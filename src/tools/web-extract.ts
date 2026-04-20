@@ -3,7 +3,8 @@ import { Type } from "@sinclair/typebox";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { EXTRACTION_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
-import { textContent } from "../util.js";
+import { textContent, inferSourceType, inferCurrentness } from "../util.js";
+import { loadSettings, resolveModelConfig } from "../settings.js";
 
 export const webExtractTool = {
   name: "web_extract",
@@ -28,7 +29,6 @@ export const webExtractTool = {
     _onUpdate: any,
     ctx: ExtensionContext,
   ) {
-    const { loadSettings, resolveModelConfig } = await import("../settings.js");
     const settings = await loadSettings(ctx.cwd);
     const extractConfig = resolveModelConfig(settings, "extract");
 
@@ -47,7 +47,7 @@ export const webExtractTool = {
     }
 
     const extraction = await callLlm(ctx, extractConfig, EXTRACTION_SYSTEM_PROMPT, userMessage, {
-      maxTokens: 3000,
+      maxTokens: settings.extractionMaxTokens,
       signal,
     });
 
@@ -61,20 +61,3 @@ export const webExtractTool = {
     };
   },
 };
-
-function inferSourceType(line: string): string {
-  const lower = line.toLowerCase();
-  if (lower.includes("official doc")) return "official docs";
-  if (lower.includes("api reference")) return "API reference";
-  if (lower.includes("tutorial")) return "tutorial";
-  if (lower.includes("blog")) return "blog post";
-  if (lower.includes("forum") || lower.includes("stackoverflow")) return "forum";
-  return "unknown";
-}
-
-function inferCurrentness(line: string): string {
-  const lower = line.toLowerCase();
-  if (lower.includes("current") || lower.includes("up to date")) return "current";
-  if (lower.includes("outdated") || lower.includes("old")) return "possibly outdated";
-  return "undated";
-}

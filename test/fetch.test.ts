@@ -2,32 +2,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-// We need to import the functions that aren't exported by testing the
-// exported fetchPages behavior and the score/sanitize/truncate helpers.
-// Since scoreContent, sanitizeMarkdown, guessTitleFromMarkdown, and
-// truncateContent are module-private, we test them through a thin wrapper.
-
-// Import via a re-export shim that exposes internals for testing.
-// Alternatively, we test the public API and the comparison logic indirectly.
-
-// For direct testing of private functions, we use this approach:
-// The module exports fetchPages and downloadLlmsFullToCache.
-// The pure helpers are internal. We test them via a test-only export.
-
-import {
-  // Re-exported from a test shim below
-} from "../src/fetch.js";
-
-// Since the functions are private, we'll create a test shim module
-// that re-exports them. But first, let's test what we can publicly.
-
-// --- scoreContent (tested via compareAndPick, but let's test the logic directly) ---
-// We'll import the module source and eval the private functions.
-// Better approach: test the exported behavior.
-
-// Let's test the pure string manipulation functions by extracting them
-// into a shared util module later. For now, test what we can.
-
 describe("fetch module structure", () => {
   it("exports fetchPages as a function", async () => {
     const mod = await import("../src/fetch.js");
@@ -38,24 +12,19 @@ describe("fetch module structure", () => {
     const mod = await import("../src/fetch.js");
     assert.strictEqual(typeof mod.downloadLlmsFullToCache, "function");
   });
+
+  it("exports FetchOptions type via interface", async () => {
+    const mod = await import("../src/fetch.js");
+    // FetchOptions is a type, so it's not available at runtime.
+    // Just verify the module loaded successfully.
+    assert.ok(mod.fetchPages !== undefined);
+  });
 });
 
-// --- Test the scoring/sanitize logic via a test-only import ---
-// We'll use dynamic import with a trick: the functions use module-private
-// scope, so we test the behaviors through the public API instead.
-
-// For thorough testing, let's create a fetch-utils extraction:
-// We'll do that in the refactoring step. For now, test what's testable.
-
-// Test the quality scoring heuristic indirectly by checking
-// what content characteristics would score higher.
+// --- Test the scoring/sanitize logic (mimics the private scoreContent) ---
+// The actual scoreContent is module-private, so we replicate the logic
+// to verify the rules described in the code.
 describe("content scoring logic (indirect)", () => {
-  // We can't call scoreContent directly, but we verify the logic
-  // by testing the scoring rules described in the code:
-  // - code blocks (+100 each), headings (+50), tables (+20)
-  // - nav chrome (-500 each), YAML frontmatter (-1000)
-  // - base score = content length
-
   function mimicScoreContent(content: string): number {
     let score = content.length;
     score += (content.match(/```/g) ?? []).length * 100;

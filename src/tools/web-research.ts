@@ -1,17 +1,13 @@
 // src/tools/web-research.ts — web_research orchestrator tool
 import { Type } from "@sinclair/typebox";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT } from "../prompts.js";
+import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
 import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile } from "../cache.js";
-import { textContent } from "../util.js";
+import { textContent, extractSourceUrls, inferSourceType, inferCurrentness } from "../util.js";
+import { loadSettings, resolveModelConfig } from "../settings.js";
 import type { FetchedPage, ExtractResult } from "../types.js";
-
-const SEARCH_SYSTEM_PROMPT =
-  "You are a web search assistant. Answer the query with cited sources. " +
-  "Always include source URLs in markdown link format: [title](url). " +
-  "Include as many relevant source URLs as possible.";
 
 export const webResearchTool = {
   name: "web_research",
@@ -46,7 +42,6 @@ export const webResearchTool = {
     onUpdate: any,
     ctx: ExtensionContext,
   ) {
-    const { loadSettings, resolveModelConfig } = await import("../settings.js");
     const settings = await loadSettings(ctx.cwd);
 
     const maxUrls = params.maxUrls ?? settings.maxUrls;
@@ -82,7 +77,11 @@ export const webResearchTool = {
     // Stage 2: Fetch pages via wreq-js + Defuddle
     // ═══════════════════════════════════════════
     onUpdate?.(progressUpdate(`Fetching ${urls.length} pages...`, 0.2));
-    const pages = await fetchPages(urls.map((u) => u.url), signal);
+    const pages = await fetchPages(urls.map((u) => u.url), signal, {
+      timeoutMs: settings.fetchTimeoutMs,
+      browser: settings.browserFingerprint as any,
+      concurrency: settings.fetchConcurrency,
+    });
     const successPages = pages.filter((p) => p.status === "success");
 
     if (successPages.length === 0) {
@@ -106,7 +105,7 @@ export const webResearchTool = {
           0.4 + (i / successPages.length) * 0.3,
         ));
 
-        return extractPage(ctx, extractConfig, page, params.query, params.focusPrompt, settings.extractMaxChars, signal);
+        return extractPage(ctx, extractConfig, page, params.query, params.focusPrompt, settings.extractMaxChars, settings.extractionMaxTokens, signal);
       }),
     );
 
@@ -150,7 +149,7 @@ export const webResearchTool = {
     }
 
     const collation = await callLlm(ctx, collateConfig, COLLATION_SYSTEM_PROMPT, collationUserMsg, {
-      maxTokens: 4000,
+      maxTokens: settings.collationMaxTokens,
       signal,
     });
 
@@ -158,14 +157,14 @@ export const webResearchTool = {
     // The raw file lands in sources/ for the agent to grep later.
     const firstUrl = successPages[0]?.url;
     const llmsFullPromise = firstUrl
-      ? downloadLlmsFullToCache(firstUrl, cachePath).catch(() => null)
+      ? downloadLlmsFullToCache(firstUrl, cachePath, settings.llmsFullSites).catch(() => null)
       : Promise.resolve(null);
 
     // Write report
     await writeReportFile(cachePath, params.query, collation, allExtractions, pages);
 
     // Wait for llms-full download (doesn't fail if it doesn't complete)
-    const llmsFullPath = await llmsFullPromise;
+    await llmsFullPromise;
 
     // ═══════════════════════════════════════════
     // Return concise injection
@@ -202,6 +201,7 @@ async function extractPage(
   query: string,
   focusPrompt: string | undefined,
   maxChars: number,
+  maxTokens: number,
   signal: AbortSignal | undefined,
 ): Promise<ExtractResult> {
   try {
@@ -217,7 +217,7 @@ async function extractPage(
     }
 
     const extraction = await callLlm(ctx, extractConfig, EXTRACTION_SYSTEM_PROMPT, userMessage, {
-      maxTokens: 3000,
+      maxTokens,
       signal,
     });
 
@@ -249,34 +249,4 @@ function progressUpdate(message: string, progress: number) {
     content: [textContent(`⏳ ${message}`)],
     details: { progress, phase: message },
   };
-}
-
-function extractSourceUrls(text: string): Array<{ url: string; title: string }> {
-  const urls: Array<{ url: string; title: string }> = [];
-  const linkPattern = /\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
-  let match;
-  while ((match = linkPattern.exec(text)) !== null) {
-    const url = match[2];
-    if (!urls.some((u) => u.url === url)) {
-      urls.push({ url, title: match[1] });
-    }
-  }
-  return urls;
-}
-
-function inferSourceType(line: string): string {
-  const lower = line.toLowerCase();
-  if (lower.includes("official doc")) return "official docs";
-  if (lower.includes("api reference")) return "API reference";
-  if (lower.includes("tutorial")) return "tutorial";
-  if (lower.includes("blog")) return "blog post";
-  if (lower.includes("forum") || lower.includes("stackoverflow")) return "forum";
-  return "unknown";
-}
-
-function inferCurrentness(line: string): string {
-  const lower = line.toLowerCase();
-  if (lower.includes("current") || lower.includes("up to date")) return "current";
-  if (lower.includes("outdated") || lower.includes("old")) return "possibly outdated";
-  return "undated";
 }

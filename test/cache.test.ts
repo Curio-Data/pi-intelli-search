@@ -27,7 +27,6 @@ describe("domainSlug", () => {
 
 describe("makeCachePath", () => {
   it("produces date-slug format under cacheDir", () => {
-    // Mock Date to get deterministic output
     const original = Date.prototype.toISOString;
     Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
 
