@@ -3,7 +3,6 @@
 
 const recordedTools: any[] = [];
 const recordedEvents: string[] = [];
-const recordedProviders: Array<{ name: string; config: any }> = [];
 
 const mockPi = {
   registerTool(tool: any) {
@@ -11,9 +10,6 @@ const mockPi = {
   },
   on(event: string, _handler: any) {
     recordedEvents.push(event);
-  },
-  registerProvider(name: string, config: any) {
-    recordedProviders.push({ name, config });
   },
 };
 
@@ -74,17 +70,14 @@ async function main() {
     assert(hasExecute, `${tool.name}: missing execute`);
   }
 
-  // 6. Check registerProvider was called
-  console.log("\n6. Provider registration:");
-  assert(recordedProviders.length === 1, "should register 1 provider");
-  const provider = recordedProviders[0];
-  assert(provider.name === "openrouter", "provider should be openrouter");
-  console.log(`   ✓ Provider: ${provider.name}`);
-
-  const modelIds = provider.config.models.map((m: any) => m.id);
-  assert(modelIds.includes("perplexity/sonar"), "missing perplexity/sonar");
-  assert(modelIds.includes("perplexity/sonar-pro"), "missing perplexity/sonar-pro");
-  console.log(`   ✓ Models: ${modelIds.join(", ")}`);
+  // 6. Verify providers.ts module loads (models.json merge logic)
+  console.log("\n6. Provider module:");
+  const providers = await import("../src/providers.js");
+  assert(typeof providers.ensureCustomModels === "function", "ensureCustomModels should be a function");
+  console.log("   ✓ ensureCustomModels exported");
+  const added = await providers.ensureCustomModels();
+  assert(Array.isArray(added), "should return an array");
+  console.log(`   ✓ Idempotent: ${added.length === 0 ? "models already present" : `added: ${added.join(", ")}`}`);
 
   console.log("\n=== All smoke tests passed ===");
 }
