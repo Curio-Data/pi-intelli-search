@@ -1,0 +1,31 @@
+{
+  "name": "pi-web-research",
+  "version": "0.1.0",
+  "description": "Web research extension for Pi: search, extract, collate, cache with persistent .search/ directory.",
+  "type": "module",
+  "main": "dist/index.js",
+  "pi": {
+    "extensions": ["./dist/index.js"],
+    "skills": ["./skills"]
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.49",
+    "wreq-js": "^2.3.0",
+    "defuddle": "^0.16.0",
+    "linkedom": "^0.18.12"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "@sinclair/typebox": "*"
+  }
+}
