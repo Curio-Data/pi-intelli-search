@@ -1,7 +1,7 @@
 // test/settings.test.ts — Unit tests for settings loading
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { resolveModelConfig } from "../src/settings.js";
+import { resolveModelConfig, loadSettings, invalidateSettingsCache } from "../src/settings.js";
 import type { ResearchSettings } from "../src/types.js";
 
 const baseSettings: ResearchSettings = {
@@ -11,6 +11,12 @@ const baseSettings: ResearchSettings = {
   maxUrls: 8,
   cacheDir: ".search",
   extractMaxChars: 150_000,
+  fetchTimeoutMs: 20_000,
+  fetchConcurrency: 4,
+  extractionMaxTokens: 3000,
+  collationMaxTokens: 4000,
+  llmsFullSites: {},
+  browserFingerprint: "chrome_145",
 };
 
 describe("resolveModelConfig", () => {
@@ -48,5 +54,40 @@ describe("resolveModelConfig", () => {
       provider: "minimax",
       model: "MiniMax-M2.7",
     });
+  });
+});
+
+describe("loadSettings defaults", () => {
+  it("returns all default settings when no overrides exist", async () => {
+    // Invalidate cache to force fresh load
+    invalidateSettingsCache();
+    const settings = await loadSettings("/nonexistent");
+
+    assert.strictEqual(settings.maxUrls, 8);
+    assert.strictEqual(settings.cacheDir, ".search");
+    assert.strictEqual(settings.extractMaxChars, 150_000);
+    assert.strictEqual(settings.fetchTimeoutMs, 20_000);
+    assert.strictEqual(settings.fetchConcurrency, 4);
+    assert.strictEqual(settings.extractionMaxTokens, 3000);
+    assert.strictEqual(settings.collationMaxTokens, 4000);
+    assert.deepStrictEqual(settings.llmsFullSites, {});
+    assert.strictEqual(settings.browserFingerprint, "chrome_145");
+  });
+});
+
+describe("settings caching", () => {
+  it("returns cached settings on second call", async () => {
+    invalidateSettingsCache();
+    const first = await loadSettings("/nonexistent");
+    const second = await loadSettings("/nonexistent");
+    assert.strictEqual(first, second, "Should return the same object reference");
+  });
+
+  it("invalidateSettingsCache forces fresh load", async () => {
+    invalidateSettingsCache();
+    const first = await loadSettings("/nonexistent");
+    invalidateSettingsCache();
+    const second = await loadSettings("/nonexistent");
+    assert.notStrictEqual(first, second, "Should return a new object after invalidation");
   });
 });

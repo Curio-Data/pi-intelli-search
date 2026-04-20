@@ -37,4 +37,10 @@ export interface ResearchSettings {
   maxUrls: number;
   cacheDir: string;
   extractMaxChars: number;
+  fetchTimeoutMs: number;
+  fetchConcurrency: number;
+  extractionMaxTokens: number;
+  collationMaxTokens: number;
+  llmsFullSites: Record<string, string>;
+  browserFingerprint: string;
 }

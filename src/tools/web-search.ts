@@ -1,14 +1,11 @@
 // src/tools/web-search.ts — web_search tool
 import { Type } from "@sinclair/typebox";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
-import type { ModelConfig, SearchResult } from "../types.js";
+import type { SearchResult } from "../types.js";
+import { SEARCH_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
-import { textContent } from "../util.js";
-
-const SEARCH_SYSTEM_PROMPT =
-  "You are a web search assistant. Answer the query with cited sources. " +
-  "Always include source URLs in markdown link format: [title](url). " +
-  "Include as many relevant source URLs as possible.";
+import { textContent, extractSourceUrls } from "../util.js";
+import { loadSettings, resolveModelConfig } from "../settings.js";
 
 export const webSearchTool = {
   name: "web_search",
@@ -29,7 +26,6 @@ export const webSearchTool = {
     _onUpdate: any,
     ctx: ExtensionContext,
   ) {
-    const { loadSettings, resolveModelConfig } = await import("../settings.js");
     const settings = await loadSettings(ctx.cwd);
     const searchConfig = resolveModelConfig(settings, "search");
 
@@ -62,19 +58,6 @@ export const webSearchTool = {
     }
   },
 };
-
-function extractSourceUrls(text: string): Array<{ url: string; title: string }> {
-  const urls: Array<{ url: string; title: string }> = [];
-  const linkPattern = /\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
-  let match;
-  while ((match = linkPattern.exec(text)) !== null) {
-    const url = match[2];
-    if (!urls.some((u) => u.url === url)) {
-      urls.push({ url, title: match[1] });
-    }
-  }
-  return urls;
-}
 
 function formatSearchResult(result: SearchResult): string {
   let output = `## Search results for: "${result.query}"\n\n`;

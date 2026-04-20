@@ -1,18 +1,19 @@
 // test/smoke.ts — Structural validation: does the extension load and register tools?
 // Run with: npm run test:smoke
-//
-// This simulates what pi does when loading the extension: import the default
-// export, call it with a mock ExtensionAPI, and verify tools are registered.
 
-const recordedTools: string[] = [];
+const recordedTools: any[] = [];
 const recordedEvents: string[] = [];
+const recordedProviders: Array<{ name: string; config: any }> = [];
 
 const mockPi = {
   registerTool(tool: any) {
-    recordedTools.push(tool.name);
+    recordedTools.push(tool);
   },
   on(event: string, _handler: any) {
     recordedEvents.push(event);
+  },
+  registerProvider(name: string, config: any) {
+    recordedProviders.push({ name, config });
   },
 };
 
@@ -33,10 +34,10 @@ async function main() {
   // 3. Check tool registration
   console.log("3. Registered tools:");
   const expectedTools = ["web_search", "web_extract", "web_collate", "web_research"];
-  for (const tool of expectedTools) {
-    const found = recordedTools.includes(tool);
-    console.log(`   ${found ? "✓" : "✗"} ${tool}`);
-    assert(found, `Expected tool '${tool}' to be registered`);
+  for (const name of expectedTools) {
+    const found = recordedTools.some((t) => t.name === name);
+    console.log(`   ${found ? "✓" : "✗"} ${name}`);
+    assert(found, `Expected tool '${name}' to be registered`);
   }
 
   // 4. Check event subscriptions
@@ -50,15 +51,7 @@ async function main() {
 
   // 5. Check tool definitions have required properties
   console.log("\n5. Tool definition shape:");
-  // Re-import to capture actual tool objects
-  const tools: any[] = [];
-  const capturingPi = {
-    registerTool(tool: any) { tools.push(tool); },
-    on() {},
-  };
-  mod.default(capturingPi);
-
-  for (const tool of tools) {
+  for (const tool of recordedTools) {
     const hasName = typeof tool.name === "string" && tool.name.length > 0;
     const hasLabel = typeof tool.label === "string" && tool.label.length > 0;
     const hasDesc = typeof tool.description === "string" && tool.description.length > 0;
@@ -66,8 +59,7 @@ async function main() {
     const hasExecute = typeof tool.execute === "function";
     const hasSnippet = typeof tool.promptSnippet === "string";
 
-    const name = tool.name;
-    console.log(`   ${name}:`);
+    console.log(`   ${tool.name}:`);
     console.log(`     name: ${hasName ? "✓" : "✗"}`);
     console.log(`     label: ${hasLabel ? "✓" : "✗"}`);
     console.log(`     description: ${hasDesc ? "✓" : "✗"}`);
@@ -75,19 +67,33 @@ async function main() {
     console.log(`     execute: ${hasExecute ? "✓" : "✗"}`);
     console.log(`     promptSnippet: ${hasSnippet ? "✓" : "✗"}`);
 
-    assert(hasName, `${name}: missing name`);
-    assert(hasLabel, `${name}: missing label`);
-    assert(hasDesc, `${name}: missing description`);
-    assert(hasParams, `${name}: missing parameters`);
-    assert(hasExecute, `${name}: missing execute`);
+    assert(hasName, `${tool.name}: missing name`);
+    assert(hasLabel, `${tool.name}: missing label`);
+    assert(hasDesc, `${tool.name}: missing description`);
+    assert(hasParams, `${tool.name}: missing parameters`);
+    assert(hasExecute, `${tool.name}: missing execute`);
   }
+
+  // 6. Check registerProvider was called
+  console.log("\n6. Provider registration:");
+  assert(recordedProviders.length === 1, "should register 1 provider");
+  const provider = recordedProviders[0];
+  assert(provider.name === "openrouter", "provider should be openrouter");
+  console.log(`   ✓ Provider: ${provider.name}`);
+
+  const modelIds = provider.config.models.map((m: any) => m.id);
+  assert(modelIds.includes("perplexity/sonar"), "missing perplexity/sonar");
+  assert(modelIds.includes("perplexity/sonar-pro"), "missing perplexity/sonar-pro");
+  console.log(`   ✓ Models: ${modelIds.join(", ")}`);
 
   console.log("\n=== All smoke tests passed ===");
 }
 
-function assert(condition: boolean, message: string) {
+function assert(condition: boolean, message: string): void;
+function assert(condition: boolean): void;
+function assert(condition: boolean, message?: string): void {
   if (!condition) {
-    console.error(`\n❌ ASSERTION FAILED: ${message}`);
+    console.error(`\n❌ ASSERTION FAILED: ${message ?? "assertion failed"}`);
     process.exit(1);
   }
 }

@@ -5,6 +5,7 @@ import { COLLATION_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile } from "../cache.js";
 import { textContent } from "../util.js";
+import { loadSettings, resolveModelConfig } from "../settings.js";
 import type { ExtractResult } from "../types.js";
 
 const extractionSchema = Type.Object({
@@ -54,7 +55,6 @@ export const webCollateTool = {
     _onUpdate: any,
     ctx: ExtensionContext,
   ) {
-    const { loadSettings, resolveModelConfig } = await import("../settings.js");
     const settings = await loadSettings(ctx.cwd);
     const collateConfig = resolveModelConfig(settings, "collate");
 
@@ -101,7 +101,7 @@ export const webCollateTool = {
 
     // Call LLM for collation
     const collation = await callLlm(ctx, collateConfig, COLLATION_SYSTEM_PROMPT, userMessage, {
-      maxTokens: 4000,
+      maxTokens: settings.collationMaxTokens,
       signal,
     });
 

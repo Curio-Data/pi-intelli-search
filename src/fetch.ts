@@ -9,21 +9,25 @@
 // For sites with llms-full.txt:
 //   4. Download raw to cache for offline grep by the agent
 //
-import { fetch as wreqFetch } from "wreq-js";
+import { fetch as wreqFetch, type BrowserProfile } from "wreq-js";
 import { Defuddle } from "defuddle/node";
 import { parseHTML } from "linkedom";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { FetchedPage } from "./types.js";
 
 export interface FetchOptions {
   maxChars: number;
   timeoutMs: number;
-  format: string;
+  browser: BrowserProfile;
+  concurrency: number;
 }
 
 const DEFAULT_FETCH_OPTIONS: FetchOptions = {
   maxChars: 500_000,
   timeoutMs: 20_000,
-  format: "markdown",
+  browser: "chrome_145",
+  concurrency: 4,
 };
 
 // ---------------------------------------------------------------------------
@@ -34,9 +38,9 @@ const DEFAULT_FETCH_OPTIONS: FetchOptions = {
  * Fetch a single URL. Fetches HTML→Defuddle and markdown variant in parallel,
  * compares quality, returns the better result.
  */
-async function fetchSingle(url: string, opts: FetchOptions): Promise<FetchedPage> {
+async function fetchSingle(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage> {
   try {
-    return await fetchWithComparison(url, opts);
+    return await fetchWithComparison(url, opts, signal);
   } catch (err: unknown) {
     return {
       url,
@@ -52,11 +56,11 @@ async function fetchSingle(url: string, opts: FetchOptions): Promise<FetchedPage
  * Fetch via both HTML→Defuddle and markdown endpoint,
  * compare quality, return the better result.
  */
-async function fetchWithComparison(url: string, opts: FetchOptions): Promise<FetchedPage> {
+async function fetchWithComparison(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage> {
   // Run both fetches in parallel
   const results = await Promise.allSettled([
-    fetchViaDefuddle(url, opts),
-    fetchMarkdownVariant(url, opts),
+    fetchViaDefuddle(url, opts, signal),
+    fetchMarkdownVariant(url, opts, signal),
   ]);
 
   const defuddlePage = results[0].status === "fulfilled" ? results[0].value : null;
@@ -121,8 +125,8 @@ function scoreContent(content: string): number {
 // Pipeline 1: HTML → Defuddle → markdown
 // ---------------------------------------------------------------------------
 
-async function fetchViaDefuddle(url: string, opts: FetchOptions): Promise<FetchedPage> {
-  const response = await rawFetch(url, opts);
+async function fetchViaDefuddle(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage> {
+  const response = await rawFetch(url, opts, signal);
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
   const contentType = response.headers.get("content-type") ?? "";
@@ -150,25 +154,26 @@ async function fetchViaDefuddle(url: string, opts: FetchOptions): Promise<Fetche
 // Pipeline 2: Markdown endpoint (Accept header or alt-link)
 // ---------------------------------------------------------------------------
 
-async function fetchMarkdownVariant(url: string, opts: FetchOptions): Promise<FetchedPage | null> {
+async function fetchMarkdownVariant(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage | null> {
   // a) Accept: text/markdown header (VitePress, FastAPI docs, etc.)
-  const acceptResult = await fetchWithAcceptHeader(url, opts);
+  const acceptResult = await fetchWithAcceptHeader(url, opts, signal);
   if (acceptResult) return acceptResult;
 
   // b) Starlight/Astro: <link rel="alternate" type="text/markdown" href="...">
-  const mdUrl = await findMarkdownAlternate(url, opts);
-  if (mdUrl) return await fetchMarkdown(mdUrl, opts);
+  const mdUrl = await findMarkdownAlternate(url, opts, signal);
+  if (mdUrl) return await fetchMarkdown(mdUrl, opts, signal);
 
   return null;
 }
 
-async function fetchWithAcceptHeader(url: string, opts: FetchOptions): Promise<FetchedPage | null> {
+async function fetchWithAcceptHeader(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage | null> {
   try {
+    const combinedSignal = combineSignal(signal, opts.timeoutMs);
     const response = await wreqFetch(url, {
-      browser: "chrome_145",
+      browser: opts.browser,
       os: "windows",
       headers: { Accept: "text/markdown" },
-      signal: AbortSignal.timeout(opts.timeoutMs),
+      signal: combinedSignal,
     });
     if (!response.ok) return null;
     if (!response.headers.get("content-type")?.includes("text/markdown")) return null;
@@ -178,9 +183,9 @@ async function fetchWithAcceptHeader(url: string, opts: FetchOptions): Promise<F
   }
 }
 
-async function findMarkdownAlternate(url: string, opts: FetchOptions): Promise<string | null> {
+async function findMarkdownAlternate(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<string | null> {
   try {
-    const response = await rawFetch(url, opts);
+    const response = await rawFetch(url, opts, signal);
     if (!response.ok) return null;
     if (!response.headers.get("content-type")?.includes("text/html")) return null;
 
@@ -198,8 +203,8 @@ async function findMarkdownAlternate(url: string, opts: FetchOptions): Promise<s
   }
 }
 
-async function fetchMarkdown(mdUrl: string, opts: FetchOptions): Promise<FetchedPage> {
-  const response = await rawFetch(mdUrl, opts);
+async function fetchMarkdown(mdUrl: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage> {
+  const response = await rawFetch(mdUrl, opts, signal);
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   return processMarkdownResponse(mdUrl, response, opts);
 }
@@ -226,10 +231,12 @@ async function processMarkdownResponse(
 // ---------------------------------------------------------------------------
 
 /**
- * Known site → product path → llms-full.txt URL mapping.
+ * Known site → llms-full.txt URL builder.
  * Sites that provide product-scoped llms-full.txt files.
+ * Complex mappings (path-dependent) stay here; user-configurable simple
+ * hostname → URL mappings are passed via extraSites.
  */
-const LLMS_FULL_SITES: Record<string, (url: string) => string | null> = {
+const BUILTIN_LLMS_FULL_SITES: Record<string, (url: string) => string | null> = {
   "developers.cloudflare.com": (url: string) => {
     // Extract product subpath from URL path: /d1/worker-api/ → /d1/llms-full.txt
     const match = new URL(url).pathname.match(/^\/([^/]+)\//);
@@ -247,20 +254,29 @@ const LLMS_FULL_SITES: Record<string, (url: string) => string | null> = {
  * The file is stored raw — no LLM processing needed. The agent can
  * grep/search it offline for future lookups.
  *
+ * Checks user-configured sites first (hostname → URL), then built-in mappings.
+ *
  * Returns the cache file path if downloaded, null otherwise.
  */
 export async function downloadLlmsFullToCache(
   url: string,
   cachePath: string,
+  extraSites: Record<string, string> = {},
   timeoutMs: number = 30_000,
 ): Promise<string | null> {
   const hostname = safeHostname(url);
   if (!hostname) return null;
 
-  const builder = LLMS_FULL_SITES[hostname];
-  if (!builder) return null;
+  // Check user-configured simple mappings first
+  let llmsFullUrl: string | null = extraSites[hostname] ?? null;
 
-  const llmsFullUrl = builder(url);
+  // Fall back to built-in complex mappings
+  if (!llmsFullUrl) {
+    const builder = BUILTIN_LLMS_FULL_SITES[hostname];
+    if (!builder) return null;
+    llmsFullUrl = builder(url);
+  }
+
   if (!llmsFullUrl) return null;
 
   try {
@@ -271,13 +287,8 @@ export async function downloadLlmsFullToCache(
     });
     if (!response.ok) return null;
 
-    // Write raw to cache — no sanitization needed, it's already clean markdown
     const content = await response.text();
     if (content.length === 0) return null;
-
-    // Import fs dynamically to avoid circular deps
-    const { mkdir, writeFile } = await import("node:fs/promises");
-    const { join } = await import("node:path");
 
     const fullCachePath = join(cachePath, "sources");
     await mkdir(fullCachePath, { recursive: true });
@@ -296,11 +307,20 @@ export async function downloadLlmsFullToCache(
 // HTTP helper
 // ---------------------------------------------------------------------------
 
-async function rawFetch(url: string, opts: FetchOptions) {
+/** Combine an external abort signal (e.g. pi agent Esc) with a per-request timeout. */
+function combineSignal(external: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  if (external) {
+    return AbortSignal.any([external, timeout]);
+  }
+  return timeout;
+}
+
+async function rawFetch(url: string, opts: FetchOptions, signal?: AbortSignal) {
   return wreqFetch(url, {
-    browser: "chrome_145",
+    browser: opts.browser,
     os: "windows",
-    signal: AbortSignal.timeout(opts.timeoutMs),
+    signal: combineSignal(signal, opts.timeoutMs),
   });
 }
 
@@ -347,13 +367,14 @@ function safeHostname(url: string): string | null {
 
 /**
  * Fetch multiple pages. For each: Defuddle vs markdown → pick best.
+ * Accepts partial overrides for fetch options (typically from ResearchSettings).
  */
 export async function fetchPages(
   urls: string[],
   signal?: AbortSignal,
-  concurrency: number = 4,
+  opts?: Partial<FetchOptions>,
 ): Promise<FetchedPage[]> {
-  const opts = { ...DEFAULT_FETCH_OPTIONS };
+  const fullOpts = { ...DEFAULT_FETCH_OPTIONS, ...opts };
   const results: (FetchedPage | null)[] = new Array(urls.length).fill(null);
   let nextIndex = 0;
 
@@ -361,11 +382,14 @@ export async function fetchPages(
     while (nextIndex < urls.length) {
       if (signal?.aborted) return;
       const index = nextIndex++;
-      results[index] = await fetchSingle(urls[index], opts);
+      results[index] = await fetchSingle(urls[index], fullOpts, signal);
     }
   };
 
-  const workers = Array.from({ length: Math.min(concurrency, urls.length) }, () => worker());
+  const workers = Array.from(
+    { length: Math.min(fullOpts.concurrency, urls.length) },
+    () => worker(),
+  );
   await Promise.all(workers);
 
   return results.map((r, i) =>

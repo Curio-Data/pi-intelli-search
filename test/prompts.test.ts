@@ -1,7 +1,19 @@
 // test/prompts.test.ts — Snapshot tests for prompt templates
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT } from "../src/prompts.js";
+import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT } from "../src/prompts.js";
+
+describe("SEARCH_SYSTEM_PROMPT", () => {
+  it("is a non-empty string", () => {
+    assert.ok(typeof SEARCH_SYSTEM_PROMPT === "string");
+    assert.ok(SEARCH_SYSTEM_PROMPT.length > 50);
+  });
+
+  it("instructs to include source URLs", () => {
+    assert.ok(SEARCH_SYSTEM_PROMPT.includes("[title](url)"), "should specify markdown link format");
+    assert.ok(SEARCH_SYSTEM_PROMPT.includes("source"), "should mention sources");
+  });
+});
 
 describe("EXTRACTION_SYSTEM_PROMPT", () => {
   it("is a non-empty string", () => {
@@ -48,8 +60,14 @@ describe("COLLATION_SYSTEM_PROMPT", () => {
 // Snapshot: store the current prompt lengths so we detect accidental changes.
 // If prompts are intentionally modified, update these values.
 describe("prompt snapshots (length)", () => {
+  it("SEARCH_SYSTEM_PROMPT length is stable", () => {
+    assert.ok(
+      SEARCH_SYSTEM_PROMPT.length > 100 && SEARCH_SYSTEM_PROMPT.length < 300,
+      `Search prompt length ${SEARCH_SYSTEM_PROMPT.length} outside expected range 100-300`,
+    );
+  });
+
   it("EXTRACTION_SYSTEM_PROMPT length is stable", () => {
-    // If this fails, the prompt was modified — update if intentional
     assert.ok(
       EXTRACTION_SYSTEM_PROMPT.length > 1000 && EXTRACTION_SYSTEM_PROMPT.length < 2000,
       `Extraction prompt length ${EXTRACTION_SYSTEM_PROMPT.length} outside expected range 1000-2000`,
