@@ -3,17 +3,17 @@
   "version": "0.1.0",
   "description": "Web research extension for Pi: search, extract, collate, cache with persistent .search/ directory.",
   "type": "module",
-  "main": "dist/index.js",
   "pi": {
-    "extensions": ["./dist/index.js"],
+    "extensions": ["./src/index.ts"],
     "skills": ["./skills"]
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:smoke": "node --import tsx test/smoke.ts"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.49",
     "wreq-js": "^2.3.0",
     "defuddle": "^0.16.0",
     "linkedom": "^0.18.12"
@@ -21,11 +21,21 @@
   "devDependencies": {
     "@mariozechner/pi-ai": "*",
     "@mariozechner/pi-coding-agent": "*",
+    "@sinclair/typebox": "*",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },
   "peerDependencies": {
     "@mariozechner/pi-ai": "*",
     "@mariozechner/pi-coding-agent": "*",
     "@sinclair/typebox": "*"
-  }
+  },
+  "files": [
+    "src/",
+    "skills/",
+    "README.md"
+  ],
+  "keywords": [
+    "pi-package"
+  ]
 }

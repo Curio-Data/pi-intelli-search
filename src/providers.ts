@@ -1,11 +1,13 @@
 // src/providers.ts — Register custom models for the web research extension
 //
 // Problem: perplexity/sonar is not in pi's built-in openrouter model list.
-// Solution: On extension load, ensure these models exist in models.json
-// under the openrouter provider. This merges with existing models (upsert by provider+id).
+// Solution: On extension load, merge these models into models.json
+// under the openrouter provider. models.json models merge with built-in
+// models by id (add or replace), so this doesn't disturb existing models.
 //
-// This runs inside the extension factory function, which pi queues and applies
-// once the runner initializes.
+// registerProvider("openrouter", { models }) would REPLACE all OpenRouter
+// models — that's destructive. The models.json merge approach is the
+// correct way to *add* models to an existing built-in provider.
 
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -16,8 +18,8 @@ const AGENT_DIR = join(homedir(), ".pi", "agent");
 const MODELS_JSON_PATH = join(AGENT_DIR, "models.json");
 
 /** Models this extension needs, to be merged into the openrouter provider. */
-const REQUIRED_MODELS = {
-  "perplexity/sonar": {
+const REQUIRED_MODELS = [
+  {
     id: "perplexity/sonar",
     name: "Perplexity Sonar",
     reasoning: false,
@@ -26,7 +28,7 @@ const REQUIRED_MODELS = {
     contextWindow: 127000,
     maxTokens: 8192,
   },
-  "perplexity/sonar-pro": {
+  {
     id: "perplexity/sonar-pro",
     name: "Perplexity Sonar Pro",
     reasoning: false,
@@ -35,7 +37,7 @@ const REQUIRED_MODELS = {
     contextWindow: 200000,
     maxTokens: 8192,
   },
-};
+];
 
 interface ModelsJson {
   providers?: Record<string, {
@@ -72,11 +74,11 @@ export async function ensureCustomModels(): Promise<string[]> {
   const models = config.providers.openrouter.models as Array<Record<string, unknown>>;
   const added: string[] = [];
 
-  for (const [modelId, modelDef] of Object.entries(REQUIRED_MODELS)) {
-    const exists = models.some((m) => m.id === modelId);
+  for (const modelDef of REQUIRED_MODELS) {
+    const exists = models.some((m) => m.id === modelDef.id);
     if (!exists) {
       models.push(modelDef);
-      added.push(modelId);
+      added.push(modelDef.id);
     }
   }
 
