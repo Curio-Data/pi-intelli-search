@@ -5,22 +5,29 @@
   "type": "module",
   "main": "dist/index.js",
   "pi": {
-    "extensions": ["./dist/index.js"],
-    "skills": ["./skills"]
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "skills": [
+      "./skills"
+    ]
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:smoke": "node --import tsx test/smoke.ts"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.49",
-    "wreq-js": "^2.3.0",
+    "@sinclair/typebox": "*",
     "defuddle": "^0.16.0",
-    "linkedom": "^0.18.12"
+    "linkedom": "^0.18.12",
+    "wreq-js": "^2.3.0"
   },
   "devDependencies": {
     "@mariozechner/pi-ai": "*",
     "@mariozechner/pi-coding-agent": "*",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0"
   },
   "peerDependencies": {
