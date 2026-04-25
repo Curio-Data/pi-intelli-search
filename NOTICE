@@ -1,0 +1,33 @@
+pi-intelli-search
+Copyright 2025 Ashraf Miah, Curio Data Pro Ltd
+
+This product includes software developed at
+Curio Data Pro Ltd (https://github.com/curio-data-pro).
+
+---
+
+This product includes/uses the following third-party software:
+
+wreq-js (https://github.com/sqdshguy/wreq-js)
+Copyright sqdshguy
+License: MIT
+
+defuddle (https://github.com/kepano/defuddle)
+Copyright Kepano
+License: MIT
+
+linkedom (https://github.com/WebReflection/linkedom)
+Copyright Andrea Giammarchi
+License: ISC
+
+@sinclair/typebox (https://github.com/sinclairzx81/typebox)
+Copyright Sinclair
+License: MIT
+
+@mariozechner/pi-ai (https://github.com/mariozechner/pi)
+Copyright Mario Zechner
+License: Apache-2.0
+
+@mariozechner/pi-coding-agent (https://github.com/mariozechner/pi)
+Copyright Mario Zechner
+License: Apache-2.0
