@@ -2,3 +2,21 @@ node_modules/
 dist/
 tsconfig.tsbuildinfo
 *.tgz
+.search/
+
+# Editor / OS artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Patch / backup files
+*.orig
+*.rej
+*.bak
+
+# npm debug logs
+npm-debug.log*
