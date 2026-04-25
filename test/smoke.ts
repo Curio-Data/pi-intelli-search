@@ -29,7 +29,7 @@ async function main() {
 
   // 3. Check tool registration
   console.log("3. Registered tools:");
-  const expectedTools = ["web_search", "web_extract", "web_collate", "web_research"];
+  const expectedTools = ["intelli_search", "intelli_extract", "intelli_collate", "intelli_research"];
   for (const name of expectedTools) {
     const found = recordedTools.some((t) => t.name === name);
     console.log(`   ${found ? "✓" : "✗"} ${name}`);

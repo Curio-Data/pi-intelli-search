@@ -1,4 +1,7 @@
-// src/tools/web-collate.ts — web_collate tool
+// src/tools/intelli-collate.ts — intelli_collate tool
+//
+// Copyright 2025 Ashraf Miah, Curio Data Pro Ltd
+// SPDX-License-Identifier: Apache-2.0
 import { Type } from "@sinclair/typebox";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { COLLATION_SYSTEM_PROMPT } from "../prompts.js";
@@ -22,17 +25,17 @@ const fullPageSchema = Type.Object({
   content: Type.String(),
 });
 
-export const webCollateTool = {
-  name: "web_collate",
-  label: "Web Collate",
+export const intelliCollateTool = {
+  name: "intelli_collate",
+  label: "Intelli Collate",
   description:
     "Collate multiple per-page extractions into a deduplicated summary. " +
     "Produces a concise injection for the main conversation and writes " +
     "a persistent cache to .search/ for follow-up.",
-  promptSnippet: "web_collate(extractions, query): deduplicate and synthesise extractions into concise summary",
+  promptSnippet: "intelli_collate(extractions, query): deduplicate and synthesise extractions into concise summary",
   parameters: Type.Object({
     extractions: Type.Array(extractionSchema, {
-      description: "Array of per-page extraction results from web_extract",
+      description: "Array of per-page extraction results from intelli_extract",
     }),
     query: Type.String({ description: "The original search query" }),
     searchSummary: Type.Optional(Type.String({

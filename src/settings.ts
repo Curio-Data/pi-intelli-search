@@ -38,18 +38,18 @@ export async function loadSettings(cwd: string): Promise<ResearchSettings> {
     try {
       const raw = await readFile(join(dir, "settings.json"), "utf-8");
       const parsed = JSON.parse(raw);
-      if (parsed.webResearchSearchModel) overrides.searchModel = parsed.webResearchSearchModel;
-      if (parsed.webResearchExtractModel) overrides.extractModel = parsed.webResearchExtractModel;
-      if (parsed.webResearchCollateModel) overrides.collateModel = parsed.webResearchCollateModel;
-      if (parsed.webResearchMaxUrls != null) overrides.maxUrls = parsed.webResearchMaxUrls;
-      if (parsed.webResearchCacheDir) overrides.cacheDir = parsed.webResearchCacheDir;
-      if (parsed.webResearchExtractMaxChars != null) overrides.extractMaxChars = parsed.webResearchExtractMaxChars;
-      if (parsed.webResearchFetchTimeoutMs != null) overrides.fetchTimeoutMs = parsed.webResearchFetchTimeoutMs;
-      if (parsed.webResearchFetchConcurrency != null) overrides.fetchConcurrency = parsed.webResearchFetchConcurrency;
-      if (parsed.webResearchExtractionMaxTokens != null) overrides.extractionMaxTokens = parsed.webResearchExtractionMaxTokens;
-      if (parsed.webResearchCollationMaxTokens != null) overrides.collationMaxTokens = parsed.webResearchCollationMaxTokens;
-      if (parsed.webResearchLlmsFullSites) overrides.llmsFullSites = parsed.webResearchLlmsFullSites;
-      if (parsed.webResearchBrowserFingerprint) overrides.browserFingerprint = parsed.webResearchBrowserFingerprint;
+      if (parsed.intelliSearchModel) overrides.searchModel = parsed.intelliSearchModel;
+      if (parsed.intelliExtractModel) overrides.extractModel = parsed.intelliExtractModel;
+      if (parsed.intelliCollateModel) overrides.collateModel = parsed.intelliCollateModel;
+      if (parsed.intelliMaxUrls != null) overrides.maxUrls = parsed.intelliMaxUrls;
+      if (parsed.intelliCacheDir) overrides.cacheDir = parsed.intelliCacheDir;
+      if (parsed.intelliExtractMaxChars != null) overrides.extractMaxChars = parsed.intelliExtractMaxChars;
+      if (parsed.intelliFetchTimeoutMs != null) overrides.fetchTimeoutMs = parsed.intelliFetchTimeoutMs;
+      if (parsed.intelliFetchConcurrency != null) overrides.fetchConcurrency = parsed.intelliFetchConcurrency;
+      if (parsed.intelliExtractionMaxTokens != null) overrides.extractionMaxTokens = parsed.intelliExtractionMaxTokens;
+      if (parsed.intelliCollationMaxTokens != null) overrides.collationMaxTokens = parsed.intelliCollationMaxTokens;
+      if (parsed.intelliLlmsFullSites) overrides.llmsFullSites = parsed.intelliLlmsFullSites;
+      if (parsed.intelliBrowserFingerprint) overrides.browserFingerprint = parsed.intelliBrowserFingerprint;
     } catch {
       // File doesn't exist or is invalid — skip
     }

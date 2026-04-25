@@ -1,4 +1,7 @@
-// src/tools/web-research.ts — web_research orchestrator tool
+// src/tools/intelli-research.ts — intelli_research orchestrator tool
+//
+// Copyright 2025 Ashraf Miah, Curio Data Pro Ltd
+// SPDX-License-Identifier: Apache-2.0
 import { Type } from "@sinclair/typebox";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT } from "../prompts.js";
@@ -9,16 +12,16 @@ import { textContent, extractSourceUrls, inferSourceType, inferCurrentness } fro
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import type { FetchedPage, ExtractResult } from "../types.js";
 
-export const webResearchTool = {
-  name: "web_research",
-  label: "Web Research",
+export const intelliResearchTool = {
+  name: "intelli_research",
+  label: "Intelli Research",
   description:
     "Full research pipeline: search the web, fetch top results, extract " +
     "query-relevant content from each page, collate and deduplicate findings, " +
     "and cache everything for follow-up. Returns a concise summary.",
-  promptSnippet: "web_research(query): full search → fetch → extract → collate pipeline with caching",
+  promptSnippet: "intelli_research(query): full search → fetch → extract → collate pipeline with caching",
   promptGuidelines: [
-    "Use web_research when the user needs current web information (docs, APIs, best practices, library updates). For quick factual questions, use web_search alone.",
+    "Use intelli_research when the user needs current web information (docs, APIs, best practices, library updates). For quick factual questions, use intelli_search alone.",
     "Use maxUrls to control breadth: 3 for targeted, 8 (default) for broad, 12 for exhaustive.",
     "Always provide focusPrompt to guide extraction. Without it the LLM extracts generically. Translate the user's intent into a specific extraction focus.",
     "The tool result contains a concise summary — use it directly. Only read .search/ cache files when the summary is insufficient.",
@@ -49,6 +52,23 @@ export const webResearchTool = {
     const extractConfig = resolveModelConfig(settings, "extract");
     const collateConfig = resolveModelConfig(settings, "collate");
 
+    // ═══════════════════════════════════════════
+    // Working indicator — custom research spinner
+    // ═══════════════════════════════════════════
+    // setWorkingIndicator was added in pi 0.68.0.
+    // Gracefully degrade on older versions.
+    const ui = ctx.ui as { setWorkingIndicator?(opts?: { frames?: string[]; intervalMs?: number }): void };
+    const INDICATOR_FRAMES = ["🔍", "🌐", "📄", "✨"];
+    ui.setWorkingIndicator?.({ frames: INDICATOR_FRAMES, intervalMs: 400 });
+    // Ensure cleanup on any exit path
+    const restoreIndicator = () => ui.setWorkingIndicator?.();
+    try {
+      return await executePipeline();
+    } finally {
+      restoreIndicator();
+    }
+
+    async function executePipeline() {
     // ═══════════════════════════════════════════
     // Stage 1: Search via Sonar
     // ═══════════════════════════════════════════
@@ -188,6 +208,7 @@ export const webResearchTool = {
         pagesFailed: failedCount,
       },
     };
+    } // end executePipeline()
   },
 };
 
@@ -232,7 +253,7 @@ async function extractPage(
     };
   } catch (err: any) {
     // Log extraction error but don't fail the whole pipeline
-    console.error(`[pi-web-research] Extraction failed for ${page.url}: ${err?.message ?? err}`);
+    console.error(`[pi-intelli-search] Extraction failed for ${page.url}: ${err?.message ?? err}`);
     return {
       url: page.url,
       title: page.title,

@@ -1,13 +1,13 @@
 ---
-name: web-research
+name: intelli-search
 description: "Research the web for current information. Use when you need docs, APIs, best practices, library updates, or any question requiring up-to-date web sources. Provides search, per-page extraction, collation, and a persistent .search/ cache for follow-up."
 ---
 
-# Web Research
+# Intelli Search
 
 ## How it works
 
-`web_research` runs a 4-stage pipeline inside a single tool call:
+`intelli_research` runs a 4-stage pipeline inside a single tool call:
 
 1. **Search** — Perplexity Sonar returns a synthesised answer + source URLs
 2. **Fetch** — grabs each page, cleans HTML to markdown via Defuddle (strips nav, ads, sidebars)
@@ -24,15 +24,15 @@ This is also why `focusPrompt` matters: it tells the extraction LLM what to keep
 
 ## When to use which tool
 
-### Quick factual question → `web_search`
+### Quick factual question → `intelli_search`
 
 When you need a fast answer with sources but no deep analysis:
 
 ```
-web_search(query="TypeScript 5.8 release date")
+intelli_search(query="TypeScript 5.8 release date")
 ```
 
-### Deep research for a coding task → `web_research`
+### Deep research for a coding task → `intelli_research`
 
 **Always provide a `focusPrompt`.** The extraction LLM needs to know what to extract. Without it, you get generic summaries. Translate the user's intent into a specific extraction focus.
 
@@ -41,7 +41,7 @@ web_search(query="TypeScript 5.8 release date")
 ```
 User: "How do runes work in Svelte 5?"
 
-web_research(
+intelli_research(
   query="Svelte 5 runes tutorial examples",
   focusPrompt="Extract the core rune concepts ($state, $derived, $effect), their syntax, and how they replace the old reactive declarations. Include migration patterns from Svelte 4."
 )
@@ -52,7 +52,7 @@ web_research(
 ```
 User: "How do I set up podman rootless with systemd?"
 
-web_research(
+intelli_research(
   query="podman rootless systemd unit configuration",
   focusPrompt="Extract the exact directory paths podman rootless uses for systemd units, the XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS setup, and the systemd --user enable commands. Include file paths."
 )
@@ -63,7 +63,7 @@ web_research(
 ```
 User: "Why is my Cloudflare Worker timing out on KV writes?"
 
-web_research(
+intelli_research(
   query="Cloudflare Workers KV write timeout limits",
   focusPrompt="Extract KV write limits, timeout thresholds, storage limits, and any workarounds for bulk writes. Focus on hard numbers and error messages."
 )
@@ -74,7 +74,7 @@ web_research(
 ```
 User: "Should I use Tailwind or Vanilla Extract for a new project?"
 
-web_research(
+intelli_research(
   query="Tailwind CSS vs Vanilla Extract comparison 2026",
   focusPrompt="Extract pros/cons, bundle size benchmarks, DX tradeoffs, and migration costs. Note which claims come from official sources vs blog opinions."
 )
@@ -85,7 +85,7 @@ web_research(
 ```
 User: "How do I use the Defuddle npm package?"
 
-web_research(
+intelli_research(
   query="defuddle npm content extraction usage",
   focusPrompt="Extract the API: install command, function signatures, options object, and output format. Include working code examples."
 )
@@ -107,18 +107,18 @@ When collating, the LLM resolves conflicts using source priority: official docs 
 
 ### Complex multi-angle research → manual orchestration
 
-When you need **different focus per URL** (e.g. comparing alternatives side-by-side), orchestrate step by step instead of using `web_research`:
+When you need **different focus per URL** (e.g. comparing alternatives side-by-side), orchestrate step by step instead of using `intelli_research`:
 
-1. `web_search(query)` — discover URLs
+1. `intelli_search(query)` — discover URLs
 2. `web_fetch` / `batch_web_fetch` — fetch specific pages
-3. `web_extract(url, title, content, query, focusPrompt)` — give each URL a different focus
-4. `web_collate(extractions, query)` — deduplicate and cache
+3. `intelli_extract(url, title, content, query, focusPrompt)` — give each URL a different focus
+4. `intelli_collate(extractions, query)` — deduplicate and cache
 
 Example: researching "KV vs Durable Objects" — extract KV pages with `focusPrompt="Extract KV read/write patterns, consistency model, and latency characteristics"` and Durable Objects pages with `focusPrompt="Extract the consistency guarantees, transaction API, and single-computer model"`.
 
 ## Using the result
 
-**The web_research tool result already contains a concise deduplicated summary. Use it directly — do NOT read cache files unless the summary is insufficient for the task.**
+**The intelli_research tool result already contains a concise deduplicated summary. Use it directly — do NOT read cache files unless the summary is insufficient for the task.**
 
 Only reach into the cache when:
 - The user asks about a specific source you need to re-examine
