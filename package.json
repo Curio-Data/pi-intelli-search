@@ -1,7 +1,8 @@
 {
-  "name": "pi-web-research",
+  "name": "pi-intelli-search",
   "version": "0.1.0",
-  "description": "Web research extension for Pi: search, extract, collate, cache with persistent .search/ directory.",
+  "description": "Intelligent web research for Pi: search, extract, collate, and cache grounded web context in one tool call.",
+  "license": "Apache-2.0",
   "type": "module",
   "pi": {
     "extensions": ["./src/index.ts"],
@@ -33,9 +34,16 @@
   "files": [
     "src/",
     "skills/",
+    "dist/",
+    "NOTICE",
+    "LICENSE",
     "README.md"
   ],
   "keywords": [
-    "pi-package"
+    "pi-package",
+    "pi-extension",
+    "web-research",
+    "web-search",
+    "intelli-search"
   ]
 }

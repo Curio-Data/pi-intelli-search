@@ -9,6 +9,10 @@ import type { ModelConfig } from "./types.js";
  * Uses pi's native auth system (auth.json, env vars, OAuth).
  * Uses completeSimple() which handles reasoning models correctly
  * (required for MiniMax M2.7 and other reasoning models).
+ *
+ * Uses the onResponse callback to detect rate-limiting (HTTP 429) and
+ * server errors (5xx) and surface them as actionable errors with retry
+ * guidance.
  */
 export async function callLlm(
   ctx: ExtensionContext,
@@ -45,6 +49,8 @@ export async function callLlm(
 
   // 4. Call via pi-ai — use completeSimple which sends reasoning params
   //    for reasoning models (required by MiniMax M2.7 etc.)
+  //    The onResponse hook checks HTTP status for rate-limit / server errors
+  //    before the stream body is consumed.
   const response = await completeSimple(
     model,
     { systemPrompt, messages },
@@ -54,6 +60,21 @@ export async function callLlm(
       signal: options?.signal,
       maxTokens: options?.maxTokens,
       reasoning: "low",
+      onResponse: (res) => {
+        if (res.status === 429) {
+          const retryAfter = res.headers["retry-after"];
+          throw new Error(
+            `Rate limited by ${config.provider}/${config.model}` +
+              (retryAfter ? ` (retry after ${retryAfter}s)` : ". Please retry in a moment."),
+          );
+        }
+        if (res.status >= 500) {
+          throw new Error(
+            `Server error from ${config.provider}/${config.model} (HTTP ${res.status}). ` +
+              `The provider may be experiencing issues. Please retry.`,
+          );
+        }
+      },
     },
   );
 

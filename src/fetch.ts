@@ -89,7 +89,7 @@ function compareAndPick(a: FetchedPage, b: FetchedPage): FetchedPage {
   // Log the comparison for debugging
   if (aScore !== bScore) {
     console.error(
-      `[pi-web-research fetch] ${a.url}: defuddle=${aScore} markdown=${bScore} → picked ${bScore > aScore ? "markdown" : "defuddle"}`,
+      `[pi-intelli-search fetch] ${a.url}: defuddle=${aScore} markdown=${bScore} → picked ${bScore > aScore ? "markdown" : "defuddle"}`,
     );
   }
 

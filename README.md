@@ -1,25 +1,85 @@
-# pi-web-research
+# pi-intelli-search
 
-A Pi extension for web research: search, fetch, extract, collate, and cache — in one tool call.
+[![npm version](https://img.shields.io/npm/v/pi-intelli-search?color=blue)](https://www.npmjs.com/package/pi-intelli-search)
+[![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.67.68-blueviolet)](https://github.com/mariozechner/pi)
+[![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
+[![tests](https://img.shields.io/badge/tests-70%20passing-brightgreen)]()
+
+Intelligent web research for [Pi](https://github.com/mariozechner/pi): search, extract, collate, and cache grounded web context in one tool call.
+
+A Pi extension that adds a 4-stage research pipeline — search → fetch → extract → collate — designed for technical task completion. Per-page LLM extraction compresses raw pages to query-relevant content, then deduplicates across sources into a concise summary with a persistent `.search/` cache.
+
+## Install
+
+From npm (recommended):
+
+```bash
+pi install npm:pi-intelli-search
+```
+
+From GitHub:
+
+```bash
+pi install git:github.com/<user>/pi-intelli-search
+```
+
+Local development:
+
+```bash
+pi install /path/to/pi-intelli-search
+```
+
+On first load, the extension adds Perplexity Sonar models to `~/.pi/agent/models.json` under the `openrouter` provider.
 
 ## Tools
 
 | Tool | Description |
 |------|-------------|
-| `web_search` | Search via Perplexity Sonar. Returns summary + source URLs. |
-| `web_extract` | Per-page LLM extraction. Reduces ~50K chars → ~3-5K of relevant content. |
-| `web_collate` | Deduplicate and synthesise extractions into a summary + cache. |
-| `web_research` | Full pipeline: search → fetch → extract → collate → cache. One call. |
+| `intelli_search` | Search via Perplexity Sonar. Returns summary + source URLs. |
+| `intelli_extract` | Per-page LLM extraction. Reduces ~50K chars → ~3-5K of relevant content. |
+| `intelli_collate` | Deduplicate and synthesise extractions into a summary + cache. |
+| `intelli_research` | Full pipeline: search → fetch → extract → collate → cache. One call. |
 
-## Installation
+## Quick Start
 
-```bash
-pi install /path/to/pi-web-research
+### Quick search
+
+```text
+intelli_search(query="TypeScript 5.8 release date")
 ```
 
-On first load, the extension adds Perplexity Sonar models to `~/.pi/agent/models.json` under the `openrouter` provider.
+### Deep research
 
-## Required API keys
+**Always provide a `focusPrompt`** — the extraction LLM works best with specific guidance.
+
+```text
+intelli_research(
+  query="Svelte 5 runes tutorial examples",
+  focusPrompt="Extract the core rune concepts ($state, $derived, $effect), their syntax, and migration patterns."
+)
+```
+
+### Targeted research with domain restriction
+
+```text
+intelli_research(
+  query="Cloudflare Workers KV write timeout limits",
+  focusPrompt="Extract KV write limits, timeout thresholds, and workarounds. Focus on hard numbers.",
+  maxUrls=3,
+  domains=["developers.cloudflare.com"]
+)
+```
+
+### Comparing options
+
+```text
+intelli_research(
+  query="Tailwind CSS vs Vanilla Extract comparison 2026",
+  focusPrompt="Extract pros/cons, bundle size benchmarks, DX tradeoffs, and migration costs."
+)
+```
+
+## Required API Keys
 
 In `~/.pi/agent/auth.json`:
 
@@ -30,83 +90,28 @@ In `~/.pi/agent/auth.json`:
 }
 ```
 
-- **OpenRouter** — used by `web_search` (Perplexity Sonar)
-- **MiniMax** — used by `web_extract` and `web_collate` (MiniMax M2.7)
+- **OpenRouter** — used by `intelli_search` (Perplexity Sonar)
+- **MiniMax** — used by `intelli_extract` and `intelli_collate` (MiniMax M2.7)
 
-## Architecture
+Run `/login` in pi to set up keys interactively, or edit the file directly.
 
-### Pipeline
+## Pipeline
 
 ```
-web_research(query)
-  ├── Stage 1: Search → Perplexity Sonar (via OpenRouter, pi native auth)
-  ├── Stage 2: Fetch  → wreq-js + Defuddle, compared against raw markdown
-  ├── Stage 3: Extract → MiniMax M2.7 per page (parallel, via native minimax provider)
+intelli_research(query)
+  ├── Stage 1: Search  → Perplexity Sonar (via OpenRouter, pi native auth)
+  ├── Stage 2: Fetch   → wreq-js + Defuddle, compared against raw markdown
+  ├── Stage 3: Extract → MiniMax M2.7 per page (parallel)
   └── Stage 4: Collate → MiniMax M2.7 dedup + cache
 ```
 
-No cross-tool invocation. `web_research` is self-contained.
+Each page is dual-fetched (HTML → Defuddle vs markdown endpoint) and scored for quality. Per-page extraction compresses ~50K chars to ~3-5K of query-relevant content before collation, keeping the total context manageable (~32K for 8 pages).
 
-### Fetch strategy: compare, don't guess
+For sites with `llms-full.txt` (Cloudflare, Next.js, Vite), the raw file is downloaded to the cache for offline grep — no LLM processing needed.
 
-Each page is fetched two ways in parallel:
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
-1. **HTML → Defuddle** — browser-grade TLS fingerprint, Defuddle content extraction
-2. **Markdown endpoint** — `Accept: text/markdown` header, `<link rel="alternate">`, or `.md` suffix
-3. **Compare quality** — score on code blocks, headings, tables vs. nav chrome noise. Pick the better one.
-
-For sites that provide `llms-full.txt` (Cloudflare, Next.js, Vite, etc.), the raw file is downloaded to `sources/` alongside individual pages. No LLM processing — the agent can grep/search it for offline lookup.
-
-### Why MiniMax direct instead of via OpenRouter
-
-MiniMax M2.7 is a reasoning model. When called via OpenRouter's OpenAI-compatible endpoint, `complete()` doesn't send the required reasoning parameters, causing `400 Reasoning is mandatory`. The fix:
-
-- Use `completeSimple()` with `reasoning: "low"` instead of `complete()`
-- Route through the native `minimax` provider (Anthropic-messages API) which handles reasoning correctly
-
-### Why extract before collate?
-
-8 pages × ~50K = ~400K chars — too large for a single context. Per-page extraction compresses each to ~3-5K, so the collation model sees ~32K total — comfortable for synthesis.
-
-### Custom model registration
-
-Perplexity Sonar isn't in pi's built-in model list for OpenRouter. The extension writes it to `~/.pi/agent/models.json` on first load and refreshes the model registry. This is idempotent.
-
-## Settings
-
-Override defaults in `~/.pi/agent/settings.json`:
-
-```jsonc
-{
-  "webResearchSearchModel":       { "provider": "openrouter", "model": "perplexity/sonar" },
-  "webResearchExtractModel":      { "provider": "minimax", "model": "MiniMax-M2.7" },
-  "webResearchCollateModel":      { "provider": "minimax", "model": "MiniMax-M2.7" },
-  "webResearchMaxUrls":           8,
-  "webResearchCacheDir":          ".search",
-  "webResearchExtractMaxChars":   150000
-}
-```
-
-## Cache structure
-
-```
-.search/
-├── 2026-04-19-d1-worker-api/
-│   ├── report.md                              # Collated summary + source index
-│   ├── query.txt                              # Original search query
-│   ├── extractions/                           # Per-page LLM extractions (~3-5K each)
-│   │   ├── 01-developers-cloudflare-com.md    # M2.7 extraction: query-relevant only
-│   │   └── 02-developers-cloudflare-com.md
-│   └── sources/                               # Full content
-│       ├── 01-developers-cloudflare-com.md    # Defuddle OR raw markdown (whichever scored higher)
-│       ├── 02-developers-cloudflare-com.md
-│       └── llms-full-developers-cloudflare-com.md   # Raw site-wide llms-full.txt (auto-dl)
-└── .index.json                                # Index of all cached searches
-```
-
-The `sources/` directory contains the raw page content — either the winning Defuddle/markdown comparison, or the full `llms-full.txt` if the site provides one. The agent can read individual extractions for a quick refresher, or grep the llms-full.txt for offline search.
-
-## Cost estimate
+## Cost
 
 Per 8-page research session: **~$0.05**
 
@@ -117,25 +122,74 @@ Per 8-page research session: **~$0.05**
 | Extract (M2.7) | 8 parallel | ~$0.03 |
 | Collate (M2.7) | 1 | ~$0.005 |
 
+## Settings
+
+Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
+
+```jsonc
+{
+  "intelliSearchModel":       { "provider": "openrouter", "model": "perplexity/sonar" },
+  "intelliExtractModel":      { "provider": "minimax", "model": "MiniMax-M2.7" },
+  "intelliCollateModel":      { "provider": "minimax", "model": "MiniMax-M2.7" },
+  "intelliMaxUrls":           8,
+  "intelliCacheDir":          ".search",
+  "intelliExtractMaxChars":   150000,
+  "intelliExtractionMaxTokens": 3000,
+  "intelliCollationMaxTokens":  4000,
+  "intelliFetchTimeoutMs":    20000,
+  "intelliFetchConcurrency":  4,
+  "intelliBrowserFingerprint": "chrome_145",
+  "intelliLlmsFullSites":     {}
+}
+```
+
+## Cache Structure
+
+```
+.search/
+├── 2026-04-19-d1-worker-api/
+│   ├── report.md               # Collated summary + source index
+│   ├── query.txt               # Original search query
+│   ├── extractions/            # Per-page LLM extractions (~3-5K each)
+│   │   ├── 01-developers-cloudflare-com.md
+│   │   └── 02-developers-cloudflare-com.md
+│   └── sources/                # Full page content
+│       ├── 01-developers-cloudflare-com.md
+│       ├── 02-developers-cloudflare-com.md
+│       └── llms-full-developers-cloudflare-com.md
+└── .index.json                 # Index of all cached searches
+```
+
+## Compatibility
+
+- **pi ≥ 0.67.68** — core functionality (tools, model registration, settings)
+- **pi ≥ 0.68.0** — custom working indicator, `after_provider_response` monitoring
+- Gracefully degrades on older versions (optional features are skipped)
+
 ## Development
 
 ```bash
-cd pi-web-research
 npm install
 npm run build        # TypeScript → dist/
+npm test             # Unit tests (70 tests)
+npm run test:smoke   # Smoke test
 
 # Test in pi
 pi -e ./dist/index.js
 
 # Install as package
-pi install /path/to/pi-web-research
+pi install /path/to/pi-intelli-search
 ```
 
-## Dependencies
+## Documentation
 
-| Package | Why |
-|---------|-----|
-| `wreq-js` | Browser-grade TLS/HTTP fingerprinting (anti-bot) |
-| `defuddle` | Content extraction (modern Readability replacement) |
-| `linkedom` | Lightweight DOM for Defudder |
-| `@sinclair/typebox` | Schema definitions for tool parameters |
+- [Architecture](docs/ARCHITECTURE.md) — detailed design decisions and pipeline internals
+- [Components](docs/COMPONENTS.md) — third-party dependencies and license attribution
+- [Skill guide](skills/intelli-search/SKILL.md) — agent-facing usage instructions
+- [Contributor guide](AGENTS.md) — coding conventions and project structure
+
+## License
+
+Copyright 2025 Ashraf Miah, Curio Data Pro Ltd.
+
+Licensed under the [Apache License, Version 2.0](./LICENSE).

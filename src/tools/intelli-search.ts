@@ -1,4 +1,7 @@
-// src/tools/web-search.ts — web_search tool
+// src/tools/intelli-search.ts — intelli_search tool
+//
+// Copyright 2025 Ashraf Miah, Curio Data Pro Ltd
+// SPDX-License-Identifier: Apache-2.0
 import { Type } from "@sinclair/typebox";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { SearchResult } from "../types.js";
@@ -7,13 +10,13 @@ import { callLlm } from "../llm.js";
 import { textContent, extractSourceUrls } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 
-export const webSearchTool = {
-  name: "web_search",
-  label: "Web Search",
+export const intelliSearchTool = {
+  name: "intelli_search",
+  label: "Intelli Search",
   description:
     "Search the web using Perplexity Sonar. Returns a synthesised summary with source URLs. " +
-    "For a complete research pipeline, use web_research instead.",
-  promptSnippet: "web_search(query): search the web and return synthesised results with source URLs",
+    "For a complete research pipeline, use intelli_research instead.",
+  promptSnippet: "intelli_search(query): search the web and return synthesised results with source URLs",
   parameters: Type.Object({
     query: Type.String({ description: "Search query" }),
     domains: Type.Optional(Type.Array(Type.String(), { description: "Restrict to these domains" })),
