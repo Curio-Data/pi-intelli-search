@@ -4,10 +4,10 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Type } from "@sinclair/typebox";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT } from "../prompts.js";
+import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT, CACHE_SUGGEST_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
-import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile } from "../cache.js";
+import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, readIndex, formatIndexForJudge, parseJudgeResponse, formatCacheSuggestions } from "../cache.js";
 import { textContent, extractSourceUrls, inferSourceType, inferCurrentness } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import type { FetchedPage, ExtractResult } from "../types.js";
@@ -187,6 +187,32 @@ export const intelliResearchTool = {
     await llmsFullPromise;
 
     // ═══════════════════════════════════════════
+    // Stage 5: Cache suggest — find related previous searches
+    // ═══════════════════════════════════════════
+    // Runs after the pipeline completes. Uses the extract model as a cheap
+    // LLM judge to find semantically related cached searches. Never blocks
+    // the main result — graceful degradation on failure.
+    const currentSlug = cachePath.split("/").pop() ?? "";
+    let suggestionsAppendix = "";
+    try {
+      const index = await readIndex(settings.cacheDir);
+      // Only run judge if there are other searches to compare against
+      if (index.searches.some((e) => e.slug !== currentSlug)) {
+        const indexText = formatIndexForJudge(index, currentSlug);
+        const judgeUserMsg = `Current query: "${params.query}"\n\nPrevious searches:\n${indexText}`;
+        const judgeResponse = await callLlm(ctx, extractConfig, CACHE_SUGGEST_PROMPT, judgeUserMsg, {
+          maxTokens: 500,
+          signal,
+        });
+        const matches = parseJudgeResponse(judgeResponse, index, currentSlug);
+        suggestionsAppendix = formatCacheSuggestions(matches, settings.cacheDir);
+      }
+    } catch (err: any) {
+      // Cache suggest is purely additive — never fail the pipeline
+      console.error(`[pi-intelli-search] Cache suggest failed: ${err?.message ?? err}`);
+    }
+
+    // ═══════════════════════════════════════════
     // Return concise injection
     // ═══════════════════════════════════════════
     const failedCount = pages.length - successPages.length;
@@ -198,6 +224,7 @@ export const intelliResearchTool = {
     result += `\nTo explore a specific source:\n`;
     result += `- Read the extraction: \`read ${cachePath}/extractions/01-*.md\`\n`;
     result += `- Read the full page: \`read ${cachePath}/sources/01-*.md\`\n`;
+    result += suggestionsAppendix;
 
     return {
       content: [textContent(result)],

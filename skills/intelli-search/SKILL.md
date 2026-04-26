@@ -120,10 +120,16 @@ Example: researching "KV vs Durable Objects" — extract KV pages with `focusPro
 
 **The intelli_research tool result already contains a concise deduplicated summary. Use it directly — do NOT read cache files unless the summary is insufficient for the task.**
 
+The tool output also includes a **📚 Related cached searches** section when semantically similar previous searches exist in `.search/`. These are discovered by an LLM judge that compares the current query against the cache index. The related searches are:
+- **Supplementary** — the live search always runs; cached results are offered as additional context
+- **Useful when live results are incomplete** — you can read a previous `report.md` to cross-reference
+- **Helpful for the user** — if the live results seem wrong, you can point the user to previous research on the same topic
+
 Only reach into the cache when:
 - The user asks about a specific source you need to re-examine
 - You need a complete code example that was truncated in the summary
 - Something in the summary seems contradictory and you need the original
+- The live results are insufficient and a related cached search may help
 
 ## Follow-up from cache
 

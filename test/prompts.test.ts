@@ -1,7 +1,7 @@
 // test/prompts.test.ts — Snapshot tests for prompt templates
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT } from "../src/prompts.js";
+import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT, CACHE_SUGGEST_PROMPT } from "../src/prompts.js";
 
 describe("SEARCH_SYSTEM_PROMPT", () => {
   it("is a non-empty string", () => {
@@ -78,6 +78,38 @@ describe("prompt snapshots (length)", () => {
     assert.ok(
       COLLATION_SYSTEM_PROMPT.length > 800 && COLLATION_SYSTEM_PROMPT.length < 1800,
       `Collation prompt length ${COLLATION_SYSTEM_PROMPT.length} outside expected range 800-1800`,
+    );
+  });
+});
+
+describe("CACHE_SUGGEST_PROMPT", () => {
+  it("is a non-empty string", () => {
+    assert.ok(typeof CACHE_SUGGEST_PROMPT === "string");
+    assert.ok(CACHE_SUGGEST_PROMPT.length > 100);
+  });
+
+  it("instructs to return JSON array", () => {
+    assert.ok(CACHE_SUGGEST_PROMPT.includes("JSON array"), "should mention JSON array");
+    assert.ok(CACHE_SUGGEST_PROMPT.includes('"index"'), "should specify index field");
+    assert.ok(CACHE_SUGGEST_PROMPT.includes('"relevance"'), "should specify relevance field");
+  });
+
+  it("cautions against false positives", () => {
+    assert.ok(CACHE_SUGGEST_PROMPT.includes("genuinely related"), "should warn about false positives");
+    assert.ok(CACHE_SUGGEST_PROMPT.includes("NOT related"), "should give negative example");
+  });
+
+  it("mentions semantic matching", () => {
+    assert.ok(
+      CACHE_SUGGEST_PROMPT.includes("paraphras") || CACHE_SUGGEST_PROMPT.includes("semantic"),
+      "should mention paraphrases or semantic matching",
+    );
+  });
+
+  it("CACHE_SUGGEST_PROMPT length is stable", () => {
+    assert.ok(
+      CACHE_SUGGEST_PROMPT.length > 300 && CACHE_SUGGEST_PROMPT.length < 800,
+      `Cache suggest prompt length ${CACHE_SUGGEST_PROMPT.length} outside expected range 300-800`,
     );
   });
 });
