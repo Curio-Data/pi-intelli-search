@@ -33,12 +33,12 @@ On first load, the extension adds Perplexity Sonar models to `~/.pi/agent/models
 
 ## Tools
 
-| Tool | Description |
-|------|-------------|
-| `intelli_search` | Search via Perplexity Sonar. Returns summary + source URLs. |
-| `intelli_extract` | Per-page LLM extraction. Reduces ~50K chars → ~3-5K of relevant content. |
-| `intelli_collate` | Deduplicate and synthesise extractions into a summary + cache. |
-| `intelli_research` | Full pipeline: search → fetch → extract → collate → cache. One call. |
+| Tool               | Description                                                              |
+| ------------------ | ------------------------------------------------------------------------ |
+| `intelli_search`   | Search via Perplexity Sonar. Returns summary + source URLs.              |
+| `intelli_extract`  | Per-page LLM extraction. Reduces ~50K chars → ~3-5K of relevant content. |
+| `intelli_collate`  | Deduplicate and synthesise extractions into a summary + cache.           |
+| `intelli_research` | Full pipeline: search → fetch → extract → collate → cache. One call.     |
 
 ## Quick Start
 
@@ -86,7 +86,7 @@ In `~/.pi/agent/auth.json`:
 ```json
 {
   "openrouter": { "type": "api_key", "key": "sk-or-v1-..." },
-  "minimax":    { "type": "api_key", "key": "sk-api-..." }
+  "minimax": { "type": "api_key", "key": "sk-api-..." }
 }
 ```
 
@@ -115,12 +115,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 Per 8-page research session: **~$0.05**
 
-| Step | Calls | Cost |
-|------|-------|------|
-| Search (Sonar) | 1 | ~$0.02 |
-| Fetch (Defuddle + markdown) | 8 parallel pairs | $0.00 |
-| Extract (M2.7) | 8 parallel | ~$0.03 |
-| Collate (M2.7) | 1 | ~$0.005 |
+| Step                        | Calls            | Cost    |
+| --------------------------- | ---------------- | ------- |
+| Search (Sonar)              | 1                | ~$0.02  |
+| Fetch (Defuddle + markdown) | 8 parallel pairs | $0.00   |
+| Extract (M2.7)              | 8 parallel       | ~$0.03  |
+| Collate (M2.7)              | 1                | ~$0.005 |
 
 ## Settings
 
@@ -128,18 +128,21 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 
 ```jsonc
 {
-  "intelliSearchModel":       { "provider": "openrouter", "model": "perplexity/sonar" },
-  "intelliExtractModel":      { "provider": "minimax", "model": "MiniMax-M2.7" },
-  "intelliCollateModel":      { "provider": "minimax", "model": "MiniMax-M2.7" },
-  "intelliMaxUrls":           8,
-  "intelliCacheDir":          ".search",
-  "intelliExtractMaxChars":   150000,
+  "intelliSearchModel": {
+    "provider": "openrouter",
+    "model": "perplexity/sonar",
+  },
+  "intelliExtractModel": { "provider": "minimax", "model": "MiniMax-M2.7" },
+  "intelliCollateModel": { "provider": "minimax", "model": "MiniMax-M2.7" },
+  "intelliMaxUrls": 8,
+  "intelliCacheDir": ".search",
+  "intelliExtractMaxChars": 150000,
   "intelliExtractionMaxTokens": 3000,
-  "intelliCollationMaxTokens":  4000,
-  "intelliFetchTimeoutMs":    20000,
-  "intelliFetchConcurrency":  4,
+  "intelliCollationMaxTokens": 4000,
+  "intelliFetchTimeoutMs": 20000,
+  "intelliFetchConcurrency": 4,
   "intelliBrowserFingerprint": "chrome_145",
-  "intelliLlmsFullSites":     {}
+  "intelliLlmsFullSites": {},
 }
 ```
 
