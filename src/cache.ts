@@ -3,6 +3,19 @@ import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FetchedPage, ExtractResult } from "./types.js";
 
+export interface IndexEntry {
+  slug: string;
+  query: string;
+  timestamp: string;
+}
+
+export interface CacheIndex {
+  searches: IndexEntry[];
+}
+
+/** Maximum number of index entries to feed to the LLM judge. */
+const MAX_JUDGE_ENTRIES = 20;
+
 export function makeCachePath(query: string, cwd: string, cacheDir: string): string {
   const date = new Date().toISOString().slice(0, 10);
   const words = query
@@ -99,16 +112,7 @@ async function updateIndex(cacheDir: string, slug: string, query: string): Promi
   await mkdir(cacheDir, { recursive: true });
   const indexPath = join(cacheDir, ".index.json");
 
-  interface IndexEntry {
-    slug: string;
-    query: string;
-    timestamp: string;
-  }
-  interface Index {
-    searches: IndexEntry[];
-  }
-
-  let index: Index;
+  let index: CacheIndex;
   try {
     const raw = await readFile(indexPath, "utf-8");
     index = JSON.parse(raw);
@@ -118,4 +122,101 @@ async function updateIndex(cacheDir: string, slug: string, query: string): Promi
 
   index.searches.push({ slug, query, timestamp: new Date().toISOString() });
   await writeFile(indexPath, JSON.stringify(index, null, 2));
+}
+
+/** Read the cache index. Returns empty index if file doesn't exist. */
+export async function readIndex(cacheDir: string): Promise<CacheIndex> {
+  const indexPath = join(cacheDir, ".index.json");
+  try {
+    const raw = await readFile(indexPath, "utf-8");
+    return JSON.parse(raw) as CacheIndex;
+  } catch {
+    return { searches: [] };
+  }
+}
+
+/**
+ * Format the cache index for the LLM judge.
+ * Returns the most recent MAX_JUDGE_ENTRIES entries as a numbered list.
+ * Excludes the entry matching `excludeSlug` (the current search).
+ */
+export function formatIndexForJudge(index: CacheIndex, excludeSlug?: string): string {
+  // Take most recent entries, excluding the current search
+  const entries = index.searches
+    .filter((e) => e.slug !== excludeSlug)
+    .slice(-MAX_JUDGE_ENTRIES);
+
+  if (entries.length === 0) return "No previous searches.";
+
+  return entries
+    .map((e, i) => `${i + 1}. "${e.query}" (slug: ${e.slug}, searched: ${e.timestamp})`)
+    .join("\n");
+}
+
+/**
+ * Parse the LLM judge response into matching index entries.
+ * Expects a JSON array of { index, relevance } objects.
+ * Returns the matched entries with their relevance notes.
+ */
+export function parseJudgeResponse(
+  response: string,
+  index: CacheIndex,
+  excludeSlug?: string,
+): Array<{ entry: IndexEntry; relevance: string }> {
+  const eligible = index.searches.filter((e) => e.slug !== excludeSlug);
+
+  // Extract JSON array from the response — the LLM may wrap it in markdown
+  const jsonMatch = response.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) return [];
+
+  let parsed: Array<{ index?: number; relevance?: string }>;
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch {
+    return [];
+  }
+
+  if (!Array.isArray(parsed)) return [];
+
+  const results: Array<{ entry: IndexEntry; relevance: string }> = [];
+  for (const item of parsed) {
+    if (typeof item.index !== "number" || item.index < 1) continue;
+    const entry = eligible[item.index - 1]; // 1-based from the numbered list
+    if (!entry) continue;
+    results.push({ entry, relevance: item.relevance ?? "" });
+  }
+
+  return results;
+}
+
+/**
+ * Format matched cache entries as a human-readable appendix for the tool output.
+ */
+export function formatCacheSuggestions(
+  matches: Array<{ entry: IndexEntry; relevance: string }>,
+  cacheDir: string,
+): string {
+  if (matches.length === 0) return "";
+
+  // Compute relative age
+  const now = Date.now();
+  const age = (ts: string): string => {
+    const hours = Math.floor((now - new Date(ts).getTime()) / 3_600_000);
+    if (hours < 1) return "just now";
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
+
+  let out = "\n---\n\n## 📚 Related cached searches\n\n";
+  out += "The following previous searches may contain relevant supplementary information. ";
+  out += "Read a report with `read .search/<slug>/report.md` if the live results are insufficient.\n\n";
+  out += "| # | Query | Age | Why related |\n";
+  out += "|---|-------|-----|-------------|\n";
+  for (const [i, m] of matches.entries()) {
+    const queryTrunc = m.entry.query.length > 60 ? m.entry.query.slice(0, 57) + "..." : m.entry.query;
+    out += `| ${i + 1} | \`${queryTrunc}\` | ${age(m.entry.timestamp)} | ${m.relevance} |\n`;
+  }
+  out += `\nCache directory: \`${cacheDir}/\`\n`;
+  return out;
 }

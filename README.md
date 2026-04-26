@@ -66,7 +66,7 @@ Local development:
 pi install /path/to/pi-intelli-search
 ```
 
-On first load, the extension adds Perplexity Sonar models to `~/.pi/agent/models.json` under the `openrouter` provider.
+On first load, the extension adds Perplexity Sonar models to `~/.pi/agent/models.json` under the `openrouter` provider. This patch approach lets pi discover Sonar through OpenRouter — no separate Perplexity API account needed.
 
 ## Tools
 
@@ -116,9 +116,70 @@ intelli_research(
 )
 ```
 
-## Required API Keys
+## Model Configuration
 
-In `~/.pi/agent/auth.json`:
+All three pipeline stages use independently configurable models. Defaults are chosen for cost-efficiency, but **any model pi can access works** — built-in providers, OpenRouter models, or models from other extensions.
+
+| Stage    | Default                    | Config key                |
+| -------- | -------------------------- | ------------------------- |
+| Search   | `openrouter/perplexity/sonar` | `intelliSearchModel`   |
+| Extract  | `minimax/MiniMax-M2.7`     | `intelliExtractModel`     |
+| Collate  | `minimax/MiniMax-M2.7`     | `intelliCollateModel`     |
+
+### Why OpenRouter for Sonar?
+
+Perplexity Sonar is an excellent search-grounded model, but it's not in pi's built-in model list. Rather than requiring a separate Perplexity API account (which requires a **$50 minimum credit top-up**), the extension routes Sonar through **OpenRouter** — a unified pay-as-you-go API with no minimum spend. One API key gives you Sonar alongside thousands of other models. On first load, the extension patches `~/.pi/agent/models.json` to add Sonar under the `openrouter` provider so pi can discover it. This approach:
+
+- **Avoids the Perplexity API $50 minimum** — OpenRouter has pay-as-you-go with no minimum spend
+- **One account, many models** — the same OpenRouter key covers Sonar and any other models you might want for extract/collate
+- **Is non-destructive** — the patch merges new models by ID; it never replaces existing OpenRouter models
+- **Is idempotent** — safe across extension reloads and updates
+
+### Swapping the extract/collate model
+
+MiniMax M2.7 is the default because it's cheap and effective for extraction/collation, but you can use any model pi supports. Override in `~/.pi/agent/settings.json` or `.pi/settings.json`:
+
+**Option A — Use a pi built-in provider** (auth via `/login`):
+
+```jsonc
+{
+  "intelliExtractModel": { "provider": "openai", "model": "gpt-4o-mini" },
+  "intelliCollateModel": { "provider": "openai", "model": "gpt-4o-mini" }
+}
+```
+
+**Option B — Use another OpenRouter model** (same key, no extra setup):
+
+```jsonc
+{
+  "intelliExtractModel": { "provider": "openrouter", "model": "google/gemini-2.0-flash-001" },
+  "intelliCollateModel": { "provider": "openrouter", "model": "google/gemini-2.0-flash-001" }
+}
+```
+
+**Option C — Use a model provided by another extension** (e.g. Z.Ai, local models):
+
+```jsonc
+{
+  "intelliExtractModel": { "provider": "zai", "model": "glm-5.1" },
+  "intelliCollateModel": { "provider": "zai", "model": "glm-5.1" }
+}
+```
+
+The only requirement is that the model is registered in pi's model registry and has auth configured. Run `/login` to set up built-in providers, or follow the extension's own setup for extension-provided models.
+
+### Model selection guidance
+
+For extraction and collation, the ideal model has:
+- **Low cost per token** — 8 pages × extraction + 1 collation per session
+- **Good instruction following** — must adhere to extraction prompts precisely
+- **Sufficient context** — cleaned pages can be ~50K chars (truncated to `extractMaxChars`)
+
+Models known to work well: MiniMax M2.7 (default), GPT-4o-mini, Gemini 2.0 Flash, DeepSeek V3, Claude 3.5 Haiku.
+
+### Required API Keys
+
+With default settings, you need two keys in `~/.pi/agent/auth.json`:
 
 ```json
 {
@@ -127,8 +188,8 @@ In `~/.pi/agent/auth.json`:
 }
 ```
 
-- **OpenRouter** — used by `intelli_search` (Perplexity Sonar)
-- **MiniMax** — used by `intelli_extract` and `intelli_collate` (MiniMax M2.7)
+- **OpenRouter** — used by `intelli_search` (Perplexity Sonar) and available as an extract/collate alternative
+- **MiniMax** — used by `intelli_extract` and `intelli_collate` (MiniMax M2.7). **Only needed if you keep the defaults** — override `intelliExtractModel`/`intelliCollateModel` to use a different provider.
 
 Run `/login` in pi to set up keys interactively, or edit the file directly.
 
@@ -138,9 +199,11 @@ Run `/login` in pi to set up keys interactively, or edit the file directly.
 intelli_research(query)
   ├── Stage 1: Search  → Perplexity Sonar (via OpenRouter, pi native auth)
   ├── Stage 2: Fetch   → wreq-js + Defuddle, compared against raw markdown
-  ├── Stage 3: Extract → MiniMax M2.7 per page (parallel)
-  └── Stage 4: Collate → MiniMax M2.7 dedup + cache
+  ├── Stage 3: Extract → configurable model, default: MiniMax M2.7 (parallel)
+  └── Stage 4: Collate → configurable model, default: MiniMax M2.7 (dedup + cache)
 ```
+
+All model assignments are configurable — see [Model Configuration](#model-configuration).
 
 Each page is dual-fetched (HTML → Defuddle vs markdown endpoint) and scored for quality. Per-page extraction compresses ~50K chars to ~3-5K of query-relevant content before collation, keeping the total context manageable (~32K for 8 pages).
 
@@ -150,7 +213,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 ## Cost
 
-Per 8-page research session: **~$0.05**
+Per 8-page research session with default models: **~$0.05**
 
 | Step                        | Calls            | Cost    |
 | --------------------------- | ---------------- | ------- |
@@ -159,18 +222,23 @@ Per 8-page research session: **~$0.05**
 | Extract (M2.7)              | 8 parallel       | ~$0.03  |
 | Collate (M2.7)              | 1                | ~$0.005 |
 
+Costs scale with your chosen extract/collate model — MiniMax M2.7 is the default specifically for its low cost.
+
 ## Settings
 
 Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 
 ```jsonc
 {
+  // Model assignments — see "Model Configuration" section for swap guidance
   "intelliSearchModel": {
     "provider": "openrouter",
     "model": "perplexity/sonar",
   },
   "intelliExtractModel": { "provider": "minimax", "model": "MiniMax-M2.7" },
   "intelliCollateModel": { "provider": "minimax", "model": "MiniMax-M2.7" },
+
+  // Pipeline tuning
   "intelliMaxUrls": 8,
   "intelliCacheDir": ".search",
   "intelliExtractMaxChars": 150000,

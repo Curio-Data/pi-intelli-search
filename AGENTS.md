@@ -17,7 +17,7 @@ When creating commits:
 - **Language**: TypeScript (ESM, strict mode)
 - **Runtime**: Node.js (runs inside pi's extension host)
 - **Build**: `tsc` → `dist/`
-- **Test**: `node --import tsx --test test/*.test.ts` (70 tests)
+- **Test**: `node --import tsx --test test/*.test.ts` (100 tests)
 - **Package manager**: npm
 - **License**: Apache-2.0 (Copyright 2025 Ashraf Miah, Curio Data Pro Ltd)
 
@@ -41,10 +41,10 @@ src/
 ├── index.ts                  # Extension entry: registers tools, events, model setup
 ├── llm.ts                    # callLlm() — pi native auth + rate-limit detection
 ├── fetch.ts                  # Page fetching: Defuddle vs markdown comparison, llms-full.txt
-├── prompts.ts                # System prompts for search, extraction, collation
+├── prompts.ts                # System prompts for search, extraction, collation, cache suggest
 ├── providers.ts              # Custom model registration (Sonar) into models.json
 ├── settings.ts               # Settings loader with caching and invalidation
-├── cache.ts                  # .search/ cache read/write and index management
+├── cache.ts                  # .search/ cache read/write, index management, cache suggest helpers
 ├── types.ts                  # Shared TypeScript interfaces
 ├── util.ts                   # URL extraction, source type inference, helpers
 └── tools/
@@ -80,8 +80,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline descripti
 
 1. **Search** — Perplexity Sonar via OpenRouter returns a synthesised answer + source URLs
 2. **Fetch** — Each page is fetched two ways in parallel (HTML→Defuddle and markdown variant), compared by quality score, best picked
-3. **Extract** — MiniMax M2.7 per-page extraction (parallel), compressing ~50K → ~3-5K chars
-4. **Collate** — MiniMax M2.7 deduplicates across extractions, produces summary + cache
+3. **Extract** — Configurable model (default: MiniMax M2.7) per-page extraction (parallel), compressing ~50K → ~3-5K chars
+4. **Collate** — Configurable model (default: MiniMax M2.7) deduplicates across extractions, produces summary + cache
+5. **Cache suggest** — LLM judge (extract model) compares current query against `.search/.index.json` and appends related previous searches to the output. Purely additive — never blocks or gates the main result.
 
 The pipeline is self-contained — pi extensions cannot call other tools from `execute()`, so all stages are inlined in `intelli-research.ts`.
 
@@ -113,13 +114,15 @@ Loaded from `~/.pi/agent/settings.json` and `.pi/settings.json` with `intelli*` 
 
 Written to `.search/<date>-<slug>/` with `report.md`, `query.txt`, `extractions/`, `sources/`, and `.index.json`. The collation model sees cache paths so it can reference them in output.
 
+**Cache suggest** (Stage 5) reads `.index.json` back after each research call. It feeds up to 20 recent entries to an LLM judge (using the extract model for cost efficiency) which returns semantically related previous searches. Results are formatted as a `📚 Related cached searches` table appended to the tool output. This is purely supplementary — the live search always runs, and the cache suggestions give the agent (and user) a pointer to prior research if live results are insufficient.
+
 ## Development Commands
 
 ```bash
 npm install              # Install deps
 npm run build            # TypeScript → dist/ (tsc)
 npm run dev              # Watch mode (tsc --watch)
-npm test                 # Run all tests (70 tests)
+npm test                 # Run all tests (100 tests)
 npm run test:smoke       # Smoke test
 ```
 
@@ -133,7 +136,9 @@ pi install /path/to/pi-intelli-search   # Install as package
 
 In `~/.pi/agent/auth.json`:
 - **OpenRouter** (`openrouter`) — used by intelli_search (Perplexity Sonar)
-- **MiniMax** (`minimax`) — used by intelli_extract and intelli_collate (MiniMax M2.7)
+- **MiniMax** (`minimax`) — used by intelli_extract and intelli_collate (MiniMax M2.7). **Only needed with default settings** — override `intelliExtractModel`/`intelliCollateModel` to use a different provider.
+
+All three model roles (search, extract, collate) are configurable via `~/.pi/agent/settings.json`. Any model in pi's registry works — built-in providers, OpenRouter models, or models from other extensions. See README "Model Configuration" section for details.
 
 ## Coding Conventions
 
@@ -151,15 +156,16 @@ In `~/.pi/agent/auth.json`:
 - Test files in `test/` mirror `src/` structure: `cache.test.ts`, `fetch.test.ts`, `settings.test.ts`, etc.
 - Run with `node --import tsx --test` (Node.js built-in test runner)
 - Tests are unit tests — no live API calls, no network access required
-- 70 tests total across 7 test files + 1 smoke test
+- 100 tests total across 7 test files + 1 smoke test
 
 ## Important Design Decisions
 
 1. **Per-page extraction before collation** — 8 pages × 50K = 400K chars exceeds LLM context. Extracting per-page first compresses to ~32K total for comfortable synthesis.
-2. **`completeSimple()` over `complete()`** — MiniMax M2.7 is a reasoning model; the simpler API correctly sends reasoning parameters.
+2. **`completeSimple()` over `complete()`** — sends `reasoning: "low"` which is required for reasoning models (MiniMax M2.7, DeepSeek, etc.) and harmless for non-reasoning ones.
 3. **models.json merge over `registerProvider()`** — The latter replaces all models for a provider; the former adds non-destructively.
 4. **Dual fetch (Defuddle + markdown)** — Some sites serve cleaner content via markdown endpoints. The quality score comparison picks the better version automatically.
 5. **`focusPrompt` is critical** — Without it the extraction LLM works generically. The promptGuidelines instruct the agent to always provide it.
+6. **Cache suggest is additive, not a gate** — Stage 5 never blocks or replaces the live pipeline. It uses the cheap extract model as an LLM judge (~500 input tokens, ~$0.0002) to find related previous searches. Failures are caught and silently ignored.
 
 ## Tool Naming
 

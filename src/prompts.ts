@@ -57,3 +57,19 @@ Preserve complete code blocks and API signatures verbatim.
 ## Source assessment
 For each source: URL, type, relevance (high/medium/low), what unique information
 it contributed that wasn't available in other sources.`;
+
+export const CACHE_SUGGEST_PROMPT = `You judge search query relevance. Given the current query and a list of
+previous searches, identify which are semantically related — even if the
+wording differs. Consider paraphrases, broader/narrower scope, and topic overlap.
+
+Return a JSON array of matching entries, each with "index" (1-based from the
+list) and "relevance" (a brief note on why it's related). Return an empty
+array [] if none are related.
+
+Important: only include genuinely related searches. A query about "Rust
+installation" is NOT related to "Rust vs Go performance" even though both
+mention Rust. Focus on whether reading the previous results would actually
+help someone researching the current query.
+
+Response format:
+[{"index": 1, "relevance": "one-line note"}]`;
