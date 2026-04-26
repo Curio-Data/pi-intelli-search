@@ -20,7 +20,7 @@ pi install npm:pi-intelli-search
 From GitHub:
 
 ```bash
-pi install git:github.com/<user>/pi-intelli-search
+pi install git:github.com/Curio-Data/pi-intelli-search
 ```
 
 Local development:
