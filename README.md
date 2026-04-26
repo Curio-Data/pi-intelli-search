@@ -23,15 +23,16 @@ Each page is compressed by a dedicated extraction model *before* entering the ag
 flowchart LR
     subgraph "Other agents"
         A[URL] --> B[Fetch]
-        B --> C[Raw content\n~50K chars × 8 pages]
-        C --> D[Agent context\n~400K chars]
+        B --> C["Raw content\n~50K chars × 8 pages"]
+        C --> D["Agent context\n~400K chars"]
     end
 
     subgraph "intelli-search"
-        E[Query] --> F[Search\nPerplexity Sonar]
-        F --> G[Fetch\nDefuddle + markdown]\nPages 1..8
-        G --> H[Extract\nper-page LLM]\n~3-5K each
-        H --> I[Collate\ndedup + synthesise]\n        I --> J[Agent context\n~5K focused summary]
+        E[Query] --> F["Search\nPerplexity Sonar"]
+        F --> G["Fetch\nDefuddle + markdown\nPages 1..8"]
+        G --> H["Extract\nper-page LLM\n~3-5K each"]
+        H --> I["Collate\ndedup + synthesise"]
+        I --> J["Agent context\n~5K focused summary"]
     end
 
     style D fill:#f9f,stroke:#333
