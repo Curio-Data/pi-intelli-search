@@ -1,6 +1,6 @@
 # pi-intelli-search
 
-[![npm version](https://img.shields.io/npm/v/pi-intelli-search?color=blue)](https://www.npmjs.com/package/pi-intelli-search)
+[![npm version](https://img.shields.io/npm/v/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.67.68-blueviolet)](https://github.com/mariozechner/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
 [![tests](https://img.shields.io/badge/tests-70%20passing-brightgreen)]()
@@ -9,12 +9,49 @@ Intelligent web research for [Pi](https://github.com/mariozechner/pi): search, e
 
 A Pi extension that adds a 4-stage research pipeline — search → fetch → extract → collate — designed for technical task completion. Per-page LLM extraction compresses raw pages to query-relevant content, then deduplicates across sources into a concise summary with a persistent `.search/` cache.
 
+## Why intelli-search?
+
+Most coding agents handle web research with a simple two-step pattern: **fetch URL → dump raw content into context**. Claude Code's `WebFetch` tool, revealed in its [open-sourced CLI](https://github.com/anthropics/claude-code), follows exactly this approach — it fetches a page, converts HTML to markdown (via the Jina Reader API), and hands the full result to the model.
+
+The problem: a cleaned documentation page is still ~50K characters. For 8 sources, that's ~400K chars dumped into the agent's context window. The model must simultaneously hold your task, the codebase, and a wall of raw web content. Signal-to-noise drops fast.
+
+**intelli-search takes a different approach — extract before you collate.**
+
+Each page is compressed by a dedicated extraction model *before* entering the agent's context. A collation model then deduplicates across extractions. The agent receives a focused ~5K summary instead of 400K of raw HTML.
+
+```mermaid
+flowchart LR
+    subgraph "Other agents"
+        A[URL] --> B[Fetch]
+        B --> C[Raw content\n~50K chars × 8 pages]
+        C --> D[Agent context\n~400K chars]
+    end
+
+    subgraph "intelli-search"
+        E[Query] --> F[Search\nPerplexity Sonar]
+        F --> G[Fetch\nDefuddle + markdown]\nPages 1..8
+        G --> H[Extract\nper-page LLM]\n~3-5K each
+        H --> I[Collate\ndedup + synthesise]\n        I --> J[Agent context\n~5K focused summary]
+    end
+
+    style D fill:#f9f,stroke:#333
+    style J fill:#9f9,stroke:#333
+```
+
+| | Fetch-and-dump | intelli-search pipeline |
+|---|---|---|
+| Context cost | ~400K chars raw | ~5K chars focused |
+| Noise | Nav, ads, sidebars included | Stripped by extraction |
+| Deduplication | None — overlapping sources waste tokens | Cross-source dedup via collation |
+| Cost per session | N/A (no search) | ~$0.05 |
+| Offline reuse | No | Cached in `.search/` |
+
 ## Install
 
 From npm (recommended):
 
 ```bash
-pi install npm:pi-intelli-search
+pi install npm:@curio-data/pi-intelli-search
 ```
 
 From GitHub:
@@ -186,13 +223,30 @@ pi install /path/to/pi-intelli-search
 
 ## Documentation
 
+- [Changelog](docs/CHANGELOG.md) — release history
 - [Architecture](docs/ARCHITECTURE.md) — detailed design decisions and pipeline internals
 - [Components](docs/COMPONENTS.md) — third-party dependencies and license attribution
 - [Skill guide](skills/intelli-search/SKILL.md) — agent-facing usage instructions
 - [Contributor guide](AGENTS.md) — coding conventions and project structure
+
+## Sponsor
+
+[![Curio Data Pro Ltd](https://github.com/miah0x41/m0x41-podman/raw/main/banner.png)](https://blog.curiodata.pro/)
+
+This project recognises the support and resources provided by **[Curio Data Pro Ltd](https://blog.curiodata.pro/)**, a data consultancy serving engineering sectors including Rail, Naval Design, Aviation, and Offshore Energy. Curio Data Pro combines 20+ years of Chartered Engineer experience across Aerospace, Defence, Rail, and Offshore Energy with data science and DevOps capabilities.
+
+[Blog](https://blog.curiodata.pro/) | [LinkedIn](https://www.linkedin.com/company/curio-data-pro-ltd/)
 
 ## License
 
 Copyright 2025 Ashraf Miah, Curio Data Pro Ltd.
 
 Licensed under the [Apache License, Version 2.0](./LICENSE).
+
+## Use of Text Generators
+
+_Text Generators_ (e.g. _Large Language Models_ (LLMs) or so-called "Artificial Intelligence" tools) have been used extensively in the development of this project.
+
+- **Pi agent** (primary development environment)
+- **GLM 5.1** — primary model for code generation and architecture
+- **Qwen 3.6 Plus** — secondary model for review and documentation

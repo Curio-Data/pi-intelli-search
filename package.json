@@ -1,5 +1,5 @@
 {
-  "name": "pi-intelli-search",
+  "name": "@curio-data/pi-intelli-search",
   "version": "0.1.0",
   "description": "Intelligent web research for Pi: search, extract, collate, and cache grounded web context in one tool call.",
   "license": "Apache-2.0",
@@ -43,6 +43,7 @@
     "src/",
     "skills/",
     "dist/",
+    "docs/CHANGELOG.md",
     "NOTICE",
     "LICENSE",
     "README.md"
