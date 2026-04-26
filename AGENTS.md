@@ -2,6 +2,15 @@
 
 This is a **pi extension** that adds intelligent web research tools to the pi coding agent. It provides a 4-stage research pipeline (search → fetch → extract → collate) as a single tool call, plus individual tools for manual orchestration.
 
+## Git Commit Messages
+
+When creating commits:
+
+- The first line must summarise succinctly what has occurred. When many things have happened, focus on the majority.
+- Bullet points should be concise and summarise the changes.
+- Avoid multiple "add" statements unless necessary. A single statement can cover multiple related items (e.g., helper functions).
+- Always check for changes before committing — do not assume changes you made still exist, as files are often manually edited.
+
 ## Project Overview
 
 - **Package name**: `pi-intelli-search`
