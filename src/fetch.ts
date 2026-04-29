@@ -136,6 +136,7 @@ async function fetchViaDefuddle(url: string, opts: FetchOptions, signal?: AbortS
 
   const body = await response.text();
   const { document } = parseHTML(body);
+  cleanBrokenMetadata(document);
   const extracted = await Defuddle(document, url, { markdown: true });
 
   const title = extracted.title ?? "";
@@ -355,6 +356,23 @@ function sanitizeMarkdown(content: string): string {
 function truncateContent(content: string, maxChars: number): string {
   if (content.length <= maxChars) return content;
   return content.slice(0, maxChars) + "\n\n[TRUNCATED — content exceeded character limit]";
+}
+
+/**
+ * Scrub meta/link tags whose href/content is "undefined" or "null".
+ * Defuddle internally calls `new URL()` on these values (og:url, canonical,
+ * etc.) and throws `Invalid URL`, dumping a stack trace to stderr.
+ */
+function cleanBrokenMetadata(document: Document): void {
+  const elements = document.querySelectorAll('meta[content], link[href], a[href]');
+  for (const el of Array.from(elements)) {
+    const href = (el as Element).getAttribute('href');
+    const content = (el as Element).getAttribute('content');
+    const val = href ?? content;
+    if (val && /^(undefined|null)$/i.test(val)) {
+      el.remove();
+    }
+  }
 }
 
 function safeHostname(url: string): string | null {
