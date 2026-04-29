@@ -14,8 +14,17 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-const AGENT_DIR = join(homedir(), ".pi", "agent");
-const MODELS_JSON_PATH = join(AGENT_DIR, "models.json");
+/**
+ * Resolve the pi agent directory. Respects PI_CODING_AGENT_DIR when set,
+ * which is used for isolated testing, custom deployments, or containerised
+ * environments. Falls back to ~/.pi/agent.
+ */
+function resolveAgentDir(): string {
+  if (process.env.PI_CODING_AGENT_DIR) return process.env.PI_CODING_AGENT_DIR;
+  return join(homedir(), ".pi", "agent");
+}
+
+const MODELS_JSON_PATH = join(resolveAgentDir(), "models.json");
 
 /** Models this extension needs, to be merged into the openrouter provider. */
 const REQUIRED_MODELS = [
