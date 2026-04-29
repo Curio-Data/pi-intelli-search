@@ -109,9 +109,7 @@ echo "║  Running pi — print mode (isolated env)              ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
-# --no-builtin-tools so only intelli_search is available, forcing
-# the model to call it instead of answering from training data.
-PROMPT="What happened in the news today? Use intelli_search to look it up."
+PROMPT="Use intelli_research to research: latest TypeScript version"
 
 OUTPUT="$(
   PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" \
@@ -121,7 +119,6 @@ OUTPUT="$(
       --no-prompt-templates \
       --no-context-files \
       --no-session \
-      --no-builtin-tools \
       -e "$E2E_EXTENSION_PATH" \
       -p "$PROMPT" \
       2>&1
@@ -143,24 +140,77 @@ echo "── Verification ──────────────────
 
 ERRORS=0
 
-if echo "$OUTPUT" | grep -qi "intelli_search"; then
-  echo "✅ intelli_search tool was invoked"
+if echo "$OUTPUT" | grep -qi "search result\|intelli_search\|intelli_research\|cached .*search\|research found"; then
+  echo "✅ intelli_research was invoked (search results present in output)"
 else
-  echo "❌ intelli_search tool was NOT found in output"
+  echo "❌ No evidence of intelli_research in output"
   ERRORS=$((ERRORS + 1))
 fi
 
-if echo "$OUTPUT" | grep -q "Search results"; then
-  echo "✅ Search results were returned"
+if echo "$OUTPUT" | grep -qi "Sources\|sources\|http"; then
+  echo "✅ Source URLs / references found"
 else
-  echo "❌ No search results in output"
+  echo "⚠️  No source references found (may be expected for some queries)"
+fi
+
+# ── Verify .search cache artifacts ──────────────────────────────────
+# intelli_research writes .search/<date>-<slug>/ with report.md,
+# query.txt, extractions/, sources/, and updates .search/.index.json.
+CACHE_DIR="$PROJECT_DIR/.search"
+
+if [ -d "$CACHE_DIR" ]; then
+  echo "✅ .search/ cache directory exists"
+else
+  echo "❌ .search/ cache directory not found at $CACHE_DIR"
   ERRORS=$((ERRORS + 1))
 fi
 
-if echo "$OUTPUT" | grep -q "Sources"; then
-  echo "✅ Source URLs were extracted"
+if [ -f "$CACHE_DIR/.index.json" ]; then
+  echo "✅ .search/.index.json exists"
+  INDEX_ENTRIES=$(jq 'if .entries then (.entries | length) else 0 end' "$CACHE_DIR/.index.json" 2>/dev/null || echo "0")
+  if [ "$INDEX_ENTRIES" -gt 0 ]; then
+    echo "   📂 $INDEX_ENTRIES cache entry/entries recorded"
+  fi
 else
-  echo "⚠️  No source URLs found (may be expected for some queries)"
+  echo "❌ .search/.index.json not found"
+  ERRORS=$((ERRORS + 1))
+fi
+
+# Find the latest cache subdirectory
+LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.search' | sort -r | head -1)
+if [ -n "$LATEST_CACHE" ]; then
+  echo "✅ Cache entry directory: $(basename "$LATEST_CACHE")"
+
+  if [ -f "$LATEST_CACHE/report.md" ]; then
+    echo "✅ report.md exists ($(wc -c < "$LATEST_CACHE/report.md") bytes)"
+  else
+    echo "❌ report.md not found in cache entry"
+    ERRORS=$((ERRORS + 1))
+  fi
+
+  if [ -f "$LATEST_CACHE/query.txt" ]; then
+    echo "✅ query.txt exists"
+  else
+    echo "❌ query.txt not found in cache entry"
+    ERRORS=$((ERRORS + 1))
+  fi
+
+  if [ -d "$LATEST_CACHE/extractions" ]; then
+    EXTRACTION_COUNT=$(find "$LATEST_CACHE/extractions" -type f | wc -l)
+    echo "✅ extractions/ exists ($EXTRACTION_COUNT file(s))"
+  else
+    echo "⚠️  extractions/ not found (may be empty for some queries)"
+  fi
+
+  if [ -d "$LATEST_CACHE/sources" ]; then
+    SOURCE_COUNT=$(find "$LATEST_CACHE/sources" -type f | wc -l)
+    echo "✅ sources/ exists ($SOURCE_COUNT file(s))"
+  else
+    echo "⚠️  sources/ not found (may be empty for some queries)"
+  fi
+else
+  echo "❌ No cache entry subdirectory found under .search/"
+  ERRORS=$((ERRORS + 1))
 fi
 
 echo ""
