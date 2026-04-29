@@ -29,22 +29,34 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
   // llm.ts — e.g. when the agent itself calls these providers outside our
   // tools, or when a 429 arrives on a streaming response that our onResponse
   // hook didn't catch.
+  //
+  // sessionActive guards against stale ctx after session replacement (/new,
+  // /resume, /fork). In-flight requests from the old session can still fire
+  // after_provider_response through the invalidated runtime, and touching
+  // ctx.ui on a stale runtime throws.
+  let sessionActive = true;
   let lastRateLimitNotified = 0;
   pi.on("after_provider_response", (event, ctx) => {
-    if (event.status === 429) {
-      // Debounce: only notify once per 30 seconds
-      const now = Date.now();
-      if (now - lastRateLimitNotified > 30_000) {
-        lastRateLimitNotified = now;
-        const retryAfter = event.headers["retry-after"];
-        ctx.ui.setStatus(
-          "pi-intelli-search:ratelimit",
-          `⏳ Rate limited — retry ${retryAfter ? `after ${retryAfter}s` : "shortly"}`,
-        );
+    if (!sessionActive) return;
+    try {
+      if (event.status === 429) {
+        // Debounce: only notify once per 30 seconds
+        const now = Date.now();
+        if (now - lastRateLimitNotified > 30_000) {
+          lastRateLimitNotified = now;
+          const retryAfter = event.headers["retry-after"];
+          ctx.ui.setStatus(
+            "pi-intelli-search:ratelimit",
+            `⏳ Rate limited — retry ${retryAfter ? `after ${retryAfter}s` : "shortly"}`,
+          );
+        }
+      } else if (event.status < 400) {
+        // Clear rate-limit status on success
+        ctx.ui.setStatus("pi-intelli-search:ratelimit", undefined);
       }
-    } else if (event.status < 400) {
-      // Clear rate-limit status on success
-      ctx.ui.setStatus("pi-intelli-search:ratelimit", undefined);
+    } catch {
+      // ctx is stale — session was replaced while request was in-flight
+      sessionActive = false;
     }
   });
 
@@ -111,5 +123,15 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
         "warning",
       );
     }
+  });
+
+  // ═══════════════════════════════════════════════
+  // Session shutdown
+  // ═══════════════════════════════════════════════
+  // Prevent after_provider_response handlers from touching ctx.ui after
+  // the session runtime is torn down (e.g. /new leaves in-flight requests).
+  pi.on("session_shutdown", () => {
+    sessionActive = false;
+    modelsChecked = false;
   });
 }
