@@ -1,13 +1,14 @@
 # pi-intelli-search
 
 [![npm version](https://img.shields.io/npm/v/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
-[![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.67.68-blueviolet)](https://github.com/mariozechner/pi)
+[![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
+[![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.69.0-blueviolet)](https://github.com/mariozechner/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-[![tests](https://img.shields.io/badge/tests-70%20passing-brightgreen)]()
+[![tests](https://img.shields.io/badge/tests-104%20passing-brightgreen)]()
 
 Intelligent web research for [Pi](https://github.com/mariozechner/pi): search, extract, collate, and cache grounded web context in one tool call.
 
-A Pi extension that adds a 4-stage research pipeline — search → fetch → extract → collate — designed for technical task completion. Per-page LLM extraction compresses raw pages to query-relevant content, then deduplicates across sources into a concise summary with a persistent `.search/` cache.
+A Pi extension that adds a 5-stage research pipeline — search → fetch → extract → collate → cache suggest — designed for technical task completion. Per-page LLM extraction compresses raw pages to query-relevant content, then deduplicates across sources into a concise summary with a persistent `.search/` cache.
 
 ## Why intelli-search?
 
@@ -201,7 +202,8 @@ intelli_research(query)
   ├── Stage 1: Search  → Perplexity Sonar (via OpenRouter, pi native auth)
   ├── Stage 2: Fetch   → wreq-js + Defuddle, compared against raw markdown
   ├── Stage 3: Extract → configurable model, default: MiniMax M2.7 (parallel)
-  └── Stage 4: Collate → configurable model, default: MiniMax M2.7 (dedup + cache)
+  ├── Stage 4: Collate → configurable model, default: MiniMax M2.7 (dedup + cache)
+  └── Stage 5: Cache suggest → LLM judge finds related previous searches (additive)
 ```
 
 All model assignments are configurable — see [Model Configuration](#model-configuration).
@@ -271,8 +273,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 
 ## Compatibility
 
-- **pi ≥ 0.67.68** — core functionality (tools, model registration, settings)
-- **pi ≥ 0.68.0** — custom working indicator, `after_provider_response` monitoring
+- **pi ≥ 0.69.0** — core functionality (TypeBox 1.x, tools, model registration, settings, working indicator, `after_provider_response` monitoring)
 - Gracefully degrades on older versions (optional features are skipped)
 
 ## Development
@@ -280,7 +281,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 ```bash
 npm install
 npm run build        # TypeScript → dist/
-npm test             # Unit tests (70 tests)
+npm test             # Unit tests (104 tests)
 npm run test:smoke   # Smoke test
 
 # Test in pi
@@ -308,7 +309,7 @@ This project recognises the support and resources provided by **[Curio Data Pro 
 
 ## License
 
-Copyright 2025 Ashraf Miah, Curio Data Pro Ltd.
+Copyright 2026 Ashraf Miah, Curio Data Pro Ltd.
 
 Licensed under the [Apache License, Version 2.0](./LICENSE).
 

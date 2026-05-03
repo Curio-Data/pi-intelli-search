@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-05-03
+
+### Changed
+
+- Updated copyright year to 2026 across all source files, NOTICE, README, and AGENTS.md
+- Documentation now reflects 5-stage pipeline (added Stage 5: cache suggest) throughout README, ARCHITECTURE.md, and AGENTS.md
+- Pi minimum version updated to ≥0.69.0 across all docs and badges (was incorrectly stated as 0.67.68/0.68.0 in README)
+- `typebox` dependency correctly named in COMPONENTS.md and NOTICE (was `@sinclair/typebox`, migrated in v0.2.0)
+- Removed spurious `thinkingLevelMap` compatibility entry from AGENTS.md (not used in codebase)
+- Test count corrected to 104 across README and AGENTS.md
+- Added npm downloads badge to README
+- Pipeline diagram and cost table in ARCHITECTURE.md now include Stage 5 (cache suggest)
+- Model configurability now documented in ARCHITECTURE.md provider choices section
+
 ## [0.2.0] - 2026-05-03
 
 ### Changed
@@ -44,5 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files
 - CI/CD via GitHub Actions (publish to npm on release)
 
+[0.3.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.1.0
