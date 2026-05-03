@@ -1,6 +1,6 @@
 {
   "name": "@curio-data/pi-intelli-search",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Intelligent web research for Pi: search, extract, collate, and cache grounded web context in one tool call.",
   "license": "Apache-2.0",
   "repository": {
@@ -13,8 +13,12 @@
   "homepage": "https://github.com/Curio-Data/pi-intelli-search#readme",
   "type": "module",
   "pi": {
-    "extensions": ["./src/index.ts"],
-    "skills": ["./skills"]
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
   },
   "scripts": {
     "build": "tsc",
@@ -23,21 +27,21 @@
     "test:smoke": "node --import tsx test/smoke.ts"
   },
   "dependencies": {
-    "wreq-js": "^2.3.0",
     "defuddle": "^0.16.0",
-    "linkedom": "^0.18.12"
+    "linkedom": "^0.18.12",
+    "wreq-js": "^2.3.0"
   },
   "devDependencies": {
-    "@mariozechner/pi-ai": "*",
-    "@mariozechner/pi-coding-agent": "*",
-    "@sinclair/typebox": "*",
+    "@mariozechner/pi-ai": "^0.72.1",
+    "@mariozechner/pi-coding-agent": "^0.72.1",
+    "typebox": "*",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },
   "peerDependencies": {
     "@mariozechner/pi-ai": "*",
     "@mariozechner/pi-coding-agent": "*",
-    "@sinclair/typebox": "*"
+    "typebox": "*"
   },
   "files": [
     "src/",

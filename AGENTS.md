@@ -30,7 +30,7 @@ When creating commits:
 | `linkedom` | Lightweight DOM for Defuddle (no full browser) |
 | `@mariozechner/pi-ai` | LLM calling via pi's auth system (`completeSimple`) |
 | `@mariozechner/pi-coding-agent` | Extension API types (`ExtensionAPI`, `ExtensionContext`) |
-| `@sinclair/typebox` | JSON Schema / parameter definitions for tool inputs |
+| `typebox` | JSON Schema / parameter definitions for tool inputs |
 
 All pi SDK packages are **peer dependencies** — provided by the hosting pi process, not bundled.
 
@@ -122,8 +122,9 @@ Written to `.search/<date>-<slug>/` with `report.md`, `query.txt`, `extractions/
 npm install              # Install deps
 npm run build            # TypeScript → dist/ (tsc)
 npm run dev              # Watch mode (tsc --watch)
-npm test                 # Run all tests (100 tests)
-npm run test:smoke       # Smoke test
+npm test                 # Run all unit tests (104 tests)
+npm run test:smoke       # Smoke test (structural validation)
+./test/run-e2e.sh        # End-to-end test (live LLM calls, isolated env)
 ```
 
 **Testing in pi:**
@@ -156,7 +157,29 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 - Test files in `test/` mirror `src/` structure: `cache.test.ts`, `fetch.test.ts`, `settings.test.ts`, etc.
 - Run with `node --import tsx --test` (Node.js built-in test runner)
 - Tests are unit tests — no live API calls, no network access required
-- 100 tests total across 7 test files + 1 smoke test
+- 104 tests total across 7 test files + 1 smoke test
+
+### Must run after every change
+
+After **any** code change, run the full verification sequence in order:
+
+1. **Build** — `npm run build` (catches type errors, broken imports)
+2. **Unit tests** — `npm test` (catches logic regressions)
+3. **End-to-end test** — `./test/run-e2e.sh` (exercises the full pipeline with real LLM calls)
+
+The E2E test launches pi in an isolated environment (separate `PI_CODING_AGENT_DIR`, temp `auth.json`/`models.json`) and runs `intelli_research` against a live query. It verifies:
+- Extension loads and registers tools
+- Perplexity Sonar search returns results
+- Pages are fetched and extracted (Defuddle + markdown)
+- Cache artifacts are written (`.search/` with `report.md`, `query.txt`, `extractions/`, `sources/`)
+- `.search/.index.json` is updated
+
+**Required environment:** `OPENROUTER_API_KEY` (and optionally `MINIMAX_API_KEY`) in `.env`, env vars, or passed inline:
+```bash
+OPENROUTER_API_KEY=sk-or-v1-... ./test/run-e2e.sh
+```
+
+Do not consider a change complete until all three steps pass.
 
 ## Important Design Decisions
 
@@ -180,6 +203,6 @@ All tools use the `intelli_` prefix to avoid collisions with other pi extensions
 
 ## Compatibility
 
-- **pi ≥ 0.67.68** — core functionality
-- **pi ≥ 0.68.0** — custom working indicator, `after_provider_response` monitoring
+- **pi ≥ 0.69.0** — core functionality (TypeBox 1.x, working indicator, `after_provider_response` monitoring)
+- **pi ≥ 0.72.0** — `thinkingLevelMap` model metadata support
 - Optional features degrade gracefully on older versions

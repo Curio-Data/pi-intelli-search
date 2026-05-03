@@ -2,7 +2,7 @@
 //
 // Copyright 2025 Ashraf Miah, Curio Data Pro Ltd
 // SPDX-License-Identifier: Apache-2.0
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { COLLATION_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
