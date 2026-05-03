@@ -136,7 +136,7 @@ async function fetchViaDefuddle(url: string, opts: FetchOptions, signal?: AbortS
 
   const body = await response.text();
   const { document } = parseHTML(body);
-  cleanBrokenMetadata(document);
+  cleanBrokenMetadata(document, url);
   const extracted = await Defuddle(document, url, { markdown: true });
 
   const title = extracted.title ?? "";
@@ -359,18 +359,46 @@ function truncateContent(content: string, maxChars: number): string {
 }
 
 /**
- * Scrub meta/link tags whose href/content is "undefined" or "null".
- * Defuddle internally calls `new URL()` on these values (og:url, canonical,
- * etc.) and throws `Invalid URL`, dumping a stack trace to stderr.
+ * Fix or remove meta/link/a tags that would crash Defuddle's MetadataExtractor.
+ *
+ * Defuddle calls `new URL()` on metadata values (og:url, canonical, etc.).
+ * This throws for:
+ *   - Literal "undefined" / "null" strings
+ *   - Relative paths like "/owner/repo/releases"
+ *
+ * We resolve relative URLs to absolute using the page URL, and remove
+ * elements with unsalvageable values.
  */
-function cleanBrokenMetadata(document: Document): void {
+function cleanBrokenMetadata(document: Document, pageUrl: string): void {
   const elements = document.querySelectorAll('meta[content], link[href], a[href]');
   for (const el of Array.from(elements)) {
-    const href = (el as Element).getAttribute('href');
-    const content = (el as Element).getAttribute('content');
-    const val = href ?? content;
-    if (val && /^(undefined|null)$/i.test(val)) {
-      el.remove();
+    const tag = (el as Element).tagName.toLowerCase();
+
+    for (const attr of tag === 'meta' ? ['content'] : ['href']) {
+      const val = (el as Element).getAttribute(attr);
+      if (!val) continue;
+
+      // Remove literal undefined/null
+      if (/^(undefined|null)$/i.test(val)) {
+        el.remove();
+        break;
+      }
+
+      // Test if this value is a valid absolute URL
+      try {
+        new URL(val);
+        // Already absolute — nothing to do
+      } catch {
+        // Not an absolute URL. Try to resolve it against the page URL.
+        try {
+          const resolved = new URL(val, pageUrl).href;
+          (el as Element).setAttribute(attr, resolved);
+        } catch {
+          // Can't resolve — remove the element to prevent Defuddle crashing
+          el.remove();
+          break;
+        }
+      }
     }
   }
 }
