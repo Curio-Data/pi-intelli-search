@@ -1,7 +1,7 @@
 // src/index.ts — Extension entry point — registers all tools, custom models,
 // provider-response monitoring, and working-indicator tracking.
 //
-// Copyright 2025 Ashraf Miah, Curio Data Pro Ltd
+// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 // SPDX-License-Identifier: Apache-2.0
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { intelliSearchTool } from "./tools/intelli-search.js";

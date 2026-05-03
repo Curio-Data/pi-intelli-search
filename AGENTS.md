@@ -1,6 +1,6 @@
 # pi-intelli-search — Agent Guidelines
 
-This is a **pi extension** that adds intelligent web research tools to the pi coding agent. It provides a 4-stage research pipeline (search → fetch → extract → collate) as a single tool call, plus individual tools for manual orchestration.
+This is a **pi extension** that adds intelligent web research tools to the pi coding agent. It provides a 5-stage research pipeline (search → fetch → extract → collate → cache suggest) as a single tool call, plus individual tools for manual orchestration.
 
 ## Git Commit Messages
 
@@ -17,9 +17,9 @@ When creating commits:
 - **Language**: TypeScript (ESM, strict mode)
 - **Runtime**: Node.js (runs inside pi's extension host)
 - **Build**: `tsc` → `dist/`
-- **Test**: `node --import tsx --test test/*.test.ts` (100 tests)
+- **Test**: `node --import tsx --test test/*.test.ts` (104 tests)
 - **Package manager**: npm
-- **License**: Apache-2.0 (Copyright 2025 Ashraf Miah, Curio Data Pro Ltd)
+- **License**: Apache-2.0 (Copyright 2026 Ashraf Miah, Curio Data Pro Ltd)
 
 ## Key Dependencies
 
@@ -48,7 +48,7 @@ src/
 ├── types.ts                  # Shared TypeScript interfaces
 ├── util.ts                   # URL extraction, source type inference, helpers
 └── tools/
-    ├── intelli-research.ts   # Full 4-stage pipeline orchestrator
+    ├── intelli-research.ts   # Full pipeline orchestrator (5 stages)
     ├── intelli-search.ts     # Standalone search via Perplexity Sonar
     ├── intelli-extract.ts    # Standalone per-page LLM extraction
     └── intelli-collate.ts    # Standalone collation + cache write
@@ -67,6 +67,7 @@ test/
 ├── index.test.ts
 ├── prompts.test.ts
 ├── providers.test.ts
+├── run-e2e.sh
 ├── settings.test.ts
 ├── smoke.ts
 └── util.test.ts
@@ -199,10 +200,9 @@ All tools use the `intelli_` prefix to avoid collisions with other pi extensions
 | `intelli_search` | Quick web search via Perplexity Sonar |
 | `intelli_extract` | Per-page LLM extraction from fetched content |
 | `intelli_collate` | Deduplicate and cache extractions |
-| `intelli_research` | Full 4-stage pipeline (search → fetch → extract → collate) |
+| `intelli_research` | Full 5-stage pipeline (search → fetch → extract → collate → cache suggest) |
 
 ## Compatibility
 
 - **pi ≥ 0.69.0** — core functionality (TypeBox 1.x, working indicator, `after_provider_response` monitoring)
-- **pi ≥ 0.72.0** — `thinkingLevelMap` model metadata support
 - Optional features degrade gracefully on older versions

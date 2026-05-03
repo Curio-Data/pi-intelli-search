@@ -31,12 +31,12 @@ These packages are installed via npm and distributed with the extension.
 
 These packages are provided by the hosting pi runtime and are not bundled with this extension.
 
-### @sinclair/typebox
+### typebox
 
 - **Repository**: https://github.com/sinclairzx81/typebox
 - **Author**: Sinclair
 - **License**: MIT
-- **Usage**: JSON Schema / parameter type definitions for tool inputs.
+- **Usage**: JSON Schema / parameter type definitions for tool inputs. Migrated from `@sinclair/typebox` 0.34.x to `typebox` 1.x in v0.2.0 (pi ≥ 0.69.0 TypeBox migration).
 
 ### @mariozechner/pi-ai
 

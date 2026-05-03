@@ -1,6 +1,6 @@
 // src/tools/intelli-extract.ts — intelli_extract tool
 //
-// Copyright 2025 Ashraf Miah, Curio Data Pro Ltd
+// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 // SPDX-License-Identifier: Apache-2.0
 import { Type } from "typebox";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
