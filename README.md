@@ -5,6 +5,7 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.69.0-blueviolet)](https://github.com/mariozechner/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
 [![tests](https://img.shields.io/badge/tests-104%20passing-brightgreen)]()
+[![CI](https://github.com/Curio-Data/pi-intelli-search/actions/workflows/ci.yml/badge.svg)](https://github.com/Curio-Data/pi-intelli-search/actions/workflows/ci.yml)
 
 Intelligent web research for [Pi](https://github.com/mariozechner/pi): search, extract, collate, and cache grounded web context in one tool call.
 
