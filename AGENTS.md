@@ -68,6 +68,7 @@ test/
 ├── prompts.test.ts
 ├── providers.test.ts
 ├── run-e2e.sh
+├── run-e2e-publish.sh
 ├── settings.test.ts
 ├── smoke.ts
 └── util.test.ts
@@ -180,7 +181,23 @@ The E2E test launches pi in an isolated environment (separate `PI_CODING_AGENT_D
 OPENROUTER_API_KEY=sk-or-v1-... ./test/run-e2e.sh
 ```
 
-Do not consider a change complete until all three steps pass.
+Do not consider a change complete until steps 1–3 pass. Run step 4 before any release.
+
+### E2E publish test
+
+`./test/run-e2e-publish.sh` validates that the published npm package installs correctly and is structurally sound. It:
+
+1. Installs `@curio-data/pi-intelli-search` into a temp directory via `npm install`
+2. Runs a smoke test against the **installed** `dist/index.js` (not the local source)
+3. Verifies all 4 tools register, event subscriptions work, and `ensureCustomModels()` is idempotent
+
+**Usage:**
+```bash
+./test/run-e2e-publish.sh              # uses the latest published version
+./test/run-e2e-publish.sh 0.3.1        # test a specific version
+```
+
+No API keys needed — it's a structural test only, no LLM calls.
 
 ## Important Design Decisions
 
