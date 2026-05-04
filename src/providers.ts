@@ -9,9 +9,9 @@
 // models — that's destructive. The models.json merge approach is the
 // correct way to *add* models to an existing built-in provider.
 
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 
 /**
@@ -93,6 +93,7 @@ export async function ensureCustomModels(): Promise<string[]> {
 
   // Only write if we added something
   if (added.length > 0) {
+    await mkdir(dirname(MODELS_JSON_PATH), { recursive: true });
     await writeFile(MODELS_JSON_PATH, JSON.stringify(config, null, 2) + "\n");
   }
 
