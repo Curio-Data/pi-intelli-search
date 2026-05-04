@@ -5,13 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.1-alpha.1] - 2026-05-04
+## [0.3.1] - 2026-05-04
 
 ### Added
 
 - CI workflow (`.github/workflows/ci.yml`) — validates build, tests, and `npm pack` on every push/PR to `main`
 - Release workflow (`.github/workflows/release.yml`) — publishes to npm on GitHub Release with provenance signing
 - Release policy documented in AGENTS.md (explicit user permission required)
+- E2E publish test (`test/run-e2e-publish.sh`) — installs from npm and validates the published package
+- CI status badge in README
 
 ### Fixed
 
@@ -72,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files
 - CI/CD via GitHub Actions (publish to npm on release)
 
+[0.3.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.1
 [0.3.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.1.0
