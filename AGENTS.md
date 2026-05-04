@@ -202,6 +202,35 @@ All tools use the `intelli_` prefix to avoid collisions with other pi extensions
 | `intelli_collate` | Deduplicate and cache extractions |
 | `intelli_research` | Full 5-stage pipeline (search → fetch → extract → collate → cache suggest) |
 
+## Release Policy
+
+**The agent must never create a GitHub Release or trigger npm publication without the user's explicit permission.**
+
+Publishing is fully automated via GitHub Actions:
+- **CI workflow** (`.github/workflows/ci.yml`) — runs on every push to `main` and every PR. Validates build, tests, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
+- **Release workflow** (`.github/workflows/release.yml`) — runs only when a GitHub Release is **published**. Builds, tests, and publishes to npm with provenance signing.
+
+### Creating a release
+
+1. Ensure all changes are merged to `main` and CI passes (green check).
+2. Update `version` in `package.json` following [SemVer](https://semver.org/).
+3. Update `docs/CHANGELOG.md` with the new version entry.
+4. Commit, push, and ask the user for **explicit approval** before proceeding.
+5. Once approved, create a GitHub Release (tag `vX.Y.Z`) — the workflow publishes automatically.
+
+### Testing the publish pipeline
+
+Before the first real release, validate the pipeline with a pre-release:
+1. Bump version to a pre-release identifier (e.g., `0.3.1-alpha.1`)
+2. Create a GitHub Release with the **Pre-release** checkbox checked
+3. The `published` event triggers the workflow, exercising the full publish path
+4. npm will **not** set pre-release versions as `latest` — early adopters won't get it by default
+5. Verify the package appears on npm, then delete the pre-release tag if not needed
+
+### npm secret
+
+The workflow uses the `NPM_REPO` repository secret (npm access token). Ensure the `@curio-data` org exists on npm and the token has publish rights for `@curio-data/pi-intelli-search`.
+
 ## Compatibility
 
 - **pi ≥ 0.69.0** — core functionality (TypeBox 1.x, working indicator, `after_provider_response` monitoring)
