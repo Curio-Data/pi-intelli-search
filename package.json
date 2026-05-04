@@ -18,7 +18,8 @@
     ],
     "skills": [
       "./skills"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/02.png"
   },
   "scripts": {
     "build": "tsc",
