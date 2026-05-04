@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1-alpha.1] - 2026-05-04
+
+### Added
+
+- CI workflow (`.github/workflows/ci.yml`) — validates build, tests, and `npm pack` on every push/PR to `main`
+- Release workflow (`.github/workflows/release.yml`) — publishes to npm on GitHub Release with provenance signing
+- Release policy documented in AGENTS.md (explicit user permission required)
+
+### Fixed
+
+- `ensureCustomModels()` now creates `~/.pi/agent/` directory before writing `models.json` (fixes CI on fresh environments)
+- `package-lock.json` drift corrected (version `0.1.0` → `0.3.0`, `@sinclair/typebox` → `typebox`)
+- Release workflow uses correct `NPM_REPO` secret (was `NPM_TOKEN`)
+
 ## [0.3.0] - 2026-05-03
 
 ### Changed
