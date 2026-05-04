@@ -11,6 +11,18 @@ Intelligent web research for [Pi](https://github.com/mariozechner/pi): search, e
 
 A Pi extension that adds a 5-stage research pipeline — search → fetch → extract → collate → cache suggest — designed for technical task completion. Per-page LLM extraction compresses raw pages to query-relevant content, then deduplicates across sources into a concise summary with a persistent `.search/` cache.
 
+<p align="center">
+  <img src="docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
+</p>
+
+**Features:**
+- 🔍 **Search** — Perplexity Sonar via OpenRouter (one API key, no $50 minimum)
+- 📄 **Extract** — Per-page LLM extraction compresses ~50K → ~3-5K chars
+- 🔗 **Collate** — Cross-source deduplication into a focused ~5K summary
+- 💾 **Cache** — Persistent `.search/` cache for offline reuse and follow-up
+- 🎯 **Configurable** — Swap any pipeline stage to any model pi supports
+- 💰 **Low cost** — ~$0.05 per 8-page research session with defaults
+
 ## Why intelli-search?
 
 Most coding agents handle web research with a simple two-step pattern: **fetch URL → dump raw content into context**. Claude Code's `WebFetch` tool, revealed in its [open-sourced CLI](https://github.com/anthropics/claude-code), follows exactly this approach — it fetches a page, converts HTML to markdown (via the Jina Reader API), and hands the full result to the model.
@@ -21,25 +33,9 @@ The problem: a cleaned documentation page is still ~50K characters. For 8 source
 
 Each page is compressed by a dedicated extraction model *before* entering the agent's context. A collation model then deduplicates across extractions. The agent receives a focused ~5K summary instead of 400K of raw HTML.
 
-```mermaid
-flowchart LR
-    subgraph "Other agents"
-        A[URL] --> B[Fetch]
-        B --> C["Raw content\n~50K chars × 8 pages"]
-        C --> D["Agent context\n~400K chars"]
-    end
-
-    subgraph "intelli-search"
-        E[Query] --> F["Search\nPerplexity Sonar"]
-        F --> G["Fetch\nDefuddle + markdown\nPages 1..8"]
-        G --> H["Extract\nper-page LLM\n~3-5K each"]
-        H --> I["Collate\ndedup + synthesise"]
-        I --> J["Agent context\n~5K focused summary"]
-    end
-
-    style D fill:#f9f,stroke:#333
-    style J fill:#9f9,stroke:#333
-```
+<p align="center">
+  <img src="docs/images/02.png" alt="PI-Intelli-Search pipeline comparison infographic contrasting two approaches: Per-Page Extraction versus Fetch-and-Dump. The top row, labelled Intelli Search, shows a five-stage pipeline: Query → Search (Perplexity Sonar) → Fetch (Defuddle and Markdown) → Extract (MiniMax M2.7, approximately 3–5K characters per page) → Collate (MiniMax M2.7, deduplicate and synthesise) → Agent Context (approximately 5K focused summary). The bottom row, labelled Other Agents, shows a simpler three-stage pipeline: URL → Fetch → Raw Content (approximately 50K characters times 8 pages) → Agent Context (approximately 400K characters). A footer banner summarises the key trade-offs: context approximately 5K versus approximately 400K, cost approximately $0.05 per session, deduplication cross-source, cache .search/. Rendered in a pen-and-ink botanical and scholarly illustration style with copper arrows and laurel-wreath medallions." width="800" />
+</p>
 
 | | Fetch-and-dump | intelli-search pipeline |
 |---|---|---|
