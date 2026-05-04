@@ -194,7 +194,7 @@ Do not consider a change complete until steps 1–3 pass. Run step 4 before any 
 **Usage:**
 ```bash
 ./test/run-e2e-publish.sh              # uses the latest published version
-./test/run-e2e-publish.sh 0.3.1        # test a specific version
+./test/run-e2e-publish.sh 0.3.2        # test a specific version
 ```
 
 No API keys needed — it's a structural test only, no LLM calls.

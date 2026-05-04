@@ -10,7 +10,7 @@
 #
 # Usage:
 #   ./test/run-e2e-publish.sh              # latest published version
-#   ./test/run-e2e-publish.sh 0.3.1        # specific version
+#   ./test/run-e2e-publish.sh 0.3.2        # specific version
 #
 # Environment:
 #   NPM_TOKEN   Optional. npm auth token for private packages (not needed for public).
