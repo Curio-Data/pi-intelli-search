@@ -1,15 +1,16 @@
-name: Publish to npm
+name: CI
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-  publish:
+  validate:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
 
     steps:
       - name: Checkout
@@ -20,7 +21,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: npm ci
@@ -31,7 +31,5 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Publish
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_REPO }}
+      - name: Verify package tarball
+        run: npm pack --dry-run
