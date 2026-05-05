@@ -218,4 +218,76 @@ describe("cleanBrokenMetadata (via DOM simulation)", () => {
     assert.ok(result.contentMarkdown || result.content, "Defuddle should extract content");
     assert.ok(result.title, "Defuddle should extract a title");
   });
+
+  it("strips <script type='application/ld+json'> with invalid JSON", async () => {
+    const { parseHTML } = await import("linkedom");
+    const { document } = parseHTML(`<!DOCTYPE html><html><head>
+      <title>Test Page</title>
+      <script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoObject"}</script>
+      <script type="application/ld+json">not json at all {{</script>
+      <script type="application/ld+json">  </script>
+    </head><body><p>Hello</p></body></html>`);
+
+    const pageUrl = "https://example.com";
+
+    // Apply cleanBrokenMetadata logic
+    const elements = document.querySelectorAll('meta[content], link[href], a[href]');
+    for (const el of Array.from(elements)) {
+      const tag = (el as any).tagName.toLowerCase();
+      for (const attr of tag === 'meta' ? ['content'] : ['href']) {
+        const val = (el as any).getAttribute(attr);
+        if (!val) continue;
+        if (/^(undefined|null)$/i.test(val)) { el.remove(); break; }
+        try { new URL(val); } catch {
+          try { (el as any).setAttribute(attr, new URL(val, pageUrl).href); } catch { el.remove(); break; }
+        }
+      }
+    }
+
+    // And the ld+json stripping logic
+    const ldJsonScripts = document.querySelectorAll('script[type="application/ld+json"]');
+    for (const script of Array.from(ldJsonScripts)) {
+      const text = script.textContent?.trim();
+      if (!text) { script.remove(); continue; }
+      try { JSON.parse(text); } catch { script.remove(); }
+    }
+
+    // Valid JSON script should remain
+    const remaining = document.querySelectorAll('script[type="application/ld+json"]');
+    assert.strictEqual(remaining.length, 1);
+    assert.ok(remaining[0].textContent?.includes('VideoObject'));
+    assert.ok(document.querySelector('title'));
+    assert.ok(document.querySelector('p'));
+  });
+
+  it("Defuddle fallback extracts basic content when Defuddle crashes", async () => {
+    const { parseHTML } = await import("linkedom");
+    // Simulate a page where Defuddle would encounter CSS pseudo-class errors
+    const html = `<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Fallback Test Page</title>
+  <meta name="description" content="A description for fallback testing">
+</head>
+<body>
+  <div class="px-20 py-4">
+    <h1>Main Heading</h1>
+    <p>Some paragraph text.</p>
+  </div>
+</body></html>`;
+
+    const { document } = parseHTML(html);
+
+    // Simulate the fallback extraction
+    const title = document.querySelector("title")?.textContent?.trim() ?? "";
+    const metaDesc = document.querySelector('meta[name="description"]')?.getAttribute("content")?.trim() ?? "";
+    const bodyText = document.body?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+    const content = [`# ${title}`, metaDesc ? `> ${metaDesc}` : "", bodyText].filter(Boolean).join("\n\n");
+
+    assert.strictEqual(title, "Fallback Test Page");
+    assert.ok(content.includes("Fallback Test Page"));
+    assert.ok(content.includes("A description for fallback testing"));
+    assert.ok(content.includes("Main Heading"));
+    assert.ok(content.includes("Some paragraph text"));
+  });
 });

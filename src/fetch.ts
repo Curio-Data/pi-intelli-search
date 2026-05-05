@@ -137,18 +137,39 @@ async function fetchViaDefuddle(url: string, opts: FetchOptions, signal?: AbortS
   const body = await response.text();
   const { document } = parseHTML(body);
   cleanBrokenMetadata(document, url);
-  const extracted = await Defuddle(document, url, { markdown: true });
 
-  const title = extracted.title ?? "";
-  const content = extracted.contentMarkdown ?? extracted.content ?? body;
+  // Try Defuddle first. If it crashes (e.g. CSS pseudo-class errors on
+  // YouTube pages), fall back to basic HTML text extraction.
+  try {
+    const extracted = await Defuddle(document, url, { markdown: true });
+    const title = extracted.title ?? "";
+    const content = extracted.contentMarkdown ?? extracted.content ?? body;
 
-  return {
-    url,
-    title,
-    content: truncateContent(content, opts.maxChars),
-    status: "success",
-    source: "defuddle",
-  };
+    return {
+      url,
+      title,
+      content: truncateContent(content, opts.maxChars),
+      status: "success",
+      source: "defuddle",
+    };
+  } catch (defuddleErr) {
+    // Defuddle failed. Fall back to basic DOM text extraction.
+    const title = document.querySelector("title")?.textContent?.trim() ?? "";
+    const metaDesc = document.querySelector('meta[name="description"]')?.getAttribute("content")?.trim() ?? "";
+    const bodyText = document.body?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+    const content = [`# ${title}`,
+      metaDesc ? `> ${metaDesc}` : "",
+      bodyText.length > 0 ? bodyText : "(No parseable text content)",
+    ].filter(Boolean).join("\n\n");
+
+    return {
+      url,
+      title,
+      content: truncateContent(content, opts.maxChars),
+      status: "success",
+      source: "defuddle-fallback",
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -399,6 +420,24 @@ function cleanBrokenMetadata(document: Document, pageUrl: string): void {
           break;
         }
       }
+    }
+  }
+
+  // Strip <script type="application/ld+json"> tags with invalid JSON.
+  // Defuddle's _extractSchemaOrgData calls JSON.parse on these, which
+  // throws for malformed content (e.g. YouTube pages). Removing invalid
+  // scripts upfront prevents a crash and wasted error handling.
+  const ldJsonScripts = document.querySelectorAll('script[type="application/ld+json"]');
+  for (const script of Array.from(ldJsonScripts)) {
+    const text = script.textContent?.trim();
+    if (!text) {
+      script.remove();
+      continue;
+    }
+    try {
+      JSON.parse(text);
+    } catch {
+      script.remove();
     }
   }
 }
