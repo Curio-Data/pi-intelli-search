@@ -7,9 +7,9 @@ This document describes the internal architecture of `pi-intelli-search`. It exp
 ```
 intelli_research(query)
   ├── Stage 1: Search  -> Perplexity Sonar (via OpenRouter, pi native auth)
-  ├── Stage 2: Fetch   -> wreq-js + Defuddle, compared against raw markdown
+  ├── Stage 2: Fetch   -> wreq-js + Defuddle, compared against raw Markdown
   ├── Stage 3: Extract -> configurable model, default: MiniMax M2.7 per page (parallel)
-  ├── Stage 4: Collate -> configurable model, default: MiniMax M2.7 dedup + cache
+  ├── Stage 4: Collate -> configurable model, default: MiniMax M2.7 dedupe + cache
   └── Stage 5: Cache suggest -> LLM judge finds related previous searches (additive)
 ```
 
@@ -17,16 +17,16 @@ No cross-tool invocation is used. `intelli_research` is self-contained. `Pi` ext
 
 ### Why Per-Page Extraction Before Collation?
 
-This is the key design decision. [Defuddle](https://github.com/kepano/defuddle) cleans HTML into clean markdown, but a cleaned documentation page is still approximately 50K characters. For 8 pages, that is approximately 400K chars. This is too large for a single LLM context.
+This is the key design decision. [Defuddle](https://github.com/kepano/defuddle) cleans HTML into clean Markdown, but a cleaned documentation page is still ≈50K characters. For 8 pages, that is ≈400K chars. This is too large for a single LLM context.
 
-Per-page extraction compresses each page independently to approximately 3-5K of query-relevant content. The collation model then sees approximately 32K total. This is comfortable for synthesis and deduplication. The optional `focusPrompt` parameter is most effective at this stage. "Extract only form validation patterns" applied to each page individually is far more targeted than asking a collation model to find those needles across 400K chars.
+Per-page extraction compresses each page independently to ≈3-5K of query-relevant content. The collation model then sees ≈32K total. This is comfortable for synthesis and deduplication. The optional `focusPrompt` parameter is most effective at this stage. "Extract only form validation patterns" applied to each page individually is far more targeted than asking a collation model to find those needles across 400K chars.
 
 ### Fetch Strategy: Compare, Don't Guess
 
 Each page is fetched two ways in parallel:
 
 1. **HTML to Defuddle:** Browser-grade TLS fingerprint plus Defuddle content extraction.
-2. **Markdown endpoint:** `Accept: text/markdown` header, `<link rel="alternate">`, or `.md` suffix.
+2. **Markdown endpoint:** `Accept: text/Markdown` header, `<link rel="alternate">`, or `.md` suffix.
 3. **Compare quality:** Score on code blocks, headings, tables versus nav chrome noise. Pick the better one.
 
 For sites that provide `llms-full.txt` ([Cloudflare](https://developers.cloudflare.com), [Next.js](https://nextjs.org), [Vite](https://vite.dev), and others), the raw file is downloaded to `sources/` alongside individual pages. No LLM processing is applied. The agent can grep or search it for offline lookup.
@@ -36,7 +36,7 @@ For sites that provide `llms-full.txt` ([Cloudflare](https://developers.cloudfla
 All three pipeline stages (search, extract, collate) use independently configurable models. The defaults are:
 
 - **Extract and Collate:** MiniMax M2.7 direct (not via [OpenRouter](https://openrouter.ai)). MiniMax M2.7 is a reasoning model. When called via OpenRouter's OpenAI-compatible endpoint, `complete()` does not send the required reasoning parameters, causing a `400 Reasoning is mandatory` error. The extension uses `completeSimple()` with `reasoning: "low"` through the native `minimax` provider, which handles reasoning parameters correctly. Override with `intelliExtractModel` or `intelliCollateModel` in settings to use any model `Pi` supports.
-- **Search:** [Perplexity Sonar](https://docs.perplexity.ai) via OpenRouter. Sonar returns a synthesised answer with inline citations. This is better than a bare URL list because the agent gets immediate context plus source URLs for follow-up. Override with `intelliSearchModel` in settings.
+- **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai). _Sonar_ returns a synthesised answer with inline citations. This is better than a bare URL list because the agent gets immediate context plus source URLs for follow-up. Override with `intelliSearchModel` in settings.
 
 ### Custom Model Registration
 
@@ -54,7 +54,7 @@ During `intelli_research` execution, the extension sets a custom animated spinne
 
 After the main pipeline completes, a lightweight LLM judge (using the extract model for cost efficiency) compares the current query against up to 20 recent entries in `.search/.index.json`. It returns semantically related previous searches, which are formatted as a `📚 Related cached searches` table appended to the tool output.
 
-This stage is purely additive. It never blocks or replaces the live pipeline. Failures are caught and silently ignored. Cost is minimal (approximately 500 input tokens, or approximately $0.0002).
+This stage is purely additive. It never blocks or replaces the live pipeline. Failures are caught and silently ignored. Cost is minimal (≈500 input tokens, or ≈$0.0002).
 
 ## Source Code Structure
 
@@ -62,7 +62,7 @@ This stage is purely additive. It never blocks or replaces the live pipeline. Fa
 src/
 ├── index.ts              # Extension entry: registers tools, events, model setup
 ├── llm.ts                # callLlm() - pi native auth + rate-limit detection
-├── fetch.ts              # Page fetching: Defuddle vs markdown comparison, llms-full.txt
+├── fetch.ts              # Page fetching: Defuddle vs Markdown comparison, llms-full.txt
 ├── prompts.ts            # System prompts for search, extraction, collation
 ├── providers.ts          # Custom model registration (Sonar) into models.json
 ├── settings.ts           # Settings loader with caching and invalidation
@@ -83,11 +83,11 @@ src/
 ├── 2026-04-19-d1-worker-api/
 │   ├── report.md                              # Collated summary + source index
 │   ├── query.txt                              # Original search query
-│   ├── extractions/                           # Per-page LLM extractions (approximately 3-5K each)
+│   ├── extractions/                           # Per-page LLM extractions (≈3-5K each)
 │   │   ├── 01-developers-cloudflare-com.md
 │   │   └── 02-developers-cloudflare-com.md
 │   └── sources/                               # Full content
-│       ├── 01-developers-cloudflare-com.md    # Defuddle OR raw markdown (best score)
+│       ├── 01-developers-cloudflare-com.md    # Defuddle OR raw Markdown (best score)
 │       ├── 02-developers-cloudflare-com.md
 │       └── llms-full-developers-cloudflare-com.md   # Raw llms-full.txt (auto-downloaded)
 └── .index.json                                # Index of all cached searches
@@ -95,12 +95,12 @@ src/
 
 ## Cost Estimate
 
-Per research session with the default 8 pages: **approximately $0.05**
+Per research session with the default 8 pages: **≈$0.05**
 
 | Step | Calls | Cost |
 |------|-------|------|
-| Search (Sonar) | 1 | approximately $0.02 |
-| Fetch (Defuddle + markdown) | 8 parallel pairs | $0.00 |
-| Extract (M2.7) | 8 parallel | approximately $0.03 |
-| Collate (M2.7) | 1 | approximately $0.005 |
-| Cache suggest (M2.7) | 1 | approximately $0.0002 |
+| Search (Sonar) | 1 | ≈$0.02 |
+| Fetch (Defuddle + Markdown) | 8 parallel pairs | $0.00 |
+| Extract (M2.7) | 8 parallel | ≈$0.03 |
+| Collate (M2.7) | 1 | ≈$0.005 |
+| Cache suggest (M2.7) | 1 | ≈$0.0002 |

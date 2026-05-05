@@ -5,11 +5,9 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.69.0-blueviolet)](https://github.com/mariozechner/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
 [![tests](https://img.shields.io/badge/tests-104%20passing-brightgreen)]()
-[![CI](https://github.com/Curio-Data/pi-intelli-search/actions/workflows/ci.yml/badge.svg)](https://github.com/Curio-Data/pi-intelli-search/actions/workflows/ci.yml)
-
 Intelligent web research for [`Pi`](https://github.com/mariozechner/pi): search, extract, collate, and cache grounded web context in one tool call.
 
-A `Pi` extension that adds a 5-stage research pipeline (search, fetch, extract, collate, and cache suggest) designed for technical task completion. Per-page LLM extraction compresses raw pages to query-relevant content. It then deduplicates across sources into a concise summary with a persistent `.search/` cache.
+A `Pi` extension that adds a 5-stage research pipeline (_Search_, _Fetch_, _Extract_, _Collate_, and _Cache Suggest_) designed for technical task completion. Per-page LLM extraction compresses raw pages to query-relevant content. It then deduplicates across sources into a concise summary with a persistent `.search/` cache.
 
 <p align="center">
   <img src="docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
@@ -17,43 +15,43 @@ A `Pi` extension that adds a 5-stage research pipeline (search, fetch, extract, 
 
 **Features:**
 - 🔍 **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai) (one API key, no $50 minimum).
-- 📄 **Extract:** Per-page LLM extraction compresses approximately 50K to approximately 3-5K chars.
-- 🔗 **Collate:** Cross-source deduplication into a focused approximately 5K summary.
+- 📄 **Extract:** Per-page LLM extraction compresses ≈50K to ≈3-5K chars.
+- 🔗 **Collate:** Cross-source deduplication into a focused ≈5K summary.
 - 💾 **Cache:** Persistent `.search/` cache for offline reuse and follow-up.
 - 🎯 **Configurable:** Swap any pipeline stage to any model `Pi` supports.
 - 💰 **Low cost:** Approximately $0.05 per research session with default settings.
 
 ## Why intelli-search?
 
-Most coding agents handle web research with a simple two-step pattern: **fetch URL, then dump raw content into context**. [_Claude Code_](https://github.com/anthropics/claude-code)'s `WebFetch` tool, revealed in its open-sourced CLI, follows exactly this approach. It fetches a page, converts HTML to markdown (via the Jina Reader API), and hands the full result to the model.
+Most coding agents handle web research with a simple two-step pattern: **fetch URL, then dump raw content into context**. [_Claude Code_](https://github.com/anthropics/claude-code)'s `WebFetch` tool, revealed in its open-sourced CLI, follows exactly this approach. It fetches a page, converts HTML to Markdown (via the Jina Reader API), and hands the full result to the model.
 
-The problem is that a cleaned documentation page is still approximately 50K characters. For the default 8 sources, that is approximately 400K chars dumped into the agent's context window. The model must simultaneously hold your task, the codebase, and a wall of raw web content. Signal-to-noise drops fast.
+The problem is that a cleaned documentation page is still ≈50K characters. For the default 8 sources, that is ≈400K chars dumped into the agent's context window. The model must simultaneously hold your task, the codebase, and a wall of raw web content. Signal-to-noise drops fast.
 
 **`intelli-search` takes a different approach: extract before you collate.**
 
-Each page is compressed by a dedicated extraction model *before* entering the agent's context. A collation model then deduplicates across extractions. The agent receives a focused approximately 5K summary instead of 400K of raw HTML.
+Each page is compressed by a dedicated extraction model *before* entering the agent's context. A collation model then deduplicates across extractions. The agent receives a focused ≈5K summary instead of 400K of raw HTML.
 
 <p align="center">
-  <img src="docs/images/02.png" alt="PI-Intelli-Search pipeline comparison infographic contrasting two approaches: Per-Page Extraction versus Fetch-and-Dump. The top row, labelled Intelli Search, shows a five-stage pipeline: Query to Search (Perplexity Sonar), Fetch (Defuddle and Markdown), Extract (MiniMax M2.7, approximately 3-5K characters per page), Collate (MiniMax M2.7, deduplicate and synthesise), and Agent Context (approximately 5K focused summary). The bottom row, labelled Other Agents, shows a simpler three-stage pipeline: URL, Fetch, Raw Content (approximately 50K characters times 8 pages), and Agent Context (approximately 400K characters). A footer banner summarises the key trade-offs: context approximately 5K versus approximately 400K, cost approximately $0.05 per session, deduplication cross-source, cache .search/. Rendered in a pen-and-ink botanical and scholarly illustration style with copper arrows and laurel-wreath medallions." width="800" />
+  <img src="docs/images/02.png" alt="PI-Intelli-Search pipeline comparison infographic contrasting two approaches: Per-Page Extraction versus Fetch-and-Dump. The top row, labelled Intelli Search, shows a five-stage pipeline: Query to Search (Perplexity Sonar), Fetch (Defuddle and Markdown), Extract (MiniMax M2.7, ≈3-5K characters per page), Collate (MiniMax M2.7, deduplicate and synthesise), and Agent Context (≈5K focused summary). The bottom row, labelled Other Agents, shows a simpler three-stage pipeline: URL, Fetch, Raw Content (≈50K characters times 8 pages), and Agent Context (≈400K characters). A footer banner summarises the key trade-offs: context ≈5K versus ≈400K, cost ≈$0.05 per session, deduplication cross-source, cache .search/. Rendered in a pen-and-ink botanical and scholarly illustration style with copper arrows and laurel-wreath medallions." width="800" />
 </p>
 
 | | Fetch-and-dump | intelli-search pipeline |
 |---|---|---|
 | Context cost | Approximately 400K chars raw | Approximately 5K chars focused |
 | Noise | Nav, ads, sidebars included | Stripped by extraction |
-| Deduplication | None. Overlapping sources waste tokens | Cross-source dedup via collation |
+| Deduplication | None. Overlapping sources waste tokens | Cross-source dedupe via collation |
 | Cost per session | N/A (no processing) | Approximately $0.05 |
 | Offline reuse | No | Cached in `.search/` |
 
 ## Install
 
-From npm (recommended):
+From `npm` (recommended):
 
 ```bash
 pi install npm:@curio-data/pi-intelli-search
 ```
 
-From GitHub:
+From _GitHub_:
 
 ```bash
 pi install git:github.com/Curio-Data/pi-intelli-search
@@ -72,7 +70,7 @@ On first load, the extension adds [Perplexity Sonar](https://docs.perplexity.ai)
 | Tool               | Description                                                              |
 | ------------------ | ------------------------------------------------------------------------ |
 | `intelli_search`   | Search via [Perplexity Sonar](https://docs.perplexity.ai). Returns summary with source URLs. |
-| `intelli_extract`  | Per-page LLM extraction. Reduces approximately 50K chars to approximately 3-5K of relevant content. |
+| `intelli_extract`  | Per-page LLM extraction. Reduces ≈50K chars to ≈3-5K of relevant content. |
 | `intelli_collate`  | Deduplicate and synthesise extractions into a summary. Writes cache. |
 | `intelli_research` | Full pipeline: search, fetch, extract, collate, cache. One call. |
 
@@ -172,9 +170,9 @@ The only requirement is that the model is registered in `Pi`'s model registry an
 For extraction and collation, the ideal model has:
 - **Low cost per token:** 8 extractions, 1 collation, and 1 cache suggest per default session.
 - **Good instruction following:** Must adhere to extraction prompts precisely.
-- **Sufficient context:** Cleaned pages can be approximately 50K chars (truncated to `extractMaxChars`).
+- **Sufficient context:** Cleaned pages can be ≈50K chars (truncated to `extractMaxChars`).
 
-Models known to work well: MiniMax M2.7 (default), GPT-4o-mini, Gemini 2.0 Flash, DeepSeek V3, Claude 3.5 Haiku.
+Models known to work well for extraction and collation: MiniMax M2.7 (default), Qwen3.5-Flash (≈1M context, ≈$0.26/M output), DeepSeek V4 Flash (≈1M context, ≈$0.28/M output), Gemini 2.0 Flash Lite (≈1M context, ≈$0.30/M output), GPT-4.1 Nano (≈1M context, ≈$0.40/M output).
 
 ### Required API Keys
 
@@ -197,15 +195,15 @@ Run `/login` in `Pi` to set up keys interactively, or edit the file directly.
 ```
 intelli_research(query)
   ├── Stage 1: Search  -> Perplexity Sonar (via OpenRouter, pi native auth)
-  ├── Stage 2: Fetch   -> wreq-js + Defuddle, compared against raw markdown
+  ├── Stage 2: Fetch   -> wreq-js + Defuddle, compared against raw Markdown
   ├── Stage 3: Extract -> configurable model, default: MiniMax M2.7 (parallel)
-  ├── Stage 4: Collate -> configurable model, default: MiniMax M2.7 (dedup + cache)
+  ├── Stage 4: Collate -> configurable model, default: MiniMax M2.7 (dedupe + cache)
   └── Stage 5: Cache suggest -> LLM judge finds related previous searches (additive)
 ```
 
 All model assignments are configurable. See [Model Configuration](#model-configuration).
 
-Each page is dual-fetched (HTML to [Defuddle](https://github.com/kepano/defuddle) versus markdown endpoint) and scored for quality. Per-page extraction compresses approximately 50K chars to approximately 3-5K of query-relevant content before collation, keeping the total context manageable (approximately 24-40K for 8 pages).
+Each page is dual-fetched (HTML to [Defuddle](https://github.com/kepano/defuddle) versus Markdown endpoint) and scored for quality. Per-page extraction compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈24-40K for 8 pages).
 
 For sites with `llms-full.txt` ([Cloudflare](https://developers.cloudflare.com), [Next.js](https://nextjs.org), [Vite](https://vite.dev)), the raw file is downloaded to the cache for offline grep. No LLM processing is needed.
 
@@ -213,15 +211,15 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 ## Cost
 
-Per research session with the default 8 pages: **approximately $0.05**
+Per research session with the default 8 pages: **≈$0.05**
 
 | Step                        | Calls            | Cost    |
 | --------------------------- | ---------------- | ------- |
-| Search (Sonar)              | 1                | approximately $0.02  |
-| Fetch (Defuddle + markdown) | 8 parallel pairs | $0.00   |
-| Extract (M2.7)              | 8 parallel       | approximately $0.03  |
-| Collate (M2.7)              | 1                | approximately $0.005 |
-| Cache suggest (M2.7)        | 1                | approximately $0.0002 |
+| Search (Sonar)              | 1                | ≈$0.02  |
+| Fetch (Defuddle + Markdown) | 8 parallel pairs | $0.00   |
+| Extract (M2.7)              | 8 parallel       | ≈$0.03  |
+| Collate (M2.7)              | 1                | ≈$0.005 |
+| Cache suggest (M2.7)        | 1                | ≈$0.0002 |
 
 Costs scale with your chosen extract or collate model. MiniMax M2.7 is the default specifically for its low cost.
 
@@ -261,7 +259,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 ├── 2026-04-19-d1-worker-api/
 │   ├── report.md               # Collated summary + source index
 │   ├── query.txt               # Original search query
-│   ├── extractions/            # Per-page LLM extractions (approximately 3-5K each)
+│   ├── extractions/            # Per-page LLM extractions (≈3-5K each)
 │   │   ├── 01-developers-cloudflare-com.md
 │   │   └── 02-developers-cloudflare-com.md
 │   └── sources/                # Full page content

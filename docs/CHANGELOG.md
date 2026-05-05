@@ -24,9 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - CI workflow (`.github/workflows/ci.yml`): Validates build, tests, and `npm pack` on every push or PR to `main`.
-- Release workflow (`.github/workflows/release.yml`): Publishes to npm on GitHub Release with provenance signing.
+- Release workflow (`.github/workflows/release.yml`): Publishes to `npm` on _GitHub_ Release with provenance signing.
 - Release policy documented in AGENTS.md (explicit user permission required).
-- E2E publish test (`test/run-e2e-publish.sh`): Installs from npm and validates the published package.
+- E2E publish test (`test/run-e2e-publish.sh`): Installs from `npm` and validates the published package.
 - CI status badge in README.
 
 ### Fixed
@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `typebox` dependency correctly named in COMPONENTS.md and NOTICE (was `@sinclair/typebox`, migrated in v0.2.0).
 - Removed spurious `thinkingLevelMap` compatibility entry from AGENTS.md (not used in codebase).
 - Test count corrected to 104 across README and AGENTS.md.
-- Added npm downloads badge to README.
+- Added `npm` downloads badge to README.
 - Pipeline diagram and cost table in ARCHITECTURE.md now include Stage 5 (cache suggest).
 - Model configurability now documented in ARCHITECTURE.md provider choices section.
 
@@ -59,12 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed `ERR_INVALID_URL` crash when [Defuddle](https://github.com/kepano/defuddle) encounters pages with relative metadata URLs (for example, GitHub `<link rel="canonical" href="/owner/repo/releases">`). Relative `href` and `content` attributes in `<meta>`, `<link>`, and `<a>` tags are now resolved to absolute URLs against the page URL before Defuddle processes the DOM.
+- Fixed `ERR_INVALID_URL` crash when [Defuddle](https://github.com/kepano/defuddle) encounters pages with relative metadata URLs (for example, _GitHub_ `<link rel="canonical" href="/owner/repo/releases">`). Relative `href` and `content` attributes in `<meta>`, `<link>`, and `<a>` tags are now resolved to absolute URLs against the page URL before Defuddle processes the DOM.
 - Fixed E2E test output verification. Grep check no longer fails when the model does not echo the tool name in its response. Cache artifact checks are the authoritative pass or fail.
 
 ### Added
 
-- 4 new unit tests for `cleanBrokenMetadata` covering relative URL resolution, literal undefined or null removal, and [Defuddle](https://github.com/kepano/defuddle) integration with GitHub HTML.
+- 4 new unit tests for `cleanBrokenMetadata` covering relative URL resolution, literal undefined or null removal, and [Defuddle](https://github.com/kepano/defuddle) integration with _GitHub_ HTML.
 - E2E test (`test/run-e2e.sh`) now documented in AGENTS.md as a required step after every change.
 - `test/` source listing in AGENTS.md updated to include `run-e2e.sh`.
 
@@ -77,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `intelli_extract` tool: Per-page LLM extraction with focus prompts.
 - `intelli_collate` tool: Deduplication and synthesis into cached report.
 - `intelli_research` tool: Full pipeline orchestrator (single call).
-- Dual fetch strategy: [Defuddle](https://github.com/kepano/defuddle) (HTML to markdown) versus raw markdown endpoint, with quality scoring.
+- Dual fetch strategy: [Defuddle](https://github.com/kepano/defuddle) (HTML to Markdown) versus raw Markdown endpoint, with quality scoring.
 - Automatic `llms-full.txt` download for known documentation sites.
 - Persistent `.search/` cache with index, extractions, sources, and collated reports.
 - [Perplexity Sonar](https://docs.perplexity.ai) model registration into `~/.pi/agent/models.json`.
@@ -86,7 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configurable settings via `~/.pi/agent/settings.json` and `.pi/settings.json`.
 - Agent-facing skill guide (`skills/intelli-search/SKILL.md`).
 - 70 unit tests across 7 test files.
-- CI/CD via GitHub Actions (publish to npm on release).
+- CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
 [0.3.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.2
 [0.3.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.1
