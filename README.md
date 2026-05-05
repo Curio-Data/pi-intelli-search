@@ -301,7 +301,7 @@ pi install /path/to/pi-intelli-search
 
 ## Sponsor
 
-[![Curio Data Pro Ltd](https://github.com/miah0x41/m0x41-podman/raw/main/banner.png)](https://blog.curiodata.pro/)
+[![Curio Data Pro Ltd](docs/images/sponsor.png)](https://blog.curiodata.pro/)
 
 This project recognises the support and resources provided by **[Curio Data Pro Ltd](https://blog.curiodata.pro/)**, a data consultancy serving engineering sectors including Rail, Naval Design, Aviation, and Offshore Energy. Curio Data Pro combines 20+ years of Chartered Engineer experience across Aerospace, Defence, Rail, and Offshore Energy with data science and DevOps capabilities.
 
