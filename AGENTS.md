@@ -17,7 +17,7 @@ Do not use em-dashes. Rephrase sentences to avoid them. Use alternative punctuat
 
 ### 2. Approximately Symbol
 
-Replace `~` with "approximately" when used as an approximation qualifier before numbers (for example, `~50K` becomes `approximately 50K`, `~$0.05` becomes `approximately $0.05`).
+Replace `~` with "approximately" when used as an approximation qualifier before numbers (for example, `~50K` becomes `≈50K`, `~$0.05` becomes `≈$0.05`).
 
 Do not change `~` in file paths (for example, `~/.pi/agent/` should remain as-is) or in code blocks where `~` has structural meaning.
 
@@ -78,7 +78,7 @@ When creating commits:
 - **Runtime:** Node.js (runs inside `Pi`'s extension host).
 - **Build:** `tsc` to `dist/`.
 - **Test:** `node --import tsx --test test/*.test.ts` (104 tests).
-- **Package manager:** npm.
+- **Package manager:** `npm`.
 - **License:** Apache-2.0 (Copyright 2026 Ashraf Miah, Curio Data Pro Ltd).
 
 ## Key Dependencies
@@ -86,7 +86,7 @@ When creating commits:
 | Package | Role |
 |---------|------|
 | [wreq-js](https://github.com/sqdshguy/wreq-js) | Browser-grade TLS/HTTP fingerprinting for page fetching |
-| [defuddle](https://github.com/kepano/defuddle) | HTML content extraction (strips nav, ads, sidebars to markdown) |
+| [defuddle](https://github.com/kepano/defuddle) | HTML content extraction (strips nav, ads, sidebars to Markdown) |
 | [linkedom](https://github.com/WebReflection/linkedom) | Lightweight DOM for [defuddle](https://github.com/kepano/defuddle) (no full browser) |
 | `@mariozechner/pi-ai` | LLM calling via `Pi`'s auth system (`completeSimple`) |
 | `@mariozechner/pi-coding-agent` | Extension API types (`ExtensionAPI`, `ExtensionContext`) |
@@ -100,7 +100,7 @@ All `Pi` SDK packages are **peer dependencies**. They are provided by the hostin
 src/
 ├── index.ts                  # Extension entry: registers tools, events, model setup
 ├── llm.ts                    # callLlm() - pi native auth + rate-limit detection
-├── fetch.ts                  # Page fetching: Defuddle vs markdown comparison, llms-full.txt
+├── fetch.ts                  # Page fetching: Defuddle vs Markdown comparison, llms-full.txt
 ├── prompts.ts                # System prompts for search, extraction, collation, cache suggest
 ├── providers.ts              # Custom model registration (Sonar) into models.json
 ├── settings.ts               # Settings loader with caching and invalidation
@@ -141,8 +141,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline descripti
 ### Pipeline (`intelli_research`)
 
 1. **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai) returns a synthesised answer with source URLs.
-2. **Fetch:** Each page is fetched two ways in parallel (HTML to [Defuddle](https://github.com/kepano/defuddle) and markdown variant). They are compared by quality score; the best is picked.
-3. **Extract:** Configurable model (default: MiniMax M2.7) per-page extraction (parallel), compressing approximately 50K to approximately 3-5K chars.
+2. **Fetch:** Each page is fetched two ways in parallel (HTML to [Defuddle](https://github.com/kepano/defuddle) and Markdown variant). They are compared by quality score; the best is picked.
+3. **Extract:** Configurable model (default: MiniMax M2.7) per-page extraction (parallel), compressing ≈50K to ≈3-5K chars.
 4. **Collate:** Configurable model (default: MiniMax M2.7) deduplicates across extractions, produces summary and cache.
 5. **Cache suggest:** LLM judge (extract model) compares current query against `.search/.index.json` and appends related previous searches to the output. This is purely additive and never blocks or gates the main result.
 
@@ -163,7 +163,7 @@ The pipeline is self-contained. `Pi` extensions cannot call other tools from `ex
 
 Each page gets dual-fetched:
 1. HTML to [Defuddle](https://github.com/kepano/defuddle) (browser TLS fingerprint and content extraction).
-2. Markdown variant (`Accept: text/markdown` header, or `<link rel="alternate">` discovery).
+2. Markdown variant (`Accept: text/Markdown` header, or `<link rel="alternate">` discovery).
 3. Quality comparison (score on code blocks, headings, tables. Penalise nav chrome).
 
 For known sites ([Cloudflare](https://developers.cloudflare.com), [Next.js](https://nextjs.org), [Vite](https://vite.dev)), `llms-full.txt` is downloaded raw to `sources/`. No LLM processing is applied.
@@ -232,7 +232,7 @@ After **any** code change, run the full verification sequence in order:
 The E2E test launches `Pi` in an isolated environment (separate `PI_CODING_AGENT_DIR`, temp `auth.json` and `models.json`) and runs `intelli_research` against a live query. It verifies:
 - Extension loads and registers tools.
 - [_Perplexity Sonar_](https://docs.perplexity.ai) search returns results.
-- Pages are fetched and extracted ([Defuddle](https://github.com/kepano/defuddle) plus markdown).
+- Pages are fetched and extracted ([Defuddle](https://github.com/kepano/defuddle) plus Markdown).
 - Cache artifacts are written (`.search/` with `report.md`, `query.txt`, `extractions/`, `sources/`).
 - `.search/.index.json` is updated.
 
@@ -245,7 +245,7 @@ Do not consider a change complete until steps 1 through 3 pass. Run step 4 befor
 
 ### E2E Publish Test
 
-`./test/run-e2e-publish.sh` validates that the published npm package installs correctly and is structurally sound. It:
+`./test/run-e2e-publish.sh` validates that the published `npm` package installs correctly and is structurally sound. It:
 
 1. Installs `@curio-data/pi-intelli-search` into a temp directory via `npm install`.
 2. Runs a smoke test against the **installed** `dist/index.js` (not the local source).
@@ -261,12 +261,12 @@ No API keys are needed. This is a structural test only, with no LLM calls.
 
 ## Important Design Decisions
 
-1. **Per-page extraction before collation:** 8 pages multiplied by 50K equals 400K chars. This exceeds LLM context. Extracting per-page first compresses to approximately 32K total for comfortable synthesis.
+1. **Per-page extraction before collation:** 8 pages multiplied by 50K equals 400K chars. This exceeds LLM context. Extracting per-page first compresses to ≈32K total for comfortable synthesis.
 2. **`completeSimple()` over `complete()`:** Sends `reasoning: "low"`, which is required for reasoning models (MiniMax M2.7, DeepSeek, etc.) and is harmless for non-reasoning ones.
 3. **models.json merge over `registerProvider()`:** The latter replaces all models for a provider. The former adds non-destructively.
-4. **Dual fetch (Defuddle plus markdown):** Some sites serve cleaner content via markdown endpoints. The quality score comparison picks the better version automatically.
+4. **Dual fetch (Defuddle plus Markdown):** Some sites serve cleaner content via Markdown endpoints. The quality score comparison picks the better version automatically.
 5. **`focusPrompt` is critical:** Without it the extraction LLM works generically. The `promptGuidelines` instruct the agent to always provide it.
-6. **Cache suggest is additive, not a gate:** Stage 5 never blocks or replaces the live pipeline. It uses the cheap extract model as an LLM judge (approximately 500 input tokens, approximately $0.0002) to find related previous searches. Failures are caught and silently ignored.
+6. **Cache suggest is additive, not a gate:** Stage 5 never blocks or replaces the live pipeline. It uses the cheap extract model as an LLM judge (≈500 input tokens, ≈$0.0002) to find related previous searches. Failures are caught and silently ignored.
 
 ## Tool Naming
 
@@ -281,11 +281,11 @@ All tools use the `intelli_` prefix to avoid collisions with other `Pi` extensio
 
 ## Release Policy
 
-**The agent must never create a GitHub Release or trigger npm publication without the user's explicit permission.**
+**The agent must never create a _GitHub_ Release or trigger `npm` publication without the user's explicit permission.**
 
-Publishing is fully automated via GitHub Actions:
+Publishing is fully automated via _GitHub_ Actions:
 - **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
-- **Release workflow** (`.github/workflows/release.yml`): Runs only when a GitHub Release is **published**. Builds, tests, and publishes to npm with provenance signing.
+- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. Builds, tests, and publishes to `npm` with provenance signing.
 
 ### Creating A Release
 
@@ -293,20 +293,20 @@ Publishing is fully automated via GitHub Actions:
 2. Update `version` in `package.json` following [SemVer](https://semver.org/).
 3. Update `docs/CHANGELOG.md` with the new version entry.
 4. Commit, push, and ask the user for **explicit approval** before proceeding.
-5. Once approved, create a GitHub Release (tag `vX.Y.Z`). The workflow publishes automatically.
+5. Once approved, create a _GitHub_ Release (tag `vX.Y.Z`). The workflow publishes automatically.
 
 ### Testing The Publish Pipeline
 
 Before the first real release, validate the pipeline with a pre-release:
 1. Bump version to a pre-release identifier (for example, `0.3.1-alpha.1`).
-2. Create a GitHub Release with the **Pre-release** checkbox checked.
+2. Create a _GitHub_ Release with the **Pre-release** checkbox checked.
 3. The `published` event triggers the workflow, exercising the full publish path.
-4. npm will **not** set pre-release versions as `latest`. Early adopters will not get it by default.
-5. Verify the package appears on npm, then delete the pre-release tag if not needed.
+4. `npm` will **not** set pre-release versions as `latest`. Early adopters will not get it by default.
+5. Verify the package appears on `npm`, then delete the pre-release tag if not needed.
 
 ### npm Secret
 
-The workflow uses the `NPM_REPO` repository secret (npm access token). Ensure the `@curio-data` org exists on npm and the token has publish rights for `@curio-data/pi-intelli-search`.
+The workflow uses the `NPM_REPO` repository secret (`npm` access token). Ensure the `@curio-data` org exists on `npm` and the token has publish rights for `@curio-data/pi-intelli-search`.
 
 ## Compatibility
 

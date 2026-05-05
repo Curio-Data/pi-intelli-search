@@ -10,7 +10,7 @@ A five-stage pipeline diagram (Search -> Fetch -> Extract -> Collate -> Cache An
 
 ## 02.png: Comparison Infographic
 
-Side-by-side comparison of the `intelli-search` pipeline (per-page extraction followed by collation, producing an approximately 5K summary) versus the fetch-and-dump approach (approximately 400K raw chars). Rendered in the same pen-and-ink style.
+Side-by-side comparison of the `intelli-search` pipeline (per-page extraction followed by collation, producing an ≈5K summary) versus the fetch-and-dump approach (≈400K raw chars). Rendered in the same pen-and-ink style.
 
 **Source:** Custom illustration (created for v0.3.2). Replaced the previous Mermaid flowchart in v0.3.2.
 
