@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-05-05
+
+### Added
+
+- Schema.org JSON stripping in `cleanBrokenMetadata`: removes `<script type="application/ld+json">` tags with invalid JSON before Defuddle processes the DOM. Prevents `JSON.parse` crashes on YouTube and similar pages.
+- Defuddle fallback extraction: if Defuddle crashes (e.g. CSS pseudo-class errors), falls back to basic DOM text extraction instead of returning an empty page.
+- 2 new unit tests for ld+json stripping and fallback extraction (test count now 106).
+
+### Changed
+
+- Documentation style rules applied across all docs: ≈ symbol replaces tilde, `Pi` and `intelli-search` backticked, headings in Title Case, emphasis on product names, links to key components.
+- Documentation Style Guide section added to AGENTS.md.
+- Updated recommended extraction/collation model list with researched 1M-context alternatives.
+- Replaced `dedup` abbreviation with `dedupe` throughout docs.
+- Removed CI badge from README.
+
+### Fixed
+
+- YouTube sources no longer crash with `JSON.parse` errors in Defuddle's `_extractSchemaOrgData`.
+
 ## [0.3.2] - 2026-05-04
 
 ### Added
