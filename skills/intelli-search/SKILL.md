@@ -7,12 +7,13 @@ description: "Research the web for current information. Use when you need docs, 
 
 ## How it works
 
-`intelli_research` runs a 4-stage pipeline inside a single tool call:
+`intelli_research` runs a 5-stage pipeline inside a single tool call:
 
 1. **Search** — Perplexity Sonar returns a synthesised answer + source URLs
 2. **Fetch** — grabs each page, cleans HTML to markdown via Defuddle (strips nav, ads, sidebars)
 3. **Extract** — for each page, an LLM (MiniMax M2.7) pulls out only the content relevant to the query. A 50K-char page becomes ~3-5K chars of focused extraction. The extraction adapts to source type — official docs preserve exact API signatures, blog posts capture practical patterns, forums capture accepted solutions.
 4. **Collate** — another LLM call deduplicates across extractions and produces one concise summary. When sources conflict, official docs win.
+5. **Cache suggest** — an LLM judge finds semantically related previous searches in `.search/` and surfaces them as a supplementary `📚 Related cached searches` table.
 
 The agent (you) receives only the final summary — typically 1-2K tokens. The full pipeline is hidden inside the tool so your context stays clean.
 
