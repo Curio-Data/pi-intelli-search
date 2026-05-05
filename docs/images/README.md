@@ -1,28 +1,17 @@
 # Gallery Images
 
-This directory holds images referenced from `package.json` → `pi.image` for the [pi.dev/packages](https://pi.dev/packages) gallery.
+This directory holds images referenced by the README and `package.json` → `pi.image` for the [pi.dev/packages](https://pi.dev/packages) gallery.
 
-## pi-intelli-search-pipeline.png
+## 01.png — Pipeline diagram
 
-A diagram or illustration explaining what the extension does. This appears as a static preview card on the pi package gallery.
+A five-stage pipeline diagram (Search → Fetch → Extract → Collate → Cache & Suggest) arranged in a clockwise cycle, rendered in a pen-and-ink botanical illustration style.
 
-**Format:** PNG, JPEG, GIF, or WebP
-**Recommended dimensions:** 1280×720 or 1920×1080
+**Source:** Custom illustration (created for v0.3.2).
 
-### How to create
+## 02.png — Comparison infographic
 
-The simplest approach is to render the existing Mermaid diagram from the README. The comparison diagram (fetch-and-dump vs intelli-search pipeline) already communicates the value proposition:
+Side-by-side comparison of the intelli-search pipeline (per-page extraction → collation → ~5K summary) versus the fetch-and-dump approach (~400K raw chars). Rendered in the same pen-and-ink style.
 
-1. Go to [mermaid.live](https://mermaid.live)
-2. Paste the flowchart from README.md
-3. Export as PNG
-4. Save as `pi-intelli-search-pipeline.png` in this directory
+**Source:** Custom illustration (created for v0.3.2). Replaced the previous Mermaid flowchart in v0.3.2.
 
-Alternatively, use `mmdc` (mermaid-cli):
-
-```bash
-npm install -g @mermaid-js/mermaid-cli
-mmdc -i pipeline.mmd -o pi-intelli-search-pipeline.png -w 1280 -H 720 -b transparent
-```
-
-After adding the image, uncomment the `<img>` block in README.md, push to GitHub, bump the version, and republish so the gallery picks up the new `pi.image` URL.
+**Used as:** `pi.image` in `package.json` — appears as the preview card on the pi package gallery.

@@ -21,13 +21,13 @@ A Pi extension that adds a 5-stage research pipeline — search → fetch → ex
 - 🔗 **Collate** — Cross-source deduplication into a focused ~5K summary
 - 💾 **Cache** — Persistent `.search/` cache for offline reuse and follow-up
 - 🎯 **Configurable** — Swap any pipeline stage to any model pi supports
-- 💰 **Low cost** — ~$0.05 per 8-page research session with defaults
+- 💰 **Low cost** — ~$0.05 per research session with default settings
 
 ## Why intelli-search?
 
 Most coding agents handle web research with a simple two-step pattern: **fetch URL → dump raw content into context**. Claude Code's `WebFetch` tool, revealed in its [open-sourced CLI](https://github.com/anthropics/claude-code), follows exactly this approach — it fetches a page, converts HTML to markdown (via the Jina Reader API), and hands the full result to the model.
 
-The problem: a cleaned documentation page is still ~50K characters. For 8 sources, that's ~400K chars dumped into the agent's context window. The model must simultaneously hold your task, the codebase, and a wall of raw web content. Signal-to-noise drops fast.
+The problem: a cleaned documentation page is still ~50K characters. For the default 8 sources, that's ~400K chars dumped into the agent's context window. The model must simultaneously hold your task, the codebase, and a wall of raw web content. Signal-to-noise drops fast.
 
 **intelli-search takes a different approach — extract before you collate.**
 
@@ -42,7 +42,7 @@ Each page is compressed by a dedicated extraction model *before* entering the ag
 | Context cost | ~400K chars raw | ~5K chars focused |
 | Noise | Nav, ads, sidebars included | Stripped by extraction |
 | Deduplication | None — overlapping sources waste tokens | Cross-source dedup via collation |
-| Cost per session | N/A (no search) | ~$0.05 |
+| Cost per session | N/A (no processing) | ~$0.05 |
 | Offline reuse | No | Cached in `.search/` |
 
 ## Install
@@ -91,7 +91,7 @@ intelli_search(query="TypeScript 5.8 release date")
 ```text
 intelli_research(
   query="Svelte 5 runes tutorial examples",
-  focusPrompt="Extract the core rune concepts ($state, $derived, $effect), their syntax, and migration patterns."
+  focusPrompt="Extract the core rune concepts ($state, $derived, $effect), their syntax, and how they replace the old reactive declarations. Include migration patterns from Svelte 4."
 )
 ```
 
@@ -100,7 +100,7 @@ intelli_research(
 ```text
 intelli_research(
   query="Cloudflare Workers KV write timeout limits",
-  focusPrompt="Extract KV write limits, timeout thresholds, and workarounds. Focus on hard numbers.",
+  focusPrompt="Extract KV write limits, timeout thresholds, storage limits, and any workarounds for bulk writes. Focus on hard numbers and error messages.",
   maxUrls=3,
   domains=["developers.cloudflare.com"]
 )
@@ -111,7 +111,7 @@ intelli_research(
 ```text
 intelli_research(
   query="Tailwind CSS vs Vanilla Extract comparison 2026",
-  focusPrompt="Extract pros/cons, bundle size benchmarks, DX tradeoffs, and migration costs."
+  focusPrompt="Extract pros/cons, bundle size benchmarks, DX tradeoffs, and migration costs. Note which claims come from official sources vs blog opinions."
 )
 ```
 
@@ -170,7 +170,7 @@ The only requirement is that the model is registered in pi's model registry and 
 ### Model selection guidance
 
 For extraction and collation, the ideal model has:
-- **Low cost per token** — 8 pages × extraction + 1 collation per session
+- **Low cost per token** — 8 extractions + 1 collation + 1 cache suggest per default session
 - **Good instruction following** — must adhere to extraction prompts precisely
 - **Sufficient context** — cleaned pages can be ~50K chars (truncated to `extractMaxChars`)
 
@@ -205,7 +205,7 @@ intelli_research(query)
 
 All model assignments are configurable — see [Model Configuration](#model-configuration).
 
-Each page is dual-fetched (HTML → Defuddle vs markdown endpoint) and scored for quality. Per-page extraction compresses ~50K chars to ~3-5K of query-relevant content before collation, keeping the total context manageable (~32K for 8 pages).
+Each page is dual-fetched (HTML → Defuddle vs markdown endpoint) and scored for quality. Per-page extraction compresses ~50K chars to ~3-5K of query-relevant content before collation, keeping the total context manageable (~24–40K for 8 pages).
 
 For sites with `llms-full.txt` (Cloudflare, Next.js, Vite), the raw file is downloaded to the cache for offline grep — no LLM processing needed.
 
@@ -213,7 +213,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 ## Cost
 
-Per 8-page research session with default models: **~$0.05**
+Per research session with the default 8 pages: **~$0.05**
 
 | Step                        | Calls            | Cost    |
 | --------------------------- | ---------------- | ------- |
@@ -221,6 +221,7 @@ Per 8-page research session with default models: **~$0.05**
 | Fetch (Defuddle + markdown) | 8 parallel pairs | $0.00   |
 | Extract (M2.7)              | 8 parallel       | ~$0.03  |
 | Collate (M2.7)              | 1                | ~$0.005 |
+| Cache suggest (M2.7)        | 1                | ~$0.0002 |
 
 Costs scale with your chosen extract/collate model — MiniMax M2.7 is the default specifically for its low cost.
 
@@ -250,6 +251,8 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
   "intelliLlmsFullSites": {},
 }
 ```
+
+`intelliBrowserFingerprint` controls the TLS fingerprint used by `wreq-js` when fetching pages (defaults to Chrome 145). `intelliLlmsFullSites` is a map of domain to base URL for sites that provide `llms-full.txt` files (e.g. `{"developers.cloudflare.com": "https://developers.cloudflare.com"}`), which are downloaded raw to the cache without LLM processing.
 
 ## Cache Structure
 
