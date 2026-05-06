@@ -117,6 +117,13 @@ Test counts, version numbers, and stat references must appear in **one canonical
 - **Version canonical:** `package.json` -> `version`, mirrored in `docs/CHANGELOG.md`.
 - `AGENTS.md` should describe **how** to run tests, not assert a count. If a count must be cited, link to the README.
 
+### 10. README Image Width
+
+All images in `README.md` must use a consistent `width="800"` attribute. This applies to infographics, pipeline diagrams, and sponsor banners.
+
+**Good:** `<img src="docs/images/example.avif" alt="..." width="800" />`
+**Avoid:** Widths other than 800, or omitting the width attribute.
+
 ---
 
 ## Git Commit Messages
