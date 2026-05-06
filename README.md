@@ -198,14 +198,9 @@ Run `/login` in `Pi` to set up keys interactively, or edit the file directly.
 
 ## Pipeline
 
-```text
-intelli_research(query)
-  ├── Stage 1: Search  -> Perplexity Sonar (via OpenRouter, pi native auth)
-  ├── Stage 2: Fetch   -> wreq-js + Defuddle, compared against raw Markdown
-  ├── Stage 3: Extract -> configurable model, default: MiniMax M2.7 (parallel)
-  ├── Stage 4: Collate -> configurable model, default: MiniMax M2.7 (dedupe + cache)
-  └── Stage 5: Cache suggest -> LLM judge finds related previous searches (additive)
-```
+<p align="center">
+  <img src="docs/images/07B.avif" alt="Vintage engraving-style infographic titled &quot;INTELLI_RESEARCH: The Five-Stage Pipeline,&quot; showing five sequentially linked numbered stages triggered by intelli_research(query): (1) Search: web discovery via Perplexity Sonar, OpenRouter/pi-native auth; (2) Fetch: dual fetch and quality comparison using wreq-js + Defuddle against raw markdown; (3) Extract: per-page parallel LLM extraction, default model MiniMax M2.7, configurable; (4) Collate: deduplication and persistent cache via MiniMax M2.7 (default, configurable), flags conflicts; (5) Cache Suggest: additive stage, LLM judge surfaces related prior searches. Stages are connected by bold arrows; each is illustrated with a period-appropriate vignette (armillary sphere, scrolls, alchemical still, filing cabinet, owl with documents)." width="700" />
+</p>
 
 All model assignments are configurable. See [Model Configuration](#model-configuration).
 
