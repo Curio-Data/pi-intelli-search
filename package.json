@@ -1,6 +1,6 @@
 {
   "name": "@curio-data/pi-intelli-search",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Intelligent web research for Pi: search, extract, collate, and cache grounded web context in one tool call.",
   "license": "Apache-2.0",
   "repository": {
@@ -19,7 +19,7 @@
     "skills": [
       "./skills"
     ],
-    "image": "https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/06.avif"
+    "image": "https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/06.png"
   },
   "scripts": {
     "build": "tsc",

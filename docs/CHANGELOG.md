@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-05-06
+
+### Fixed
+
+- **Images missing on pi.dev/packages:** replaced `.avif` images (`06.avif`, `07B.avif`, `sponsor.avif`) with `.png` equivalents. The `Pi` packages website does not support `.avif`, causing gallery images and the sponsor banner to render as broken. Also updated `pi.image` in `package.json`.
+- Removed "typically" hedging adverb from SKILL.md (Rule 8, assertive voice).
+- Added pipeline infographic to `docs/ARCHITECTURE.md`, replacing the ASCII art overview block.
+
+### Changed
+
+- Added `.avif` limitation note to AGENTS.md Rule 10 (README Image Width).
+
 ## [0.5.0] - 2026-05-06
 
 ### Added
@@ -14,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Documentation restructured:** SKILL.md reordered so decision logic precedes mechanism. README tightened with direct comparisons and consistent naming. All docs rewritten in assertive voice with hedged language removed.
-- **Pipeline infographic updated:** replaced `02.png` with a more detailed `06.avif` showing the full 7-stage pipeline.
+- **Pipeline infographic updated:** replaced `02.png` with a more detailed `06.png` showing the full 7-stage pipeline.
 
 ## [0.4.1] - 2026-05-06
 
@@ -130,8 +142,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.5.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.5.1
 [0.5.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.5.0
 [0.4.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.4.1
+[0.4.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.4.0
+[0.3.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.2
+[0.3.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.1
+[0.3.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.0
+[0.2.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.2.0
+[0.1.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.1.0
+com/Curio-Data/pi-intelli-search/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.4.0
 [0.3.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.2
 [0.3.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.1
