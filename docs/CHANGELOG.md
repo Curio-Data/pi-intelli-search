@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-05-06
+
+### Changed
+
+- Bumped `devDependencies` to `@mariozechner/pi-ai` 0.73.0 and `@mariozechner/pi-coding-agent` 0.73.0 to stay aligned with the latest `Pi` release. No runtime impact: peer dependencies remain `*` and `Pi` 0.73.0 introduces no breaking changes to extension APIs used by `intelli-search`.
+
+### Compatibility
+
+- Verified against `Pi` 0.73.0: all 106 unit tests pass, E2E pipeline exercises the full search → fetch → extract → collate → cache flow in an isolated `Pi` environment.
+- Upstream `Pi` 0.73.0 fixes that benefit `intelli-search`: MiniMax M2.7 model metadata correction ([pi-mono#4110](https://github.com/badlogic/pi-mono/pull/4110)), and safer `models.json` provider override merging ([pi-mono#3651](https://github.com/badlogic/pi-mono/issues/3651)).
+
 ## [0.4.0] - 2026-05-05
 
 ### Added
