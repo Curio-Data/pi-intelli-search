@@ -4,6 +4,26 @@ This is a **`Pi` extension** that adds intelligent web research tools to the `Pi
 
 ---
 
+## Shell Tool Preferences
+
+Always prefer these over Unix defaults. All are installed and available.
+
+| Task | Tool | Notes |
+|------|------|-------|
+| Search text | `rg` | Over `grep`. Supports `--json`, `--type`, `--glob` |
+| Find files | `fd` | Over `find`. Respects `.gitignore` |
+| Find-and-replace | `sd` | Over `sed`. PCRE regex, no escaping pain |
+| Code patterns | `sg` (ast-grep) | Structural search. Use instead of regex for function calls, imports, class definitions |
+| JSON | `jq` | Query and transform |
+| YAML/TOML | `yq` | Query and transform |
+| Shell validation | `shellcheck` | Validate any shell script before committing or suggesting |
+| Codebase analysis | `scc` | Before major refactors or size/complexity queries |
+| Batch operations | `parallel` | Example: `fd -e py \| parallel ruff check` |
+| Benchmarks | `hyperfine` | Use `--export-markdown` for results |
+| GitHub | `gh` | Release creation, workflow monitoring, repo operations |
+
+---
+
 ## Documentation Style Guide
 
 The following style rules are applied consistently across all documentation files. Any changes to documentation must adhere to these rules.
