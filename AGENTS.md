@@ -121,8 +121,10 @@ Test counts, version numbers, and stat references must appear in **one canonical
 
 All images in `README.md` must use a consistent `width="800"` attribute. This applies to infographics, pipeline diagrams, and sponsor banners.
 
-**Good:** `<img src="docs/images/example.avif" alt="..." width="800" />`
+**Good:** `<img src="docs/images/example.png" alt="..." width="800" />`
 **Avoid:** Widths other than 800, or omitting the width attribute.
+
+**Note:** The `Pi` packages website does not support `.avif` images. Use `.png` or `.webp` for README images that will appear on the packages site.
 
 ---
 

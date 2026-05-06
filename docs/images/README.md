@@ -8,7 +8,7 @@ A five-stage pipeline diagram (Search -> Fetch -> Extract -> Collate -> Cache An
 
 **Source:** Custom illustration (created for v0.3.2).
 
-## 06.avif: Comparison Infographic
+## 06.png: Comparison Infographic
 
 Side-by-side comparison of the 7-stage `intelli-search` pipeline versus generic fetch/search extensions, rendered in a vintage engraving style. The top row shows the full purpose-built pipeline (Search → Dual Fetch → Quality Compare → Extract Per Page → Collate → Persistent Cache → Cache Suggest). The bottom row shows the generic approach (Search → Single Fetch → Raw Pages → No Cache).
 

@@ -4,14 +4,9 @@ This document describes the internal architecture of `pi-intelli-search`. It exp
 
 ## Pipeline Overview
 
-```
-intelli_research(query)
-  ├── Stage 1: Search  -> Perplexity Sonar (via OpenRouter, pi native auth)
-  ├── Stage 2: Fetch   -> wreq-js + Defuddle, compared against raw Markdown
-  ├── Stage 3: Extract -> configurable model, default: MiniMax M2.7 per page (parallel)
-  ├── Stage 4: Collate -> configurable model, default: MiniMax M2.7 dedupe + cache
-  └── Stage 5: Cache suggest -> LLM judge finds related previous searches (additive)
-```
+<p align="center">
+  <img src="images/07B.png" alt="Vintage engraving-style infographic titled &quot;INTELLI_RESEARCH: The Five-Stage Pipeline,&quot; showing five sequentially linked numbered stages triggered by intelli_research(query): (1) Search: web discovery via Perplexity Sonar, OpenRouter/pi-native auth; (2) Fetch: dual fetch and quality comparison using wreq-js + Defuddle against raw markdown; (3) Extract: per-page parallel LLM extraction, default model MiniMax M2.7, configurable; (4) Collate: deduplication and persistent cache via MiniMax M2.7 (default, configurable), flags conflicts; (5) Cache Suggest: additive stage, LLM judge surfaces related prior searches. Stages are connected by bold arrows; each is illustrated with a period-appropriate vignette (armillary sphere, scrolls, alchemical still, filing cabinet, owl with documents)." width="800" />
+</p>
 
 No cross-tool invocation is used. `intelli_research` is self-contained. `Pi` extensions cannot call other tools from within `execute()`, so the orchestrator inlines all four stages.
 
