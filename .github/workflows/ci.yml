@@ -25,6 +25,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint markdown for em-dashes
+        run: |
+          # Enforce AGENTS.md Rule 1: no typographic em-dashes (U+2014).
+          # AGENTS.md is excluded because it must contain the character to illustrate the rule.
+          violations=$(grep -RPn $'—' --include='*.md' . | grep -Ev '^(\./)?AGENTS\.md:' || true)
+          if [ -n "$violations" ]; then
+            echo "::error::Em-dash (U+2014) found. See AGENTS.md Rule 1."
+            echo "$violations"
+            exit 1
+          fi
+
       - name: Build
         run: npm run build
 
