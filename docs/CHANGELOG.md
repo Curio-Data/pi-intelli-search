@@ -9,13 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Images missing on pi.dev/packages:** replaced `.avif` images (`06.avif`, `07B.avif`, `sponsor.avif`) with `.png` equivalents. The `Pi` packages website does not support `.avif`, causing gallery images and the sponsor banner to render as broken. Also updated `pi.image` in `package.json`.
-- Removed "typically" hedging adverb from SKILL.md (Rule 8, assertive voice).
-- Added pipeline infographic to `docs/ARCHITECTURE.md`, replacing the ASCII art overview block.
-
-### Changed
-
-- Added `.avif` limitation note to AGENTS.md Rule 10 (README Image Width).
+- **Images broken on pi.dev/packages:** replaced `.avif` images with `.png` equivalents. The `Pi` packages website does not support `.avif`. Also updated `pi.image` in `package.json`.
 
 ## [0.5.0] - 2026-05-06
 
