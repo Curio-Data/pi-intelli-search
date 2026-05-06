@@ -301,7 +301,7 @@ pi install /path/to/pi-intelli-search
 
 ## Sponsor
 
-[![Curio Data Pro Ltd](docs/images/sponsor.png)](https://blog.curiodata.pro/)
+[**Curio Data Pro Ltd**](https://blog.curiodata.pro/)
 
 **[Curio Data Pro Ltd](https://blog.curiodata.pro/)** sponsors this project. _Curio Data Pro_ is a data consultancy serving _Rail_, _Naval Design_, _Aviation_, and _Offshore Energy_, combining 20+ years of _Chartered Engineer_ experience with _Data Science_ and _DevOps_ capabilities.
 
