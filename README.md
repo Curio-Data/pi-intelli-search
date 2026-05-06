@@ -4,10 +4,10 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.69.0-blueviolet)](https://github.com/mariozechner/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/tests-104%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-106%20passing-brightgreen)
 Intelligent web research for [`Pi`](https://github.com/mariozechner/pi): search, extract, collate, and cache grounded web context in one tool call.
 
-A `Pi` extension that adds a 5-stage research pipeline (_Search_, _Fetch_, _Extract_, _Collate_, and _Cache Suggest_) designed for technical task completion. Per-page LLM extraction compresses raw pages to query-relevant content. It then deduplicates across sources into a concise summary with a persistent `.search/` cache.
+A `Pi` extension for deep web research. It searches via [Perplexity Sonar](https://docs.perplexity.ai), fetches pages through an intelligent dual-fetch comparison ([_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), extracts query-relevant content per page with a dedicated LLM guided by a `focusPrompt`, then collates findings — deduplicating, flagging inconsistencies, and synthesising a concise summary. Everything is cached in `.search/` for offline reuse, with automatic cache suggest surfacing related previous searches on each query.
 
 <p align="center">
   <img src="docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
@@ -15,34 +15,35 @@ A `Pi` extension that adds a 5-stage research pipeline (_Search_, _Fetch_, _Extr
 
 **Features:**
 
-- 🔍 **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai) (one API key, no $50 minimum).
-- 📄 **Extract:** Per-page LLM extraction compresses ≈50K to ≈3-5K chars.
-- 🔗 **Collate:** Cross-source deduplication into a focused ≈5K summary.
-- 💾 **Cache:** Persistent `.search/` cache for offline reuse and follow-up.
-- 🎯 **Configurable:** Swap any pipeline stage to any model `Pi` supports.
+- 🔍 **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) via [_OpenRouter_](https://openrouter.ai) — one API key, no $50 minimum.
+- 🌐 **Fetch:** Dual-fetch each page (HTML → Defuddle versus Markdown endpoint), compare quality, pick the cleaner version.
+- 📄 **Extract:** Per-page LLM extraction guided by `focusPrompt` — compresses ≈50K to ≈3-5K chars of query-relevant content.
+- 🔗 **Collate:** Cross-source deduplication, inconsistency detection, and synthesis into a focused ≈5K summary.
+- 💾 **Cache:** Persistent `.search/` cache with automatic cache suggest — related previous searches surfaced on each query.
+- 🎯 **Configurable:** Swap any pipeline stage (search, extract, collate) to any model `Pi` supports.
 - 💰 **Low cost:** Approximately $0.05 per research session with default settings.
 
-## Why intelli-search?
+## How It Compares
 
-Most coding agents handle web research with a simple two-step pattern: **fetch URL, then dump raw content into context**. [_Claude Code_](https://github.com/anthropics/claude-code)'s `WebFetch` tool, revealed in its open-sourced CLI, follows exactly this approach. It fetches a page, converts HTML to Markdown (via the Jina Reader API), and hands the full result to the model.
+Other `Pi` search extensions do excellent work: `pi-web-access` (26K downloads/mo) fetches via _Readability_ and _Jina_, `pi-smart-fetch` uses browser-grade TLS with Defuddle, and `pi-web-providers` routes across 15+ search backends. All of them clean HTML into readable content.
 
-The problem is that a cleaned documentation page is still ≈50K characters. For the default 8 sources, that is ≈400K chars dumped into the agent's context window. The model must simultaneously hold your task, the codebase, and a wall of raw web content. Signal-to-noise drops fast.
+`intelli-search` goes further in four specific areas:
 
-**`intelli-search` takes a different approach: extract before you collate.**
+**1. Dual-fetch quality comparison.** Every page is fetched twice in parallel — once through Defuddle (HTML cleaning) and once through a Markdown endpoint if available. They are scored on code blocks, headings, and tables versus nav chrome noise. The better version wins. Server-rendered Markdown is not always clean: `https://developers.cloudflare.com/d1/` returns 3,696 chars with JSON-LD breadcrumb noise when fetched as Markdown, versus 3,047 chars of cleaner content from Defuddle. The comparison catches this automatically.
 
-Each page is compressed by a dedicated extraction model _before_ entering the agent's context. A collation model then deduplicates across extractions. The agent receives a focused ≈5K summary instead of 400K of raw HTML.
+**2. Per-page LLM extraction before collation.** Other extensions deliver full page content to the agent. That works when the main LLM can filter noise effectively. `intelli-search` uses a dedicated extraction model (configurable, default _MiniMax_ M2.7) to compress each page to ≈3-5K of query-relevant content _before_ it enters the agent's context. The `focusPrompt` parameter guides what to look for across all pages. This keeps the agent's context focused — but it depends on the extraction model's quality.
+
+**3. LLM collation with deduplication.** After per-page extraction, a collation model synthesises findings across all sources. It removes redundant information, flags conflicting claims, and preserves source attribution. Without this, the agent spends reasoning tokens on mechanical synthesis.
+
+**4. Persistent cache with cache suggest.** Full pages and extractions are stored in `.search/` and indexed. The cache suggest stage automatically finds related previous searches, so follow-up queries can compare new findings against cached data. Over time, this reduces API calls and cost.
+
+Together, extraction and caching give the best of both worlds. The agent works from a concise ≈5K summary by default — saving context and tokens. But the full page content is preserved in the cache, accessible with native `Pi` tools like `read` or `grep` whenever deeper inspection is needed. No other `Pi` search extension offers both.
+
+For a detailed comparison against six other `Pi` search extensions, see [docs/COMPARISON.md](docs/COMPARISON.md).
 
 <p align="center">
-  <img src="docs/images/02.png" alt="PI-Intelli-Search pipeline comparison infographic contrasting two approaches: Per-Page Extraction versus Fetch-and-Dump. The top row, labelled Intelli Search, shows a five-stage pipeline: Query to Search (Perplexity Sonar), Fetch (Defuddle and Markdown), Extract (MiniMax M2.7, ≈3-5K characters per page), Collate (MiniMax M2.7, deduplicate and synthesise), and Agent Context (≈5K focused summary). The bottom row, labelled Other Agents, shows a simpler three-stage pipeline: URL, Fetch, Raw Content (≈50K characters times 8 pages), and Agent Context (≈400K characters). A footer banner summarises the key trade-offs: context ≈5K versus ≈400K, cost ≈$0.05 per session, deduplication cross-source, cache .search/. Rendered in a pen-and-ink botanical and scholarly illustration style with copper arrows and laurel-wreath medallions." width="800" />
+  <img src="docs/images/02.png" alt="Pipeline comparison infographic" width="800" />
 </p>
-
-|                  | Fetch-and-dump                         | intelli-search pipeline           |
-| ---------------- | -------------------------------------- | --------------------------------- |
-| Context cost     | Approximately 400K chars raw           | Approximately 5K chars focused    |
-| Noise            | Nav, ads, sidebars included            | Stripped by extraction            |
-| Deduplication    | None. Overlapping sources waste tokens | Cross-source dedupe via collation |
-| Cost per session | N/A (no processing)                    | Approximately $0.05               |
-| Offline reuse    | No                                     | Cached in `.search/`              |
 
 ## Install
 
@@ -64,16 +65,16 @@ Local development:
 pi install /path/to/pi-intelli-search
 ```
 
-On first load, the extension adds [Perplexity Sonar](https://docs.perplexity.ai) models to `~/.pi/agent/models.json` under the `openrouter` provider. This patch approach lets `Pi` discover Sonar through [OpenRouter](https://openrouter.ai). No separate Perplexity API account is needed.
+On first load, the extension adds [Perplexity Sonar](https://docs.perplexity.ai) models to `~/.pi/agent/models.json` under the `openrouter` provider. This patch approach lets `Pi` discover _Sonar_ through [OpenRouter](https://openrouter.ai). No separate Perplexity API account is needed.
 
 ## Tools
 
-| Tool               | Description                                                                                  |
-| ------------------ | -------------------------------------------------------------------------------------------- |
-| `intelli_search`   | Search via [Perplexity Sonar](https://docs.perplexity.ai). Returns summary with source URLs. |
-| `intelli_extract`  | Per-page LLM extraction. Reduces ≈50K chars to ≈3-5K of relevant content.                    |
-| `intelli_collate`  | Deduplicate and synthesise extractions into a summary. Writes cache.                         |
-| `intelli_research` | Full pipeline: search, fetch, extract, collate, cache. One call.                             |
+| Tool               | Description                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------------- |
+| `intelli_search`   | Search via [Perplexity Sonar](https://docs.perplexity.ai). Returns summary with source URLs.              |
+| `intelli_extract`  | Per-page LLM extraction guided by `focusPrompt`. Reduces ≈50K chars to ≈3-5K of relevant content.         |
+| `intelli_collate`  | Deduplicate and synthesise extractions into a summary. Writes cache.                                      |
+| `intelli_research` | Full pipeline: search, fetch, extract, collate, cache. One call.                                          |
 
 ## Quick Start
 
@@ -124,18 +125,18 @@ All three pipeline stages use independently configurable models. Defaults are ch
 | Extract | `minimax/MiniMax-M2.7`        | `intelliExtractModel` |
 | Collate | `minimax/MiniMax-M2.7`        | `intelliCollateModel` |
 
-### Why OpenRouter For Sonar?
+### Why OpenRouter For _Sonar_?
 
-[_Perplexity Sonar_](https://docs.perplexity.ai) is an excellent search-grounded model, but it is not in `Pi`'s built-in model list. Rather than requiring a separate Perplexity API account (which requires a **$50 minimum credit top-up**), the extension routes Sonar through [OpenRouter](https://openrouter.ai). OpenRouter is a unified pay-as-you-go API with no minimum spend. One API key gives you Sonar alongside thousands of other models. On first load, the extension patches `~/.pi/agent/models.json` to add Sonar under the `openrouter` provider so `Pi` can discover it. This approach has several benefits:
+[_Perplexity Sonar_](https://docs.perplexity.ai) is an excellent search-grounded model, but it is not in `Pi`'s built-in model list. Rather than requiring a separate Perplexity API account (which requires a **$50 minimum credit top-up**), the extension routes _Sonar_ through [OpenRouter](https://openrouter.ai). OpenRouter is a unified pay-as-you-go API with no minimum spend. One API key gives you _Sonar_ alongside thousands of other models. On first load, the extension patches `~/.pi/agent/models.json` to add _Sonar_ under the `openrouter` provider so `Pi` can discover it. This approach has several benefits:
 
 - **Avoids the Perplexity API $50 minimum.** OpenRouter has pay-as-you-go with no minimum spend.
-- **One account, many models.** The same OpenRouter key covers Sonar and any other models you might want for extract or collate.
+- **One account, many models.** The same OpenRouter key covers _Sonar_ and any other models you might want for extract or collate.
 - **Is non-destructive.** The patch merges new models by ID. It never replaces existing OpenRouter models.
 - **Is idempotent.** It is safe across extension reloads and updates.
 
 ### Swapping The Extract And Collate Model
 
-MiniMax M2.7 is the default because it is cheap and effective for extraction and collation. However, you can use any model `Pi` supports. Override in `~/.pi/agent/settings.json` or `.pi/settings.json`:
+_MiniMax_ M2.7 is the default because it is cheap and effective for extraction and collation. However, you can use any model `Pi` supports. Override in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 
 **Option A: Use A `Pi` Built-In Provider** (auth via `/login`):
 
@@ -174,7 +175,7 @@ For extraction and collation, the ideal model has:
 - **Good instruction following:** Must adhere to extraction prompts precisely.
 - **Sufficient context:** Cleaned pages can be ≈50K chars (truncated to `extractMaxChars`).
 
-Models known to work well for extraction and collation: MiniMax M2.7 (default), Qwen3.5-Flash (≈1M context, ≈$0.26/M output), DeepSeek V4 Flash (≈1M context, ≈$0.28/M output), Gemini 2.0 Flash Lite (≈1M context, ≈$0.30/M output), GPT-4.1 Nano (≈1M context, ≈$0.40/M output).
+Models known to work well for extraction and collation: _MiniMax_ M2.7 (default), _Qwen_ 3.5-Flash (≈1M context, ≈$0.26/M output), _DeepSeek_ V4 Flash (≈1M context, ≈$0.28/M output), _Gemini_ 2.0 Flash Lite (≈1M context, ≈$0.30/M output), _GPT-4.1_ Nano (≈1M context, ≈$0.40/M output).
 
 ### Required API Keys
 
@@ -188,7 +189,7 @@ With default settings, you need two keys in `~/.pi/agent/auth.json`:
 ```
 
 - **OpenRouter:** Used by `intelli_search` ([Perplexity Sonar](https://docs.perplexity.ai)) and available as an extract or collate alternative.
-- **MiniMax:** Used by `intelli_extract` and `intelli_collate` (MiniMax M2.7). **Only needed if you keep the defaults.** Override `intelliExtractModel` or `intelliCollateModel` to use a different provider.
+- **_MiniMax_:** Used by `intelli_extract` and `intelli_collate` (MiniMax M2.7). **Only needed if you keep the defaults.** Override `intelliExtractModel` or `intelliCollateModel` to use a different provider.
 
 Run `/login` in `Pi` to set up keys interactively, or edit the file directly.
 
@@ -205,7 +206,7 @@ intelli_research(query)
 
 All model assignments are configurable. See [Model Configuration](#model-configuration).
 
-Each page is dual-fetched (HTML to [Defuddle](https://github.com/kepano/defuddle) versus Markdown endpoint) and scored for quality. Per-page extraction compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈24-40K for 8 pages).
+Each page is dual-fetched (HTML to [_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint) and scored for quality. Per-page extraction — guided by `focusPrompt` — compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈24-40K for 8 pages).
 
 For sites with `llms-full.txt` ([Cloudflare](https://developers.cloudflare.com), [Next.js](https://nextjs.org), [Vite](https://vite.dev)), the raw file is downloaded to the cache for offline grep. No LLM processing is needed.
 
@@ -215,15 +216,15 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 Per research session with the default 8 pages: **≈$0.05**
 
-| Step                        | Calls            | Cost     |
-| --------------------------- | ---------------- | -------- |
-| Search (Sonar)              | 1                | ≈$0.02   |
-| Fetch (Defuddle + Markdown) | 8 parallel pairs | $0.00    |
-| Extract (M2.7)              | 8 parallel       | ≈$0.03   |
-| Collate (M2.7)              | 1                | ≈$0.005  |
-| Cache suggest (M2.7)        | 1                | ≈$0.0002 |
+| Step                           | Calls            | Cost      |
+| ------------------------------ | ---------------- | --------- |
+| Search (_Sonar_)               | 1                | ≈$0.02    |
+| Fetch (Defuddle + Markdown)    | 8 parallel pairs | $0.00     |
+| Extract (_MiniMax_ M2.7)       | 8 parallel       | ≈$0.03    |
+| Collate (_MiniMax_ M2.7)       | 1                | ≈$0.005   |
+| Cache suggest (_MiniMax_ M2.7) | 1                | ≈$0.0002  |
 
-Costs scale with your chosen extract or collate model. MiniMax M2.7 is the default specifically for its low cost.
+Costs scale with your chosen extract or collate model. _MiniMax_ M2.7 is the default specifically for its low cost.
 
 ## Settings
 
@@ -281,7 +282,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 ```bash
 npm install
 npm run build        # TypeScript -> dist/
-npm test             # Unit tests (104 tests)
+npm test             # Unit tests (106 tests)
 npm run test:smoke   # Smoke test
 
 # Test in pi
@@ -293,6 +294,7 @@ pi install /path/to/pi-intelli-search
 
 ## Documentation
 
+- [Comparison](docs/COMPARISON.md): How `intelli-search` compares to other `Pi` search extensions.
 - [Changelog](docs/CHANGELOG.md): Release history.
 - [Architecture](docs/ARCHITECTURE.md): Detailed design decisions and pipeline internals.
 - [Components](docs/COMPONENTS.md): Third-party dependencies and license attribution.
@@ -318,5 +320,6 @@ Licensed under the [Apache License, Version 2.0](./LICENSE).
 _Text Generators_ (for example, _Large Language Models_ or so-called "Artificial Intelligence" tools) have been used extensively in the development of this project.
 
 - **`Pi` agent** (primary development environment).
-- **GLM 5.1:** Primary model for code generation and architecture.
-- **Qwen 3.6 Plus:** Secondary model for review and documentation.
+- **_GLM_ 5.1:** Primary model for code generation and architecture.
+- **_DeepSeek_ V4 Pro:** Research and data analysis.
+- **_Qwen_ 3.6 Plus:** Secondary model for review and documentation.
