@@ -10,10 +10,16 @@ The following style rules are applied consistently across all documentation file
 
 ### 1. Em-Dashes
 
-Do not use em-dashes. Rephrase sentences to avoid them. Use alternative punctuation such as colons, periods, or semicolons, or restructure the sentence entirely.
+Do not use em-dashes. This applies to **both** forms:
+
+- The typographic em-dash `—` (Unicode U+2014).
+- The double-hyphen `--` (often auto-substituted by editors).
+
+Rephrase by replacing with a period, colon, semicolon, or sentence break. Inside tables specifically, replace `**Yes** — explanation` with `**Yes**: explanation` or split into two columns. CI enforces the typographic form (`.github/workflows/ci.yml` greps for U+2014 across all markdown files except this one). The double-hyphen form is harder to lint automatically because it overlaps with CLI flags and table separators, so reviewers must catch it in prose.
 
 **Good:** "Each page is compressed by a dedicated extraction model. The agent context stays clean."
 **Avoid:** "Each page is compressed by a dedicated extraction model -- the agent context stays clean."
+**Avoid:** "Each page is compressed by a dedicated extraction model — the agent context stays clean."
 
 ### 2. Approximately Symbol
 
@@ -37,10 +43,12 @@ When referring to `intelli-search` as the program, extension, or package name, s
 
 ### 5. Heading Capitalization
 
-Markdown headings should use capital letters for the first letter of each word (Title Case). Articles, conjunctions, and prepositions of three letters or fewer are lowercased unless they are the first or last word.
+Markdown headings should use capital letters for the first letter of each word (Title Case). Articles, conjunctions, and prepositions of three letters or fewer are lowercased unless they are the first or last word. The rule applies to **all heading levels** including `####` and to **bold pseudo-headings** such as `**Option A: Use a Pi Built-In Provider**`.
 
-**Good:** `## How It Works`, `### Why Extract Before Collate?`
-**Avoid:** `## How it works`, `### Why extract before collate?`
+Phrasal-verb particles (`Up`, `Out`, `In`) at the end of a heading are capitalised: `Follow Up`, `Sign In`. All-caps emphasis inside a heading (for example, `When NOT to Search`) is discouraged. Use bold in the body instead, or rephrase the heading.
+
+**Good:** `## How It Works`, `### Why Extract Before Collate?`, `### Creating a Release`
+**Avoid:** `## How it works`, `### Why extract before collate?`, `### Creating A Release`
 
 ### 6. Emphasis for Names
 
@@ -49,9 +57,19 @@ When stating a proper name such as a product, company, or framework, use italic 
 **Good:** "Most coding agents like _Claude Code_ handle web research by..."
 **Avoid:** "Most coding agents like Claude Code handle web research by..."
 
+### 6a. Tie-Breaker for Names That Are Also Packages
+
+When a proper name is **also** a package, library, or CLI command, follow the convention that matches the surrounding context:
+
+- **Code or install context (commands, file listings):** backticks. Example: `npm install defuddle`.
+- **Prose narrative:** italic emphasis with a link on the **first** mention; thereafter use the plain capitalised name without emphasis. Example: "[_Defuddle_](https://github.com/kepano/defuddle) cleans HTML... Defuddle's quality score..."
+- **Tables:** plain capitalised name. No backticks, no italics, no link. Tables are scan-optimised; emphasis adds noise.
+
+This resolves ambiguity for names like Defuddle, MiniMax, OpenRouter, and Sonar that are simultaneously products and routable identifiers.
+
 ### 7. Links for Key Components
 
-Add hyperlinks to key components, libraries, and services on their first mention in each document. This includes but is not limited to:
+Add hyperlinks to key components, libraries, and services on their **first prose mention** in each document. Mentions inside tables do not count as the first mention because Rule 6a forbids links in tables; the link is added in the first prose paragraph that names the component instead. This applies to but is not limited to:
 
 - [Defuddle](https://github.com/kepano/defuddle)
 - [wreq-js](https://github.com/sqdshguy/wreq-js)
@@ -59,6 +77,25 @@ Add hyperlinks to key components, libraries, and services on their first mention
 - [OpenRouter](https://openrouter.ai)
 - [Perplexity Sonar](https://docs.perplexity.ai)
 - [MiniMax](https://minimax.io)
+
+### 8. Assertive Voice
+
+Documentation describes a working system, not a hopeful one. Avoid:
+
+- **Hedging adverbs:** *typically*, *often*, *generally*, *somewhat*, *fairly*, *roughly*. If a number is approximate, use `≈` per Rule 2; do not also pad the prose with hedges.
+- **Diplomatic disclaimers about competing tools:** "do excellent work", "also valuable", "complementary rather than competitive". State what other tools do; let the reader infer the comparison.
+- **Apologetic parentheticals:** `(yet)`, `(for now)`, `(roughly)`. Either commit to the claim or remove it.
+- **Editorial scare quotes:** for example, `so-called "AI"`. State the term plainly.
+
+Prefer present-tense indicative. "The pipeline caches results." beats "The pipeline can cache results."
+
+### 9. Numbers and Versions Are Single-Sourced
+
+Test counts, version numbers, and stat references must appear in **one canonical location** and be referenced from elsewhere, not duplicated. When a number changes, only the canonical source needs editing.
+
+- **Test count canonical:** `README.md` badge and `Development` block.
+- **Version canonical:** `package.json` -> `version`, mirrored in `docs/CHANGELOG.md`.
+- `AGENTS.md` should describe **how** to run tests, not assert a count. If a count must be cited, link to the README.
 
 ---
 
@@ -77,7 +114,7 @@ When creating commits:
 - **Language:** TypeScript (ESM, strict mode).
 - **Runtime:** Node.js (runs inside `Pi`'s extension host).
 - **Build:** `tsc` to `dist/`.
-- **Test:** `node --import tsx --test test/*.test.ts` (104 tests).
+- **Test:** `node --import tsx --test test/*.test.ts`. Test count is shown by the badge in `README.md`.
 - **Package manager:** `npm`.
 - **License:** Apache-2.0 (Copyright 2026 Ashraf Miah, Curio Data Pro Ltd).
 
@@ -184,7 +221,7 @@ Written to `.search/<date>-<slug>/` with `report.md`, `query.txt`, `extractions/
 npm install              # Install deps
 npm run build            # TypeScript -> dist/ (tsc)
 npm run dev              # Watch mode (tsc --watch)
-npm test                 # Run all unit tests (104 tests)
+npm test                 # Run all unit tests
 npm run test:smoke       # Smoke test (structural validation)
 ./test/run-e2e.sh        # End-to-end test (live LLM calls, isolated env)
 ```
@@ -219,7 +256,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 - Test files in `test/` mirror `src/` structure: `cache.test.ts`, `fetch.test.ts`, `settings.test.ts`, etc.
 - Run with `node --import tsx --test` (Node.js built-in test runner).
 - Tests are unit tests. No live API calls and no network access required.
-- 104 tests total across 7 test files, plus 1 smoke test.
+- Tests are unit tests across 7 test files, plus 1 smoke test. The total count is shown by the badge in `README.md`.
 
 ### Must Run After Every Change
 
@@ -287,15 +324,29 @@ Publishing is fully automated via _GitHub_ Actions:
 - **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
 - **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. Builds, tests, and publishes to `npm` with provenance signing.
 
-### Creating A Release
+### Creating a Release
 
-1. Ensure all changes are merged to `main` and CI passes (green check).
-2. Update `version` in `package.json` following [SemVer](https://semver.org/).
-3. Update `docs/CHANGELOG.md` with the new version entry.
-4. Commit, push, and ask the user for **explicit approval** before proceeding.
-5. Once approved, create a _GitHub_ Release (tag `vX.Y.Z`). The workflow publishes automatically.
+Releases are routinely missed because steps 3 and 4 below are skipped or done halfway. Follow every step. Do not assume.
 
-### Testing The Publish Pipeline
+1. **Verify CI is green.** Confirm all changes are merged to `main` and the latest run is passing.
+2. **Bump `version` in `package.json`** following [SemVer](https://semver.org/).
+3. **Update `docs/CHANGELOG.md` in two places.** Both are required:
+   - **Top of file:** Add a new `## [X.Y.Z] - YYYY-MM-DD` section above the previous entry. Use the standard sub-headings (`### Added`, `### Changed`, `### Fixed`, `### Compatibility`, `### Removed`, `### Security`) as needed. List user-visible changes only; internal refactors do not need entries unless they affect compatibility.
+   - **Bottom of file:** Add a corresponding reference link `[X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/vX.Y.Z` below the existing reference block. Without this entry the version heading at the top will not link to the GitHub release.
+4. **Verify both CHANGELOG edits exist before committing.** Run:
+
+   ```bash
+   grep -n "^## \[X.Y.Z\]" docs/CHANGELOG.md   # must return one match
+   grep -n "^\[X.Y.Z\]:"  docs/CHANGELOG.md   # must return one match
+   ```
+
+   Both must match. If either is missing, fix before continuing.
+5. **Commit and push** the version bump and CHANGELOG together. Suggested commit subject: `Release vX.Y.Z`.
+6. **Request explicit user approval** before creating the GitHub Release. The agent must not publish without it (see `Release Policy` above).
+7. **On approval, create the GitHub Release** with tag `vX.Y.Z`. The workflow then publishes to `npm` automatically.
+8. **Verify publication.** After the workflow finishes, check `https://www.npmjs.com/package/@curio-data/pi-intelli-search` shows the new version.
+
+### Testing the Publish Pipeline
 
 Before the first real release, validate the pipeline with a pre-release:
 1. Bump version to a pre-release identifier (for example, `0.3.1-alpha.1`).

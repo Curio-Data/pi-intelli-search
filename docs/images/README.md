@@ -14,4 +14,4 @@ Side-by-side comparison of the `intelli-search` pipeline (per-page extraction fo
 
 **Source:** Custom illustration (created for v0.3.2). Replaced the previous Mermaid flowchart in v0.3.2.
 
-**Used as:** `pi.image` in `package.json`. Appears as the preview card on the `pi` package gallery.
+**Used as:** `pi.image` in `package.json`. Appears as the preview card on the `Pi` package gallery.

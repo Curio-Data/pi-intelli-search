@@ -31,7 +31,7 @@ Each page is fetched two ways in parallel:
 
 For sites that provide `llms-full.txt` ([Cloudflare](https://developers.cloudflare.com), [Next.js](https://nextjs.org), [Vite](https://vite.dev), and others), the raw file is downloaded to `sources/` alongside individual pages. No LLM processing is applied. The agent can grep or search it for offline lookup.
 
-### Provider And Model Choices
+### Provider and Model Choices
 
 All three pipeline stages (search, extract, collate) use independently configurable models. The defaults are:
 

@@ -2,6 +2,19 @@
 
 This document lists third-party software included or used by `pi-intelli-search`, along with their licenses and provenance. This project uses these libraries as dependencies via `npm`. No third-party source code has been copied or embedded directly.
 
+## Capability Map
+
+Each runtime dependency provides one specific capability. The table below shows what `pi-intelli-search` would lose if a dependency were removed, and how easily an alternative could be substituted.
+
+| Capability | Dependency | Replaceable? |
+|---|---|---|
+| Browser-grade TLS / HTTP fingerprinting for page fetching | [`wreq-js`](https://github.com/sqdshguy/wreq-js) | Hard. Most Node HTTP clients lack realistic browser fingerprints (`chrome_145`), which many sites require to return clean content. |
+| HTML to Markdown content extraction (strips nav, ads, sidebars) | [`defuddle`](https://github.com/kepano/defuddle) | Medium. Mozilla Readability is a fallback but produces less consistent Markdown; the dual-fetch quality scoring is calibrated against Defuddle's output. |
+| DOM in Node.js (required by Defuddle) | [`linkedom`](https://github.com/WebReflection/linkedom) | Easy. `jsdom` is a heavier alternative; switching is a one-line change in `src/fetch.ts`. |
+| LLM dispatch and `Pi`-native auth | [`@mariozechner/pi-ai`](https://github.com/mariozechner/pi) | No. `Pi`-bound by design; all auth flows route through `Pi`'s native system. |
+| Extension API surface (`ExtensionAPI`, `ExtensionContext`, event types) | [`@mariozechner/pi-coding-agent`](https://github.com/mariozechner/pi) | No. `Pi`-bound by design. |
+| JSON Schema and tool-input parameter typing | [`typebox`](https://github.com/sinclairzx81/typebox) | Hard. `Pi`'s extension contract is built around TypeBox 1.x; replacing it would require coordinated upstream changes. |
+
 ## Runtime Dependencies
 
 These packages are installed via `npm` and distributed with the extension.
@@ -29,21 +42,21 @@ These packages are installed via `npm` and distributed with the extension.
 
 ## Peer Dependencies
 
-These packages are provided by the hosting `pi` runtime and are not bundled with this extension.
+These packages are provided by the hosting `Pi` runtime and are not bundled with this extension.
 
 ### typebox
 
 - **Repository:** https://github.com/sinclairzx81/typebox
 - **Author:** Sinclair
 - **License:** MIT
-- **Usage:** JSON Schema and parameter type definitions for tool inputs. Migrated from `@sinclair/typebox` 0.34.x to `typebox` 1.x in v0.2.0 (required `pi` >= 0.69.0 for the TypeBox migration).
+- **Usage:** JSON Schema and parameter type definitions for tool inputs. Migrated from `@sinclair/typebox` 0.34.x to `typebox` 1.x in v0.2.0 (required `Pi` >= 0.69.0 for the TypeBox migration).
 
 ### @mariozechner/pi-ai
 
 - **Repository:** https://github.com/mariozechner/pi
 - **Author:** Mario Zechner
 - **License:** Apache-2.0
-- **Usage:** LLM calling via `pi`'s auth system (`completeSimple()`).
+- **Usage:** LLM calling via `Pi`'s auth system (`completeSimple()`).
 
 ### @mariozechner/pi-coding-agent
 
@@ -61,4 +74,4 @@ These packages are provided by the hosting `pi` runtime and are not bundled with
 
 ## Original Code
 
-All source code in `src/` is original work by Ashraf Miah, Curio Data Pro Ltd. No code has been derived from other `pi` extensions, published `pi` packages, or third-party projects.
+All source code in `src/` is original work by Ashraf Miah, Curio Data Pro Ltd. No code has been derived from other `Pi` extensions, published `Pi` packages, or third-party projects.

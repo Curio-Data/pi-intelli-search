@@ -5,25 +5,7 @@ description: "Research the web for current information. Use when you need docs, 
 
 # Intelli Search
 
-## How It Works
-
-`intelli_research` runs a 5-stage pipeline inside a single tool call:
-
-1. **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) returns a synthesised answer with source URLs.
-2. **Fetch:** Grabs each page, cleans HTML to Markdown via [Defuddle](https://github.com/kepano/defuddle) (strips nav, ads, sidebars).
-3. **Extract:** For each page, an LLM (MiniMax M2.7) pulls out only the content relevant to the query. A 50K-char page becomes ≈3-5K chars of focused extraction. The extraction adapts to source type. Official docs preserve exact API signatures. Blog posts capture practical patterns. Forums capture accepted solutions.
-4. **Collate:** Another LLM call deduplicates across extractions and produces one concise summary. When sources conflict, official docs win.
-5. **Cache suggest:** An LLM judge finds semantically related previous searches in `.search/` and surfaces them as a supplementary `📚 Related cached searches` table.
-
-The agent (you) receives only the final summary, typically 1-2K tokens. The full pipeline is hidden inside the tool so your context stays clean.
-
-### Why Extract Before Collate?
-
-Eight fetched pages multiplied by ≈50K chars each equals ≈400K chars. That is too large for a single LLM context window. Extracting per-page first compresses each independently. The collation model then sees ≈32K chars total, which is comfortable for synthesis and deduplication.
-
-This is also why `focusPrompt` matters. It tells the extraction LLM what to keep from each 50K-char page. Without guidance, it extracts generically and the collation has less signal to work with.
-
-## When To Use Which Tool
+## When to Use Which Tool
 
 ### Quick Factual Question: Use `intelli_search`
 
@@ -33,11 +15,11 @@ When you need a fast answer with sources but no deep analysis:
 intelli_search(query="TypeScript 5.8 release date")
 ```
 
-### Deep Research For A Coding Task: Use `intelli_research`
+### Deep Research for a Coding Task: Use `intelli_research`
 
 **Always provide a `focusPrompt`.** The extraction LLM needs to know what to extract. Without it, you get generic summaries. Translate the user's intent into a specific extraction focus.
 
-#### Example: Learning A New Feature
+#### Example: Learning a New Feature
 
 ```
 User: "How do runes work in Svelte 5?"
@@ -48,7 +30,7 @@ intelli_research(
 )
 ```
 
-#### Example: Infrastructure And Sysadmin Detail
+#### Example: Infrastructure and Sysadmin Detail
 
 ```
 User: "How do I set up podman rootless with systemd?"
@@ -59,7 +41,7 @@ intelli_research(
 )
 ```
 
-#### Example: Debugging A Specific Problem
+#### Example: Debugging a Specific Problem
 
 ```
 User: "Why is my Cloudflare Worker timing out on KV writes?"
@@ -117,9 +99,9 @@ When you need **different focus per URL** (for example, comparing alternatives s
 
 Example: researching "KV vs Durable Objects". Extract KV pages with `focusPrompt="Extract KV read/write patterns, consistency model, and latency characteristics"`. Extract Durable Objects pages with `focusPrompt="Extract the consistency guarantees, transaction API, and single-computer model"`.
 
-## Using The Result
+## Using the Result
 
-**The `intelli_research` tool result already contains a concise deduplicated summary. Use it directly. Do NOT read cache files unless the summary is insufficient for the task.**
+**The `intelli_research` tool result already contains a concise deduplicated summary. Use it directly. Do not read cache files unless the summary is insufficient for the task.**
 
 The tool output also includes a **📚 Related cached searches** section when semantically similar previous searches exist in `.search/`. These are discovered by an LLM judge that compares the current query against the cache index. The related searches are:
 - **Supplementary:** The live search always runs. Cached results are offered as additional context.
@@ -132,7 +114,7 @@ Only reach into the cache when:
 - Something in the summary seems contradictory and you need the original.
 - The live results are insufficient and a related cached search may help.
 
-## Follow Up From Cache
+## Follow Up from Cache
 
 The cache lives at `.search/<date>-<slug>/`. The tool output includes the path.
 
@@ -143,7 +125,27 @@ The cache lives at `.search/<date>-<slug>/`. The tool output includes the path.
 | Collated overview | `read .search/<slug>/report.md` |
 | Re-fetch a single URL fresh | `web_fetch(url, format="Markdown")` |
 
-## When NOT To Search
+## How It Works
+
+Reference material for the curious. The decision logic above is what matters in practice.
+
+`intelli_research` runs a 5-stage pipeline inside a single tool call:
+
+1. **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) returns a synthesised answer with source URLs.
+2. **Fetch:** Each page is fetched and cleaned to Markdown via [_Defuddle_](https://github.com/kepano/defuddle) (strips nav, ads, sidebars).
+3. **Extract:** A configurable LLM (default _MiniMax_ M2.7) pulls out only the content relevant to the query. A 50K-char page becomes ≈3-5K chars of focused extraction. Extraction adapts to source type: official docs preserve exact API signatures, blog posts capture practical patterns, forums capture accepted solutions.
+4. **Collate:** Another LLM call deduplicates across extractions and produces one concise summary. When sources conflict, official docs win.
+5. **Cache suggest:** An LLM judge finds semantically related previous searches in `.search/` and surfaces them as a supplementary `📚 Related cached searches` table.
+
+The agent (you) receives only the final summary, typically 1-2K tokens. The full pipeline is hidden inside the tool so your context stays clean.
+
+### Why Extract Before Collate?
+
+Eight fetched pages multiplied by ≈50K chars each equals ≈400K chars. That exceeds a single LLM context window. Extracting per-page first compresses each independently. The collation model then sees ≈32K chars total, which is comfortable for synthesis and deduplication.
+
+This is also why `focusPrompt` matters. It tells the extraction LLM what to keep from each 50K-char page. Without guidance, it extracts generically and the collation has less signal to work with.
+
+## When Not to Search
 
 - Writing or editing code already in the project.
 - General programming concepts you are confident about.
