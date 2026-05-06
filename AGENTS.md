@@ -324,6 +324,15 @@ Publishing is fully automated via _GitHub_ Actions:
 - **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
 - **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. Builds, tests, and publishes to `npm` with provenance signing.
 
+### Changelog Principles
+
+Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): the changelog is for humans, not machines. Its purpose is to document **user-noticeable differences**, often spanning multiple commits, not to replace `git log`.
+
+- **Group related changes.** One entry can cover many commits (for example, "Documentation restructured" covers SKILL.md reordering, README tightening, heading fixes, and assertive voice rewrites).
+- **Omit internal changes.** CI tweaks, style guide additions, markdownlint fixes, dependency bumps, and internal refactors do not belong unless they affect compatibility.
+- **Omit docs-only changes** that are not user-visible (for example, adding a rule to AGENTS.md).
+- **Ask: would a user care about this?** If no, leave it out. The user can browse the repo if they want commit-level detail.
+
 ### Creating a Release
 
 Releases are routinely missed because steps 3 and 4 below are skipped or done halfway. Follow every step. Do not assume.

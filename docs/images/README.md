@@ -8,10 +8,10 @@ A five-stage pipeline diagram (Search -> Fetch -> Extract -> Collate -> Cache An
 
 **Source:** Custom illustration (created for v0.3.2).
 
-## 02.png: Comparison Infographic
+## 06.avif: Comparison Infographic
 
-Side-by-side comparison of the `intelli-search` pipeline (per-page extraction followed by collation, producing an ≈5K summary) versus the fetch-and-dump approach (≈400K raw chars). Rendered in the same pen-and-ink style.
+Side-by-side comparison of the 7-stage `intelli-search` pipeline versus generic fetch/search extensions, rendered in a vintage engraving style. The top row shows the full purpose-built pipeline (Search → Dual Fetch → Quality Compare → Extract Per Page → Collate → Persistent Cache → Cache Suggest). The bottom row shows the generic approach (Search → Single Fetch → Raw Pages → No Cache).
 
-**Source:** Custom illustration (created for v0.3.2). Replaced the previous Mermaid flowchart in v0.3.2.
+**Source:** Custom illustration (created for v0.5.0). Replaced the previous 02.png from v0.3.2.
 
 **Used as:** `pi.image` in `package.json`. Appears as the preview card on the `Pi` package gallery.

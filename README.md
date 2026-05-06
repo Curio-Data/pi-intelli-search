@@ -26,6 +26,10 @@ A `Pi` extension for deep web research. It searches via [Perplexity Sonar](https
 
 ## What It Adds Over Other Extensions
 
+<p align="center">
+  <img src="docs/images/06.avif" alt="Pipeline comparison infographic titled &quot;PI-INTELLI-SEARCH&quot; contrasting two approaches in a vintage engraving style. The top row shows the Intelli-Search purpose-built research pipeline: seven sequential stages — Search (Perplexity Sonar, single unified key), Dual Fetch (defuddle &amp; markdown), Quality Compare (pick the best), LLM Extract Per Page (MiniMax M2.7, focused &amp; targeted), LLM Collate (MiniMax M2.7, dedupe/highlight/source, flags conflicts), Persistent Cache (expand on demand), and Cache Suggest (LLM-judged relevance, additive, feeds back). The bottom row shows generic fetch/search extensions: Search (additional keys), Single Fetch (simple, provider-dependent), Raw Page Content (unstructured, ~50K chars/page), No Cache (in-memory at best). Footer summary: &quot;Intelli-Search: deduped, cited, focused, ~$0.05/session, reusable&quot; vs. &quot;Other extensions: raw pages, must synthesise, no reuse.&quot;" width="800" />
+</p>
+
 Four capabilities together separate `intelli-search` from every other extension in the `Pi` ecosystem:
 
 1. **Dual-fetch quality comparison.** Every page is fetched twice in parallel (Defuddle versus Markdown endpoint), scored, and the better version wins. Server-rendered Markdown is not guaranteed to be cleaner than HTML; the comparison catches this automatically.
@@ -37,9 +41,6 @@ The agent receives a concise ≈5K summary by default. The full page content sta
 
 For the detailed feature-by-feature comparison against six other `Pi` search extensions, see [docs/COMPARISON.md](docs/COMPARISON.md).
 
-<p align="center">
-  <img src="docs/images/02.png" alt="Pipeline comparison infographic" width="800" />
-</p>
 
 ## Install
 
