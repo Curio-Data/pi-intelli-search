@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.69.0-blueviolet)](https://github.com/mariozechner/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-[![tests](https://img.shields.io/badge/tests-104%20passing-brightgreen)]()
+![tests](https://img.shields.io/badge/tests-104%20passing-brightgreen)
 Intelligent web research for [`Pi`](https://github.com/mariozechner/pi): search, extract, collate, and cache grounded web context in one tool call.
 
 A `Pi` extension that adds a 5-stage research pipeline (_Search_, _Fetch_, _Extract_, _Collate_, and _Cache Suggest_) designed for technical task completion. Per-page LLM extraction compresses raw pages to query-relevant content. It then deduplicates across sources into a concise summary with a persistent `.search/` cache.
@@ -14,6 +14,7 @@ A `Pi` extension that adds a 5-stage research pipeline (_Search_, _Fetch_, _Extr
 </p>
 
 **Features:**
+
 - 🔍 **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai) (one API key, no $50 minimum).
 - 📄 **Extract:** Per-page LLM extraction compresses ≈50K to ≈3-5K chars.
 - 🔗 **Collate:** Cross-source deduplication into a focused ≈5K summary.
@@ -29,19 +30,19 @@ The problem is that a cleaned documentation page is still ≈50K characters. For
 
 **`intelli-search` takes a different approach: extract before you collate.**
 
-Each page is compressed by a dedicated extraction model *before* entering the agent's context. A collation model then deduplicates across extractions. The agent receives a focused ≈5K summary instead of 400K of raw HTML.
+Each page is compressed by a dedicated extraction model _before_ entering the agent's context. A collation model then deduplicates across extractions. The agent receives a focused ≈5K summary instead of 400K of raw HTML.
 
 <p align="center">
   <img src="docs/images/02.png" alt="PI-Intelli-Search pipeline comparison infographic contrasting two approaches: Per-Page Extraction versus Fetch-and-Dump. The top row, labelled Intelli Search, shows a five-stage pipeline: Query to Search (Perplexity Sonar), Fetch (Defuddle and Markdown), Extract (MiniMax M2.7, ≈3-5K characters per page), Collate (MiniMax M2.7, deduplicate and synthesise), and Agent Context (≈5K focused summary). The bottom row, labelled Other Agents, shows a simpler three-stage pipeline: URL, Fetch, Raw Content (≈50K characters times 8 pages), and Agent Context (≈400K characters). A footer banner summarises the key trade-offs: context ≈5K versus ≈400K, cost ≈$0.05 per session, deduplication cross-source, cache .search/. Rendered in a pen-and-ink botanical and scholarly illustration style with copper arrows and laurel-wreath medallions." width="800" />
 </p>
 
-| | Fetch-and-dump | intelli-search pipeline |
-|---|---|---|
-| Context cost | Approximately 400K chars raw | Approximately 5K chars focused |
-| Noise | Nav, ads, sidebars included | Stripped by extraction |
-| Deduplication | None. Overlapping sources waste tokens | Cross-source dedupe via collation |
-| Cost per session | N/A (no processing) | Approximately $0.05 |
-| Offline reuse | No | Cached in `.search/` |
+|                  | Fetch-and-dump                         | intelli-search pipeline           |
+| ---------------- | -------------------------------------- | --------------------------------- |
+| Context cost     | Approximately 400K chars raw           | Approximately 5K chars focused    |
+| Noise            | Nav, ads, sidebars included            | Stripped by extraction            |
+| Deduplication    | None. Overlapping sources waste tokens | Cross-source dedupe via collation |
+| Cost per session | N/A (no processing)                    | Approximately $0.05               |
+| Offline reuse    | No                                     | Cached in `.search/`              |
 
 ## Install
 
@@ -67,12 +68,12 @@ On first load, the extension adds [Perplexity Sonar](https://docs.perplexity.ai)
 
 ## Tools
 
-| Tool               | Description                                                              |
-| ------------------ | ------------------------------------------------------------------------ |
+| Tool               | Description                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------- |
 | `intelli_search`   | Search via [Perplexity Sonar](https://docs.perplexity.ai). Returns summary with source URLs. |
-| `intelli_extract`  | Per-page LLM extraction. Reduces ≈50K chars to ≈3-5K of relevant content. |
-| `intelli_collate`  | Deduplicate and synthesise extractions into a summary. Writes cache. |
-| `intelli_research` | Full pipeline: search, fetch, extract, collate, cache. One call. |
+| `intelli_extract`  | Per-page LLM extraction. Reduces ≈50K chars to ≈3-5K of relevant content.                    |
+| `intelli_collate`  | Deduplicate and synthesise extractions into a summary. Writes cache.                         |
+| `intelli_research` | Full pipeline: search, fetch, extract, collate, cache. One call.                             |
 
 ## Quick Start
 
@@ -117,11 +118,11 @@ intelli_research(
 
 All three pipeline stages use independently configurable models. Defaults are chosen for cost-efficiency, but **any model `Pi` can access works**. This includes built-in providers, [OpenRouter](https://openrouter.ai) models, or models from other extensions.
 
-| Stage    | Default                    | Config key                |
-| -------- | -------------------------- | ------------------------- |
-| Search   | `openrouter/perplexity/sonar` | `intelliSearchModel`   |
-| Extract  | `minimax/MiniMax-M2.7`     | `intelliExtractModel`     |
-| Collate  | `minimax/MiniMax-M2.7`     | `intelliCollateModel`     |
+| Stage   | Default                       | Config key            |
+| ------- | ----------------------------- | --------------------- |
+| Search  | `openrouter/perplexity/sonar` | `intelliSearchModel`  |
+| Extract | `minimax/MiniMax-M2.7`        | `intelliExtractModel` |
+| Collate | `minimax/MiniMax-M2.7`        | `intelliCollateModel` |
 
 ### Why OpenRouter For Sonar?
 
@@ -168,6 +169,7 @@ The only requirement is that the model is registered in `Pi`'s model registry an
 ### Model Selection Guidance
 
 For extraction and collation, the ideal model has:
+
 - **Low cost per token:** 8 extractions, 1 collation, and 1 cache suggest per default session.
 - **Good instruction following:** Must adhere to extraction prompts precisely.
 - **Sufficient context:** Cleaned pages can be ≈50K chars (truncated to `extractMaxChars`).
@@ -192,7 +194,7 @@ Run `/login` in `Pi` to set up keys interactively, or edit the file directly.
 
 ## Pipeline
 
-```
+```text
 intelli_research(query)
   ├── Stage 1: Search  -> Perplexity Sonar (via OpenRouter, pi native auth)
   ├── Stage 2: Fetch   -> wreq-js + Defuddle, compared against raw Markdown
@@ -213,12 +215,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 Per research session with the default 8 pages: **≈$0.05**
 
-| Step                        | Calls            | Cost    |
-| --------------------------- | ---------------- | ------- |
-| Search (Sonar)              | 1                | ≈$0.02  |
-| Fetch (Defuddle + Markdown) | 8 parallel pairs | $0.00   |
-| Extract (M2.7)              | 8 parallel       | ≈$0.03  |
-| Collate (M2.7)              | 1                | ≈$0.005 |
+| Step                        | Calls            | Cost     |
+| --------------------------- | ---------------- | -------- |
+| Search (Sonar)              | 1                | ≈$0.02   |
+| Fetch (Defuddle + Markdown) | 8 parallel pairs | $0.00    |
+| Extract (M2.7)              | 8 parallel       | ≈$0.03   |
+| Collate (M2.7)              | 1                | ≈$0.005  |
 | Cache suggest (M2.7)        | 1                | ≈$0.0002 |
 
 Costs scale with your chosen extract or collate model. MiniMax M2.7 is the default specifically for its low cost.
@@ -254,7 +256,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 
 ## Cache Structure
 
-```
+```text
 .search/
 ├── 2026-04-19-d1-worker-api/
 │   ├── report.md               # Collated summary + source index
