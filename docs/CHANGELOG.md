@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-05-06
+
+### Added
+
+- **Extension comparison guide** (`docs/COMPARISON.md`): feature-by-feature breakdown of `intelli-search` against 7 other `Pi` search extensions across search, fetch, extraction, collation, caching, and cost.
+
+### Changed
+
+- **Documentation restructured:** SKILL.md reordered so decision logic precedes mechanism. README tightened with direct comparisons and consistent naming. All docs rewritten in assertive voice with hedged language removed.
+- **Pipeline infographic updated:** replaced `02.png` with a more detailed `06.avif` showing the full 7-stage pipeline.
+
 ## [0.4.1] - 2026-05-06
 
 ### Changed
@@ -119,6 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.5.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.5.0
 [0.4.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.4.0
 [0.3.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.2
