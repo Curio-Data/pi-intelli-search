@@ -340,8 +340,8 @@ All tools use the `intelli_` prefix to avoid collisions with other `Pi` extensio
 
 | Tool | Purpose |
 |------|---------|
-| `intelli_search` | Quick web search via [Perplexity Sonar](https://docs.perplexity.ai) |
-| `intelli_extract` | Per-page LLM extraction from fetched content |
+| `intelli_search` | Quick web search returning a concise answer with source URLs |
+| `intelli_extract` | Per-page query-relevant content extraction |
 | `intelli_collate` | Deduplicate and cache extractions |
 | `intelli_research` | Full 5-stage pipeline (search, fetch, extract, collate, cache suggest) |
 

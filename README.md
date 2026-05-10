@@ -68,10 +68,10 @@ On first load, the extension adds [Perplexity Sonar](https://docs.perplexity.ai)
 
 | Tool               | Description                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
-| `intelli_search`   | Search via [Perplexity Sonar](https://docs.perplexity.ai). Returns summary with source URLs.        |
-| `intelli_extract`  | Per-page LLM extraction guided by `focusPrompt`. Reduces ≈50K chars to ≈3-5K of _relevant_ content. |
-| `intelli_collate`  | Deduplicate and synthesise extractions into a summary. Writes cache.                                |
-| `intelli_research` | Full pipeline: search, fetch, extract, collate, cache. One call.                                    |
+| `intelli_search`   | Search the web and return a concise answer with source URLs.                                        |
+| `intelli_extract`  | Extract query-relevant content from a web page, preserving code and technical detail verbatim.      |
+| `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
+| `intelli_research` | Search, fetch, extract, collate, cache. The primary research tool. One call.                        |
 
 ## Quick Start
 
