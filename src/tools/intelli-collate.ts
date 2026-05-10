@@ -29,9 +29,10 @@ export const intelliCollateTool = {
   name: "intelli_collate",
   label: "Intelli Collate",
   description:
-    "Collate multiple per-page extractions into a deduplicated summary. " +
-    "Produces a concise injection for the main conversation and writes " +
-    "a persistent cache to .search/ for follow-up.",
+    "Deduplicate and synthesise multiple per-page extractions into a single " +
+    "concise summary. Caches results to .search/ for follow-up. Use this " +
+    "after extracting multiple pages with intelli_extract; for end-to-end " +
+    "research, use intelli_research.",
   promptSnippet: "intelli_collate(extractions, query): deduplicate and synthesise extractions into concise summary",
   parameters: Type.Object({
     extractions: Type.Array(extractionSchema, {
@@ -39,10 +40,10 @@ export const intelliCollateTool = {
     }),
     query: Type.String({ description: "The original search query" }),
     searchSummary: Type.Optional(Type.String({
-      description: "Sonar summary from the search step",
+      description: "Summary from the initial search step",
     })),
     fullPages: Type.Optional(Type.Array(fullPageSchema, {
-      description: "Full Defuddle output for caching (not sent to LLM)",
+      description: "Full page content for caching (not sent to LLM)",
     })),
   }),
 

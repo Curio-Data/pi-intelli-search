@@ -16,19 +16,21 @@ export const intelliResearchTool = {
   name: "intelli_research",
   label: "Intelli Research",
   description:
-    "Full research pipeline: search the web, fetch top results, extract " +
-    "query-relevant content from each page, collate and deduplicate findings, " +
-    "and cache everything for follow-up. Returns a concise summary.",
+    "Search the web, fetch top results, extract relevant content from each " +
+    "page, and deduplicate into a concise summary. Caches all results under " +
+    ".search/ for follow-up. This is the primary research tool; for quick " +
+    "factual lookups, use intelli_search instead.",
   promptSnippet: "intelli_research(query): full search → fetch → extract → collate pipeline with caching",
   promptGuidelines: [
     "Use intelli_research when the user needs current web information (docs, APIs, best practices, library updates). For quick factual questions, use intelli_search alone.",
     "Use maxUrls to control breadth: 3 for targeted, 8 (default) for broad, 12 for exhaustive.",
     "Always provide focusPrompt to guide extraction. Without it the LLM extracts generically. Translate the user's intent into a specific extraction focus.",
     "The tool result contains a concise summary — use it directly. Only read .search/ cache files when the summary is insufficient.",
+    "Use domains to target specific sites (e.g., ['docs.python.org']) when the user references a specific documentation source.",
   ],
   parameters: Type.Object({
     query: Type.String({ description: "What to research" }),
-    maxUrls: Type.Optional(Type.Number({ description: "Max URLs to fetch (default: from settings, typically 8)" })),
+    maxUrls: Type.Optional(Type.Number({ description: "Max URLs to fetch (default: 8)" })),
     domains: Type.Optional(Type.Array(Type.String(), { description: "Restrict search to these domains" })),
     focusPrompt: Type.Optional(Type.String({ description: "Focus guidance for all extractions" })),
   }),

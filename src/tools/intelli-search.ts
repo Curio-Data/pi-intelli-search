@@ -14,8 +14,8 @@ export const intelliSearchTool = {
   name: "intelli_search",
   label: "Intelli Search",
   description:
-    "Search the web using Perplexity Sonar. Returns a synthesised summary with source URLs. " +
-    "For a complete research pipeline, use intelli_research instead.",
+    "Search the web and return a concise answer with source URLs. " +
+    "For multi-page deep research, use intelli_research instead.",
   promptSnippet: "intelli_search(query): search the web and return synthesised results with source URLs",
   parameters: Type.Object({
     query: Type.String({ description: "Search query" }),
