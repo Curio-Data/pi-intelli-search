@@ -13,14 +13,15 @@ export const intelliExtractTool = {
   name: "intelli_extract",
   label: "Intelli Extract",
   description:
-    "Extract query-relevant content from a fetched web page using an LLM. " +
-    "Reduces a full page (~50K chars) to relevant content (~3-5K chars). " +
-    "Preserves code blocks, API signatures, and technical detail verbatim.",
+    "Extract query-relevant content from a web page. Compresses full page content " +
+    "to the parts that matter for a given query, preserving code blocks, API " +
+    "signatures, and technical detail verbatim. Use this for individual pages " +
+    "you already have; for end-to-end research, use intelli_research.",
   promptSnippet: "intelli_extract(page, query, focusPrompt?): LLM extraction of query-relevant content from a web page",
   parameters: Type.Object({
-    url: Type.String({ description: "URL of the page (for metadata)" }),
+    url: Type.String({ description: "URL of the page to extract from" }),
     title: Type.String({ description: "Page title" }),
-    content: Type.String({ description: "Full markdown content from web_fetch" }),
+    content: Type.String({ description: "Full page content in markdown" }),
     query: Type.String({ description: "The original search query" }),
     focusPrompt: Type.Optional(Type.String({ description: "Optional focus guidance for extraction" })),
   }),
