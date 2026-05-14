@@ -154,8 +154,8 @@ When creating commits:
 | [wreq-js](https://github.com/sqdshguy/wreq-js) | Browser-grade TLS/HTTP fingerprinting for page fetching |
 | [defuddle](https://github.com/kepano/defuddle) | HTML content extraction (strips nav, ads, sidebars to Markdown) |
 | [linkedom](https://github.com/WebReflection/linkedom) | Lightweight DOM for [defuddle](https://github.com/kepano/defuddle) (no full browser) |
-| `@mariozechner/pi-ai` | LLM calling via `Pi`'s auth system (`completeSimple`) |
-| `@mariozechner/pi-coding-agent` | Extension API types (`ExtensionAPI`, `ExtensionContext`) |
+| `@earendil-works/pi-ai` | LLM calling via `Pi`'s auth system (`completeSimple`) |
+| `@earendil-works/pi-coding-agent` | Extension API types (`ExtensionAPI`, `ExtensionContext`) |
 | `typebox` | JSON Schema and parameter definitions for tool inputs |
 
 All `Pi` SDK packages are **peer dependencies**. They are provided by the hosting `Pi` process and are not bundled.
@@ -216,7 +216,7 @@ The pipeline is self-contained. `Pi` extensions cannot call other tools from `ex
 
 ### LLM Integration
 
-- Uses `completeSimple()` from `@mariozechner/pi-ai` (not `complete()`) because MiniMax M2.7 is a reasoning model and needs `reasoning: "low"` parameter.
+- Uses `completeSimple()` from `@earendil-works/pi-ai` (not `complete()`) because MiniMax M2.7 is a reasoning model and needs `reasoning: "low"` parameter.
 - Auth flows through `Pi`'s native system (`auth.json`, env vars, OAuth). No API key management happens in this code.
 - The `onResponse` callback in `callLlm()` detects HTTP 429 and 5xx immediately before stream consumption.
 - Provider-response monitoring via `after_provider_response` event catches rate limits even outside tool calls.
@@ -401,3 +401,4 @@ The workflow uses the `NPM_REPO` repository secret (`npm` access token). Ensure 
 
 - **`Pi` >= 0.69.0:** Core functionality (TypeBox 1.x, working indicator, `after_provider_response` monitoring).
 - Optional features degrade gracefully on older versions.
+.

@@ -3,7 +3,7 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 // SPDX-License-Identifier: Apache-2.0
 import { Type } from "typebox";
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { EXTRACTION_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { textContent, inferSourceType, inferCurrentness } from "../util.js";

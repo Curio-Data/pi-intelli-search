@@ -11,7 +11,8 @@
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
 #   TEST_MODEL           Override model (default: openrouter/minimax/minimax-m2.5)
-#   MINIMAX_API_KEY      Optional. If set, also available to the isolated agent.
+#   MINIMAX_API_KEY      Not needed. MiniMax is available via OpenRouter and
+#                        via the mounted ~/.pi/agent/auth.json when present.
 #
 # The .env file (gitignored) can hold OPENROUTER_API_KEY for convenience.
 #
@@ -62,19 +63,16 @@ echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR"
 
 mkdir -p "$ISOLATED_AGENT_DIR/sessions"
 
-# ── auth.json — providers needed by the extension
-# OpenRouter: required for intelli_search (perplexity/sonar)
-# MiniMax: required for the default model (minimax/MiniMax-M2.5)
-# No real ~/.pi/agent/ credentials are ever read or modified.
-if [ -n "${MINIMAX_API_KEY:-}" ]; then
-  cat > "$ISOLATED_AGENT_DIR/auth.json" <<EOF
-{"openrouter":{"type":"api_key","key":"$OPENROUTER_API_KEY"},"minimax":{"type":"api_key","key":"$MINIMAX_API_KEY"}}
-EOF
+# ── auth.json — mount the real file so all providers (openrouter, minimax,
+# deepseek, …) are available.  settings.json and models.json remain isolated.
+if [ -f "$HOME/.pi/agent/auth.json" ]; then
+  ln -s "$HOME/.pi/agent/auth.json" "$ISOLATED_AGENT_DIR/auth.json"
+  echo "🔗 Mounted ~/.pi/agent/auth.json (all providers available)"
 else
   cat > "$ISOLATED_AGENT_DIR/auth.json" <<EOF
 {"openrouter":{"type":"api_key","key":"$OPENROUTER_API_KEY"}}
 EOF
-  echo "⚠️  MINIMAX_API_KEY not set — skipping MiniMax model"
+  echo "⚠️  No ~/.pi/agent/auth.json found — using openrouter key only"
 fi
 
 # ── settings.json — default model + intelli config ─────────────────
@@ -95,7 +93,6 @@ cat > "$ISOLATED_AGENT_DIR/models.json" <<'MEOF'
 {}
 MEOF
 
-echo "🔐 Wrote isolated auth.json (openrouter only)"
 echo "📄 Wrote vanilla models.json (extension will add perplexity models)"
 echo "⚙️  Test model: $TEST_MODEL"
 
