@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-05-14
+
+### Changed
+
+- **npm scope migrated** from `@mariozechner` to `@earendil-works`: `pi-ai` and `pi-coding-agent` peer dependencies updated to 0.74.x. The `Pi` project moved from Mario Zechner's personal scope to an organization scope. No API changes.
+
+### Fixed
+
+- `loadSettings()` and `getAgentDir()` now respect `PI_CODING_AGENT_DIR`, allowing the extension to read settings from isolated environments (e.g. E2E tests, CI).
+
+### Compatibility
+
+- Minimum `Pi` version raised to 0.74.0 (previously 0.73.0). Earlier `Pi` releases bundle the deprecated `@mariozechner`-scoped packages and cannot resolve the new names.
+
 ## [0.6.0] - 2026-05-10
 
 ### Changed
@@ -143,17 +157,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.7.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.6.0
 [0.5.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.5.1
 [0.5.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.5.0
 [0.4.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.4.1
-[0.4.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.4.0
-[0.3.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.2
-[0.3.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.1
-[0.3.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.0
-[0.2.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.2.0
-[0.1.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.1.0
-com/Curio-Data/pi-intelli-search/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.4.0
 [0.3.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.2
 [0.3.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.3.1
