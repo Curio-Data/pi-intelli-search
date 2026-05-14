@@ -302,7 +302,9 @@ The E2E test launches `Pi` in an isolated environment (separate `PI_CODING_AGENT
 - Cache artifacts are written (`.search/` with `report.md`, `query.txt`, `extractions/`, `sources/`).
 - `.search/.index.json` is updated.
 
-**Required environment:** `OPENROUTER_API_KEY` (and optionally `MINIMAX_API_KEY`) in `.env`, env vars, or passed inline:
+**API key auto-detection:** The test auto-detects `OPENROUTER_API_KEY` from `~/.pi/agent/auth.json` if not already in the environment. No manual setup is needed when `Pi` is already configured with an OpenRouter key. Only an OpenRouter key is required: all three model roles (search, extract, collate) route through OpenRouter, so no separate MiniMax key is needed.
+
+**Manual override:**
 ```bash
 OPENROUTER_API_KEY=sk-or-v1-... ./test/run-e2e.sh
 ```

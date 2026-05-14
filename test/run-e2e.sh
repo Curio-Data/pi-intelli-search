@@ -17,12 +17,16 @@
 # The .env file (gitignored) can hold OPENROUTER_API_KEY for convenience.
 #
 # How it works:
-#   PI_CODING_AGENT_DIR points pi at a fresh temp directory with only a
-#   vanilla auth.json and empty models.json. The extension injects
-#   perplexity/sonar models via ensureCustomModels() on session_start,
-#   exactly like a real install.
+#   PI_CODING_AGENT_DIR points pi at a fresh temp directory. The extension
+#   respects this for both auth (via pi's native config loading) and
+#   settings (getAgentDir() checks the env var). models.json is vanilla;
+#   the extension injects perplexity/sonar models on session_start.
 #
-# Your real ~/.pi/agent/ config is never read, modified, or polluted.
+# Only an OpenRouter key is needed — all model roles route through
+# OpenRouter. No direct MiniMax key is required.
+#
+# Your real ~/.pi/agent/ config is never read, modified, or polluted
+# (except auth.json which is read only to auto-detect OPENROUTER_API_KEY).
 
 set -euo pipefail
 
@@ -41,12 +45,25 @@ fi
 TEST_MODEL="${TEST_MODEL:-openrouter/minimax/minimax-m2.5}"
 
 # ── Check prerequisites ────────────────────────────────────────────
+# Auto-detect OPENROUTER_API_KEY from ~/.pi/agent/auth.json if not
+# already in the environment. This lets the test run with zero manual
+# setup when the user has already configured pi.
+if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+  if [ -f "$HOME/.pi/agent/auth.json" ]; then
+    OPENROUTER_API_KEY="$(jq -r '.openrouter.key // empty' "$HOME/.pi/agent/auth.json" 2>/dev/null || true)"
+    if [ -n "$OPENROUTER_API_KEY" ]; then
+      echo "🔑 Detected OPENROUTER_API_KEY from ~/.pi/agent/auth.json"
+    fi
+  fi
+fi
+
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
   echo "❌ OPENROUTER_API_KEY is not set."
   echo ""
   echo "  Get a key from https://openrouter.ai and either:"
   echo "  - export OPENROUTER_API_KEY=sk-or-v1-..."
   echo "  - Add it to .env (see .env.example)"
+  echo "  - Ensure ~/.pi/agent/auth.json has an openrouter key"
   exit 1
 fi
 
@@ -71,12 +88,22 @@ cat > "$ISOLATED_AGENT_DIR/auth.json" <<EOF
 EOF
 
 # ── settings.json — default model + intelli config ─────────────────
+# All three model roles route through OpenRouter so only an OpenRouter
+# API key is needed. MiniMax is accessed via openrouter/minimax routing.
 cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
 {
   "defaultModel": "$TEST_MODEL",
   "intelliSearchModel": {
     "provider": "openrouter",
     "model": "perplexity/sonar"
+  },
+  "intelliExtractModel": {
+    "provider": "openrouter",
+    "model": "minimax/minimax-m2.5"
+  },
+  "intelliCollateModel": {
+    "provider": "openrouter",
+    "model": "minimax/minimax-m2.5"
   }
 }
 EOF
