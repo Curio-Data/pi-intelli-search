@@ -11,8 +11,8 @@ Each runtime dependency provides one specific capability. The table below shows 
 | Browser-grade TLS / HTTP fingerprinting for page fetching | [`wreq-js`](https://github.com/sqdshguy/wreq-js) | Hard. Most Node HTTP clients lack realistic browser fingerprints (`chrome_145`), which many sites require to return clean content. |
 | HTML to Markdown content extraction (strips nav, ads, sidebars) | [`defuddle`](https://github.com/kepano/defuddle) | Medium. Mozilla Readability is a fallback but produces less consistent Markdown; the dual-fetch quality scoring is calibrated against Defuddle's output. |
 | DOM in Node.js (required by Defuddle) | [`linkedom`](https://github.com/WebReflection/linkedom) | Easy. `jsdom` is a heavier alternative; switching is a one-line change in `src/fetch.ts`. |
-| LLM dispatch and `Pi`-native auth | [`@mariozechner/pi-ai`](https://github.com/mariozechner/pi) | No. `Pi`-bound by design; all auth flows route through `Pi`'s native system. |
-| Extension API surface (`ExtensionAPI`, `ExtensionContext`, event types) | [`@mariozechner/pi-coding-agent`](https://github.com/mariozechner/pi) | No. `Pi`-bound by design. |
+| LLM dispatch and `Pi`-native auth | [`@earendil-works/pi-ai`](https://github.com/earendil-works/pi) | No. `Pi`-bound by design; all auth flows route through `Pi`'s native system. |
+| Extension API surface (`ExtensionAPI`, `ExtensionContext`, event types) | [`@earendil-works/pi-coding-agent`](https://github.com/earendil-works/pi) | No. `Pi`-bound by design. |
 | JSON Schema and tool-input parameter typing | [`typebox`](https://github.com/sinclairzx81/typebox) | Hard. `Pi`'s extension contract is built around TypeBox 1.x; replacing it would require coordinated upstream changes. |
 
 ## Runtime Dependencies
@@ -51,16 +51,16 @@ These packages are provided by the hosting `Pi` runtime and are not bundled with
 - **License:** MIT
 - **Usage:** JSON Schema and parameter type definitions for tool inputs. Migrated from `@sinclair/typebox` 0.34.x to `typebox` 1.x in v0.2.0 (required `Pi` >= 0.69.0 for the TypeBox migration).
 
-### @mariozechner/pi-ai
+### @earendil-works/pi-ai
 
-- **Repository:** https://github.com/mariozechner/pi
+- **Repository:** https://github.com/earendil-works/pi
 - **Author:** Mario Zechner
 - **License:** Apache-2.0
 - **Usage:** LLM calling via `Pi`'s auth system (`completeSimple()`).
 
-### @mariozechner/pi-coding-agent
+### @earendil-works/pi-coding-agent
 
-- **Repository:** https://github.com/mariozechner/pi
+- **Repository:** https://github.com/earendil-works/pi
 - **Author:** Mario Zechner
 - **License:** Apache-2.0
 - **Usage:** Extension API types (`ExtensionAPI`, `ExtensionContext`, event types).
