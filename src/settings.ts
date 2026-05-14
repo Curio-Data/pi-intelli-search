@@ -1,8 +1,8 @@
 // src/settings.ts — Load settings from pi settings files (with in-memory cache)
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import type { ModelConfig, ResearchSettings } from "./types.js";
+import { getAgentDir } from "./util.js";
 
 const DEFAULT_SETTINGS: ResearchSettings = {
   searchModel: { provider: "openrouter", model: "perplexity/sonar" },
@@ -33,7 +33,7 @@ export async function loadSettings(cwd: string): Promise<ResearchSettings> {
   const overrides: Partial<ResearchSettings> = {};
 
   // Try global settings first, then project-local
-  const agentDir = join(homedir(), ".pi", "agent");
+  const agentDir = getAgentDir();
   for (const dir of [agentDir, join(cwd, ".pi")]) {
     try {
       const raw = await readFile(join(dir, "settings.json"), "utf-8");

@@ -11,8 +11,12 @@ export function textContent(text: string): { type: "text"; text: string } {
 
 /**
  * Get the pi agent directory path.
+ * Respects PI_CODING_AGENT_DIR for isolated environments (e.g. E2E tests).
  */
 export function getAgentDir(): string {
+  if (process.env.PI_CODING_AGENT_DIR) {
+    return process.env.PI_CODING_AGENT_DIR;
+  }
   return join(homedir(), ".pi", "agent");
 }
 
