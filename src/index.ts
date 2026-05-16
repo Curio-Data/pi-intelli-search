@@ -13,7 +13,7 @@ import { intelliExtractTool } from "./tools/intelli-extract.js";
 import { intelliCollateTool } from "./tools/intelli-collate.js";
 import { intelliResearchTool } from "./tools/intelli-research.js";
 import { ensureCustomModels } from "./providers.js";
-import { invalidateSettingsCache, hasFlatKeys } from "./settings.js";
+import { invalidateSettingsCache, hasFlatKeys, migrateDefaults, loadSettings, setMigrationContext } from "./settings.js";
 
 const CURRENT_VERSION = "0.7.0";
 
@@ -177,7 +177,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
       // Auth check is best-effort; never block session startup
     }
 
-    // Version tracking and settings deprecation notice
+    // Version tracking, default migration, and settings deprecation notice
     try {
       const versionPath = join(".search", ".version.json");
       let previousVersion: string | undefined;
@@ -195,8 +195,29 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
         JSON.stringify({ version: CURRENT_VERSION, settingsFormat: "nested" }, null, 2) + "\n",
       );
 
-      // Notify on upgrade if user still uses flat intelli* keys
       if (previousVersion && previousVersion !== CURRENT_VERSION) {
+        // Set migration context so loadSettings() applies default
+        // migration in-memory for all subsequent calls this session.
+        setMigrationContext(previousVersion, CURRENT_VERSION);
+
+        // Run migration once to check if any defaults changed and
+        // notify the user.
+        try {
+          const userSettings = await loadSettings(process.cwd());
+          const { changes } = migrateDefaults(previousVersion, CURRENT_VERSION, userSettings);
+          if (changes.length > 0) {
+            ctx.ui.notify(
+              `[pi-intelli-search] Default models updated:\n` +
+              changes.map((c) => `  ${c}`).join("\n") + "\n" +
+              `Update your settings.json to make these permanent.`,
+              "warning",
+            );
+          }
+        } catch {
+          // Migration is best-effort; never block session startup
+        }
+
+        // Flat key deprecation notice
         const flatKeysExist = await hasFlatKeys(process.cwd());
         if (flatKeysExist) {
           ctx.ui.notify(
