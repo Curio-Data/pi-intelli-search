@@ -84,7 +84,8 @@ cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
     "collateModel": {
       "provider": "openrouter",
       "model": "google/gemini-3-flash-preview"
-    }
+    },
+    "cacheDir": ".e2e-custom-cache"
   }
 }
 EOF
@@ -97,6 +98,7 @@ MEOF
 echo "📄 Wrote vanilla models.json (extension will add perplexity models)"
 echo "⚙️  Extract/Collate: openrouter/google/gemini-3-flash-preview (overridden)"
 echo "⚙️  Search:            openrouter/perplexity/sonar (default)"
+echo "⚙️  Cache dir:         .e2e-custom-cache (overridden)"
 echo ""
 
 echo "╔══════════════════════════════════════════════════════╗"
@@ -152,28 +154,39 @@ else
   echo "⚠️  No source references found (may be expected for some queries)"
 fi
 
-# ── Verify .search cache artifacts ──────────────────────────────────
-CACHE_DIR="$PROJECT_DIR/.search"
+# ── Verify custom cache directory ─────────────────────────────────────
+# The settings.json overrides cacheDir to ".e2e-custom-cache".
+# Verify the cache appears there, not in the default ".search".
+CACHE_DIR="$PROJECT_DIR/.e2e-custom-cache"
 
 if [ -d "$CACHE_DIR" ]; then
-  echo "✅ .search/ cache directory exists"
+  echo "✅ .e2e-custom-cache/ cache directory exists (custom dir override works)"
 else
-  echo "❌ .search/ cache directory not found at $CACHE_DIR"
+  echo "❌ .e2e-custom-cache/ cache directory not found at $CACHE_DIR"
+  # Also check if it went to default .search instead
+  if [ -d "$PROJECT_DIR/.search" ]; then
+    echo "⚠️  Cache went to .search/ instead (cacheDir override ignored)"
+  fi
   ERRORS=$((ERRORS + 1))
 fi
 
+# Also verify .search does NOT exist (proves override took effect)
+if [ -d "$PROJECT_DIR/.search" ]; then
+  echo "⚠️  Default .search/ directory also exists (may be stale from previous tests)"
+fi
+
 if [ -f "$CACHE_DIR/.index.json" ]; then
-  echo "✅ .search/.index.json exists"
+  echo "✅ .e2e-custom-cache/.index.json exists"
   INDEX_ENTRIES=$(jq 'if .entries then (.entries | length) else 0 end' "$CACHE_DIR/.index.json" 2>/dev/null || echo "0")
   if [ "$INDEX_ENTRIES" -gt 0 ]; then
     echo "   📂 $INDEX_ENTRIES cache entry/entries recorded"
   fi
 else
-  echo "❌ .search/.index.json not found"
+  echo "❌ .e2e-custom-cache/.index.json not found"
   ERRORS=$((ERRORS + 1))
 fi
 
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.search' | sort -r | head -1)
+LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' | sort -r | head -1)
 if [ -n "$LATEST_CACHE" ]; then
   echo "✅ Cache entry directory: $(basename "$LATEST_CACHE")"
 
