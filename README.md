@@ -46,7 +46,7 @@ For the detailed feature-by-feature comparison against six other `Pi` search ext
 
 ### Prerequisites
 
-You need an [OpenRouter](https://openrouter.ai) API key. A single key covers all three pipeline stages (search, extract, collate).
+You need at minimum an [OpenRouter](https://openrouter.ai) API key for [_Perplexity Sonar_](https://docs.perplexity.ai) search. The same key also covers extraction and collation with the default models. For the extract and collate stages, any model or provider `Pi` supports can be used. Swap them in settings if you prefer.
 
 1. **Get a key** at [openrouter.ai/keys](https://openrouter.ai/keys)
 2. **Add it to Pi** by running `/login` in Pi and selecting the `openrouter` provider, or edit `~/.pi/agent/auth.json`:
@@ -211,7 +211,7 @@ With default settings, you need one key in `~/.pi/agent/auth.json`:
 }
 ```
 
-A single [OpenRouter](https://openrouter.ai) key covers all three pipeline stages: Sonar for search, MiniMax M2.7 for extraction and collation. Override `intelliExtractModel` or `intelliCollateModel` to use a different model or provider.
+A single [OpenRouter](https://openrouter.ai) key is the minimum required. It covers Sonar for search plus MiniMax M2.7 for extraction and collation with the default models. The extract and collate stages can use any model `Pi` supports. Override `extractModel` or `collateModel` in settings to switch providers.
 
 Run `/login` in `Pi` to set up keys interactively, or edit the file directly.
 
