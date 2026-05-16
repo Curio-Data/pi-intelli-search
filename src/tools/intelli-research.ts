@@ -54,6 +54,25 @@ export const intelliResearchTool = {
     const extractConfig = resolveModelConfig(settings, "extract");
     const collateConfig = resolveModelConfig(settings, "collate");
 
+    // Pre-flight: validate all three models exist in the registry before
+    // starting the pipeline. This catches typos in settings.json (e.g.
+    // "minimax/M3.7") before any LLM calls are made and cost incurred.
+    const missingModels = validateModelConfigs(ctx, [
+      { role: "search", config: searchConfig },
+      { role: "extract", config: extractConfig },
+      { role: "collate", config: collateConfig },
+    ]);
+    if (missingModels.length > 0) {
+      const lines = missingModels.map(
+        (m) => `  ${m.role}: ${m.config.provider}/${m.config.model}`,
+      );
+      throw new Error(
+        `Configured model(s) not found in Pi's model registry:\n${lines.join("\n")}\n` +
+        `Check your settings.json for typos or missing provider configuration. ` +
+        `Run /login to add API keys, or /model to see available models.`,
+      );
+    }
+
     // ═══════════════════════════════════════════
     // Working indicator — custom research spinner
     // ═══════════════════════════════════════════
@@ -240,6 +259,25 @@ export const intelliResearchTool = {
     } // end executePipeline()
   },
 };
+
+/**
+ * Validate that all configured models exist in Pi's model registry.
+ * Returns a list of models that are missing. An empty list means all OK.
+ * Call this before starting any pipeline stages to fail fast on typos.
+ */
+export function validateModelConfigs(
+  ctx: ExtensionContext,
+  configs: Array<{ role: string; config: { provider: string; model: string } }>,
+): Array<{ role: string; config: { provider: string; model: string } }> {
+  const missing: Array<{ role: string; config: { provider: string; model: string } }> = [];
+  for (const { role, config } of configs) {
+    const model = ctx.modelRegistry.find(config.provider, config.model);
+    if (!model) {
+      missing.push({ role, config });
+    }
+  }
+  return missing;
+}
 
 /**
  * Extract query-relevant content from a single page.
