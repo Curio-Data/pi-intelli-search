@@ -301,3 +301,84 @@ describe("hasFlatKeys", () => {
     assert.strictEqual(result, false, "non-intelli keys should not trigger detection");
   });
 });
+
+describe("migrateDefaults", () => {
+  it("migrates extract model when it matches old default", async () => {
+    const { migrateDefaults } = await import("../src/settings.js");
+
+    // User settings match 0.7.0 defaults (minimax direct)
+    const userSettings: ResearchSettings = {
+      ...baseSettings,
+      extractModel: { provider: "minimax", model: "MiniMax-M2.7" },
+      collateModel: { provider: "minimax", model: "MiniMax-M2.7" },
+    };
+
+    const { changes, settings } = migrateDefaults("0.7.0", "0.8.0", userSettings);
+
+    assert.ok(changes.length > 0, "should have migration changes");
+    assert.deepStrictEqual(settings.extractModel, {
+      provider: "openrouter",
+      model: "minimax/minimax-m2.7",
+    }, "extract should migrate to 0.8.0 default");
+    assert.deepStrictEqual(settings.collateModel, {
+      provider: "openrouter",
+      model: "minimax/minimax-m2.7",
+    }, "collate should migrate to 0.8.0 default");
+  });
+
+  it("does NOT migrate when user customized a model", async () => {
+    const { migrateDefaults } = await import("../src/settings.js");
+
+    // User explicitly set extract model to something else
+    const userSettings: ResearchSettings = {
+      ...baseSettings,
+      extractModel: { provider: "openai", model: "gpt-4o-mini" },
+      collateModel: { provider: "minimax", model: "MiniMax-M2.7" },
+    };
+
+    const { changes, settings } = migrateDefaults("0.7.0", "0.8.0", userSettings);
+
+    // Extract should NOT change (user customized)
+    assert.deepStrictEqual(settings.extractModel, {
+      provider: "openai",
+      model: "gpt-4o-mini",
+    }, "customized extract should not be migrated");
+    // Collate matched old default — should migrate
+    assert.deepStrictEqual(settings.collateModel, {
+      provider: "openrouter",
+      model: "minimax/minimax-m2.7",
+    }, "default-matching collate should migrate");
+
+    const extractChange = changes.find((c) => c.includes("extract"));
+    assert.strictEqual(extractChange, undefined, "no extract change when customized");
+  });
+
+  it("returns no changes when no defaults changed between versions", async () => {
+    const { migrateDefaults } = await import("../src/settings.js");
+
+    // Both versions have same defaults (hypothetical)
+    const userSettings: ResearchSettings = { ...baseSettings };
+
+    const { changes } = migrateDefaults("0.8.0", "0.8.0", userSettings);
+    assert.deepStrictEqual(changes, [], "same version should have no changes");
+  });
+
+  it("returns no changes when previous version has no history entry", async () => {
+    const { migrateDefaults } = await import("../src/settings.js");
+
+    const userSettings: ResearchSettings = { ...baseSettings };
+    const { changes } = migrateDefaults("0.1.0", "0.8.0", userSettings);
+    assert.deepStrictEqual(changes, [], "unknown old version should have no changes");
+  });
+
+  it("does NOT migrate search model by default (it has not changed)", async () => {
+    const { migrateDefaults } = await import("../src/settings.js");
+
+    // User settings have search matching base (Sonar)
+    const userSettings: ResearchSettings = { ...baseSettings };
+
+    const { changes } = migrateDefaults("0.7.0", "0.8.0", userSettings);
+    const searchChange = changes.find((c) => c.includes("search"));
+    assert.strictEqual(searchChange, undefined, "search model should not be migrated");
+  });
+});

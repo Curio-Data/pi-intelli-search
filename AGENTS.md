@@ -342,6 +342,8 @@ Each user-facing behavior must have at least one deterministic test that asserts
 | API key present in auth.json | `index.test.ts` | Temp dir, write auth.json → assert no warning |
 | Upgrade from old version with flat keys | `index.test.ts` | Temp CWD with `.search/.version.json` + flat keys → assert deprecation notice |
 | Model typo in settings | `research.test.ts` | Mock modelRegistry returning null → assert missing models detected |
+| Default migration on upgrade | `settings.test.ts` | User settings match old default → assert migrated to new default |
+| Default migration with custom model | `settings.test.ts` | User customized extract model → assert NOT migrated |
 | Nested settings namespace | `settings.test.ts` | Temp dir with `pi-intelli-search` key → assert values read |
 | Flat key fallback | `settings.test.ts` | Temp dir with `intelli*` keys → assert values read as fallback |
 
@@ -395,6 +397,7 @@ No API keys are needed.
 4. **Dual fetch (Defuddle plus Markdown):** Some sites serve cleaner content via Markdown endpoints. The quality score comparison picks the better version automatically.
 5. **`focusPrompt` is critical:** Without it the extraction LLM works generically. The `promptGuidelines` instruct the agent to always provide it.
 6. **Cache suggest is additive, not a gate:** Stage 5 never blocks or replaces the live pipeline. It uses the cheap extract model as an LLM judge (≈500 input tokens, ≈$0.0002) to find related previous searches. Failures are caught and silently ignored.
+7. **Default migration is match-based, not tracked:** When defaults change between versions, users whose model configs match the OLD default exactly get auto-migrated to the NEW default in-memory. Users who customized their config are left alone. Migration never writes to the user's `settings.json`. A notification explains what changed and how to make it permanent. This is tested in `test/settings.test.ts` under `migrateDefaults`.
 
 ## Tool Naming
 
