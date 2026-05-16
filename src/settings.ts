@@ -74,6 +74,14 @@ export function setMigrationContext(previousVersion: string, currentVersion: str
 }
 
 /**
+ * Clear the migration context. Used in tests to reset state
+ * between scenarios.
+ */
+export function clearMigrationContext(): void {
+  pendingMigration = null;
+}
+
+/**
  * Migrate user settings when upgrading from a previous version.
  *
  * For each model role (search, extract, collate), compares the user's

@@ -14,8 +14,9 @@ import { intelliCollateTool } from "./tools/intelli-collate.js";
 import { intelliResearchTool } from "./tools/intelli-research.js";
 import { ensureCustomModels } from "./providers.js";
 import { invalidateSettingsCache, hasFlatKeys, migrateDefaults, loadSettings, setMigrationContext } from "./settings.js";
+import { getAgentDir } from "./util.js";
 
-const CURRENT_VERSION = "0.7.0";
+const CURRENT_VERSION = "0.8.0";
 
 /**
  * Check whether the openrouter provider has auth configured.
@@ -179,7 +180,12 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
 
     // Version tracking, default migration, and settings deprecation notice
     try {
-      const versionPath = join(".search", ".version.json");
+      // Version file lives in the agent directory (global to the extension
+      // installation), not in the project-relative .search/ cache. This
+      // ensures version tracking works regardless of which directory the
+      // user runs pi from.
+      const agentDir = getAgentDir();
+      const versionPath = join(agentDir, ".pi-intelli-search-version.json");
       let previousVersion: string | undefined;
 
       if (existsSync(versionPath)) {
@@ -189,19 +195,16 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
       }
 
       // Write current version
-      await mkdir(".search", { recursive: true });
+      await mkdir(agentDir, { recursive: true });
       await writeFile(
         versionPath,
         JSON.stringify({ version: CURRENT_VERSION, settingsFormat: "nested" }, null, 2) + "\n",
       );
 
       if (previousVersion && previousVersion !== CURRENT_VERSION) {
-        // Set migration context so loadSettings() applies default
-        // migration in-memory for all subsequent calls this session.
-        setMigrationContext(previousVersion, CURRENT_VERSION);
-
-        // Run migration once to check if any defaults changed and
-        // notify the user.
+        // Check for migration changes BEFORE setting the migration
+        // context. loadSettings() applies pendingMigration in-memory,
+        // so we must detect changes on the raw (unmigrated) settings.
         try {
           const userSettings = await loadSettings(process.cwd());
           const { changes } = migrateDefaults(previousVersion, CURRENT_VERSION, userSettings);
@@ -216,6 +219,10 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
         } catch {
           // Migration is best-effort; never block session startup
         }
+
+        // Set migration context so subsequent loadSettings() calls
+        // (from tools) get the migrated defaults in-memory.
+        setMigrationContext(previousVersion, CURRENT_VERSION);
 
         // Flat key deprecation notice
         const flatKeysExist = await hasFlatKeys(process.cwd());

@@ -387,20 +387,19 @@ describe("auth pre-flight check", () => {
     };
 
     try {
-      // Agent dir has auth so the auth warning doesn't fire
+      // Agent dir has auth so the auth warning doesn't fire.
+      // Write a previous version marker so the handler detects an upgrade.
       const agentDir = tempAgentDir();
       writeAuthJson(agentDir, { openrouter: { type: "api_key", key: "sk-or-v1-test" } });
-      process.env.PI_CODING_AGENT_DIR = agentDir;
-
-      // CWD simulates a project with a previous version and flat keys
-      const cwd = mkdtempSync(join(tmpdir(), "pi-intelli-deprecation-"));
-      // Previous version marker (older than CURRENT_VERSION)
-      mkdirSync(join(cwd, ".search"), { recursive: true });
+      // Simulate a prior 0.6.0 install by writing the version file
       writeFileSync(
-        join(cwd, ".search", ".version.json"),
+        join(agentDir, ".pi-intelli-search-version.json"),
         JSON.stringify({ version: "0.6.0" }),
       );
-      // Flat intelli* keys in project settings
+      process.env.PI_CODING_AGENT_DIR = agentDir;
+
+      // CWD has flat intelli* keys in project settings
+      const cwd = mkdtempSync(join(tmpdir(), "pi-intelli-deprecation-"));
       const piDir = join(cwd, ".pi");
       mkdirSync(piDir, { recursive: true });
       writeFileSync(
@@ -430,7 +429,7 @@ describe("auth pre-flight check", () => {
   });
 
   it("session_start does NOT fire deprecation notice on fresh install", async () => {
-    // Scenario: first-time user, no .search/.version.json exists
+    // Scenario: first-time user, no .pi-intelli-search-version.json in agent dir
     const savedKey = process.env.OPENROUTER_API_KEY;
     const savedDir = process.env.PI_CODING_AGENT_DIR;
     const savedCwd = process.cwd();
@@ -463,7 +462,7 @@ describe("auth pre-flight check", () => {
       writeAuthJson(agentDir, { openrouter: { type: "api_key", key: "sk-or-v1-test" } });
       process.env.PI_CODING_AGENT_DIR = agentDir;
 
-      // Fresh cwd — no .search/.version.json, no .pi/settings.json
+      // Fresh agent dir — no .pi-intelli-search-version.json, .pi/settings.json
       const cwd = mkdtempSync(join(tmpdir(), "pi-intelli-fresh-"));
       process.chdir(cwd);
 
@@ -477,6 +476,175 @@ describe("auth pre-flight check", () => {
         (n) => n.type === "warning" && n.msg.includes("Flat 'intelli*' settings keys are deprecated"),
       );
       assert.strictEqual(deprecationNotices.length, 0, "no deprecation notice on fresh install");
+    } finally {
+      process.chdir(savedCwd);
+      if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("session_start fires migration notification when defaults changed", async () => {
+    // Simulate upgrade from 0.7.0 with old default model configs.
+    // The handler should detect the version change and notify about
+    // the model migration.
+    const savedKey = process.env.OPENROUTER_API_KEY;
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    const savedCwd = process.cwd();
+    delete process.env.OPENROUTER_API_KEY;
+
+    const notifications: Array<{ msg: string; type: string }> = [];
+    let sessionStartHandler: Function | undefined;
+
+    const mockPi = {
+      registerTool() {},
+      on(event: string, h: Function) {
+        if (event === "session_start") sessionStartHandler = h;
+      },
+    };
+
+    const mockCtx = {
+      ui: {
+        notify(msg: string, type: string) {
+          notifications.push({ msg, type });
+        },
+        setStatus() {},
+      },
+      modelRegistry: {
+        refresh() {},
+      },
+    };
+
+    try {
+      // Clear any stale migration state from previous tests
+      const { clearMigrationContext } = await import("../src/settings.js");
+      clearMigrationContext();
+
+      // Agent dir: auth present, version marker claims 0.7.0
+      const agentDir = tempAgentDir();
+      writeAuthJson(agentDir, { openrouter: { type: "api_key", key: "sk-or-v1-test" } });
+      writeFileSync(
+        join(agentDir, ".pi-intelli-search-version.json"),
+        JSON.stringify({ version: "0.7.0" }),
+      );
+      // settings.json with old 0.7.0 default models (minimax direct)
+      writeFileSync(
+        join(agentDir, "settings.json"),
+        JSON.stringify({
+          intelliExtractModel: { provider: "minimax", model: "MiniMax-M2.7" },
+          intelliCollateModel: { provider: "minimax", model: "MiniMax-M2.7" },
+          intelliSearchModel: { provider: "openrouter", model: "perplexity/sonar" },
+        }),
+      );
+      process.env.PI_CODING_AGENT_DIR = agentDir;
+
+      // CWD with no project-local settings
+      const cwd = mkdtempSync(join(tmpdir(), "pi-intelli-migration-"));
+      process.chdir(cwd);
+
+      const mod = await import("../src/index.js");
+      mod.default(mockPi);
+
+      assert.ok(sessionStartHandler, "session_start handler should be registered");
+      await sessionStartHandler!({}, mockCtx);
+
+      const migrationNotices = notifications.filter(
+        (n) => n.type === "warning" && n.msg.includes("Default models updated"),
+      );
+      assert.strictEqual(migrationNotices.length, 1, "should fire migration notification");
+      assert.ok(
+        migrationNotices[0].msg.includes("extract: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m2.7"),
+        "should list extract migration",
+      );
+      assert.ok(
+        migrationNotices[0].msg.includes("collate: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m2.7"),
+        "should list collate migration",
+      );
+    } finally {
+      process.chdir(savedCwd);
+      if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("session_start does NOT fire migration when user customized models", async () => {
+    // Simulate upgrade from 0.7.0, but user customized extract model.
+    // The handler should NOT migrate customized models.
+    const savedKey = process.env.OPENROUTER_API_KEY;
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    const savedCwd = process.cwd();
+    delete process.env.OPENROUTER_API_KEY;
+
+    const notifications: Array<{ msg: string; type: string }> = [];
+    let sessionStartHandler: Function | undefined;
+
+    const mockPi = {
+      registerTool() {},
+      on(event: string, h: Function) {
+        if (event === "session_start") sessionStartHandler = h;
+      },
+    };
+
+    const mockCtx = {
+      ui: {
+        notify(msg: string, type: string) {
+          notifications.push({ msg, type });
+        },
+        setStatus() {},
+      },
+      modelRegistry: {
+        refresh() {},
+      },
+    };
+
+    try {
+      // Clear any stale migration state from previous tests
+      const { clearMigrationContext } = await import("../src/settings.js");
+      clearMigrationContext();
+
+      // Agent dir: auth present, version marker claims 0.7.0
+      const agentDir = tempAgentDir();
+      writeAuthJson(agentDir, { openrouter: { type: "api_key", key: "sk-or-v1-test" } });
+      writeFileSync(
+        join(agentDir, ".pi-intelli-search-version.json"),
+        JSON.stringify({ version: "0.7.0" }),
+      );
+      // settings.json with CUSTOMIZED extract model (not the old default)
+      writeFileSync(
+        join(agentDir, "settings.json"),
+        JSON.stringify({
+          intelliExtractModel: { provider: "openai", model: "gpt-4o-mini" },
+          intelliCollateModel: { provider: "minimax", model: "MiniMax-M2.7" },
+          intelliSearchModel: { provider: "openrouter", model: "perplexity/sonar" },
+        }),
+      );
+      process.env.PI_CODING_AGENT_DIR = agentDir;
+
+      const cwd = mkdtempSync(join(tmpdir(), "pi-intelli-custom-"));
+      process.chdir(cwd);
+
+      const mod = await import("../src/index.js");
+      mod.default(mockPi);
+
+      await sessionStartHandler!({}, mockCtx);
+
+      const migrationNotices = notifications.filter(
+        (n) => n.type === "warning" && n.msg.includes("Default models updated"),
+      );
+      // Should still migrate collate (matched old default) but NOT extract
+      assert.strictEqual(migrationNotices.length, 1, "should fire for collate only");
+      const notice = migrationNotices[0].msg;
+      assert.ok(
+        !notice.includes("extract:"),
+        "should NOT mention extract (user customized)",
+      );
+      assert.ok(
+        notice.includes("collate: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m2.7"),
+        "should list collate migration",
+      );
     } finally {
       process.chdir(savedCwd);
       if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
