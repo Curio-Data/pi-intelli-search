@@ -7,6 +7,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { intelliSearchTool } from "./tools/intelli-search.js";
 import { intelliExtractTool } from "./tools/intelli-extract.js";
 import { intelliCollateTool } from "./tools/intelli-collate.js";
@@ -15,6 +16,30 @@ import { ensureCustomModels } from "./providers.js";
 import { invalidateSettingsCache, hasFlatKeys } from "./settings.js";
 
 const CURRENT_VERSION = "0.7.0";
+
+/**
+ * Check whether the openrouter provider has auth configured.
+ * Checks auth.json and the OPENROUTER_API_KEY environment variable.
+ * Best-effort: Pi supports other auth mechanisms (OAuth, API key helpers)
+ * that this check won't detect, but those are edge cases.
+ * Returns true if auth is likely missing.
+ */
+export async function isOpenRouterAuthMissing(): Promise<boolean> {
+  // Check environment variable first (fast path)
+  if (process.env.OPENROUTER_API_KEY) return false;
+
+  // Check auth.json
+  const agentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+  try {
+    const raw = await readFile(join(agentDir, "auth.json"), "utf-8");
+    const auth = JSON.parse(raw);
+    if (auth.openrouter) return false;
+  } catch {
+    // File doesn't exist or is invalid — auth is missing
+  }
+
+  return true;
+}
 
 export default function piWebResearchExtension(pi: ExtensionAPI) {
   // ═══════════════════════════════════════════════
@@ -133,6 +158,23 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
           "warning",
         );
       }
+    }
+
+    // Auth pre-flight: warn if OpenRouter has no configured key.
+    // With default settings, all three pipeline stages need OpenRouter.
+    // This is a best-effort early warning. The tool itself will throw
+    // a clearer error at execution time if the key is truly missing.
+    try {
+      const authMissing = await isOpenRouterAuthMissing();
+      if (authMissing) {
+        ctx.ui.notify(
+          `[pi-intelli-search] No OpenRouter API key found. ` +
+          `This extension requires one. Run /login or add 'openrouter' to auth.json.`,
+          "warning",
+        );
+      }
+    } catch {
+      // Auth check is best-effort; never block session startup
     }
 
     // Version tracking and settings deprecation notice
