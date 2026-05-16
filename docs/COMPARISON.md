@@ -90,7 +90,7 @@ What happens to page content after fetching, before it reaches the agent.
 
 | Extension | Per-Page LLM Extraction | Targets Query Relevance | Handles Code Blocks |
 | --- | :---: | :---: | :---: |
-| **intelli-search** | **Yes**: configurable model, default MiniMax M2.7 | **Yes**: guided by `focusPrompt` | **Yes**: preserved verbatim |
+| **intelli-search** | **Yes**: configurable model, default MiniMax M2.7 via OpenRouter | **Yes**: guided by `focusPrompt` | **Yes**: preserved verbatim |
 | **pi-web-providers** | No | No | No |
 | **pi-web-access** | Partial (Gemini for blocked pages, video descriptions) | No | No |
 | **pi-smart-fetch** | No | No | No |
@@ -102,7 +102,7 @@ What happens to page content after fetching, before it reaches the agent.
 
 `intelli-search` is the only extension among those compared that uses an LLM to extract query-relevant content from each page before it enters the agent's context. This compresses ≈50K chars per page to ≈3-5K of focused content. The `focusPrompt` parameter lets the agent specify exactly what to look for across all pages.
 
-[_MiniMax_](https://minimax.io) M2.7 is the default extraction model. Any model `Pi` supports can be swapped in via `intelliExtractModel` in settings, including models accessed through the same OpenRouter key used for search. Extraction quality scales independently from cost, from cheap flash models to full reasoning models.
+[_MiniMax_](https://minimax.io) M2.7 (via [OpenRouter](https://openrouter.ai)) is the default extraction model. A single OpenRouter key covers all three pipeline stages. Any model `Pi` supports can be swapped in via `intelliExtractModel` in settings. Extraction quality scales independently from cost, from cheap flash models to full reasoning models.
 
 **Trade-off:** This approach is vulnerable to the extraction LLM's ability to identify relevant content. A weak extraction model may miss key details or introduce errors. The other extensions deliver full page content to the agent, which can be advantageous when the main LLM is better equipped to filter noise than a smaller, cheaper extraction model. If the main LLM is confused by non-relevant material, however, pre-extraction keeps the context clean and focused.
 
@@ -153,9 +153,9 @@ Approximate cost per research session with 8 pages. Token rates sourced from pro
 | Stage | Model | Input (per 1M tokens) | Output (per 1M tokens) |
 | --- | --- | --- | --- |
 | Search | Perplexity Sonar | $2.00 | $8.00 |
-| Extract | MiniMax M2.7 | $0.30 | $1.20 |
-| Collate | MiniMax M2.7 | $0.30 | $1.20 |
-| Cache suggest | MiniMax M2.7 | $0.30 | $1.20 |
+| Extract | MiniMax M2.7 (via OpenRouter) | $0.279 | $1.20 |
+| Collate | MiniMax M2.7 (via OpenRouter) | $0.279 | $1.20 |
+| Cache suggest | MiniMax M2.7 (via OpenRouter) | $0.279 | $1.20 |
 
 **Per-session breakdown:**
 
@@ -173,4 +173,4 @@ Approximate cost per research session with 8 pages. Token rates sourced from pro
 
 `intelli-search` has a cost because it does more work: LLM extraction, LLM collation, and LLM cache suggest. The ≈$0.05 per session is intentional. It buys targeted, deduplicated, cached results. Extensions without LLM processing are free but deliver raw content to the agent, which then spends its own reasoning tokens (and context) sorting through it. The persistent cache reduces costs over time through reuse.
 
-Costs scale with the chosen models. The figures above use the defaults (Sonar for search, MiniMax M2.7 for extraction and collation). Swapping to cheaper or more expensive models changes the per-session cost proportionally.
+Costs scale with the chosen models. The figures above use the defaults (Sonar for search, MiniMax M2.7 via OpenRouter for extraction and collation). Swapping to cheaper or more expensive models changes the per-session cost proportionally.

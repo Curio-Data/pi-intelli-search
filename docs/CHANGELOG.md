@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Extract and collate models now default to OpenRouter:** `minimax/MiniMax-M2.7` (direct) replaced with `openrouter/minimax/minimax-m2.7`. Users no longer need a separate MiniMax API key. A single OpenRouter key covers all three pipeline stages (search, extract, collate).
+- **Settings now support nested `pi-intelli-search` namespace.** Bare keys (e.g. `extractModel`) are preferred over flat `intelli*`-prefixed keys. Both formats are supported; the nested format takes precedence when both are present. Flat `intelli*` keys are deprecated and trigger a non-blocking notification on upgrade.
+
+### Added
+
+- **Version tracking:** `.search/.version.json` is written on `session_start`. On upgrade, flat-key users receive a deprecation notice asking them to migrate to the nested format.
+
 ## [0.7.0] - 2026-05-14
 
 ### Changed

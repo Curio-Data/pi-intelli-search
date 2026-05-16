@@ -4,12 +4,17 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 // SPDX-License-Identifier: Apache-2.0
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { intelliSearchTool } from "./tools/intelli-search.js";
 import { intelliExtractTool } from "./tools/intelli-extract.js";
 import { intelliCollateTool } from "./tools/intelli-collate.js";
 import { intelliResearchTool } from "./tools/intelli-research.js";
 import { ensureCustomModels } from "./providers.js";
-import { invalidateSettingsCache } from "./settings.js";
+import { invalidateSettingsCache, hasFlatKeys } from "./settings.js";
+
+const CURRENT_VERSION = "0.7.0";
 
 export default function piWebResearchExtension(pi: ExtensionAPI) {
   // ═══════════════════════════════════════════════
@@ -24,7 +29,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
   // Provider-response monitoring
   // ═══════════════════════════════════════════════
   // Watch for rate-limiting (429) and server errors (5xx) from the providers
-  // our tools use (OpenRouter for Sonar search, MiniMax for extract/collate).
+  // our tools use (OpenRouter for search, extract, and collate).
   // This catches issues that slip through the per-call onResponse hook in
   // llm.ts — e.g. when the agent itself calls these providers outside our
   // tools, or when a 429 arrives on a streaming response that our onResponse
@@ -96,32 +101,72 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
   // models — destructive. models.json merges by id instead.
   // This event fires after the runner initializes, so we can safely
   // trigger a model registry refresh if we added new models.
+  //
+  // Also handles version tracking and deprecation notices. On upgrade,
+  // checks whether the user is still using flat intelli* settings keys
+  // and shows a non-blocking notification suggesting migration to the
+  // nested pi-intelli-search namespace.
   let modelsChecked = false;
   pi.on("session_start", async (_event, ctx) => {
     invalidateSettingsCache();
 
-    if (modelsChecked) return;
-    modelsChecked = true;
+    if (!modelsChecked) {
+      modelsChecked = true;
 
-    try {
-      const added = await ensureCustomModels();
-      if (added.length > 0) {
-        // We wrote new models to models.json. Refresh the registry so they're
-        // available immediately without restarting pi.
-        // modelRegistry.refresh() is not on the public ExtensionContext type,
-        // but is available at runtime on the concrete ModelRegistry instance.
-        const registry = ctx.modelRegistry as { refresh?: () => void };
-        registry.refresh?.();
+      try {
+        const added = await ensureCustomModels();
+        if (added.length > 0) {
+          // We wrote new models to models.json. Refresh the registry so they're
+          // available immediately without restarting pi.
+          // modelRegistry.refresh() is not on the public ExtensionContext type,
+          // but is available at runtime on the concrete ModelRegistry instance.
+          const registry = ctx.modelRegistry as { refresh?: () => void };
+          registry.refresh?.();
+          ctx.ui.notify(
+            `[pi-intelli-search] Added models: ${added.join(", ")}. Use /model to select them.`,
+            "info",
+          );
+        }
+      } catch (err: any) {
         ctx.ui.notify(
-          `[pi-intelli-search] Added models: ${added.join(", ")}. Use /model to select them.`,
-          "info",
+          `[pi-intelli-search] Warning: could not update models.json: ${err?.message ?? err}`,
+          "warning",
         );
       }
-    } catch (err: any) {
-      ctx.ui.notify(
-        `[pi-intelli-search] Warning: could not update models.json: ${err?.message ?? err}`,
-        "warning",
+    }
+
+    // Version tracking and settings deprecation notice
+    try {
+      const versionPath = join(".search", ".version.json");
+      let previousVersion: string | undefined;
+
+      if (existsSync(versionPath)) {
+        const raw = await readFile(versionPath, "utf-8");
+        const meta = JSON.parse(raw);
+        previousVersion = meta.version;
+      }
+
+      // Write current version
+      await mkdir(".search", { recursive: true });
+      await writeFile(
+        versionPath,
+        JSON.stringify({ version: CURRENT_VERSION, settingsFormat: "nested" }, null, 2) + "\n",
       );
+
+      // Notify on upgrade if user still uses flat intelli* keys
+      if (previousVersion && previousVersion !== CURRENT_VERSION) {
+        const flatKeysExist = await hasFlatKeys(process.cwd());
+        if (flatKeysExist) {
+          ctx.ui.notify(
+            `[pi-intelli-search] Flat 'intelli*' settings keys are deprecated. ` +
+            `Nest them under 'pi-intelli-search' in settings.json. ` +
+            `See docs/CHANGELOG.md for details.`,
+            "warning",
+          );
+        }
+      }
+    } catch {
+      // Version tracking is best-effort; never break session startup
     }
   });
 
