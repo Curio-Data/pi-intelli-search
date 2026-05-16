@@ -281,50 +281,111 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 
 ## Testing Conventions
 
+### Test Structure
+
 - Test files in `test/` mirror `src/` structure: `cache.test.ts`, `fetch.test.ts`, `settings.test.ts`, etc.
 - Run with `node --import tsx --test` (Node.js built-in test runner).
-- Tests are unit tests. No live API calls and no network access required.
-- Tests are unit tests across 7 test files, plus 1 smoke test. The total count is shown by the badge in `README.md`.
+- Test count is shown by the badge in `README.md`.
+
+### Test Categories
+
+| Category | Purpose | Files | Network |
+|---|---|---|---|
+| **Structural/smoke** | Extension loads, tools register, events bind | `smoke.ts` | No |
+| **Unit (pure logic)** | Functions without filesystem or network deps | `cache.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
+| **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts` | No |
+| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `run-e2e.sh`, `run-e2e-model-override.sh` | Yes |
+| **Publish** | Validates published npm package structure | `run-e2e-publish.sh` | Yes (npm only) |
+
+### Principle 1: Tests Must Be Deterministic
+
+No test may depend on the state of the host machine's `~/.pi/agent/` directory, environment variables from the developer's shell, or network availability (except E2E tests, which are isolated).
+
+**Pattern for filesystem isolation:**
+
+```typescript
+import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const dir = mkdtempSync(join(tmpdir(), "pi-intelli-test-"));
+process.env.PI_CODING_AGENT_DIR = dir;  // isolate from ~/.pi/agent
+
+// Write specific config files for the scenario
+writeFileSync(join(dir, "auth.json"), JSON.stringify({ openrouter: { ... } }));
+writeFileSync(join(dir, "models.json"), "{}");
+
+// ... run test ...
+
+// Restore env in finally block
+delete process.env.PI_CODING_AGENT_DIR;
+```
+
+**Pattern for working-directory isolation (when code reads from `process.cwd()`):**
+
+```typescript
+const savedCwd = process.cwd();
+const cwd = mkdtempSync(join(tmpdir(), "pi-intelli-cwd-"));
+process.chdir(cwd);
+// ... create .pi/settings.json, .search/.version.json, etc. ...
+// ... run test ...
+process.chdir(savedCwd);
+```
+
+### Principle 2: Every Scenario Needs a Test
+
+Each user-facing behavior must have at least one deterministic test that asserts exact outcomes. Examples from this codebase:
+
+| Scenario | Test location | Mechanism |
+|---|---|---|
+| Fresh install, no API key | `index.test.ts` | Temp dir, no auth.json → assert auth warning fires |
+| API key present in auth.json | `index.test.ts` | Temp dir, write auth.json → assert no warning |
+| Upgrade from old version with flat keys | `index.test.ts` | Temp CWD with `.search/.version.json` + flat keys → assert deprecation notice |
+| Model typo in settings | `research.test.ts` | Mock modelRegistry returning null → assert missing models detected |
+| Nested settings namespace | `settings.test.ts` | Temp dir with `pi-intelli-search` key → assert values read |
+| Flat key fallback | `settings.test.ts` | Temp dir with `intelli*` keys → assert values read as fallback |
+
+### Principle 3: Fail Fast Before Cost
+
+Configuration errors (model typos, missing keys) must be caught before LLM calls incur cost. The `intelli_research` pre-flight validation checks all three models exist in the registry before Stage 1 begins. This is tested in `research.test.ts` with a mocked model registry.
+
+### Principle 4: E2E Tests Exercise Real Config Paths
+
+E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. There are two E2E scripts:
+
+| Test | What it proves |
+|---|---|
+| `run-e2e.sh` | Default pipeline (Sonar + M2.7 via OpenRouter) works end-to-end with nested settings |
+| `run-e2e-model-override.sh` | Model override in `pi-intelli-search` settings namespace is read and used |
+
+Both write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
 
 ### Must Run After Every Change
 
-After **any** code change, run the full verification sequence in order:
+1. **Build:** `npm run build`
+2. **Unit tests:** `npm test`
+3. **End-to-end test:** `./test/run-e2e.sh`
 
-1. **Build:** `npm run build` (catches type errors, broken imports).
-2. **Unit tests:** `npm test` (catches logic regressions).
-3. **End-to-end test:** `./test/run-e2e.sh` (exercises the full pipeline with real LLM calls).
+Do not consider a change complete until all three pass. Run `./test/run-e2e-model-override.sh` before any release.
 
-The E2E test launches `Pi` in an isolated environment (separate `PI_CODING_AGENT_DIR`, temp `auth.json` and `models.json`) and runs `intelli_research` against a live query. It verifies:
-- Extension loads and registers tools.
-- [_Perplexity Sonar_](https://docs.perplexity.ai) search returns results.
-- Pages are fetched and extracted ([Defuddle](https://github.com/kepano/defuddle) plus Markdown).
-- Cache artifacts are written (`.search/` with `report.md`, `query.txt`, `extractions/`, `sources/`).
-- `.search/.index.json` is updated.
+### E2E Test Requirements
 
-**API key auto-detection:** The test auto-detects `OPENROUTER_API_KEY` from `~/.pi/agent/auth.json` if not already in the environment. No manual setup is needed when `Pi` is already configured with an OpenRouter key. Only an OpenRouter key is required: all three model roles (search, extract, collate) route through OpenRouter, so no separate MiniMax key is needed.
+The E2E tests auto-detect `OPENROUTER_API_KEY` from `~/.pi/agent/auth.json`. Only an OpenRouter key is required: all three model roles route through OpenRouter.
 
-**Manual override:**
 ```bash
 OPENROUTER_API_KEY=sk-or-v1-... ./test/run-e2e.sh
 ```
 
-Do not consider a change complete until steps 1 through 3 pass. Run step 4 before any release.
-
 ### E2E Publish Test
 
-`./test/run-e2e-publish.sh` validates that the published `npm` package installs correctly and is structurally sound. It:
+`./test/run-e2e-publish.sh` validates that the published `npm` package installs and registers correctly:
 
-1. Installs `@curio-data/pi-intelli-search` into a temp directory via `npm install`.
-2. Runs a smoke test against the **installed** `dist/index.js` (not the local source).
-3. Verifies all 4 tools register, event subscriptions work, and `ensureCustomModels()` is idempotent.
-
-**Usage:**
 ```bash
-./test/run-e2e-publish.sh              # uses the latest published version
-./test/run-e2e-publish.sh 0.4.0        # test a specific version
+./test/run-e2e-publish.sh              # latest version
+./test/run-e2e-publish.sh 0.7.0        # specific version
 ```
 
-No API keys are needed. This is a structural test only, with no LLM calls.
+No API keys are needed.
 
 ## Important Design Decisions
 
