@@ -114,7 +114,7 @@ Prefer present-tense indicative. "The pipeline caches results." beats "The pipel
 Test counts, version numbers, and stat references must appear in **one canonical location** and be referenced from elsewhere, not duplicated. When a number changes, only the canonical source needs editing.
 
 - **Test count canonical:** `README.md` badge and `Development` block.
-- **Version canonical:** `package.json` -> `version`, mirrored in `docs/CHANGELOG.md`.
+- **Version canonical:** `package.json` -> `version`, mirrored in `CHANGELOG.md`.
 - `AGENTS.md` should describe **how** to run tests, not assert a count. If a count must be cited, link to the README.
 
 ### 10. README Image Width
@@ -433,14 +433,14 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 
 1. **Verify CI is green.** Confirm all changes are merged to `main` and the latest run is passing.
 2. **Bump `version` in `package.json`** following [SemVer](https://semver.org/).
-3. **Update `docs/CHANGELOG.md` in two places.** Both are required:
+3. **Update `CHANGELOG.md` in two places.** Both are required:
    - **Top of file:** Add a new `## [X.Y.Z] - YYYY-MM-DD` section above the previous entry. Use the standard sub-headings (`### Added`, `### Changed`, `### Fixed`, `### Compatibility`, `### Removed`, `### Security`) as needed. List user-visible changes only; internal refactors do not need entries unless they affect compatibility.
    - **Bottom of file:** Add a corresponding reference link `[X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/vX.Y.Z` below the existing reference block. Without this entry the version heading at the top will not link to the GitHub release.
 4. **Verify both CHANGELOG edits exist before committing.** Run:
 
    ```bash
-   grep -n "^## \[X.Y.Z\]" docs/CHANGELOG.md   # must return one match
-   grep -n "^\[X.Y.Z\]:"  docs/CHANGELOG.md   # must return one match
+   grep -n "^## \[X.Y.Z\]" CHANGELOG.md   # must return one match
+   grep -n "^\[X.Y.Z\]:"  CHANGELOG.md   # must return one match
    ```
 
    Both must match. If either is missing, fix before continuing.

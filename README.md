@@ -412,7 +412,7 @@ pi install /path/to/pi-intelli-search
 ## Documentation
 
 - [Comparison](docs/COMPARISON.md): How `intelli-search` compares to other `Pi` search extensions.
-- [Changelog](docs/CHANGELOG.md): Release history.
+- [Changelog](CHANGELOG.md): Release history.
 - [Architecture](docs/ARCHITECTURE.md): Detailed design decisions and pipeline internals.
 - [Components](docs/COMPONENTS.md): Third-party dependencies and license attribution.
 - [Skill guide](skills/intelli-search/SKILL.md): Agent-facing usage instructions.

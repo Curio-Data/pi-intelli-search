@@ -230,7 +230,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
           ctx.ui.notify(
             `[pi-intelli-search] Flat 'intelli*' settings keys are deprecated. ` +
             `Nest them under 'pi-intelli-search' in settings.json. ` +
-            `See docs/CHANGELOG.md for details.`,
+            `See CHANGELOG.md for details.`,
             "warning",
           );
         }
