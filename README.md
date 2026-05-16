@@ -53,7 +53,10 @@ You need at minimum an [OpenRouter](https://openrouter.ai) API key for [_Perplex
 
 ```json
 {
-  "openrouter": { "type": "api_key", "key": "sk-or-v1-..." }
+  "openrouter": {
+    "type": "api_key",
+    "key": "sk-or-v1-..."
+  }
 }
 ```
 
@@ -94,9 +97,18 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
 ```jsonc
 {
   "pi-intelli-search": {
-    "searchModel":  { "provider": "openrouter", "model": "perplexity/sonar" },
-    "extractModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
-    "collateModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
+    "searchModel": {
+      "provider": "openrouter",
+      "model": "perplexity/sonar"
+    },
+    "extractModel": {
+      "provider": "openrouter",
+      "model": "minimax/minimax-m2.7"
+    },
+    "collateModel": {
+      "provider": "openrouter",
+      "model": "minimax/minimax-m2.7"
+    },
 
     "maxUrls": 8,
     "cacheDir": ".search",
@@ -116,9 +128,18 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
 ```jsonc
 {
   "pi-intelli-search": {
-    "searchModel":  { "provider": "openrouter", "model": "perplexity/sonar" },
-    "extractModel": { "provider": "openai",     "model": "gpt-4o-mini" },
-    "collateModel": { "provider": "openai",     "model": "gpt-4o-mini" },
+    "searchModel": {
+      "provider": "openrouter",
+      "model": "perplexity/sonar"
+    },
+    "extractModel": {
+      "provider": "openai",
+      "model": "gpt-4o-mini"
+    },
+    "collateModel": {
+      "provider": "openai",
+      "model": "gpt-4o-mini"
+    },
 
     "maxUrls": 6,
     "cacheDir": ".my-research-cache",
@@ -128,7 +149,9 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
     "fetchTimeoutMs": 30000,
     "fetchConcurrency": 2,
     "browserFingerprint": "chrome_145",
-    "llmsFullSites": { "developers.cloudflare.com": "https://developers.cloudflare.com" }
+    "llmsFullSites": {
+      "developers.cloudflare.com": "https://developers.cloudflare.com"
+    }
   }
 }
 ```
@@ -211,8 +234,14 @@ _MiniMax_ M2.7 (via OpenRouter) is the default because it is cheap and effective
 ```jsonc
 {
   "pi-intelli-search": {
-    "extractModel": { "provider": "openai", "model": "gpt-4o-mini" },
-    "collateModel": { "provider": "openai", "model": "gpt-4o-mini" }
+    "extractModel": {
+      "provider": "openai",
+      "model": "gpt-4o-mini"
+    },
+    "collateModel": {
+      "provider": "openai",
+      "model": "gpt-4o-mini"
+    }
   }
 }
 ```
@@ -222,8 +251,14 @@ _MiniMax_ M2.7 (via OpenRouter) is the default because it is cheap and effective
 ```jsonc
 {
   "pi-intelli-search": {
-    "extractModel": { "provider": "openrouter", "model": "google/gemini-2.0-flash-001" },
-    "collateModel": { "provider": "openrouter", "model": "google/gemini-2.0-flash-001" }
+    "extractModel": {
+      "provider": "openrouter",
+      "model": "google/gemini-2.0-flash-001"
+    },
+    "collateModel": {
+      "provider": "openrouter",
+      "model": "google/gemini-2.0-flash-001"
+    }
   }
 }
 ```
@@ -233,8 +268,14 @@ _MiniMax_ M2.7 (via OpenRouter) is the default because it is cheap and effective
 ```jsonc
 {
   "pi-intelli-search": {
-    "extractModel": { "provider": "zai", "model": "glm-5.1" },
-    "collateModel": { "provider": "zai", "model": "glm-5.1" }
+    "extractModel": {
+      "provider": "zai",
+      "model": "glm-5.1"
+    },
+    "collateModel": {
+      "provider": "zai",
+      "model": "glm-5.1"
+    }
   }
 }
 ```
@@ -257,7 +298,10 @@ With default settings, you need one key in `~/.pi/agent/auth.json`:
 
 ```json
 {
-  "openrouter": { "type": "api_key", "key": "sk-or-v1-..." }
+  "openrouter": {
+    "type": "api_key",
+    "key": "sk-or-v1-..."
+  }
 }
 ```
 
@@ -305,8 +349,14 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
       "provider": "openrouter",
       "model": "perplexity/sonar"
     },
-    "extractModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
-    "collateModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
+    "extractModel": {
+      "provider": "openrouter",
+      "model": "minimax/minimax-m2.7"
+    },
+    "collateModel": {
+      "provider": "openrouter",
+      "model": "minimax/minimax-m2.7"
+    },
 
     // Pipeline tuning
     "maxUrls": 8,
