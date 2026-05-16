@@ -1,30 +1,18 @@
 #!/usr/bin/env bash
 #
-# test/run-e2e.sh — End-to-end test for pi-intelli-search
+# test/run-e2e-model-override.sh — E2E test for model override via settings
 #
-# Runs the extension inside an isolated pi agent environment to verify
-# the install experience works in a fresh session with real LLM calls.
-#
-# This test uses the default models: Sonar for search, MiniMax M2.7
-# via OpenRouter for extract and collate. All three stages route through
-# OpenRouter, requiring only a single API key.
+# Demonstrates that changing the extract/collate model in settings.json
+# is read and used by the pipeline. Replaces the default MiniMax M2.7
+# with google/gemini-3-flash-preview from OpenRouter.
 #
 # Usage:
-#   ./test/run-e2e.sh
+#   ./test/run-e2e-model-override.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
 #
 # The .env file (gitignored) can hold OPENROUTER_API_KEY for convenience.
-#
-# How it works:
-#   PI_CODING_AGENT_DIR points pi at a fresh temp directory. The extension
-#   respects this for both auth (via pi's native config loading) and
-#   settings (getAgentDir() checks the env var). models.json is vanilla;
-#   the extension injects perplexity/sonar models on session_start.
-#
-# Your real ~/.pi/agent/ config is never read, modified, or polluted
-# (except auth.json which is read only to auto-detect OPENROUTER_API_KEY).
 
 set -euo pipefail
 
@@ -39,13 +27,7 @@ if [ -f "$PROJECT_DIR/.env" ]; then
   set +a
 fi
 
-# Use a cheap model by default. Override with TEST_MODEL if desired.
-TEST_MODEL="${TEST_MODEL:-openrouter/minimax/minimax-m2.7}"
-
 # ── Check prerequisites ────────────────────────────────────────────
-# Auto-detect OPENROUTER_API_KEY from ~/.pi/agent/auth.json if not
-# already in the environment. This lets the test run with zero manual
-# setup when the user has already configured pi.
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
   if [ -f "$HOME/.pi/agent/auth.json" ]; then
     OPENROUTER_API_KEY="$(jq -r '.openrouter.key // empty' "$HOME/.pi/agent/auth.json" 2>/dev/null || true)"
@@ -71,26 +53,25 @@ if ! command -v pi &>/dev/null; then
 fi
 
 # ── Create isolated agent directory ────────────────────────────────
-ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-agent-XXXXXX)"
+ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-override-XXXXXX)"
 trap 'rm -rf "$ISOLATED_AGENT_DIR"' EXIT
 
 echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR"
 
 mkdir -p "$ISOLATED_AGENT_DIR/sessions"
 
-# ── auth.json — minimal isolated file
-# Only OpenRouter is needed. All three pipeline stages route through
-# OpenRouter, so a single API key covers everything.
+# ── auth.json — OpenRouter key only ────────────────────────────────
 cat > "$ISOLATED_AGENT_DIR/auth.json" <<EOF
 {"openrouter":{"type":"api_key","key":"$OPENROUTER_API_KEY"}}
 EOF
 
-# ── settings.json — default model + intelli config (nested namespace) ─
-# Uses nested pi-intelli-search namespace with bare keys.
-# All three model roles route through OpenRouter.
+# ── settings.json — override extract/collate to Gemini 3 Flash ─────
+# Uses the nested pi-intelli-search namespace.
+# Search stays on Perplexity Sonar; extract and collate use a different
+# model to prove that settings.json overrides are respected.
 cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
 {
-  "defaultModel": "$TEST_MODEL",
+  "defaultModel": "openrouter/google/gemini-3-flash-preview",
   "pi-intelli-search": {
     "searchModel": {
       "provider": "openrouter",
@@ -98,34 +79,37 @@ cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
     },
     "extractModel": {
       "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
+      "model": "google/gemini-3-flash-preview"
     },
     "collateModel": {
       "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
+      "model": "google/gemini-3-flash-preview"
     }
   }
 }
 EOF
 
 # ── models.json — vanilla/empty ────────────────────────────────────
-# The extension's ensureCustomModels() will inject perplexity/sonar
-# models on session_start, exactly like a real installation.
 cat > "$ISOLATED_AGENT_DIR/models.json" <<'MEOF'
 {}
 MEOF
 
 echo "📄 Wrote vanilla models.json (extension will add perplexity models)"
-echo "⚙️  Test model: $TEST_MODEL"
-echo "⚙️  Extract/Collate: openrouter/minimax/minimax-m2.7 (default)"
+echo "⚙️  Extract/Collate: openrouter/google/gemini-3-flash-preview (overridden)"
+echo "⚙️  Search:            openrouter/perplexity/sonar (default)"
 echo ""
 
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  Running pi — print mode (isolated env)              ║"
+echo "║  Model override: Gemini 3 Flash for extract/collate  ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
-PROMPT="Use intelli_research to research: latest TypeScript version"
+# ── Extension path ─────────────────────────────────────────────────
+E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
+echo "🧪 Extension: $E2E_EXTENSION_PATH"
+
+PROMPT="Use intelli_research to research: what is the latest Deno version"
 
 OUTPUT="$(
   PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" \
@@ -169,8 +153,6 @@ else
 fi
 
 # ── Verify .search cache artifacts ──────────────────────────────────
-# intelli_research writes .search/<date>-<slug>/ with report.md,
-# query.txt, extractions/, sources/, and updates .search/.index.json.
 CACHE_DIR="$PROJECT_DIR/.search"
 
 if [ -d "$CACHE_DIR" ]; then
@@ -191,7 +173,6 @@ else
   ERRORS=$((ERRORS + 1))
 fi
 
-# Find the latest cache subdirectory
 LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.search' | sort -r | head -1)
 if [ -n "$LATEST_CACHE" ]; then
   echo "✅ Cache entry directory: $(basename "$LATEST_CACHE")"
@@ -230,8 +211,8 @@ fi
 
 echo ""
 if [ "$ERRORS" -gt 0 ]; then
-  echo "❌ E2E test failed ($ERRORS error(s))"
+  echo "❌ E2E model-override test failed ($ERRORS error(s))"
   exit 1
 fi
 
-echo "✅ E2E test passed — full pipeline works in isolated session"
+echo "✅ E2E model-override test passed — model override in settings.json is respected"
