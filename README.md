@@ -44,6 +44,23 @@ For the detailed feature-by-feature comparison against six other `Pi` search ext
 
 ## Install
 
+### Prerequisites
+
+You need an [OpenRouter](https://openrouter.ai) API key. A single key covers all three pipeline stages (search, extract, collate).
+
+1. **Get a key** at [openrouter.ai/keys](https://openrouter.ai/keys)
+2. **Add it to Pi** by running `/login` in Pi and selecting the `openrouter` provider, or edit `~/.pi/agent/auth.json`:
+
+```json
+{
+  "openrouter": { "type": "api_key", "key": "sk-or-v1-..." }
+}
+```
+
+No other keys are needed with default settings.
+
+### Install the Extension
+
 From `npm` (recommended):
 
 ```bash
@@ -62,7 +79,11 @@ Local development:
 pi install /path/to/pi-intelli-search
 ```
 
-On first load, the extension adds [Perplexity Sonar](https://docs.perplexity.ai) models to `~/.pi/agent/models.json` under the `openrouter` provider. This patch approach lets `Pi` discover _Sonar_ through [OpenRouter](https://openrouter.ai). No separate _Perplexity_ API account is needed.
+On first load, Pi will show: `Added models: perplexity/sonar, perplexity/sonar-pro`. If your OpenRouter key is missing, you will see a warning notification.
+
+### Verify Installation
+
+Start Pi and type `/model`. You should see `perplexity/sonar` and `perplexity/sonar-pro` in the model list. If not, restart Pi.
 
 ## Tools
 
@@ -139,8 +160,10 @@ _MiniMax_ M2.7 (via OpenRouter) is the default because it is cheap and effective
 
 ```jsonc
 {
-  "intelliExtractModel": { "provider": "openai", "model": "gpt-4o-mini" },
-  "intelliCollateModel": { "provider": "openai", "model": "gpt-4o-mini" },
+  "pi-intelli-search": {
+    "extractModel": { "provider": "openai", "model": "gpt-4o-mini" },
+    "collateModel": { "provider": "openai", "model": "gpt-4o-mini" }
+  }
 }
 ```
 
@@ -148,14 +171,10 @@ _MiniMax_ M2.7 (via OpenRouter) is the default because it is cheap and effective
 
 ```jsonc
 {
-  "intelliExtractModel": {
-    "provider": "openrouter",
-    "model": "google/gemini-2.0-flash-001",
-  },
-  "intelliCollateModel": {
-    "provider": "openrouter",
-    "model": "google/gemini-2.0-flash-001",
-  },
+  "pi-intelli-search": {
+    "extractModel": { "provider": "openrouter", "model": "google/gemini-2.0-flash-001" },
+    "collateModel": { "provider": "openrouter", "model": "google/gemini-2.0-flash-001" }
+  }
 }
 ```
 
@@ -163,8 +182,10 @@ _MiniMax_ M2.7 (via OpenRouter) is the default because it is cheap and effective
 
 ```jsonc
 {
-  "intelliExtractModel": { "provider": "zai", "model": "glm-5.1" },
-  "intelliCollateModel": { "provider": "zai", "model": "glm-5.1" },
+  "pi-intelli-search": {
+    "extractModel": { "provider": "zai", "model": "glm-5.1" },
+    "collateModel": { "provider": "zai", "model": "glm-5.1" }
+  }
 }
 ```
 
@@ -229,23 +250,25 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 ```jsonc
 {
   // Model assignments: see "Model Configuration" section for swap guidance
-  "intelliSearchModel": {
-    "provider": "openrouter",
-    "model": "perplexity/sonar",
-  },
-  "intelliExtractModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
-  "intelliCollateModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
+  "pi-intelli-search": {
+    "searchModel": {
+      "provider": "openrouter",
+      "model": "perplexity/sonar"
+    },
+    "extractModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
+    "collateModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
 
-  // Pipeline tuning
-  "intelliMaxUrls": 8,
-  "intelliCacheDir": ".search",
-  "intelliExtractMaxChars": 150000,
-  "intelliExtractionMaxTokens": 3000,
-  "intelliCollationMaxTokens": 4000,
-  "intelliFetchTimeoutMs": 20000,
-  "intelliFetchConcurrency": 4,
-  "intelliBrowserFingerprint": "chrome_145",
-  "intelliLlmsFullSites": {},
+    // Pipeline tuning
+    "maxUrls": 8,
+    "cacheDir": ".search",
+    "extractMaxChars": 150000,
+    "extractionMaxTokens": 3000,
+    "collationMaxTokens": 4000,
+    "fetchTimeoutMs": 20000,
+    "fetchConcurrency": 4,
+    "browserFingerprint": "chrome_145",
+    "llmsFullSites": {}
+  }
 }
 ```
 
@@ -278,7 +301,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 ```bash
 npm install
 npm run build        # TypeScript -> dist/
-npm test             # Unit tests (106 tests)
+npm test             # Unit tests (136 tests)
 npm run test:smoke   # Smoke test
 
 # Test in pi
