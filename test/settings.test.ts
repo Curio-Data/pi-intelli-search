@@ -1,6 +1,9 @@
 // test/settings.test.ts — Unit tests for settings loading
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { resolveModelConfig, loadSettings, invalidateSettingsCache } from "../src/settings.js";
 import type { ResearchSettings } from "../src/types.js";
 
@@ -92,16 +95,209 @@ describe("settings caching", () => {
   });
 });
 
-describe("hasFlatKeys", () => {
-  it("is an async function returning boolean", async () => {
-    const { hasFlatKeys } = await import("../src/settings.js");
-    const result = await hasFlatKeys("/nonexistent");
-    assert.strictEqual(typeof result, "boolean");
+describe("loadSettings nested namespace", () => {
+  // Tests that loadSettings reads from PI_CODING_AGENT_DIR and
+  // correctly parses both nested pi-intelli-search and flat intelli* keys.
+
+  function tempAgentDir(): string {
+    return mkdtempSync(join(tmpdir(), "pi-intelli-settings-agent-"));
+  }
+
+  function writeAgentSettings(agentDir: string, content: Record<string, unknown>): void {
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, "settings.json"), JSON.stringify(content));
+  }
+
+  it("reads extract model from nested pi-intelli-search namespace", async () => {
+    const dir = tempAgentDir();
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+
+    try {
+      writeAgentSettings(dir, {
+        "pi-intelli-search": {
+          extractModel: { provider: "openai", model: "gpt-4" },
+        },
+      });
+
+      invalidateSettingsCache();
+      const settings = await loadSettings("/nonexistent");
+      assert.deepStrictEqual(settings.extractModel, {
+        provider: "openai",
+        model: "gpt-4",
+      });
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
   });
 
-  it("returns false when no settings files exist", async () => {
+  it("nested namespace takes precedence over flat keys", async () => {
+    const dir = tempAgentDir();
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+
+    try {
+      writeAgentSettings(dir, {
+        "pi-intelli-search": {
+          maxUrls: 12,
+        },
+        intelliMaxUrls: 4,
+      });
+
+      invalidateSettingsCache();
+      const settings = await loadSettings("/nonexistent");
+      assert.strictEqual(settings.maxUrls, 12, "nested should win");
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("falls back to flat intelli* keys when no namespace present", async () => {
+    const dir = tempAgentDir();
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+
+    try {
+      writeAgentSettings(dir, {
+        intelliCacheDir: "my-cache",
+      });
+
+      invalidateSettingsCache();
+      const settings = await loadSettings("/nonexistent");
+      assert.strictEqual(settings.cacheDir, "my-cache", "flat key should work as fallback");
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("reads all model configs from nested namespace", async () => {
+    const dir = tempAgentDir();
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+
+    try {
+      writeAgentSettings(dir, {
+        "pi-intelli-search": {
+          searchModel: { provider: "openrouter", model: "perplexity/sonar-pro" },
+          extractModel: { provider: "openai", model: "gpt-4o-mini" },
+          collateModel: { provider: "openai", model: "gpt-4o-mini" },
+        },
+      });
+
+      invalidateSettingsCache();
+      const settings = await loadSettings("/nonexistent");
+      assert.deepStrictEqual(settings.searchModel, {
+        provider: "openrouter",
+        model: "perplexity/sonar-pro",
+      });
+      assert.deepStrictEqual(settings.extractModel, {
+        provider: "openai",
+        model: "gpt-4o-mini",
+      });
+      assert.deepStrictEqual(settings.collateModel, {
+        provider: "openai",
+        model: "gpt-4o-mini",
+      });
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("reads numeric settings from nested namespace", async () => {
+    const dir = tempAgentDir();
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+
+    try {
+      writeAgentSettings(dir, {
+        "pi-intelli-search": {
+          maxUrls: 3,
+          fetchTimeoutMs: 30000,
+          fetchConcurrency: 2,
+          extractionMaxTokens: 8000,
+          collationMaxTokens: 16000,
+        },
+      });
+
+      invalidateSettingsCache();
+      const settings = await loadSettings("/nonexistent");
+      assert.strictEqual(settings.maxUrls, 3);
+      assert.strictEqual(settings.fetchTimeoutMs, 30000);
+      assert.strictEqual(settings.fetchConcurrency, 2);
+      assert.strictEqual(settings.extractionMaxTokens, 8000);
+      assert.strictEqual(settings.collationMaxTokens, 16000);
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+});
+
+describe("hasFlatKeys", () => {
+  function tempCwd(): string {
+    return mkdtempSync(join(tmpdir(), "pi-intelli-settings-"));
+  }
+
+  function writeSettings(cwd: string, content: Record<string, unknown>): void {
+    const piDir = join(cwd, ".pi");
+    mkdirSync(piDir, { recursive: true });
+    writeFileSync(join(piDir, "settings.json"), JSON.stringify(content));
+  }
+
+  it("returns true when settings.json has intelli-prefixed keys", async () => {
+    const cwd = tempCwd();
+    writeSettings(cwd, { intelliExtractModel: { provider: "openrouter", model: "test" } });
     const { hasFlatKeys } = await import("../src/settings.js");
-    const result = await hasFlatKeys("/nonexistent");
-    assert.strictEqual(result, false);
+    const result = await hasFlatKeys(cwd);
+    assert.strictEqual(result, true, "should detect flat intelli* keys");
+  });
+
+  it("returns true when settings.json has intelliSearchModel", async () => {
+    const cwd = tempCwd();
+    writeSettings(cwd, { intelliSearchModel: { provider: "openrouter", model: "test" } });
+    const { hasFlatKeys } = await import("../src/settings.js");
+    const result = await hasFlatKeys(cwd);
+    assert.strictEqual(result, true, "should detect intelliSearchModel");
+  });
+
+  it("returns false when settings.json uses nested pi-intelli-search namespace only", async () => {
+    const cwd = tempCwd();
+    writeSettings(cwd, {
+      "pi-intelli-search": { extractModel: { provider: "openrouter", model: "test" } },
+    });
+    const { hasFlatKeys } = await import("../src/settings.js");
+    const result = await hasFlatKeys(cwd);
+    assert.strictEqual(result, false, "nested namespace should not trigger flat key detection");
+  });
+
+  it("returns true when both nested namespace and flat keys are present", async () => {
+    const cwd = tempCwd();
+    writeSettings(cwd, {
+      "pi-intelli-search": { extractModel: { provider: "openrouter", model: "test" } },
+      intelliMaxUrls: 12,
+    });
+    const { hasFlatKeys } = await import("../src/settings.js");
+    const result = await hasFlatKeys(cwd);
+    assert.strictEqual(result, true, "flat keys present alongside namespace should be detected");
+  });
+
+  it("returns false when no settings.json exists", async () => {
+    const cwd = tempCwd();
+    // No .pi/settings.json written
+    const { hasFlatKeys } = await import("../src/settings.js");
+    const result = await hasFlatKeys(cwd);
+    assert.strictEqual(result, false, "no settings file means no flat keys");
+  });
+
+  it("returns false when settings.json has no intelli keys", async () => {
+    const cwd = tempCwd();
+    writeSettings(cwd, { theme: "dark", model: "gpt-4" });
+    const { hasFlatKeys } = await import("../src/settings.js");
+    const result = await hasFlatKeys(cwd);
+    assert.strictEqual(result, false, "non-intelli keys should not trigger detection");
   });
 });

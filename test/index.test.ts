@@ -1,6 +1,9 @@
 // test/index.test.ts — Unit tests for extension entry point
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 describe("extension module structure", () => {
   it("exports a default function", async () => {
@@ -165,42 +168,102 @@ describe("after_provider_response handler", () => {
 });
 
 describe("auth pre-flight check", () => {
-  it("detects missing OpenRouter key when env var is unset", async () => {
-    // Ensure OPENROUTER_API_KEY is not set for this test
-    const saved = process.env.OPENROUTER_API_KEY;
+  // Use temp directories with PI_CODING_AGENT_DIR for deterministic
+  // filesystem control. Each test creates an isolated agent dir,
+  // writes specific auth.json contents, and asserts exact behavior.
+
+  function tempAgentDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), "pi-intelli-test-"));
+    // Write empty models.json so ensureCustomModels doesn't fail
+    writeFileSync(join(dir, "models.json"), "{}");
+    return dir;
+  }
+
+  function writeAuthJson(agentDir: string, content: Record<string, unknown>): void {
+    writeFileSync(join(agentDir, "auth.json"), JSON.stringify(content));
+  }
+
+  it("returns true when no auth.json exists and no env var is set", async () => {
+    const savedKey = process.env.OPENROUTER_API_KEY;
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
     delete process.env.OPENROUTER_API_KEY;
 
     try {
+      process.env.PI_CODING_AGENT_DIR = tempAgentDir();
+      // No auth.json written — auth should be missing
       const { isOpenRouterAuthMissing } = await import("../src/index.js");
       const result = await isOpenRouterAuthMissing();
-      // Result depends on whether ~/.pi/agent/auth.json exists and has
-      // an openrouter entry. We can only assert it's a boolean.
-      assert.strictEqual(typeof result, "boolean");
+      assert.strictEqual(result, true, "should report auth missing with no auth.json");
     } finally {
-      if (saved !== undefined) process.env.OPENROUTER_API_KEY = saved;
+      if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
     }
   });
 
-  it("detects present OpenRouter key via env var", async () => {
-    const saved = process.env.OPENROUTER_API_KEY;
-    process.env.OPENROUTER_API_KEY = "sk-or-v1-test";
+  it("returns false when auth.json has an openrouter key", async () => {
+    const savedKey = process.env.OPENROUTER_API_KEY;
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    delete process.env.OPENROUTER_API_KEY;
+
+    try {
+      const dir = tempAgentDir();
+      writeAuthJson(dir, { openrouter: { type: "api_key", key: "sk-or-v1-test" } });
+      process.env.PI_CODING_AGENT_DIR = dir;
+
+      const { isOpenRouterAuthMissing } = await import("../src/index.js");
+      const result = await isOpenRouterAuthMissing();
+      assert.strictEqual(result, false, "should find auth via auth.json openrouter key");
+    } finally {
+      if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("returns true when auth.json exists but has no openrouter key", async () => {
+    const savedKey = process.env.OPENROUTER_API_KEY;
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    delete process.env.OPENROUTER_API_KEY;
+
+    try {
+      const dir = tempAgentDir();
+      writeAuthJson(dir, { anthropic: { type: "api_key", key: "sk-ant-test" } });
+      process.env.PI_CODING_AGENT_DIR = dir;
+
+      const { isOpenRouterAuthMissing } = await import("../src/index.js");
+      const result = await isOpenRouterAuthMissing();
+      assert.strictEqual(result, true, "should report auth missing when openrouter key absent");
+    } finally {
+      if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("returns false when OPENROUTER_API_KEY env var is set (fast path)", async () => {
+    const savedKey = process.env.OPENROUTER_API_KEY;
+    process.env.OPENROUTER_API_KEY = "sk-or-v1-from-env";
 
     try {
       const { isOpenRouterAuthMissing } = await import("../src/index.js");
       const result = await isOpenRouterAuthMissing();
-      assert.strictEqual(result, false, "should find auth via env var");
+      assert.strictEqual(result, false, "env var should short-circuit to auth present");
     } finally {
-      if (saved !== undefined) process.env.OPENROUTER_API_KEY = saved;
+      if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
       else delete process.env.OPENROUTER_API_KEY;
     }
   });
 
-  it("session_start shows warning when auth is missing", async () => {
-    // Simulate missing auth by removing the env var
+  it("session_start fires warning notification when auth is missing", async () => {
     const savedKey = process.env.OPENROUTER_API_KEY;
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
     delete process.env.OPENROUTER_API_KEY;
 
-    const notifications: string[] = [];
+    const notifications: Array<{ msg: string; type: string }> = [];
     let sessionStartHandler: Function | undefined;
 
     const mockPi = {
@@ -210,13 +273,10 @@ describe("auth pre-flight check", () => {
       },
     };
 
-    const mod = await import("../src/index.js");
-    mod.default(mockPi);
-
     const mockCtx = {
       ui: {
-        notify(msg: string, _type: string) {
-          notifications.push(msg);
+        notify(msg: string, type: string) {
+          notifications.push({ msg, type });
         },
         setStatus() {},
       },
@@ -226,15 +286,203 @@ describe("auth pre-flight check", () => {
     };
 
     try {
+      process.env.PI_CODING_AGENT_DIR = tempAgentDir();
+      // No auth.json written — OpenRouter auth is missing
+
+      const mod = await import("../src/index.js");
+      mod.default(mockPi);
+
       assert.ok(sessionStartHandler, "session_start handler should be registered");
       await sessionStartHandler!({}, mockCtx);
 
-      // The notification may or may not fire depending on whether
-      // ~/.pi/agent/auth.json exists with an openrouter key.
-      // Just verify the handler ran without error.
-      assert.ok(true, "session_start handler completed without error");
+      const authWarnings = notifications.filter(
+        (n) => n.type === "warning" && n.msg.includes("No OpenRouter API key"),
+      );
+      assert.strictEqual(authWarnings.length, 1, "should fire one auth warning notification");
     } finally {
       if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("session_start does NOT fire auth warning when key is present", async () => {
+    const savedKey = process.env.OPENROUTER_API_KEY;
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    delete process.env.OPENROUTER_API_KEY;
+
+    const notifications: Array<{ msg: string; type: string }> = [];
+    let sessionStartHandler: Function | undefined;
+
+    const mockPi = {
+      registerTool() {},
+      on(event: string, h: Function) {
+        if (event === "session_start") sessionStartHandler = h;
+      },
+    };
+
+    const mockCtx = {
+      ui: {
+        notify(msg: string, type: string) {
+          notifications.push({ msg, type });
+        },
+        setStatus() {},
+      },
+      modelRegistry: {
+        refresh() {},
+      },
+    };
+
+    try {
+      const dir = tempAgentDir();
+      writeAuthJson(dir, { openrouter: { type: "api_key", key: "sk-or-v1-test" } });
+      process.env.PI_CODING_AGENT_DIR = dir;
+
+      const mod = await import("../src/index.js");
+      mod.default(mockPi);
+
+      assert.ok(sessionStartHandler, "session_start handler should be registered");
+      await sessionStartHandler!({}, mockCtx);
+
+      const authWarnings = notifications.filter(
+        (n) => n.type === "warning" && n.msg.includes("No OpenRouter API key"),
+      );
+      assert.strictEqual(authWarnings.length, 0, "should NOT fire auth warning when key present");
+    } finally {
+      if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("session_start fires deprecation notice when flat keys exist and version changed", async () => {
+    // Scenario: upgrading user with flat intelli* keys in settings
+    const savedKey = process.env.OPENROUTER_API_KEY;
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    const savedCwd = process.cwd();
+    delete process.env.OPENROUTER_API_KEY;
+
+    const notifications: Array<{ msg: string; type: string }> = [];
+    let sessionStartHandler: Function | undefined;
+
+    const mockPi = {
+      registerTool() {},
+      on(event: string, h: Function) {
+        if (event === "session_start") sessionStartHandler = h;
+      },
+    };
+
+    const mockCtx = {
+      ui: {
+        notify(msg: string, type: string) {
+          notifications.push({ msg, type });
+        },
+        setStatus() {},
+      },
+      modelRegistry: {
+        refresh() {},
+      },
+    };
+
+    try {
+      // Agent dir has auth so the auth warning doesn't fire
+      const agentDir = tempAgentDir();
+      writeAuthJson(agentDir, { openrouter: { type: "api_key", key: "sk-or-v1-test" } });
+      process.env.PI_CODING_AGENT_DIR = agentDir;
+
+      // CWD simulates a project with a previous version and flat keys
+      const cwd = mkdtempSync(join(tmpdir(), "pi-intelli-deprecation-"));
+      // Previous version marker (older than CURRENT_VERSION)
+      mkdirSync(join(cwd, ".search"), { recursive: true });
+      writeFileSync(
+        join(cwd, ".search", ".version.json"),
+        JSON.stringify({ version: "0.6.0" }),
+      );
+      // Flat intelli* keys in project settings
+      const piDir = join(cwd, ".pi");
+      mkdirSync(piDir, { recursive: true });
+      writeFileSync(
+        join(piDir, "settings.json"),
+        JSON.stringify({ intelliMaxUrls: 12 }),
+      );
+
+      process.chdir(cwd);
+
+      const mod = await import("../src/index.js");
+      mod.default(mockPi);
+
+      assert.ok(sessionStartHandler, "session_start handler should be registered");
+      await sessionStartHandler!({}, mockCtx);
+
+      const deprecationNotices = notifications.filter(
+        (n) => n.type === "warning" && n.msg.includes("Flat 'intelli*' settings keys are deprecated"),
+      );
+      assert.strictEqual(deprecationNotices.length, 1, "should fire deprecation notice on upgrade with flat keys");
+    } finally {
+      process.chdir(savedCwd);
+      if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("session_start does NOT fire deprecation notice on fresh install", async () => {
+    // Scenario: first-time user, no .search/.version.json exists
+    const savedKey = process.env.OPENROUTER_API_KEY;
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    const savedCwd = process.cwd();
+    delete process.env.OPENROUTER_API_KEY;
+
+    const notifications: Array<{ msg: string; type: string }> = [];
+    let sessionStartHandler: Function | undefined;
+
+    const mockPi = {
+      registerTool() {},
+      on(event: string, h: Function) {
+        if (event === "session_start") sessionStartHandler = h;
+      },
+    };
+
+    const mockCtx = {
+      ui: {
+        notify(msg: string, type: string) {
+          notifications.push({ msg, type });
+        },
+        setStatus() {},
+      },
+      modelRegistry: {
+        refresh() {},
+      },
+    };
+
+    try {
+      const agentDir = tempAgentDir();
+      writeAuthJson(agentDir, { openrouter: { type: "api_key", key: "sk-or-v1-test" } });
+      process.env.PI_CODING_AGENT_DIR = agentDir;
+
+      // Fresh cwd — no .search/.version.json, no .pi/settings.json
+      const cwd = mkdtempSync(join(tmpdir(), "pi-intelli-fresh-"));
+      process.chdir(cwd);
+
+      const mod = await import("../src/index.js");
+      mod.default(mockPi);
+
+      assert.ok(sessionStartHandler, "session_start handler should be registered");
+      await sessionStartHandler!({}, mockCtx);
+
+      const deprecationNotices = notifications.filter(
+        (n) => n.type === "warning" && n.msg.includes("Flat 'intelli*' settings keys are deprecated"),
+      );
+      assert.strictEqual(deprecationNotices.length, 0, "no deprecation notice on fresh install");
+    } finally {
+      process.chdir(savedCwd);
+      if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
     }
   });
 });
