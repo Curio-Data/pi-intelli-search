@@ -85,6 +85,41 @@ On first load, Pi will show: `Added models: perplexity/sonar, perplexity/sonar-p
 
 Start Pi and type `/model`. You should see `perplexity/sonar` and `perplexity/sonar-pro` in the model list. If not, restart Pi.
 
+### Customise (Optional)
+
+No configuration is needed to get started. The defaults use OpenRouter for all stages. If you want to change models, add a `pi-intelli-search` block to `~/.pi/agent/settings.json` or `.pi/settings.json`:
+
+**Defaults (what you get without any config):**
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "searchModel":  { "provider": "openrouter", "model": "perplexity/sonar" },
+    "extractModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
+    "collateModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" }
+  }
+}
+```
+
+**Customised example (different provider for extract and collate, tuned pipeline):**
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "searchModel":  { "provider": "openrouter", "model": "perplexity/sonar" },
+    "extractModel": { "provider": "openai",     "model": "gpt-4o-mini" },
+    "collateModel": { "provider": "openai",     "model": "gpt-4o-mini" },
+
+    "maxUrls": 6,
+    "cacheDir": ".my-research-cache",
+    "fetchConcurrency": 2,
+    "extractionMaxTokens": 8000
+  }
+}
+```
+
+See [Model Configuration](#model-configuration) for all options and [Settings](#settings) for the full reference.
+
 ## Tools
 
 | Tool               | Description                                                                                         |
