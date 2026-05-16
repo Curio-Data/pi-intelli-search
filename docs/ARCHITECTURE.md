@@ -30,7 +30,7 @@ For sites that provide `llms-full.txt` ([Cloudflare](https://developers.cloudfla
 
 All three pipeline stages (search, extract, collate) use independently configurable models. The defaults are:
 
-- **Extract and Collate:** MiniMax M2.7 direct (not via [OpenRouter](https://openrouter.ai)). MiniMax M2.7 is a reasoning model. When called via OpenRouter's OpenAI-compatible endpoint, `complete()` does not send the required reasoning parameters, causing a `400 Reasoning is mandatory` error. The extension uses `completeSimple()` with `reasoning: "low"` through the native `minimax` provider, which handles reasoning parameters correctly. Override with `intelliExtractModel` or `intelliCollateModel` in settings to use any model `Pi` supports.
+- **Extract and Collate:** MiniMax M2.7 via [OpenRouter](https://openrouter.ai). MiniMax M2.7 is a reasoning model and requires a `reasoning` parameter. The extension uses `completeSimple()` with `reasoning: "low"`, which sends the required parameter through OpenRouter's endpoint. Override with `intelliExtractModel` or `intelliCollateModel` in settings to use any model `Pi` supports.
 - **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai). _Sonar_ returns a synthesised answer with inline citations. This is better than a bare URL list because the agent gets immediate context plus source URLs for follow-up. Override with `intelliSearchModel` in settings.
 
 ### Custom Model Registration
@@ -39,7 +39,7 @@ All three pipeline stages (search, extract, collate) use independently configura
 
 ### Rate-Limit Monitoring
 
-The extension monitors `after_provider_response` events to detect HTTP 429 (rate-limiting) and 5xx (server errors) from [OpenRouter](https://openrouter.ai) and [MiniMax](https://minimax.io). Rate-limit status appears in the `Pi` footer via `ctx.ui.setStatus()`, debounced to avoid flooding. The `callLlm()` helper also uses an `onResponse` callback to throw immediately on 429 or 5xx before the response stream is consumed, providing actionable retry guidance.
+The extension monitors `after_provider_response` events to detect HTTP 429 (rate-limiting) and 5xx (server errors) from [OpenRouter](https://openrouter.ai). Rate-limit status appears in the `Pi` footer via `ctx.ui.setStatus()`, debounced to avoid flooding. The `callLlm()` helper also uses an `onResponse` callback to throw immediately on 429 or 5xx before the response stream is consumed, providing actionable retry guidance.
 
 ### Working Indicator
 

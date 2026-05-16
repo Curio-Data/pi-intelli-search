@@ -119,8 +119,8 @@ All three pipeline stages use independently configurable models. Defaults are ch
 | Stage   | Default                       | Config key            |
 | ------- | ----------------------------- | --------------------- |
 | Search  | `openrouter/perplexity/sonar` | `intelliSearchModel`  |
-| Extract | `minimax/MiniMax-M2.7`        | `intelliExtractModel` |
-| Collate | `minimax/MiniMax-M2.7`        | `intelliCollateModel` |
+| Extract | `openrouter/minimax/minimax-m2.7` | `intelliExtractModel` |
+| Collate | `openrouter/minimax/minimax-m2.7` | `intelliCollateModel` |
 
 ### Why OpenRouter for _Sonar_?
 
@@ -133,7 +133,7 @@ All three pipeline stages use independently configurable models. Defaults are ch
 
 ### Swapping the Extract and Collate Model
 
-_MiniMax_ M2.7 is the default because it is cheap and effective for extraction and collation. However, you can use any model `Pi` supports. Override in `~/.pi/agent/settings.json` or `.pi/settings.json`:
+_MiniMax_ M2.7 (via OpenRouter) is the default because it is cheap and effective for extraction and collation. However, you can use any model `Pi` supports. Override in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 
 **Option A: Use a `Pi` Built-In Provider** (auth via `/login`):
 
@@ -178,21 +178,19 @@ For extraction and collation, the ideal model has:
 - **Good instruction following:** Must adhere to extraction prompts precisely.
 - **Sufficient context:** Cleaned pages can be ≈50K chars (truncated to `extractMaxChars`).
 
-Models known to work well for extraction and collation: _MiniMax_ M2.7 (default), _Qwen_ 3.5-Flash (≈1M context, ≈$0.26/M output), _DeepSeek_ V4 Flash (≈1M context, ≈$0.28/M output), _Gemini_ 2.0 Flash Lite (≈1M context, ≈$0.30/M output), _GPT-4.1_ Nano (≈1M context, ≈$0.40/M output).
+Models known to work well for extraction and collation: _MiniMax_ M2.7 (default, via OpenRouter), _Qwen_ 3.5-Flash (≈1M context, ≈$0.26/M output), _DeepSeek_ V4 Flash (≈1M context, ≈$0.28/M output), _Gemini_ 2.0 Flash Lite (≈1M context, ≈$0.30/M output), _GPT-4.1_ Nano (≈1M context, ≈$0.40/M output).
 
 ### Required API Keys
 
-With default settings, you need two keys in `~/.pi/agent/auth.json`:
+With default settings, you need one key in `~/.pi/agent/auth.json`:
 
 ```json
 {
-  "openrouter": { "type": "api_key", "key": "sk-or-v1-..." },
-  "minimax": { "type": "api_key", "key": "sk-api-..." }
+  "openrouter": { "type": "api_key", "key": "sk-or-v1-..." }
 }
 ```
 
-- **OpenRouter:** Used by `intelli_search` ([Perplexity Sonar](https://docs.perplexity.ai)) and available as an extract or collate alternative.
-- **_MiniMax_:** Used by `intelli_extract` and `intelli_collate` (MiniMax M2.7). **Only needed if you keep the defaults.** Override `intelliExtractModel` or `intelliCollateModel` to use a different provider.
+A single [OpenRouter](https://openrouter.ai) key covers all three pipeline stages: Sonar for search, MiniMax M2.7 for extraction and collation. Override `intelliExtractModel` or `intelliCollateModel` to use a different model or provider.
 
 Run `/login` in `Pi` to set up keys interactively, or edit the file directly.
 
@@ -218,11 +216,11 @@ Per research session with the default 8 pages: **≈$0.05**
 | ------------------------------ | ---------------- | -------- |
 | Search (_Sonar_)               | 1                | ≈$0.02   |
 | Fetch (Defuddle + Markdown)    | 8 parallel pairs | $0.00    |
-| Extract (_MiniMax_ M2.7)       | 8 parallel       | ≈$0.03   |
-| Collate (_MiniMax_ M2.7)       | 1                | ≈$0.005  |
-| Cache suggest (_MiniMax_ M2.7) | 1                | ≈$0.0002 |
+| Extract (M2.7 via OpenRouter)       | 8 parallel       | ≈$0.03   |
+| Collate (M2.7 via OpenRouter)       | 1                | ≈$0.005  |
+| Cache suggest (M2.7 via OpenRouter) | 1                | ≈$0.0002 |
 
-Costs scale with your chosen extract or collate model. _MiniMax_ M2.7 is the default specifically for its low relative cost.
+Costs scale with your chosen extract or collate model. _MiniMax_ M2.7 (via OpenRouter) is the default specifically for its low relative cost.
 
 ## Settings
 
@@ -235,8 +233,8 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
     "provider": "openrouter",
     "model": "perplexity/sonar",
   },
-  "intelliExtractModel": { "provider": "minimax", "model": "MiniMax-M2.7" },
-  "intelliCollateModel": { "provider": "minimax", "model": "MiniMax-M2.7" },
+  "intelliExtractModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
+  "intelliCollateModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
 
   // Pipeline tuning
   "intelliMaxUrls": 8,

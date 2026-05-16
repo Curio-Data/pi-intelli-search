@@ -6,8 +6,8 @@ import type { ResearchSettings } from "../src/types.js";
 
 const baseSettings: ResearchSettings = {
   searchModel: { provider: "openrouter", model: "perplexity/sonar" },
-  extractModel: { provider: "minimax", model: "MiniMax-M2.7" },
-  collateModel: { provider: "minimax", model: "MiniMax-M2.7" },
+  extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+  collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
   maxUrls: 8,
   cacheDir: ".search",
   extractMaxChars: 150_000,
@@ -27,12 +27,12 @@ describe("resolveModelConfig", () => {
 
   it("returns extract model for 'extract' role", () => {
     const result = resolveModelConfig(baseSettings, "extract");
-    assert.deepStrictEqual(result, { provider: "minimax", model: "MiniMax-M2.7" });
+    assert.deepStrictEqual(result, { provider: "openrouter", model: "minimax/minimax-m2.7" });
   });
 
   it("returns collate model for 'collate' role", () => {
     const result = resolveModelConfig(baseSettings, "collate");
-    assert.deepStrictEqual(result, { provider: "minimax", model: "MiniMax-M2.7" });
+    assert.deepStrictEqual(result, { provider: "openrouter", model: "minimax/minimax-m2.7" });
   });
 
   it("returns different models when configured differently", () => {
@@ -49,10 +49,10 @@ describe("resolveModelConfig", () => {
       provider: "openai",
       model: "gpt-4o-mini",
     });
-    // Collate unchanged
+    // Collate unchanged (still uses baseSettings default)
     assert.deepStrictEqual(resolveModelConfig(custom, "collate"), {
-      provider: "minimax",
-      model: "MiniMax-M2.7",
+      provider: "openrouter",
+      model: "minimax/minimax-m2.7",
     });
   });
 });
@@ -89,5 +89,19 @@ describe("settings caching", () => {
     invalidateSettingsCache();
     const second = await loadSettings("/nonexistent");
     assert.notStrictEqual(first, second, "Should return a new object after invalidation");
+  });
+});
+
+describe("hasFlatKeys", () => {
+  it("is an async function returning boolean", async () => {
+    const { hasFlatKeys } = await import("../src/settings.js");
+    const result = await hasFlatKeys("/nonexistent");
+    assert.strictEqual(typeof result, "boolean");
+  });
+
+  it("returns false when no settings files exist", async () => {
+    const { hasFlatKeys } = await import("../src/settings.js");
+    const result = await hasFlatKeys("/nonexistent");
+    assert.strictEqual(result, false);
   });
 });

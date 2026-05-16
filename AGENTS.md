@@ -264,8 +264,7 @@ pi install /path/to/pi-intelli-search   # Install as package
 ## Required API Keys
 
 In `~/.pi/agent/auth.json`:
-- **OpenRouter** (`openrouter`): Used by `intelli_search` ([Perplexity Sonar](https://docs.perplexity.ai)).
-- **MiniMax** (`minimax`): Used by `intelli_extract` and `intelli_collate` (MiniMax M2.7). **Only needed with default settings.** Override `intelliExtractModel` or `intelliCollateModel` to use a different provider.
+- **OpenRouter** (`openrouter`): A single key covers all three pipeline stages (search, extract, collate).
 
 All three model roles (search, extract, collate) are configurable via `~/.pi/agent/settings.json`. Any model in `Pi`'s registry works. This includes built-in providers, [OpenRouter](https://openrouter.ai) models, or models from other extensions. See README "Model Configuration" section for details.
 
