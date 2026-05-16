@@ -48,7 +48,7 @@
     "src/",
     "skills/",
     "dist/",
-    "docs/CHANGELOG.md",
+    "CHANGELOG.md",
     "NOTICE",
     "LICENSE",
     "README.md"
