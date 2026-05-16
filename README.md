@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
-[![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.69.0-blueviolet)](https://github.com/mariozechner/pi)
+[![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.74.0-blueviolet)](https://github.com/mariozechner/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
 ![tests](https://img.shields.io/badge/tests-136%20passing-brightgreen)
 
@@ -46,7 +46,7 @@ For the detailed feature-by-feature comparison against six other `Pi` search ext
 
 ### Prerequisites
 
-You need at minimum an [OpenRouter](https://openrouter.ai) API key for [_Perplexity Sonar_](https://docs.perplexity.ai) search. The same key also covers extraction and collation with the default models. For the extract and collate stages, any model or provider `Pi` supports can be used. Swap them in settings if you prefer.
+You need at minimum an [OpenRouter](https://openrouter.ai) API key for [_Perplexity Sonar_](https://docs.perplexity.ai) search. The same key also covers extraction and collation with the default models. For the extract and collate stages, any model or provider `Pi` supports can be used. See [Model Configuration](#model-configuration) for how to swap them.
 
 1. **Get a key** at [openrouter.ai/keys](https://openrouter.ai/keys)
 2. **Add it to Pi** by running `/login` in Pi and selecting the `openrouter` provider, or edit `~/.pi/agent/auth.json`:
@@ -59,8 +59,6 @@ You need at minimum an [OpenRouter](https://openrouter.ai) API key for [_Perplex
   }
 }
 ```
-
-No other keys are needed with default settings.
 
 ### Install the Extension
 
@@ -210,11 +208,11 @@ intelli_research(
 
 All three pipeline stages use independently configurable models. Defaults are chosen for cost-efficiency, but **any model `Pi` can access works**. This includes built-in providers, [OpenRouter](https://openrouter.ai) models, or models from other extensions.
 
-| Stage   | Default                       | Config key            |
-| ------- | ----------------------------- | --------------------- |
-| Search  | `openrouter/perplexity/sonar` | `intelliSearchModel`  |
-| Extract | `openrouter/minimax/minimax-m2.7` | `intelliExtractModel` |
-| Collate | `openrouter/minimax/minimax-m2.7` | `intelliCollateModel` |
+| Stage   | Default                       | Config key              |
+| ------- | ----------------------------- | ----------------------- |
+| Search  | `openrouter/perplexity/sonar` | `searchModel`           |
+| Extract | `openrouter/minimax/minimax-m2.7` | `extractModel`      |
+| Collate | `openrouter/minimax/minimax-m2.7` | `collateModel`      |
 
 ### Why OpenRouter for _Sonar_?
 
@@ -372,7 +370,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 }
 ```
 
-`intelliBrowserFingerprint` controls the TLS fingerprint used by [wreq-js](https://github.com/sqdshguy/wreq-js) when fetching pages (defaults to _Chrome 145_). `intelliLlmsFullSites` is a map of domain to base URL for sites that provide `llms-full.txt` files (for example, `{"developers.cloudflare.com": "https://developers.cloudflare.com"}`). These files are downloaded raw to the cache without LLM processing.
+`browserFingerprint` controls the TLS fingerprint used by [wreq-js](https://github.com/sqdshguy/wreq-js) when fetching pages (defaults to _Chrome 145_). `llmsFullSites` is a map of domain to base URL for sites that provide `llms-full.txt` files (for example, `{"developers.cloudflare.com": "https://developers.cloudflare.com"}`). These files are downloaded raw to the cache without LLM processing.
 
 ## Cache Structure
 
@@ -393,7 +391,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 
 ## Compatibility
 
-- **`Pi` >= 0.69.0:** Core functionality (_TypeBox_ 1.x, tools, model registration, settings, working indicator, `after_provider_response` monitoring).
+- **`Pi` >= 0.74.0:** Core functionality (_TypeBox_ 1.x, tools, model registration, settings, working indicator, `after_provider_response` monitoring).
 - Gracefully degrades on older versions. Optional features are skipped.
 
 ## Development
