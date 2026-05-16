@@ -5,16 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-05-16
 
 ### Changed
 
-- **Extract and collate models now default to OpenRouter:** `minimax/MiniMax-M2.7` (direct) replaced with `openrouter/minimax/minimax-m2.7`. Users no longer need a separate MiniMax API key. A single OpenRouter key covers all three pipeline stages (search, extract, collate).
-- **Settings now support nested `pi-intelli-search` namespace.** Bare keys (e.g. `extractModel`) are preferred over flat `intelli*`-prefixed keys. Both formats are supported; the nested format takes precedence when both are present. Flat `intelli*` keys are deprecated and trigger a non-blocking notification on upgrade.
+- **Extract and collate models now default to OpenRouter.** A single OpenRouter key covers all three pipeline stages. The separate MiniMax API key is no longer needed. Users upgrading from 0.7.0 whose model config matches the old default are auto-migrated with a notification.
+- **Settings now use a nested `pi-intelli-search` namespace.** Bare keys (e.g. `extractModel`) are preferred over flat `intelli*`-prefixed keys. Both formats still work; flat keys are deprecated and show a notification on upgrade.
 
 ### Added
 
-- **Version tracking:** `.search/.version.json` is written on `session_start`. On upgrade, flat-key users receive a deprecation notice asking them to migrate to the nested format.
+- **Auth warning on startup.** If no OpenRouter key is configured, a notification appears immediately rather than waiting for the first tool call to fail.
+- **Model validation before pipeline runs.** Typos in model names (e.g. `minimax/M3.7`) are caught before any API cost is incurred.
+
+### Fixed
+
+- **Settings from both locations are now read correctly.** Project-local `.pi/settings.json` takes precedence over global `~/.pi/agent/settings.json`, with proper deep-merge.
+- **Version tracking survives directory changes.** Previously the version file was project-relative and could be missed when running Pi from different directories.
 
 ## [0.7.0] - 2026-05-14
 
@@ -168,6 +174,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.8.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.8.0
 [0.7.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.6.0
 [0.5.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.5.1
