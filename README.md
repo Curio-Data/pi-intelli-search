@@ -96,12 +96,22 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
   "pi-intelli-search": {
     "searchModel":  { "provider": "openrouter", "model": "perplexity/sonar" },
     "extractModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
-    "collateModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" }
+    "collateModel": { "provider": "openrouter", "model": "minimax/minimax-m2.7" },
+
+    "maxUrls": 8,
+    "cacheDir": ".search",
+    "extractMaxChars": 150000,
+    "extractionMaxTokens": 3000,
+    "collationMaxTokens": 4000,
+    "fetchTimeoutMs": 20000,
+    "fetchConcurrency": 4,
+    "browserFingerprint": "chrome_145",
+    "llmsFullSites": {}
   }
 }
 ```
 
-**Customised example (different provider for extract and collate, tuned pipeline):**
+**Customised example (different provider, tuned pipeline):**
 
 ```jsonc
 {
@@ -112,8 +122,13 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
 
     "maxUrls": 6,
     "cacheDir": ".my-research-cache",
+    "extractMaxChars": 80000,
+    "extractionMaxTokens": 8000,
+    "collationMaxTokens": 16000,
+    "fetchTimeoutMs": 30000,
     "fetchConcurrency": 2,
-    "extractionMaxTokens": 8000
+    "browserFingerprint": "chrome_145",
+    "llmsFullSites": { "developers.cloudflare.com": "https://developers.cloudflare.com" }
   }
 }
 ```
