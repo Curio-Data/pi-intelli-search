@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Extract and collate models now default to OpenRouter.** A single OpenRouter key covers all three pipeline stages. The separate MiniMax API key is no longer needed. Users upgrading from 0.7.0 whose model config matches the old default are auto-migrated with a notification.
-- **Settings now use a nested `pi-intelli-search` namespace.** Bare keys (e.g. `extractModel`) are preferred over flat `intelli*`-prefixed keys. Both formats still work; flat keys are deprecated and show a notification on upgrade.
+- **Settings now use a nested `pi-intelli-search` namespace.** Bare keys (e.g. `extractModel`) are preferred over flat `intelli*`-prefixed keys. Both formats still work; flat keys are deprecated and show a notification on every session start.
 
 ### Added
 
@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Settings from both locations are now read correctly.** Project-local `.pi/settings.json` takes precedence over global `~/.pi/agent/settings.json` (project overrides global).
 - **Version tracking survives directory changes.** Previously the version file was project-relative and could be missed when running `Pi` from different directories.
+- **Settings cache now correctly invalidated after default migration.** On first upgrade, tools previously read unmigrated defaults from a stale cache (the migration notification fired, but the pipeline itself used the old models). The cache is now rebuilt after migration so the pipeline immediately uses the new defaults.
+- **Rate-limit monitoring no longer goes dark after session replacement.** The `sessionActive` flag was never reset on `session_start`, so rate-limit status in the footer stopped updating after `/new` or `/fork`.
+- **Version marker written after migration completes.** Previously the version file was persisted before migration ran. If migration failed mid-session, the user was permanently stranded on stale defaults with no recovery path.
+- **Auth check tightened.** An empty `openrouter: {}` in `auth.json` no longer suppresses the missing-key warning.
 
 ## [0.7.0] - 2026-05-14
 
