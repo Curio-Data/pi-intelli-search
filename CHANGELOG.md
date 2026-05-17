@@ -20,8 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Settings from both locations are now read correctly.** Project-local `.pi/settings.json` takes precedence over global `~/.pi/agent/settings.json`, with proper deep-merge.
-- **Version tracking survives directory changes.** Previously the version file was project-relative and could be missed when running Pi from different directories.
+- **Settings from both locations are now read correctly.** Project-local `.pi/settings.json` takes precedence over global `~/.pi/agent/settings.json` (project overrides global).
+- **Version tracking survives directory changes.** Previously the version file was project-relative and could be missed when running `Pi` from different directories.
 
 ## [0.7.0] - 2026-05-14
 

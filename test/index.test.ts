@@ -561,6 +561,14 @@ describe("auth pre-flight check", () => {
         migrationNotices[0].msg.includes("collate: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m2.7"),
         "should list collate migration",
       );
+
+      // Verify the pipeline actually runs on migrated settings (C1 regression guard).
+      const { loadSettings } = await import("../src/settings.js");
+      const post = await loadSettings(cwd);
+      assert.strictEqual(post.extractModel.provider, "openrouter", "extract model should be migrated");
+      assert.strictEqual(post.collateModel.provider, "openrouter", "collate model should be migrated");
+      assert.strictEqual(post.extractModel.model, "minimax/minimax-m2.7");
+      assert.strictEqual(post.collateModel.model, "minimax/minimax-m2.7");
     } finally {
       process.chdir(savedCwd);
       if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;

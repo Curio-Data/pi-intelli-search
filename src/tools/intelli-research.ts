@@ -120,7 +120,7 @@ export const intelliResearchTool = {
     onUpdate?.(progressUpdate(`Fetching ${urls.length} pages...`, 0.2));
     const pages = await fetchPages(urls.map((u) => u.url), signal, {
       timeoutMs: settings.fetchTimeoutMs,
-      browser: settings.browserFingerprint as any,
+      browser: settings.browserFingerprint as unknown as import("wreq-js").BrowserProfile,
       concurrency: settings.fetchConcurrency,
     });
     const successPages = pages.filter((p) => p.status === "success");
@@ -228,9 +228,10 @@ export const intelliResearchTool = {
         const matches = parseJudgeResponse(judgeResponse, index, currentSlug);
         suggestionsAppendix = formatCacheSuggestions(matches, settings.cacheDir);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Cache suggest is purely additive — never fail the pipeline
-      console.error(`[pi-intelli-search] Cache suggest failed: ${err?.message ?? err}`);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[pi-intelli-search] Cache suggest failed: ${message}`);
     }
 
     // ═══════════════════════════════════════════
@@ -318,9 +319,10 @@ async function extractPage(
       currentness: inferCurrentness(firstLine),
       status: "success",
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Log extraction error but don't fail the whole pipeline
-    console.error(`[pi-intelli-search] Extraction failed for ${page.url}: ${err?.message ?? err}`);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[pi-intelli-search] Extraction failed for ${page.url}: ${message}`);
     return {
       url: page.url,
       title: page.title,

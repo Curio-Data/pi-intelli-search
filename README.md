@@ -27,7 +27,7 @@ A `Pi` extension for deep web research. It searches via [Perplexity Sonar](https
 ## What It Adds Over Other Extensions
 
 <p align="center">
-  <img src="docs/images/06.png" alt="Pipeline comparison infographic titled &quot;PI-INTELLI-SEARCH&quot; contrasting two approaches in a vintage engraving style. The top row shows the Intelli-Search purpose-built research pipeline: seven sequential stages: Search (Perplexity Sonar, single unified key), Dual Fetch (defuddle &amp; markdown), Quality Compare (pick the best), LLM Extract Per Page (MiniMax M2.7, focused &amp; targeted), LLM Collate (MiniMax M2.7, dedupe/highlight/source, flags conflicts), Persistent Cache (expand on demand), and Cache Suggest (LLM-judged relevance, additive, feeds back). The bottom row shows generic fetch/search extensions: Search (additional keys), Single Fetch (simple, provider-dependent), Raw Page Content (unstructured, ~50K chars/page), No Cache (in-memory at best). Footer summary: &quot;Intelli-Search: deduped, cited, focused, ~$0.05/session, reusable&quot; vs. &quot;Other extensions: raw pages, must synthesise, no reuse.&quot;" width="800" />
+  <img src="docs/images/06.png" alt="Pipeline comparison infographic titled &quot;PI-INTELLI-SEARCH&quot; contrasting two approaches in a vintage engraving style. The top row shows the Intelli-Search purpose-built research pipeline: seven sequential stages: Search (Perplexity Sonar, single unified key), Dual Fetch (defuddle &amp; markdown), Quality Compare (pick the best), LLM Extract Per Page (MiniMax M2.7, focused &amp; targeted), LLM Collate (MiniMax M2.7, dedupe/highlight/source, flags conflicts), Persistent Cache (expand on demand), and Cache Suggest (LLM-judged relevance, additive, feeds back). The bottom row shows generic fetch/search extensions: Search (additional keys), Single Fetch (simple, provider-dependent), Raw Page Content (unstructured, ≈50K chars/page), No Cache (in-memory at best). Footer summary: &quot;Intelli-Search: deduped, cited, focused, ≈$0.05/session, reusable&quot; vs. &quot;Other extensions: raw pages, must synthesise, no reuse.&quot;" width="800" />
 </p>
 
 Four capabilities together separate `intelli-search` from every other extension in the `Pi` ecosystem:
@@ -49,7 +49,7 @@ For the detailed feature-by-feature comparison against six other `Pi` search ext
 You need at minimum an [OpenRouter](https://openrouter.ai) API key for [_Perplexity Sonar_](https://docs.perplexity.ai) search. The same key also covers extraction and collation with the default models. For the extract and collate stages, any model or provider `Pi` supports can be used. See [Model Configuration](#model-configuration) for how to swap them.
 
 1. **Get a key** at [openrouter.ai/keys](https://openrouter.ai/keys)
-2. **Add it to Pi** by running `/login` in Pi and selecting the `openrouter` provider, or edit `~/.pi/agent/auth.json`:
+2. **Add it to `Pi`** by running `/login` in `Pi` and selecting the `openrouter` provider, or edit `~/.pi/agent/auth.json`:
 
 ```json
 {
@@ -80,11 +80,11 @@ Local development:
 pi install /path/to/pi-intelli-search
 ```
 
-On first load, Pi will show: `Added models: perplexity/sonar, perplexity/sonar-pro`. If your OpenRouter key is missing, you will see a warning notification.
+On first load, `Pi` will show: `Added models: perplexity/sonar, perplexity/sonar-pro`. If your OpenRouter key is missing, you will see a warning notification.
 
 ### Verify Installation
 
-Start Pi and type `/model`. You should see `perplexity/sonar` and `perplexity/sonar-pro` in the model list. If not, restart Pi.
+Start `Pi` and type `/model`. You should see `perplexity/sonar` and `perplexity/sonar-pro` in the model list. If not, restart `Pi`.
 
 ### Customise (Optional)
 

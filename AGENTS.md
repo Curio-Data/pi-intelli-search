@@ -294,7 +294,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | **Structural/smoke** | Extension loads, tools register, events bind | `smoke.ts` | No |
 | **Unit (pure logic)** | Functions without filesystem or network deps | `cache.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
 | **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts` | No |
-| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `run-e2e.sh`, `run-e2e-model-override.sh` | Yes |
+| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `run-e2e.sh`, `run-e2e-migration.sh`, `run-e2e-model-override.sh` | Yes |
 | **Publish** | Validates published npm package structure | `run-e2e-publish.sh` | Yes (npm only) |
 
 ### Principle 1: Tests Must Be Deterministic
@@ -353,11 +353,12 @@ Configuration errors (model typos, missing keys) must be caught before LLM calls
 
 ### Principle 4: E2E Tests Exercise Real Config Paths
 
-E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. There are two E2E scripts:
+E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. There are three E2E scripts:
 
 | Test | What it proves |
 |---|---|
 | `run-e2e.sh` | Default pipeline (Sonar + M2.7 via OpenRouter) works end-to-end with nested settings |
+| `run-e2e-migration.sh` | Upgrade from 0.7.0 defaults auto-migrates to 0.8.0 OpenRouter defaults |
 | `run-e2e-model-override.sh` | Model override in `pi-intelli-search` settings namespace is read and used |
 
 Both write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
@@ -368,7 +369,7 @@ Both write the nested `pi-intelli-search` format in `settings.json`, matching th
 2. **Unit tests:** `npm test`
 3. **End-to-end test:** `./test/run-e2e.sh`
 
-Do not consider a change complete until all three pass. Run `./test/run-e2e-model-override.sh` before any release.
+Do not consider a change complete until all three pass. Run `./test/run-e2e-migration.sh` and `./test/run-e2e-model-override.sh` before any release.
 
 ### E2E Test Requirements
 
@@ -464,6 +465,6 @@ The workflow uses the `NPM_REPO` repository secret (`npm` access token). Ensure 
 
 ## Compatibility
 
-- **`Pi` >= 0.69.0:** Core functionality (TypeBox 1.x, working indicator, `after_provider_response` monitoring).
+- **`Pi` >= 0.74.0:** Core functionality (TypeBox 1.x, working indicator, `after_provider_response` monitoring).
 - Optional features degrade gracefully on older versions.
 .
