@@ -19,7 +19,6 @@
 set -euo pipefail
 
 VERSION="${1:-latest}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  E2E Publish Test — npm install + smoke validation  ║"

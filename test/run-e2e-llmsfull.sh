@@ -139,9 +139,10 @@ cat > "$ISO/models.json" <<'MEOF'
 {}
 MEOF
 
-# Query that should return a page from the target domain
-QUERY="site:${FOUND_HOSTNAME} documentation"
-
+# Use intelli_research with domains parameter to constrain search to the
+# discovered hostname. The domains filter is applied at the Sonar search stage
+# and keeps the result set small (maxUrls=1), so the first returned page is
+# almost certainly from the target domain.
 OUTPUT="$(
   PI_CODING_AGENT_DIR="$ISO" \
     pi \
