@@ -218,7 +218,7 @@ if [ -n "$LATEST_CACHE" ]; then
     echo "⚠️  sources/ not found (may be empty for some queries)"
   fi
 else
-  echo "❌ No cache entry subdirectory found under .search/"
+  echo "❌ No cache entry subdirectory found under $CACHE_DIR/"
   ERRORS=$((ERRORS + 1))
 fi
 

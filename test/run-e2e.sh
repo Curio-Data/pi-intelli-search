@@ -14,6 +14,7 @@
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
+#   TEST_MODEL           Override default model (default: openrouter/minimax/minimax-m2.7)
 #
 # The .env file (gitignored) can hold OPENROUTER_API_KEY for convenience.
 #
@@ -124,6 +125,9 @@ echo "╔═══════════════════════�
 echo "║  Running pi — print mode (isolated env)              ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
+
+E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
+echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 PROMPT="Use intelli_research to research: latest TypeScript version"
 

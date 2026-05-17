@@ -5,9 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { intelliSearchTool } from "./tools/intelli-search.js";
 import { intelliExtractTool } from "./tools/intelli-extract.js";
 import { intelliCollateTool } from "./tools/intelli-collate.js";
@@ -30,11 +28,10 @@ export async function isOpenRouterAuthMissing(): Promise<boolean> {
   if (process.env.OPENROUTER_API_KEY) return false;
 
   // Check auth.json
-  const agentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
   try {
-    const raw = await readFile(join(agentDir, "auth.json"), "utf-8");
+    const raw = await readFile(join(getAgentDir(), "auth.json"), "utf-8");
     const auth = JSON.parse(raw);
-    if (auth.openrouter) return false;
+    if (auth.openrouter?.key && typeof auth.openrouter.key === "string") return false;
   } catch {
     // File doesn't exist or is invalid — auth is missing
   }
@@ -134,6 +131,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
   // nested pi-intelli-search namespace.
   let modelsChecked = false;
   pi.on("session_start", async (_event, ctx) => {
+    sessionActive = true;
     invalidateSettingsCache();
 
     if (!modelsChecked) {
@@ -153,9 +151,10 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
             "info",
           );
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
         ctx.ui.notify(
-          `[pi-intelli-search] Warning: could not update models.json: ${err?.message ?? err}`,
+          `[pi-intelli-search] Warning: could not update models.json: ${message}`,
           "warning",
         );
       }
@@ -174,8 +173,9 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
           "warning",
         );
       }
-    } catch {
+    } catch (err: unknown) {
       // Auth check is best-effort; never block session startup
+      console.error(`[pi-intelli-search] Auth check failed:`, err);
     }
 
     // Version tracking, default migration, and settings deprecation notice
@@ -188,18 +188,13 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
       const versionPath = join(agentDir, ".pi-intelli-search-version.json");
       let previousVersion: string | undefined;
 
-      if (existsSync(versionPath)) {
+      try {
         const raw = await readFile(versionPath, "utf-8");
         const meta = JSON.parse(raw);
         previousVersion = meta.version;
+      } catch {
+        // No previous version file — fresh install or cleared state
       }
-
-      // Write current version
-      await mkdir(agentDir, { recursive: true });
-      await writeFile(
-        versionPath,
-        JSON.stringify({ version: CURRENT_VERSION, settingsFormat: "nested" }, null, 2) + "\n",
-      );
 
       if (previousVersion && previousVersion !== CURRENT_VERSION) {
         // Check for migration changes BEFORE setting the migration
@@ -216,15 +211,32 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
               "warning",
             );
           }
-        } catch {
+        } catch (err: unknown) {
           // Migration is best-effort; never block session startup
+          console.error(`[pi-intelli-search] Default migration error:`, err);
         }
 
         // Set migration context so subsequent loadSettings() calls
         // (from tools) get the migrated defaults in-memory.
+        // Invalidate the cache so loadSettings() rebuilds with
+        // pendingMigration applied (the earlier call for notification
+        // populated the cache without migration).
         setMigrationContext(previousVersion, CURRENT_VERSION);
+        invalidateSettingsCache();
+      }
 
-        // Flat key deprecation notice
+      // Write current version AFTER migration succeeds, so a failed
+      // migration doesn't permanently strand the user on stale defaults.
+      await mkdir(agentDir, { recursive: true });
+      await writeFile(
+        versionPath,
+        JSON.stringify({ version: CURRENT_VERSION, settingsFormat: "nested" }, null, 2) + "\n",
+      );
+
+      // Flat key deprecation notice — check on every session_start,
+      // not just on upgrade, to catch fresh-install users who
+      // copy-paste deprecated flat keys from old docs/blog posts.
+      try {
         const flatKeysExist = await hasFlatKeys(process.cwd());
         if (flatKeysExist) {
           ctx.ui.notify(
@@ -234,9 +246,12 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
             "warning",
           );
         }
+      } catch {
+        // Flat key check is best-effort; never block session startup
       }
-    } catch {
+    } catch (err: unknown) {
       // Version tracking is best-effort; never break session startup
+      console.error(`[pi-intelli-search] Version tracking error:`, err);
     }
   });
 

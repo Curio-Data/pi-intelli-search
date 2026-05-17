@@ -37,25 +37,31 @@ const DEFAULT_HISTORY: Record<string, {
   collateModel?: ModelConfig;
   searchModel?: ModelConfig;
 }> = {
+  // Every entry MUST include every model role, even when unchanged from
+  // prior versions. Migration skips roles missing from either old or new
+  // defaults, so a gap in one entry silently strands upgrades that route
+  // through it.
   "0.7.0": {
-    // Defaults active in 0.7.0 — pre-OpenRouter-consolidation
+    // Defaults active in 0.7.0: pre-OpenRouter-consolidation
     extractModel: { provider: "minimax", model: "MiniMax-M2.7" },
     collateModel: { provider: "minimax", model: "MiniMax-M2.7" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   },
   "0.8.0": {
-    // Defaults active in 0.8.0 — OpenRouter for all stages
+    // Defaults active in 0.8.0: OpenRouter for all stages
     extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
     collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   },
 };
 
-/** In-memory cache — invalidated on session_start / reload. */
+/** In-memory cache: invalidated on session_start / reload. */
 let cachedSettings: ResearchSettings | null = null;
 
 /**
  * Migration context set by index.ts on session_start when a version
  * change is detected. loadSettings() applies this migration in-memory
- * so tools always get the migrated defaults.
+ * so tools always get the migrated defaults. Cleared after consumption.
  */
 let pendingMigration: { previousVersion: string; currentVersion: string } | null = null;
 
@@ -86,8 +92,8 @@ export function clearMigrationContext(): void {
  *
  * For each model role (search, extract, collate), compares the user's
  * current setting against the previous version's default. If they match
- * exactly, the user never customized that role — auto-migrate to the
- * current default. If they differ, the user customized — leave alone.
+ * exactly, the user never customized that role: auto-migrate to the
+ * current default. If they differ, the user customized: leave alone.
  *
  * Migration is in-memory only: it does NOT write to settings.json.
  * Users are notified of changes and can make them permanent.
@@ -135,7 +141,7 @@ export function migrateDefaults(
       userSetting.provider === oldDefault.provider &&
       userSetting.model === oldDefault.model
     ) {
-      // User was using the old default — migrate to new default
+      // User was using the old default: migrate to new default
       (settings as Record<string, unknown>)[key] = { ...newDefault };
       changes.push(
         `${label}: ${oldDefault.provider}/${oldDefault.model} → ${newDefault.provider}/${newDefault.model}`,
@@ -171,7 +177,7 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
     if (ns.browserFingerprint) overrides.browserFingerprint = ns.browserFingerprint as string;
   }
 
-  // Flat intelli* keys (deprecated fallback — nested namespace wins when both present)
+  // Flat intelli* keys (deprecated fallback: nested namespace wins when both present)
   if (parsed.intelliSearchModel && !overrides.searchModel) overrides.searchModel = parsed.intelliSearchModel as ResearchSettings["searchModel"];
   if (parsed.intelliExtractModel && !overrides.extractModel) overrides.extractModel = parsed.intelliExtractModel as ResearchSettings["extractModel"];
   if (parsed.intelliCollateModel && !overrides.collateModel) overrides.collateModel = parsed.intelliCollateModel as ResearchSettings["collateModel"];
@@ -203,7 +209,7 @@ export async function hasFlatKeys(cwd: string): Promise<boolean> {
         if (key.startsWith("intelli")) return true;
       }
     } catch {
-      // File doesn't exist or is invalid — skip
+      // File doesn't exist or is invalid: skip
     }
   }
   return false;
@@ -223,10 +229,14 @@ export async function loadSettings(cwd: string): Promise<ResearchSettings> {
       const dirOverrides = extractOverrides(parsed);
       Object.assign(overrides, dirOverrides);
     } catch {
-      // File doesn't exist or is invalid — skip
+      // File doesn't exist or is invalid: skip
     }
   }
 
+  // Note: overrides use shallow Object.assign. Today every key in
+  // ResearchSettings is either a scalar or a complete ModelConfig
+  // object, so partial nested overrides don't arise. A future field
+  // that is a non-trivial nested object would need deep merging.
   cachedSettings = { ...DEFAULT_SETTINGS, ...overrides };
 
   // Apply default migration in-memory when upgrading between versions.
@@ -240,6 +250,7 @@ export async function loadSettings(cwd: string): Promise<ResearchSettings> {
       cachedSettings,
     );
     cachedSettings = migrated;
+    pendingMigration = null;
   }
 
   return cachedSettings;
