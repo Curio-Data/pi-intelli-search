@@ -113,9 +113,9 @@ Prefer present-tense indicative. "The pipeline caches results." beats "The pipel
 
 Test counts, version numbers, and stat references must appear in **one canonical location** and be referenced from elsewhere, not duplicated. When a number changes, only the canonical source needs editing.
 
-- **Test count canonical:** `README.md` badge and `Development` block.
+- **Test count canonical:** `README.md` badge.
 - **Version canonical:** `package.json` -> `version`, mirrored in `CHANGELOG.md`.
-- `AGENTS.md` should describe **how** to run tests, not assert a count. If a count must be cited, link to the README.
+- `AGENTS.md` should describe **how** to run tests, not assert a count.
 
 ### 10. README Image Width
 
