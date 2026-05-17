@@ -408,6 +408,16 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 
 Both write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
 
+### Principle 5: E2E Scripts Must Be Proven Runnable
+
+No E2E script may be committed without being executed at least once to completion. A script that has never run is not a test: it is a wish.
+
+- **Before committing a new E2E script**, run it with a real API key and confirm it exits 0 with the expected verification checks passing.
+- **`shellcheck` is mandatory.** Every shell script must pass `shellcheck` with zero findings. This catches unbound variables, quoting bugs, and syntax errors that `set -euo pipefail` alone will not catch until runtime.
+- **`set -euo pipefail` is mandatory** at the top of every E2E script. The `-u` flag turns any reference to an undefined variable into a hard error. If a script references `$E2E_EXTENSION_PATH` or any other variable, it must define that variable before first use. No E2E script may depend on variables from the caller's environment (except `OPENROUTER_API_KEY`, which is documented).
+
+CI does not run E2E scripts (they require API keys and a live `pi` binary). The only gate is the developer running the script. If it is not run, it is not tested. If it is not tested, it rots.
+
 ### Must Run After Every Change
 
 1. **Build:** `npm run build`

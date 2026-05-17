@@ -18,6 +18,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
 
 # Load .env if it exists
 if [ -f "$PROJECT_DIR/.env" ]; then
