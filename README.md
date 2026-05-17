@@ -150,7 +150,7 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
     "fetchConcurrency": 2,
     "browserFingerprint": "chrome_145",
     "llmsFullSites": {
-      "developers.cloudflare.com": "https://developers.cloudflare.com"
+      "docs.example.com": "https://docs.example.com/llms-full.txt"
     }
   }
 }
@@ -391,7 +391,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json` under th
 | `fetchTimeoutMs` | 2. Fetch | `20000` | Per-page fetch timeout in milliseconds. Increase if you research sites known to be slow. Fetches run in parallel so this does not multiply by page count. |
 | `fetchConcurrency` | 2. Fetch | `4` | Number of pages fetched simultaneously. Higher values (6-8) complete the fetch stage faster but may trigger rate limiting. Lower values (2) are gentler on target servers. |
 | `browserFingerprint` | 2. Fetch | `chrome_145` | TLS fingerprint used by [_wreq-js_](https://github.com/sqdshguy/wreq-js) to impersonate a browser. Determines which HTTP client signature sites see. Available profiles include `chrome_*`, `firefox_*`, `safari_*`, `edge_*`, and `opera_*` across many versions. Change this if a site blocks the default fingerprint. |
-| `llmsFullSites` | 2. Fetch | `{}` | Map of domain to base URL for sites that provide `llms-full.txt` files (single-page documentation snapshots). These are downloaded raw to `sources/llms-full-*.md` for offline search with `grep` or `read`. No LLM processing is applied. Example: `{"developers.cloudflare.com": "https://developers.cloudflare.com"}`. |
+| `llmsFullSites` | 2. Fetch | `{}` | Domain → full URL map for sites that publish an `llms-full.txt` file (a single Markdown file containing all documentation). When a research result comes from a configured domain, the file is downloaded raw to `sources/llms-full-*.md` for offline search with `grep` or `read`. No LLM processing is applied. **The value must be the complete URL to the file** (e.g. `{"docs.example.com": "https://docs.example.com/llms-full.txt"}`). Cloudflare Docs, Next.js, and Vite are built-in and do not need configuration. Only the domain of the first fetched result triggers the download. |
 
 ## Cache Structure
 
