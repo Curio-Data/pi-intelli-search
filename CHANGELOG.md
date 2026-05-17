@@ -34,7 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rate-limit monitoring no longer goes dark after session replacement.** The `sessionActive` flag was never reset on `session_start`, so rate-limit status in the footer stopped updating after `/new` or `/fork`.
 - **Version marker written after migration completes.** Previously the version file was persisted before migration ran. If migration failed mid-session, the user was permanently stranded on stale defaults with no recovery path.
 - **Auth check tightened.** An empty `openrouter: {}` in `auth.json` no longer suppresses the missing-key warning.
-- **Cloudflare llms-full.txt resolves product-scoped paths again.** The auto-discovery was passing a bare hostname (`developers.cloudflare.com`) to the path builder, which resolved the aggregated root documentation instead of the product-specific file. It now receives a representative page URL so subpaths like `/workers/llms-full.txt` are resolved correctly.
 
 ## [0.7.0] - 2026-05-14
 
