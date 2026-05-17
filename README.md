@@ -426,7 +426,7 @@ No configuration is needed. The probe and download are automatic.
 ```bash
 npm install
 npm run build        # TypeScript -> dist/
-npm test             # Unit tests (138 tests)
+npm test             # Unit tests
 npm run test:smoke   # Smoke test
 
 # Test in pi
