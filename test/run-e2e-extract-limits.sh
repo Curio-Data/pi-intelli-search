@@ -17,6 +17,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+CACHE_DEFAULT="$PROJECT_DIR/.e2e-extract-default"
+CACHE_TIGHT="$PROJECT_DIR/.e2e-extract-tight"
 
 # Load .env if it exists
 if [ -f "$PROJECT_DIR/.env" ]; then
@@ -71,7 +73,7 @@ echo ""
 
 ISO1="$(mktemp -d -t pi-e2e-extlim1-XXXXXX)"
 # shellcheck disable=SC2064
-trap "rm -rf $ISO1" EXIT
+trap "rm -rf $ISO1 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
 
 mkdir -p "$ISO1/sessions"
 
@@ -143,7 +145,7 @@ echo ""
 
 ISO2="$(mktemp -d -t pi-e2e-extlim2-XXXXXX)"
 # shellcheck disable=SC2064
-trap "rm -rf $ISO2" EXIT
+trap "rm -rf $ISO2 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
 
 mkdir -p "$ISO2/sessions"
 
@@ -210,9 +212,6 @@ echo ""
 echo "══ Comparison ═════════════════════════════════════════════════════════"
 
 ERRORS=0
-
-CACHE_DEFAULT="$PROJECT_DIR/.e2e-extract-default"
-CACHE_TIGHT="$PROJECT_DIR/.e2e-extract-tight"
 
 # Find the latest cache entry in each
 ENTRY_DEFAULT=$(find "$CACHE_DEFAULT" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' 2>/dev/null | sort -r | head -1)
@@ -297,9 +296,6 @@ if [ -n "$ENTRY_TIGHT" ] && [ -f "$ENTRY_TIGHT/report.md" ]; then
   SIZE_RPT_TIGHT=$(wc -c < "$ENTRY_TIGHT/report.md")
   echo "   Tight report:   ${SIZE_RPT_TIGHT} bytes"
 fi
-
-# Clean up cache dirs
-rm -rf "$CACHE_DEFAULT" "$CACHE_TIGHT"
 
 echo ""
 if [ "$ERRORS" -gt 0 ]; then

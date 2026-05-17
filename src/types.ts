@@ -43,4 +43,5 @@ export interface ResearchSettings {
   extractionMaxTokens: number;
   collationMaxTokens: number;
   browserFingerprint: string;
+  disableLlmsFullDiscovery: boolean;
 }

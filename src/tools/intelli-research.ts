@@ -195,16 +195,24 @@ export const intelliResearchTool = {
       signal,
     });
 
-    // Download llms-full.txt for all unique domains found in results.
-    // Built-in sites get their product-scoped paths; all others are probed
-    // at the de facto /llms-full.txt convention. Runs in parallel with
-    // the report write.
-    const hostnames = new Set(
-      successPages.map((p) => { try { return new URL(p.url).hostname; } catch { return null; } }).filter(Boolean) as string[],
-    );
-    const llmsFullPromises = [...hostnames].map((hostname) =>
-      downloadLlmsFullToCache(`https://${hostname}`, cachePath).catch(() => null),
-    );
+    // Download llms-full.txt for each unique domain in the results
+    // (unless disabled via settings.disableLlmsFullDiscovery).
+    // Pass a representative page URL per hostname (not the bare hostname)
+    // so path-aware builders (e.g. Cloudflare product-scoped paths) still
+    // receive the path context they need to construct the correct URL.
+    let llmsFullPromises: Promise<unknown>[] = [];
+    if (!settings.disableLlmsFullDiscovery) {
+      const sampleUrlByHost = new Map<string, string>();
+      for (const p of successPages) {
+        try {
+          const h = new URL(p.url).hostname;
+          if (!sampleUrlByHost.has(h)) sampleUrlByHost.set(h, p.url);
+        } catch { /* skip malformed URLs */ }
+      }
+      llmsFullPromises = [...sampleUrlByHost.values()].map((sampleUrl) =>
+        downloadLlmsFullToCache(sampleUrl, cachePath).catch(() => null),
+      );
+    }
 
     // Write report
     await writeReportFile(cachePath, params.query, collation, allExtractions, pages);

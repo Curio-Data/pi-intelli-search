@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS: ResearchSettings = {
   extractionMaxTokens: 3000,
   collationMaxTokens: 4000,
   browserFingerprint: "chrome_145",
+  disableLlmsFullDiscovery: false,
 };
 
 /**
@@ -151,7 +152,41 @@ export function migrateDefaults(
     }
   }
 
+  // Notify users upgrading to 0.8.0+ that maxUrls changed from a
+  // default-fallback to a hard cap. Only fire for users who actually
+  // set a maxUrls value (custom or old default); users on the new
+  // default (16) don't need the warning.
+  if (
+    isUpgradeAcross(previousVersion, currentVersion, "0.8.0") &&
+    userSettings.maxUrls !== 16
+  ) {
+    changes.push(
+      `maxUrls is now a hard cap (was the default before 0.8.0). ` +
+      `Your current maxUrls=${userSettings.maxUrls} will clamp all ` +
+      `intelli_research calls. The new agent fallback is defaultUrls (default: 8).`,
+    );
+  }
+
   return { changes, settings };
+}
+
+/** True when upgrading FROM a version < boundary TO a version >= boundary. */
+function isUpgradeAcross(from: string, to: string, boundary: string): boolean {
+  const vFrom = from.split(".").map(Number);
+  const vTo = to.split(".").map(Number);
+  const vBoundary = boundary.split(".").map(Number);
+  return (
+    compareVersions(vFrom, vBoundary) < 0 &&
+    compareVersions(vTo, vBoundary) >= 0
+  );
+}
+
+function compareVersions(a: number[], b: number[]): number {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const diff = (a[i] ?? 0) - (b[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
 }
 
 /**
@@ -177,6 +212,7 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
     if (ns.extractionMaxTokens != null) overrides.extractionMaxTokens = ns.extractionMaxTokens as number;
     if (ns.collationMaxTokens != null) overrides.collationMaxTokens = ns.collationMaxTokens as number;
     if (ns.browserFingerprint) overrides.browserFingerprint = ns.browserFingerprint as string;
+    if (ns.disableLlmsFullDiscovery != null) overrides.disableLlmsFullDiscovery = ns.disableLlmsFullDiscovery as boolean;
   }
 
   // Flat intelli* keys (deprecated fallback: nested namespace wins when both present).
@@ -192,6 +228,13 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
   if (parsed.intelliExtractionMaxTokens != null && overrides.extractionMaxTokens == null) overrides.extractionMaxTokens = parsed.intelliExtractionMaxTokens as number;
   if (parsed.intelliCollationMaxTokens != null && overrides.collationMaxTokens == null) overrides.collationMaxTokens = parsed.intelliCollationMaxTokens as number;
   if (parsed.intelliBrowserFingerprint && !overrides.browserFingerprint) overrides.browserFingerprint = parsed.intelliBrowserFingerprint as string;
+  if (parsed.intelliDisableLlmsFullDiscovery != null && overrides.disableLlmsFullDiscovery == null) overrides.disableLlmsFullDiscovery = parsed.intelliDisableLlmsFullDiscovery as boolean;
+
+  // intelliDefaultUrls has no flat fallback by design: the key did not
+  // exist in 0.7.0 (which is the only version that produced flat keys),
+  // so there are no legacy flat-key settings to migrate. A user who
+  // manually adds intelliDefaultUrls in 0.8.0+ without disabling the
+  // deprecation notice is working against the tooling.
 
   return overrides;
 }

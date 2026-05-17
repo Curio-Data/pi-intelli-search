@@ -63,7 +63,8 @@ echo "╚═══════════════════════�
 echo ""
 
 ISOLATED_AGENT_DIR1="$(mktemp -d -t pi-e2e-cap1-XXXXXX)"
-trap 'rm -rf "$ISOLATED_AGENT_DIR1"' EXIT
+CACHE_DIR1="$PROJECT_DIR/.e2e-cap-test"
+trap 'rm -rf "$ISOLATED_AGENT_DIR1" "$CACHE_DIR1"' EXIT
 
 echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR1"
 
@@ -136,7 +137,10 @@ echo "── Scenario 1 Verification ──────────────�
 ERRORS=0
 
 # Pipeline must have completed (search results present)
-if echo "$OUTPUT1" | grep -qi "intelli_search\|intelli_research\|search result\|research found\|http"; then
+# Look for "Results cached at" which is always emitted on successful
+# pipeline completion. Avoids false positives from "http" matching in
+# stack traces, error messages, or the test banners themselves.
+if echo "$OUTPUT1" | grep -qi "Results cached at"; then
   echo "✅ Pipeline completed (results present in output)"
 else
   echo "⚠️  No explicit results in output"
@@ -194,7 +198,8 @@ echo "╚═══════════════════════�
 echo ""
 
 ISOLATED_AGENT_DIR2="$(mktemp -d -t pi-e2e-cap2-XXXXXX)"
-trap 'rm -rf "$ISOLATED_AGENT_DIR2"' EXIT
+CACHE_DIR2="$PROJECT_DIR/.e2e-cap-test2"
+trap 'rm -rf "$ISOLATED_AGENT_DIR2" "$CACHE_DIR2"' EXIT
 
 echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR2"
 
@@ -267,14 +272,13 @@ echo "── Scenario 2 Verification ──────────────�
 ERRORS2=0
 
 # Pipeline must have completed
-if echo "$OUTPUT2" | grep -qi "intelli_search\|intelli_research\|search result\|research found\|http"; then
+if echo "$OUTPUT2" | grep -qi "Results cached at"; then
   echo "✅ Pipeline completed (results present in output)"
 else
   echo "⚠️  No explicit results in output"
 fi
 
 # Cache must exist
-CACHE_DIR2="$PROJECT_DIR/.e2e-cap-test2"
 if [ -d "$CACHE_DIR2" ]; then
   echo "✅ .e2e-cap-test2/ cache directory exists"
 else

@@ -275,7 +275,7 @@ const BUILTIN_LLMS_FULL_SITES: Record<string, (url: string) => string | null> = 
  *
  * Resolution order:
  *   1. Built-in mappings (Cloudflare product-scoped, Next.js, Vite)
- *   2. HEAD-probe the standard /llms-full.txt convention at the domain root
+ *   2. Probe the standard /llms-full.txt convention at the domain root
  *
  * The file is stored raw — no LLM processing needed. The agent can
  * grep/search it offline for future lookups.
