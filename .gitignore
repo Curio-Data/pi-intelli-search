@@ -26,3 +26,5 @@ npm-debug.log*
 .e2e-custom-cache/
 .e2e-cap-test/
 .e2e-cap-test2/
+.e2e-extract-default/
+.e2e-extract-tight/
