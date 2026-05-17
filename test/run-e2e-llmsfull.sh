@@ -16,6 +16,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+CACHE_DIR="$PROJECT_DIR/.e2e-llmsfull"
 
 if [ -f "$PROJECT_DIR/.env" ]; then
   set -a
@@ -101,7 +102,7 @@ echo "╚═══════════════════════�
 echo ""
 
 ISO="$(mktemp -d -t pi-e2e-llmsfull-XXXXXX)"
-trap 'rm -rf "$ISO"' EXIT
+trap 'rm -rf "$ISO" "$CACHE_DIR"' EXIT
 
 mkdir -p "$ISO/sessions"
 
@@ -172,7 +173,6 @@ echo ""
 echo "══ Verification ════════════════════════════════════════════════════════"
 
 ERRORS=0
-CACHE_DIR="$PROJECT_DIR/.e2e-llmsfull"
 
 if [ ! -d "$CACHE_DIR" ]; then
   echo "❌ Cache directory .e2e-llmsfull/ not found"
@@ -202,9 +202,6 @@ else
     done
   fi
 fi
-
-# Clean up
-rm -rf "$CACHE_DIR"
 
 echo ""
 if [ "$ERRORS" -gt 0 ]; then

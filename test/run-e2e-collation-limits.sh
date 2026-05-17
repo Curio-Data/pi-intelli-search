@@ -17,6 +17,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+CACHE_DEFAULT="$PROJECT_DIR/.e2e-collate-default"
+CACHE_TIGHT="$PROJECT_DIR/.e2e-collate-tight"
 
 # Load .env if it exists
 if [ -f "$PROJECT_DIR/.env" ]; then
@@ -70,7 +72,7 @@ echo ""
 
 ISO1="$(mktemp -d -t pi-e2e-collim1-XXXXXX)"
 # shellcheck disable=SC2064
-trap "rm -rf $ISO1" EXIT
+trap "rm -rf $ISO1 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
 
 mkdir -p "$ISO1/sessions"
 
@@ -141,7 +143,7 @@ echo ""
 
 ISO2="$(mktemp -d -t pi-e2e-collim2-XXXXXX)"
 # shellcheck disable=SC2064
-trap "rm -rf $ISO2" EXIT
+trap "rm -rf $ISO2 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
 
 mkdir -p "$ISO2/sessions"
 
@@ -208,9 +210,6 @@ echo ""
 echo "══ Comparison ═════════════════════════════════════════════════════════"
 
 ERRORS=0
-
-CACHE_DEFAULT="$PROJECT_DIR/.e2e-collate-default"
-CACHE_TIGHT="$PROJECT_DIR/.e2e-collate-tight"
 
 ENTRY_DEFAULT=$(find "$CACHE_DEFAULT" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' 2>/dev/null | sort -r | head -1)
 ENTRY_TIGHT=$(find "$CACHE_TIGHT" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' 2>/dev/null | sort -r | head -1)
@@ -287,9 +286,6 @@ if [ -n "$ENTRY_DEFAULT" ] && [ -n "$ENTRY_TIGHT" ]; then
     ERRORS=$((ERRORS + 1))
   fi
 fi
-
-# Clean up
-rm -rf "$CACHE_DEFAULT" "$CACHE_TIGHT"
 
 echo ""
 if [ "$ERRORS" -gt 0 ]; then

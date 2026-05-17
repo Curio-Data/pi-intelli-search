@@ -273,7 +273,7 @@ Each page gets dual-fetched:
 2. Markdown variant (`Accept: text/Markdown` header, or `<link rel="alternate">` discovery).
 3. Quality comparison (score on code blocks, headings, tables. Penalise nav chrome).
 
-For known sites ([Cloudflare](https://developers.cloudflare.com), [Next.js](https://nextjs.org), [Vite](https://vite.dev)), `llms-full.txt` is downloaded raw to `sources/`. No LLM processing is applied.
+After extraction, every unique domain in the results is probed for `llms-full.txt` documentation files. Built-in mappings resolve non-standard paths for [Cloudflare](https://developers.cloudflare.com) (product-scoped), [Next.js](https://nextjs.org), and [Vite](https://vite.dev). All other domains use the standard `/llms-full.txt` convention. Discovered files are stored raw in `sources/`. Set `disableLlmsFullDiscovery: true` to opt out.
 
 ### Settings
 
@@ -335,7 +335,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | **Structural/smoke** | Extension loads, tools register, events bind | `smoke.ts` | No |
 | **Unit (pure logic)** | Functions without filesystem or network deps | `cache.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
 | **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts` | No |
-| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `run-e2e.sh`, `run-e2e-cap.sh`, `run-e2e-extract-limits.sh`, `run-e2e-migration.sh`, `run-e2e-model-override.sh` | Yes |
+| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `run-e2e.sh`, `run-e2e-cap.sh`, `run-e2e-extract-limits.sh`, `run-e2e-collation-limits.sh`, `run-e2e-llmsfull.sh`, `run-e2e-migration.sh`, `run-e2e-model-override.sh` | Yes |
 | **Publish** | Validates published npm package structure | `run-e2e-publish.sh` | Yes (npm only) |
 
 ### Principle 1: Tests Must Be Deterministic
@@ -424,7 +424,7 @@ CI does not run E2E scripts (they require API keys and a live `pi` binary). The 
 2. **Unit tests:** `npm test`
 3. **End-to-end test:** `./test/run-e2e.sh`
 
-Do not consider a change complete until all three pass. Run `./test/run-e2e-migration.sh`, `./test/run-e2e-model-override.sh`, and `./test/run-e2e-cap.sh` before any release.
+Do not consider a change complete until all three pass. Run all E2E scripts before any release: `./test/run-e2e-migration.sh`, `./test/run-e2e-model-override.sh`, `./test/run-e2e-cap.sh`, `./test/run-e2e-extract-limits.sh`, `./test/run-e2e-collation-limits.sh`, and `./test/run-e2e-llmsfull.sh`.
 
 ### E2E Test Requirements
 
