@@ -34,6 +34,7 @@ export interface ResearchSettings {
   searchModel: ModelConfig;
   extractModel: ModelConfig;
   collateModel: ModelConfig;
+  defaultUrls: number;
   maxUrls: number;
   cacheDir: string;
   extractMaxChars: number;

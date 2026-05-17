@@ -76,7 +76,7 @@ intelli_research(
 
 ### Other Parameters
 
-- `maxUrls`: `3` for quick targeted research, `8` (default) for broad research, `12` for exhaustive research.
+- `maxUrls`: `3` for quick targeted research, `8` (default) for broad research, `12` for exhaustive research. The setting caps this at `maxUrls` (default 16). Requests above the cap are silently clamped.
 - `domains`: Restrict to trusted sources, for example `domains=["react.dev", "github.com"]`.
 
 ### When Search Results Mix Source Types

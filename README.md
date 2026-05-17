@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.74.0-blueviolet)](https://github.com/mariozechner/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/tests-136%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-138%20passing-brightgreen)
 
 Intelligent web research for [`Pi`](https://github.com/mariozechner/pi): search, extract, collate, and cache grounded web context in one tool call.
 
@@ -108,7 +108,8 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
       "model": "minimax/minimax-m2.7"
     },
 
-    "maxUrls": 8,
+    "defaultUrls": 8,
+    "maxUrls": 16,
     "cacheDir": ".search",
     "extractMaxChars": 150000,
     "extractionMaxTokens": 3000,
@@ -139,6 +140,7 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
       "model": "gpt-4o-mini"
     },
 
+    "defaultUrls": 6,
     "maxUrls": 6,
     "cacheDir": ".my-research-cache",
     "extractMaxChars": 80000,
@@ -337,12 +339,12 @@ Costs scale with your chosen extract or collate model. _MiniMax_ M2.7 (via OpenR
 
 ## Settings
 
-Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
+Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json` under the `pi-intelli-search` namespace:
 
 ```jsonc
 {
-  // Model assignments: see "Model Configuration" section for swap guidance
   "pi-intelli-search": {
+    // Model assignments (see Model Configuration above)
     "searchModel": {
       "provider": "openrouter",
       "model": "perplexity/sonar"
@@ -357,11 +359,14 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
     },
 
     // Pipeline tuning
-    "maxUrls": 8,
+    "defaultUrls": 8,
+    "maxUrls": 16,
     "cacheDir": ".search",
     "extractMaxChars": 150000,
     "extractionMaxTokens": 3000,
     "collationMaxTokens": 4000,
+
+    // Fetch behavior
     "fetchTimeoutMs": 20000,
     "fetchConcurrency": 4,
     "browserFingerprint": "chrome_145",
@@ -370,7 +375,23 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 }
 ```
 
-`browserFingerprint` controls the TLS fingerprint used by [wreq-js](https://github.com/sqdshguy/wreq-js) when fetching pages (defaults to _Chrome 145_). `llmsFullSites` is a map of domain to base URL for sites that provide `llms-full.txt` files (for example, `{"developers.cloudflare.com": "https://developers.cloudflare.com"}`). These files are downloaded raw to the cache without LLM processing.
+### Settings Reference
+
+| Setting | Stage | Default | What It Does |
+|---|---|---|---|
+| `searchModel` | 1. Search | `openrouter/perplexity/sonar` | Model for the initial web search. Swap provider or model to use any LLM in `Pi`'s registry. See [Model Configuration](#model-configuration). |
+| `extractModel` | 3. Extract | `openrouter/minimax/minimax-m2.7` | Model for per-page content extraction. Runs 8 times per session, so low cost per token matters. See [Model Configuration](#model-configuration). |
+| `collateModel` | 4. Collate | `openrouter/minimax/minimax-m2.7` | Model for cross-source synthesis and deduplication. Sees all extractions at once; needs enough context and instruction-following to flag contradictions. See [Model Configuration](#model-configuration). |
+| `defaultUrls` | 1 → 2 | `8` | Fallback number of URLs when the agent does not pass `maxUrls` per call. In practice the agent follows the 3/8/12 heuristic in the [skill guide](skills/intelli-search/SKILL.md) and passes `maxUrls` explicitly, so this applies when the agent omits the parameter. |
+| `maxUrls` | 1 → 2 | `16` | Hard cap on URLs fetched. The agent can request any number up to this limit; requests above it are silently clamped. An old setting named `maxUrls` (pre-0.8.0) maps here automatically, since users always assumed it was a cap. Each extra URL adds roughly $0.004 in extract cost with the default model. |
+| `cacheDir` | 4, 5 | `.search` | Directory where research sessions are cached. Each session writes a date-stamped subdirectory with `report.md`, per-page extractions, and full page content. Change this to keep project-specific research separate. Example: `".my-research-cache"`. |
+| `extractMaxChars` | 3. Extract | `150000` | Maximum characters of raw page content sent to the extract LLM per page. Pages longer than this are truncated. Most cleaned pages fall under this limit; increase it if you often see `[TRUNCATED]` in extraction output. |
+| `extractionMaxTokens` | 3. Extract | `3000` | Maximum output tokens for each per-page extraction. Higher values preserve more detail at higher cost. The extract system prompt targets 3,000-5,000 characters; 3,000 tokens covers this range for most models. |
+| `collationMaxTokens` | 4. Collate | `4000` | Maximum output tokens for the final collation summary. Controls how verbosely the collation model synthesises findings. Lower values force tighter deduplication. The summary you see in the agent context is bounded by this setting. |
+| `fetchTimeoutMs` | 2. Fetch | `20000` | Per-page fetch timeout in milliseconds. Increase if you research sites known to be slow. Fetches run in parallel, so this does not multiply by page count. |
+| `fetchConcurrency` | 2. Fetch | `4` | Number of pages fetched simultaneously. Higher values (6-8) complete the fetch stage faster but may trigger rate limiting. Lower values (2) are gentler on target servers. |
+| `browserFingerprint` | 2. Fetch | `chrome_145` | TLS fingerprint used by [_wreq-js_](https://github.com/sqdshguy/wreq-js) to impersonate a browser. Determines which HTTP client signature sites see. Available profiles include `chrome_*`, `firefox_*`, `safari_*`, `edge_*`, and `opera_*` across many versions. Change this if a site blocks the default fingerprint. |
+| `llmsFullSites` | 2. Fetch | `{}` | Map of domain to base URL for sites that provide `llms-full.txt` files (single-page documentation snapshots). These are downloaded raw to `sources/llms-full-*.md` for offline search with `grep` or `read`. No LLM processing is applied. Example: `{"developers.cloudflare.com": "https://developers.cloudflare.com"}`. |
 
 ## Cache Structure
 
@@ -399,7 +420,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 ```bash
 npm install
 npm run build        # TypeScript -> dist/
-npm test             # Unit tests (136 tests)
+npm test             # Unit tests (138 tests)
 npm run test:smoke   # Smoke test
 
 # Test in pi
