@@ -230,6 +230,7 @@ test/
 ├── providers.test.ts
 ├── run-e2e.sh
 ├── run-e2e-cap.sh
+├── run-e2e-collation-limits.sh
 ├── run-e2e-extract-limits.sh
 ├── run-e2e-migration.sh
 ├── run-e2e-model-override.sh
@@ -392,7 +393,7 @@ Configuration errors (model typos, missing keys) must be caught before LLM calls
 
 ### Principle 4: E2E Tests Exercise Real Config Paths
 
-E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. There are five E2E scripts:
+E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. There are six E2E scripts:
 
 | Test | What it proves |
 |---|---|
@@ -401,6 +402,7 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `run-e2e-model-override.sh` | Model override in `pi-intelli-search` settings namespace is read and used |
 | `run-e2e-cap.sh` | `defaultUrls` and `maxUrls` (cap) are enforced; agent requests above cap are silently clamped |
 | `run-e2e-extract-limits.sh` | `extractMaxChars` and `extractionMaxTokens` are enforced; back-to-back comparison proves truncation |
+| `run-e2e-collation-limits.sh` | `collationMaxTokens` is enforced; back-to-back comparison proves output clamping |
 
 Both write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
 
