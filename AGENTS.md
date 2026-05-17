@@ -126,6 +126,41 @@ All images in `README.md` must use a consistent `width="800"` attribute. This ap
 
 **Note:** The `Pi` packages website does not support `.avif` images. Use `.png` or `.webp` for README images that will appear on the packages site.
 
+### 11. Narrow JSON Blocks for Mobile Readability
+
+When displaying JSON or JSONC configuration blocks in documentation, break nested objects and arrays onto separate lines. Keep each line under roughly 60 characters so the block is readable on narrow viewports (mobile, split-pane) without horizontal scroll.
+
+Scalar key-value pairs (strings, numbers, booleans) can stay on one line. Objects and arrays start their content on a new line.
+
+**Good (narrow):**
+```jsonc
+{
+  "pi-intelli-search": {
+    "searchModel": {
+      "provider": "openrouter",
+      "model": "perplexity/sonar"
+    },
+    "maxUrls": 8,
+    "cacheDir": ".search",
+    "fetchConcurrency": 4
+  }
+}
+```
+
+**Avoid (wide — causes horizontal scroll on mobile):**
+```jsonc
+{
+  "pi-intelli-search": {
+    "searchModel": { "provider": "openrouter", "model": "perplexity/sonar" },
+    "maxUrls": 8,
+    "cacheDir": ".search",
+    "fetchConcurrency": 4
+  }
+}
+```
+
+The "Customise (Optional)" and "Model Configuration" sections in README.md use this format. All documentation examples should follow it.
+
 ---
 
 ## Git Commit Messages
@@ -353,7 +388,7 @@ Configuration errors (model typos, missing keys) must be caught before LLM calls
 
 ### Principle 4: E2E Tests Exercise Real Config Paths
 
-E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. There are three E2E scripts:
+E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. There are four E2E scripts:
 
 | Test | What it proves |
 |---|---|

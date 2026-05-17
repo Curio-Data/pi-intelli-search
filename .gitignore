@@ -21,3 +21,8 @@ Thumbs.db
 # npm debug logs
 npm-debug.log*
 .env
+
+# E2E test cache dirs
+.e2e-custom-cache/
+.e2e-cap-test/
+.e2e-cap-test2/

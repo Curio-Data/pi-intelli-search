@@ -8,7 +8,8 @@ const DEFAULT_SETTINGS: ResearchSettings = {
   searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
   collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
-  maxUrls: 8,
+  defaultUrls: 8,
+  maxUrls: 16,
   cacheDir: ".search",
   extractMaxChars: 150_000,
   fetchTimeoutMs: 20_000,
@@ -52,6 +53,8 @@ const DEFAULT_HISTORY: Record<string, {
     extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
     collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+    // maxUrls is now a hard cap (was a default pre-0.8.0).
+    // defaultUrls is the new agent fallback.
   },
 };
 
@@ -166,6 +169,7 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
     if (ns.searchModel) overrides.searchModel = ns.searchModel as ResearchSettings["searchModel"];
     if (ns.extractModel) overrides.extractModel = ns.extractModel as ResearchSettings["extractModel"];
     if (ns.collateModel) overrides.collateModel = ns.collateModel as ResearchSettings["collateModel"];
+    if (ns.defaultUrls != null) overrides.defaultUrls = ns.defaultUrls as number;
     if (ns.maxUrls != null) overrides.maxUrls = ns.maxUrls as number;
     if (ns.cacheDir) overrides.cacheDir = ns.cacheDir as string;
     if (ns.extractMaxChars != null) overrides.extractMaxChars = ns.extractMaxChars as number;
@@ -177,7 +181,8 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
     if (ns.browserFingerprint) overrides.browserFingerprint = ns.browserFingerprint as string;
   }
 
-  // Flat intelli* keys (deprecated fallback: nested namespace wins when both present)
+  // Flat intelli* keys (deprecated fallback: nested namespace wins when both present).
+  // intelliMaxUrls maps to maxUrls (the cap), matching what users always assumed it did.
   if (parsed.intelliSearchModel && !overrides.searchModel) overrides.searchModel = parsed.intelliSearchModel as ResearchSettings["searchModel"];
   if (parsed.intelliExtractModel && !overrides.extractModel) overrides.extractModel = parsed.intelliExtractModel as ResearchSettings["extractModel"];
   if (parsed.intelliCollateModel && !overrides.collateModel) overrides.collateModel = parsed.intelliCollateModel as ResearchSettings["collateModel"];

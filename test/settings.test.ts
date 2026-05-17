@@ -11,7 +11,8 @@ const baseSettings: ResearchSettings = {
   searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
   collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
-  maxUrls: 8,
+  defaultUrls: 8,
+  maxUrls: 16,
   cacheDir: ".search",
   extractMaxChars: 150_000,
   fetchTimeoutMs: 20_000,
@@ -66,7 +67,8 @@ describe("loadSettings defaults", () => {
     invalidateSettingsCache();
     const settings = await loadSettings("/nonexistent");
 
-    assert.strictEqual(settings.maxUrls, 8);
+    assert.strictEqual(settings.defaultUrls, 8);
+    assert.strictEqual(settings.maxUrls, 16);
     assert.strictEqual(settings.cacheDir, ".search");
     assert.strictEqual(settings.extractMaxChars, 150_000);
     assert.strictEqual(settings.fetchTimeoutMs, 20_000);
@@ -147,7 +149,8 @@ describe("loadSettings nested namespace", () => {
 
       invalidateSettingsCache();
       const settings = await loadSettings("/nonexistent");
-      assert.strictEqual(settings.maxUrls, 12, "nested should win");
+      assert.strictEqual(settings.maxUrls, 12, "nested maxUrls (cap) should win over flat key");
+      assert.strictEqual(settings.defaultUrls, 8, "defaultUrls should remain at default when not overridden");
     } finally {
       if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
       else delete process.env.PI_CODING_AGENT_DIR;
@@ -215,7 +218,8 @@ describe("loadSettings nested namespace", () => {
     try {
       writeAgentSettings(dir, {
         "pi-intelli-search": {
-          maxUrls: 3,
+          defaultUrls: 3,
+          maxUrls: 12,
           fetchTimeoutMs: 30000,
           fetchConcurrency: 2,
           extractionMaxTokens: 8000,
@@ -225,11 +229,59 @@ describe("loadSettings nested namespace", () => {
 
       invalidateSettingsCache();
       const settings = await loadSettings("/nonexistent");
-      assert.strictEqual(settings.maxUrls, 3);
+      assert.strictEqual(settings.defaultUrls, 3);
+      assert.strictEqual(settings.maxUrls, 12);
       assert.strictEqual(settings.fetchTimeoutMs, 30000);
       assert.strictEqual(settings.fetchConcurrency, 2);
       assert.strictEqual(settings.extractionMaxTokens, 8000);
       assert.strictEqual(settings.collationMaxTokens, 16000);
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("old maxUrls maps to cap, defaultUrls stays at default", async () => {
+    // Users upgrading from pre-0.8.0 had maxUrls in settings (meant as default).
+    // In 0.8.0+ the same key means cap, and defaultUrls is the new fallback.
+    const dir = tempAgentDir();
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+
+    try {
+      writeAgentSettings(dir, {
+        "pi-intelli-search": {
+          maxUrls: 6,
+        },
+      });
+
+      invalidateSettingsCache();
+      const settings = await loadSettings("/nonexistent");
+      assert.strictEqual(settings.maxUrls, 6, "old maxUrls → cap");
+      assert.strictEqual(settings.defaultUrls, 8, "defaultUrls stays at new default");
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("defaultUrls and maxUrls work independently in new format", async () => {
+    const dir = tempAgentDir();
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+
+    try {
+      writeAgentSettings(dir, {
+        "pi-intelli-search": {
+          defaultUrls: 4,
+          maxUrls: 10,
+        },
+      });
+
+      invalidateSettingsCache();
+      const settings = await loadSettings("/nonexistent");
+      assert.strictEqual(settings.defaultUrls, 4, "defaultUrls explicitly set");
+      assert.strictEqual(settings.maxUrls, 10, "maxUrls (cap) explicitly set");
     } finally {
       if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
       else delete process.env.PI_CODING_AGENT_DIR;

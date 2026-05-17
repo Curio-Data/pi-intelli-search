@@ -23,14 +23,14 @@ export const intelliResearchTool = {
   promptSnippet: "intelli_research(query): full search → fetch → extract → collate pipeline with caching",
   promptGuidelines: [
     "Use intelli_research when the user needs current web information (docs, APIs, best practices, library updates). For quick factual questions, use intelli_search alone.",
-    "Use maxUrls to control breadth: 3 for targeted, 8 (default) for broad, 12 for exhaustive.",
+    "Use maxUrls to control breadth: 3 for targeted, 8 (default) for broad, 12 for exhaustive. The setting caps requests at maxUrls (default 16).",
     "Always provide focusPrompt to guide extraction. Without it the LLM extracts generically. Translate the user's intent into a specific extraction focus.",
     "The tool result contains a concise summary — use it directly. Only read .search/ cache files when the summary is insufficient.",
     "Use domains to target specific sites (e.g., ['docs.python.org']) when the user references a specific documentation source.",
   ],
   parameters: Type.Object({
     query: Type.String({ description: "What to research" }),
-    maxUrls: Type.Optional(Type.Number({ description: "Max URLs to fetch (default: 8)" })),
+    maxUrls: Type.Optional(Type.Number({ description: "Max URLs to fetch (default: 8, capped by settings.maxUrls)" })),
     domains: Type.Optional(Type.Array(Type.String(), { description: "Restrict search to these domains" })),
     focusPrompt: Type.Optional(Type.String({ description: "Focus guidance for all extractions" })),
   }),
@@ -49,7 +49,8 @@ export const intelliResearchTool = {
   ) {
     const settings = await loadSettings(ctx.cwd);
 
-    const maxUrls = params.maxUrls ?? settings.maxUrls;
+    const requestedMax = params.maxUrls ?? settings.defaultUrls;
+    const maxUrls = Math.min(requestedMax, settings.maxUrls);
     const searchConfig = resolveModelConfig(settings, "search");
     const extractConfig = resolveModelConfig(settings, "extract");
     const collateConfig = resolveModelConfig(settings, "collate");
