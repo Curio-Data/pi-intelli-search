@@ -16,12 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Breaking
 
 - **`maxUrls` split into `defaultUrls` and `maxUrls`.** The old `maxUrls` setting was always a fallback default, not a cap. It is now the hard cap (default 16). A new `defaultUrls` setting (default 8) provides the fallback when the agent does not pass `maxUrls` per call. Old settings containing `maxUrls` map automatically to the cap, matching what users always assumed it did. The pipeline now clamps agent requests with `Math.min(requested, maxUrls)`. The agent's SKILL.md heuristic (3/8/12) is now bounded by this setting.
+- **`llmsFullSites` setting removed.** The manual domain→URL map has been replaced by automatic discovery: every fetched domain is probed at `https://domain/llms-full.txt`. If the file exists (HTTP 200), it is downloaded raw to the cache. A small built-in list handles sites with non-standard paths (Cloudflare, Next.js, Vite). No configuration is needed.
 
 ### Added
 
 - **Auth warning on startup.** If no OpenRouter key is configured, a notification appears immediately rather than waiting for the first tool call to fail.
 - **Model validation before pipeline runs.** Typos in model names (e.g. `minimax/M3.7`) are caught before any API cost is incurred.
 - **Limit enforcement E2E tests.** Six E2E test scripts now validate the full extension install experience. New tests cover: `defaultUrls` and `maxUrls` cap clamping, `extractMaxChars` and `extractionMaxTokens` enforcement (20× reduction proven), `collationMaxTokens` enforcement (9.5× reduction proven), model override via settings, and upgrade migration from 0.7.0.
+- **Automatic llms-full.txt discovery.** Every domain in the search results is probed at `https://domain/llms-full.txt`. If the file exists it is downloaded raw to the cache for offline grep. A small built-in list handles sites with non-standard paths (Cloudflare `/product/llms-full.txt`, Next.js `/docs/llms-full.txt`, Vite). The manual `llmsFullSites` setting is removed.
 
 ### Fixed
 

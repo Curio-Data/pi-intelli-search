@@ -42,6 +42,5 @@ export interface ResearchSettings {
   fetchConcurrency: number;
   extractionMaxTokens: number;
   collationMaxTokens: number;
-  llmsFullSites: Record<string, string>;
   browserFingerprint: string;
 }
