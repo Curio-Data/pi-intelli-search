@@ -116,8 +116,7 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
     "collationMaxTokens": 4000,
     "fetchTimeoutMs": 20000,
     "fetchConcurrency": 4,
-    "browserFingerprint": "chrome_145",
-    "llmsFullSites": {}
+    "browserFingerprint": "chrome_145"
   }
 }
 ```
@@ -148,10 +147,7 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
     "collationMaxTokens": 16000,
     "fetchTimeoutMs": 30000,
     "fetchConcurrency": 2,
-    "browserFingerprint": "chrome_145",
-    "llmsFullSites": {
-      "docs.example.com": "https://docs.example.com/llms-full.txt"
-    }
+    "browserFingerprint": "chrome_145"
   }
 }
 ```
@@ -319,8 +315,6 @@ All model assignments are configurable. See [Model Configuration](#model-configu
 
 Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈24-40K for 8 pages).
 
-For sites with `llms-full.txt` ([Cloudflare](https://developers.cloudflare.com), [Next.js](https://nextjs.org), [Vite](https://vite.dev)), the raw file is downloaded to the cache for offline grep. No LLM processing is needed.
-
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 ## Cost
@@ -369,8 +363,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json` under th
     // Fetch behavior
     "fetchTimeoutMs": 20000,
     "fetchConcurrency": 4,
-    "browserFingerprint": "chrome_145",
-    "llmsFullSites": {}
+    "browserFingerprint": "chrome_145"
   }
 }
 ```
@@ -390,8 +383,21 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json` under th
 | `collationMaxTokens` | 4. Collate | `4000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. **Lower this when using a collation model with a small context window** (the output must fit alongside all extraction inputs). The summary you see in the agent context is bounded by this setting. |
 | `fetchTimeoutMs` | 2. Fetch | `20000` | Per-page fetch timeout in milliseconds. Increase if you research sites known to be slow. Fetches run in parallel so this does not multiply by page count. |
 | `fetchConcurrency` | 2. Fetch | `4` | Number of pages fetched simultaneously. Higher values (6-8) complete the fetch stage faster but may trigger rate limiting. Lower values (2) are gentler on target servers. |
-| `browserFingerprint` | 2. Fetch | `chrome_145` | TLS fingerprint used by [_wreq-js_](https://github.com/sqdshguy/wreq-js) to impersonate a browser. Determines which HTTP client signature sites see. Available profiles include `chrome_*`, `firefox_*`, `safari_*`, `edge_*`, and `opera_*` across many versions. Change this if a site blocks the default fingerprint. |
-| `llmsFullSites` | 2. Fetch | `{}` | Domain → full URL map for sites that publish an `llms-full.txt` file (a single Markdown file containing all documentation). When a research result comes from a configured domain, the file is downloaded raw to `sources/llms-full-*.md` for offline search with `grep` or `read`. No LLM processing is applied. **The value must be the complete URL to the file** (e.g. `{"docs.example.com": "https://docs.example.com/llms-full.txt"}`). Cloudflare Docs, Next.js, and Vite are built-in and do not need configuration. Only the domain of the first fetched result triggers the download. |
+| `browserFingerprint` | 2. Fetch | `chrome_145` | TLS fingerprint used by [_wreq-js_](https://github.com/sqdshguy/wreq-js) to impersonate a browser. Determines which HTTP client signature site sees. Available profiles include `chrome_*`, `firefox_*`, `safari_*`, `edge_*`, and `opera_*` across many versions. Change this if a site blocks the default fingerprint. |
+
+### Automatic llms-full.txt Discovery
+
+Sites that follow the [`llms-full.txt` convention](https://llmstxt.org) publish a single Markdown file containing their complete documentation. During the fetch stage, every domain in the search results is probed at `https://domain/llms-full.txt`. If the file exists (HTTP 200), it is downloaded raw to `sources/llms-full-*.md` for offline search with `grep` or `read`.
+
+A small built-in list handles sites with non-standard paths:
+
+| Site | Path Pattern |
+|------|-------------|
+| Cloudflare Docs | `/product/llms-full.txt` |
+| Next.js | `/docs/llms-full.txt` |
+| Vite | `/llms-full.txt` (root) |
+
+No configuration is needed. The probe and download are automatic.
 
 ## Cache Structure
 

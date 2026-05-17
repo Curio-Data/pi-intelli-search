@@ -16,7 +16,6 @@ const DEFAULT_SETTINGS: ResearchSettings = {
   fetchConcurrency: 4,
   extractionMaxTokens: 3000,
   collationMaxTokens: 4000,
-  llmsFullSites: {},
   browserFingerprint: "chrome_145",
 };
 
@@ -177,7 +176,6 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
     if (ns.fetchConcurrency != null) overrides.fetchConcurrency = ns.fetchConcurrency as number;
     if (ns.extractionMaxTokens != null) overrides.extractionMaxTokens = ns.extractionMaxTokens as number;
     if (ns.collationMaxTokens != null) overrides.collationMaxTokens = ns.collationMaxTokens as number;
-    if (ns.llmsFullSites) overrides.llmsFullSites = ns.llmsFullSites as ResearchSettings["llmsFullSites"];
     if (ns.browserFingerprint) overrides.browserFingerprint = ns.browserFingerprint as string;
   }
 
@@ -193,7 +191,6 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
   if (parsed.intelliFetchConcurrency != null && overrides.fetchConcurrency == null) overrides.fetchConcurrency = parsed.intelliFetchConcurrency as number;
   if (parsed.intelliExtractionMaxTokens != null && overrides.extractionMaxTokens == null) overrides.extractionMaxTokens = parsed.intelliExtractionMaxTokens as number;
   if (parsed.intelliCollationMaxTokens != null && overrides.collationMaxTokens == null) overrides.collationMaxTokens = parsed.intelliCollationMaxTokens as number;
-  if (parsed.intelliLlmsFullSites && !overrides.llmsFullSites) overrides.llmsFullSites = parsed.intelliLlmsFullSites as ResearchSettings["llmsFullSites"];
   if (parsed.intelliBrowserFingerprint && !overrides.browserFingerprint) overrides.browserFingerprint = parsed.intelliBrowserFingerprint as string;
 
   return overrides;

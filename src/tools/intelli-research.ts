@@ -195,18 +195,22 @@ export const intelliResearchTool = {
       signal,
     });
 
-    // Download llms-full.txt in parallel — runs alongside the report write.
-    // The raw file lands in sources/ for the agent to grep later.
-    const firstUrl = successPages[0]?.url;
-    const llmsFullPromise = firstUrl
-      ? downloadLlmsFullToCache(firstUrl, cachePath, settings.llmsFullSites).catch(() => null)
-      : Promise.resolve(null);
+    // Download llms-full.txt for all unique domains found in results.
+    // Built-in sites get their product-scoped paths; all others are probed
+    // at the de facto /llms-full.txt convention. Runs in parallel with
+    // the report write.
+    const hostnames = new Set(
+      successPages.map((p) => { try { return new URL(p.url).hostname; } catch { return null; } }).filter(Boolean) as string[],
+    );
+    const llmsFullPromises = [...hostnames].map((hostname) =>
+      downloadLlmsFullToCache(`https://${hostname}`, cachePath).catch(() => null),
+    );
 
     // Write report
     await writeReportFile(cachePath, params.query, collation, allExtractions, pages);
 
-    // Wait for llms-full download (doesn't fail if it doesn't complete)
-    await llmsFullPromise;
+    // Wait for llms-full downloads (don't fail if they don't complete)
+    await Promise.all(llmsFullPromises);
 
     // ═══════════════════════════════════════════
     // Stage 5: Cache suggest — find related previous searches

@@ -254,9 +254,8 @@ async function processMarkdownResponse(
 
 /**
  * Known site → llms-full.txt URL builder.
- * Sites that provide product-scoped llms-full.txt files.
- * Complex mappings (path-dependent) stay here; user-configurable simple
- * hostname → URL mappings are passed via extraSites.
+ * Sites whose llms-full.txt is not at the standard /llms-full.txt root.
+ * The standard /llms-full.txt convention is auto-probed for all other sites.
  */
 const BUILTIN_LLMS_FULL_SITES: Record<string, (url: string) => string | null> = {
   "developers.cloudflare.com": (url: string) => {
@@ -273,33 +272,45 @@ const BUILTIN_LLMS_FULL_SITES: Record<string, (url: string) => string | null> = 
 
 /**
  * Download llms-full.txt for a site and write it to the research cache.
+ *
+ * Resolution order:
+ *   1. Built-in mappings (Cloudflare product-scoped, Next.js, Vite)
+ *   2. HEAD-probe the standard /llms-full.txt convention at the domain root
+ *
  * The file is stored raw — no LLM processing needed. The agent can
  * grep/search it offline for future lookups.
- *
- * Checks user-configured sites first (hostname → URL), then built-in mappings.
  *
  * Returns the cache file path if downloaded, null otherwise.
  */
 export async function downloadLlmsFullToCache(
   url: string,
   cachePath: string,
-  extraSites: Record<string, string> = {},
   timeoutMs: number = 30_000,
 ): Promise<string | null> {
   const hostname = safeHostname(url);
   if (!hostname) return null;
 
-  // Check user-configured simple mappings first
-  let llmsFullUrl: string | null = extraSites[hostname] ?? null;
+  // 1. Check built-in mappings for sites with non-standard paths
+  const builder = BUILTIN_LLMS_FULL_SITES[hostname];
+  let llmsFullUrl: string | null = builder ? builder(url) : null;
 
-  // Fall back to built-in complex mappings
+  // 2. Fall back to the de facto convention: /llms-full.txt at the root
   if (!llmsFullUrl) {
-    const builder = BUILTIN_LLMS_FULL_SITES[hostname];
-    if (!builder) return null;
-    llmsFullUrl = builder(url);
+    llmsFullUrl = `https://${hostname}/llms-full.txt`;
   }
 
-  if (!llmsFullUrl) return null;
+  return downloadLlmsFullFile(llmsFullUrl, hostname, cachePath, timeoutMs);
+}
+
+/**
+ * Fetch an llms-full.txt URL and write it to the cache.
+ */
+async function downloadLlmsFullFile(
+  llmsFullUrl: string,
+  hostname: string,
+  cachePath: string,
+  timeoutMs: number,
+): Promise<string | null> {
 
   try {
     const response = await wreqFetch(llmsFullUrl, {

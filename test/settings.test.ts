@@ -19,7 +19,6 @@ const baseSettings: ResearchSettings = {
   fetchConcurrency: 4,
   extractionMaxTokens: 3000,
   collationMaxTokens: 4000,
-  llmsFullSites: {},
   browserFingerprint: "chrome_145",
 };
 
@@ -75,7 +74,6 @@ describe("loadSettings defaults", () => {
     assert.strictEqual(settings.fetchConcurrency, 4);
     assert.strictEqual(settings.extractionMaxTokens, 3000);
     assert.strictEqual(settings.collationMaxTokens, 4000);
-    assert.deepStrictEqual(settings.llmsFullSites, {});
     assert.strictEqual(settings.browserFingerprint, "chrome_145");
   });
 });
