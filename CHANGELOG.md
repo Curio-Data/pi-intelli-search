@@ -23,7 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Auth warning on startup.** If no OpenRouter key is configured, a notification appears immediately rather than waiting for the first tool call to fail.
 - **Model validation before pipeline runs.** Typos in model names (e.g. `minimax/M3.7`) are caught before any API cost is incurred.
 - **Limit enforcement E2E tests.** Seven E2E test scripts now validate the full extension install experience. New tests cover: `defaultUrls` and `maxUrls` cap clamping, `extractMaxChars` and `extractionMaxTokens` enforcement (20× reduction proven), `collationMaxTokens` enforcement (9.5× reduction proven), model override via settings, and upgrade migration from 0.7.0.
-- **Automatic llms-full.txt discovery.** Every domain in the search results is probed at `https://domain/llms-full.txt`. If the file exists it is downloaded raw to the cache for offline grep. A small built-in list handles sites with non-standard paths (Cloudflare `/product/llms-full.txt`, Next.js `/docs/llms-full.txt`, Vite). The manual `llmsFullSites` setting is removed.
+- **Automatic llms-full.txt discovery.** Every domain in the search results is probed at `https://domain/llms-full.txt`. If the file exists it is downloaded raw to the cache for offline grep. A small built-in list handles sites with non-standard paths (Cloudflare `/product/llms-full.txt`, Next.js `/docs/llms-full.txt`, Vite). The manual `llmsFullSites` setting is removed. A new `disableLlmsFullDiscovery` setting (default `false`) lets users opt out when the bandwidth cost of probing multiple domains is unwanted.
+- **Upgrade notification for `maxUrls` semantic change.** Users upgrading to 0.8.0 who had configured a custom `maxUrls` value see an in-product notification explaining it has become a hard cap (was a fallback default in 0.7.0). The `defaultUrls` setting is the new agent fallback.
 
 ### Fixed
 
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rate-limit monitoring no longer goes dark after session replacement.** The `sessionActive` flag was never reset on `session_start`, so rate-limit status in the footer stopped updating after `/new` or `/fork`.
 - **Version marker written after migration completes.** Previously the version file was persisted before migration ran. If migration failed mid-session, the user was permanently stranded on stale defaults with no recovery path.
 - **Auth check tightened.** An empty `openrouter: {}` in `auth.json` no longer suppresses the missing-key warning.
+- **Cloudflare llms-full.txt resolves product-scoped paths again.** The auto-discovery was passing a bare hostname (`developers.cloudflare.com`) to the path builder, which resolved the aggregated root documentation instead of the product-specific file. It now receives a representative page URL so subpaths like `/workers/llms-full.txt` are resolved correctly.
 
 ## [0.7.0] - 2026-05-14
 
