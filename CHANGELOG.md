@@ -11,16 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Extract and collate models now default to OpenRouter.** A single OpenRouter key covers all three pipeline stages. The separate MiniMax API key is no longer needed. Users upgrading from 0.7.0 whose model config matches the old default are auto-migrated with a notification.
 - **Settings now use a nested `pi-intelli-search` namespace.** Bare keys (e.g. `extractModel`) are preferred over flat `intelli*`-prefixed keys. Both formats still work; flat keys are deprecated and show a notification on every session start.
+- **README Settings section restructured.** A new Settings Reference table maps each setting to its pipeline stage, explains what it does, and gives guidance on when to change it. Context window considerations for small-window models (e.g. 256K) and cost-vs-speed trade-offs are called out.
 
 ### Breaking
 
-- **`maxUrls` split into `defaultUrls` and `maxUrls`.** The old `maxUrls` setting was always a fallback default, not a cap. It is now the hard cap (default 16). A new `defaultUrls` setting (default 8) provides the fallback when the agent does not pass `maxUrls` per call. Old settings containing `maxUrls` map automatically to the cap, matching what users always assumed it did. The agent's SKILL.md heuristic (3/8/12) is now clamped by this setting.
+- **`maxUrls` split into `defaultUrls` and `maxUrls`.** The old `maxUrls` setting was always a fallback default, not a cap. It is now the hard cap (default 16). A new `defaultUrls` setting (default 8) provides the fallback when the agent does not pass `maxUrls` per call. Old settings containing `maxUrls` map automatically to the cap, matching what users always assumed it did. The pipeline now clamps agent requests with `Math.min(requested, maxUrls)`. The agent's SKILL.md heuristic (3/8/12) is now bounded by this setting.
 
 ### Added
 
 - **Auth warning on startup.** If no OpenRouter key is configured, a notification appears immediately rather than waiting for the first tool call to fail.
 - **Model validation before pipeline runs.** Typos in model names (e.g. `minimax/M3.7`) are caught before any API cost is incurred.
-- **Additional E2E tests.** Tests now cover model override via settings, upgrade migration from 0.7.0, and custom cache directory configuration.
+- **Limit enforcement E2E tests.** Six E2E test scripts now validate the full extension install experience. New tests cover: `defaultUrls` and `maxUrls` cap clamping, `extractMaxChars` and `extractionMaxTokens` enforcement (20× reduction proven), `collationMaxTokens` enforcement (9.5× reduction proven), model override via settings, and upgrade migration from 0.7.0.
 
 ### Fixed
 
