@@ -470,9 +470,9 @@ All tools use the `intelli_` prefix to avoid collisions with other `Pi` extensio
 
 **The agent must never create a _GitHub_ Release or trigger `npm` publication without the user's explicit permission.**
 
-Publishing is fully automated via _GitHub_ Actions:
+Publishing is gated through `npm` staged publishing. CI submits the tarball; the user approves it on `npmjs.com` with 2FA before it goes live:
 - **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
-- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. Builds, tests, and publishes to `npm` with provenance signing.
+- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. Builds, tests, and runs `npm stage publish` against the `@curio-data` scope. Authentication is via OIDC trusted publishing (no stored token); provenance is signed automatically. The package is then **held in the staging queue** until a maintainer approves it on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) with 2FA. Until approval, the version does not appear on the public registry.
 
 ### Changelog Principles
 
@@ -501,9 +501,10 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 
    Both must match. If either is missing, fix before continuing.
 5. **Commit and push** the version bump and CHANGELOG together. Suggested commit subject: `Release vX.Y.Z`.
-6. **Request explicit user approval** before creating the GitHub Release. The agent must not publish without it (see `Release Policy` above).
-7. **On approval, create the GitHub Release** with tag `vX.Y.Z`. The workflow then publishes to `npm` automatically.
-8. **Verify publication.** After the workflow finishes, check `https://www.npmjs.com/package/@curio-data/pi-intelli-search` shows the new version.
+6. **Request explicit user approval** before creating the GitHub Release. The agent must not stage a publish without it (see `Release Policy` above).
+7. **On approval, create the GitHub Release** with tag `vX.Y.Z`. The workflow then runs `npm stage publish`, which submits the tarball to the staging queue. The agent's responsibility ends here.
+8. **User approves the staged package** on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) via the Staged Packages tab, providing 2FA. The agent must never attempt to approve a staged publish, even if given credentials.
+9. **Verify publication.** After approval, check `https://www.npmjs.com/package/@curio-data/pi-intelli-search` shows the new version.
 
 ### Testing the Publish Pipeline
 
@@ -514,9 +515,17 @@ Before the first real release, validate the pipeline with a pre-release:
 4. `npm` will **not** set pre-release versions as `latest`. Early adopters will not get it by default.
 5. Verify the package appears on `npm`, then delete the pre-release tag if not needed.
 
-### npm Secret
+### npm Trusted Publisher
 
-The workflow uses the `NPM_REPO` repository secret (`npm` access token). Ensure the `@curio-data` org exists on `npm` and the token has publish rights for `@curio-data/pi-intelli-search`.
+The workflow authenticates to `npm` via OIDC; no stored token is used. The trusted publisher is configured on the `@curio-data/pi-intelli-search` package page on `npmjs.com` under **Settings → Trusted Publishers** with the following bindings:
+
+- Organization: `Curio-Data`
+- Repository: `pi-intelli-search`
+- Workflow filename: `release.yml`
+- Environment: (none)
+- Allowed actions: `npm stage publish` only
+
+`npm publish` is intentionally **not** in the allowed actions list, so even a workflow compromise cannot push directly to the public registry; every release passes through the staged-publish approval gate.
 
 ## Compatibility
 

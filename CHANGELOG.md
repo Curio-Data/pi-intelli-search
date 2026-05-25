@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-05-25
+
+### Security
+
+- **Git history rewritten to normalise commit metadata.** All commit author and committer fields across the repository were collapsed to a single canonical identity (`miah0x41 <99686292+miah0x41@users.noreply.github.com>`) to remove stale personal addresses and unify the maintainer identity on the path to a stable `v1` release. Every commit SHA changed.
+- **Tags v0.3.1 through v0.8.0 rebuilt against the rewritten history.** Each tag now points to the corresponding rewritten commit. Tree contents are byte-identical to the pre-rewrite commits (only metadata was changed), so source-at-tag still matches the contents published to `npm` for each version.
+- **`npm` SLSA provenance attestations for v0.3.1 through v0.8.0 reference unreachable SHAs.** The attestations themselves remain valid as historical records and the published tarballs are unchanged. The `gitHead` recorded in each attestation points to a commit that is no longer reachable from any branch in this repository. From v0.9.0 onwards, attestations track the rewritten history.
+- **Publishing migrated to OIDC trusted publishing with staged release.** The release workflow now authenticates to `npm` via short-lived GitHub Actions OIDC tokens; the long-lived `NPM_REPO` automation token has been removed. The trusted publisher on `npmjs.com` is configured to permit `npm stage publish` only, so every release lands in the staging queue and requires a maintainer approval with 2FA before it appears on the public registry. Direct `npm publish` from CI is no longer possible.
+
+### Compatibility
+
+- No runtime or API changes between v0.8.0 and v0.9.0. The release exists to document the history rewrite; the package contents differ only by the version bump, the new CHANGELOG entry, and the new README Provenance section.
+
 ## [0.8.0] - 2026-05-17
 
 ### Changed
@@ -187,6 +200,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.9.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.9.0
 [0.8.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.8.0
 [0.7.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.6.0
