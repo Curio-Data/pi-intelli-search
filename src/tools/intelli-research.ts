@@ -129,9 +129,9 @@ export const intelliResearchTool = {
 
     async function executePipeline() {
     // ═══════════════════════════════════════════
-    // Stage 1: Search via Sonar
+    // Stage 1: Search
     // ═══════════════════════════════════════════
-    onUpdate?.(progressUpdate("search", "Querying Perplexity Sonar..."));
+    onUpdate?.(progressUpdate("search", `Querying ${searchConfig.provider}/${searchConfig.model}...`));
 
     let searchQuery = params.query;
     if (params.domains?.length) {

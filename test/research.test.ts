@@ -121,6 +121,18 @@ describe("progressUpdate", () => {
     assert.ok(text.includes("Page 3/8"), `Expected message in: ${text}`);
   });
 
+  it("message is passed through verbatim with no hardcoded model names", async () => {
+    const { progressUpdate } = await import("../src/tools/intelli-research.js");
+    // Simulate what the execute() call site does: pass a provider/model string
+    const message = "Querying openrouter/perplexity/sonar...";
+    const update = progressUpdate("search", message);
+    const text = update.content[0].text;
+    assert.ok(text.includes(message), `Expected message verbatim in content, got: ${text}`);
+    assert.strictEqual(update.details.message, message, "details.message must match verbatim");
+    // Regression guard: the message must not contain a different hardcoded model name
+    assert.ok(!text.includes("Perplexity Sonar"), "must not hardcode 'Perplexity Sonar'");
+  });
+
   it("calculates correct percentage for each stage", async () => {
     const { progressUpdate } = await import("../src/tools/intelli-research.js");
     const expected = { search: 20, fetch: 40, extract: 60, collate: 80, cache: 100 };
