@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Type } from "typebox";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT, CACHE_SUGGEST_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
@@ -11,6 +12,27 @@ import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, readIndex,
 import { textContent, extractSourceUrls, inferSourceType, inferCurrentness } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import type { FetchedPage, ExtractResult } from "../types.js";
+
+// ── Progress bar: pipeline stages ──
+const STAGES = ["search", "fetch", "extract", "collate", "cache"] as const;
+type StageName = (typeof STAGES)[number];
+
+const STAGE_LABELS: Record<StageName, string> = {
+  search: "Search",
+  fetch: "Fetch",
+  extract: "Extract",
+  collate: "Collate",
+  cache: "Cache",
+};
+
+interface ProgressDetails {
+  stage: StageName;
+  stageIdx: number;
+  totalStages: number;
+  message: string;
+  pct: number;
+  subProgress?: { current: number; total: number };
+}
 
 export const intelliResearchTool = {
   name: "intelli_research",
@@ -34,6 +56,21 @@ export const intelliResearchTool = {
     domains: Type.Optional(Type.Array(Type.String(), { description: "Restrict search to these domains" })),
     focusPrompt: Type.Optional(Type.String({ description: "Focus guidance for all extractions" })),
   }),
+
+  renderResult(
+    result: any,
+    { isPartial }: { isPartial: boolean; expanded: boolean },
+    theme: any,
+    _context: any,
+  ): Text {
+    if (isPartial && result.details?.stage) {
+      return renderProgressBar(result.details as ProgressDetails, theme);
+    }
+    // Final result: show the collated summary text (compact fallback)
+    const content = result.content?.[0];
+    const text = content?.type === "text" ? content.text : "";
+    return new Text(text, 0, 0);
+  },
 
   async execute(
     _toolCallId: string,
@@ -94,7 +131,7 @@ export const intelliResearchTool = {
     // ═══════════════════════════════════════════
     // Stage 1: Search via Sonar
     // ═══════════════════════════════════════════
-    onUpdate?.(progressUpdate("Searching...", 0.1));
+    onUpdate?.(progressUpdate("search", "Querying Perplexity Sonar..."));
 
     let searchQuery = params.query;
     if (params.domains?.length) {
@@ -118,7 +155,7 @@ export const intelliResearchTool = {
     // ═══════════════════════════════════════════
     // Stage 2: Fetch pages via wreq-js + Defuddle
     // ═══════════════════════════════════════════
-    onUpdate?.(progressUpdate(`Fetching ${urls.length} pages...`, 0.2));
+    onUpdate?.(progressUpdate("fetch", `Fetching ${urls.length} pages...`));
     const pages = await fetchPages(urls.map((u) => u.url), signal, {
       timeoutMs: settings.fetchTimeoutMs,
       browser: settings.browserFingerprint as unknown as import("wreq-js").BrowserProfile,
@@ -138,13 +175,17 @@ export const intelliResearchTool = {
     // ═══════════════════════════════════════════
     // Stage 3: Extract per-page via LLM (parallel)
     // ═══════════════════════════════════════════
-    onUpdate?.(progressUpdate(`Extracting from ${successPages.length} pages...`, 0.4));
+    onUpdate?.(progressUpdate("extract", `Extracting from ${successPages.length} pages...`, {
+      current: 0,
+      total: successPages.length,
+    }));
 
     const extractions: ExtractResult[] = await Promise.all(
       successPages.map(async (page, i) => {
-        onUpdate?.(progressUpdate(
-          `Extracting ${i + 1}/${successPages.length}: ${(page.title || page.url).slice(0, 40)}...`,
-          0.4 + (i / successPages.length) * 0.3,
+        const current = i + 1;
+        onUpdate?.(progressUpdate("extract",
+          `Page ${current}/${successPages.length}: ${(page.title || page.url).slice(0, 40)}...`,
+          { current, total: successPages.length },
         ));
 
         return extractPage(ctx, extractConfig, page, params.query, params.focusPrompt, settings.extractMaxChars, settings.extractionMaxTokens, signal);
@@ -166,7 +207,7 @@ export const intelliResearchTool = {
     // ═══════════════════════════════════════════
     // Stage 4: Collate via LLM + write cache
     // ═══════════════════════════════════════════
-    onUpdate?.(progressUpdate("Collating findings...", 0.85));
+    onUpdate?.(progressUpdate("collate", "Synthesising results..."));
 
     const cachePath = makeCachePath(params.query, ctx.cwd, settings.cacheDir);
     const allExtractions = [...extractions, ...blockedExtractions];
@@ -226,6 +267,9 @@ export const intelliResearchTool = {
     // Runs after the pipeline completes. Uses the extract model as a cheap
     // LLM judge to find semantically related cached searches. Never blocks
     // the main result — graceful degradation on failure.
+    // ── Stage 5 notification ──
+    onUpdate?.(progressUpdate("cache", "Checking related cached research..."));
+
     const currentSlug = cachePath.split("/").pop() ?? "";
     let suggestionsAppendix = "";
     try {
@@ -347,9 +391,63 @@ async function extractPage(
   }
 }
 
-function progressUpdate(message: string, progress: number) {
+/**
+ * Build a progress update payload with structured stage data.
+ * The content text is what the LLM sees as the tool result during streaming.
+ * The details carry structured data for renderResult to render a progress bar.
+ */
+export function progressUpdate(
+  stage: StageName,
+  message: string,
+  subProgress?: { current: number; total: number },
+) {
+  const stageIdx = STAGES.indexOf(stage);
+  const pct = Math.round(((stageIdx + 1) / STAGES.length) * 100);
   return {
-    content: [textContent(`⏳ ${message}`)],
-    details: { progress, phase: message },
+    content: [textContent(`⚙️ Stage ${stageIdx + 1}/${STAGES.length}: ${message}`)],
+    details: {
+      stage,
+      stageIdx,
+      totalStages: STAGES.length,
+      message,
+      pct,
+      ...(subProgress ? { subProgress } : {}),
+    } satisfies ProgressDetails,
   };
+}
+
+/**
+ * Render a progress bar showing pipeline stage completion for the TUI.
+ * Called by renderResult when isPartial is true during tool streaming.
+ * Shows overall bar, stage pills, current message, and optional sub-progress.
+ */
+export function renderProgressBar(details: ProgressDetails, theme: any): Text {
+  const { stage, stageIdx, totalStages, message, subProgress } = details;
+
+  // Overall progress bar
+  const barWidth = 20;
+  const filled = Math.round(((stageIdx + 1) / totalStages) * barWidth);
+  const bar = "█".repeat(filled) + "░".repeat(barWidth - filled);
+  const pct = Math.round(((stageIdx + 1) / totalStages) * 100);
+
+  // Stage pills: ✓ for done, ● for current, ○ for pending
+  const pills = STAGES.map((s, i) => {
+    const label = STAGE_LABELS[s];
+    if (i < stageIdx) return theme.fg("success", `✓${label}`);
+    if (i === stageIdx) return theme.fg("accent", theme.bold(`●${label}`));
+    return theme.fg("dim", `○${label}`);
+  }).join("  ");
+
+  let text = theme.fg("accent", `[${bar}] ${pct}%`) + "\n";
+  text += pills + "\n";
+  text += theme.fg("dim", message);
+
+  // Sub-progress bar for stages with per-item progress (e.g. extraction)
+  if (subProgress) {
+    const subFilled = Math.round((subProgress.current / subProgress.total) * barWidth);
+    const subBar = "▐".repeat(subFilled) + "░".repeat(barWidth - subFilled);
+    text += "\n  " + theme.fg("muted", `╰ [${subBar}] ${subProgress.current}/${subProgress.total}`);
+  }
+
+  return new Text(text, 0, 0);
 }

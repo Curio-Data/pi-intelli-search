@@ -68,6 +68,13 @@ async function main() {
     assert(hasDesc, `${tool.name}: missing description`);
     assert(hasParams, `${tool.name}: missing parameters`);
     assert(hasExecute, `${tool.name}: missing execute`);
+
+    // intelli_research must have renderResult for the progress bar
+    if (tool.name === "intelli_research") {
+      const hasRenderResult = typeof tool.renderResult === "function";
+      console.log(`     renderResult: ${hasRenderResult ? "✓" : "✗"}`);
+      assert(hasRenderResult, "intelli_research: missing renderResult");
+    }
   }
 
   // 6. Verify providers.ts module loads (models.json merge logic)
