@@ -41,9 +41,11 @@ All three pipeline stages (search, extract, collate) use independently configura
 
 The extension monitors `after_provider_response` events to detect HTTP 429 (rate-limiting) and 5xx (server errors) from [OpenRouter](https://openrouter.ai). Rate-limit status appears in the `Pi` footer via `ctx.ui.setStatus()`, debounced to avoid flooding. The `callLlm()` helper also uses an `onResponse` callback to throw immediately on 429 or 5xx before the response stream is consumed, providing actionable retry guidance.
 
-### Working Indicator
+### Working Indicator and Progress Bar
 
 During `intelli_research` execution, the extension sets a custom animated spinner (🔍 🌐 📄 ✨) via `ctx.ui.setWorkingIndicator()` (requires `Pi` 0.69.0+). This is restored to the default on completion or error. On older `Pi` versions, the call is silently skipped.
+
+In addition, the tool streams stage progress updates via `onUpdate()` and renders a progress bar in the tool output via `renderResult`. The progress bar shows overall completion, stage pills (✓/●/○), the current stage message, and a per-page sub-progress bar during extraction. The LLM receives structured `Stage X/5` prefixed text through `onUpdate` content. The `renderResult` function is a standard `Pi` tool API feature and requires no minimum version beyond what the extension already needs.
 
 ### Cache Suggest (Stage 5)
 

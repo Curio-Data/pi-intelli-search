@@ -137,7 +137,7 @@ Reference material for the curious. The decision logic above is what matters in 
 4. **Collate:** Another LLM call deduplicates across extractions and produces one concise summary. When sources conflict, official docs win.
 5. **Cache suggest:** An LLM judge finds semantically related previous searches in `.search/` and surfaces them as a supplementary `📚 Related cached searches` table.
 
-The agent (you) receives only the final summary, 1-2K tokens. The full pipeline is hidden inside the tool so your context stays clean.
+The agent (you) receives only the final summary, 1-2K tokens, plus brief `Stage X/5` progress text during execution. The full pipeline is hidden inside the tool so your context stays clean.
 
 ### Why Extract Before Collate?
 
