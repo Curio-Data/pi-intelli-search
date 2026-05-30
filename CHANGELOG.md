@@ -5,7 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.0] - 2026-05-25
+## [0.10.0] - 2026-05-30
+
+### Added
+
+- **Stage-based progress bar in `intelli_research` tool output.** A visual progress bar renders during tool streaming showing overall completion, stage pills with ✓/●/○ markers, the current stage message, and a per-page sub-progress bar during the extraction stage. The LLM receives structured `Stage X/5` prefixed text via `onUpdate` content.
+- `intelliResearchTool` now exports `progressUpdate()` and `renderProgressBar()` for unit testing.
+- 15 new unit tests for `progressUpdate` (stage indices, percentages, sub-progress propagation) and `renderProgressBar` (stage pill rendering, sub-progress bar, bar characters, message display).
+- Smoke test now verifies `renderResult` is present on `intelliResearchTool`.
+
+### Changed
+
+- `onUpdate` progress messages changed from `⏳ Searching...` format to structured `⚙️ Stage X/5: message` format. This is backward compatible.
 
 ### Security
 
@@ -200,6 +211,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.10.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.10.0
 [0.9.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.9.0
 [0.8.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.8.0
 [0.7.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.7.0
