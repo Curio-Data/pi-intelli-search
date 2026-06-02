@@ -77,7 +77,7 @@ src/
 
 ```
 .search/
-├── 2026-04-19-d1-worker-api/
+├── 2026-04-19-d1-worker-api-3f7a2c/
 │   ├── report.md                              # Collated summary + source index
 │   ├── query.txt                              # Original search query
 │   ├── extractions/                           # Per-page LLM extractions (≈3-5K each)

@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.74.0-blueviolet)](https://github.com/mariozechner/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/tests-168%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-171%20passing-brightgreen)
 
 Intelligent web research for [`Pi`](https://github.com/mariozechner/pi): search, extract, collate, and cache grounded web context in one tool call.
 
@@ -407,7 +407,7 @@ No configuration is needed. The probe and download are automatic.
 
 ```text
 .search/
-├── 2026-04-19-d1-worker-api/
+├── 2026-04-19-d1-worker-api-3f7a2c/
 │   ├── report.md               # Collated summary + source index
 │   ├── query.txt               # Original search query
 │   ├── extractions/            # Per-page LLM extractions (≈3-5K each)

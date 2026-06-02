@@ -1,6 +1,7 @@
 // src/cache.ts — .search/ cache read/write utilities
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import type { FetchedPage, ExtractResult } from "./types.js";
 
 export interface IndexEntry {
@@ -22,9 +23,17 @@ export function makeCachePath(query: string, cwd: string, cacheDir: string): str
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, "")
     .split(/\s+/)
+    .filter(Boolean)
     .slice(0, 5)
     .join("-");
-  return join(cacheDir, `${date}-${words}`);
+  // The 5-word stem is human-readable but collides easily: different queries
+  // can reduce to the same words, and the date prefix makes same-day collisions
+  // certain. Append a short hash of the full query so distinct queries get
+  // distinct directories (no silent overwrite) while the same query stays
+  // deterministic (re-research refreshes its own directory).
+  const hash = createHash("sha1").update(query).digest("hex").slice(0, 6);
+  const stem = words ? `${words}-${hash}` : hash;
+  return join(cacheDir, `${date}-${stem}`);
 }
 
 export function domainSlug(url: string): string {
@@ -120,6 +129,10 @@ async function updateIndex(cacheDir: string, slug: string, query: string): Promi
     index = { searches: [] };
   }
 
+  // Drop any prior entry for this slug so re-researching the same query
+  // refreshes its entry rather than accumulating duplicates (which would make
+  // cache suggest list the same search several times).
+  index.searches = index.searches.filter((e) => e.slug !== slug);
   index.searches.push({ slug, query, timestamp: new Date().toISOString() });
   await writeFile(indexPath, JSON.stringify(index, null, 2));
 }

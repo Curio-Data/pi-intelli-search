@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Extraction sub-progress bar now tracks real completions.** Progress was emitted when each page's extraction was launched (so the bar jumped straight to N/N); it now advances as each page finishes.
 - **`llms-full.txt` discovery no longer stalls or ignores cancellation.** The supplementary per-domain probes now honour the tool's abort signal (Esc cancels them) and use a tight 10s per-probe timeout instead of 30s, so a slow or hanging documentation host cannot delay the research result.
 - **Corrected `perplexity/sonar` cost metadata to $1/$1 per 1M tokens** (was $2/$8), matching OpenRouter. Affects Pi's `/model` cost estimates only.
+- **Cache directories no longer collide.** Two different queries that reduced to the same five-word slug on the same day overwrote each other's cache; a short hash of the full query is now appended to the directory name. Re-running the same query stays deterministic and refreshes its own entry instead of accumulating duplicate rows in the cache index (and duplicate cache-suggest results).
 
 ## [0.10.0] - 2026-06-02
 

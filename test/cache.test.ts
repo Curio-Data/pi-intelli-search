@@ -5,6 +5,7 @@ import {
   makeCachePath,
   domainSlug,
   readIndex,
+  writeCacheFiles,
   formatIndexForJudge,
   parseJudgeResponse,
   formatCacheSuggestions,
@@ -45,54 +46,119 @@ describe("domainSlug", () => {
 // ═══════════════════════════════════════════
 
 describe("makeCachePath", () => {
+  // makeCachePath appends a 6-hex-char hash of the full query to the
+  // date-slug stem to avoid same-day collisions. Tests assert the stem and
+  // the hash shape rather than a hardcoded digest.
+  const HASH = /-[0-9a-f]{6}$/;
+
   it("produces date-slug format under cacheDir", () => {
     const original = Date.prototype.toISOString;
     Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
-
-    const result = makeCachePath("How do Svelte 5 runes work?", "/project", ".search");
-    assert.strictEqual(result, ".search/2026-04-20-how-do-svelte-5-runes");
-
-    Date.prototype.toISOString = original;
+    try {
+      const result = makeCachePath("How do Svelte 5 runes work?", "/project", ".search");
+      assert.ok(result.startsWith(".search/2026-04-20-how-do-svelte-5-runes-"), result);
+      assert.match(result, HASH);
+    } finally {
+      Date.prototype.toISOString = original;
+    }
   });
 
   it("limits slug to first 5 words", () => {
     const original = Date.prototype.toISOString;
     Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
-
-    const result = makeCachePath("this is a very long query with many words", "/project", ".search");
-    assert.strictEqual(result, ".search/2026-04-20-this-is-a-very-long");
-
-    Date.prototype.toISOString = original;
+    try {
+      const result = makeCachePath("this is a very long query with many words", "/project", ".search");
+      assert.ok(result.startsWith(".search/2026-04-20-this-is-a-very-long-"), result);
+      assert.match(result, HASH);
+    } finally {
+      Date.prototype.toISOString = original;
+    }
   });
 
   it("strips non-alphanumeric characters from slug", () => {
     const original = Date.prototype.toISOString;
     Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
-
-    const result = makeCachePath("C++ vs Rust: which is faster?", "/project", ".search");
-    assert.strictEqual(result, ".search/2026-04-20-c-vs-rust-which-is");
-
-    Date.prototype.toISOString = original;
+    try {
+      const result = makeCachePath("C++ vs Rust: which is faster?", "/project", ".search");
+      assert.ok(result.startsWith(".search/2026-04-20-c-vs-rust-which-is-"), result);
+      assert.match(result, HASH);
+    } finally {
+      Date.prototype.toISOString = original;
+    }
   });
 
   it("respects custom cacheDir", () => {
     const original = Date.prototype.toISOString;
     Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
-
-    const result = makeCachePath("test query", "/project", ".cache/research");
-    assert.strictEqual(result, ".cache/research/2026-04-20-test-query");
-
-    Date.prototype.toISOString = original;
+    try {
+      const result = makeCachePath("test query", "/project", ".cache/research");
+      assert.ok(result.startsWith(".cache/research/2026-04-20-test-query-"), result);
+      assert.match(result, HASH);
+    } finally {
+      Date.prototype.toISOString = original;
+    }
   });
 
   it("handles single-word query", () => {
     const original = Date.prototype.toISOString;
     Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
+    try {
+      const result = makeCachePath("docker", "/project", ".search");
+      assert.ok(result.startsWith(".search/2026-04-20-docker-"), result);
+      assert.match(result, HASH);
+    } finally {
+      Date.prototype.toISOString = original;
+    }
+  });
 
-    const result = makeCachePath("docker", "/project", ".search");
-    assert.strictEqual(result, ".search/2026-04-20-docker");
+  it("disambiguates different queries that share the same first five words", () => {
+    const original = Date.prototype.toISOString;
+    Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
+    try {
+      // Both queries slugify to the same human-readable stem (first 5 words)...
+      const a = makeCachePath("react hooks useEffect cleanup function returns", "/p", ".search");
+      const b = makeCachePath("react hooks useEffect cleanup function memo", "/p", ".search");
+      assert.ok(a.includes("react-hooks-useeffect-cleanup-function"), `unexpected: ${a}`);
+      assert.ok(b.includes("react-hooks-useeffect-cleanup-function"), `unexpected: ${b}`);
+      // ...but must map to different cache directories so they do not overwrite.
+      assert.notStrictEqual(a, b);
+    } finally {
+      Date.prototype.toISOString = original;
+    }
+  });
 
-    Date.prototype.toISOString = original;
+  it("is deterministic: the same query on the same day maps to the same path", () => {
+    const original = Date.prototype.toISOString;
+    Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
+    try {
+      const a = makeCachePath("docker rootless setup", "/p", ".search");
+      const b = makeCachePath("docker rootless setup", "/p", ".search");
+      assert.strictEqual(a, b);
+    } finally {
+      Date.prototype.toISOString = original;
+    }
+  });
+});
+
+// ═══════════════════════════════════════════
+// writeCacheFiles → index dedupe
+// ═══════════════════════════════════════════
+
+describe("writeCacheFiles index", () => {
+  it("dedupes repeated slugs instead of accumulating duplicate entries", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "cache-idx-"));
+    try {
+      const cachePath = join(dir, "2026-04-20-test-query-abc123");
+      // Same query researched twice the same day → same cachePath/slug.
+      await writeCacheFiles(cachePath, [], [], "", "test query");
+      await writeCacheFiles(cachePath, [], [], "", "test query");
+
+      const index = await readIndex(dir);
+      const matching = index.searches.filter((e) => e.slug === "2026-04-20-test-query-abc123");
+      assert.strictEqual(matching.length, 1, "slug should appear exactly once in the index");
+    } finally {
+      await rm(dir, { recursive: true });
+    }
   });
 });
 
