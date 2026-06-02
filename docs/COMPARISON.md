@@ -62,7 +62,7 @@ How each extension discovers which URLs to fetch.
 
 `intelli-search` uses a single [_OpenRouter_](https://openrouter.ai) API key to access [_Perplexity Sonar_](https://docs.perplexity.ai) for search _and_ any model for extraction and collation. `pi-web-providers` and `pi-web-access` give more search backends, but each requires its own API key, account, and setup. `rpiv-web-tools` and `pi-amplike` also require separate provider accounts.
 
-Perplexity Sonar is the default search model. OpenRouter also exposes a `web_search` server tool that equips any model with URL-cited search results (using Exa, Parallel, Firecrawl, or native provider engines). If a future model surpasses Sonar for grounded search, the architecture swaps it via `intelliSearchModel` in settings without changing the rest of the pipeline.
+Perplexity Sonar is the default search model. OpenRouter also exposes a `web_search` server tool that equips any model with URL-cited search results (using Exa, Parallel, Firecrawl, or native provider engines). If a future model surpasses Sonar for grounded search, the architecture swaps it via `searchModel` in the `pi-intelli-search` settings namespace without changing the rest of the pipeline.
 
 ## Fetch
 
@@ -102,7 +102,7 @@ What happens to page content after fetching, before it reaches the agent.
 
 `intelli-search` is the only extension among those compared that uses an LLM to extract query-relevant content from each page before it enters the agent's context. This compresses ≈50K chars per page to ≈3-5K of focused content. The `focusPrompt` parameter lets the agent specify exactly what to look for across all pages.
 
-[_MiniMax_](https://minimax.io) M2.7 (via [OpenRouter](https://openrouter.ai)) is the default extraction model. A single OpenRouter key covers all three pipeline stages. Any model `Pi` supports can be swapped in via `intelliExtractModel` in settings. Extraction quality scales independently from cost, from cheap flash models to full reasoning models.
+[_MiniMax_](https://minimax.io) M2.7 (via [OpenRouter](https://openrouter.ai)) is the default extraction model. A single OpenRouter key covers all three pipeline stages. Any model `Pi` supports can be swapped in via `extractModel` in the `pi-intelli-search` settings namespace. Extraction quality scales independently from cost, from cheap flash models to full reasoning models.
 
 **Trade-off:** This approach is vulnerable to the extraction LLM's ability to identify relevant content. A weak extraction model may miss key details or introduce errors. The other extensions deliver full page content to the agent, which can be advantageous when the main LLM is better equipped to filter noise than a smaller, cheaper extraction model. If the main LLM is confused by non-relevant material, however, pre-extraction keeps the context clean and focused.
 
@@ -124,7 +124,7 @@ What happens after individual pages are processed, to synthesise findings.
 
 `intelli-search` is the only extension among those compared with a collation stage. The collation LLM sees all per-page extractions and produces a single synthesised summary. It deduplicates overlapping information, flags conflicting claims from different sources, and preserves URLs for attribution. Without this, the agent has to do this work itself, consuming context and reasoning tokens for mechanical synthesis.
 
-Like extraction, the collation model is configurable. Swap it via `intelliCollateModel` in settings to use any model `Pi` supports.
+Like extraction, the collation model is configurable. Swap it via `collateModel` in the `pi-intelli-search` settings namespace to use any model `Pi` supports.
 
 ## Caching
 

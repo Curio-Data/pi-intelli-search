@@ -30,8 +30,8 @@ For sites that provide `llms-full.txt` ([Cloudflare](https://developers.cloudfla
 
 All three pipeline stages (search, extract, collate) use independently configurable models. The defaults are:
 
-- **Extract and Collate:** MiniMax M2.7 via [OpenRouter](https://openrouter.ai). MiniMax M2.7 is a reasoning model and requires a `reasoning` parameter. The extension uses `completeSimple()` with `reasoning: "low"`, which sends the required parameter through OpenRouter's endpoint. Override with `intelliExtractModel` or `intelliCollateModel` in settings to use any model `Pi` supports.
-- **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai). _Sonar_ returns a synthesised answer with inline citations. This is better than a bare URL list because the agent gets immediate context plus source URLs for follow-up. Override with `intelliSearchModel` in settings.
+- **Extract and Collate:** MiniMax M2.7 via [OpenRouter](https://openrouter.ai). MiniMax M2.7 is a reasoning model and requires a `reasoning` parameter. The extension uses `completeSimple()` with `reasoning: "low"`, which sends the required parameter through OpenRouter's endpoint. Override `extractModel` or `collateModel` in the `pi-intelli-search` settings namespace to use any model `Pi` supports.
+- **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai). _Sonar_ returns a synthesised answer with inline citations. This is better than a bare URL list because the agent gets immediate context plus source URLs for follow-up. Override `searchModel` in the `pi-intelli-search` settings namespace.
 
 ### Custom Model Registration
 
