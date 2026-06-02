@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Source URLs containing parentheses are no longer truncated.** Links to pages like Wikipedia disambiguation (`Foo_(disambiguation)`) and MSDN API references (`...format(v=net-8.0)`) kept only the text up to the first `)`, producing malformed URLs that failed to fetch. The markdown link parser now preserves balanced parentheses.
 - **Extraction sub-progress bar now tracks real completions.** Progress was emitted when each page's extraction was launched (so the bar jumped straight to N/N); it now advances as each page finishes.
+- **`llms-full.txt` discovery no longer stalls or ignores cancellation.** The supplementary per-domain probes now honour the tool's abort signal (Esc cancels them) and use a tight 10s per-probe timeout instead of 30s, so a slow or hanging documentation host cannot delay the research result.
 - **Corrected `perplexity/sonar` cost metadata to $1/$1 per 1M tokens** (was $2/$8), matching OpenRouter. Affects Pi's `/model` cost estimates only.
 
 ## [0.10.0] - 2026-06-02

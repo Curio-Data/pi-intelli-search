@@ -262,8 +262,13 @@ export const intelliResearchTool = {
     // Pass a representative page URL per hostname (not the bare hostname)
     // so path-aware builders (e.g. Cloudflare product-scoped paths) still
     // receive the path context they need to construct the correct URL.
+    // These probes are supplementary cache artifacts, not part of the returned
+    // summary. Each honours the tool signal (Esc cancels) and a tight timeout
+    // (fetch.ts: LLMS_FULL_TIMEOUT_MS), so a slow or hanging documentation host
+    // can no longer stall the result. They run concurrently with the report
+    // write below, so the worst-case added latency is one probe timeout.
     let llmsFullPromises: Promise<unknown>[] = [];
-    if (!settings.disableLlmsFullDiscovery) {
+    if (!settings.disableLlmsFullDiscovery && !signal?.aborted) {
       const sampleUrlByHost = new Map<string, string>();
       for (const p of successPages) {
         try {
@@ -272,7 +277,7 @@ export const intelliResearchTool = {
         } catch { /* skip malformed URLs */ }
       }
       llmsFullPromises = [...sampleUrlByHost.values()].map((sampleUrl) =>
-        downloadLlmsFullToCache(sampleUrl, cachePath).catch(() => null),
+        downloadLlmsFullToCache(sampleUrl, cachePath, signal).catch(() => null),
       );
     }
 

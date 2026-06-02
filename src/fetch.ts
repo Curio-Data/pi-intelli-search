@@ -254,6 +254,15 @@ async function processMarkdownResponse(
 // ---------------------------------------------------------------------------
 
 /**
+ * Per-probe timeout for llms-full.txt discovery. These downloads are
+ * supplementary (raw docs cached for offline grep), not part of the returned
+ * summary, so the budget is deliberately tight: a slow or hanging documentation
+ * host must not stall the user-facing research result. Probes also honour the
+ * caller's AbortSignal, so pressing Esc cancels them immediately.
+ */
+export const LLMS_FULL_TIMEOUT_MS = 10_000;
+
+/**
  * Known site → llms-full.txt URL builder.
  * Sites whose llms-full.txt is not at the standard /llms-full.txt root.
  * The standard /llms-full.txt convention is auto-probed for all other sites.
@@ -286,8 +295,10 @@ const BUILTIN_LLMS_FULL_SITES: Record<string, (url: string) => string | null> = 
 export async function downloadLlmsFullToCache(
   url: string,
   cachePath: string,
-  timeoutMs: number = 30_000,
+  signal?: AbortSignal,
+  timeoutMs: number = LLMS_FULL_TIMEOUT_MS,
 ): Promise<string | null> {
+  if (signal?.aborted) return null;
   const hostname = safeHostname(url);
   if (!hostname) return null;
 
@@ -300,7 +311,7 @@ export async function downloadLlmsFullToCache(
     llmsFullUrl = `https://${hostname}/llms-full.txt`;
   }
 
-  return downloadLlmsFullFile(llmsFullUrl, hostname, cachePath, timeoutMs);
+  return downloadLlmsFullFile(llmsFullUrl, hostname, cachePath, timeoutMs, signal);
 }
 
 /**
@@ -311,13 +322,14 @@ async function downloadLlmsFullFile(
   hostname: string,
   cachePath: string,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<string | null> {
 
   try {
     const response = await wreqFetch(llmsFullUrl, {
       browser: "chrome_145",
       os: "windows",
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: combineSignal(signal, timeoutMs),
     });
     if (!response.ok) return null;
 

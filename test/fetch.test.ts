@@ -1,6 +1,10 @@
 // test/fetch.test.ts — Unit tests for fetch utilities
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm, readdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { downloadLlmsFullToCache, LLMS_FULL_TIMEOUT_MS } from "../src/fetch.js";
 
 describe("fetch module structure", () => {
   it("exports fetchPages as a function", async () => {
@@ -18,6 +22,49 @@ describe("fetch module structure", () => {
     // FetchOptions is a type, so it's not available at runtime.
     // Just verify the module loaded successfully.
     assert.ok(mod.fetchPages !== undefined);
+  });
+});
+
+// llms-full.txt discovery is supplementary and must never stall the research
+// result: it honours the caller's AbortSignal and uses a tight per-probe
+// timeout instead of the original 30s. These tests are network-free.
+describe("downloadLlmsFullToCache (cancellable, bounded)", () => {
+  it("uses a tight per-probe timeout (no 30s stall)", () => {
+    assert.ok(
+      LLMS_FULL_TIMEOUT_MS <= 15_000,
+      `expected a tight probe timeout, got ${LLMS_FULL_TIMEOUT_MS}ms`,
+    );
+  });
+
+  it("returns null for a URL with no resolvable hostname (no network)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "llmsfull-"));
+    try {
+      const result = await downloadLlmsFullToCache("not-a-url", dir);
+      assert.strictEqual(result, null);
+      // Nothing should have been written.
+      assert.deepStrictEqual(await readdir(dir), []);
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  it("returns null immediately when the signal is already aborted, writing nothing", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "llmsfull-"));
+    try {
+      const start = Date.now();
+      const result = await downloadLlmsFullToCache(
+        "https://example.com/docs/page",
+        dir,
+        AbortSignal.abort(),
+      );
+      const elapsed = Date.now() - start;
+      assert.strictEqual(result, null);
+      // Must not block on the network or the timeout: aborts are honoured up front.
+      assert.ok(elapsed < 3000, `aborted probe should return fast, took ${elapsed}ms`);
+      assert.deepStrictEqual(await readdir(dir), []);
+    } finally {
+      await rm(dir, { recursive: true });
+    }
   });
 });
 
