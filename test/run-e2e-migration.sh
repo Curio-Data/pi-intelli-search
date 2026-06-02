@@ -2,9 +2,9 @@
 #
 # test/run-e2e-migration.sh — E2E test for default migration on upgrade
 #
-# Simulates a user upgrading from 0.7.0 to 0.8.0. In 0.7.0, the
+# Simulates a user upgrading from 0.7.0. In 0.7.0, the
 # default extract/collate model was minimax/MiniMax-M2.7 (direct
-# provider). In 0.8.0, it switches to openrouter/minimax/minimax-m2.7.
+# provider). In 0.10.0, it is openrouter/minimax/minimax-m2.7.
 #
 # The test writes a 0.7.0 version marker and old-style settings,
 # then runs the current extension. Verifies:
@@ -109,7 +109,7 @@ cat > "$ISOLATED_AGENT_DIR/models.json" <<'MEOF'
 MEOF
 
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║  Running pi — print mode (simulated 0.7.0→0.8.0     ║"
+echo "║  Running pi — print mode (simulated 0.7.0→0.10.0   ║"
 echo "║  migration)                                         ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
@@ -152,10 +152,10 @@ ERRORS=0
 # 1. Migration must have happened — the version file should now say 0.8.0
 if [ -f "$ISOLATED_AGENT_DIR/.pi-intelli-search-version.json" ]; then
   MIGRATED_VERSION=$(jq -r '.version' "$ISOLATED_AGENT_DIR/.pi-intelli-search-version.json" 2>/dev/null || echo "unknown")
-  if [ "$MIGRATED_VERSION" = "0.8.0" ]; then
+  if [ "$MIGRATED_VERSION" = "0.10.0" ]; then
     echo "✅ Version marker migrated: 0.7.0 → $MIGRATED_VERSION"
   else
-    echo "❌ Version marker not migrated (got: $MIGRATED_VERSION, expected: 0.8.0)"
+    echo "❌ Version marker not migrated (got: $MIGRATED_VERSION, expected: 0.10.0)"
     ERRORS=$((ERRORS + 1))
   fi
 else
@@ -228,4 +228,4 @@ if [ "$ERRORS" -gt 0 ]; then
   exit 1
 fi
 
-echo "✅ E2E migration test passed — 0.7.0→0.8.0 upgrade works"
+echo "✅ E2E migration test passed — 0.7.0→0.10.0 upgrade works"
