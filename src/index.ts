@@ -14,7 +14,7 @@ import { ensureCustomModels } from "./providers.js";
 import { invalidateSettingsCache, hasFlatKeys, migrateDefaults, loadSettings, setMigrationContext } from "./settings.js";
 import { getAgentDir } from "./util.js";
 
-const CURRENT_VERSION = "0.8.0";
+const CURRENT_VERSION = "0.10.0";
 
 /**
  * Check whether the openrouter provider has auth configured.

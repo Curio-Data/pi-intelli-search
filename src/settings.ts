@@ -56,6 +56,12 @@ const DEFAULT_HISTORY: Record<string, {
     // maxUrls is now a hard cap (was a default pre-0.8.0).
     // defaultUrls is the new agent fallback.
   },
+  "0.10.0": {
+    // Defaults unchanged from 0.8.0. No model changes.
+    extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+    collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  },
 };
 
 /** In-memory cache: invalidated on session_start / reload. */

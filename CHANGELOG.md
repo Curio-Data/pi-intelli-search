@@ -5,18 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.10.0] - 2026-05-30
+## [0.10.0] - 2026-06-02
 
 ### Added
 
-- **Stage-based progress bar in `intelli_research` tool output.** A visual progress bar renders during tool streaming showing overall completion, stage pills with ✓/●/○ markers, the current stage message, and a per-page sub-progress bar during the extraction stage. The LLM receives structured `Stage X/5` prefixed text via `onUpdate` content.
-- `intelliResearchTool` now exports `progressUpdate()` and `renderProgressBar()` for unit testing.
-- 15 new unit tests for `progressUpdate` (stage indices, percentages, sub-progress propagation) and `renderProgressBar` (stage pill rendering, sub-progress bar, bar characters, message display).
-- Smoke test now verifies `renderResult` is present on `intelliResearchTool`.
+- **Stage-based progress bar in `intelli_research` tool output.** A visual progress bar renders during tool streaming showing overall completion, stage pills with ✓/●/○ markers, the current stage message, and a per-page sub-progress bar during the extraction stage.
+- `@earendil-works/pi-tui` added to peer dependencies (used by `renderResult` for progress bar rendering).
 
 ### Changed
 
-- `onUpdate` progress messages changed from `⏳ Searching...` format to structured `⚙️ Stage X/5: message` format. This is backward compatible.
+- `onUpdate` progress messages changed from `⏳ Searching...` format to structured `⚙️ Stage X/5: message` format. Backward compatible.
+
+### Fixed
+
+- Search progress message no longer hardcodes "Perplexity Sonar". It now uses the configured search model so the message is correct when a different model is configured.
+
+## [0.9.0] - 2026-05-25
 
 ### Security
 
