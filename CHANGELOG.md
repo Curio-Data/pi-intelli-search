@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`extractionConcurrency` setting (default 4).** Per-page extractions now run through a bounded worker pool instead of all at once, so a wide result set (up to `maxUrls` pages) no longer fires that many simultaneous extract-model calls and trips provider rate limits. Tune via the `pi-intelli-search` settings namespace.
+
+### Fixed
+
+- **Source URLs containing parentheses are no longer truncated.** Links to pages like Wikipedia disambiguation (`Foo_(disambiguation)`) and MSDN API references (`...format(v=net-8.0)`) kept only the text up to the first `)`, producing malformed URLs that failed to fetch. The markdown link parser now preserves balanced parentheses.
+- **Extraction sub-progress bar now tracks real completions.** Progress was emitted when each page's extraction was launched (so the bar jumped straight to N/N); it now advances as each page finishes.
+- **Corrected `perplexity/sonar` cost metadata to $1/$1 per 1M tokens** (was $2/$8), matching OpenRouter. Affects Pi's `/model` cost estimates only.
+
 ## [0.10.0] - 2026-06-02
 
 ### Added

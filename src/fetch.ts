@@ -15,6 +15,7 @@ import { parseHTML } from "linkedom";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FetchedPage } from "./types.js";
+import { mapWithConcurrency } from "./util.js";
 
 export interface FetchOptions {
   maxChars: number;
@@ -471,22 +472,13 @@ export async function fetchPages(
   opts?: Partial<FetchOptions>,
 ): Promise<FetchedPage[]> {
   const fullOpts = { ...DEFAULT_FETCH_OPTIONS, ...opts };
-  const results: (FetchedPage | null)[] = new Array(urls.length).fill(null);
-  let nextIndex = 0;
 
-  const worker = async () => {
-    while (nextIndex < urls.length) {
-      if (signal?.aborted) return;
-      const index = nextIndex++;
-      results[index] = await fetchSingle(urls[index], fullOpts, signal);
-    }
-  };
-
-  const workers = Array.from(
-    { length: Math.min(fullOpts.concurrency, urls.length) },
-    () => worker(),
+  const results = await mapWithConcurrency(
+    urls,
+    fullOpts.concurrency,
+    (url) => fetchSingle(url, fullOpts, signal),
+    { signal },
   );
-  await Promise.all(workers);
 
   return results.map((r, i) =>
     r ?? { url: urls[i], title: "", content: "", status: "error" as const, error: "Worker did not complete" },

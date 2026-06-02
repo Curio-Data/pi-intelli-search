@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS: ResearchSettings = {
   extractMaxChars: 150_000,
   fetchTimeoutMs: 20_000,
   fetchConcurrency: 4,
+  extractionConcurrency: 4,
   extractionMaxTokens: 3000,
   collationMaxTokens: 4000,
   browserFingerprint: "chrome_145",
@@ -215,6 +216,7 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
     if (ns.extractMaxChars != null) overrides.extractMaxChars = ns.extractMaxChars as number;
     if (ns.fetchTimeoutMs != null) overrides.fetchTimeoutMs = ns.fetchTimeoutMs as number;
     if (ns.fetchConcurrency != null) overrides.fetchConcurrency = ns.fetchConcurrency as number;
+    if (ns.extractionConcurrency != null) overrides.extractionConcurrency = ns.extractionConcurrency as number;
     if (ns.extractionMaxTokens != null) overrides.extractionMaxTokens = ns.extractionMaxTokens as number;
     if (ns.collationMaxTokens != null) overrides.collationMaxTokens = ns.collationMaxTokens as number;
     if (ns.browserFingerprint) overrides.browserFingerprint = ns.browserFingerprint as string;

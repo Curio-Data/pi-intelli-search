@@ -21,6 +21,47 @@ export function getAgentDir(): string {
 }
 
 /**
+ * Map over `items` running at most `concurrency` tasks concurrently.
+ *
+ * A bounded worker pool: each worker pulls the next index, runs `fn`, stores
+ * the result by index (input order preserved), then fires `onSettled`. This
+ * caps how many expensive operations (network fetches, LLM calls) run at once,
+ * so a wide result set cannot launch dozens of simultaneous requests and trip
+ * provider rate limits.
+ *
+ * Workers stop pulling new work once `signal` aborts: in-flight tasks finish
+ * but no new ones start, and indices that never ran are left `undefined`.
+ * `fn` is expected to handle its own errors and resolve to a result; a throw
+ * propagates and rejects the returned promise (matching Promise.all).
+ */
+export async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>,
+  opts?: {
+    signal?: AbortSignal;
+    onSettled?: (item: T, index: number, result: R) => void;
+  },
+): Promise<Array<R | undefined>> {
+  const results: Array<R | undefined> = new Array(items.length).fill(undefined);
+  let nextIndex = 0;
+  const limit = Math.max(1, Math.min(concurrency, items.length));
+
+  const worker = async () => {
+    while (nextIndex < items.length) {
+      if (opts?.signal?.aborted) return;
+      const index = nextIndex++;
+      const result = await fn(items[index], index);
+      results[index] = result;
+      opts?.onSettled?.(items[index], index, result);
+    }
+  };
+
+  await Promise.all(Array.from({ length: limit }, () => worker()));
+  return results;
+}
+
+/**
  * Extract source URLs from LLM-generated markdown text.
  * Parses markdown link format: [title](url)
  */

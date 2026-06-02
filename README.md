@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.74.0-blueviolet)](https://github.com/mariozechner/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/tests-159%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-165%20passing-brightgreen)
 
 Intelligent web research for [`Pi`](https://github.com/mariozechner/pi): search, extract, collate, and cache grounded web context in one tool call.
 
@@ -112,6 +112,7 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
     "maxUrls": 16,
     "cacheDir": ".search",
     "extractMaxChars": 150000,
+    "extractionConcurrency": 4,
     "extractionMaxTokens": 3000,
     "collationMaxTokens": 4000,
     "fetchTimeoutMs": 20000,
@@ -379,6 +380,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json` under th
 | `maxUrls` | 1 → 2 | `16` | Hard cap on URLs fetched. Lower caps mean faster responses and lower cost; higher caps allow more thorough research. Each extra URL adds roughly $0.004 in extract cost with the default model. Requests above the cap are silently clamped. |
 | `cacheDir` | 4, 5 | `.search` | Directory where research sessions are cached. Change this to keep project-specific research separate. Example: `".my-research-cache"`. |
 | `extractMaxChars` | 3. Extract | `150000` | Maximum characters of raw page content fed to the extract LLM per page. **Lower this when using an extract model with a small context window** (e.g. 256K) to prevent context overflow. Raise it if pages are truncated and your model has ample headroom. Each 50K chars consumes roughly 12K input tokens. |
+| `extractionConcurrency` | 3. Extract | `4` | Number of per-page extractions sent to the extract model simultaneously. Bounded so a wide result set does not fire many concurrent LLM calls and trigger rate limiting. Raise it (6-8) on generous rate limits for faster extraction; lower it (1-2) on tight limits. |
 | `extractionMaxTokens` | 3. Extract | `3000` | Maximum output tokens for each per-page extraction. Higher values preserve more detail at higher cost. **Lower this when using a model with a small context window** so the output does not crowd out the input. The extract prompt targets 3,000-5,000 characters; 3,000 tokens covers this comfortably. |
 | `collationMaxTokens` | 4. Collate | `4000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. **Lower this when using a collation model with a small context window** (the output must fit alongside all extraction inputs). The summary you see in the agent context is bounded by this setting. |
 | `fetchTimeoutMs` | 2. Fetch | `20000` | Per-page fetch timeout in milliseconds. Increase if you research sites known to be slow. Fetches run in parallel so this does not multiply by page count. |

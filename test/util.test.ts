@@ -7,7 +7,10 @@ import {
   extractSourceUrls,
   inferSourceType,
   inferCurrentness,
+  mapWithConcurrency,
 } from "../src/util.js";
+
+const tick = () => new Promise<void>((r) => setTimeout(r, 5));
 
 describe("textContent", () => {
   it("creates a properly typed text content object", () => {
@@ -100,6 +103,91 @@ describe("extractSourceUrls", () => {
       { url: "https://react.dev", title: "React" },
       { url: "https://vuejs.org", title: "Vue" },
     ]);
+  });
+});
+
+describe("mapWithConcurrency", () => {
+  it("never exceeds the concurrency limit", async () => {
+    let active = 0;
+    let peak = 0;
+    const items = Array.from({ length: 12 }, (_, i) => i);
+    await mapWithConcurrency(items, 3, async (n) => {
+      active++;
+      peak = Math.max(peak, active);
+      await tick();
+      active--;
+      return n;
+    });
+    assert.ok(peak <= 3, `peak concurrency ${peak} exceeded limit of 3`);
+    assert.ok(peak >= 2, `expected real concurrency, peak was only ${peak}`);
+  });
+
+  it("preserves input order regardless of completion order", async () => {
+    const items = [40, 10, 30, 20];
+    // Earlier items resolve later, so completion order differs from input order.
+    const results = await mapWithConcurrency(items, 4, async (ms) => {
+      await new Promise<void>((r) => setTimeout(r, ms));
+      return ms;
+    });
+    assert.deepStrictEqual(results, [40, 10, 30, 20]);
+  });
+
+  it("invokes onSettled exactly once per item with index and result", async () => {
+    const items = ["a", "b", "c"];
+    const settled: Array<{ item: string; index: number; result: string }> = [];
+    await mapWithConcurrency(
+      items,
+      2,
+      async (s, i) => `${s}-${i}`,
+      { onSettled: (item, index, result) => settled.push({ item, index, result }) },
+    );
+    assert.strictEqual(settled.length, 3);
+    // Sort by index for a stable assertion (completion order is non-deterministic).
+    settled.sort((a, b) => a.index - b.index);
+    assert.deepStrictEqual(settled, [
+      { item: "a", index: 0, result: "a-0" },
+      { item: "b", index: 1, result: "b-1" },
+      { item: "c", index: 2, result: "c-2" },
+    ]);
+  });
+
+  it("stops launching new work once the signal is aborted", async () => {
+    const controller = new AbortController();
+    let started = 0;
+    const items = Array.from({ length: 10 }, (_, i) => i);
+    const results = await mapWithConcurrency(
+      items,
+      2,
+      async (n) => {
+        started++;
+        if (n === 1) controller.abort(); // abort during the first wave
+        await tick();
+        return n;
+      },
+      { signal: controller.signal },
+    );
+    assert.ok(started < items.length, `expected early stop, but started all ${started}`);
+    // Unrun indices are left undefined.
+    assert.ok(results.some((r) => r === undefined), "aborted run should leave holes");
+  });
+
+  it("handles an empty item list", async () => {
+    const results = await mapWithConcurrency([], 4, async (x) => x);
+    assert.deepStrictEqual(results, []);
+  });
+
+  it("degrades to serial for non-positive concurrency", async () => {
+    let active = 0;
+    let peak = 0;
+    const items = [1, 2, 3];
+    await mapWithConcurrency(items, 0, async (n) => {
+      active++;
+      peak = Math.max(peak, active);
+      await tick();
+      active--;
+      return n;
+    });
+    assert.strictEqual(peak, 1, "non-positive concurrency should run one at a time");
   });
 });
 

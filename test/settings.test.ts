@@ -17,6 +17,7 @@ const baseSettings: ResearchSettings = {
   extractMaxChars: 150_000,
   fetchTimeoutMs: 20_000,
   fetchConcurrency: 4,
+  extractionConcurrency: 4,
   extractionMaxTokens: 3000,
   collationMaxTokens: 4000,
   browserFingerprint: "chrome_145",
@@ -72,6 +73,7 @@ describe("loadSettings defaults", () => {
     assert.strictEqual(settings.extractMaxChars, 150_000);
     assert.strictEqual(settings.fetchTimeoutMs, 20_000);
     assert.strictEqual(settings.fetchConcurrency, 4);
+    assert.strictEqual(settings.extractionConcurrency, 4);
     assert.strictEqual(settings.extractionMaxTokens, 3000);
     assert.strictEqual(settings.collationMaxTokens, 4000);
     assert.strictEqual(settings.browserFingerprint, "chrome_145");
@@ -220,6 +222,7 @@ describe("loadSettings nested namespace", () => {
           maxUrls: 12,
           fetchTimeoutMs: 30000,
           fetchConcurrency: 2,
+          extractionConcurrency: 2,
           extractionMaxTokens: 8000,
           collationMaxTokens: 16000,
         },
@@ -231,6 +234,7 @@ describe("loadSettings nested namespace", () => {
       assert.strictEqual(settings.maxUrls, 12);
       assert.strictEqual(settings.fetchTimeoutMs, 30000);
       assert.strictEqual(settings.fetchConcurrency, 2);
+      assert.strictEqual(settings.extractionConcurrency, 2);
       assert.strictEqual(settings.extractionMaxTokens, 8000);
       assert.strictEqual(settings.collationMaxTokens, 16000);
     } finally {

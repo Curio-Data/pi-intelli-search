@@ -40,6 +40,7 @@ export interface ResearchSettings {
   extractMaxChars: number;
   fetchTimeoutMs: number;
   fetchConcurrency: number;
+  extractionConcurrency: number;
   extractionMaxTokens: number;
   collationMaxTokens: number;
   browserFingerprint: string;

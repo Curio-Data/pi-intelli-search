@@ -9,7 +9,7 @@ import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT
 import { callLlm } from "../llm.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
 import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, readIndex, formatIndexForJudge, parseJudgeResponse, formatCacheSuggestions } from "../cache.js";
-import { textContent, extractSourceUrls, inferSourceType, inferCurrentness } from "../util.js";
+import { textContent, extractSourceUrls, inferSourceType, inferCurrentness, mapWithConcurrency } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import type { FetchedPage, ExtractResult } from "../types.js";
 
@@ -180,17 +180,38 @@ export const intelliResearchTool = {
       total: successPages.length,
     }));
 
-    const extractions: ExtractResult[] = await Promise.all(
-      successPages.map(async (page, i) => {
-        const current = i + 1;
-        onUpdate?.(progressUpdate("extract",
-          `Page ${current}/${successPages.length}: ${(page.title || page.url).slice(0, 40)}...`,
-          { current, total: successPages.length },
-        ));
-
-        return extractPage(ctx, extractConfig, page, params.query, params.focusPrompt, settings.extractMaxChars, settings.extractionMaxTokens, signal);
-      }),
+    // Extract pages through a bounded worker pool (settings.extractionConcurrency)
+    // rather than all at once. With maxUrls up to 16, an unbounded Promise.all
+    // would fire that many simultaneous LLM calls and trip provider rate limits.
+    // Progress is emitted on each page's completion (via onSettled), so the
+    // sub-progress bar reflects real work done instead of jumping to N/N at launch.
+    let extractDone = 0;
+    const rawExtractions = await mapWithConcurrency(
+      successPages,
+      settings.extractionConcurrency,
+      (page) => extractPage(ctx, extractConfig, page, params.query, params.focusPrompt, settings.extractMaxChars, settings.extractionMaxTokens, signal),
+      {
+        signal,
+        onSettled: (page) => {
+          extractDone++;
+          onUpdate?.(progressUpdate("extract",
+            `Page ${extractDone}/${successPages.length}: ${(page.title || page.url).slice(0, 40)}...`,
+            { current: extractDone, total: successPages.length },
+          ));
+        },
+      },
     );
+
+    // Indices left unrun by an aborted signal become a failed extraction so the
+    // result array stays aligned with successPages and fully typed.
+    const extractions: ExtractResult[] = rawExtractions.map((e, i) => e ?? {
+      url: successPages[i].url,
+      title: successPages[i].title,
+      extraction: "",
+      sourceType: "unknown",
+      currentness: "unknown",
+      status: "failed" as const,
+    });
 
     // Include failed pages as blocked extractions
     const blockedExtractions: ExtractResult[] = pages
