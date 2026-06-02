@@ -249,7 +249,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline descripti
 
 1. **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai) returns a synthesised answer with source URLs.
 2. **Fetch:** Each page is fetched two ways in parallel (HTML to [Defuddle](https://github.com/kepano/defuddle) and Markdown variant). They are compared by quality score; the best is picked.
-3. **Extract:** Configurable model (default: MiniMax M2.7) per-page extraction (parallel), compressing ≈50K to ≈3-5K chars.
+3. **Extract:** Configurable model (default: MiniMax M2.7) per-page extraction (bounded-parallel via `extractionConcurrency`, default 4), compressing ≈50K to ≈3-5K chars.
 4. **Collate:** Configurable model (default: MiniMax M2.7) deduplicates across extractions, produces summary and cache.
 5. **Cache suggest:** LLM judge (extract model) compares current query against `.search/.index.json` and appends related previous searches to the output. This is purely additive and never blocks or gates the main result.
 

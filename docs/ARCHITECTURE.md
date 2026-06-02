@@ -98,6 +98,6 @@ Per research session with the default 8 pages: **≈$0.05**
 |------|-------|------|
 | Search (Sonar) | 1 | ≈$0.02 |
 | Fetch (Defuddle + Markdown) | 8 parallel pairs | $0.00 |
-| Extract (M2.7) | 8 parallel | ≈$0.03 |
+| Extract (M2.7) | 8 (≤4 concurrent) | ≈$0.03 |
 | Collate (M2.7) | 1 | ≈$0.005 |
 | Cache suggest (M2.7) | 1 | ≈$0.0002 |
