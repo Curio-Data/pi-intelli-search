@@ -75,6 +75,32 @@ describe("extractSourceUrls", () => {
     const urls = extractSourceUrls(text);
     assert.strictEqual(urls[0].url, "https://api.example.com/v2?q=test#section");
   });
+
+  it("preserves a balanced parenthesis inside the URL (Wikipedia-style)", () => {
+    const text = "See [Foo](https://en.wikipedia.org/wiki/Foo_(disambiguation)) here.";
+    const urls = extractSourceUrls(text);
+    assert.strictEqual(urls.length, 1);
+    assert.strictEqual(urls[0].url, "https://en.wikipedia.org/wiki/Foo_(disambiguation)");
+  });
+
+  it("preserves multiple parenthetical groups in a URL (MSDN-style)", () => {
+    const text = "[Docs](https://learn.microsoft.com/dotnet/api/system.string.format(v=net-8.0))";
+    const urls = extractSourceUrls(text);
+    assert.strictEqual(urls.length, 1);
+    assert.strictEqual(
+      urls[0].url,
+      "https://learn.microsoft.com/dotnet/api/system.string.format(v=net-8.0)",
+    );
+  });
+
+  it("does not swallow trailing markdown after a paren-free URL", () => {
+    const text = "[React](https://react.dev). Then [Vue](https://vuejs.org).";
+    const urls = extractSourceUrls(text);
+    assert.deepStrictEqual(urls, [
+      { url: "https://react.dev", title: "React" },
+      { url: "https://vuejs.org", title: "Vue" },
+    ]);
+  });
 });
 
 describe("inferSourceType", () => {

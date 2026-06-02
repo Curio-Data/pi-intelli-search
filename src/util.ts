@@ -26,7 +26,12 @@ export function getAgentDir(): string {
  */
 export function extractSourceUrls(text: string): Array<{ url: string; title: string }> {
   const urls: Array<{ url: string; title: string }> = [];
-  const linkPattern = /\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
+  // Match markdown links [title](url). The URL body allows balanced
+  // single-level parentheses so links to pages like Wikipedia disambiguation
+  // (`Foo_(disambiguation)`) or MSDN (`...format(v=net-8.0)`) keep their
+  // closing paren instead of being truncated at the first `)`. URLs never
+  // contain whitespace, so a space ends the match.
+  const linkPattern = /\[([^\]]*)\]\((https?:\/\/(?:[^()\s]|\([^()\s]*\))*)\)/g;
   let match;
   while ((match = linkPattern.exec(text)) !== null) {
     const url = match[2];

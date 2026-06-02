@@ -1,7 +1,7 @@
 // test/providers.test.ts — Unit tests for model registration logic
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ensureCustomModels } from "../src/providers.js";
+import { ensureCustomModels, REQUIRED_MODELS } from "../src/providers.js";
 
 describe("ensureCustomModels", () => {
   it("is an async function", () => {
@@ -20,6 +20,24 @@ describe("ensureCustomModels", () => {
     await ensureCustomModels(); // Ensure models exist
     const result = await ensureCustomModels();
     assert.deepStrictEqual(result, []);
+  });
+});
+
+describe("REQUIRED_MODELS pricing", () => {
+  // Verified against https://openrouter.ai/perplexity/sonar (2026):
+  // standard Sonar is $1/$1 per 1M tokens; Sonar Pro is $3/$15.
+  it("prices perplexity/sonar at $1 in / $1 out per 1M tokens", () => {
+    const sonar = REQUIRED_MODELS.find((m) => m.id === "perplexity/sonar");
+    assert.ok(sonar, "perplexity/sonar should be defined");
+    assert.strictEqual(sonar!.cost.input, 1.0);
+    assert.strictEqual(sonar!.cost.output, 1.0);
+  });
+
+  it("prices perplexity/sonar-pro at $3 in / $15 out per 1M tokens", () => {
+    const pro = REQUIRED_MODELS.find((m) => m.id === "perplexity/sonar-pro");
+    assert.ok(pro, "perplexity/sonar-pro should be defined");
+    assert.strictEqual(pro!.cost.input, 3.0);
+    assert.strictEqual(pro!.cost.output, 15.0);
   });
 });
 

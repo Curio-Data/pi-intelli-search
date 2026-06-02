@@ -27,13 +27,16 @@ function resolveAgentDir(): string {
 const MODELS_JSON_PATH = join(resolveAgentDir(), "models.json");
 
 /** Models this extension needs, to be merged into the openrouter provider. */
-const REQUIRED_MODELS = [
+export const REQUIRED_MODELS = [
   {
     id: "perplexity/sonar",
     name: "Perplexity Sonar",
     reasoning: false,
     input: ["text"],
-    cost: { input: 2.0, output: 8.0, cacheRead: 0, cacheWrite: 0 },
+    // $1/$1 per 1M tokens per https://openrouter.ai/perplexity/sonar (2026).
+    // (Sonar also bills a per-request search fee that this cost shape can't
+    // express; the token rates here drive Pi's /model cost estimates.)
+    cost: { input: 1.0, output: 1.0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 127000,
     maxTokens: 8192,
   },
