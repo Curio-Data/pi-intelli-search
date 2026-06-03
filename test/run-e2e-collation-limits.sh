@@ -107,6 +107,7 @@ cat > "$ISO1/settings.json" <<EOF
     },
     "defaultUrls": 2,
     "maxUrls": 2,
+    "searchRetryAttempts": 4,
     "extractMaxChars": 150000,
     "extractionMaxTokens": 3000,
     "collationMaxTokens": 4000,
@@ -178,6 +179,7 @@ cat > "$ISO2/settings.json" <<EOF
     },
     "defaultUrls": 2,
     "maxUrls": 2,
+    "searchRetryAttempts": 4,
     "extractMaxChars": 150000,
     "extractionMaxTokens": 3000,
     "collationMaxTokens": 200,
@@ -225,8 +227,10 @@ ENTRY_TIGHT=$(find "$CACHE_TIGHT" -maxdepth 1 -mindepth 1 -type d -not -name '.i
 
 # A missing cache entry usually means the search stage returned a degraded 200
 # (a valid reply with no markdown links), so the pipeline returned early without
-# writing a cache. Distinguish that from a genuine collation bug.
-DEGRADED_RE="Search returned no links|degraded search response"
+# writing a cache. Distinguish that from a genuine collation bug. The agent
+# paraphrases the tool's wording, so match the underlying signal loosely
+# (this branch only runs when a cache entry is already missing).
+DEGRADED_RE="degraded|parseable links|no usable links|no markdown links|returned no links|without markdown links"
 
 if [ -z "$ENTRY_DEFAULT" ]; then
   if echo "${OUTPUT1:-}" | grep -qiE "$DEGRADED_RE"; then
