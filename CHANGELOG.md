@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Stage-based progress bar in `intelli_research` tool output.** A visual progress bar renders during streaming: overall completion bar, stage pills with ✓/●/○ markers, current stage message, and a per-page sub-progress bar during extraction. The LLM sees structured `⚙️ Stage X/5:` prefixed text via `onUpdate`.
 - **`extractionConcurrency` setting (default 4).** Per-page extractions now run through a bounded worker pool so a wide result set no longer fires a burst of simultaneous extract-model calls that trip provider rate limits.
+- **Rate-limit resilience for every LLM call.** Search, extract, collate, and cache-suggest calls retry transient failures (HTTP 429, 5xx, timeouts) with full-jitter exponential backoff that honours `Retry-After`, and enforce a hard per-call timeout so a stalled provider connection cannot hang the pipeline. New settings tune this: `llmTimeoutMs` (default 90000), `llmRetryAttempts` (default 3), `retryBaseDelayMs` (default 1500), `retryMaxDelayMs` (default 20000), `searchRetryAttempts` (default 2), and an opt-in `minRequestIntervalMs` throttle (default 0, off) that spaces concurrent extract calls for keys with tight rate limits.
 - `@earendil-works/pi-tui` added to peer dependencies (required by `renderResult` for progress bar rendering).
 
 ### Changed
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Pipeline no longer hangs or hard-fails under provider rate limiting.** Previously a 429 on the search or collate stage aborted the run, a rate-limited extraction was silently dropped, and a stalled connection could hang for minutes with no output (the SDK request timeout does not cover a stalled response stream). Calls now back off and retry, a degraded search that returns no usable links is retried, and an unrecoverable call fails fast with a clear timeout or rate-limit message.
 - **Source URLs containing parentheses no longer truncated.** Wikipedia disambiguation links (`Foo_(disambiguation)`) and MSDN API references with version suffixes kept only the text up to the first `)`, producing malformed URLs that failed to fetch.
 - **Extraction sub-progress bar advances per completion** instead of jumping to N/N at launch, so progress reflects real work done.
 - **`llms-full.txt` discovery honours cancellation and has a tight timeout.** Probes now respond to Esc and use a 10s per-host budget so a slow documentation host cannot stall the research result.

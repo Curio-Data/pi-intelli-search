@@ -8,6 +8,12 @@ import {
   inferSourceType,
   inferCurrentness,
   mapWithConcurrency,
+  withRetry,
+  isRetryableMessage,
+  parseRetryAfterMs,
+  createRateLimiter,
+  callWithAbortTimeout,
+  type RetryDecision,
 } from "../src/util.js";
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 5));
@@ -224,4 +230,239 @@ describe("inferCurrentness", () => {
       assert.strictEqual(inferCurrentness(input), expected);
     });
   }
+});
+
+describe("isRetryableMessage", () => {
+  const retryable = [
+    "Rate limited by openrouter/perplexity/sonar (retry after 3s)",
+    "HTTP 429 Too Many Requests",
+    "Provider overloaded, please retry",
+    "Server error (HTTP 503)",
+    "502 Bad Gateway",
+    "request timed out",
+    "ETIMEDOUT",
+    "ECONNRESET while reading",
+  ];
+  const nonRetryable = [
+    "No API key for openrouter/x. Run /login.",
+    "Model not found: openrouter/minimax/M3.7",
+    "invalid_request_error: max_tokens too large",
+    "",
+    undefined,
+  ];
+
+  for (const m of retryable) {
+    it(`treats ${JSON.stringify(m)} as retryable`, () => {
+      assert.strictEqual(isRetryableMessage(m), true);
+    });
+  }
+  for (const m of nonRetryable) {
+    it(`treats ${JSON.stringify(m)} as non-retryable`, () => {
+      assert.strictEqual(isRetryableMessage(m), false);
+    });
+  }
+});
+
+describe("parseRetryAfterMs", () => {
+  const cases: Array<{ input: string | undefined; expected: number | undefined }> = [
+    { input: "retry after 3s", expected: 3000 },
+    { input: "Rate limited (retry-after: 12)", expected: 12000 },
+    { input: "try again in 5 seconds", expected: 5000 },
+    { input: "back off for 500ms", expected: undefined }, // no "retry after"/"try again" anchor
+    { input: "retry after 500ms", expected: 500 },
+    { input: "no numeric hint here", expected: undefined },
+    { input: undefined, expected: undefined },
+  ];
+  for (const { input, expected } of cases) {
+    it(`parses ${JSON.stringify(input)} -> ${expected}`, () => {
+      assert.strictEqual(parseRetryAfterMs(input), expected);
+    });
+  }
+});
+
+describe("withRetry", () => {
+  // A sleep stub that records requested delays and resolves instantly.
+  const makeSleep = () => {
+    const delays: number[] = [];
+    const fn = (ms: number) => {
+      delays.push(ms);
+      return Promise.resolve();
+    };
+    return { delays, fn };
+  };
+  const alwaysRetry = (): RetryDecision => ({ retry: true });
+
+  it("returns immediately on success without sleeping", async () => {
+    const { delays, fn } = makeSleep();
+    let calls = 0;
+    const result = await withRetry(
+      async () => { calls++; return "ok"; },
+      () => ({ retry: false }),
+      { attempts: 3, baseDelayMs: 1000, maxDelayMs: 20000, sleep: fn },
+    );
+    assert.strictEqual(result, "ok");
+    assert.strictEqual(calls, 1);
+    assert.deepStrictEqual(delays, []);
+  });
+
+  it("retries then succeeds; records one backoff", async () => {
+    const { delays, fn } = makeSleep();
+    let calls = 0;
+    const result = await withRetry(
+      async () => { calls++; return calls < 2 ? "bad" : "good"; },
+      (r) => (r === "bad" ? { retry: true } : { retry: false }),
+      { attempts: 3, baseDelayMs: 1000, maxDelayMs: 20000, sleep: fn, random: () => 1 },
+    );
+    assert.strictEqual(result, "good");
+    assert.strictEqual(calls, 2);
+    assert.deepStrictEqual(delays, [1000]); // random()=1 → full exp delay, attempt 1
+  });
+
+  it("uses full-jitter exponential schedule (random()=1)", async () => {
+    const { delays, fn } = makeSleep();
+    await withRetry(
+      async () => "x",
+      alwaysRetry,
+      { attempts: 4, baseDelayMs: 1000, maxDelayMs: 20000, sleep: fn, random: () => 1 },
+    );
+    // attempt 1 -> 1000*2^0, 2 -> 2000, 3 -> 4000 (3 sleeps for 4 attempts)
+    assert.deepStrictEqual(delays, [1000, 2000, 4000]);
+  });
+
+  it("caps each delay at maxDelayMs", async () => {
+    const { delays, fn } = makeSleep();
+    await withRetry(
+      async () => "x",
+      alwaysRetry,
+      { attempts: 4, baseDelayMs: 10000, maxDelayMs: 15000, sleep: fn, random: () => 1 },
+    );
+    assert.deepStrictEqual(delays, [10000, 15000, 15000]);
+  });
+
+  it("honours Retry-After as a floor, clamped to maxDelayMs", async () => {
+    const { delays, fn } = makeSleep();
+    await withRetry(
+      async () => "x",
+      () => ({ retry: true, retryAfterMs: 4000 }),
+      { attempts: 2, baseDelayMs: 1000, maxDelayMs: 20000, sleep: fn, random: () => 0 },
+    );
+    assert.deepStrictEqual(delays, [4000]); // jitter 0 but floor raises to 4000
+
+    const clamp = makeSleep();
+    await withRetry(
+      async () => "x",
+      () => ({ retry: true, retryAfterMs: 99999 }),
+      { attempts: 2, baseDelayMs: 1000, maxDelayMs: 20000, sleep: clamp.fn, random: () => 0 },
+    );
+    assert.deepStrictEqual(clamp.delays, [20000]); // clamped to cap
+  });
+
+  it("returns the last resolved value when attempts are exhausted", async () => {
+    const { fn } = makeSleep();
+    let calls = 0;
+    const result = await withRetry(
+      async () => { calls++; return `try-${calls}`; },
+      alwaysRetry,
+      { attempts: 3, baseDelayMs: 1, maxDelayMs: 10, sleep: fn, random: () => 0 },
+    );
+    assert.strictEqual(result, "try-3");
+    assert.strictEqual(calls, 3);
+  });
+
+  it("rethrows the last error when fn keeps throwing", async () => {
+    const { fn } = makeSleep();
+    let calls = 0;
+    await assert.rejects(
+      withRetry(
+        async () => { calls++; throw new Error(`boom-${calls}`); },
+        () => ({ retry: true }),
+        { attempts: 2, baseDelayMs: 1, maxDelayMs: 10, sleep: fn, random: () => 0 },
+      ),
+      /boom-2/,
+    );
+    assert.strictEqual(calls, 2);
+  });
+
+  it("does not retry once the signal is aborted", async () => {
+    const { delays, fn } = makeSleep();
+    const ac = new AbortController();
+    let calls = 0;
+    const result = await withRetry(
+      async () => { calls++; ac.abort(); return "bad"; },
+      alwaysRetry,
+      { attempts: 5, baseDelayMs: 1, maxDelayMs: 10, sleep: fn, signal: ac.signal },
+    );
+    assert.strictEqual(calls, 1);
+    assert.strictEqual(result, "bad");
+    assert.deepStrictEqual(delays, []);
+  });
+});
+
+describe("createRateLimiter", () => {
+  it("is a no-op when interval <= 0", async () => {
+    const gate = createRateLimiter(0);
+    const start = Date.now();
+    await gate();
+    await gate();
+    assert.ok(Date.now() - start < 20);
+  });
+
+  it("spaces the second call by at least the interval", async () => {
+    const gate = createRateLimiter(30);
+    const start = Date.now();
+    await gate(); // first call returns immediately
+    await gate(); // second waits ~30ms
+    assert.ok(Date.now() - start >= 25, "second call should be delayed");
+  });
+});
+
+describe("callWithAbortTimeout", () => {
+  it("returns the value and timedOut=false when run resolves first", async () => {
+    const { value, timedOut } = await callWithAbortTimeout(
+      async () => "done",
+      1000,
+    );
+    assert.strictEqual(value, "done");
+    assert.strictEqual(timedOut, false);
+  });
+
+  it("passes a no-op (undefined) signal through when timeout disabled", async () => {
+    let received: AbortSignal | undefined = {} as AbortSignal;
+    const { value, timedOut } = await callWithAbortTimeout(
+      async (signal) => { received = signal; return 42; },
+      0,
+    );
+    assert.strictEqual(value, 42);
+    assert.strictEqual(timedOut, false);
+    assert.strictEqual(received, undefined);
+  });
+
+  it("aborts the run and reports timedOut=true when it stalls", async () => {
+    // A run that only settles when its signal aborts (models a stalled stream).
+    const { value, timedOut } = await callWithAbortTimeout<string>(
+      (signal) =>
+        new Promise((resolve) => {
+          signal?.addEventListener("abort", () => resolve("aborted"), { once: true });
+        }),
+      20,
+    );
+    assert.strictEqual(timedOut, true);
+    assert.strictEqual(value, "aborted");
+  });
+
+  it("combines the user signal so an external abort also fires", async () => {
+    const ac = new AbortController();
+    const p = callWithAbortTimeout<string>(
+      (signal) =>
+        new Promise((resolve) => {
+          signal?.addEventListener("abort", () => resolve("aborted"), { once: true });
+        }),
+      10_000, // long timeout; user abort should win
+      ac.signal,
+    );
+    ac.abort();
+    const { value, timedOut } = await p;
+    assert.strictEqual(value, "aborted");
+    assert.strictEqual(timedOut, false); // user aborted, not our timer
+  });
 });

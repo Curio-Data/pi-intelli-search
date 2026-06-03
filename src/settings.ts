@@ -19,6 +19,19 @@ const DEFAULT_SETTINGS: ResearchSettings = {
   collationMaxTokens: 4000,
   browserFingerprint: "chrome_145",
   disableLlmsFullDiscovery: false,
+  // Rate-limit resilience: 1 try + 2 retries, full-jitter backoff capped at 20s,
+  // honouring any Retry-After hint in the provider error. searchRetryAttempts
+  // covers the degraded-200 case (valid response, zero links). The min-interval
+  // throttle is off by default; free-tier OpenRouter users (~0.33 req/s bucket)
+  // should set minRequestIntervalMs to ~3000. llmTimeoutMs bounds a stalled
+  // connection (generous enough for slow reasoning models, short enough to
+  // turn a provider hang into a retryable timeout).
+  llmTimeoutMs: 90_000,
+  llmRetryAttempts: 3,
+  retryBaseDelayMs: 1500,
+  retryMaxDelayMs: 20_000,
+  searchRetryAttempts: 2,
+  minRequestIntervalMs: 0,
 };
 
 /**
@@ -221,6 +234,12 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
     if (ns.collationMaxTokens != null) overrides.collationMaxTokens = ns.collationMaxTokens as number;
     if (ns.browserFingerprint) overrides.browserFingerprint = ns.browserFingerprint as string;
     if (ns.disableLlmsFullDiscovery != null) overrides.disableLlmsFullDiscovery = ns.disableLlmsFullDiscovery as boolean;
+    if (ns.llmTimeoutMs != null) overrides.llmTimeoutMs = ns.llmTimeoutMs as number;
+    if (ns.llmRetryAttempts != null) overrides.llmRetryAttempts = ns.llmRetryAttempts as number;
+    if (ns.retryBaseDelayMs != null) overrides.retryBaseDelayMs = ns.retryBaseDelayMs as number;
+    if (ns.retryMaxDelayMs != null) overrides.retryMaxDelayMs = ns.retryMaxDelayMs as number;
+    if (ns.searchRetryAttempts != null) overrides.searchRetryAttempts = ns.searchRetryAttempts as number;
+    if (ns.minRequestIntervalMs != null) overrides.minRequestIntervalMs = ns.minRequestIntervalMs as number;
   }
 
   // Flat intelli* keys (deprecated fallback: nested namespace wins when both present).
@@ -237,6 +256,12 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
   if (parsed.intelliCollationMaxTokens != null && overrides.collationMaxTokens == null) overrides.collationMaxTokens = parsed.intelliCollationMaxTokens as number;
   if (parsed.intelliBrowserFingerprint && !overrides.browserFingerprint) overrides.browserFingerprint = parsed.intelliBrowserFingerprint as string;
   if (parsed.intelliDisableLlmsFullDiscovery != null && overrides.disableLlmsFullDiscovery == null) overrides.disableLlmsFullDiscovery = parsed.intelliDisableLlmsFullDiscovery as boolean;
+  if (parsed.intelliLlmTimeoutMs != null && overrides.llmTimeoutMs == null) overrides.llmTimeoutMs = parsed.intelliLlmTimeoutMs as number;
+  if (parsed.intelliLlmRetryAttempts != null && overrides.llmRetryAttempts == null) overrides.llmRetryAttempts = parsed.intelliLlmRetryAttempts as number;
+  if (parsed.intelliRetryBaseDelayMs != null && overrides.retryBaseDelayMs == null) overrides.retryBaseDelayMs = parsed.intelliRetryBaseDelayMs as number;
+  if (parsed.intelliRetryMaxDelayMs != null && overrides.retryMaxDelayMs == null) overrides.retryMaxDelayMs = parsed.intelliRetryMaxDelayMs as number;
+  if (parsed.intelliSearchRetryAttempts != null && overrides.searchRetryAttempts == null) overrides.searchRetryAttempts = parsed.intelliSearchRetryAttempts as number;
+  if (parsed.intelliMinRequestIntervalMs != null && overrides.minRequestIntervalMs == null) overrides.minRequestIntervalMs = parsed.intelliMinRequestIntervalMs as number;
 
   // intelliDefaultUrls has no flat fallback by design: the key did not
   // exist in 0.7.0 (which is the only version that produced flat keys),

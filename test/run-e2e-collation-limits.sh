@@ -63,9 +63,11 @@ E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 # ── Shared prompt ───────────────────────────────────────────────────
-# A single-URL query against a content-rich page gives the collation
-# model enough material that a 200-token limit will visibly truncate.
-RESEARCH_PROMPT="Use intelli_research with maxUrls=1 to research: Python programming language history design philosophy. Use focusPrompt='Extract the history and design philosophy sections.'"
+# A small-but-redundant query against content-rich pages gives the collation
+# model enough material that a 200-token limit will visibly truncate. maxUrls=2
+# (rather than 1) gives redundancy so a single degraded or rate-limited LLM
+# call can't zero the whole run.
+RESEARCH_PROMPT="Use intelli_research with maxUrls=2 to research: Python programming language history design philosophy. Use focusPrompt='Extract the history and design philosophy sections.'"
 
 # ═══════════════════════════════════════════════════════════════════
 # Run 1: Default collation limit (4000 tokens)
@@ -103,8 +105,8 @@ cat > "$ISO1/settings.json" <<EOF
       "provider": "openrouter",
       "model": "minimax/minimax-m2.7"
     },
-    "defaultUrls": 1,
-    "maxUrls": 1,
+    "defaultUrls": 2,
+    "maxUrls": 2,
     "extractMaxChars": 150000,
     "extractionMaxTokens": 3000,
     "collationMaxTokens": 4000,
@@ -174,8 +176,8 @@ cat > "$ISO2/settings.json" <<EOF
       "provider": "openrouter",
       "model": "minimax/minimax-m2.7"
     },
-    "defaultUrls": 1,
-    "maxUrls": 1,
+    "defaultUrls": 2,
+    "maxUrls": 2,
     "extractMaxChars": 150000,
     "extractionMaxTokens": 3000,
     "collationMaxTokens": 200,
@@ -221,14 +223,27 @@ ERRORS=0
 ENTRY_DEFAULT=$(find "$CACHE_DEFAULT" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' 2>/dev/null | sort -r | head -1)
 ENTRY_TIGHT=$(find "$CACHE_TIGHT" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' 2>/dev/null | sort -r | head -1)
 
+# A missing cache entry usually means the search stage returned a degraded 200
+# (a valid reply with no markdown links), so the pipeline returned early without
+# writing a cache. Distinguish that from a genuine collation bug.
+DEGRADED_RE="Search returned no links|degraded search response"
+
 if [ -z "$ENTRY_DEFAULT" ]; then
-  echo "❌ No cache entry found in .e2e-collate-default/"
-  ERRORS=$((ERRORS + 1))
+  if echo "${OUTPUT1:-}" | grep -qiE "$DEGRADED_RE"; then
+    echo "⚠️  Default run: search returned 0 URLs (degraded LLM response), not a collation bug — rerun"
+  else
+    echo "❌ No cache entry found in .e2e-collate-default/"
+    ERRORS=$((ERRORS + 1))
+  fi
 fi
 
 if [ -z "$ENTRY_TIGHT" ]; then
-  echo "❌ No cache entry found in .e2e-collate-tight/"
-  ERRORS=$((ERRORS + 1))
+  if echo "${OUTPUT2:-}" | grep -qiE "$DEGRADED_RE"; then
+    echo "⚠️  Tight run: search returned 0 URLs (degraded LLM response), not a collation bug — rerun"
+  else
+    echo "❌ No cache entry found in .e2e-collate-tight/"
+    ERRORS=$((ERRORS + 1))
+  fi
 fi
 
 if [ -n "$ENTRY_DEFAULT" ] && [ -n "$ENTRY_TIGHT" ]; then

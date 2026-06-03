@@ -9,7 +9,8 @@ import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT
 import { callLlm } from "../llm.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
 import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, readIndex, formatIndexForJudge, parseJudgeResponse, formatCacheSuggestions } from "../cache.js";
-import { textContent, extractSourceUrls, inferSourceType, inferCurrentness, mapWithConcurrency } from "../util.js";
+import { textContent, extractSourceUrls, inferSourceType, inferCurrentness, mapWithConcurrency, sleep, createRateLimiter } from "../util.js";
+import type { LlmRetryConfig } from "../llm.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import type { FetchedPage, ExtractResult } from "../types.js";
 
@@ -88,6 +89,16 @@ export const intelliResearchTool = {
 
     const requestedMax = params.maxUrls ?? settings.defaultUrls;
     const maxUrls = Math.min(requestedMax, settings.maxUrls);
+
+    // Transport-level retry config shared by every LLM call in this pipeline.
+    const retry: LlmRetryConfig = {
+      attempts: settings.llmRetryAttempts,
+      baseDelayMs: settings.retryBaseDelayMs,
+      maxDelayMs: settings.retryMaxDelayMs,
+    };
+    // Min-interval gate for the extract fan-out (no-op when interval is 0).
+    const gate = createRateLimiter(settings.minRequestIntervalMs);
+
     const searchConfig = resolveModelConfig(settings, "search");
     const extractConfig = resolveModelConfig(settings, "extract");
     const collateConfig = resolveModelConfig(settings, "collate");
@@ -138,16 +149,33 @@ export const intelliResearchTool = {
       searchQuery += " site:" + params.domains.join(" OR site:");
     }
 
-    const searchResult = await callLlm(ctx, searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {
-      maxTokens: 2000,
-      signal,
-    });
-
-    const urls = extractSourceUrls(searchResult).slice(0, maxUrls);
+    // The search model occasionally returns a valid response with no markdown
+    // links (a "degraded 200" — common under provider load). callLlm's retry
+    // only covers transport errors, so retry the search call itself a bounded
+    // number of times until it yields at least one URL.
+    let searchResult = "";
+    let urls: Array<{ url: string; title: string }> = [];
+    const searchAttempts = Math.max(1, settings.searchRetryAttempts);
+    for (let attempt = 1; attempt <= searchAttempts; attempt++) {
+      searchResult = await callLlm(ctx, searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {
+        maxTokens: 2000,
+        signal,
+        retry,
+        timeoutMs: settings.llmTimeoutMs,
+      });
+      urls = extractSourceUrls(searchResult).slice(0, maxUrls);
+      if (urls.length > 0 || signal?.aborted || attempt === searchAttempts) break;
+      onUpdate?.(progressUpdate("search", `Search returned no links — retrying (${attempt}/${searchAttempts - 1})...`));
+      await sleep(settings.retryBaseDelayMs, signal);
+    }
 
     if (urls.length === 0) {
       return {
-        content: [textContent(`No URLs found for query: "${params.query}"\n\nSearch summary:\n${searchResult}`)],
+        content: [textContent(
+          `Search returned no links for query: "${params.query}" after ${searchAttempts} attempt(s). ` +
+          `This is a degraded search response (the model replied without markdown links), ` +
+          `not a fetch or extraction failure.\n\nSearch summary:\n${searchResult}`,
+        )],
         details: { cachePath: "", urlsSearched: 0, pagesFetched: 0, pagesFailed: 0 } as Record<string, unknown>,
       };
     }
@@ -189,7 +217,11 @@ export const intelliResearchTool = {
     const rawExtractions = await mapWithConcurrency(
       successPages,
       settings.extractionConcurrency,
-      (page) => extractPage(ctx, extractConfig, page, params.query, params.focusPrompt, settings.extractMaxChars, settings.extractionMaxTokens, signal),
+      async (page) => {
+        // Space out concurrent extract calls when a throttle is configured.
+        await gate(signal);
+        return extractPage(ctx, extractConfig, page, params.query, params.focusPrompt, settings.extractMaxChars, settings.extractionMaxTokens, signal, retry, settings.llmTimeoutMs);
+      },
       {
         signal,
         onSettled: (page) => {
@@ -278,6 +310,8 @@ export const intelliResearchTool = {
     const collation = await callLlm(ctx, collateConfig, COLLATION_SYSTEM_PROMPT, collationUserMsg, {
       maxTokens: settings.collationMaxTokens,
       signal,
+      retry,
+      timeoutMs: settings.llmTimeoutMs,
     });
 
     // Download llms-full.txt for each unique domain in the results
@@ -330,6 +364,8 @@ export const intelliResearchTool = {
         const judgeResponse = await callLlm(ctx, extractConfig, CACHE_SUGGEST_PROMPT, judgeUserMsg, {
           maxTokens: 500,
           signal,
+          retry,
+          timeoutMs: settings.llmTimeoutMs,
         });
         const matches = parseJudgeResponse(judgeResponse, index, currentSlug);
         suggestionsAppendix = formatCacheSuggestions(matches, settings.cacheDir);
@@ -398,6 +434,8 @@ async function extractPage(
   maxChars: number,
   maxTokens: number,
   signal: AbortSignal | undefined,
+  retry: LlmRetryConfig,
+  timeoutMs: number,
 ): Promise<ExtractResult> {
   try {
     let content = page.content;
@@ -414,6 +452,8 @@ async function extractPage(
     const extraction = await callLlm(ctx, extractConfig, EXTRACTION_SYSTEM_PROMPT, userMessage, {
       maxTokens,
       signal,
+      retry,
+      timeoutMs,
     });
 
     const firstLine = extraction.split("\n")[0] ?? "";

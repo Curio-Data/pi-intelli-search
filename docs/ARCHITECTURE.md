@@ -37,9 +37,13 @@ All three pipeline stages (search, extract, collate) use independently configura
 
 [Perplexity Sonar](https://docs.perplexity.ai) is not in `Pi`'s built-in model list for [OpenRouter](https://openrouter.ai). The extension writes it to `~/.pi/agent/models.json` on first load (merges by id, non-destructive) and refreshes the model registry. This operation is idempotent.
 
-### Rate-Limit Monitoring
+### Rate-Limit Resilience
 
-The extension monitors `after_provider_response` events to detect HTTP 429 (rate-limiting) and 5xx (server errors) from [OpenRouter](https://openrouter.ai). Rate-limit status appears in the `Pi` footer via `ctx.ui.setStatus()`, debounced to avoid flooding. The `callLlm()` helper also uses an `onResponse` callback to throw immediately on 429 or 5xx before the response stream is consumed, providing actionable retry guidance.
+The extension monitors `after_provider_response` events to detect HTTP 429 (rate-limiting) and 5xx (server errors) from [OpenRouter](https://openrouter.ai). Rate-limit status appears in the `Pi` footer via `ctx.ui.setStatus()`, debounced to avoid flooding.
+
+Recovery is owned by `callLlm()`, not the underlying SDK. It passes `maxRetries: 0` to `completeSimple()` so SDK retries do not compound with ours, then retries transient failures (429, 5xx, timeouts) with full-jitter exponential backoff that honours any Retry-After hint, bounded by `llmRetryAttempts`, `retryBaseDelayMs`, and `retryMaxDelayMs`. On the [OpenRouter](https://openrouter.ai) path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and `completeSimple()` resolves with `stopReason: "error"` carrying the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header) and never throws, because a throw would propagate out of `completeSimple()` and bypass the retry loop.
+
+A hard per-call timeout (`llmTimeoutMs`) is applied with an `AbortController` via `callWithAbortTimeout()`, combined with the tool signal so Esc still cancels. This is necessary because the SDK request timeout does not cover a stalled streaming body, which a provider can hold open after a 200 under load. Stage 1 additionally retries a degraded-200 search (a valid response with zero links) up to `searchRetryAttempts` times, and `minRequestIntervalMs` optionally spaces the concurrent extract calls for keys with tight rate limits. The pure helpers live in `util.ts` and are unit-tested.
 
 ### Working Indicator and Progress Bar
 
@@ -58,7 +62,7 @@ This stage is purely additive. It never blocks or replaces the live pipeline. Fa
 ```
 src/
 ├── index.ts              # Extension entry: registers tools, events, model setup
-├── llm.ts                # callLlm() - pi native auth + rate-limit detection
+├── llm.ts                # callLlm() - pi native auth + retry/backoff + per-call timeout
 ├── fetch.ts              # Page fetching: Defuddle vs Markdown comparison, llms-full.txt
 ├── prompts.ts            # System prompts for search, extraction, collation
 ├── providers.ts          # Custom model registration (Sonar) into models.json

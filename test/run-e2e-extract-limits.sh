@@ -67,10 +67,11 @@ fi
 E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
-# ── Shared prompt: single-URL research against a content-heavy page ─
+# ── Shared prompt: small-but-redundant research against content-heavy pages ─
 # Wikipedia's Python article is reliably long (>100K chars cleaned).
-# maxUrls=1 ensures we process one page only.
-RESEARCH_PROMPT="Use intelli_research with maxUrls=1 to research: Python programming language history design philosophy. Use focusPrompt='Extract the history and design philosophy sections.'"
+# maxUrls=2 keeps the run small while giving redundancy: a single degraded or
+# rate-limited LLM call can't zero the whole run (maxUrls=1 was brittle).
+RESEARCH_PROMPT="Use intelli_research with maxUrls=2 to research: Python programming language history design philosophy. Use focusPrompt='Extract the history and design philosophy sections.'"
 
 # ═══════════════════════════════════════════════════════════════════
 # Run 1: Default limits (extractMaxChars=150000, extractionMaxTokens=3000)
@@ -109,8 +110,8 @@ cat > "$ISO1/settings.json" <<EOF
       "provider": "openrouter",
       "model": "minimax/minimax-m2.7"
     },
-    "defaultUrls": 1,
-    "maxUrls": 1,
+    "defaultUrls": 2,
+    "maxUrls": 2,
     "extractMaxChars": 150000,
     "extractionMaxTokens": 3000,
     "collationMaxTokens": 4000,
@@ -181,8 +182,8 @@ cat > "$ISO2/settings.json" <<EOF
       "provider": "openrouter",
       "model": "minimax/minimax-m2.7"
     },
-    "defaultUrls": 1,
-    "maxUrls": 1,
+    "defaultUrls": 2,
+    "maxUrls": 2,
     "extractMaxChars": 500,
     "extractionMaxTokens": 150,
     "collationMaxTokens": 4000,
@@ -229,14 +230,27 @@ ERRORS=0
 ENTRY_DEFAULT=$(find "$CACHE_DEFAULT" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' 2>/dev/null | sort -r | head -1)
 ENTRY_TIGHT=$(find "$CACHE_TIGHT" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' 2>/dev/null | sort -r | head -1)
 
+# A missing cache entry usually means the search stage returned a degraded 200
+# (a valid reply with no markdown links), so the pipeline returned early without
+# writing a cache. Distinguish that from a genuine extraction bug.
+DEGRADED_RE="Search returned no links|degraded search response"
+
 if [ -z "$ENTRY_DEFAULT" ]; then
-  echo "❌ No cache entry found in .e2e-extract-default/"
-  ERRORS=$((ERRORS + 1))
+  if echo "${OUTPUT1:-}" | grep -qiE "$DEGRADED_RE"; then
+    echo "⚠️  Default run: search returned 0 URLs (degraded LLM response), not a fetch/extract bug — rerun"
+  else
+    echo "❌ No cache entry found in .e2e-extract-default/"
+    ERRORS=$((ERRORS + 1))
+  fi
 fi
 
 if [ -z "$ENTRY_TIGHT" ]; then
-  echo "❌ No cache entry found in .e2e-extract-tight/"
-  ERRORS=$((ERRORS + 1))
+  if echo "${OUTPUT2:-}" | grep -qiE "$DEGRADED_RE"; then
+    echo "⚠️  Tight run: search returned 0 URLs (degraded LLM response), not a fetch/extract bug — rerun"
+  else
+    echo "❌ No cache entry found in .e2e-extract-tight/"
+    ERRORS=$((ERRORS + 1))
+  fi
 fi
 
 # ── Diagnostic: read source counts from each report ──
@@ -248,7 +262,10 @@ for label in "Default" "Tight"; do
   fi
   if [ -n "$ENTRY" ] && [ -f "$ENTRY/report.md" ]; then
     SOURCE_LINE=$(grep "^> Sources:" "$ENTRY/report.md" 2>/dev/null || echo "")
-    BLOCKED_LINE=$(grep -c "^## Blocked/Failed" "$ENTRY/report.md" 2>/dev/null || echo "0")
+    # grep -c prints "0" AND exits 1 on no match; a trailing `|| echo 0` would
+    # append a second line ("0\n0") and break the numeric test below. Use a
+    # separate assignment on failure instead.
+    BLOCKED_LINE=$(grep -c "^## Blocked/Failed" "$ENTRY/report.md" 2>/dev/null) || BLOCKED_LINE=0
     EXT_COUNT=$(find "$ENTRY/extractions" -type f 2>/dev/null | wc -l)
     SRC_COUNT=$(find "$ENTRY/sources" -type f 2>/dev/null | wc -l)
     echo "🔍 $label: $SOURCE_LINE | extractions=$EXT_COUNT files | sources=$SRC_COUNT files | has_blocked_section=$BLOCKED_LINE"

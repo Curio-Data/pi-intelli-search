@@ -200,14 +200,14 @@ All `Pi` SDK packages are **peer dependencies**. They are provided by the hostin
 ```
 src/
 ├── index.ts                  # Extension entry: registers tools, events, model setup
-├── llm.ts                    # callLlm() - pi native auth + rate-limit detection
+├── llm.ts                    # callLlm() - pi native auth + retry/backoff + per-call timeout
 ├── fetch.ts                  # Page fetching: Defuddle vs Markdown comparison, llms-full.txt
 ├── prompts.ts                # System prompts for search, extraction, collation, cache suggest
 ├── providers.ts              # Custom model registration (Sonar) into models.json
 ├── settings.ts               # Settings loader with caching and invalidation
 ├── cache.ts                  # .search/ cache read/write, index management, cache suggest helpers
 ├── types.ts                  # Shared TypeScript interfaces
-├── util.ts                   # URL extraction, source type inference, helpers
+├── util.ts                   # URL extraction, inference, concurrency + retry/backoff/timeout/throttle helpers
 └── tools/
     ├── intelli-research.ts   # Full pipeline orchestrator (5 stages)
     ├── intelli-search.ts     # Standalone search via Perplexity Sonar
@@ -228,7 +228,9 @@ test/
 ├── index.test.ts
 ├── prompts.test.ts
 ├── providers.test.ts
+├── research.test.ts
 ├── run-e2e.sh
+├── run-e2e-all.sh
 ├── run-e2e-cap.sh
 ├── run-e2e-collation-limits.sh
 ├── run-e2e-extract-limits.sh
@@ -259,8 +261,12 @@ The pipeline is self-contained. `Pi` extensions cannot call other tools from `ex
 
 - Uses `completeSimple()` from `@earendil-works/pi-ai` (not `complete()`) because MiniMax M2.7 is a reasoning model and needs `reasoning: "low"` parameter.
 - Auth flows through `Pi`'s native system (`auth.json`, env vars, OAuth). No API key management happens in this code.
-- The `onResponse` callback in `callLlm()` detects HTTP 429 and 5xx immediately before stream consumption.
-- Provider-response monitoring via `after_provider_response` event catches rate limits even outside tool calls.
+- **Retry and timeout are owned by `callLlm()`, not the SDK.** It passes `maxRetries: 0` to `completeSimple()` so the SDK's own retries do not compound with ours, then wraps the call in `withRetry()` (full-jitter exponential backoff, honours Retry-After, bounded by `llmRetryAttempts`/`retryBaseDelayMs`/`retryMaxDelayMs`). On the OpenRouter path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and `completeSimple()` resolves with `stopReason: "error"` and the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header); it must never throw, because a throw propagates out of `completeSimple()` and bypasses retry.
+- **Per-call timeout via `callWithAbortTimeout()` (`util.ts`).** The SDK request timeout does not cover a stalled streaming body, so `callLlm()` aborts the whole call with an `AbortController` after `llmTimeoutMs`, combined with the tool's signal so Esc still cancels. A timeout surfaces as a retryable condition; if it survives all attempts, `callLlm()` throws a clear timeout error.
+- **Application-level search retry.** Stage 1 retries up to `searchRetryAttempts` times when the search model returns a valid response with zero usable links (a degraded 200 that transport retry cannot catch).
+- **Optional extract throttle.** `minRequestIntervalMs` (default 0, off) spaces concurrent extract calls via a per-run rate limiter for keys with tight rate limits.
+- Provider-response monitoring via `after_provider_response` event surfaces a rate-limit status in the `Pi` footer even outside tool calls.
+- **Caveat:** `pi -p` (used by the E2E scripts) drives `Pi`'s own agent-loop LLM calls (tool selection and final summary). Those go through `Pi`'s provider path and are **not** wrapped by `callLlm()`'s retry/timeout. A hung `pi` with no open network connection is agent-loop behaviour, not this extension.
 
 ### Model Registration
 
@@ -277,7 +283,7 @@ After extraction, every unique domain in the results is probed for `llms-full.tx
 
 ### Settings
 
-Loaded from `~/.pi/agent/settings.json` and `.pi/settings.json` with `intelli*` prefixed keys. Cached in memory, invalidated on `session_start`. See README for all settings keys.
+Loaded from `~/.pi/agent/settings.json` and `.pi/settings.json`. The nested `pi-intelli-search` namespace is preferred; flat `intelli*` prefixed keys are a deprecated fallback. Cached in memory, invalidated on `session_start`. Rate-limit resilience keys (`llmTimeoutMs`, `llmRetryAttempts`, `retryBaseDelayMs`, `retryMaxDelayMs`, `searchRetryAttempts`, `minRequestIntervalMs`) tune retry, timeout, and throttling. See README for all settings keys and defaults (the canonical reference).
 
 ### Cache
 
@@ -315,7 +321,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 - **Strict TypeScript:** No `any` unless interfacing with untyped `Pi` internals (for example, `ctx.modelRegistry as { refresh?: () => void }`).
 - **Extension API pattern:** Single `export default function(pi: ExtensionAPI)` in `index.ts`.
 - **Tool definition pattern:** Each tool exports an object with `name`, `label`, `description`, `promptSnippet`, `promptGuidelines`, `parameters` (TypeBox schema), and `execute()`.
-- **Error handling:** Extraction failures are caught per-page (do not fail the whole pipeline). Rate limits throw actionable errors with retry guidance.
+- **Error handling:** Extraction failures are caught per-page (do not fail the whole pipeline). Transient failures (429, 5xx, timeouts) are retried with full-jitter backoff honouring Retry-After; a failure that survives all attempts throws an actionable error.
 - **Graceful degradation:** Optional `Pi` features (working indicator, model refresh) are feature-detected and silently skipped on older versions.
 - **No cross-tool calls:** `Pi` extensions cannot invoke other tools from `execute()`. Therefore `intelli_research` inlines all stages.
 - **SPDX headers:** Source files include `// SPDX-License-Identifier: Apache-2.0` and copyright notices.
@@ -335,7 +341,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | **Structural/smoke** | Extension loads, tools register, events bind | `smoke.ts` | No |
 | **Unit (pure logic)** | Functions without filesystem or network deps | `cache.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
 | **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts` | No |
-| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `run-e2e.sh`, `run-e2e-cap.sh`, `run-e2e-extract-limits.sh`, `run-e2e-collation-limits.sh`, `run-e2e-llmsfull.sh`, `run-e2e-migration.sh`, `run-e2e-model-override.sh` | Yes |
+| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `run-e2e.sh`, `run-e2e-cap.sh`, `run-e2e-extract-limits.sh`, `run-e2e-collation-limits.sh`, `run-e2e-llmsfull.sh`, `run-e2e-migration.sh`, `run-e2e-model-override.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
 | **Publish** | Validates published npm package structure | `run-e2e-publish.sh` | Yes (npm only) |
 
 ### Principle 1: Tests Must Be Deterministic
@@ -394,7 +400,7 @@ Configuration errors (model typos, missing keys) must be caught before LLM calls
 
 ### Principle 4: E2E Tests Exercise Real Config Paths
 
-E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. There are seven E2E scripts:
+E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. There are seven scenario scripts plus a sequential runner:
 
 | Test | What it proves |
 |---|---|
@@ -405,8 +411,11 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `run-e2e-extract-limits.sh` | `extractMaxChars` and `extractionMaxTokens` are enforced; back-to-back comparison proves truncation |
 | `run-e2e-collation-limits.sh` | `collationMaxTokens` is enforced; back-to-back comparison proves output clamping |
 | `run-e2e-llmsfull.sh` | Automatic llms-full.txt discovery works; probes candidate sites, verifies file lands in cache |
+| `run-e2e-all.sh` | Runs every scenario script one at a time with a spacing gap (`E2E_GAP_SECONDS`, default 20). Use this instead of launching scripts in parallel or back-to-back: bursting many calls at one key depletes the rate-limit bucket and produces degraded or hung runs. |
 
 Both write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
+
+**Rate-limit caution:** the scenario scripts each fire two or more full pipelines. Run them through `run-e2e-all.sh` (or singly with gaps) on free or shared keys. The fragile single-URL comparisons (`run-e2e-extract-limits.sh`, `run-e2e-collation-limits.sh`) use `maxUrls=2` for redundancy so one degraded call cannot zero the run.
 
 ### Principle 5: E2E Scripts Must Be Proven Runnable
 
@@ -424,7 +433,7 @@ CI does not run E2E scripts (they require API keys and a live `pi` binary). The 
 2. **Unit tests:** `npm test`
 3. **End-to-end test:** `./test/run-e2e.sh`
 
-Do not consider a change complete until all three pass. Run all E2E scripts before any release: `./test/run-e2e-migration.sh`, `./test/run-e2e-model-override.sh`, `./test/run-e2e-cap.sh`, `./test/run-e2e-extract-limits.sh`, `./test/run-e2e-collation-limits.sh`, and `./test/run-e2e-llmsfull.sh`.
+Do not consider a change complete until all three pass. Run all E2E scripts before any release via the sequential runner `./test/run-e2e-all.sh` (it paces calls so the rate-limit bucket does not deplete). Running them in parallel or back-to-back is the documented cause of degraded or hung runs.
 
 ### E2E Test Requirements
 
@@ -454,6 +463,7 @@ No API keys are needed.
 5. **`focusPrompt` is critical:** Without it the extraction LLM works generically. The `promptGuidelines` instruct the agent to always provide it.
 6. **Cache suggest is additive, not a gate:** Stage 5 never blocks or replaces the live pipeline. It uses the cheap extract model as an LLM judge (≈500 input tokens, ≈$0.0002) to find related previous searches. Failures are caught and silently ignored.
 7. **Default migration is match-based, not tracked:** When defaults change between versions, users whose model configs match the OLD default exactly get auto-migrated to the NEW default in-memory. Users who customized their config are left alone. Migration never writes to the user's `settings.json`. A notification explains what changed and how to make it permanent. This is tested in `test/settings.test.ts` under `migrateDefaults`.
+8. **Rate-limit resilience is owned at the application layer:** `callLlm()` disables the SDK's retries (`maxRetries: 0`) and runs its own full-jitter backoff plus a hard `AbortController` timeout, because the SDK retries do not honour Retry-After, do not abort cleanly on Esc, and (critically) the SDK request timeout does not cover a stalled streaming body. Stage 1 additionally retries a degraded-200 search (valid response, zero links) that no transport-level check can catch. An opt-in `minRequestIntervalMs` throttle spaces the extract fan-out for tight-limit keys. The pure helpers (`withRetry`, `callWithAbortTimeout`, `isRetryableMessage`, `parseRetryAfterMs`, `createRateLimiter`) live in `util.ts` and are unit-tested in `test/util.test.ts`.
 
 ## Tool Naming
 

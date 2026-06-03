@@ -45,4 +45,20 @@ export interface ResearchSettings {
   collationMaxTokens: number;
   browserFingerprint: string;
   disableLlmsFullDiscovery: boolean;
+  // ── Rate-limit resilience ──
+  // Per-call timeout (ms) for each LLM request. Bounds a stalled provider
+  // connection (common under rate limiting) so it surfaces as a retryable
+  // timeout instead of hanging on the SDK's ~10-minute default.
+  llmTimeoutMs: number;
+  // Transport-level retry per LLM call (1 = no retry; includes the first try).
+  llmRetryAttempts: number;
+  // Backoff base and cap (ms) for full-jitter retry delays.
+  retryBaseDelayMs: number;
+  retryMaxDelayMs: number;
+  // Application-level retry when search returns a valid 2xx with zero usable
+  // links (degraded response). Includes the first try.
+  searchRetryAttempts: number;
+  // Minimum gap (ms) between concurrent LLM calls in the extract fan-out.
+  // 0 disables the throttle (default; paid providers have no hard rate limit).
+  minRequestIntervalMs: number;
 }
