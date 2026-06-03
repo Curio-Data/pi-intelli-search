@@ -153,7 +153,7 @@ rm -rf "$ISO1"
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  RUN 2: Tight limits                                 ║"
-echo "║  extractMaxChars=500    extractionMaxTokens=150      ║"
+echo "║  extractMaxChars=500    extractionMaxTokens=500      ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 

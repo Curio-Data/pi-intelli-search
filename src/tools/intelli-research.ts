@@ -169,6 +169,12 @@ export const intelliResearchTool = {
       await sleep(settings.retryBaseDelayMs, signal);
     }
 
+    // User cancel during search: propagate abort rather than returning a
+    // misleading "no links" diagnostic.
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
     if (urls.length === 0) {
       return {
         content: [textContent(

@@ -88,32 +88,48 @@ export async function callLlm(
       // stream open after a 200, hanging the read until the SDK's ~10-minute
       // default. callWithAbortTimeout aborts the whole call (combined with the
       // user's signal so Esc still cancels) and reports whether it timed out.
-      const { value, timedOut } = await callWithAbortTimeout(
-        (signal) =>
-          completeSimple(
-            model,
-            { systemPrompt, messages },
-            {
-              apiKey: auth.apiKey,
-              headers: auth.headers,
-              signal,
-              maxTokens: options?.maxTokens,
-              reasoning: "low",
-              maxRetries: 0,
-              onResponse: (res) => {
-                if (res.status === 429 || res.status >= 500) {
-                  const ra = res.headers["retry-after"];
-                  const secs = ra ? Number(ra) : NaN;
-                  onResponseRetryAfterMs = Number.isFinite(secs) ? secs * 1000 : undefined;
-                }
+      //
+      // completeSimple may resolve or throw on abort depending on the
+      // provider path — the try/catch ensures lastAttemptTimedOut is set
+      // correctly either way so the classifier can distinguish a retryable
+      // timeout from a genuine (non-retryable) error.
+      try {
+        const { value, timedOut } = await callWithAbortTimeout(
+          (signal) =>
+            completeSimple(
+              model,
+              { systemPrompt, messages },
+              {
+                apiKey: auth.apiKey,
+                headers: auth.headers,
+                signal,
+                maxTokens: options?.maxTokens,
+                reasoning: "low",
+                maxRetries: 0,
+                onResponse: (res) => {
+                  if (res.status === 429 || res.status >= 500) {
+                    const ra = res.headers["retry-after"];
+                    const secs = ra ? Number(ra) : NaN;
+                    onResponseRetryAfterMs = Number.isFinite(secs) ? secs * 1000 : undefined;
+                  }
+                },
               },
-            },
-          ),
-        timeoutMs,
-        userSignal,
-      );
-      lastAttemptTimedOut = timedOut;
-      return value;
+            ),
+          timeoutMs,
+          userSignal,
+        );
+        lastAttemptTimedOut = timedOut;
+        return value;
+      } catch (err) {
+        // When our timer abort causes completeSimple to throw instead of
+        // resolve, lastAttemptTimedOut is still false. Infer it from signal
+        // state: if userSignal is NOT aborted, the most likely cause is our
+        // timeout. This lets the classifier issue a retry.
+        if (!userSignal?.aborted) {
+          lastAttemptTimedOut = true;
+        }
+        throw err;
+      }
     },
     (result, error) => {
       if (userSignal?.aborted) return { retry: false }; // genuine user cancel
@@ -155,6 +171,10 @@ export async function callLlm(
       `LLM call timed out (${config.provider}/${config.model}) after ${timeoutMs}ms ` +
         `per attempt across ${retry?.attempts ?? 1} attempt(s). The provider may be rate limiting or overloaded.`,
     );
+  }
+  // User cancel: surface as AbortError rather than a misleading failure.
+  if (userSignal?.aborted) {
+    throw new DOMException("Aborted", "AbortError");
   }
   if (response.stopReason === "error") {
     throw new Error(

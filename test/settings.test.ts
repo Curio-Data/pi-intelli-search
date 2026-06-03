@@ -77,6 +77,13 @@ describe("loadSettings defaults", () => {
     assert.strictEqual(settings.extractionMaxTokens, 3000);
     assert.strictEqual(settings.collationMaxTokens, 4000);
     assert.strictEqual(settings.browserFingerprint, "chrome_145");
+    assert.strictEqual(settings.disableLlmsFullDiscovery, false);
+    assert.strictEqual(settings.llmTimeoutMs, 90_000);
+    assert.strictEqual(settings.llmRetryAttempts, 3);
+    assert.strictEqual(settings.retryBaseDelayMs, 1500);
+    assert.strictEqual(settings.retryMaxDelayMs, 20_000);
+    assert.strictEqual(settings.searchRetryAttempts, 2);
+    assert.strictEqual(settings.minRequestIntervalMs, 0);
   });
 });
 
