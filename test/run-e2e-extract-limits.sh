@@ -7,6 +7,9 @@
 # then with aggressively low limits. Compares extraction file sizes
 # to confirm truncation and token limiting took effect.
 #
+# Output is tee'd to .e2e-logs/extract-limits-<timestamp>.log for
+# out-of-band inspection of failures.
+#
 # Usage:
 #   ./test/run-e2e-extract-limits.sh
 #
@@ -19,6 +22,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CACHE_DEFAULT="$PROJECT_DIR/.e2e-extract-default"
 CACHE_TIGHT="$PROJECT_DIR/.e2e-extract-tight"
+LOG_DIR="$PROJECT_DIR/.e2e-logs"
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+LOG_FILE="$LOG_DIR/extract-limits-${TIMESTAMP}.log"
+mkdir -p "$LOG_DIR"
+
+# Tee all output to log file
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo "📝 Log: $LOG_FILE"
 
 # Load .env if it exists
 if [ -f "$PROJECT_DIR/.env" ]; then
@@ -227,16 +239,60 @@ if [ -z "$ENTRY_TIGHT" ]; then
   ERRORS=$((ERRORS + 1))
 fi
 
+# ── Diagnostic: read source counts from each report ──
+for label in "Default" "Tight"; do
+  if [ "$label" = "Default" ]; then
+    ENTRY="$ENTRY_DEFAULT"
+  else
+    ENTRY="$ENTRY_TIGHT"
+  fi
+  if [ -n "$ENTRY" ] && [ -f "$ENTRY/report.md" ]; then
+    SOURCE_LINE=$(grep "^> Sources:" "$ENTRY/report.md" 2>/dev/null || echo "")
+    BLOCKED_LINE=$(grep -c "^## Blocked/Failed" "$ENTRY/report.md" 2>/dev/null || echo "0")
+    EXT_COUNT=$(find "$ENTRY/extractions" -type f 2>/dev/null | wc -l)
+    SRC_COUNT=$(find "$ENTRY/sources" -type f 2>/dev/null | wc -l)
+    echo "🔍 $label: $SOURCE_LINE | extractions=$EXT_COUNT files | sources=$SRC_COUNT files | has_blocked_section=$BLOCKED_LINE"
+    if [ "$BLOCKED_LINE" -gt 0 ]; then
+      echo "   Blocked URLs:"
+      sed -n '/^## Blocked\/Failed/,/^##/p' "$ENTRY/report.md" 2>/dev/null | grep "^-" | while read -r line; do
+        echo "   $line"
+      done
+    fi
+  fi
+done
+echo ""
+
 if [ -n "$ENTRY_DEFAULT" ] && [ -n "$ENTRY_TIGHT" ]; then
   EXTRACT_DIR_DEFAULT="$ENTRY_DEFAULT/extractions"
   EXTRACT_DIR_TIGHT="$ENTRY_TIGHT/extractions"
 
   if [ -d "$EXTRACT_DIR_DEFAULT" ] && [ -d "$EXTRACT_DIR_TIGHT" ]; then
-    # Get the first extraction file from each
     FILE_DEFAULT=$(find "$EXTRACT_DIR_DEFAULT" -type f | head -1)
     FILE_TIGHT=$(find "$EXTRACT_DIR_TIGHT" -type f | head -1)
 
-    if [ -n "$FILE_DEFAULT" ] && [ -n "$FILE_TIGHT" ]; then
+    if [ -z "$FILE_DEFAULT" ] || [ -z "$FILE_TIGHT" ]; then
+      # Check whether this is a fetch failure (0 pages) or extraction failure
+      SRC_LINE_DEFAULT=$(grep "^> Sources:" "$ENTRY_DEFAULT/report.md" 2>/dev/null || echo "")
+      SRC_LINE_TIGHT=$(grep "^> Sources:" "$ENTRY_TIGHT/report.md" 2>/dev/null || echo "")
+      SUCC_DEFAULT=$(echo "$SRC_LINE_DEFAULT" | grep -oP '\d+(?= succeeded)' || echo "0")
+      SUCC_TIGHT=$(echo "$SRC_LINE_TIGHT" | grep -oP '\d+(?= succeeded)' || echo "0")
+
+      if [ "$SUCC_DEFAULT" -eq 0 ] && [ "$SUCC_TIGHT" -eq 0 ]; then
+        echo "⚠️  Both runs had 0 successful page fetches — cannot compare extraction limits."
+        echo "   This is a fetch reliability issue, not an extract-limits bug."
+        echo "   Check report.md Blocked/Failed section above for per-URL details."
+        echo "   Rerun the test; if it persists, the target URLs may have changed."
+      elif [ "$SUCC_DEFAULT" -eq 0 ]; then
+        echo "⚠️  Default run had 0 extractions (fetch failure). Tight run cannot be compared."
+        echo "   Rerun the test."
+      elif [ "$SUCC_TIGHT" -eq 0 ]; then
+        echo "⚠️  Tight run had 0 extractions (fetch failure). Default run cannot be compared."
+        echo "   Rerun the test."
+      else
+        echo "❌ Extractions succeeded but no extraction files written (code bug)"
+        ERRORS=$((ERRORS + 1))
+      fi
+    else
       SIZE_DEFAULT=$(wc -c < "$FILE_DEFAULT" || echo "0")
       SIZE_TIGHT=$(wc -c < "$FILE_TIGHT" || echo "0")
       CHARS_DEFAULT=$(wc -m < "$FILE_DEFAULT" || echo "0")
@@ -275,10 +331,6 @@ if [ -n "$ENTRY_DEFAULT" ] && [ -n "$ENTRY_TIGHT" ]; then
       else
         echo "⚠️  Tight extraction does not mention truncation (extract LLM may not echo the marker)"
       fi
-
-    else
-      echo "❌ Missing extraction files"
-      ERRORS=$((ERRORS + 1))
     fi
   else
     echo "❌ Missing extractions directory in one or both caches"

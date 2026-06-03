@@ -20,6 +20,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
 
+LOG_DIR="$PROJECT_DIR/.e2e-logs"
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+LOG_FILE="$LOG_DIR/e2e-cap-${TIMESTAMP}.log"
+mkdir -p "$LOG_DIR"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "📝 Log: $LOG_FILE"
+
 # Load .env if it exists
 if [ -f "$PROJECT_DIR/.env" ]; then
   set -a

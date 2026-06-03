@@ -233,11 +233,34 @@ export const intelliResearchTool = {
     const cachePath = makeCachePath(params.query, ctx.cwd, settings.cacheDir);
     const allExtractions = [...extractions, ...blockedExtractions];
 
-    // Write cache
-    await writeCacheFiles(cachePath, allExtractions, successPages, searchResult, params.query);
-
     // Build collation message
     const succeededExtractions = allExtractions.filter((e) => e.status === "success");
+
+    // If no extractions produced useful content (all fetches failed or all
+    // extraction LLM calls errored), return the search summary without
+    // creating cache artifacts or running collation.
+    if (succeededExtractions.length === 0) {
+      const fetchFailed = blockedExtractions.length;
+      const extractFailed = extractions.filter((e) => e.status === "failed").length;
+      const reason = fetchFailed > 0
+        ? `${fetchFailed} page(s) failed to fetch`
+        : `${extractFailed} extraction(s) failed`;
+      return {
+        content: [textContent(
+          `${reason}. No content was extracted.\n\nSearch summary:\n${searchResult}`,
+        )],
+        details: {
+          cachePath: "",
+          urlsSearched: urls.length,
+          pagesFetched: successPages.length,
+          pagesFailed: pages.length - successPages.length,
+        } as Record<string, unknown>,
+      };
+    }
+
+    // Write cache (only when there are successful extractions)
+    await writeCacheFiles(cachePath, allExtractions, successPages, searchResult, params.query);
+
     let collationUserMsg = `Original query: ${params.query}\n`;
     collationUserMsg += `Cache path: ${cachePath}/\n\n`;
     collationUserMsg += `Search summary (from Sonar):\n${searchResult}\n\n`;

@@ -31,3 +31,4 @@ npm-debug.log*
 .e2e-collate-default/
 .e2e-collate-tight/
 .e2e-llmsfull/
+.e2e-logs/
