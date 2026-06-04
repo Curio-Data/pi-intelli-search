@@ -528,9 +528,9 @@ export function renderProgressBar(details: ProgressDetails, theme: any): Text {
   // Stage pills: ✓ for done, ● for current, ○ for pending
   const pills = STAGES.map((s, i) => {
     const label = STAGE_LABELS[s];
-    if (i < stageIdx) return theme.fg("success", `✓${label}`);
-    if (i === stageIdx) return theme.fg("accent", theme.bold(`●${label}`));
-    return theme.fg("dim", `○${label}`);
+    if (i < stageIdx) return theme.fg("success", `✓ ${label}`);
+    if (i === stageIdx) return theme.fg("accent", theme.bold(`● ${label}`));
+    return theme.fg("dim", `○ ${label}`);
   }).join("  ");
 
   let text = theme.fg("accent", `[${bar}] ${pct}%`) + "\n";

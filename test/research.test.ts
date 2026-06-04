@@ -201,11 +201,11 @@ describe("renderProgressBar", () => {
     const lines = result.render(80);
     const output = lines.join("\n");
 
-    assert.ok(output.includes("✓Search"), "should show ✓Search as completed");
-    assert.ok(output.includes("✓Fetch"), "should show ✓Fetch as completed");
-    assert.ok(output.includes("●Extract"), "should show ●Extract as current");
-    assert.ok(output.includes("○Collate"), "should show ○Collate as pending");
-    assert.ok(output.includes("○Cache"), "should show ○Cache as pending");
+    assert.ok(output.includes("✓ Search"), "should show ✓ Search as completed");
+    assert.ok(output.includes("✓ Fetch"), "should show ✓ Fetch as completed");
+    assert.ok(output.includes("● Extract"), "should show ● Extract as current");
+    assert.ok(output.includes("○ Collate"), "should show ○ Collate as pending");
+    assert.ok(output.includes("○ Cache"), "should show ○ Cache as pending");
   });
 
   it("first stage shows no completed pills", async () => {
@@ -215,9 +215,9 @@ describe("renderProgressBar", () => {
     const lines = result.render(80);
     const output = lines.join("\n");
 
-    assert.ok(output.includes("●Search"), "should show ●Search as current");
-    assert.ok(!output.includes("✓Search"), "should not show ✓Search (nothing completed yet)");
-    assert.ok(output.includes("○Fetch"), "should show ○Fetch as pending");
+    assert.ok(output.includes("● Search"), "should show ● Search as current");
+    assert.ok(!output.includes("✓ Search"), "should not show ✓ Search (nothing completed yet)");
+    assert.ok(output.includes("○ Fetch"), "should show ○ Fetch as pending");
   });
 
   it("last stage shows all others completed", async () => {
@@ -227,11 +227,11 @@ describe("renderProgressBar", () => {
     const lines = result.render(80);
     const output = lines.join("\n");
 
-    assert.ok(output.includes("✓Search"), "should show ✓Search");
-    assert.ok(output.includes("✓Fetch"), "should show ✓Fetch");
-    assert.ok(output.includes("✓Extract"), "should show ✓Extract");
-    assert.ok(output.includes("✓Collate"), "should show ✓Collate");
-    assert.ok(output.includes("●Cache"), "should show ●Cache as current");
+    assert.ok(output.includes("✓ Search"), "should show ✓ Search");
+    assert.ok(output.includes("✓ Fetch"), "should show ✓ Fetch");
+    assert.ok(output.includes("✓ Extract"), "should show ✓ Extract");
+    assert.ok(output.includes("✓ Collate"), "should show ✓ Collate");
+    assert.ok(output.includes("● Cache"), "should show ● Cache as current");
   });
 
   it("includes sub-progress bar when subProgress is present", async () => {
