@@ -194,6 +194,7 @@ export const intelliResearchTool = {
       timeoutMs: settings.fetchTimeoutMs,
       browser: settings.browserFingerprint as unknown as import("wreq-js").BrowserProfile,
       concurrency: settings.fetchConcurrency,
+      proxy: settings.httpProxy,
     });
     const successPages = pages.filter((p) => p.status === "success");
 
@@ -340,7 +341,7 @@ export const intelliResearchTool = {
         } catch { /* skip malformed URLs */ }
       }
       llmsFullPromises = [...sampleUrlByHost.values()].map((sampleUrl) =>
-        downloadLlmsFullToCache(sampleUrl, cachePath, signal).catch(() => null),
+        downloadLlmsFullToCache(sampleUrl, cachePath, signal, undefined, settings.httpProxy).catch(() => null),
       );
     }
 

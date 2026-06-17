@@ -66,6 +66,9 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
   let lastRateLimitNotified = 0;
   pi.on("after_provider_response", (event, ctx) => {
     if (!sessionActive) return;
+    // ctx.hasUI is false in print/json mode, where setStatus is a no-op.
+    // Skip the work entirely so pi -p / --mode json runs stay clean.
+    if (!ctx.hasUI) return;
     try {
       if (event.status === 429) {
         // Debounce: only notify once per 30 seconds
@@ -134,6 +137,13 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
     sessionActive = true;
     invalidateSettingsCache();
 
+    // ctx.hasUI is false in print/json mode, where notify is a no-op.
+    // Route every user-facing notice through this guard so non-interactive
+    // runs (pi -p, --mode json) skip the TUI call cleanly.
+    const notify = (message: string, level: "info" | "warning") => {
+      if (ctx.hasUI) ctx.ui.notify(message, level);
+    };
+
     if (!modelsChecked) {
       modelsChecked = true;
 
@@ -146,14 +156,14 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
           // but is available at runtime on the concrete ModelRegistry instance.
           const registry = ctx.modelRegistry as { refresh?: () => void };
           registry.refresh?.();
-          ctx.ui.notify(
+          notify(
             `[pi-intelli-search] Added models: ${added.join(", ")}. Use /model to select them.`,
             "info",
           );
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        ctx.ui.notify(
+        notify(
           `[pi-intelli-search] Warning: could not update models.json: ${message}`,
           "warning",
         );
@@ -167,7 +177,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
     try {
       const authMissing = await isOpenRouterAuthMissing();
       if (authMissing) {
-        ctx.ui.notify(
+        notify(
           `[pi-intelli-search] No OpenRouter API key found. ` +
           `This extension requires one. Run /login or add 'openrouter' to auth.json.`,
           "warning",
@@ -204,7 +214,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
           const userSettings = await loadSettings(process.cwd());
           const { changes } = migrateDefaults(previousVersion, CURRENT_VERSION, userSettings);
           if (changes.length > 0) {
-            ctx.ui.notify(
+            notify(
               `[pi-intelli-search] Default models updated:\n` +
               changes.map((c) => `  ${c}`).join("\n") + "\n" +
               `Update your settings.json to make these permanent.`,
@@ -239,7 +249,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
       try {
         const flatKeysExist = await hasFlatKeys(process.cwd());
         if (flatKeysExist) {
-          ctx.ui.notify(
+          notify(
             `[pi-intelli-search] Flat 'intelli*' settings keys are deprecated. ` +
             `Nest them under 'pi-intelli-search' in settings.json. ` +
             `See CHANGELOG.md for details.`,

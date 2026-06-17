@@ -228,8 +228,9 @@ echo ""
 echo "── Peer dependency check ──────────────────────────────────────────"
 
 PEER_DIRS=(
-  "@mariozechner/pi-ai"
-  "@mariozechner/pi-coding-agent"
+  "@earendil-works/pi-ai"
+  "@earendil-works/pi-coding-agent"
+  "@earendil-works/pi-tui"
   "typebox"
 )
 

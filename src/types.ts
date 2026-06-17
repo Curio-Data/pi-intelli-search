@@ -61,4 +61,10 @@ export interface ResearchSettings {
   // Minimum gap (ms) between concurrent LLM calls in the extract fan-out.
   // 0 disables the throttle (default; paid providers have no hard rate limit).
   minRequestIntervalMs: number;
+  // ── Network ──
+  // Mirrors Pi's top-level global `httpProxy` setting. The LLM stages already
+  // route through Pi's managed HTTP clients (which apply it automatically), but
+  // the page-fetching layer uses wreq-js and bypasses those clients, so we honor
+  // the same setting here. undefined means no proxy (direct connection).
+  httpProxy?: string;
 }

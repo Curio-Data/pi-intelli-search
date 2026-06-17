@@ -113,6 +113,7 @@ describe("after_provider_response handler", () => {
     assert.ok(handler, "handler should be registered");
 
     const mockCtx = {
+      hasUI: true,
       ui: {
         setStatus(key: string, text: string | undefined) {
           if (text === undefined) statuses.delete(key);
@@ -149,6 +150,7 @@ describe("after_provider_response handler", () => {
     mod.default(mockPi);
 
     const mockCtx = {
+      hasUI: true,
       ui: {
         setStatus(key: string, text: string | undefined) {
           setStatusCalls.push([key, text]);
@@ -274,6 +276,7 @@ describe("auth pre-flight check", () => {
     };
 
     const mockCtx = {
+      hasUI: true,
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -323,6 +326,7 @@ describe("auth pre-flight check", () => {
     };
 
     const mockCtx = {
+      hasUI: true,
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -375,6 +379,7 @@ describe("auth pre-flight check", () => {
     };
 
     const mockCtx = {
+      hasUI: true,
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -446,6 +451,7 @@ describe("auth pre-flight check", () => {
     };
 
     const mockCtx = {
+      hasUI: true,
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -505,6 +511,7 @@ describe("auth pre-flight check", () => {
     };
 
     const mockCtx = {
+      hasUI: true,
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -597,6 +604,7 @@ describe("auth pre-flight check", () => {
     };
 
     const mockCtx = {
+      hasUI: true,
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });

@@ -2,11 +2,11 @@
 
 [![npm version](https://img.shields.io/npm/v/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
-[![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.74.0-blueviolet)](https://github.com/mariozechner/pi)
+[![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.74.0-blueviolet)](https://github.com/earendil-works/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
 ![tests](https://img.shields.io/badge/tests-205%20passing-brightgreen)
 
-Intelligent web research for [`Pi`](https://github.com/mariozechner/pi): search, extract, collate, and cache grounded web context in one tool call.
+Intelligent web research for [`Pi`](https://github.com/earendil-works/pi): search, extract, collate, and cache grounded web context in one tool call.
 
 A `Pi` extension for deep web research. It searches via [Perplexity Sonar](https://docs.perplexity.ai), fetches pages through a dual-fetch comparison ([_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), extracts query-relevant content per page with a dedicated LLM guided by a _focused prompt_, then collates findings: deduplicating, flagging inconsistencies, and synthesising a concise summary. Everything is cached in `.search/` for offline reuse. Cache suggest surfaces related previous searches on each query.
 
@@ -429,6 +429,9 @@ No configuration is needed. The probe and download are automatic.
 ## Compatibility
 
 - **`Pi` >= 0.74.0:** Core functionality (_TypeBox_ 1.x, tools, model registration, settings, working indicator, `after_provider_response` monitoring).
+- UI notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, RPC).
+- Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
+- Retry and timeout are owned by the extension (`callLlm()`), independent of `Pi`'s `retry.provider.maxRetries`. The extension forces `maxRetries: 0` and runs its own full-jitter backoff, so changing `Pi`'s provider-retry setting has no effect on these tools.
 - Gracefully degrades on older versions. Optional features are skipped.
 
 ## Development

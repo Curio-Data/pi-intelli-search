@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS: ResearchSettings = {
   retryMaxDelayMs: 20_000,
   searchRetryAttempts: 2,
   minRequestIntervalMs: 0,
+  httpProxy: undefined,
 };
 
 /**
@@ -216,6 +217,13 @@ function compareVersions(a: number[], b: number[]): number {
  */
 function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSettings> {
   const overrides: Partial<ResearchSettings> = {};
+
+  // Top-level Pi global setting (mirrors `httpProxy` in Pi's settings.json).
+  // Not namespaced: the page-fetching layer (wreq-js) bypasses Pi's managed
+  // HTTP clients, so we honor the same setting here for proxy support.
+  if (typeof parsed.httpProxy === "string" && parsed.httpProxy.length > 0) {
+    overrides.httpProxy = parsed.httpProxy;
+  }
 
   // Nested namespace (preferred)
   const ns = parsed["pi-intelli-search"] as Record<string, unknown> | undefined;

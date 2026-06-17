@@ -24,10 +24,14 @@ typebox (https://github.com/sinclairzx81/typebox)
 Copyright Sinclair
 License: MIT
 
-@mariozechner/pi-ai (https://github.com/mariozechner/pi)
+@earendil-works/pi-ai (https://github.com/earendil-works/pi)
 Copyright Mario Zechner
 License: Apache-2.0
 
-@mariozechner/pi-coding-agent (https://github.com/mariozechner/pi)
+@earendil-works/pi-coding-agent (https://github.com/earendil-works/pi)
+Copyright Mario Zechner
+License: Apache-2.0
+
+@earendil-works/pi-tui (https://github.com/earendil-works/pi)
 Copyright Mario Zechner
 License: Apache-2.0

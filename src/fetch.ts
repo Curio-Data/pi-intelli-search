@@ -22,6 +22,8 @@ export interface FetchOptions {
   timeoutMs: number;
   browser: BrowserProfile;
   concurrency: number;
+  /** Optional HTTP proxy URL (mirrors Pi's top-level httpProxy setting). */
+  proxy?: string;
 }
 
 const DEFAULT_FETCH_OPTIONS: FetchOptions = {
@@ -196,6 +198,7 @@ async function fetchWithAcceptHeader(url: string, opts: FetchOptions, signal?: A
       browser: opts.browser,
       os: "windows",
       headers: { Accept: "text/markdown" },
+      proxy: opts.proxy,
       signal: combinedSignal,
     });
     if (!response.ok) return null;
@@ -297,6 +300,7 @@ export async function downloadLlmsFullToCache(
   cachePath: string,
   signal?: AbortSignal,
   timeoutMs: number = LLMS_FULL_TIMEOUT_MS,
+  proxy?: string,
 ): Promise<string | null> {
   if (signal?.aborted) return null;
   const hostname = safeHostname(url);
@@ -311,7 +315,7 @@ export async function downloadLlmsFullToCache(
     llmsFullUrl = `https://${hostname}/llms-full.txt`;
   }
 
-  return downloadLlmsFullFile(llmsFullUrl, hostname, cachePath, timeoutMs, signal);
+  return downloadLlmsFullFile(llmsFullUrl, hostname, cachePath, timeoutMs, signal, proxy);
 }
 
 /**
@@ -323,12 +327,14 @@ async function downloadLlmsFullFile(
   cachePath: string,
   timeoutMs: number,
   signal?: AbortSignal,
+  proxy?: string,
 ): Promise<string | null> {
 
   try {
     const response = await wreqFetch(llmsFullUrl, {
       browser: "chrome_145",
       os: "windows",
+      proxy,
       signal: combineSignal(signal, timeoutMs),
     });
     if (!response.ok) return null;
@@ -366,6 +372,7 @@ async function rawFetch(url: string, opts: FetchOptions, signal?: AbortSignal) {
   return wreqFetch(url, {
     browser: opts.browser,
     os: "windows",
+    proxy: opts.proxy,
     signal: combineSignal(signal, opts.timeoutMs),
   });
 }

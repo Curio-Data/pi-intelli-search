@@ -22,8 +22,11 @@ export interface LlmRetryConfig {
  * full-jitter exponential backoff, honouring any Retry-After hint in the
  * provider error. Retry is owned here rather than by the underlying SDK
  * (maxRetries is forced to 0) so the two layers don't compound and so we can
- * honour Retry-After and the AbortSignal. A non-retryable error, or a retryable
- * one that survives all attempts, surfaces as an actionable thrown error.
+ * honour Retry-After and the AbortSignal. Since Pi 0.76.0 the SDK default is
+ * also 0 (retry.provider.maxRetries), so the forced 0 is now defensive rather
+ * than a divergence: it keeps these tools aligned regardless of a user's global
+ * retry settings. A non-retryable error, or a retryable one that survives all
+ * attempts, surfaces as an actionable thrown error.
  */
 export async function callLlm(
   ctx: ExtensionContext,
@@ -63,7 +66,9 @@ export async function callLlm(
   //
   //    Retry is owned by withRetry below, not by the SDK: maxRetries is forced
   //    to 0 so the SDK's own (Retry-After-blind, non-abortable) retries don't
-  //    compound with ours and amplify load. onResponse only OBSERVES — it must
+  //    compound with ours and amplify load. Since Pi 0.76.0 the SDK default is
+  //    also 0, so this force is defensive: it keeps these tools aligned even if
+  //    a user raises retry.provider.maxRetries globally. onResponse only OBSERVES — it must
   //    not throw, because a throw propagates out of completeSimple and would
   //    bypass the retry loop. On the OpenRouter path a 429 never arrives here as
   //    a 2xx anyway; it surfaces as stopReason "error" with the status in

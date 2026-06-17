@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-06-17
+
+### Fixed
+
+- **Page fetching now honours `Pi`'s global `httpProxy` setting.** The LLM stages already route through `Pi`'s managed HTTP clients (which apply the proxy automatically), but the page-fetching layer uses [_wreq-js_](https://github.com/sqdshguy/wreq-js) and bypassed those clients, so users behind a proxy got working LLM calls with silently broken page fetches. The fetch and `llms-full.txt` discovery stages now read the top-level `httpProxy` setting and route their requests through it.
+- **`README` links to `Pi` pointed at the dead `mariozechner/pi` repository.** Updated to the current `earendil-works/pi` home after the 0.74.0 upstream move.
+- **`NOTICE` third-party attribution referenced the old `@mariozechner/*` package scope.** Updated to the current `@earendil-works/*` scope for `pi-ai` and `pi-coding-agent`, and added the missing `@earendil-works/pi-tui` attribution.
+- **The E2E publish test checked the wrong peer-dependency scope.** It verified that `@mariozechner/*` packages were not bundled, which passed vacuously since those packages were never dependencies. It now checks the current `@earendil-works/*` scope (including `pi-tui`) so the peer-dependency exclusion is actually validated.
+
+### Changed
+
+- **UI notifications and status indicators are now guarded with `ctx.hasUI`.** Previously the `session_start` and `after_provider_response` handlers called `ctx.ui.notify`/`setStatus` unconditionally, which is a no-op in non-interactive modes but produced unnecessary work in `pi -p` and `--mode json` runs. These calls now skip cleanly when no UI is attached. No behavioural change in interactive (`tui`/`rpc`) modes.
+- **Internal retry documentation refreshed.** `callLlm()` continues to force `maxRetries: 0` and own its own full-jitter backoff. Since `Pi` 0.76.0 the SDK default is also `0`, so the forced zero is now defensive rather than a divergence; comments and the `README` compatibility section reflect this. No runtime change.
+
 ## [0.10.1] - 2026-06-04
 
 ### Fixed
@@ -229,6 +243,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.10.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.10.2
 [0.10.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.10.1
 [0.10.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.10.0
 [0.9.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.9.0
