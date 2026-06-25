@@ -44,6 +44,6 @@ PI_SESSIONS_DIR=/path scripts/analyze-sessions.sh
 
 ### Provenance
 
-The headline numbers in `PROJECT_BRIEF.md` were produced with an early version
-of this script. Re-running it reproduces those numbers (within the limits of
-session-log inference, since live sessions keep appending).
+The headline numbers were produced with an early version of this script.
+Re-running it reproduces those numbers (within the limits of session-log
+inference, since live sessions keep appending).
