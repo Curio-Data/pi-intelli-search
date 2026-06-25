@@ -200,7 +200,7 @@ else
   ERRORS=$((ERRORS + 1))
 fi
 
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.search' | sort -r | head -1)
+LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.search' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 if [ -n "$LATEST_CACHE" ]; then
   echo "✅ Cache entry directory: $(basename "$LATEST_CACHE")"
 

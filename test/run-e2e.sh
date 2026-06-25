@@ -202,8 +202,10 @@ else
   ERRORS=$((ERRORS + 1))
 fi
 
-# Find the latest cache subdirectory
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.search' | sort -r | head -1)
+# Find the most recently modified cache subdirectory. Uses mtime, not
+# lexicographic order, so a stale dir whose name sorts later cannot mask the
+# dir the live run just created.
+LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.search' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 if [ -n "$LATEST_CACHE" ]; then
   echo "✅ Cache entry directory: $(basename "$LATEST_CACHE")"
 
@@ -233,6 +235,81 @@ if [ -n "$LATEST_CACHE" ]; then
     echo "✅ sources/ exists ($SOURCE_COUNT file(s))"
   else
     echo "⚠️  sources/ not found (may be empty for some queries)"
+  fi
+
+  # ── Telemetry sidecar (v0.11.0+) ───────────────────────────────────
+  # Every completed run writes meta.json with schemaVersion, outcome, and
+  # per-stage outcomes. A happy-path run must produce outcome="completed"
+  # and a schemaVersion of 1. Per-stage fields are asserted as a wiring
+  # guard so a refactor that breaks the orchestrator's telemetry hooks is
+  # caught here, not just by unit tests.
+  if [ -f "$LATEST_CACHE/meta.json" ]; then
+    echo "✅ meta.json telemetry sidecar exists"
+
+    META_SCHEMA=$(jq -r '.schemaVersion // empty' "$LATEST_CACHE/meta.json" 2>/dev/null || echo "")
+    if [ "$META_SCHEMA" = "1" ]; then
+      echo "   ✅ schemaVersion is 1"
+    else
+      echo "   ❌ schemaVersion is '$META_SCHEMA' (expected 1)"
+      ERRORS=$((ERRORS + 1))
+    fi
+
+    META_OUTCOME=$(jq -r '.outcome // empty' "$LATEST_CACHE/meta.json" 2>/dev/null || echo "")
+    if [ "$META_OUTCOME" = "completed" ]; then
+      echo "   ✅ outcome is 'completed'"
+    else
+      echo "   ❌ outcome is '$META_OUTCOME' (expected 'completed')"
+      ERRORS=$((ERRORS + 1))
+    fi
+
+    # Per-stage presence (field names, not values). Empty arrays/objects are
+    # valid if a stage had nothing to record, so only assert the keys exist.
+    for stage in search fetch extract collate cacheSuggest; do
+      if jq -e --arg s "$stage" '.stages[$s]' "$LATEST_CACHE/meta.json" >/dev/null 2>&1; then
+        :
+      else
+        echo "   ❌ stages.$stage missing"
+        ERRORS=$((ERRORS + 1))
+      fi
+    done
+    echo "   ✅ all five stage buckets present"
+
+    # extensionVersion must read a real semver from package.json, not the
+    # 'unknown' fallback.
+    META_VER=$(jq -r '.extensionVersion // empty' "$LATEST_CACHE/meta.json" 2>/dev/null || echo "")
+    if echo "$META_VER" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+      echo "   ✅ extensionVersion is a semver ($META_VER)"
+    else
+      echo "   ❌ extensionVersion is '$META_VER' (expected a semver)"
+      ERRORS=$((ERRORS + 1))
+    fi
+
+    # A live run with live pages must record at least one fetch winner and a
+    # non-empty collation summary, proving the per-stage values are wired to
+    # real LLM/fetch output, not just the builder defaults.
+    FETCH_SUCCEEDED=$(jq -r '.stages.fetch.succeeded // 0' "$LATEST_CACHE/meta.json" 2>/dev/null || echo "0")
+    if [ "$FETCH_SUCCEEDED" -gt 0 ] 2>/dev/null; then
+      echo "   ✅ fetch.succeeded=$FETCH_SUCCEEDED"
+    else
+      echo "   ⚠️  fetch.succeeded is 0 (run may have degraded; check outcome)"
+    fi
+
+    WINNER_KEYS=$(jq -r '.stages.fetch.winners | length' "$LATEST_CACHE/meta.json" 2>/dev/null || echo "0")
+    if [ "$WINNER_KEYS" -gt 0 ] 2>/dev/null; then
+      echo "   ✅ fetch.winners populated ($WINNER_KEYS variant(s))"
+    else
+      echo "   ⚠️  fetch.winners empty"
+    fi
+
+    SUMMARY_CHARS=$(jq -r '.stages.collate.summaryChars // 0' "$LATEST_CACHE/meta.json" 2>/dev/null || echo "0")
+    if [ "$SUMMARY_CHARS" -gt 0 ] 2>/dev/null; then
+      echo "   ✅ collate.summaryChars=$SUMMARY_CHARS"
+    else
+      echo "   ⚠️  collate.summaryChars is 0"
+    fi
+  else
+    echo "❌ meta.json telemetry sidecar not found in cache entry"
+    ERRORS=$((ERRORS + 1))
   fi
 else
   echo "❌ No cache entry subdirectory found under .search/"
