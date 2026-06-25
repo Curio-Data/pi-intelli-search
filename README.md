@@ -325,8 +325,8 @@ Per research session with the default 8 pages: **≈$0.05**
 | Step                           | Calls            | Cost     |
 | ------------------------------ | ---------------- | -------- |
 | Search (_Sonar_)               | 1                | ≈$0.02   |
-| Fetch (Defuddle + Markdown)    | 8 parallel pairs | $0.00    |
-| Extract (M2.7 via OpenRouter)       | 8 parallel       | ≈$0.03   |
+| Fetch (Defuddle + Markdown)    | 8 (≤4 concurrent) pairs | $0.00    |
+| Extract (M2.7 via OpenRouter)       | 8 (≤4 concurrent) | ≈$0.03   |
 | Collate (M2.7 via OpenRouter)       | 1                | ≈$0.005  |
 | Cache suggest (M2.7 via OpenRouter) | 1                | ≈$0.0002 |
 
@@ -426,7 +426,7 @@ No configuration is needed. The probe and download are automatic.
 └── .index.json                 # Index of all cached searches
 ```
 
-## Compatibility
+Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short SHA-1 of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. The same query always produces the same hash, so re-running it refreshes the same directory instead of accumulating duplicates.
 
 - **`Pi` >= 0.74.0:** Core functionality (_TypeBox_ 1.x, tools, model registration, settings, working indicator, `after_provider_response` monitoring).
 - UI notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, RPC).

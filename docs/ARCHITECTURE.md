@@ -69,7 +69,7 @@ src/
 ├── settings.ts           # Settings loader with caching and invalidation
 ├── cache.ts              # .search/ cache read/write and index management
 ├── types.ts              # Shared TypeScript interfaces
-├── util.ts               # URL extraction, source type inference, helpers
+├── util.ts               # URL extraction, inference, concurrency + retry/backoff/timeout/throttle helpers
 └── tools/
     ├── intelli-research.ts   # Full pipeline orchestrator (5 stages)
     ├── intelli-search.ts     # Standalone search via Perplexity Sonar
@@ -94,6 +94,8 @@ src/
 └── .index.json                                # Index of all cached searches
 ```
 
+Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short SHA-1 of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. The same query always produces the same hash, so re-running it refreshes the same directory instead of accumulating duplicates.
+
 ## Cost Estimate
 
 Per research session with the default 8 pages: **≈$0.05**
@@ -101,7 +103,7 @@ Per research session with the default 8 pages: **≈$0.05**
 | Step | Calls | Cost |
 |------|-------|------|
 | Search (Sonar) | 1 | ≈$0.02 |
-| Fetch (Defuddle + Markdown) | 8 parallel pairs | $0.00 |
+| Fetch (Defuddle + Markdown) | 8 (≤4 concurrent) pairs | $0.00 |
 | Extract (M2.7) | 8 (≤4 concurrent) | ≈$0.03 |
 | Collate (M2.7) | 1 | ≈$0.005 |
 | Cache suggest (M2.7) | 1 | ≈$0.0002 |
