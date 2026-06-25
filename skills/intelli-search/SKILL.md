@@ -123,6 +123,7 @@ The cache lives at `.search/<date>-<slug>/`. The tool output includes the path.
 | Quick refresher on one source | `read .search/<slug>/extractions/01-*.md` |
 | Full original page content | `read .search/<slug>/sources/01-*.md` |
 | Collated overview | `read .search/<slug>/report.md` |
+| Per-stage outcomes (v0.11.0+) | `read .search/<slug>/meta.json` |
 | Re-fetch a single URL fresh | `web_fetch(url, format="Markdown")` |
 
 ## How It Works

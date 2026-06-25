@@ -279,10 +279,12 @@ else
           | {succeeded: (map(.succeeded // 0) | add),
               failed: (map(.failed // 0) | add)}' "$tmp_meta" 2>/dev/null
   echo ""
-  echo "Defuddle vs Markdown fetch winners:"
+  echo "Defuddle vs Markdown fetch winners (summed across sidecars):"
   jq -rs 'map(.stages.fetch.winners // {})
-          | add as $w
-          | ($w | to_entries | map("\(.key): \(.value)"))' "$tmp_meta" 2>/dev/null
+          | reduce .[] as $obj ({};
+              reduce ($obj | to_entries)[] as $e (.;
+                .[$e.key] = ((.[$e.key] // 0) + $e.value)))
+          | to_entries | map("\(.key): \(.value)")' "$tmp_meta" 2>/dev/null
   echo ""
   echo "search-retry firings:"
   jq -rs '[.[] | select(.stages.search.retryFired == true)] | length' "$tmp_meta" 2>/dev/null

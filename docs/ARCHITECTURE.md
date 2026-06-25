@@ -84,6 +84,7 @@ src/
 ├── 2026-04-19-d1-worker-api-3f7a2c/
 │   ├── report.md                              # Collated summary + source index
 │   ├── query.txt                              # Original search query
+│   ├── meta.json                              # Local-only telemetry sidecar (v0.11.0+)
 │   ├── extractions/                           # Per-page LLM extractions (≈3-5K each)
 │   │   ├── 01-developers-cloudflare-com.md
 │   │   └── 02-developers-cloudflare-com.md
@@ -95,6 +96,31 @@ src/
 ```
 
 Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short SHA-1 of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. The same query always produces the same hash, so re-running it refreshes the same directory instead of accumulating duplicates.
+
+### Telemetry Sidecar
+
+Each `intelli_research` run writes a `meta.json` sidecar into its cache directory. The schema is owned by `src/telemetry.ts` and is additive-only: future versions add optional fields and never rename or remove existing ones.
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "extensionVersion": "0.11.0",
+  "query": "...",
+  "timestamp": "2026-06-25T12:00:00.000Z",
+  "durationMs": 12345,
+  "stages": {
+    "search": { "model": "...", "linksReturned": 5, "retryFired": false, "attempts": 1 },
+    "fetch": { "requested": 5, "succeeded": 4, "failed": 1, "winners": { "defuddle": 3, "markdown": 1 } },
+    "extract": { "model": "...", "succeeded": 4, "failed": 0, "totalInputChars": 200000, "totalOutputChars": 16000 },
+    "collate": { "model": "...", "summaryChars": 4000 },
+    "cacheSuggest": { "ran": true, "surfaced": 2, "slugs": ["..."] }
+  }
+}
+```
+
+`schemaVersion` is decoupled from `extensionVersion` so consumers can branch on payload shape without parsing the product semver. The file is written atomically (temp file then `rename`) so a crash never leaves a partial `meta.json`. The write is fail-safe: failures are caught and logged, never surfacing to the pipeline result or the agent.
+
+This is strictly local telemetry. No network call is added, no data leaves the host, and no account or identity is recorded. Set `disableTelemetry: true` to suppress the sidecar entirely. The bundled `scripts/analyze-sessions.sh` aggregates sidecars across projects to report per-stage success rates.
 
 ## Cost Estimate
 

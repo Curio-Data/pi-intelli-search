@@ -206,6 +206,7 @@ src/
 ├── providers.ts              # Custom model registration (Sonar) into models.json
 ├── settings.ts               # Settings loader with caching and invalidation
 ├── cache.ts                  # .search/ cache read/write, index management, cache suggest helpers
+├── telemetry.ts             # Local-only meta.json sidecar: schema, builder, atomic write, version source
 ├── types.ts                  # Shared TypeScript interfaces
 ├── util.ts                   # URL extraction, inference, concurrency + retry/backoff/timeout/throttle helpers
 └── tools/
@@ -224,6 +225,7 @@ docs/
 
 test/
 ├── cache.test.ts
+├── telemetry.test.ts
 ├── fetch.test.ts
 ├── index.test.ts
 ├── prompts.test.ts
@@ -287,7 +289,9 @@ Loaded from `~/.pi/agent/settings.json` and `.pi/settings.json`. The nested `pi-
 
 ### Cache
 
-Written to `.search/<date>-<slug>/` with `report.md`, `query.txt`, `extractions/`, `sources/`, and `.index.json`. The collation model sees cache paths so it can reference them in output.
+Written to `.search/<date>-<slug>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. The collation model sees cache paths so it can reference them in output.
+
+**Telemetry sidecar** (v0.11.0+). Each `intelli_research` run also writes a local-only `meta.json` into its cache directory, recording per-stage outcomes (pages fetched/failed, fetch-variant winners, search-retry, cache-suggest hits, latency). The schema is owned by `src/telemetry.ts`, is additive-only, and carries an independent `schemaVersion` decoupled from `extensionVersion`. The write is atomic (temp file then `rename`) and fail-safe: failures are caught and logged, never surfacing to the pipeline result. Suppressed entirely when `disableTelemetry` is true. No network call is added; the word "telemetry" refers to local runtime signals, not remote reporting. The bundled `scripts/analyze-sessions.sh` aggregates these sidecars.
 
 **Cache suggest** (Stage 5) reads `.index.json` back after each research call. It feeds up to 20 recent entries to an LLM judge (using the extract model for cost efficiency) which returns semantically related previous searches. Results are formatted as a `📚 Related cached searches` table appended to the tool output. This is purely supplementary. The live search always runs, and the cache suggestions give the agent (and user) a pointer to prior research if live results are insufficient.
 
@@ -339,7 +343,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | Category | Purpose | Files | Network |
 |---|---|---|---|
 | **Structural/smoke** | Extension loads, tools register, events bind | `smoke.ts` | No |
-| **Unit (pure logic)** | Functions without filesystem or network deps | `cache.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
+| **Unit (pure logic)** | Functions without filesystem or network deps | `cache.test.ts`, `telemetry.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
 | **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts` | No |
 | **E2E** | Full pipeline with real LLM calls in isolated Pi env | `run-e2e.sh`, `run-e2e-cap.sh`, `run-e2e-extract-limits.sh`, `run-e2e-collation-limits.sh`, `run-e2e-llmsfull.sh`, `run-e2e-migration.sh`, `run-e2e-model-override.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
 | **Publish** | Validates published npm package structure | `run-e2e-publish.sh` | Yes (npm only) |

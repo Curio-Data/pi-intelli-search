@@ -316,6 +316,8 @@ All model assignments are configurable. See [Model Configuration](#model-configu
 
 Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈24-40K for 8 pages).
 
+At the end of each run the pipeline writes a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `disableTelemetry: true` to suppress it.
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 ## Cost
@@ -392,6 +394,7 @@ Override defaults in `~/.pi/agent/settings.json` or `.pi/settings.json` under th
 | `retryMaxDelayMs` | All LLM | `20000` | Upper bound on any single retry backoff, and the clamp applied to a Retry-After hint so a large hint cannot stall the pipeline. |
 | `searchRetryAttempts` | 1. Search | `2` | Total attempts for the search stage when it returns a valid response with zero usable links (a degraded result), including the first. Independent of `llmRetryAttempts`, which covers transport errors. |
 | `minRequestIntervalMs` | 3. Extract | `0` | Minimum gap in milliseconds between concurrent extract LLM calls. `0` disables the throttle. Free-tier OpenRouter keys (approximately 0.33 requests per second) should set this to approximately `3000` to avoid tripping rate limits; paid keys can leave it off. |
+| `disableTelemetry` | All | `false` | When `false`, each `intelli_research` run writes a local-only `meta.json` sidecar into its `.search/<slug>/` cache directory recording per-stage outcomes (pages fetched/failed, fetch-variant winners, search-retry, cache-suggest hits, latency). Strictly local: no network call, no data leaves the host. Set `true` to suppress the sidecar. |
 
 ### Automatic llms-full.txt Discovery
 
@@ -416,6 +419,7 @@ No configuration is needed. The probe and download are automatic.
 ├── 2026-04-19-d1-worker-api-3f7a2c/
 │   ├── report.md               # Collated summary + source index
 │   ├── query.txt               # Original search query
+│   ├── meta.json               # Local-only telemetry sidecar (v0.11.0+)
 │   ├── extractions/            # Per-page LLM extractions (≈3-5K each)
 │   │   ├── 01-developers-cloudflare-com.md
 │   │   └── 02-developers-cloudflare-com.md
@@ -427,6 +431,8 @@ No configuration is needed. The probe and download are automatic.
 ```
 
 Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short SHA-1 of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. The same query always produces the same hash, so re-running it refreshes the same directory instead of accumulating duplicates.
+
+**`meta.json` (local-only telemetry).** Each `intelli_research` run writes a `meta.json` sidecar recording per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), whether search-retry fired, cache-suggest hits, and per-stage latency. It is strictly local: no network call is added, no data leaves the host, and no account or identity is recorded. Set `disableTelemetry: true` in [Settings](#settings) to suppress it. The bundled [`scripts/analyze-sessions.sh`](scripts/README.md) can aggregate these sidecars to report per-stage success rates.
 
 - **`Pi` >= 0.74.0:** Core functionality (_TypeBox_ 1.x, tools, model registration, settings, working indicator, `after_provider_response` monitoring).
 - UI notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, RPC).

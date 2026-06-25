@@ -35,7 +35,7 @@ PI_SESSIONS_DIR=/path scripts/analyze-sessions.sh
 | 6 | Adoption rate: sessions using any `intelli_*` tool |
 | 7 | Cache re-reads: tool calls referencing a `.search/` path |
 | 8 | `.search/` cache sizes per project (from `.index.json`) |
-| 9 | Telemetry sidecars (`meta.json`, v0.11.0+): per-stage success rates |
+| 9 | Telemetry sidecars (`meta.json`, v0.11.0+): per-stage success rates, fetch-variant winners (summed across sidecars), search-retry firings, cache-suggest hits |
 
 ### Environment
 
