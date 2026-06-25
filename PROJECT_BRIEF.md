@@ -93,20 +93,89 @@ produce the headline numbers above. It parses `~/.pi/agent/sessions/` and emits:
 The script must be deterministic, depend only on tools already documented in
 `AGENTS.md` (`jq`, `rg`, `fd`), and require no API keys.
 
-### Objective 3: Documentation
+### Objective 3: Documentation and User Communication
 
-Update `CHANGELOG.md` and `README.md` to describe the new telemetry output and
-point at the analysis script. The version in `package.json` is bumped to
-`0.11.0` per [SemVer](https://semver.org/): a new feature (telemetry output)
-lands.
+The telemetry sidecar writes a new file inside the user's project `.search/`
+directory. A new file appearing under a cache directory is user-visible, and
+users who read the cache or version-control it (even though `.search/` is
+gitignored by default) will notice it. The documentation must therefore:
+
+1. State plainly that the file is written, what it contains, and where.
+2. Reassure users that nothing leaves the host (local-only, no remote
+   telemetry).
+3. Provide an opt-out setting so users who do not want the file can disable it.
+4. Point operators at the analysis script that consumes it.
+
+The version in `package.json` is bumped to `0.11.0` per
+[SemVer](https://semver.org/): a new feature (telemetry output) lands.
+
+#### Affected Documents
+
+Every document that describes the cache layout, the pipeline stages, or
+user-visible settings must be amended. The register below is the authoritative
+list for v0.11.0; the release is not complete until each row is addressed.
+
+| Document | Change |
+|---|---|
+| `CHANGELOG.md` | Add `## [0.11.0] - YYYY-MM-DD` with `### Added` (telemetry sidecar, analysis script) and `### Changed` (version bump). Add the `[0.11.0]:` reference link at the bottom. Per the changelog principles, frame the entry around what a user notices: a new file in their cache and a new opt-out setting. |
+| `README.md` | Three edits. (1) **Cache Structure**: add `meta.json` to the directory tree with a one-line comment, and a short paragraph explaining contents and the opt-out. (2) **Settings Reference**: add the `disableTelemetry` row. (3) **Pipeline**: note that a telemetry sidecar is written at the end of the run. |
+| `docs/ARCHITECTURE.md` | Update the **Cache Structure** section to document `meta.json` and add a short **Telemetry Sidecar** subsection describing the schema and the additive, fail-safe write. |
+| `skills/intelli-search/SKILL.md` | The **How It Works** section lists what lands in the cache directory. Add `meta.json` to that list so the agent knows the file exists and can offer to read it. No prose expansion needed; the skill is agent-facing and should stay terse. |
+| `AGENTS.md` | Two edits. (1) **Source Structure**: the `cache.ts` entry gains a `meta.json` mention. (2) **Architecture > Cache**: note that `meta.json` is written. This file is excluded from the CI em-dash grep, so it is the canonical place to describe implementation detail in prose. |
+| `scripts/README.md` | Already documents section 9 (telemetry sidecars). Confirm the schema field names match the implemented `meta.json` keys once the code lands. |
+
+`docs/COMPONENTS.md` (third-party attribution) and `docs/COMPARISON.md` need no
+change: no new dependency is introduced, and local-only telemetry is not a
+public differentiator worth marketing.
+
+#### Opt-Out Setting
+
+Add a `disableTelemetry` boolean setting (default `false`) to match the
+existing `disableLlmsFullDiscovery` naming pattern. When `true`, no `meta.json`
+is written and the analysis script's section 9 reports nothing for that
+project. The setting loads through the existing `settings.ts` nested-namespace
+loader and appears in the README **Settings Reference** table.
+
+#### Privacy Framing
+
+The word "telemetry" in the wider ecosystem often implies remote reporting.
+This feature is strictly local: the `meta.json` file is written next to the
+existing `report.md` and `query.txt` in `.search/<slug>/`, and the analysis
+script reads files on the same host. No network call is added, no data leaves
+the machine, and no account or identity is recorded.
+
+Documentation must lead with this distinction. The README **Cache Structure**
+paragraph and the `CHANGELOG.md` entry both open with "local-only" phrasing
+before describing the contents. The `disableTelemetry` setting exists for users
+who prefer no per-research metadata file at all, even locally.
+
+#### Release Notes Skeleton
+
+The `CHANGELOG.md` entry follows this shape (dates and final wording settled at
+release time):
+
+```markdown
+## [0.11.0] - YYYY-MM-DD
+
+### Added
+
+- **Local-only telemetry sidecar.** Each `intelli_research` run now writes a
+  `meta.json` file into its `.search/<slug>/` cache directory recording
+  per-stage outcomes: pages fetched and failed, fetch-variant winners, whether
+  search-retry fired, cache-suggest hits, and per-stage latency. Nothing leaves
+  the host. Set `disableTelemetry: true` to opt out.
+- **Session analysis script** at `scripts/analyze-sessions.sh` reproduces the
+  effectiveness evaluation from session logs and the new sidecars.
+```
 
 ## Non-Objectives
 
 - No remote telemetry. Nothing leaves the host. The sidecar and the script read
-  and write local files only.
-- No change to pipeline behaviour, model defaults, settings keys, or the cache
-  directory layout. The only addition is the `meta.json` file inside existing
-  cache directories.
+  and write local files only. The word "telemetry" in the setting name refers
+  to local runtime signals, not remote reporting.
+- No change to pipeline behaviour, model defaults, or the cache directory
+  layout. The only addition is the `meta.json` file inside existing cache
+  directories, plus the `disableTelemetry` opt-out.
 - No change to the staged-publish release policy. The agent does not create a
   _GitHub_ Release or trigger `npm` publication without explicit user approval.
 
@@ -114,8 +183,11 @@ lands.
 
 - Every new `intelli_research` run writes a `meta.json` sidecar that the
   analysis script can aggregate.
+- Setting `disableTelemetry: true` suppresses the sidecar, verified by a unit
+  test.
 - Running `scripts/analyze-sessions.sh` on a fresh checkout reproduces the
   headline numbers above (within the limits of session-log inference).
+- Every row in the **Affected Documents** table is addressed.
 - `npm run build` and `npm test` pass.
 - The unit-test suite gains at least one test asserting that a `meta.json`
   sidecar is written with the expected keys, following the filesystem-isolation
