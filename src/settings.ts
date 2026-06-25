@@ -19,6 +19,11 @@ const DEFAULT_SETTINGS: ResearchSettings = {
   collationMaxTokens: 4000,
   browserFingerprint: "chrome_145",
   disableLlmsFullDiscovery: false,
+  // ── Local telemetry ──
+  // When false (default), each intelli_research run writes a meta.json
+  // sidecar into .search/<slug>/ recording per-stage outcomes. Strictly
+  // local: no network call, no data leaves the host. Set true to suppress.
+  disableTelemetry: false,
   // Rate-limit resilience: 1 try + 2 retries, full-jitter backoff capped at 20s,
   // honouring any Retry-After hint in the provider error. searchRetryAttempts
   // covers the degraded-200 case (valid response, zero links). The min-interval
@@ -242,6 +247,7 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
     if (ns.collationMaxTokens != null) overrides.collationMaxTokens = ns.collationMaxTokens as number;
     if (ns.browserFingerprint) overrides.browserFingerprint = ns.browserFingerprint as string;
     if (ns.disableLlmsFullDiscovery != null) overrides.disableLlmsFullDiscovery = ns.disableLlmsFullDiscovery as boolean;
+    if (ns.disableTelemetry != null) overrides.disableTelemetry = ns.disableTelemetry as boolean;
     if (ns.llmTimeoutMs != null) overrides.llmTimeoutMs = ns.llmTimeoutMs as number;
     if (ns.llmRetryAttempts != null) overrides.llmRetryAttempts = ns.llmRetryAttempts as number;
     if (ns.retryBaseDelayMs != null) overrides.retryBaseDelayMs = ns.retryBaseDelayMs as number;
@@ -264,6 +270,7 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
   if (parsed.intelliCollationMaxTokens != null && overrides.collationMaxTokens == null) overrides.collationMaxTokens = parsed.intelliCollationMaxTokens as number;
   if (parsed.intelliBrowserFingerprint && !overrides.browserFingerprint) overrides.browserFingerprint = parsed.intelliBrowserFingerprint as string;
   if (parsed.intelliDisableLlmsFullDiscovery != null && overrides.disableLlmsFullDiscovery == null) overrides.disableLlmsFullDiscovery = parsed.intelliDisableLlmsFullDiscovery as boolean;
+  if (parsed.intelliDisableTelemetry != null && overrides.disableTelemetry == null) overrides.disableTelemetry = parsed.intelliDisableTelemetry as boolean;
   if (parsed.intelliLlmTimeoutMs != null && overrides.llmTimeoutMs == null) overrides.llmTimeoutMs = parsed.intelliLlmTimeoutMs as number;
   if (parsed.intelliLlmRetryAttempts != null && overrides.llmRetryAttempts == null) overrides.llmRetryAttempts = parsed.intelliLlmRetryAttempts as number;
   if (parsed.intelliRetryBaseDelayMs != null && overrides.retryBaseDelayMs == null) overrides.retryBaseDelayMs = parsed.intelliRetryBaseDelayMs as number;

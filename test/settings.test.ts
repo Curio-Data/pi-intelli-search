@@ -78,6 +78,7 @@ describe("loadSettings defaults", () => {
     assert.strictEqual(settings.collationMaxTokens, 4000);
     assert.strictEqual(settings.browserFingerprint, "chrome_145");
     assert.strictEqual(settings.disableLlmsFullDiscovery, false);
+    assert.strictEqual(settings.disableTelemetry, false);
     assert.strictEqual(settings.llmTimeoutMs, 90_000);
     assert.strictEqual(settings.llmRetryAttempts, 3);
     assert.strictEqual(settings.retryBaseDelayMs, 1500);
@@ -211,6 +212,46 @@ describe("loadSettings nested namespace", () => {
         provider: "openai",
         model: "gpt-4o-mini",
       });
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("reads disableTelemetry from nested namespace", async () => {
+    const dir = tempAgentDir();
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+
+    try {
+      writeAgentSettings(dir, {
+        "pi-intelli-search": {
+          disableTelemetry: true,
+        },
+      });
+
+      invalidateSettingsCache();
+      const settings = await loadSettings("/nonexistent");
+      assert.strictEqual(settings.disableTelemetry, true);
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+
+  it("reads disableTelemetry from flat intelli* fallback key", async () => {
+    const dir = tempAgentDir();
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+
+    try {
+      writeAgentSettings(dir, {
+        intelliDisableTelemetry: true,
+      });
+
+      invalidateSettingsCache();
+      const settings = await loadSettings("/nonexistent");
+      assert.strictEqual(settings.disableTelemetry, true);
     } finally {
       if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
       else delete process.env.PI_CODING_AGENT_DIR;

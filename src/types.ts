@@ -45,6 +45,11 @@ export interface ResearchSettings {
   collationMaxTokens: number;
   browserFingerprint: string;
   disableLlmsFullDiscovery: boolean;
+  // When false (default), a local-only meta.json telemetry sidecar is written
+  // per intelli_research run. True suppresses it entirely. No remote
+  // reporting is involved; the word "telemetry" refers to local runtime
+  // signals recorded for the operator's own analysis.
+  disableTelemetry: boolean;
   // ── Rate-limit resilience ──
   // Per-call timeout (ms) for each LLM request. Bounds a stalled provider
   // connection (common under rate limiting) so it surfaces as a retryable

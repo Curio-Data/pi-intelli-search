@@ -12,6 +12,7 @@ import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, readIndex,
 import { textContent, extractSourceUrls, inferSourceType, inferCurrentness, mapWithConcurrency, sleep, createRateLimiter } from "../util.js";
 import type { LlmRetryConfig } from "../llm.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
+import { TelemetryBuilder, writeTelemetry } from "../telemetry.js";
 import type { FetchedPage, ExtractResult } from "../types.js";
 
 // ── Progress bar: pipeline stages ──
@@ -99,6 +100,12 @@ export const intelliResearchTool = {
     // Min-interval gate for the extract fan-out (no-op when interval is 0).
     const gate = createRateLimiter(settings.minRequestIntervalMs);
 
+    // Telemetry accumulator. Constructed only when telemetry is enabled so
+    // the disabled path does zero allocation. Each stage records its slice;
+    // the sidecar is written once at the end of executePipeline(). A write
+    // failure is caught and logged, never surfacing to the pipeline result.
+    const tel = settings.disableTelemetry ? null : await TelemetryBuilder.create(params.query);
+
     const searchConfig = resolveModelConfig(settings, "search");
     const extractConfig = resolveModelConfig(settings, "extract");
     const collateConfig = resolveModelConfig(settings, "collate");
@@ -156,7 +163,9 @@ export const intelliResearchTool = {
     let searchResult = "";
     let urls: Array<{ url: string; title: string }> = [];
     const searchAttempts = Math.max(1, settings.searchRetryAttempts);
+    let searchAttemptsUsed = 0;
     for (let attempt = 1; attempt <= searchAttempts; attempt++) {
+      searchAttemptsUsed = attempt;
       searchResult = await callLlm(ctx, searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {
         maxTokens: 2000,
         signal,
@@ -174,6 +183,13 @@ export const intelliResearchTool = {
     if (signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
     }
+
+    tel?.recordSearch({
+      model: `${searchConfig.provider}/${searchConfig.model}`,
+      linksReturned: urls.length,
+      retryFired: searchAttemptsUsed > 1,
+      attempts: searchAttemptsUsed,
+    });
 
     if (urls.length === 0) {
       return {
@@ -197,6 +213,21 @@ export const intelliResearchTool = {
       proxy: settings.httpProxy,
     });
     const successPages = pages.filter((p) => p.status === "success");
+
+    // Tally fetch-variant winners from the per-page `source` field that
+    // fetch.ts stamps ("defuddle" | "markdown"). Falls back to "unknown"
+    // for any page lacking the field.
+    const fetchWinners: Record<string, number> = {};
+    for (const p of successPages) {
+      const variant = p.source ?? "unknown";
+      fetchWinners[variant] = (fetchWinners[variant] ?? 0) + 1;
+    }
+    tel?.recordFetch({
+      requested: urls.length,
+      succeeded: successPages.length,
+      failed: pages.length - successPages.length,
+      winners: fetchWinners,
+    });
 
     if (successPages.length === 0) {
       return {
@@ -264,6 +295,27 @@ export const intelliResearchTool = {
         status: "blocked" as const,
       }));
 
+    // Telemetry: tally extract outcomes and char throughput. Input chars are
+    // the truncated page content actually fed to each extraction; output is
+    // the returned extraction text. Blocked pages contributed no input.
+    {
+      const succeededExtr = extractions.filter((e) => e.status === "success");
+      const failedExtr = extractions.length - succeededExtr.length;
+      // Input chars are not retained per-page post-call; approximate from the
+      // pages that were fed in (capped at extractMaxChars each).
+      const totalIn = successPages.reduce(
+        (sum, p) => sum + Math.min(p.content.length, settings.extractMaxChars), 0,
+      );
+      const totalOut = succeededExtr.reduce((sum, e) => sum + e.extraction.length, 0);
+      tel?.recordExtract({
+        model: `${extractConfig.provider}/${extractConfig.model}`,
+        succeeded: succeededExtr.length,
+        failed: failedExtr,
+        totalInputChars: totalIn,
+        totalOutputChars: totalOut,
+      });
+    }
+
     // ═══════════════════════════════════════════
     // Stage 4: Collate via LLM + write cache
     // ═══════════════════════════════════════════
@@ -321,6 +373,11 @@ export const intelliResearchTool = {
       timeoutMs: settings.llmTimeoutMs,
     });
 
+    tel?.recordCollate({
+      model: `${collateConfig.provider}/${collateConfig.model}`,
+      summaryChars: collation.length,
+    });
+
     // Download llms-full.txt for each unique domain in the results
     // (unless disabled via settings.disableLlmsFullDiscovery).
     // Pass a representative page URL per hostname (not the bare hostname)
@@ -362,6 +419,10 @@ export const intelliResearchTool = {
 
     const currentSlug = cachePath.split("/").pop() ?? "";
     let suggestionsAppendix = "";
+    // Tracked for telemetry regardless of whether the judge runs.
+    let cacheSuggestRan = false;
+    let cacheSuggestSurfaced = 0;
+    let cacheSuggestSlugs: string[] = [];
     try {
       const index = await readIndex(settings.cacheDir);
       // Only run judge if there are other searches to compare against
@@ -375,12 +436,35 @@ export const intelliResearchTool = {
           timeoutMs: settings.llmTimeoutMs,
         });
         const matches = parseJudgeResponse(judgeResponse, index, currentSlug);
+        cacheSuggestRan = true;
+        cacheSuggestSurfaced = matches.length;
+        cacheSuggestSlugs = matches.map((m) => m.entry.slug);
         suggestionsAppendix = formatCacheSuggestions(matches, settings.cacheDir);
       }
     } catch (err: unknown) {
       // Cache suggest is purely additive — never fail the pipeline
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[pi-intelli-search] Cache suggest failed: ${message}`);
+    }
+
+    tel?.recordCacheSuggest({
+      ran: cacheSuggestRan,
+      surfaced: cacheSuggestSurfaced,
+      slugs: cacheSuggestSlugs,
+    });
+
+    // ── Telemetry sidecar ──
+    // Written once, after every stage has recorded. Local-only and additive:
+    // a write failure is caught and logged so it never surfaces to the
+    // pipeline result or the agent. Suppressed entirely when disableTelemetry
+    // is set (tel === null).
+    if (tel) {
+      try {
+        await writeTelemetry(cachePath, tel.finalize());
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[pi-intelli-search] Telemetry write failed: ${message}`);
+      }
     }
 
     // ═══════════════════════════════════════════
