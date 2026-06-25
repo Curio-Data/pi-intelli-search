@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-06-25
+
+### Fixed
+
+- **The published package failed to load outside the `Pi` host against current `pi-ai`.** `completeSimple` was imported from the `@earendil-works/pi-ai` main entry, which removed it in 0.80.0 (it moved to a `/compat` subpath). The extension worked inside `Pi` (the host aliases the import at runtime) but threw a `SyntaxError` under a plain `node` load, such as the install-fresh publish smoke test and any non-host loader. The import now resolves at runtime between the `/compat` subpath (0.80+) and the main entry (older versions), so it loads in any context and across host versions.
+
+### Added
+
+- **Install-fresh smoke test** (`test/run-e2e-publish-local.sh`) packs the working tree, installs it into a clean directory where peer dependencies resolve to their current latest, and imports it under plain `node`. This is the gate that catches peer-dependency runtime drift that `tsc`, `ty`, LSP, and unit tests cannot see (they resolve the pinned dev dependency, not the install-resolved one). Wired into CI on every push and pull request.
+
 ## [0.11.0] - 2026-06-25
 
 ### Added
@@ -250,6 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.11.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.1
 [0.11.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.0
 [0.10.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.10.2
 [0.10.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.10.1

@@ -346,7 +346,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | **Unit (pure logic)** | Functions without filesystem or network deps | `cache.test.ts`, `telemetry.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
 | **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts` | No |
 | **E2E** | Full pipeline with real LLM calls in isolated Pi env | `run-e2e.sh`, `run-e2e-cap.sh`, `run-e2e-extract-limits.sh`, `run-e2e-collation-limits.sh`, `run-e2e-llmsfull.sh`, `run-e2e-migration.sh`, `run-e2e-model-override.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
-| **Publish** | Validates published npm package structure | `run-e2e-publish.sh` | Yes (npm only) |
+| **Publish** | Validates the published npm package structure | `run-e2e-publish.sh` (registry install), `run-e2e-publish-local.sh` (local tarball install; CI gate for peer-dep drift) | Yes (npm only) |
 
 ### Principle 1: Tests Must Be Deterministic
 

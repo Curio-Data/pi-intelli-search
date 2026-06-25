@@ -1,9 +1,35 @@
 // src/llm.ts — LLM calling utilities using pi native auth
-import { completeSimple } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { Message } from "@earendil-works/pi-ai";
+import type { Message, AssistantMessage, Model, Context, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import type { ModelConfig } from "./types.js";
 import { withRetry, isRetryableMessage, parseRetryAfterMs, callWithAbortTimeout } from "./util.js";
+
+// pi-ai 0.80.0 moved completeSimple out of the package main entry into the
+// /compat subpath. Older pi-ai (<0.80) has no /compat subpath and exports
+// completeSimple from the main entry. Resolve both layouts at first use so
+// the extension works against any pi host version AND in plain node smoke
+// tests (which do not apply the host's runtime aliasing).
+type CompleteSimpleFn = (model: Model<any>, context: Context, options?: SimpleStreamOptions) => Promise<AssistantMessage>;
+
+let _completeSimple: CompleteSimpleFn | null = null;
+
+async function getCompleteSimple(): Promise<CompleteSimpleFn> {
+  if (_completeSimple) return _completeSimple;
+  // Use a non-literal specifier so tsc does not try to type-check the
+  // /compat subpath (which only exists in pi-ai 0.80+; the dev tree pins an
+  // older version that lacks it). Resolution is deferred to runtime.
+  const compatSpec = "@earendil-works/pi-ai/compat";
+  try {
+    // New layout (0.80+): completeSimple lives in the compat subpath.
+    const mod = (await import(compatSpec)) as { completeSimple: CompleteSimpleFn };
+    _completeSimple = mod.completeSimple;
+  } catch {
+    // Old layout (<0.80): completeSimple is exported from the main entry.
+    const mod = await import("@earendil-works/pi-ai");
+    _completeSimple = (mod as { completeSimple: CompleteSimpleFn }).completeSimple;
+  }
+  return _completeSimple!;
+}
 
 /** Transport-level retry config for a single {@link callLlm} call. */
 export interface LlmRetryConfig {
@@ -99,6 +125,7 @@ export async function callLlm(
       // correctly either way so the classifier can distinguish a retryable
       // timeout from a genuine (non-retryable) error.
       try {
+        const completeSimple = await getCompleteSimple();
         const { value, timedOut } = await callWithAbortTimeout(
           (signal) =>
             completeSimple(
