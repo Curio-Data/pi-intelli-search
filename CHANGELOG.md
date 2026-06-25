@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Local-only telemetry sidecar.** Each `intelli_research` run now writes a `meta.json` file into its `.search/<slug>/` cache directory recording per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), whether search-retry fired, cache-suggest hits, and per-stage latency. Nothing leaves the host; no network call is added, no data leaves the machine, and no account or identity is recorded. The schema is additive-only with an independent `schemaVersion`. Set `disableTelemetry: true` to suppress the sidecar entirely.
+- **Local-only telemetry sidecar.** Each `intelli_research` run now writes a `meta.json` file into its `.search/<slug>/` cache directory recording per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), whether search-retry fired, cache-suggest hits, and per-stage latency. Degraded runs that exit early (no links, all fetches failed, all extractions failed) also write a sidecar, with an `outcome` field recording which path produced it, so degradation rates can be measured. Nothing leaves the host; no network call is added, no data leaves the machine, and no account or identity is recorded. The schema is additive-only with an independent `schemaVersion`. Set `disableTelemetry: true` to suppress the sidecar entirely.
 - **Session analysis script** at `scripts/analyze-sessions.sh` reproduces the effectiveness evaluation (tool-call counts, adoption over time, follow-up research, cache re-reads, cache sizes) from session logs, and aggregates `meta.json` sidecars into per-stage success rates and summed fetch-variant winner tallies.
 
 ## [0.10.2] - 2026-06-17
@@ -250,11 +250,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.11.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.0
 [0.10.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.10.2
 [0.10.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.10.1
 [0.10.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.10.0
 [0.9.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.9.0
-[0.11.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.0
 [0.8.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.8.0
 [0.7.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.6.0

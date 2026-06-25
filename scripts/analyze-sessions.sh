@@ -84,7 +84,7 @@ echo ""
 echo "## 2. intelli_* tool calls breakdown"
 hr
 grep '^intelli_' "$TOOLCALLS_CACHE" | sort | uniq -c | sort -rn \
-  | awk '{printf "%6d  %s\n", $1, $2}'
+  | awk '{printf "%6d  %s\n", $1, $2}' || true
 intelli_total=$(grep -c '^intelli_' "$TOOLCALLS_CACHE" || true)
 all_total=$(wc -l < "$TOOLCALLS_CACHE" | tr -d ' ')
 if [ "$all_total" -gt 0 ]; then
@@ -259,6 +259,11 @@ else
   while IFS= read -r m; do
     [ -z "$m" ] && continue
     meta_count=$((meta_count+1))
+    # Skip sidecars that fail to parse rather than aborting under set -e.
+    if ! jq -e '.' "$m" >/dev/null 2>&1; then
+      echo "  (skip malformed sidecar: $m)"
+      continue
+    fi
     if [ "$first" -eq 1 ]; then
       jq -c '.' "$m" > "$tmp_meta"
       first=0
@@ -268,6 +273,11 @@ else
   done <<< "$meta_files"
 
   echo "sidecars found: $meta_count"
+  echo ""
+  echo "run outcomes (breakdown by .outcome):"
+  jq -rs 'group_by(.outcome // "unknown")
+          | map({outcome: (.[0].outcome // "unknown"), count: length})
+          | map("\(.outcome): \(.count)")' "$tmp_meta" 2>/dev/null
   echo ""
   echo "fetch outcomes (succeeded / failed):"
   jq -rs 'map(.stages.fetch // {})

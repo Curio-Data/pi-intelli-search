@@ -15,13 +15,22 @@
 // `SCHEMA_VERSION` only on a breaking change (rename/remove/retype). Historical
 // sidecars remain interpretable because `schemaVersion` is independent of the
 // product `extensionVersion`.
-import { writeFile, rename, readFile } from "node:fs/promises";
+import { writeFile, rename, readFile, readdir, unlink } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 
 /** Payload shape version. Bump only on a breaking schema change. */
 export const SCHEMA_VERSION = 1 as const;
+
+/** Run outcome. Degraded runs also write a sidecar (v0.11.0+) so the analysis
+ * script can measure how often the pipeline degraded, not just how often it
+ * succeeded. */
+export type TelemetryOutcome =
+  | "completed"
+  | "no-links"
+  | "fetch-failed"
+  | "extraction-failed";
 
 /**
  * Canonical telemetry payload. Additive-only evolution: new fields optional.
@@ -35,6 +44,7 @@ export interface TelemetryMeta {
   query: string;
   timestamp: string; // ISO 8601, mirrors query.txt / report.md
   durationMs: number;
+  outcome: TelemetryOutcome; // which exit path produced this sidecar
   stages: {
     search: {
       model: string; // "provider/model"
@@ -46,15 +56,25 @@ export interface TelemetryMeta {
       requested: number;
       succeeded: number;
       failed: number;
-      // Tally of the winning fetch variant per page. Source comes from
-      // FetchedPage.source, which fetch.ts stamps as "defuddle" | "markdown".
+      // Tally of the winning fetch variant per page. Keys come from
+      // FetchedPage.source as stamped by fetch.ts: "defuddle", "markdown", or
+      // "defuddle-fallback". The orchestrator falls back to "unknown" for any
+      // page lacking the field.
       winners: Record<string, number>;
     };
     extract: {
       model: string;
       succeeded: number;
+      // LLM-call failures only. Pages that never fetched are accounted in
+      // stages.fetch.failed (status "blocked"), not here.
       failed: number;
-      totalInputChars: number;
+      // Lower bound on the chars fed to extraction LLMs. Sums
+      // min(page.content.length, extractMaxChars) over fetched pages. It
+      // excludes the per-call wrapper text ("Web page content:", the query,
+      // focusPrompt) and the "[TRUNCATED]" marker, so it understates actual
+      // input. Direction of error is consistent, so relative comparisons
+      // across runs remain valid. Renamed from totalInputChars in v0.11.0.
+      totalInputCharsApprox: number;
       totalOutputChars: number;
     };
     collate: {
@@ -86,10 +106,11 @@ export class TelemetryBuilder {
       query,
       timestamp,
       durationMs: 0,
+      outcome: "completed",
       stages: {
         search: { model: "", linksReturned: 0, retryFired: false, attempts: 0 },
         fetch: { requested: 0, succeeded: 0, failed: 0, winners: {} },
-        extract: { model: "", succeeded: 0, failed: 0, totalInputChars: 0, totalOutputChars: 0 },
+        extract: { model: "", succeeded: 0, failed: 0, totalInputCharsApprox: 0, totalOutputChars: 0 },
         collate: { model: "", summaryChars: 0 },
         cacheSuggest: { ran: false, surfaced: 0, slugs: [] },
       },
@@ -128,7 +149,7 @@ export class TelemetryBuilder {
     model: string;
     succeeded: number;
     failed: number;
-    totalInputChars: number;
+    totalInputCharsApprox: number;
     totalOutputChars: number;
   }): void {
     this.meta.stages.extract = { ...input };
@@ -142,6 +163,12 @@ export class TelemetryBuilder {
     this.meta.stages.cacheSuggest = { ...input };
   }
 
+  /** Record which exit path produced this sidecar. Call at every return
+   * point so the analysis script can bucket degraded runs. */
+  setOutcome(outcome: TelemetryOutcome): void {
+    this.meta.outcome = outcome;
+  }
+
   /** Stamp duration and return the immutable payload. */
   finalize(): TelemetryMeta {
     this.meta.durationMs = Date.now() - this.start;
@@ -150,12 +177,14 @@ export class TelemetryBuilder {
 }
 
 /**
- * Write the telemetry sidecar atomically.
+ * Write the telemetry sidecar atomically, sweeping any stray temp files
+ * left by a prior crashed write first.
  *
  * Writes to a uniquely-named temp file, then `rename(2)`s it into place.
  * `rename` is atomic when source and destination are on the same filesystem,
  * which holds here (both live under `cachePath`). A crash mid-write leaves a
- * stray `.tmp` file, never a partial `meta.json`.
+ * stray `.tmp` file, never a partial `meta.json`; that orphan is swept by the
+ * next successful write so cache directories stay self-healing.
  *
  * The caller wraps this in a try/catch so a write failure never surfaces to
  * the pipeline result.
@@ -164,6 +193,7 @@ export async function writeTelemetry(
   cachePath: string,
   meta: TelemetryMeta,
 ): Promise<void> {
+  await sweepStaleTempFiles(cachePath);
   const target = join(cachePath, "meta.json");
   const tmp = join(
     cachePath,
@@ -171,6 +201,22 @@ export async function writeTelemetry(
   );
   await writeFile(tmp, JSON.stringify(meta, null, 2) + "\n", "utf-8");
   await rename(tmp, target);
+}
+
+/** Best-effort cleanup of orphaned `.meta.json.*.tmp` files from a prior
+ * crashed write. Errors are ignored: a sweep failure must not block the write. */
+async function sweepStaleTempFiles(cachePath: string): Promise<void> {
+  let entries: string[];
+  try {
+    entries = await readdir(cachePath);
+  } catch {
+    return; // directory may not exist yet on a degraded path; caller mkdirs
+  }
+  await Promise.all(
+    entries
+      .filter((e) => /^\.meta\.json\..*\.tmp$/.test(e))
+      .map((e) => unlink(join(cachePath, e)).catch(() => {})),
+  );
 }
 
 // ── Extension version sourcing ──────────────────────────────────────────────
@@ -189,22 +235,29 @@ let cachedVersion: string | null = null;
  */
 async function getExtensionVersion(): Promise<string> {
   if (cachedVersion) return cachedVersion;
+  // dist/telemetry.js -> repo root (../). Also works for src/ via tsx where
+  // import.meta.url points at the source file.
+  const here = dirname(fileURLToPath(import.meta.url));
+  cachedVersion = await readVersionFromPackageJson(join(here, "..", "package.json"));
+  return cachedVersion;
+}
+
+/**
+ * Read and validate the `version` field from a package.json path. Exported for
+ * testability so the fallback path can be exercised against a bad path.
+ * Never throws: returns "unknown" on any read or parse failure.
+ */
+export async function readVersionFromPackageJson(pkgPath: string): Promise<string> {
   try {
-    // dist/telemetry.js -> repo root (../). Also works for src/ via tsx where
-    // import.meta.url points at the source file.
-    const here = dirname(fileURLToPath(import.meta.url));
-    const pkgPath = join(here, "..", "package.json");
     const raw = await readFile(pkgPath, "utf-8");
     const pkg = JSON.parse(raw) as { version?: unknown };
     if (typeof pkg.version === "string" && pkg.version.length > 0) {
-      cachedVersion = pkg.version;
-    } else {
-      cachedVersion = "unknown";
+      return pkg.version;
     }
+    return "unknown";
   } catch {
-    cachedVersion = "unknown";
+    return "unknown";
   }
-  return cachedVersion;
 }
 
 /** Test-only: reset the version cache between unit tests. */

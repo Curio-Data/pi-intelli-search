@@ -12,7 +12,8 @@ import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, readIndex,
 import { textContent, extractSourceUrls, inferSourceType, inferCurrentness, mapWithConcurrency, sleep, createRateLimiter } from "../util.js";
 import type { LlmRetryConfig } from "../llm.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
-import { TelemetryBuilder, writeTelemetry } from "../telemetry.js";
+import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "../telemetry.js";
+import { mkdir } from "node:fs/promises";
 import type { FetchedPage, ExtractResult } from "../types.js";
 
 // ── Progress bar: pipeline stages ──
@@ -146,6 +147,11 @@ export const intelliResearchTool = {
     }
 
     async function executePipeline() {
+    // cachePath depends only on the query, cwd, and settings, so it is
+    // computed once up front. Degraded early-return paths (no links, all
+    // fetches failed, all extractions failed) still write a telemetry sidecar
+    // into this directory so the analysis script can measure degradation.
+    const cachePath = makeCachePath(params.query, ctx.cwd, settings.cacheDir);
     // ═══════════════════════════════════════════
     // Stage 1: Search
     // ═══════════════════════════════════════════
@@ -166,7 +172,7 @@ export const intelliResearchTool = {
     let searchAttemptsUsed = 0;
     for (let attempt = 1; attempt <= searchAttempts; attempt++) {
       searchAttemptsUsed = attempt;
-      searchResult = await callLlm(ctx, searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {
+      searchResult = await __harness.callLlm(ctx, searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {
         maxTokens: 2000,
         signal,
         retry,
@@ -192,6 +198,7 @@ export const intelliResearchTool = {
     });
 
     if (urls.length === 0) {
+      await writeTelemetrySidecar(tel, cachePath, "no-links");
       return {
         content: [textContent(
           `Search returned no links for query: "${params.query}" after ${searchAttempts} attempt(s). ` +
@@ -206,7 +213,7 @@ export const intelliResearchTool = {
     // Stage 2: Fetch pages via wreq-js + Defuddle
     // ═══════════════════════════════════════════
     onUpdate?.(progressUpdate("fetch", `Fetching ${urls.length} pages...`));
-    const pages = await fetchPages(urls.map((u) => u.url), signal, {
+    const pages = await __harness.fetchPages(urls.map((u) => u.url), signal, {
       timeoutMs: settings.fetchTimeoutMs,
       browser: settings.browserFingerprint as unknown as import("wreq-js").BrowserProfile,
       concurrency: settings.fetchConcurrency,
@@ -230,6 +237,7 @@ export const intelliResearchTool = {
     });
 
     if (successPages.length === 0) {
+      await writeTelemetrySidecar(tel, cachePath, "fetch-failed");
       return {
         content: [textContent(
           `All ${urls.length} pages failed to fetch.\n\nSearch summary:\n${searchResult}`,
@@ -311,7 +319,7 @@ export const intelliResearchTool = {
         model: `${extractConfig.provider}/${extractConfig.model}`,
         succeeded: succeededExtr.length,
         failed: failedExtr,
-        totalInputChars: totalIn,
+        totalInputCharsApprox: totalIn,
         totalOutputChars: totalOut,
       });
     }
@@ -321,7 +329,6 @@ export const intelliResearchTool = {
     // ═══════════════════════════════════════════
     onUpdate?.(progressUpdate("collate", "Synthesising results..."));
 
-    const cachePath = makeCachePath(params.query, ctx.cwd, settings.cacheDir);
     const allExtractions = [...extractions, ...blockedExtractions];
 
     // Build collation message
@@ -333,6 +340,7 @@ export const intelliResearchTool = {
     if (succeededExtractions.length === 0) {
       const fetchFailed = blockedExtractions.length;
       const extractFailed = extractions.filter((e) => e.status === "failed").length;
+      await writeTelemetrySidecar(tel, cachePath, "extraction-failed");
       const reason = fetchFailed > 0
         ? `${fetchFailed} page(s) failed to fetch`
         : `${extractFailed} extraction(s) failed`;
@@ -366,7 +374,7 @@ export const intelliResearchTool = {
       collationUserMsg += `\n${ext.extraction}\n\n`;
     }
 
-    const collation = await callLlm(ctx, collateConfig, COLLATION_SYSTEM_PROMPT, collationUserMsg, {
+    const collation = await __harness.callLlm(ctx, collateConfig, COLLATION_SYSTEM_PROMPT, collationUserMsg, {
       maxTokens: settings.collationMaxTokens,
       signal,
       retry,
@@ -429,7 +437,7 @@ export const intelliResearchTool = {
       if (index.searches.some((e) => e.slug !== currentSlug)) {
         const indexText = formatIndexForJudge(index, currentSlug);
         const judgeUserMsg = `Current query: "${params.query}"\n\nPrevious searches:\n${indexText}`;
-        const judgeResponse = await callLlm(ctx, extractConfig, CACHE_SUGGEST_PROMPT, judgeUserMsg, {
+        const judgeResponse = await __harness.callLlm(ctx, extractConfig, CACHE_SUGGEST_PROMPT, judgeUserMsg, {
           maxTokens: 500,
           signal,
           retry,
@@ -458,14 +466,7 @@ export const intelliResearchTool = {
     // a write failure is caught and logged so it never surfaces to the
     // pipeline result or the agent. Suppressed entirely when disableTelemetry
     // is set (tel === null).
-    if (tel) {
-      try {
-        await writeTelemetry(cachePath, tel.finalize());
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`[pi-intelli-search] Telemetry write failed: ${message}`);
-      }
-    }
+    await writeTelemetrySidecar(tel, cachePath, "completed");
 
     // ═══════════════════════════════════════════
     // Return concise injection
@@ -493,6 +494,38 @@ export const intelliResearchTool = {
     } // end executePipeline()
   },
 };
+
+/**
+ * Test seam: the pipeline's two I/O collaborators. Tests swap these to avoid
+ * LLM/network calls (Node's test runner exposes no module mocking). Defaults
+ * to the real implementations. Restore in a `finally` block after swapping.
+ */
+export const __harness = {
+  callLlm,
+  fetchPages,
+};
+
+/**
+ * Write the telemetry sidecar into `cachePath`, stamping the run `outcome`.
+ * Creates the directory (degraded paths reach this before writeCacheFiles does)
+ * and never throws: a write failure is logged and swallowed so it cannot alter
+ * the pipeline result. No-op when telemetry is disabled (`tel === null`).
+ */
+async function writeTelemetrySidecar(
+  tel: TelemetryBuilder | null,
+  cachePath: string,
+  outcome: TelemetryOutcome,
+): Promise<void> {
+  if (!tel) return;
+  tel.setOutcome(outcome);
+  try {
+    await mkdir(cachePath, { recursive: true });
+    await writeTelemetry(cachePath, tel.finalize());
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[pi-intelli-search] Telemetry write failed: ${message}`);
+  }
+}
 
 /**
  * Validate that all configured models exist in Pi's model registry.
@@ -540,7 +573,7 @@ async function extractPage(
       userMessage += `\nFocus: ${focusPrompt}\n`;
     }
 
-    const extraction = await callLlm(ctx, extractConfig, EXTRACTION_SYSTEM_PROMPT, userMessage, {
+    const extraction = await __harness.callLlm(ctx, extractConfig, EXTRACTION_SYSTEM_PROMPT, userMessage, {
       maxTokens,
       signal,
       retry,
