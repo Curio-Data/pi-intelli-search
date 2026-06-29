@@ -307,9 +307,11 @@ describe("cleanBrokenMetadata (via DOM simulation)", () => {
     assert.ok(document.querySelector('p'));
   });
 
-  it("Defuddle fallback extracts basic content when Defuddle crashes", async () => {
+  it("Defuddle fallback extracts basic content when Defuddle degrades", async () => {
     const { parseHTML } = await import("linkedom");
-    // Simulate a page where Defuddle would encounter CSS pseudo-class errors
+    // Simulates the DOM text fallback used when Defuddle throws or logs a
+    // degraded result (e.g. malformed CSS attribute selector) and is muzzled
+    // by fetchViaDefuddle via withMuzzledConsole.
     const html = `<!DOCTYPE html><html lang="en">
 <head>
   <meta charset="utf-8">
