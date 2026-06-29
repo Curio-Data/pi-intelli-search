@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Defuddle's internal error log no longer pollutes the terminal.** Pages with malformed CSS selectors (for example an unterminated attribute selector) made [_Defuddle_](https://github.com/kepano/defuddle) throw inside its own parsing loop. _Defuddle_ caught the error, logged the full stack to `console.error` (`Defuddle Error processing document: ...`), and returned a degraded result instead of throwing, so the research pipeline kept working but the raw stack trace reached the user's terminal on every affected page. The fetch layer now muzzles just that `Defuddle`-tagged log for the duration of the call and, when it fires, routes to the clean DOM text fallback, so the failure is handled internally with no terminal noise.
+- **Defuddle's internal error log no longer pollutes the terminal.** Pages with malformed CSS selectors (for example an unterminated attribute selector) made [_Defuddle_](https://github.com/kepano/defuddle) throw inside its own parsing loop. Defuddle caught the error, logged the full stack to `console.error` (`Defuddle Error processing document: ...`), and returned a degraded result instead of throwing, so the research pipeline kept working but the raw stack trace reached the user's terminal on every affected page. The fetch layer now muzzles just that `Defuddle`-tagged log for the duration of the call and, when it fires, routes to the clean DOM text fallback, so the failure is handled internally with no terminal noise.
 
 ## [0.11.1] - 2026-06-25
 
