@@ -223,6 +223,51 @@ export function parseRetryAfterMs(msg: string | undefined): number | undefined {
 }
 
 /**
+ * Run `fn` with `console.error` selectively muzzled.
+ *
+ * Some dependencies (notably _Defuddle_) print unrecoverable internal errors
+ * to `console.error` from inside their own try/catch, then return a degraded
+ * result instead of throwing. The log, including the full captured stack, is
+ * noise that reaches the user's terminal even though the caller handles the
+ * degradation. Swallowing those logs during the call keeps the experience
+ * clean.
+ *
+ * Only logs whose first argument matches one of `muzzledTags` are swallowed
+ * (matched by identity against Defuddle's `'Defuddle'` tag, so a plain string
+ * like `'[pi-intelli-search]'` is never caught up). Everything else is passed
+ * straight through to the real `console.error`, so unrelated errors during the
+ * call window are still surfaced. `console.error` is always restored in a
+ * `finally`, including on throw.
+ *
+ * Returns `{ value, muzzled }`. `muzzled` is true when at least one matching
+ * log was swallowed, which lets the caller detect the degraded path and route
+ * to its own fallback instead of consuming the dependency's degraded output.
+ */
+export async function withMuzzledConsole<T>(
+  fn: () => Promise<T>,
+  muzzledTags: ReadonlyArray<unknown>,
+): Promise<{ value: T; muzzled: boolean }> {
+  if (muzzledTags.length === 0) {
+    return { value: await fn(), muzzled: false };
+  }
+  const original = console.error;
+  let muzzled = false;
+  try {
+    console.error = (...args: unknown[]) => {
+      if (muzzledTags.includes(args[0])) {
+        muzzled = true;
+        return;
+      }
+      original(...args);
+    };
+    const value = await fn();
+    return { value, muzzled };
+  } finally {
+    console.error = original;
+  }
+}
+
+/**
  * Create a minimum-interval gate. Each call to the returned function resolves
  * no sooner than `minIntervalMs` after the previous call started, spacing out
  * otherwise-concurrent requests (e.g. the extract fan-out). `minIntervalMs <= 0`

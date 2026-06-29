@@ -15,7 +15,7 @@ import { parseHTML } from "linkedom";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FetchedPage } from "./types.js";
-import { mapWithConcurrency } from "./util.js";
+import { mapWithConcurrency, withMuzzledConsole } from "./util.js";
 
 export interface FetchOptions {
   maxChars: number;
@@ -141,22 +141,30 @@ async function fetchViaDefuddle(url: string, opts: FetchOptions, signal?: AbortS
   const { document } = parseHTML(body);
   cleanBrokenMetadata(document, url);
 
-  // Try Defuddle first. If it crashes (e.g. CSS pseudo-class errors on
-  // YouTube pages), fall back to basic HTML text extraction.
+  // Try Defuddle first. Two failure modes are handled:
+  //   1. Defuddle throws (rare). Caught below.
+  //   2. Defuddle logs to console.error from its own internal catch and returns
+  //      a degraded result (raw serialized body, no clean markdown). This is
+  //      the common case for pages with malformed CSS selectors. Defuddle's log
+  //      prints the full stack to the user's terminal; we muzzle just that log
+  //      for the duration of the call and, when it fires, route to our own DOM
+  //      text fallback so the output stays clean and structured.
+  let extracted: Awaited<ReturnType<typeof Defuddle>> | undefined;
+  let degraded = false;
   try {
-    const extracted = await Defuddle(document, url, { markdown: true });
-    const title = extracted.title ?? "";
-    const content = extracted.contentMarkdown ?? extracted.content ?? body;
+    const out = await withMuzzledConsole(
+      () => Defuddle(document, url, { markdown: true }),
+      // Defuddle logs as `console.error('Defuddle', 'Error ...', error)`.
+      ["Defuddle"],
+    );
+    extracted = out.value;
+    degraded = out.muzzled;
+  } catch {
+    degraded = true;
+  }
 
-    return {
-      url,
-      title,
-      content: truncateContent(content, opts.maxChars),
-      status: "success",
-      source: "defuddle",
-    };
-  } catch (defuddleErr) {
-    // Defuddle failed. Fall back to basic DOM text extraction.
+  if (degraded || !extracted) {
+    // Defuddle failed or degraded. Fall back to basic DOM text extraction.
     const title = document.querySelector("title")?.textContent?.trim() ?? "";
     const metaDesc = document.querySelector('meta[name="description"]')?.getAttribute("content")?.trim() ?? "";
     const bodyText = document.body?.textContent?.replace(/\s+/g, " ").trim() ?? "";
@@ -173,6 +181,16 @@ async function fetchViaDefuddle(url: string, opts: FetchOptions, signal?: AbortS
       source: "defuddle-fallback",
     };
   }
+
+  const title = extracted.title ?? "";
+  const content = extracted.contentMarkdown ?? extracted.content ?? body;
+  return {
+    url,
+    title,
+    content: truncateContent(content, opts.maxChars),
+    status: "success",
+    source: "defuddle",
+  };
 }
 
 // ---------------------------------------------------------------------------

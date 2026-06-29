@@ -13,6 +13,7 @@ import {
   parseRetryAfterMs,
   createRateLimiter,
   callWithAbortTimeout,
+  withMuzzledConsole,
   type RetryDecision,
 } from "../src/util.js";
 
@@ -464,5 +465,87 @@ describe("callWithAbortTimeout", () => {
     const { value, timedOut } = await p;
     assert.strictEqual(value, "aborted");
     assert.strictEqual(timedOut, false); // user aborted, not our timer
+  });
+});
+
+describe("withMuzzledConsole", () => {
+  it("swallows console.error logs whose first arg matches a muzzled tag and reports muzzled=true", async () => {
+    const seen: unknown[] = [];
+    const real = console.error;
+    console.error = (...args: unknown[]) => seen.push(args);
+    try {
+      const { value, muzzled } = await withMuzzledConsole(
+        async () => {
+          // Simulate Defuddle's internal catch log: console.error('Defuddle', '...', err)
+          console.error("Defuddle", "Error processing document:", new Error("boom"));
+          return "ok";
+        },
+        ["Defuddle"],
+      );
+      assert.strictEqual(value, "ok");
+      assert.strictEqual(muzzled, true);
+      assert.strictEqual(seen.length, 0, "the Defuddle log must not reach the real console.error");
+    } finally {
+      console.error = real;
+    }
+  });
+
+  it("passes unrelated console.error calls straight through", async () => {
+    const seen: unknown[] = [];
+    const real = console.error;
+    console.error = (...args: unknown[]) => seen.push(args);
+    try {
+      const { value, muzzled } = await withMuzzledConsole(
+        async () => {
+          console.error("[pi-intelli-search]", "unrelated");
+          console.error("Defuddle", "swallowed", new Error("x"));
+          console.error("another", "unrelated");
+          return 42;
+        },
+        ["Defuddle"],
+      );
+      assert.strictEqual(value, 42);
+      assert.strictEqual(muzzled, true);
+      assert.strictEqual(seen.length, 2, "only the unrelated logs pass through");
+      assert.strictEqual(seen[0][0], "[pi-intelli-search]");
+      assert.strictEqual(seen[1][0], "another");
+    } finally {
+      console.error = real;
+    }
+  });
+
+  it("reports muzzled=false and skips setup when no tags are given", async () => {
+    const real = console.error;
+    let touched = false;
+    console.error = () => { touched = true; };
+    try {
+      const { value, muzzled } = await withMuzzledConsole(async () => "clean", []);
+      assert.strictEqual(value, "clean");
+      assert.strictEqual(muzzled, false);
+      assert.strictEqual(touched, false, "console.error must not be replaced when there is nothing to muzzle");
+    } finally {
+      console.error = real;
+    }
+  });
+
+  it("always restores console.error, even when fn throws", async () => {
+    const real = console.error;
+    await assert.rejects(
+      withMuzzledConsole(async () => { throw new Error("fn failed"); }, ["Defuddle"]),
+      /fn failed/,
+    );
+    assert.strictEqual(console.error, real, "console.error must be restored after a throw");
+  });
+
+  it("restores console.error even when fn rejects after a log", async () => {
+    const real = console.error;
+    await assert.rejects(
+      withMuzzledConsole(async () => {
+        console.error("Defuddle", "oops");
+        throw new Error("post-log");
+      }, ["Defuddle"]),
+      /post-log/,
+    );
+    assert.strictEqual(console.error, real);
   });
 });
