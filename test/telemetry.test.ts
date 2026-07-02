@@ -141,6 +141,24 @@ describe("TelemetryBuilder", () => {
     assert.strictEqual(meta.outcome, "extraction-failed");
   });
 
+  it("search stage defaults degraded to false", async () => {
+    _resetVersionCacheForTests();
+    const builder = await TelemetryBuilder.create("q");
+    builder.recordSearch({ model: "p/m", linksReturned: 3, retryFired: false, attempts: 1 });
+    const meta = builder.finalize();
+    assert.strictEqual(meta.stages.search.degraded, false);
+  });
+
+  it("search stage records degraded=true for no-links responses", async () => {
+    _resetVersionCacheForTests();
+    const builder = await TelemetryBuilder.create("q");
+    builder.recordSearch({ model: "p/m", linksReturned: 0, retryFired: true, attempts: 2, degraded: true });
+    const meta = builder.finalize();
+    assert.strictEqual(meta.stages.search.degraded, true);
+    assert.strictEqual(meta.stages.search.linksReturned, 0);
+    assert.strictEqual(meta.stages.search.retryFired, true);
+  });
+
   it("reads extensionVersion from package.json as a real semver", async () => {
     _resetVersionCacheForTests();
     // From the src/test context, package.json resolves to the repo root via

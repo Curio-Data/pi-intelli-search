@@ -151,6 +151,7 @@ describe("intelli_research telemetry wiring", () => {
       assert.equal(meta!.stages.search.retryFired, false);
       assert.equal(meta!.stages.search.attempts, 1);
       assert.equal(meta!.stages.search.linksReturned, 2);
+      assert.equal(meta!.stages.search.degraded, false);
       assert.equal(meta!.stages.fetch.succeeded, 2);
       assert.equal(meta!.stages.fetch.failed, 0);
       assert.deepStrictEqual(meta!.stages.fetch.winners, { defuddle: 1, markdown: 1 });
@@ -193,6 +194,7 @@ describe("intelli_research telemetry wiring", () => {
       assert.equal(meta!.stages.search.retryFired, true);
       assert.equal(meta!.stages.search.attempts, 2);
       assert.equal(meta!.stages.search.linksReturned, 1); // clamped by maxUrls:1
+      assert.equal(meta!.stages.search.degraded, false);
     } finally {
       restore(env);
     }
@@ -214,6 +216,7 @@ describe("intelli_research telemetry wiring", () => {
       assert.equal(meta!.outcome, "no-links");
       assert.equal(meta!.stages.search.linksReturned, 0);
       assert.equal(meta!.stages.search.retryFired, false);
+      assert.equal(meta!.stages.search.degraded, true);
     } finally {
       restore(env);
     }

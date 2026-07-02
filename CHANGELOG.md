@@ -5,7 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.11.2] - 2026-06-29
+## [0.11.3] - 2026-07-02
+
+### Fixed
+
+- **Bare URLs in degraded search responses are now extracted as source links.** When Perplexity Sonar synthesises a prose answer without markdown `[title](url)` links (common for how-to and design-pattern queries), the response previously yielded zero extractable URLs and the pipeline returned early with a "no links" message. `extractSourceUrls()` now performs a second pass that catches bare `https?://` URLs from bold markers, inline code, bullet lists, and plain prose, rescuing many searches that would otherwise degrade. Markdown links still take precedence so the structured format requested by the search prompt is always preferred when available.
+
+### Changed
+
+- **Telemetry search stage now records a `degraded` boolean field.** When `stages.search.degraded` is `true` the search returned text but zero extractable URLs. This makes the failure count unambiguous in telemetry aggregation; previously only the `outcome` field signalled it, and the dedicated field simplifies analysis scripts. The field defaults to `false` and is set to `true` by the orchestrator only on the no-links early-return path.
 
 ### Fixed
 
@@ -266,6 +274,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.11.3]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.3
 [0.11.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.2
 [0.11.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.1
 [0.11.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.0

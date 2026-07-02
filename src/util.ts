@@ -288,23 +288,68 @@ export function createRateLimiter(
 
 /**
  * Extract source URLs from LLM-generated markdown text.
- * Parses markdown link format: [title](url)
+ *
+ * Two-pass extraction:
+ * 1. Markdown links: `[title](url)` — the canonical format the search prompt
+ *    requests. Handles balanced single-level parentheses in URLs (Wikipedia
+ *    disambiguation, MSDN parameterised paths).
+ * 2. Bare URLs: `https?://...` standing outside markdown link syntax. These
+ *    appear when the search model returns synthesised prose with inline URLs
+ *    (for example, `**https://fal.ai/models/...**`) instead of markdown
+ *    links. The second pass skips URLs already captured by pass 1.
+ *
+ * In both passes, URLs never contain whitespace, so a space ends the match.
  */
 export function extractSourceUrls(text: string): Array<{ url: string; title: string }> {
   const urls: Array<{ url: string; title: string }> = [];
-  // Match markdown links [title](url). The URL body allows balanced
-  // single-level parentheses so links to pages like Wikipedia disambiguation
-  // (`Foo_(disambiguation)`) or MSDN (`...format(v=net-8.0)`) keep their
-  // closing paren instead of being truncated at the first `)`. URLs never
-  // contain whitespace, so a space ends the match.
+  const seen = new Set<string>();
+
+  // Pass 1: markdown links [title](url)
   const linkPattern = /\[([^\]]*)\]\((https?:\/\/(?:[^()\s]|\([^()\s]*\))*)\)/g;
   let match;
   while ((match = linkPattern.exec(text)) !== null) {
     const url = match[2];
-    if (!urls.some((u) => u.url === url)) {
+    if (!seen.has(url)) {
+      seen.add(url);
       urls.push({ url, title: match[1] });
     }
   }
+
+  // Pass 2: bare https?:// URLs that were not already inside a markdown link.
+  // This catches URLs embedded in bold, italics, inline code, bullet lists,
+  // or plain prose — formats common in degraded search responses where the
+  // model synthesises an answer without markdown citations.
+  //
+  // The regex matches a protocol://host[/path[?query][#fragment]] sequence.
+  // It stops at whitespace and common delimiters (backtick, double quote,
+  // angle brackets, braces, asterisks, parentheses). Underscores are
+  // allowed (common in URL paths like `/Foo_bar`).
+  // Balanced paren groups in URLs (Wikipedia `/Foo_(disambiguation)`, MSDN
+  // `...format(v=net-8.0)`) are matched via the explicit balanced-paren
+  // alternative, not via the general character class.
+  const barePattern = /(https?:\/\/(?:[^\s<>"{}*()|\\^`\[\]]|\([^()\s]*\))+)/g;
+  while ((match = barePattern.exec(text)) !== null) {
+    let url = match[1];
+    // Strip trailing punctuation that is not part of the URL: period, comma,
+    // semicolon, colon, or exclamation mark.
+    url = url.replace(/[.,;:!]+$/, "");
+    if (!seen.has(url)) {
+      seen.add(url);
+      // Derive a title from the URL: use the path's last segment (minus
+      // extension), or the hostname as fallback.
+      try {
+        const u = new URL(url);
+        const parts = u.pathname.split("/").filter(Boolean);
+        const title = parts.length > 0
+          ? parts[parts.length - 1].replace(/\.[^.]+$/, "")
+          : u.hostname;
+        urls.push({ url, title });
+      } catch {
+        // Malformed URL that passed the regex: skip.
+      }
+    }
+  }
+
   return urls;
 }
 

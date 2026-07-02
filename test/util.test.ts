@@ -111,6 +111,79 @@ describe("extractSourceUrls", () => {
       { url: "https://vuejs.org", title: "Vue" },
     ]);
   });
+
+  // ── Pass 2: bare URL extraction (degraded search responses) ──
+
+  it("extracts bare https URLs from prose", () => {
+    const text = "See https://svelte.dev/docs for details.";
+    const urls = extractSourceUrls(text);
+    assert.strictEqual(urls.length, 1);
+    assert.strictEqual(urls[0].url, "https://svelte.dev/docs");
+    assert.strictEqual(urls[0].title, "docs"); // last path segment
+  });
+
+  it("extracts bare URLs inside bold markers", () => {
+    const text = "🔗 **https://fal.ai/models/fal-ai/nano-banana-2**";
+    const urls = extractSourceUrls(text);
+    assert.strictEqual(urls.length, 1);
+    assert.strictEqual(urls[0].url, "https://fal.ai/models/fal-ai/nano-banana-2");
+  });
+
+  it("does not duplicate URLs already captured as markdown links", () => {
+    const text = "[Svelte](https://svelte.dev) and bare https://svelte.dev";
+    const urls = extractSourceUrls(text);
+    assert.strictEqual(urls.length, 1);
+    assert.strictEqual(urls[0].url, "https://svelte.dev");
+    assert.strictEqual(urls[0].title, "Svelte"); // markdown title wins (pass 1)
+  });
+
+  it("extracts multiple bare URLs from a bullet list", () => {
+    const text = `
+*   **Source:** https://fal.ai/models/fal-ai/nano-banana-2
+*   **SDK docs:** https://fal.ai/docs
+*   **Install:** https://www.npmjs.com/package/@fal-ai/client
+`;
+    const urls = extractSourceUrls(text);
+    assert.strictEqual(urls.length, 3);
+    assert.strictEqual(urls[0].url, "https://fal.ai/models/fal-ai/nano-banana-2");
+    assert.strictEqual(urls[1].url, "https://fal.ai/docs");
+    assert.strictEqual(urls[2].url, "https://www.npmjs.com/package/@fal-ai/client");
+  });
+
+  it("handles URLs with query params and fragments in bare form", () => {
+    const text = "API at https://api.example.com/v2?q=test#section ready.";
+    const urls = extractSourceUrls(text);
+    assert.strictEqual(urls.length, 1);
+    assert.strictEqual(urls[0].url, "https://api.example.com/v2?q=test#section");
+  });
+
+  it("strips trailing punctuation from bare URLs", () => {
+    const text = "Visit https://example.com/page. Then continue.";
+    const urls = extractSourceUrls(text);
+    assert.strictEqual(urls.length, 1);
+    assert.strictEqual(urls[0].url, "https://example.com/page");
+  });
+
+  it("extracts both markdown links and bare URLs together", () => {
+    const text = `
+The main docs are at [Svelte](https://svelte.dev/docs).
+For API reference, see https://svelte.dev/docs/svelte.
+Also bare reference https://kit.svelte.dev.
+`;
+    const urls = extractSourceUrls(text);
+    assert.strictEqual(urls.length, 3);
+    const urlSet = new Set(urls.map((u) => u.url));
+    assert.ok(urlSet.has("https://svelte.dev/docs"));
+    assert.ok(urlSet.has("https://svelte.dev/docs/svelte"));
+    assert.ok(urlSet.has("https://kit.svelte.dev"));
+  });
+
+  it("extracts bare URLs from inline code backtick syntax", () => {
+    const text = "Source: `https://openrouter.ai/google/gemini-flash-1.5/providers` is the pricing page.";
+    const urls = extractSourceUrls(text);
+    assert.strictEqual(urls.length, 1);
+    assert.strictEqual(urls[0].url, "https://openrouter.ai/google/gemini-flash-1.5/providers");
+  });
 });
 
 describe("mapWithConcurrency", () => {

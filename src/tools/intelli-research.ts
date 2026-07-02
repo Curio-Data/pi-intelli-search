@@ -195,6 +195,7 @@ export const intelliResearchTool = {
       linksReturned: urls.length,
       retryFired: searchAttemptsUsed > 1,
       attempts: searchAttemptsUsed,
+      degraded: urls.length === 0,
     });
 
     if (urls.length === 0) {

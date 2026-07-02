@@ -51,6 +51,7 @@ export interface TelemetryMeta {
       linksReturned: number;
       retryFired: boolean; // true if more than one search iteration ran
       attempts: number; // iterations actually executed
+      degraded: boolean; // true when the search returned text but zero extractable URLs
     };
     fetch: {
       requested: number;
@@ -108,7 +109,7 @@ export class TelemetryBuilder {
       durationMs: 0,
       outcome: "completed",
       stages: {
-        search: { model: "", linksReturned: 0, retryFired: false, attempts: 0 },
+        search: { model: "", linksReturned: 0, retryFired: false, attempts: 0, degraded: false },
         fetch: { requested: 0, succeeded: 0, failed: 0, winners: {} },
         extract: { model: "", succeeded: 0, failed: 0, totalInputCharsApprox: 0, totalOutputChars: 0 },
         collate: { model: "", summaryChars: 0 },
@@ -132,8 +133,9 @@ export class TelemetryBuilder {
     linksReturned: number;
     retryFired: boolean;
     attempts: number;
+    degraded?: boolean;
   }): void {
-    this.meta.stages.search = { ...input };
+    this.meta.stages.search = { degraded: false, ...input };
   }
 
   recordFetch(input: {
