@@ -456,11 +456,16 @@ export const intelliResearchTool = {
       await releaseCacheLock();
     }
 
-    // Await remaining llms-full downloads and flush them (lock-free:
-    // unique per-run staging dirs prevent interleaving, and same-host
-    // sources produce the same deterministic filename).
+    // Await remaining llms-full downloads outside the lock. Commit their
+    // staged files under the cache lock so concurrent same-query runs cannot
+    // interleave writes to identical llms-full filenames.
     await Promise.all(llmsFullFutures);
-    await flushLlmsStaging(llmsStaging, join(cachePath, "sources"));
+    const releaseFinalCacheLock = await acquireLock(cacheLockDir(cachePath));
+    try {
+      await flushLlmsStaging(llmsStaging, join(cachePath, "sources"));
+    } finally {
+      await releaseFinalCacheLock();
+    }
     // Clean up the staging dir.
     await rm(llmsStaging, { recursive: true, force: true }).catch(() => {});
 
@@ -549,10 +554,9 @@ export const intelliResearchTool = {
 /**
  * Move completed llms-full downloads from a per-run staging directory
  * into the target cache sources directory. Best-effort: errors on
- * individual files are logged and skipped. This is called both under
- * the cache lock (for already-completed downloads) and after the lock
- * is released (for any remaining downloads), always from a unique
- * per-run staging dir so no two runs touch the same source files.
+ * individual files are logged and skipped. Each call happens while holding
+ * the cache lock; the staging directory is unique per run and the lock
+ * serialises writes to matching destination filenames.
  */
 async function flushLlmsStaging(
   staging: string,
