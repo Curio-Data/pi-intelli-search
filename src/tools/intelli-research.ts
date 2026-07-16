@@ -8,12 +8,15 @@ import { Text } from "@earendil-works/pi-tui";
 import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT, CACHE_SUGGEST_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
-import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, readIndex, formatIndexForJudge, parseJudgeResponse, formatCacheSuggestions } from "../cache.js";
+import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, readIndex, formatIndexForJudge, parseJudgeResponse, formatCacheSuggestions, cacheLockDir, indexLockDir, acquireLock, updateIndex } from "../cache.js";
 import { textContent, extractSourceUrls, inferSourceType, inferCurrentness, mapWithConcurrency, sleep, createRateLimiter } from "../util.js";
 import type { LlmRetryConfig } from "../llm.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "../telemetry.js";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile, rm, readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { randomBytes } from "node:crypto";
 import type { FetchedPage, ExtractResult } from "../types.js";
 
 // ── Progress bar: pipeline stages ──
@@ -362,9 +365,9 @@ export const intelliResearchTool = {
       };
     }
 
-    // Write cache (only when there are successful extractions)
-    await writeCacheFiles(cachePath, allExtractions, successPages, searchResult, params.query);
-
+    // Build collation prompt (no files written yet — lock is never held
+    // across the LLM call). Path references in the prompt are resolved
+    // later when cache files are written.
     let collationUserMsg = `Original query: ${params.query}\n`;
     collationUserMsg += `Cache path: ${cachePath}/\n\n`;
     collationUserMsg += `Search summary (from Sonar):\n${searchResult}\n\n`;
@@ -391,17 +394,17 @@ export const intelliResearchTool = {
       summaryChars: collation.length,
     });
 
-    // Download llms-full.txt for each unique domain in the results
-    // (unless disabled via settings.disableLlmsFullDiscovery).
-    // Pass a representative page URL per hostname (not the bare hostname)
-    // so path-aware builders (e.g. Cloudflare product-scoped paths) still
-    // receive the path context they need to construct the correct URL.
-    // These probes are supplementary cache artifacts, not part of the returned
-    // summary. Each honours the tool signal (Esc cancels) and a tight timeout
-    // (fetch.ts: LLMS_FULL_TIMEOUT_MS), so a slow or hanging documentation host
-    // can no longer stall the result. They run concurrently with the report
-    // write below, so the worst-case added latency is one probe timeout.
-    let llmsFullPromises: Promise<unknown>[] = [];
+    // ═══════════════════════════════════════════════════════════════
+    // Start llms-full downloads to a unique per-run staging dir
+    // BEFORE acquiring any lock. Network I/O never happens under
+    // the cache lock. The staging dir is unique to this run so
+    // concurrent same-query runs never interleave their downloads.
+    // ═══════════════════════════════════════════════════════════════
+    const llmsStaging = join(
+      tmpdir(),
+      `pi-intelli-llms-${process.pid}-${randomBytes(4).toString("hex")}`,
+    );
+    let llmsFullFutures: Array<Promise<string | null>> = [];
     if (!settings.disableLlmsFullDiscovery && !signal?.aborted) {
       const sampleUrlByHost = new Map<string, string>();
       for (const p of successPages) {
@@ -410,23 +413,66 @@ export const intelliResearchTool = {
           if (!sampleUrlByHost.has(h)) sampleUrlByHost.set(h, p.url);
         } catch { /* skip malformed URLs */ }
       }
-      llmsFullPromises = [...sampleUrlByHost.values()].map((sampleUrl) =>
-        downloadLlmsFullToCache(sampleUrl, cachePath, signal, undefined, settings.httpProxy).catch(() => null),
+      llmsFullFutures = [...sampleUrlByHost.values()].map((sampleUrl) =>
+        downloadLlmsFullToCache(sampleUrl, llmsStaging, signal, undefined, settings.httpProxy).catch(() => null),
       );
     }
 
-    // Write report
+    // ═══════════════════════════════════════════════════════════════
+    // Write cache artifacts under the per-cache-path lock.
+    // Only local file I/O happens here — no network calls.
+    // The lock serialises two concurrent same-query runs.
+    // ═══════════════════════════════════════════════════════════════
+    const releaseCacheLock = await acquireLock(cacheLockDir(cachePath));
+    try {
+    // Write cache files (staging-based atomic, no partial visibility)
+    await writeCacheFiles(cachePath, allExtractions, successPages, searchResult, params.query);
+
+    // Write report (atomic via temp-file + rename)
     await writeReportFile(cachePath, params.query, collation, allExtractions, pages);
 
-    // Wait for llms-full downloads (don't fail if they don't complete)
-    await Promise.all(llmsFullPromises);
+    // Write telemetry sidecar (atomic via temp-file + rename)
+    await writeTelemetrySidecar(tel, cachePath, "completed");
+
+    // Move any already-completed llms-full downloads from the per-run
+    // staging dir into cachePath/sources/. Pending downloads stay in
+    // staging and are moved after the lock is released.
+    await flushLlmsStaging(llmsStaging, join(cachePath, "sources"));
+
+    // ═══════════════════════════════════════════════════════════════
+    // Atomic index update under a separate lock scoped to the cache
+    // directory. Different cache paths contend only on this short
+    // index update, not on the per-cache-path bulk writes.
+    // ═══════════════════════════════════════════════════════════════
+    const releaseIndexLock = await acquireLock(indexLockDir(settings.cacheDir));
+    try {
+      const slug = cachePath.split("/").pop() ?? cachePath;
+      await updateIndex(settings.cacheDir, slug, params.query);
+    } finally {
+      await releaseIndexLock();
+    }
+    } finally {
+      // Release the cache lock. Index lock already released above.
+      await releaseCacheLock();
+    }
+
+    // Await remaining llms-full downloads and flush them (lock-free:
+    // unique per-run staging dirs prevent interleaving, and same-host
+    // sources produce the same deterministic filename).
+    await Promise.all(llmsFullFutures);
+    await flushLlmsStaging(llmsStaging, join(cachePath, "sources"));
+    // Clean up the staging dir.
+    await rm(llmsStaging, { recursive: true, force: true }).catch(() => {});
 
     // ═══════════════════════════════════════════
     // Stage 5: Cache suggest — find related previous searches
     // ═══════════════════════════════════════════
-    // Runs after the pipeline completes. Uses the extract model as a cheap
-    // LLM judge to find semantically related cached searches. Never blocks
-    // the main result — graceful degradation on failure.
+    // Runs after the pipeline completes and after both cache and index
+    // locks are released. Uses the extract model as a cheap LLM judge to
+    // find semantically related cached searches. Never blocks the main
+    // result — graceful degradation on failure. No lock is needed:
+    // reading .index.json is safe (atomic rename on write) and the only
+    // writer (updateIndex) has already released the index lock.
     // ── Stage 5 notification ──
     onUpdate?.(progressUpdate("cache", "Checking related cached research..."));
 
@@ -466,11 +512,11 @@ export const intelliResearchTool = {
       slugs: cacheSuggestSlugs,
     });
 
-    // ── Telemetry sidecar ──
-    // Written once, after every stage has recorded. Local-only and additive:
-    // a write failure is caught and logged so it never surfaces to the
-    // pipeline result or the agent. Suppressed entirely when disableTelemetry
-    // is set (tel === null).
+    // ── Telemetry sidecar refresh ──
+    // The sidecar was already written under the cache lock with all core
+    // stages recorded. Rewrite it now that cache-suggest data is available
+    // so the final sidecar is complete. Atomic via temp-file + rename; a
+    // failure is caught and logged, never surfaced to the pipeline.
     await writeTelemetrySidecar(tel, cachePath, "completed");
 
     // ═══════════════════════════════════════════
@@ -499,6 +545,39 @@ export const intelliResearchTool = {
     } // end executePipeline()
   },
 };
+
+/**
+ * Move completed llms-full downloads from a per-run staging directory
+ * into the target cache sources directory. Best-effort: errors on
+ * individual files are logged and skipped. This is called both under
+ * the cache lock (for already-completed downloads) and after the lock
+ * is released (for any remaining downloads), always from a unique
+ * per-run staging dir so no two runs touch the same source files.
+ */
+async function flushLlmsStaging(
+  staging: string,
+  targetDir: string,
+): Promise<void> {
+  const stagingSources = join(staging, "sources");
+  let entries: string[];
+  try {
+    entries = await readdir(stagingSources);
+  } catch {
+    return; // No staging dir yet (downloads haven't completed)
+  }
+  await mkdir(targetDir, { recursive: true });
+  for (const name of entries) {
+    if (!name.startsWith("llms-full-")) continue;
+    const src = join(stagingSources, name);
+    const dst = join(targetDir, name);
+    try {
+      const data = await readFile(src, "utf-8");
+      await writeFile(dst, data);
+    } catch {
+      // Best-effort: skip files that can't be read or written.
+    }
+  }
+}
 
 /**
  * Test seam: the pipeline's two I/O collaborators. Tests swap these to avoid

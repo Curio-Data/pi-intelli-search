@@ -6,7 +6,7 @@ import { Type } from "typebox";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { COLLATION_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
-import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile } from "../cache.js";
+import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, cacheLockDir, indexLockDir, acquireLock, updateIndex } from "../cache.js";
 import { textContent } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import type { ExtractResult } from "../types.js";
@@ -87,9 +87,8 @@ export const intelliCollateTool = {
       status: "success" as const,
     }));
 
-    await writeCacheFiles(cachePath, extractResults, fetchedPages, params.searchSummary ?? "", params.query);
-
-    // Build collation prompt
+    // Build collation prompt (no files written yet — lock is never held
+    // across an LLM call).
     let userMessage = `Original query: ${params.query}\n`;
     userMessage += `Cache path: ${cachePath}/\n\n`;
 
@@ -107,14 +106,35 @@ export const intelliCollateTool = {
       userMessage += `\n${ext.extraction}\n\n`;
     }
 
-    // Call LLM for collation
+    // Call LLM for collation (no lock — never hold locks across LLM calls)
     const collation = await callLlm(ctx, collateConfig, COLLATION_SYSTEM_PROMPT, userMessage, {
       maxTokens: settings.collationMaxTokens,
       signal,
     });
 
-    // Write report
-    await writeReportFile(cachePath, params.query, collation, extractResults, fetchedPages);
+    // ═══════════════════════════════════════════════════════════════
+    // Write cache artifacts under the per-cache-path lock so two
+    // concurrent same-query runs do not interleave file writes.
+    // ═══════════════════════════════════════════════════════════════
+    const releaseCacheLock = await acquireLock(cacheLockDir(cachePath));
+    try {
+      // Write cache files (staging-based atomic, no partial visibility)
+      await writeCacheFiles(cachePath, extractResults, fetchedPages, params.searchSummary ?? "", params.query);
+
+      // Write report (atomic via temp-file + rename)
+      await writeReportFile(cachePath, params.query, collation, extractResults, fetchedPages);
+
+      // Atomic index update under the shared cache-dir index lock.
+      const releaseIndexLock = await acquireLock(indexLockDir(settings.cacheDir));
+      try {
+        const slug = cachePath.split("/").pop() ?? cachePath;
+        await updateIndex(settings.cacheDir, slug, params.query);
+      } finally {
+        await releaseIndexLock();
+      }
+    } finally {
+      await releaseCacheLock();
+    }
 
     return {
       content: [textContent(formatCollationResult(collation, cachePath, succeeded, blocked))],
