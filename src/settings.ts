@@ -1,8 +1,14 @@
 // src/settings.ts — Load settings from pi settings files (with in-memory cache)
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { ModelConfig, ResearchSettings } from "./types.js";
 import { getAgentDir } from "./util.js";
+
+export interface SettingsContext {
+  cwd: string;
+  projectTrusted: boolean;
+}
 
 const DEFAULT_SETTINGS: ResearchSettings = {
   searchModel: { provider: "openrouter", model: "perplexity/sonar" },
@@ -82,10 +88,21 @@ const DEFAULT_HISTORY: Record<string, {
     collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   },
+  "0.12.0": {
+    // Defaults unchanged from 0.10.0. Retained so migrations from older
+    // releases continue to compare against an explicit current-version entry.
+    extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+    collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  },
 };
 
-/** In-memory cache: invalidated on session_start / reload. */
-let cachedSettings: ResearchSettings | null = null;
+/** In-memory settings cache, isolated by the configuration source context. */
+const cachedSettings = new Map<string, ResearchSettings>();
+
+function cacheKey(context: SettingsContext): string {
+  return [getAgentDir(), CONFIG_DIR_NAME, context.cwd, context.projectTrusted].join("\0");
+}
 
 /**
  * Migration context set by index.ts on session_start when a version
@@ -96,7 +113,7 @@ let pendingMigration: { previousVersion: string; currentVersion: string } | null
 
 /** Called by index.ts on session_start to invalidate stale settings. */
 export function invalidateSettingsCache(): void {
-  cachedSettings = null;
+  cachedSettings.clear();
 }
 
 /**
@@ -291,9 +308,10 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
  * Check whether any settings file contains flat intelli*-prefixed keys.
  * Used to decide whether to show a deprecation notice on upgrade.
  */
-export async function hasFlatKeys(cwd: string): Promise<boolean> {
-  const agentDir = getAgentDir();
-  for (const dir of [agentDir, join(cwd, ".pi")]) {
+export async function hasFlatKeys(context: SettingsContext): Promise<boolean> {
+  const dirs = [getAgentDir()];
+  if (context.projectTrusted) dirs.push(join(context.cwd, CONFIG_DIR_NAME));
+  for (const dir of dirs) {
     try {
       const raw = await readFile(join(dir, "settings.json"), "utf-8");
       const parsed = JSON.parse(raw);
@@ -308,14 +326,18 @@ export async function hasFlatKeys(cwd: string): Promise<boolean> {
   return false;
 }
 
-export async function loadSettings(cwd: string): Promise<ResearchSettings> {
-  if (cachedSettings) return cachedSettings;
+export async function loadSettings(context: SettingsContext): Promise<ResearchSettings> {
+  const key = cacheKey(context);
+  const cached = cachedSettings.get(key);
+  if (cached) return cached;
 
   const overrides: Partial<ResearchSettings> = {};
 
-  // Try global settings first, then project-local
-  const agentDir = getAgentDir();
-  for (const dir of [agentDir, join(cwd, ".pi")]) {
+  // Global settings always apply. Project settings apply only after `Pi`
+  // has approved the project and its local configuration resources.
+  const dirs = [getAgentDir()];
+  if (context.projectTrusted) dirs.push(join(context.cwd, CONFIG_DIR_NAME));
+  for (const dir of dirs) {
     try {
       const raw = await readFile(join(dir, "settings.json"), "utf-8");
       const parsed = JSON.parse(raw);
@@ -330,7 +352,7 @@ export async function loadSettings(cwd: string): Promise<ResearchSettings> {
   // ResearchSettings is either a scalar or a complete ModelConfig
   // object, so partial nested overrides don't arise. A future field
   // that is a non-trivial nested object would need deep merging.
-  cachedSettings = { ...DEFAULT_SETTINGS, ...overrides };
+  let settings = { ...DEFAULT_SETTINGS, ...overrides };
 
   // Apply default migration in-memory when upgrading between versions.
   // If the user's model config matches a previous version's default,
@@ -340,13 +362,14 @@ export async function loadSettings(cwd: string): Promise<ResearchSettings> {
     const { settings: migrated } = migrateDefaults(
       pendingMigration.previousVersion,
       pendingMigration.currentVersion,
-      cachedSettings,
+      settings,
     );
-    cachedSettings = migrated;
+    settings = migrated;
     pendingMigration = null;
   }
 
-  return cachedSettings;
+  cachedSettings.set(key, settings);
+  return settings;
 }
 
 export function resolveModelConfig(settings: ResearchSettings, role: "search" | "extract" | "collate"): ModelConfig {

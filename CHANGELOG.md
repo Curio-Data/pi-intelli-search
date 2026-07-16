@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-07-16
+
+### Changed
+
+- **`Pi` 0.80.8 is now the minimum supported version.** The extension uses the supported `pi-ai` compatibility entrypoint, `CONFIG_DIR_NAME`, trusted project settings, registry authentication environment values, and async model-registry refresh semantics from this baseline.
+- **Project settings now respect `Pi` trust.** Global settings always load. A project-local settings file is considered only after that project is trusted, and the settings cache is isolated by agent directory, project directory, trust state, and configuration-directory name.
+- **Cache-writing tools execute sequentially in one `Pi` host.** Cross-process cache commits use staging directories and short locks so concurrent research runs cannot interleave artifacts or lose index entries.
+
+### Fixed
+
+- **Version migration now records the current release.** The extension version marker previously remained at 0.10.0 while package releases advanced.
+- **Resolved provider authentication now forwards environment overrides to LLM calls.** Models configured with provider-scoped `env` values receive them consistently.
+
 ## [0.11.3] - 2026-07-02
 
 ### Fixed
@@ -274,6 +287,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.12.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.0
 [0.11.3]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.3
 [0.11.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.2
 [0.11.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.1

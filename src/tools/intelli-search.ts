@@ -29,7 +29,10 @@ export const intelliSearchTool = {
     _onUpdate: any,
     ctx: ExtensionContext,
   ) {
-    const settings = await loadSettings(ctx.cwd);
+    const settings = await loadSettings({
+      cwd: ctx.cwd,
+      projectTrusted: ctx.isProjectTrusted(),
+    });
     const searchConfig = resolveModelConfig(settings, "search");
 
     let searchQuery = params.query;

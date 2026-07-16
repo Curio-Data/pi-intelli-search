@@ -33,7 +33,10 @@ export const intelliExtractTool = {
     _onUpdate: any,
     ctx: ExtensionContext,
   ) {
-    const settings = await loadSettings(ctx.cwd);
+    const settings = await loadSettings({
+      cwd: ctx.cwd,
+      projectTrusted: ctx.isProjectTrusted(),
+    });
     const extractConfig = resolveModelConfig(settings, "extract");
 
     // Truncate extremely large pages

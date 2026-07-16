@@ -1,8 +1,27 @@
 // src/llm.ts — LLM calling utilities using pi native auth
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { completeSimple, type Message } from "@earendil-works/pi-ai/compat";
+import {
+  completeSimple as defaultCompleteSimple,
+  type Api,
+  type AssistantMessage,
+  type Context,
+  type Message,
+  type Model,
+  type SimpleStreamOptions,
+} from "@earendil-works/pi-ai/compat";
 import type { ModelConfig } from "./types.js";
 import { withRetry, isRetryableMessage, parseRetryAfterMs, callWithAbortTimeout } from "./util.js";
+
+/** Narrow injectable seam for deterministic callLlm tests. */
+export const __harness: {
+  completeSimple: (
+    model: Model<Api>,
+    context: Context,
+    options?: SimpleStreamOptions,
+  ) => Promise<AssistantMessage>;
+} = {
+  completeSimple: defaultCompleteSimple,
+};
 
 /** Transport-level retry config for a single {@link callLlm} call. */
 export interface LlmRetryConfig {
@@ -100,7 +119,7 @@ export async function callLlm(
       try {
         const { value, timedOut } = await callWithAbortTimeout(
           (signal) =>
-            completeSimple(
+            __harness.completeSimple(
               model,
               { systemPrompt, messages },
               {

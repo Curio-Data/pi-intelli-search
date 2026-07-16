@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveModelConfig, loadSettings, invalidateSettingsCache } from "../src/settings.js";
+import { resolveModelConfig, loadSettings, hasFlatKeys, invalidateSettingsCache } from "../src/settings.js";
 import type { ResearchSettings } from "../src/types.js";
 
 const baseSettings: ResearchSettings = {
@@ -65,7 +65,7 @@ describe("loadSettings defaults", () => {
   it("returns all default settings when no overrides exist", async () => {
     // Invalidate cache to force fresh load
     invalidateSettingsCache();
-    const settings = await loadSettings("/nonexistent");
+    const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
 
     assert.strictEqual(settings.defaultUrls, 8);
     assert.strictEqual(settings.maxUrls, 16);
@@ -91,16 +91,16 @@ describe("loadSettings defaults", () => {
 describe("settings caching", () => {
   it("returns cached settings on second call", async () => {
     invalidateSettingsCache();
-    const first = await loadSettings("/nonexistent");
-    const second = await loadSettings("/nonexistent");
+    const first = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
+    const second = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
     assert.strictEqual(first, second, "Should return the same object reference");
   });
 
   it("invalidateSettingsCache forces fresh load", async () => {
     invalidateSettingsCache();
-    const first = await loadSettings("/nonexistent");
+    const first = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
     invalidateSettingsCache();
-    const second = await loadSettings("/nonexistent");
+    const second = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
     assert.notStrictEqual(first, second, "Should return a new object after invalidation");
   });
 });
@@ -131,7 +131,7 @@ describe("loadSettings nested namespace", () => {
       });
 
       invalidateSettingsCache();
-      const settings = await loadSettings("/nonexistent");
+      const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
       assert.deepStrictEqual(settings.extractModel, {
         provider: "openai",
         model: "gpt-4",
@@ -156,7 +156,7 @@ describe("loadSettings nested namespace", () => {
       });
 
       invalidateSettingsCache();
-      const settings = await loadSettings("/nonexistent");
+      const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
       assert.strictEqual(settings.maxUrls, 12, "nested maxUrls (cap) should win over flat key");
       assert.strictEqual(settings.defaultUrls, 8, "defaultUrls should remain at default when not overridden");
     } finally {
@@ -176,7 +176,7 @@ describe("loadSettings nested namespace", () => {
       });
 
       invalidateSettingsCache();
-      const settings = await loadSettings("/nonexistent");
+      const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
       assert.strictEqual(settings.cacheDir, "my-cache", "flat key should work as fallback");
     } finally {
       if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
@@ -199,7 +199,7 @@ describe("loadSettings nested namespace", () => {
       });
 
       invalidateSettingsCache();
-      const settings = await loadSettings("/nonexistent");
+      const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
       assert.deepStrictEqual(settings.searchModel, {
         provider: "openrouter",
         model: "perplexity/sonar-pro",
@@ -231,7 +231,7 @@ describe("loadSettings nested namespace", () => {
       });
 
       invalidateSettingsCache();
-      const settings = await loadSettings("/nonexistent");
+      const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
       assert.strictEqual(settings.disableTelemetry, true);
     } finally {
       if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
@@ -250,7 +250,7 @@ describe("loadSettings nested namespace", () => {
       });
 
       invalidateSettingsCache();
-      const settings = await loadSettings("/nonexistent");
+      const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
       assert.strictEqual(settings.disableTelemetry, true);
     } finally {
       if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
@@ -277,7 +277,7 @@ describe("loadSettings nested namespace", () => {
       });
 
       invalidateSettingsCache();
-      const settings = await loadSettings("/nonexistent");
+      const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
       assert.strictEqual(settings.defaultUrls, 3);
       assert.strictEqual(settings.maxUrls, 12);
       assert.strictEqual(settings.fetchTimeoutMs, 30000);
@@ -306,7 +306,7 @@ describe("loadSettings nested namespace", () => {
       });
 
       invalidateSettingsCache();
-      const settings = await loadSettings("/nonexistent");
+      const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
       assert.strictEqual(settings.maxUrls, 6, "old maxUrls → cap");
       assert.strictEqual(settings.defaultUrls, 8, "defaultUrls stays at new default");
     } finally {
@@ -329,12 +329,51 @@ describe("loadSettings nested namespace", () => {
       });
 
       invalidateSettingsCache();
-      const settings = await loadSettings("/nonexistent");
+      const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
       assert.strictEqual(settings.defaultUrls, 4, "defaultUrls explicitly set");
       assert.strictEqual(settings.maxUrls, 10, "maxUrls (cap) explicitly set");
     } finally {
       if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
       else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
+});
+
+describe("trusted project settings", () => {
+  it("ignores untrusted project overrides and isolates cache entries by trust and cwd", async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-intelli-settings-agent-"));
+    const projectDir = mkdtempSync(join(tmpdir(), "pi-intelli-project-"));
+    const otherProjectDir = mkdtempSync(join(tmpdir(), "pi-intelli-project-"));
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+
+    try {
+      writeFileSync(join(agentDir, "settings.json"), JSON.stringify({
+        "pi-intelli-search": { cacheDir: ".global-cache", maxUrls: 7 },
+      }));
+      mkdirSync(join(projectDir, ".pi"), { recursive: true });
+      writeFileSync(join(projectDir, ".pi", "settings.json"), JSON.stringify({
+        "pi-intelli-search": { cacheDir: ".project-cache", maxUrls: 2 },
+        intelliCacheDir: ".deprecated-project-cache",
+      }));
+
+      invalidateSettingsCache();
+      const untrusted = await loadSettings({ cwd: projectDir, projectTrusted: false });
+      const trusted = await loadSettings({ cwd: projectDir, projectTrusted: true });
+      const other = await loadSettings({ cwd: otherProjectDir, projectTrusted: true });
+
+      assert.strictEqual(untrusted.cacheDir, ".global-cache");
+      assert.strictEqual(untrusted.maxUrls, 7);
+      assert.strictEqual(trusted.cacheDir, ".project-cache");
+      assert.strictEqual(trusted.maxUrls, 2);
+      assert.notStrictEqual(untrusted, trusted);
+      assert.notStrictEqual(trusted, other);
+      assert.strictEqual(await hasFlatKeys({ cwd: projectDir, projectTrusted: false }), false);
+      assert.strictEqual(await hasFlatKeys({ cwd: projectDir, projectTrusted: true }), true);
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+      invalidateSettingsCache();
     }
   });
 });
@@ -354,7 +393,7 @@ describe("hasFlatKeys", () => {
     const cwd = tempCwd();
     writeSettings(cwd, { intelliExtractModel: { provider: "openrouter", model: "test" } });
     const { hasFlatKeys } = await import("../src/settings.js");
-    const result = await hasFlatKeys(cwd);
+    const result = await hasFlatKeys({ cwd, projectTrusted: true });
     assert.strictEqual(result, true, "should detect flat intelli* keys");
   });
 
@@ -362,7 +401,7 @@ describe("hasFlatKeys", () => {
     const cwd = tempCwd();
     writeSettings(cwd, { intelliSearchModel: { provider: "openrouter", model: "test" } });
     const { hasFlatKeys } = await import("../src/settings.js");
-    const result = await hasFlatKeys(cwd);
+    const result = await hasFlatKeys({ cwd, projectTrusted: true });
     assert.strictEqual(result, true, "should detect intelliSearchModel");
   });
 
@@ -372,7 +411,7 @@ describe("hasFlatKeys", () => {
       "pi-intelli-search": { extractModel: { provider: "openrouter", model: "test" } },
     });
     const { hasFlatKeys } = await import("../src/settings.js");
-    const result = await hasFlatKeys(cwd);
+    const result = await hasFlatKeys({ cwd, projectTrusted: true });
     assert.strictEqual(result, false, "nested namespace should not trigger flat key detection");
   });
 
@@ -383,7 +422,7 @@ describe("hasFlatKeys", () => {
       intelliMaxUrls: 12,
     });
     const { hasFlatKeys } = await import("../src/settings.js");
-    const result = await hasFlatKeys(cwd);
+    const result = await hasFlatKeys({ cwd, projectTrusted: true });
     assert.strictEqual(result, true, "flat keys present alongside namespace should be detected");
   });
 
@@ -391,7 +430,7 @@ describe("hasFlatKeys", () => {
     const cwd = tempCwd();
     // No .pi/settings.json written
     const { hasFlatKeys } = await import("../src/settings.js");
-    const result = await hasFlatKeys(cwd);
+    const result = await hasFlatKeys({ cwd, projectTrusted: true });
     assert.strictEqual(result, false, "no settings file means no flat keys");
   });
 
@@ -399,7 +438,7 @@ describe("hasFlatKeys", () => {
     const cwd = tempCwd();
     writeSettings(cwd, { theme: "dark", model: "gpt-4" });
     const { hasFlatKeys } = await import("../src/settings.js");
-    const result = await hasFlatKeys(cwd);
+    const result = await hasFlatKeys({ cwd, projectTrusted: true });
     assert.strictEqual(result, false, "non-intelli keys should not trigger detection");
   });
 });

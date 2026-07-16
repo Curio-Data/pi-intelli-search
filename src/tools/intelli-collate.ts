@@ -34,6 +34,7 @@ export const intelliCollateTool = {
     "after extracting multiple pages with intelli_extract; for end-to-end " +
     "research, use intelli_research.",
   promptSnippet: "intelli_collate(extractions, query): deduplicate and synthesise extractions into concise summary",
+  executionMode: "sequential" as const,
   parameters: Type.Object({
     extractions: Type.Array(extractionSchema, {
       description: "Array of per-page extraction results from intelli_extract",
@@ -59,7 +60,10 @@ export const intelliCollateTool = {
     _onUpdate: any,
     ctx: ExtensionContext,
   ) {
-    const settings = await loadSettings(ctx.cwd);
+    const settings = await loadSettings({
+      cwd: ctx.cwd,
+      projectTrusted: ctx.isProjectTrusted(),
+    });
     const collateConfig = resolveModelConfig(settings, "collate");
 
     const cachePath = makeCachePath(params.query, ctx.cwd, settings.cacheDir);

@@ -10,11 +10,18 @@ import { intelliSearchTool } from "./tools/intelli-search.js";
 import { intelliExtractTool } from "./tools/intelli-extract.js";
 import { intelliCollateTool } from "./tools/intelli-collate.js";
 import { intelliResearchTool } from "./tools/intelli-research.js";
-import { ensureCustomModels } from "./providers.js";
+import { ensureCustomModels as defaultEnsureCustomModels } from "./providers.js";
 import { invalidateSettingsCache, hasFlatKeys, migrateDefaults, loadSettings, setMigrationContext } from "./settings.js";
 import { getAgentDir } from "./util.js";
 
-const CURRENT_VERSION = "0.10.0";
+const CURRENT_VERSION = "0.12.0";
+
+/** Narrow injectable seam for deterministic model-registry refresh tests. */
+export const __harness: {
+  ensureCustomModels: () => Promise<string[]>;
+} = {
+  ensureCustomModels: defaultEnsureCustomModels,
+};
 
 /**
  * Check whether the openrouter provider has auth configured.
@@ -148,14 +155,19 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
       modelsChecked = true;
 
       try {
-        const added = await ensureCustomModels();
+        const added = await __harness.ensureCustomModels();
         if (added.length > 0) {
           // We wrote new models to models.json. Refresh the registry so they're
           // available immediately without restarting pi.
           // modelRegistry.refresh() is not on the public ExtensionContext type,
           // but is available at runtime on the concrete ModelRegistry instance.
-          const registry = ctx.modelRegistry as { refresh?: () => void };
-          registry.refresh?.();
+          const registry = ctx.modelRegistry as { refresh?: () => Promise<void> };
+          try {
+            await registry.refresh?.();
+          } catch (refreshErr: unknown) {
+            const message = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+            console.error(`[pi-intelli-search] Model registry refresh failed: ${message}`);
+          }
           notify(
             `[pi-intelli-search] Added models: ${added.join(", ")}. Use /model to select them.`,
             "info",
@@ -211,7 +223,10 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
         // context. loadSettings() applies pendingMigration in-memory,
         // so we must detect changes on the raw (unmigrated) settings.
         try {
-          const userSettings = await loadSettings(process.cwd());
+          const userSettings = await loadSettings({
+            cwd: ctx.cwd,
+            projectTrusted: ctx.isProjectTrusted(),
+          });
           const { changes } = migrateDefaults(previousVersion, CURRENT_VERSION, userSettings);
           if (changes.length > 0) {
             notify(
@@ -247,7 +262,10 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
       // not just on upgrade, to catch fresh-install users who
       // copy-paste deprecated flat keys from old docs/blog posts.
       try {
-        const flatKeysExist = await hasFlatKeys(process.cwd());
+        const flatKeysExist = await hasFlatKeys({
+          cwd: ctx.cwd,
+          projectTrusted: ctx.isProjectTrusted(),
+        });
         if (flatKeysExist) {
           notify(
             `[pi-intelli-search] Flat 'intelli*' settings keys are deprecated. ` +

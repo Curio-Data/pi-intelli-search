@@ -114,6 +114,8 @@ describe("after_provider_response handler", () => {
 
     const mockCtx = {
       hasUI: true,
+      get cwd() { return process.cwd(); },
+      isProjectTrusted() { return true; },
       ui: {
         setStatus(key: string, text: string | undefined) {
           if (text === undefined) statuses.delete(key);
@@ -151,6 +153,8 @@ describe("after_provider_response handler", () => {
 
     const mockCtx = {
       hasUI: true,
+      get cwd() { return process.cwd(); },
+      isProjectTrusted() { return true; },
       ui: {
         setStatus(key: string, text: string | undefined) {
           setStatusCalls.push([key, text]);
@@ -277,6 +281,8 @@ describe("auth pre-flight check", () => {
 
     const mockCtx = {
       hasUI: true,
+      get cwd() { return process.cwd(); },
+      isProjectTrusted() { return true; },
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -327,6 +333,8 @@ describe("auth pre-flight check", () => {
 
     const mockCtx = {
       hasUI: true,
+      get cwd() { return process.cwd(); },
+      isProjectTrusted() { return true; },
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -380,6 +388,8 @@ describe("auth pre-flight check", () => {
 
     const mockCtx = {
       hasUI: true,
+      get cwd() { return process.cwd(); },
+      isProjectTrusted() { return true; },
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -452,6 +462,8 @@ describe("auth pre-flight check", () => {
 
     const mockCtx = {
       hasUI: true,
+      get cwd() { return process.cwd(); },
+      isProjectTrusted() { return true; },
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -512,6 +524,8 @@ describe("auth pre-flight check", () => {
 
     const mockCtx = {
       hasUI: true,
+      get cwd() { return process.cwd(); },
+      isProjectTrusted() { return true; },
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -571,7 +585,7 @@ describe("auth pre-flight check", () => {
 
       // Verify the pipeline actually runs on migrated settings (C1 regression guard).
       const { loadSettings } = await import("../src/settings.js");
-      const post = await loadSettings(cwd);
+      const post = await loadSettings({ cwd, projectTrusted: true });
       assert.strictEqual(post.extractModel.provider, "openrouter", "extract model should be migrated");
       assert.strictEqual(post.collateModel.provider, "openrouter", "collate model should be migrated");
       assert.strictEqual(post.extractModel.model, "minimax/minimax-m2.7");
@@ -605,6 +619,8 @@ describe("auth pre-flight check", () => {
 
     const mockCtx = {
       hasUI: true,
+      get cwd() { return process.cwd(); },
+      isProjectTrusted() { return true; },
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
