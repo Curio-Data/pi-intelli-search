@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# test/run-e2e-llmsfull.sh — E2E test for automatic llms-full.txt discovery
+# test/07_llms_full.sh — E2E test for automatic llms-full.txt discovery
 #
 # Proves the HEAD-probe auto-discovery works by targeting a site known
 # to publish llms-full.txt at the standard /llms-full.txt root path.
 # Verifies the file lands in sources/llms-full-*.md in the cache.
 #
 # Usage:
-#   ./test/run-e2e-llmsfull.sh
+#   ./test/07_llms_full.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CACHE_DIR="$PROJECT_DIR/.e2e-llmsfull"
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"

@@ -231,14 +231,14 @@ test/
 ├── prompts.test.ts
 ├── providers.test.ts
 ├── research.test.ts
-├── run-e2e.sh
+├── e2e/01_main.sh
 ├── run-e2e-all.sh
-├── run-e2e-cap.sh
-├── run-e2e-collation-limits.sh
-├── run-e2e-extract-limits.sh
-├── run-e2e-llmsfull.sh
-├── run-e2e-migration.sh
-├── run-e2e-model-override.sh
+├── e2e/02_cap.sh
+├── e2e/05_collation_limits.sh
+├── e2e/06_extract_limits.sh
+├── e2e/07_llms_full.sh
+├── e2e/04_migration.sh
+├── e2e/03_model_override.sh
 ├── run-e2e-publish.sh
 ├── settings.test.ts
 ├── smoke.ts
@@ -303,7 +303,7 @@ npm run build            # TypeScript -> dist/ (tsc)
 npm run dev              # Watch mode (tsc --watch)
 npm test                 # Run all unit tests
 npm run test:smoke       # Smoke test (structural validation)
-./test/run-e2e.sh        # End-to-end test (live LLM calls, isolated env)
+./test/e2e/01_main.sh        # End-to-end test (live LLM calls, isolated env)
 ```
 
 **Testing in `Pi`:**
@@ -345,7 +345,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | **Structural/smoke** | Extension loads, tools register, events bind | `smoke.ts` | No |
 | **Unit (pure logic)** | Functions without filesystem or network deps | `cache.test.ts`, `telemetry.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
 | **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts` | No |
-| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `run-e2e.sh`, `run-e2e-cap.sh`, `run-e2e-extract-limits.sh`, `run-e2e-collation-limits.sh`, `run-e2e-llmsfull.sh`, `run-e2e-migration.sh`, `run-e2e-model-override.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
+| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `e2e/01_main.sh`, `e2e/02_cap.sh`, `e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`, `e2e/07_llms_full.sh`, `e2e/04_migration.sh`, `e2e/03_model_override.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
 | **Publish** | Validates the published npm package structure | `run-e2e-publish.sh` (registry install), `run-e2e-publish-local.sh` (local tarball install; CI gate for peer-dep drift) | Yes (npm only) |
 
 ### Principle 1: Tests Must Be Deterministic
@@ -408,18 +408,18 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 
 | Test | What it proves |
 |---|---|
-| `run-e2e.sh` | Default pipeline (Sonar + M2.7 via OpenRouter) works end-to-end with nested settings |
-| `run-e2e-migration.sh` | Upgrade from 0.7.0 defaults auto-migrates to 0.8.0 OpenRouter defaults |
-| `run-e2e-model-override.sh` | Model override in `pi-intelli-search` settings namespace is read and used |
-| `run-e2e-cap.sh` | `defaultUrls` and `maxUrls` (cap) are enforced; agent requests above cap are silently clamped |
-| `run-e2e-extract-limits.sh` | `extractMaxChars` and `extractionMaxTokens` are enforced; back-to-back comparison proves truncation |
-| `run-e2e-collation-limits.sh` | `collationMaxTokens` is enforced; back-to-back comparison proves output clamping |
-| `run-e2e-llmsfull.sh` | Automatic llms-full.txt discovery works; probes candidate sites, verifies file lands in cache |
+| `e2e/01_main.sh` | Default pipeline (Sonar + M2.7 via OpenRouter) works end-to-end with nested settings |
+| `e2e/04_migration.sh` | Upgrade from 0.7.0 defaults auto-migrates to 0.8.0 OpenRouter defaults |
+| `e2e/03_model_override.sh` | Model override in `pi-intelli-search` settings namespace is read and used |
+| `e2e/02_cap.sh` | `defaultUrls` and `maxUrls` (cap) are enforced; agent requests above cap are silently clamped |
+| `e2e/06_extract_limits.sh` | `extractMaxChars` and `extractionMaxTokens` are enforced; back-to-back comparison proves truncation |
+| `e2e/05_collation_limits.sh` | `collationMaxTokens` is enforced; back-to-back comparison proves output clamping |
+| `e2e/07_llms_full.sh` | Automatic llms-full.txt discovery works; probes candidate sites, verifies file lands in cache |
 | `run-e2e-all.sh` | Runs every scenario script one at a time with a spacing gap (`E2E_GAP_SECONDS`, default 20). Use this instead of launching scripts in parallel or back-to-back: bursting many calls at one key depletes the rate-limit bucket and produces degraded or hung runs. |
 
 Both write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
 
-**Rate-limit caution:** the scenario scripts each fire two or more full pipelines. Run them through `run-e2e-all.sh` (or singly with gaps) on free or shared keys. The fragile single-URL comparisons (`run-e2e-extract-limits.sh`, `run-e2e-collation-limits.sh`) use `maxUrls=2` for redundancy so one degraded call cannot zero the run.
+**Rate-limit caution:** the scenario scripts each fire two or more full pipelines. Run them through `run-e2e-all.sh` (or singly with gaps) on free or shared keys. The fragile single-URL comparisons (`e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`) use `maxUrls=2` for redundancy so one degraded call cannot zero the run.
 
 ### Principle 5: E2E Scripts Must Be Proven Runnable
 
@@ -435,7 +435,7 @@ CI does not run E2E scripts (they require API keys and a live `pi` binary). The 
 
 1. **Build:** `npm run build`
 2. **Unit tests:** `npm test`
-3. **End-to-end test:** `./test/run-e2e.sh`
+3. **End-to-end test:** `./test/e2e/01_main.sh`
 
 Do not consider a change complete until all three pass. Run all E2E scripts before any release via the sequential runner `./test/run-e2e-all.sh` (it paces calls so the rate-limit bucket does not deplete). Running them in parallel or back-to-back is the documented cause of degraded or hung runs.
 
@@ -444,7 +444,7 @@ Do not consider a change complete until all three pass. Run all E2E scripts befo
 The E2E tests auto-detect `OPENROUTER_API_KEY` from `~/.pi/agent/auth.json`. Only an OpenRouter key is required: all three model roles route through OpenRouter.
 
 ```bash
-OPENROUTER_API_KEY=sk-or-v1-... ./test/run-e2e.sh
+OPENROUTER_API_KEY=sk-or-v1-... ./test/e2e/01_main.sh
 ```
 
 ### E2E Publish Test

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# test/run-e2e.sh — End-to-end test for pi-intelli-search
+# test/01_main.sh — End-to-end test for pi-intelli-search
 #
 # Runs the extension inside an isolated pi agent environment to verify
 # the install experience works in a fresh session with real LLM calls.
@@ -10,7 +10,7 @@
 # OpenRouter, requiring only a single API key.
 #
 # Usage:
-#   ./test/run-e2e.sh
+#   ./test/01_main.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
@@ -30,7 +30,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)

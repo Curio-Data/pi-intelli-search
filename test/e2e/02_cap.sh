@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# test/run-e2e-cap.sh — E2E test for defaultUrls / maxUrls (cap)
+# test/02_cap.sh — E2E test for defaultUrls / maxUrls (cap)
 #
 # Verifies two scenarios:
 #   1. Low cap (maxUrls=3) — agent requests 12 (exhaustive per SKILL.md)
@@ -9,7 +9,7 @@
 #      uses defaultUrls=3. Cap at 6 is never reached.
 #
 # Usage:
-#   ./test/run-e2e-cap.sh
+#   ./test/02_cap.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"

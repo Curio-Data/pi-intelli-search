@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# test/run-e2e-migration.sh — E2E test for default migration on upgrade
+# test/04_migration.sh — E2E test for default migration on upgrade
 #
 # Simulates a user upgrading from 0.7.0. In 0.7.0, the
 # default extract/collate model was minimax/MiniMax-M2.7 (direct
@@ -12,7 +12,7 @@
 # - Cache artifacts are created
 #
 # Usage:
-#   ./test/run-e2e-migration.sh
+#   ./test/04_migration.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
@@ -20,7 +20,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TARGET_VERSION="$(jq -r '.version' "$PROJECT_DIR/package.json")"
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"

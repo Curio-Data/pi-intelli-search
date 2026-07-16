@@ -46,13 +46,13 @@ export OPENROUTER_API_KEY
 
 # Order: cheapest/most-fundamental first, broadest last.
 SCRIPTS=(
-  run-e2e.sh
-  run-e2e-cap.sh
-  run-e2e-model-override.sh
-  run-e2e-migration.sh
-  run-e2e-collation-limits.sh
-  run-e2e-extract-limits.sh
-  run-e2e-llmsfull.sh
+  e2e/01_main.sh
+  e2e/02_cap.sh
+  e2e/03_model_override.sh
+  e2e/04_migration.sh
+  e2e/05_collation_limits.sh
+  e2e/06_extract_limits.sh
+  e2e/07_llms_full.sh
 )
 
 echo "🧪 Sequential E2E run — ${#SCRIPTS[@]} scripts, ${GAP}s gap, ${SCRIPT_TIMEOUT}s timeout per script"

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# test/run-e2e-model-override.sh — E2E test for model override via settings
+# test/03_model_override.sh — E2E test for model override via settings
 #
 # Demonstrates that changing the extract/collate model in settings.json
 # is read and used by the pipeline. Replaces the default MiniMax M2.7
 # with google/gemini-3-flash-preview from OpenRouter.
 #
 # Usage:
-#   ./test/run-e2e-model-override.sh
+#   ./test/03_model_override.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# test/run-e2e-extract-limits.sh — E2E test for extractMaxChars and extractionMaxTokens
+# test/06_extract_limits.sh — E2E test for extractMaxChars and extractionMaxTokens
 #
 # Proves both settings are enforced by running the same single-URL
 # research query twice (back-to-back): first with default limits,
@@ -11,7 +11,7 @@
 # out-of-band inspection of failures.
 #
 # Usage:
-#   ./test/run-e2e-extract-limits.sh
+#   ./test/06_extract_limits.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
@@ -19,7 +19,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CACHE_DEFAULT="$PROJECT_DIR/.e2e-extract-default"
 CACHE_TIGHT="$PROJECT_DIR/.e2e-extract-tight"
 RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-30}"
