@@ -88,7 +88,7 @@ Start `Pi` and type `/model`. You should see `perplexity/sonar` and `perplexity/
 
 ### Customise (Optional)
 
-No configuration is needed to get started. The defaults use OpenRouter for all stages. If you want to change models, add a `pi-intelli-search` block to `~/.pi/agent/settings.json` or `.pi/settings.json`:
+No configuration is needed to get started. The defaults use OpenRouter for all stages. If you want to change models, add a `pi-intelli-search` block to `~/.pi/agent/settings.json` or, for a trusted project, `<project>/.pi/settings.json`:
 
 **Defaults (what you get without any config):**
 

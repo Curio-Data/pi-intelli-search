@@ -231,14 +231,15 @@ test/
 ├── prompts.test.ts
 ├── providers.test.ts
 ├── research.test.ts
-├── e2e/01_main.sh
+├── e2e/
+│   ├── 01_main.sh
+│   ├── 02_cap.sh
+│   ├── 03_model_override.sh
+│   ├── 04_migration.sh
+│   ├── 05_collation_limits.sh
+│   ├── 06_extract_limits.sh
+│   └── 07_llms_full.sh
 ├── run-e2e-all.sh
-├── e2e/02_cap.sh
-├── e2e/05_collation_limits.sh
-├── e2e/06_extract_limits.sh
-├── e2e/07_llms_full.sh
-├── e2e/04_migration.sh
-├── e2e/03_model_override.sh
 ├── run-e2e-publish.sh
 ├── settings.test.ts
 ├── smoke.ts
@@ -285,7 +286,7 @@ After extraction, every unique domain in the results is probed for `llms-full.tx
 
 ### Settings
 
-Loaded from `~/.pi/agent/settings.json` and `.pi/settings.json`. The nested `pi-intelli-search` namespace is preferred; flat `intelli*` prefixed keys are a deprecated fallback. Cached in memory, invalidated on `session_start`. Rate-limit resilience keys (`llmTimeoutMs`, `llmRetryAttempts`, `retryBaseDelayMs`, `retryMaxDelayMs`, `searchRetryAttempts`, `minRequestIntervalMs`) tune retry, timeout, and throttling. See README for all settings keys and defaults (the canonical reference).
+Loaded from `~/.pi/agent/settings.json` and, only for trusted projects, `<project>/<CONFIG_DIR_NAME>/settings.json`. The nested `pi-intelli-search` namespace is preferred; flat `intelli*` prefixed keys are a deprecated fallback. Cached by agent directory, project directory, trust state, and configuration-directory name, then invalidated on `session_start`. Rate-limit resilience keys (`llmTimeoutMs`, `llmRetryAttempts`, `retryBaseDelayMs`, `retryMaxDelayMs`, `searchRetryAttempts`, `minRequestIntervalMs`) tune retry, timeout, and throttling. See README for all settings keys and defaults (the canonical reference).
 
 ### Cache
 
@@ -326,7 +327,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 - **Extension API pattern:** Single `export default function(pi: ExtensionAPI)` in `index.ts`.
 - **Tool definition pattern:** Each tool exports an object with `name`, `label`, `description`, `promptSnippet`, `promptGuidelines`, `parameters` (TypeBox schema), and `execute()`.
 - **Error handling:** Extraction failures are caught per-page (do not fail the whole pipeline). Transient failures (429, 5xx, timeouts) are retried with full-jitter backoff honouring Retry-After; a failure that survives all attempts throws an actionable error.
-- **Graceful degradation:** Optional `Pi` features (working indicator, model refresh) are feature-detected and silently skipped on older versions.
+- **`Pi` 0.80.8 baseline:** The extension uses the supported settings trust APIs, `CONFIG_DIR_NAME`, and async model-registry refresh semantics from this version.
 - **No cross-tool calls:** `Pi` extensions cannot invoke other tools from `execute()`. Therefore `intelli_research` inlines all stages.
 - **SPDX headers:** Source files include `// SPDX-License-Identifier: Apache-2.0` and copyright notices.
 
@@ -419,7 +420,7 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 
 Both write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
 
-**Rate-limit caution:** the scenario scripts each fire two or more full pipelines. Run them through `run-e2e-all.sh` (or singly with gaps) on free or shared keys. The fragile single-URL comparisons (`e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`) use `maxUrls=2` for redundancy so one degraded call cannot zero the run.
+**Rate-limit caution:** the scenario scripts consume live provider quota. Run them through `run-e2e-all.sh` (or singly with gaps) on free or shared keys. The paired limit comparisons (`e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`) use one official documentation source and an internal cooldown (`E2E_RUN_GAP_SECONDS`, default 30) between runs.
 
 ### Principle 5: E2E Scripts Must Be Proven Runnable
 
@@ -543,6 +544,5 @@ The workflow authenticates to `npm` via OIDC; no stored token is used. The trust
 
 ## Compatibility
 
-- **`Pi` >= 0.74.0:** Core functionality (TypeBox 1.x, working indicator, `after_provider_response` monitoring).
-- Optional features degrade gracefully on older versions.
+- **`Pi` >= 0.80.8:** Core functionality, trusted project settings, `CONFIG_DIR_NAME`, `pi-ai/compat`, and async model-registry refresh.
 .
