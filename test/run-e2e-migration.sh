@@ -4,7 +4,7 @@
 #
 # Simulates a user upgrading from 0.7.0. In 0.7.0, the
 # default extract/collate model was minimax/MiniMax-M2.7 (direct
-# provider). In 0.10.0, it is openrouter/minimax/minimax-m2.7.
+# provider). The current release keeps it on openrouter/minimax/minimax-m2.7.
 #
 # The test writes a 0.7.0 version marker and old-style settings,
 # then runs the current extension. Verifies:
@@ -21,6 +21,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+TARGET_VERSION="$(jq -r '.version' "$PROJECT_DIR/package.json")"
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
@@ -116,8 +117,8 @@ cat > "$ISOLATED_AGENT_DIR/models.json" <<'MEOF'
 MEOF
 
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║  Running pi — print mode (simulated 0.7.0→0.10.0   ║"
-echo "║  migration)                                         ║"
+echo "║  Running pi — print mode (simulated 0.7.0 upgrade)  ║"
+echo "║  target: $TARGET_VERSION                             ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
@@ -156,13 +157,13 @@ echo "── Verification ──────────────────
 
 ERRORS=0
 
-# 1. Migration must have happened — the version file should now say 0.8.0
+# 1. Migration must have happened: the marker matches package.json.
 if [ -f "$ISOLATED_AGENT_DIR/.pi-intelli-search-version.json" ]; then
   MIGRATED_VERSION=$(jq -r '.version' "$ISOLATED_AGENT_DIR/.pi-intelli-search-version.json" 2>/dev/null || echo "unknown")
-  if [ "$MIGRATED_VERSION" = "0.10.0" ]; then
+  if [ "$MIGRATED_VERSION" = "$TARGET_VERSION" ]; then
     echo "✅ Version marker migrated: 0.7.0 → $MIGRATED_VERSION"
   else
-    echo "❌ Version marker not migrated (got: $MIGRATED_VERSION, expected: 0.10.0)"
+    echo "❌ Version marker not migrated (got: $MIGRATED_VERSION, expected: $TARGET_VERSION)"
     ERRORS=$((ERRORS + 1))
   fi
 else
@@ -235,4 +236,4 @@ if [ "$ERRORS" -gt 0 ]; then
   exit 1
 fi
 
-echo "✅ E2E migration test passed — 0.7.0→0.10.0 upgrade works"
+echo "✅ E2E migration test passed — 0.7.0 upgrade works"

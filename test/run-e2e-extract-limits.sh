@@ -22,6 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CACHE_DEFAULT="$PROJECT_DIR/.e2e-extract-default"
 CACHE_TIGHT="$PROJECT_DIR/.e2e-extract-tight"
+RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-30}"
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 LOG_FILE="$LOG_DIR/extract-limits-${TIMESTAMP}.log"
@@ -68,10 +69,9 @@ E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 # ── Shared prompt: small-but-redundant research against content-heavy pages ─
-# Wikipedia's Python article is reliably long (>100K chars cleaned).
-# maxUrls=2 keeps the run small while giving redundancy: a single degraded or
-# rate-limited LLM call can't zero the whole run (maxUrls=1 was brittle).
-RESEARCH_PROMPT="Use intelli_research with maxUrls=2 to research: Python programming language history design philosophy. Use focusPrompt='Extract the history and design philosophy sections.'"
+# The official Python documentation provides stable, content-rich input.
+# Restrict to one source to reduce rate-limit pressure between the paired runs.
+RESEARCH_PROMPT='Use intelli_research with maxUrls=1 and domains=["docs.python.org"] to research: Python data model reference. Use focusPrompt="Extract the data-model details and canonical API terminology."'
 
 # ═══════════════════════════════════════════════════════════════════
 # Run 1: Default limits (extractMaxChars=150000, extractionMaxTokens=3000)
@@ -110,8 +110,8 @@ cat > "$ISO1/settings.json" <<EOF
       "provider": "openrouter",
       "model": "minimax/minimax-m2.7"
     },
-    "defaultUrls": 2,
-    "maxUrls": 2,
+    "defaultUrls": 1,
+    "maxUrls": 1,
     "searchRetryAttempts": 4,
     "extractMaxChars": 150000,
     "extractionMaxTokens": 3000,
@@ -145,6 +145,8 @@ OUTPUT1="$(
 
 echo "$OUTPUT1"
 rm -rf "$ISO1"
+echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run to refill the provider bucket..."
+sleep "$RUN_GAP_SECONDS"
 
 # ═══════════════════════════════════════════════════════════════════
 # Run 2: Tight limits (extractMaxChars=500, extractionMaxTokens=150)
@@ -183,8 +185,8 @@ cat > "$ISO2/settings.json" <<EOF
       "provider": "openrouter",
       "model": "minimax/minimax-m2.7"
     },
-    "defaultUrls": 2,
-    "maxUrls": 2,
+    "defaultUrls": 1,
+    "maxUrls": 1,
     "searchRetryAttempts": 4,
     "extractMaxChars": 500,
     "extractionMaxTokens": 500,

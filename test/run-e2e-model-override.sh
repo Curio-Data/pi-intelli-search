@@ -61,9 +61,11 @@ fi
 
 # ── Create isolated agent directory ────────────────────────────────
 ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-override-XXXXXX)"
-trap 'rm -rf "$ISOLATED_AGENT_DIR"' EXIT
+E2E_CWD="$(mktemp -d -t pi-e2e-override-cwd-XXXXXX)"
+trap 'rm -rf "$ISOLATED_AGENT_DIR" "$E2E_CWD"' EXIT
 
 echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR"
+echo "📂 Isolated working directory: $E2E_CWD"
 
 mkdir -p "$ISOLATED_AGENT_DIR/sessions"
 
@@ -92,7 +94,9 @@ cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
       "provider": "openrouter",
       "model": "google/gemini-3-flash-preview"
     },
-    "cacheDir": ".e2e-custom-cache"
+    "cacheDir": ".e2e-custom-cache",
+    "defaultUrls": 1,
+    "maxUrls": 1
   }
 }
 EOF
@@ -118,11 +122,12 @@ echo ""
 E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
-PROMPT="Use intelli_research to research: what is the latest Deno version"
+PROMPT='Use intelli_research with maxUrls=1 and domains=["deno.com"] to research: the current Deno release. Return the official release source.'
 
 OUTPUT="$(
+  cd "$E2E_CWD"
   PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" \
-    pi \
+    timeout --foreground "${E2E_TIMEOUT_SECONDS:-300}s" pi \
       --no-extensions \
       --no-skills \
       --no-prompt-templates \
@@ -164,27 +169,27 @@ fi
 # ── Verify custom cache directory ─────────────────────────────────────
 # The settings.json overrides cacheDir to ".e2e-custom-cache".
 # Verify the cache appears there, not in the default ".search".
-CACHE_DIR="$PROJECT_DIR/.e2e-custom-cache"
+CACHE_DIR="$E2E_CWD/.e2e-custom-cache"
 
 if [ -d "$CACHE_DIR" ]; then
   echo "✅ .e2e-custom-cache/ cache directory exists (custom dir override works)"
 else
   echo "❌ .e2e-custom-cache/ cache directory not found at $CACHE_DIR"
   # Also check if it went to default .search instead
-  if [ -d "$PROJECT_DIR/.search" ]; then
+  if [ -d "$E2E_CWD/.search" ]; then
     echo "⚠️  Cache went to .search/ instead (cacheDir override ignored)"
   fi
   ERRORS=$((ERRORS + 1))
 fi
 
 # Also verify .search does NOT exist (proves override took effect)
-if [ -d "$PROJECT_DIR/.search" ]; then
-  echo "⚠️  Default .search/ directory also exists (may be stale from previous tests)"
+if [ -d "$E2E_CWD/.search" ]; then
+  echo "⚠️  Default .search/ directory exists (cacheDir override ignored)"
 fi
 
 if [ -f "$CACHE_DIR/.index.json" ]; then
   echo "✅ .e2e-custom-cache/.index.json exists"
-  INDEX_ENTRIES=$(jq 'if .entries then (.entries | length) else 0 end' "$CACHE_DIR/.index.json" 2>/dev/null || echo "0")
+  INDEX_ENTRIES=$(jq '.searches | length' "$CACHE_DIR/.index.json" 2>/dev/null || echo "0")
   if [ "$INDEX_ENTRIES" -gt 0 ]; then
     echo "   📂 $INDEX_ENTRIES cache entry/entries recorded"
   fi

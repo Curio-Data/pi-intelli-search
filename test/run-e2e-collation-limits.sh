@@ -19,6 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CACHE_DEFAULT="$PROJECT_DIR/.e2e-collate-default"
 CACHE_TIGHT="$PROJECT_DIR/.e2e-collate-tight"
+RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-30}"
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
@@ -64,10 +65,10 @@ echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 # ── Shared prompt ───────────────────────────────────────────────────
 # A small-but-redundant query against content-rich pages gives the collation
-# model enough material that a 200-token limit will visibly truncate. maxUrls=2
-# (rather than 1) gives redundancy so a single degraded or rate-limited LLM
-# call can't zero the whole run.
-RESEARCH_PROMPT="Use intelli_research with maxUrls=2 to research: Python programming language history design philosophy. Use focusPrompt='Extract the history and design philosophy sections.'"
+# model enough material that a 200-token limit will visibly truncate. Restrict
+# to one official documentation source to limit live-provider load and avoid
+# unrelated, low-quality search results.
+RESEARCH_PROMPT='Use intelli_research with maxUrls=1 and domains=["docs.python.org"] to research: Python data model reference. Use focusPrompt="Extract the data-model details and canonical API terminology."'
 
 # ═══════════════════════════════════════════════════════════════════
 # Run 1: Default collation limit (4000 tokens)
@@ -105,8 +106,8 @@ cat > "$ISO1/settings.json" <<EOF
       "provider": "openrouter",
       "model": "minimax/minimax-m2.7"
     },
-    "defaultUrls": 2,
-    "maxUrls": 2,
+    "defaultUrls": 1,
+    "maxUrls": 1,
     "searchRetryAttempts": 4,
     "extractMaxChars": 150000,
     "extractionMaxTokens": 3000,
@@ -140,6 +141,8 @@ OUTPUT1="$(
 
 echo "$OUTPUT1"
 rm -rf "$ISO1"
+echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run to refill the provider bucket..."
+sleep "$RUN_GAP_SECONDS"
 
 # ═══════════════════════════════════════════════════════════════════
 # Run 2: Tight collation limit (200 tokens)
@@ -177,8 +180,8 @@ cat > "$ISO2/settings.json" <<EOF
       "provider": "openrouter",
       "model": "minimax/minimax-m2.7"
     },
-    "defaultUrls": 2,
-    "maxUrls": 2,
+    "defaultUrls": 1,
+    "maxUrls": 1,
     "searchRetryAttempts": 4,
     "extractMaxChars": 150000,
     "extractionMaxTokens": 3000,
