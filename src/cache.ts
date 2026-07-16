@@ -3,7 +3,7 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 // SPDX-License-Identifier: Apache-2.0
 import { mkdir, writeFile, readFile, rename, rm, stat, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import type { FetchedPage, ExtractResult } from "./types.js";
 
@@ -71,6 +71,7 @@ export async function acquireLock(
   const staleMs = opts?.staleMs ?? DEFAULT_STALE_MS;
   const pollMs = opts?.pollMs ?? DEFAULT_POLL_MS;
   const deadline = Date.now() + timeoutMs;
+  await mkdir(dirname(lockDir), { recursive: true });
 
   while (true) {
     try {

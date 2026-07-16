@@ -50,6 +50,7 @@ function makePage(url: string, source: string): FetchedPage {
 
 interface CtxLike {
   cwd: string;
+  isProjectTrusted(): boolean;
   hasUI: boolean;
   ui: { setWorkingIndicator?(opts?: unknown): void };
   modelRegistry: { find(provider: string, modelId: string): unknown };
@@ -58,6 +59,7 @@ interface CtxLike {
 function makeCtx(cwd: string): CtxLike {
   return {
     cwd,
+    isProjectTrusted: () => true,
     hasUI: false,
     ui: { setWorkingIndicator: () => {} },
     modelRegistry: { find: () => ({ provider: "openrouter", id: "stub" }) },
