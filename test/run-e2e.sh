@@ -49,6 +49,7 @@ fi
 
 # Use a cheap model by default. Override with TEST_MODEL if desired.
 TEST_MODEL="${TEST_MODEL:-openrouter/minimax/minimax-m2.7}"
+E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
 
 # ── Check prerequisites ────────────────────────────────────────────
 # Auto-detect OPENROUTER_API_KEY from ~/.pi/agent/auth.json if not
@@ -80,9 +81,11 @@ fi
 
 # ── Create isolated agent directory ────────────────────────────────
 ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-agent-XXXXXX)"
-trap 'rm -rf "$ISOLATED_AGENT_DIR"' EXIT
+E2E_CWD="$(mktemp -d -t pi-e2e-cwd-XXXXXX)"
+trap 'rm -rf "$ISOLATED_AGENT_DIR" "$E2E_CWD"' EXIT
 
 echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR"
+echo "📂 Isolated working directory: $E2E_CWD"
 
 mkdir -p "$ISOLATED_AGENT_DIR/sessions"
 
@@ -111,7 +114,9 @@ cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
     "collateModel": {
       "provider": "openrouter",
       "model": "minimax/minimax-m2.7"
-    }
+    },
+    "defaultUrls": 1,
+    "maxUrls": 1
   }
 }
 EOF
@@ -136,11 +141,12 @@ echo ""
 E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
-PROMPT="Use intelli_research to research: latest TypeScript version"
+PROMPT='Use intelli_research with maxUrls=1 and domains=["typescriptlang.org"] to research: the current TypeScript release. Return the official release source.'
 
 OUTPUT="$(
+  cd "$E2E_CWD"
   PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" \
-    pi \
+    timeout --foreground "${E2E_TIMEOUT_SECONDS}s" pi \
       --no-extensions \
       --no-skills \
       --no-prompt-templates \
@@ -182,7 +188,7 @@ fi
 # ── Verify .search cache artifacts ──────────────────────────────────
 # intelli_research writes .search/<date>-<slug>/ with report.md,
 # query.txt, extractions/, sources/, and updates .search/.index.json.
-CACHE_DIR="$PROJECT_DIR/.search"
+CACHE_DIR="$E2E_CWD/.search"
 
 if [ -d "$CACHE_DIR" ]; then
   echo "✅ .search/ cache directory exists"
@@ -191,15 +197,16 @@ else
   ERRORS=$((ERRORS + 1))
 fi
 
+INDEX_MISSING=false
 if [ -f "$CACHE_DIR/.index.json" ]; then
   echo "✅ .search/.index.json exists"
-  INDEX_ENTRIES=$(jq 'if .entries then (.entries | length) else 0 end' "$CACHE_DIR/.index.json" 2>/dev/null || echo "0")
+  INDEX_ENTRIES=$(jq '.searches | length' "$CACHE_DIR/.index.json" 2>/dev/null || echo "0")
   if [ "$INDEX_ENTRIES" -gt 0 ]; then
     echo "   📂 $INDEX_ENTRIES cache entry/entries recorded"
   fi
 else
-  echo "❌ .search/.index.json not found"
-  ERRORS=$((ERRORS + 1))
+  echo "⚠️  .search/.index.json not found yet"
+  INDEX_MISSING=true
 fi
 
 # Find the most recently modified cache subdirectory. Uses mtime, not
@@ -209,16 +216,24 @@ LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.se
 if [ -n "$LATEST_CACHE" ]; then
   echo "✅ Cache entry directory: $(basename "$LATEST_CACHE")"
 
-  if [ -f "$LATEST_CACHE/report.md" ]; then
+  META_OUTCOME="$(jq -r '.outcome // empty' "$LATEST_CACHE/meta.json" 2>/dev/null || true)"
+  if [ "$META_OUTCOME" != "completed" ]; then
+    echo "❌ Live search did not satisfy the citation contract (outcome: ${META_OUTCOME:-missing})."
+    echo "   This is a provider degradation, not a successful full-pipeline run."
+    ERRORS=$((ERRORS + 1))
+  elif [ "$INDEX_MISSING" = true ]; then
+    echo "❌ .search/.index.json not found after a completed run"
+    ERRORS=$((ERRORS + 1))
+  elif [ -f "$LATEST_CACHE/report.md" ]; then
     echo "✅ report.md exists ($(wc -c < "$LATEST_CACHE/report.md") bytes)"
   else
     echo "❌ report.md not found in cache entry"
     ERRORS=$((ERRORS + 1))
   fi
 
-  if [ -f "$LATEST_CACHE/query.txt" ]; then
+  if [ "$META_OUTCOME" = "completed" ] && [ -f "$LATEST_CACHE/query.txt" ]; then
     echo "✅ query.txt exists"
-  else
+  elif [ "$META_OUTCOME" = "completed" ]; then
     echo "❌ query.txt not found in cache entry"
     ERRORS=$((ERRORS + 1))
   fi
@@ -254,12 +269,10 @@ if [ -n "$LATEST_CACHE" ]; then
       ERRORS=$((ERRORS + 1))
     fi
 
-    META_OUTCOME=$(jq -r '.outcome // empty' "$LATEST_CACHE/meta.json" 2>/dev/null || echo "")
     if [ "$META_OUTCOME" = "completed" ]; then
       echo "   ✅ outcome is 'completed'"
     else
-      echo "   ❌ outcome is '$META_OUTCOME' (expected 'completed')"
-      ERRORS=$((ERRORS + 1))
+      echo "   ⚠️  outcome is '$META_OUTCOME'; see the citation-contract failure above"
     fi
 
     # Per-stage presence (field names, not values). Empty arrays/objects are

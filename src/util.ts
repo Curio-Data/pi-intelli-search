@@ -297,8 +297,11 @@ export function createRateLimiter(
  *    appear when the search model returns synthesised prose with inline URLs
  *    (for example, `**https://fal.ai/models/...**`) instead of markdown
  *    links. The second pass skips URLs already captured by pass 1.
+ * 3. Protocol-less domains: `github.com/owner/repo` and similar source
+ *    references. A degraded search response may omit `https://` despite the
+ *    citation instruction; normalise only domain-shaped text, never prose.
  *
- * In both passes, URLs never contain whitespace, so a space ends the match.
+ * In all passes, URLs never contain whitespace, so a space ends the match.
  */
 export function extractSourceUrls(text: string): Array<{ url: string; title: string }> {
   const urls: Array<{ url: string; title: string }> = [];
@@ -347,6 +350,36 @@ export function extractSourceUrls(text: string): Array<{ url: string; title: str
       } catch {
         // Malformed URL that passed the regex: skip.
       }
+    }
+  }
+
+  // Pass 3: protocol-less domain/path references. This recovers citations
+  // such as `github.com/microsoft/TypeScript/releases` when a model omitted
+  // https://. Require a real dotted hostname and reject text preceded by @
+  // (email addresses) or :// (already handled by the absolute-URL pass).
+  // Track absolute URL spans as well: an internal dotted token such as
+  // `net-8.0` in a query parameter must not become a second source.
+  const absoluteSpans: Array<{ start: number; end: number }> = [];
+  const absoluteSpanPattern = /https?:\/\/\S+/g;
+  while ((match = absoluteSpanPattern.exec(text)) !== null) {
+    absoluteSpans.push({ start: match.index, end: match.index + match[0].length });
+  }
+  const domainPattern = /(?<!:\/\/)(?<![A-Za-z0-9@._-])((?:www\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?:\/[^\s<>"{}*()|\\`\[\]]*)?)/g;
+  while ((match = domainPattern.exec(text)) !== null) {
+    if (absoluteSpans.some(({ start, end }) => match!.index >= start && match!.index < end)) continue;
+    const domainReference = match[1].replace(/[.,;:!]+$/, "");
+    const url = `https://${domainReference}`;
+    if (seen.has(url)) continue;
+    try {
+      const u = new URL(url);
+      seen.add(url);
+      const parts = u.pathname.split("/").filter(Boolean);
+      const title = parts.length > 0
+        ? parts[parts.length - 1].replace(/\.[^.]+$/, "")
+        : u.hostname;
+      urls.push({ url, title });
+    } catch {
+      // Defensive: the domain-shaped match should form a valid URL.
     }
   }
 

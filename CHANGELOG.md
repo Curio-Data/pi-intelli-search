@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Version migration now records the current release.** The extension version marker previously remained at 0.10.0 while package releases advanced.
 - **Resolved provider authentication now forwards environment overrides to LLM calls.** Models configured with provider-scoped `env` values receive them consistently.
+- **Search recovery now accepts protocol-less source domains.** A search response that cites `github.com/owner/repo` without `https://` continues through fetch and collation instead of being discarded as a no-links degradation.
 
 ## [0.11.3] - 2026-07-02
 

@@ -184,6 +184,37 @@ Also bare reference https://kit.svelte.dev.
     assert.strictEqual(urls.length, 1);
     assert.strictEqual(urls[0].url, "https://openrouter.ai/google/gemini-flash-1.5/providers");
   });
+
+  // ── Pass 3: protocol-less source references ──
+
+  it("normalises protocol-less source domains from a degraded response", () => {
+    const text = [
+      "GitHub: `github.com/microsoft/TypeScript/releases`",
+      "Official blog: `devblogs.microsoft.com/typescript`",
+    ].join("\n");
+    assert.deepStrictEqual(extractSourceUrls(text), [
+      {
+        url: "https://github.com/microsoft/TypeScript/releases",
+        title: "releases",
+      },
+      {
+        url: "https://devblogs.microsoft.com/typescript",
+        title: "typescript",
+      },
+    ]);
+  });
+
+  it("does not treat email addresses or absolute URLs as extra domain references", () => {
+    const urls = extractSourceUrls(
+      "Contact releases@example.com or read https://github.com/microsoft/TypeScript/releases.",
+    );
+    assert.deepStrictEqual(urls, [
+      {
+        url: "https://github.com/microsoft/TypeScript/releases",
+        title: "releases",
+      },
+    ]);
+  });
 });
 
 describe("mapWithConcurrency", () => {
