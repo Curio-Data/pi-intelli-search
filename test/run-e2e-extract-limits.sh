@@ -149,13 +149,13 @@ echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run to refill the provid
 sleep "$RUN_GAP_SECONDS"
 
 # ═══════════════════════════════════════════════════════════════════
-# Run 2: Tight limits (extractMaxChars=500, extractionMaxTokens=150)
+# Run 2: Tight limits (extractMaxChars=500, extractionMaxTokens=1000)
 # ═══════════════════════════════════════════════════════════════════
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  RUN 2: Tight limits                                 ║"
-echo "║  extractMaxChars=500    extractionMaxTokens=500      ║"
+echo "║  extractMaxChars=500    extractionMaxTokens=1000     ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
@@ -189,7 +189,7 @@ cat > "$ISO2/settings.json" <<EOF
     "maxUrls": 1,
     "searchRetryAttempts": 4,
     "extractMaxChars": 500,
-    "extractionMaxTokens": 500,
+    "extractionMaxTokens": 1000,
     "collationMaxTokens": 4000,
     "cacheDir": ".e2e-extract-tight"
   }
@@ -341,11 +341,12 @@ if [ -n "$ENTRY_DEFAULT" ] && [ -n "$ENTRY_TIGHT" ]; then
         ERRORS=$((ERRORS + 1))
       fi
 
-      # Tight extraction should be short (≈4 chars/token, so ≤2400 with 500 tokens)
-      if [ "$CHARS_TIGHT" -le 2400 ]; then
-        echo "✅ Tight extraction ≤2400 chars (extractionMaxTokens=500 enforced)"
+      # Tight extraction should be short (approximately 4 chars/token, so
+      # ≤4000 chars with 1000 output tokens).
+      if [ "$CHARS_TIGHT" -le 4000 ]; then
+        echo "✅ Tight extraction ≤4000 chars (extractionMaxTokens=1000 enforced)"
       else
-        echo "⚠️  Tight extraction is ${CHARS_TIGHT} chars (>2400, may still be correct depending on model)"
+        echo "⚠️  Tight extraction is ${CHARS_TIGHT} chars (>4000, may still be correct depending on model)"
       fi
 
       # Show first 200 chars of each for manual inspection
