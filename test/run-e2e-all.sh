@@ -24,6 +24,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 GAP="${E2E_GAP_SECONDS:-20}"
+SCRIPT_TIMEOUT="${E2E_SCRIPT_TIMEOUT_SECONDS:-600}"
 
 # Load .env if present (gitignored)
 if [ -f "$PROJECT_DIR/.env" ]; then
@@ -54,7 +55,7 @@ SCRIPTS=(
   run-e2e-llmsfull.sh
 )
 
-echo "🧪 Sequential E2E run — ${#SCRIPTS[@]} scripts, ${GAP}s gap between each"
+echo "🧪 Sequential E2E run — ${#SCRIPTS[@]} scripts, ${GAP}s gap, ${SCRIPT_TIMEOUT}s timeout per script"
 echo ""
 
 PASSED=()
@@ -67,11 +68,16 @@ for i in "${!SCRIPTS[@]}"; do
   echo "════════════════════════════════════════════════════════════════"
 
   # Don't let one failure abort the suite — collect results and report at the end.
-  if "$SCRIPT_DIR/$script"; then
+  if timeout --foreground "${SCRIPT_TIMEOUT}s" "$SCRIPT_DIR/$script"; then
     echo "✅ $script PASSED"
     PASSED+=("$script")
   else
-    echo "❌ $script FAILED (exit $?)"
+    status=$?
+    if [ "$status" -eq 124 ]; then
+      echo "❌ $script TIMED OUT after ${SCRIPT_TIMEOUT}s"
+    else
+      echo "❌ $script FAILED (exit $status)"
+    fi
     FAILED+=("$script")
   fi
 
