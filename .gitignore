@@ -4,6 +4,9 @@ tsconfig.tsbuildinfo
 *.tgz
 .search/
 
+# Subagent run artifacts
+.pi-subagents/
+
 # Editor / OS artifacts
 .idea/
 .vscode/

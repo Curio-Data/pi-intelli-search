@@ -116,7 +116,7 @@ Only reach into the cache when:
 
 ## Follow Up from Cache
 
-The cache lives at `.search/<date>-<slug>/`. The tool output includes the path.
+The cache lives at `.search/<date>-<slug>-<hash>/`. The tool output includes the path.
 
 | Need | Command |
 |------|---------|

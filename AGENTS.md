@@ -290,7 +290,7 @@ Loaded from `~/.pi/agent/settings.json` and, only for trusted projects, `<projec
 
 ### Cache
 
-Written to `.search/<date>-<slug>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. The collation model sees cache paths so it can reference them in output.
+Written to `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. The collation model sees cache paths so it can reference them in output.
 
 **Telemetry sidecar** (v0.11.0+). Each `intelli_research` run also writes a local-only `meta.json` into its cache directory, recording per-stage outcomes (pages fetched/failed, fetch-variant winners, search-retry, cache-suggest hits, latency). The schema is owned by `src/telemetry.ts`, is additive-only, and carries an independent `schemaVersion` decoupled from `extensionVersion`. The write is atomic (temp file then `rename`) and fail-safe: failures are caught and logged, never surfacing to the pipeline result. Suppressed entirely when `disableTelemetry` is true. No network call is added; the word "telemetry" refers to local runtime signals, not remote reporting. The bundled `scripts/analyze-sessions.sh` aggregates these sidecars.
 

@@ -47,7 +47,7 @@ A hard per-call timeout (`llmTimeoutMs`) is applied with an `AbortController` vi
 
 ### Working Indicator and Progress Bar
 
-During `intelli_research` execution, the extension sets a custom animated spinner (🔍 🌐 📄 ✨) via `ctx.ui.setWorkingIndicator()` (requires `Pi` 0.69.0+). This is restored to the default on completion or error. On older `Pi` versions, the call is silently skipped.
+During `intelli_research` execution, the extension sets a custom animated spinner (🔍 🌐 📄 ✨) via `ctx.ui.setWorkingIndicator()` (requires `Pi` 0.69.0+). This is restored to the default on completion or error.
 
 In addition, the tool streams stage progress updates via `onUpdate()` and renders a progress bar in the tool output via `renderResult`. The progress bar shows overall completion, stage pills (✓/●/○), the current stage message, and a per-page sub-progress bar during extraction. The LLM receives structured `Stage X/5` prefixed text through `onUpdate` content. The `renderResult` function is a standard `Pi` tool API feature and requires no minimum version beyond what the extension already needs.
 
@@ -104,7 +104,7 @@ Every `intelli_research` run writes a `meta.json` sidecar into its cache directo
 ```jsonc
 {
   "schemaVersion": 1,
-  "extensionVersion": "0.11.0",
+  "extensionVersion": "0.12.0",
   "query": "...",
   "timestamp": "2026-06-25T12:00:00.000Z",
   "durationMs": 12345,
