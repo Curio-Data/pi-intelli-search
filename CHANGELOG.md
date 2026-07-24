@@ -5,13 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.12.0] - 2026-07-16
+## [0.12.0] - 2026-07-24
 
 ### Changed
 
 - **`Pi` 0.80.8 is now the minimum supported version.** The extension uses the supported `pi-ai` compatibility entrypoint, `CONFIG_DIR_NAME`, trusted project settings, registry authentication environment values, and async model-registry refresh semantics from this baseline.
 - **Project settings now respect `Pi` trust.** Global settings always load. A project-local settings file is considered only after that project is trusted, and the settings cache is isolated by agent directory, project directory, trust state, and configuration-directory name.
 - **Cache-writing tools execute sequentially in one `Pi` host.** Cross-process cache commits use staging directories and short locks so concurrent research runs cannot interleave artifacts or lose index entries.
+- **`README` setup instructions updated for `Pi` 0.82.0.** Prerequisites now lead with `/login openrouter` (OAuth PKCE, no manual key) as the recommended path, with the `auth.json` edit kept as a fallback. The Verify Installation step notes that `/model` re-reads `models.json` on open before suggesting a restart.
 
 ### Fixed
 

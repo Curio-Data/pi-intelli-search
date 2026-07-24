@@ -46,10 +46,10 @@ For the detailed feature-by-feature comparison against six other `Pi` search ext
 
 ### Prerequisites
 
-You need at minimum an [OpenRouter](https://openrouter.ai) API key for [_Perplexity Sonar_](https://docs.perplexity.ai) search. The same key also covers extraction and collation with the default models. For the extract and collate stages, any model or provider `Pi` supports can be used. See [Model Configuration](#model-configuration) for how to swap them.
+You need at minimum an [OpenRouter](https://openrouter.ai) account for [_Perplexity Sonar_](https://docs.perplexity.ai) search. The same account also covers extraction and collation with the default models. For the extract and collate stages, any model or provider `Pi` supports can be used. See [Model Configuration](#model-configuration) for how to swap them.
 
-1. **Get a key** at [openrouter.ai/keys](https://openrouter.ai/keys)
-2. **Add it to `Pi`** by running `/login` in `Pi` and selecting the `openrouter` provider, or edit `~/.pi/agent/auth.json`:
+1. **Sign in with OAuth (recommended):** run `/login openrouter` in `Pi`. On `Pi` 0.82.0 and later this performs OpenRouter OAuth PKCE sign-in and stores a user-controlled key automatically. No manual key paste is required.
+2. **Or add a key manually:** create one at [openrouter.ai/keys](https://openrouter.ai/keys), then edit `~/.pi/agent/auth.json`:
 
 ```json
 {
@@ -84,7 +84,7 @@ On first load, `Pi` will show: `Added models: perplexity/sonar, perplexity/sonar
 
 ### Verify Installation
 
-Start `Pi` and type `/model`. You should see `perplexity/sonar` and `perplexity/sonar-pro` in the model list. If not, restart `Pi`.
+Start `Pi` and type `/model`. You should see `perplexity/sonar` and `perplexity/sonar-pro` in the model list. If they are missing after a manual edit, reopen `/model`: since `Pi` 0.82.0 the picker reloads `models.json` on open. Restart `Pi` only if they are still absent.
 
 ### Customise (Optional)
 
@@ -304,7 +304,7 @@ With default settings, you need one key in `~/.pi/agent/auth.json`:
 
 A single [OpenRouter](https://openrouter.ai) key is the minimum required. It covers Sonar for search plus MiniMax M2.7 for extraction and collation with the default models. The extract and collate stages can use any model `Pi` supports. Override `extractModel` or `collateModel` in settings to switch providers.
 
-Run `/login` in `Pi` to set up keys interactively, or edit the file directly.
+Run `/login openrouter` in `Pi` to authorise via OAuth (`Pi` 0.82.0 and later), or edit the file directly with a key from [openrouter.ai/keys](https://openrouter.ai/keys).
 
 ## Pipeline
 
