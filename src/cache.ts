@@ -119,6 +119,28 @@ async function isLockStale(
   }
 }
 
+/**
+ * Run `fn` while holding the lock at `lockDir`, always releasing in a
+ * finally. Preferred over calling acquireLock directly so the try/finally
+ * release pattern cannot be forgotten.
+ *
+ * Lock-ordering invariant (deadlock freedom): the index lock
+ * (`indexLockDir`) is only ever acquired while already holding the
+ * per-cache-path lock (`cacheLockDir`), never the reverse. Callers nesting
+ * two withLock calls must keep that order.
+ */
+export async function withLock<T>(
+  lockDir: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const release = await acquireLock(lockDir);
+  try {
+    return await fn();
+  } finally {
+    await release();
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Atomic write helpers
 // ═══════════════════════════════════════════════════════════════════════════
@@ -175,6 +197,11 @@ export function domainSlug(url: string): string {
   }
 }
 
+/** Canonical cache filename for the Nth (0-based) source of `url`: "01-example-com.md". */
+export function sourceFilename(index: number, url: string): string {
+  return `${String(index + 1).padStart(2, "0")}-${domainSlug(url)}.md`;
+}
+
 /**
  * Write cache files using a staging directory for atomic visibility.
  *
@@ -210,7 +237,7 @@ export async function writeCacheFiles(
     // Write extractions
     for (const [i, ext] of extractions.entries()) {
       if (ext.status !== "success" || !ext.extraction) continue;
-      const filename = `${String(i + 1).padStart(2, "0")}-${domainSlug(ext.url)}.md`;
+      const filename = sourceFilename(i, ext.url);
       const header = `# ${ext.title}\n\n> Source: ${ext.url}\n> Type: ${ext.sourceType}\n\n---\n\n`;
       await writeFile(join(stagingExtractions, filename), header + ext.extraction, "utf-8");
     }
@@ -218,7 +245,7 @@ export async function writeCacheFiles(
     // Write full pages (sources)
     for (const [i, page] of pages.entries()) {
       if (page.status !== "success") continue;
-      const filename = `${String(i + 1).padStart(2, "0")}-${domainSlug(page.url)}.md`;
+      const filename = sourceFilename(i, page.url);
       const header = `# ${page.title}\n\n> Source: ${page.url}\n\n---\n\n`;
       await writeFile(join(stagingSources, filename), header + page.content, "utf-8");
     }
@@ -286,7 +313,7 @@ export async function writeReportFile(
   report += `| # | Source | Type | Extraction | Full page |\n`;
   report += `|---|--------|------|------------|----------|\n`;
   for (const [i, ext] of succeeded.entries()) {
-    const filename = `${String(i + 1).padStart(2, "0")}-${domainSlug(ext.url)}.md`;
+    const filename = sourceFilename(i, ext.url);
     report += `| ${i + 1} | ${ext.url} | ${ext.sourceType} | extractions/${filename} | sources/${filename} |\n`;
   }
 

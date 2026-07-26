@@ -6,7 +6,7 @@ import { Type } from "typebox";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { COLLATION_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
-import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, cacheLockDir, indexLockDir, acquireLock, updateIndex } from "../cache.js";
+import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, cacheLockDir, indexLockDir, withLock, updateIndex } from "../cache.js";
 import { textContent } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import type { ExtractResult } from "../types.js";
@@ -116,8 +116,7 @@ export const intelliCollateTool = {
     // Write cache artifacts under the per-cache-path lock so two
     // concurrent same-query runs do not interleave file writes.
     // ═══════════════════════════════════════════════════════════════
-    const releaseCacheLock = await acquireLock(cacheLockDir(cachePath));
-    try {
+    await withLock(cacheLockDir(cachePath), async () => {
       // Write cache files (staging-based atomic, no partial visibility)
       await writeCacheFiles(cachePath, extractResults, fetchedPages, params.searchSummary ?? "", params.query);
 
@@ -125,16 +124,11 @@ export const intelliCollateTool = {
       await writeReportFile(cachePath, params.query, collation, extractResults, fetchedPages);
 
       // Atomic index update under the shared cache-dir index lock.
-      const releaseIndexLock = await acquireLock(indexLockDir(settings.cacheDir));
-      try {
+      await withLock(indexLockDir(settings.cacheDir), async () => {
         const slug = cachePath.split("/").pop() ?? cachePath;
         await updateIndex(settings.cacheDir, slug, params.query);
-      } finally {
-        await releaseIndexLock();
-      }
-    } finally {
-      await releaseCacheLock();
-    }
+      });
+    });
 
     return {
       content: [textContent(formatCollationResult(collation, cachePath, succeeded, blocked))],

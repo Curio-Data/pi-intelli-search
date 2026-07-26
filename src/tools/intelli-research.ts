@@ -8,7 +8,7 @@ import { Text } from "@earendil-works/pi-tui";
 import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT, CACHE_SUGGEST_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
-import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, readIndex, formatIndexForJudge, parseJudgeResponse, formatCacheSuggestions, cacheLockDir, indexLockDir, acquireLock, updateIndex } from "../cache.js";
+import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, readIndex, formatIndexForJudge, parseJudgeResponse, formatCacheSuggestions, cacheLockDir, indexLockDir, withLock, updateIndex } from "../cache.js";
 import { textContent, extractSourceUrls, inferSourceType, inferCurrentness, mapWithConcurrency, sleep, createRateLimiter, errMsg, logErr } from "../util.js";
 import type { LlmRetryConfig } from "../llm.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
@@ -423,8 +423,7 @@ export const intelliResearchTool = {
     // Only local file I/O happens here — no network calls.
     // The lock serialises two concurrent same-query runs.
     // ═══════════════════════════════════════════════════════════════
-    const releaseCacheLock = await acquireLock(cacheLockDir(cachePath));
-    try {
+    await withLock(cacheLockDir(cachePath), async () => {
     // Write cache files (staging-based atomic, no partial visibility)
     await writeCacheFiles(cachePath, allExtractions, successPages, searchResult, params.query);
 
@@ -444,28 +443,19 @@ export const intelliResearchTool = {
     // directory. Different cache paths contend only on this short
     // index update, not on the per-cache-path bulk writes.
     // ═══════════════════════════════════════════════════════════════
-    const releaseIndexLock = await acquireLock(indexLockDir(settings.cacheDir));
-    try {
+    await withLock(indexLockDir(settings.cacheDir), async () => {
       const slug = cachePath.split("/").pop() ?? cachePath;
       await updateIndex(settings.cacheDir, slug, params.query);
-    } finally {
-      await releaseIndexLock();
-    }
-    } finally {
-      // Release the cache lock. Index lock already released above.
-      await releaseCacheLock();
-    }
+    });
+    });
 
     // Await remaining llms-full downloads outside the lock. Commit their
     // staged files under the cache lock so concurrent same-query runs cannot
     // interleave writes to identical llms-full filenames.
     await Promise.all(llmsFullFutures);
-    const releaseFinalCacheLock = await acquireLock(cacheLockDir(cachePath));
-    try {
-      await flushLlmsStaging(llmsStaging, join(cachePath, "sources"));
-    } finally {
-      await releaseFinalCacheLock();
-    }
+    await withLock(cacheLockDir(cachePath), () =>
+      flushLlmsStaging(llmsStaging, join(cachePath, "sources")),
+    );
     // Clean up the staging dir.
     await rm(llmsStaging, { recursive: true, force: true }).catch(() => {});
 
