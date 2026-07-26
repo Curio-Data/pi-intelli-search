@@ -9,6 +9,7 @@ import { SEARCH_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { textContent, extractSourceUrls } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
+import { appendDomainFilter } from "./shared.js";
 
 export const intelliSearchTool = {
   name: "intelli_search",
@@ -35,10 +36,7 @@ export const intelliSearchTool = {
     });
     const searchConfig = resolveModelConfig(settings, "search");
 
-    let searchQuery = params.query;
-    if (params.domains?.length) {
-      searchQuery += " site:" + params.domains.join(" OR site:");
-    }
+    const searchQuery = appendDomainFilter(params.query, params.domains);
 
     try {
       const responseText = await callLlm(ctx, searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {

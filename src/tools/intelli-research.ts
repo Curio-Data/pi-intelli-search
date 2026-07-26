@@ -8,10 +8,11 @@ import { Text } from "@earendil-works/pi-tui";
 import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT, CACHE_SUGGEST_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
-import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, readIndex, formatIndexForJudge, parseJudgeResponse, formatCacheSuggestions, cacheLockDir, indexLockDir, withLock, updateIndex } from "../cache.js";
+import { makeCachePath, writeCacheFiles, writeReportFile, readIndex, formatIndexForJudge, parseJudgeResponse, formatCacheSuggestions, cacheLockDir, indexLockDir, withLock, updateIndex } from "../cache.js";
 import { textContent, extractSourceUrls, inferSourceType, inferCurrentness, mapWithConcurrency, sleep, createRateLimiter, errMsg, logErr } from "../util.js";
 import type { LlmRetryConfig } from "../llm.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
+import { appendDomainFilter, buildExtractionMessage, buildCollationMessage, formatCacheAppendix } from "./shared.js";
 import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "../telemetry.js";
 import { mkdir, writeFile, rm, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -164,10 +165,7 @@ export const intelliResearchTool = {
     // ═══════════════════════════════════════════
     onUpdate?.(progressUpdate("search", `Querying ${searchConfig.provider}/${searchConfig.model}...`));
 
-    let searchQuery = params.query;
-    if (params.domains?.length) {
-      searchQuery += " site:" + params.domains.join(" OR site:");
-    }
+    let searchQuery = appendDomainFilter(params.query, params.domains);
 
     // The search model occasionally returns a valid response with no markdown
     // links (a "degraded 200" — common under provider load). callLlm's retry
@@ -368,19 +366,7 @@ export const intelliResearchTool = {
     // Build collation prompt (no files written yet — lock is never held
     // across the LLM call). Path references in the prompt are resolved
     // later when cache files are written.
-    let collationUserMsg = `Original query: ${params.query}\n`;
-    collationUserMsg += `Cache path: ${cachePath}/\n\n`;
-    collationUserMsg += `Search summary (from Sonar):\n${searchResult}\n\n`;
-
-    for (const [i, ext] of succeededExtractions.entries()) {
-      const filename = `${String(i + 1).padStart(2, "0")}-${domainSlug(ext.url)}.md`;
-      collationUserMsg += `--- Source ${i + 1}: ${ext.url} ---\n`;
-      collationUserMsg += `Title: ${ext.title}\n`;
-      collationUserMsg += `Type: ${ext.sourceType}\n`;
-      collationUserMsg += `Extraction file: ${cachePath}/extractions/${filename}\n`;
-      collationUserMsg += `Full page file: ${cachePath}/sources/${filename}\n`;
-      collationUserMsg += `\n${ext.extraction}\n\n`;
-    }
+    const collationUserMsg = buildCollationMessage(params.query, cachePath, searchResult, succeededExtractions);
 
     const collation = await __harness.callLlm(ctx, collateConfig, COLLATION_SYSTEM_PROMPT, collationUserMsg, {
       maxTokens: settings.collationMaxTokens,
@@ -517,15 +503,10 @@ export const intelliResearchTool = {
     // Return concise injection
     // ═══════════════════════════════════════════
     const failedCount = pages.length - successPages.length;
-    let result = collation;
-    result += `\n\n---\n`;
-    result += `**Cache**: \`${cachePath}/\`\n`;
-    result += `**Report**: \`${cachePath}/report.md\`\n`;
-    result += `**Sources**: ${successPages.length} succeeded, ${failedCount} failed\n`;
-    result += `\nTo explore a specific source:\n`;
-    result += `- Read the extraction: \`read ${cachePath}/extractions/01-*.md\`\n`;
-    result += `- Read the full page: \`read ${cachePath}/sources/01-*.md\`\n`;
-    result += suggestionsAppendix;
+    const result =
+      collation +
+      formatCacheAppendix(cachePath, successPages.length, failedCount) +
+      suggestionsAppendix;
 
     return {
       content: [textContent(result)],
@@ -638,16 +619,7 @@ async function extractPage(
   timeoutMs: number,
 ): Promise<ExtractResult> {
   try {
-    let content = page.content;
-    if (content.length > maxChars) {
-      content = content.slice(0, maxChars) + "\n\n[TRUNCATED]";
-    }
-
-    let userMessage = `Web page content:\n---\n${content}\n---\n\n`;
-    userMessage += `Extract information relevant to: ${query}\n`;
-    if (focusPrompt) {
-      userMessage += `\nFocus: ${focusPrompt}\n`;
-    }
+    const userMessage = buildExtractionMessage(page.content, query, focusPrompt, maxChars);
 
     const extraction = await __harness.callLlm(ctx, extractConfig, EXTRACTION_SYSTEM_PROMPT, userMessage, {
       maxTokens,

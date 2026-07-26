@@ -24,6 +24,15 @@ export function logErr(msg: string, err?: unknown): void {
   else console.error(`[pi-intelli-search] ${msg}`);
 }
 
+/** Unified marker appended whenever page content is truncated to a char cap. */
+export const TRUNCATED_MARKER = "\n\n[TRUNCATED]";
+
+/** Truncate `content` to `maxChars`, appending the unified truncation marker. */
+export function truncateContent(content: string, maxChars: number): string {
+  if (content.length <= maxChars) return content;
+  return content.slice(0, maxChars) + TRUNCATED_MARKER;
+}
+
 /**
  * Get the pi agent directory path.
  * Respects PI_CODING_AGENT_DIR for isolated environments (e.g. E2E tests).

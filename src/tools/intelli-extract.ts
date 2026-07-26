@@ -8,6 +8,7 @@ import { EXTRACTION_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { textContent, inferSourceType, inferCurrentness } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
+import { buildExtractionMessage } from "./shared.js";
 
 export const intelliExtractTool = {
   name: "intelli_extract",
@@ -39,19 +40,12 @@ export const intelliExtractTool = {
     });
     const extractConfig = resolveModelConfig(settings, "extract");
 
-    // Truncate extremely large pages
-    let content = params.content;
-    const maxChars = settings.extractMaxChars;
-    if (content.length > maxChars) {
-      content = content.slice(0, maxChars) + `\n\n[TRUNCATED — page exceeded ${maxChars} characters]`;
-    }
-
-    // Build extraction user message
-    let userMessage = `Web page content:\n---\n${content}\n---\n\n`;
-    userMessage += `Extract information relevant to: ${params.query}\n`;
-    if (params.focusPrompt) {
-      userMessage += `\nFocus: ${params.focusPrompt}\n`;
-    }
+    const userMessage = buildExtractionMessage(
+      params.content,
+      params.query,
+      params.focusPrompt,
+      settings.extractMaxChars,
+    );
 
     const extraction = await callLlm(ctx, extractConfig, EXTRACTION_SYSTEM_PROMPT, userMessage, {
       maxTokens: settings.extractionMaxTokens,

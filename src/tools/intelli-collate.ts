@@ -6,9 +6,10 @@ import { Type } from "typebox";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { COLLATION_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
-import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, cacheLockDir, indexLockDir, withLock, updateIndex } from "../cache.js";
+import { makeCachePath, writeCacheFiles, writeReportFile, cacheLockDir, indexLockDir, withLock, updateIndex } from "../cache.js";
 import { textContent } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
+import { buildCollationMessage, formatCacheAppendix } from "./shared.js";
 import type { ExtractResult } from "../types.js";
 
 const extractionSchema = Type.Object({
@@ -89,22 +90,12 @@ export const intelliCollateTool = {
 
     // Build collation prompt (no files written yet — lock is never held
     // across an LLM call).
-    let userMessage = `Original query: ${params.query}\n`;
-    userMessage += `Cache path: ${cachePath}/\n\n`;
-
-    if (params.searchSummary) {
-      userMessage += `Search summary (from Sonar):\n${params.searchSummary}\n\n`;
-    }
-
-    for (const [i, ext] of succeeded.entries()) {
-      const filename = `${String(i + 1).padStart(2, "0")}-${domainSlug(ext.url)}.md`;
-      userMessage += `--- Source ${i + 1}: ${ext.url} ---\n`;
-      userMessage += `Title: ${ext.title}\n`;
-      userMessage += `Type: ${ext.sourceType}\n`;
-      userMessage += `Extraction file: ${cachePath}/extractions/${filename}\n`;
-      userMessage += `Full page file: ${cachePath}/sources/${filename}\n`;
-      userMessage += `\n${ext.extraction}\n\n`;
-    }
+    const userMessage = buildCollationMessage(
+      params.query,
+      cachePath,
+      params.searchSummary,
+      extractResults.filter((e) => e.status === "success"),
+    );
 
     // Call LLM for collation (no lock — never hold locks across LLM calls)
     const collation = await callLlm(ctx, collateConfig, COLLATION_SYSTEM_PROMPT, userMessage, {
@@ -131,25 +122,8 @@ export const intelliCollateTool = {
     });
 
     return {
-      content: [textContent(formatCollationResult(collation, cachePath, succeeded, blocked))],
+      content: [textContent(collation + formatCacheAppendix(cachePath, succeeded.length, blocked.length))],
       details: { cachePath, sourcesFetched: succeeded.length + blocked.length },
     };
   },
 };
-
-function formatCollationResult(
-  collation: string,
-  cachePath: string,
-  succeeded: Array<{ url: string }>,
-  blocked: Array<{ url: string }>,
-): string {
-  let output = collation + "\n\n";
-  output += `---\n`;
-  output += `**Cache**: \`${cachePath}/\`\n`;
-  output += `**Report**: \`${cachePath}/report.md\`\n`;
-  output += `**Sources**: ${succeeded.length} succeeded, ${blocked.length} blocked\n`;
-  output += `\nTo explore a specific source:\n`;
-  output += `- Read the extraction: \`read ${cachePath}/extractions/01-*.md\`\n`;
-  output += `- Read the full page: \`read ${cachePath}/sources/01-*.md\`\n`;
-  return output;
-}

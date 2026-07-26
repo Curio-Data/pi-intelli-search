@@ -15,7 +15,7 @@ import { parseHTML } from "linkedom";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FetchedPage } from "./types.js";
-import { mapWithConcurrency, withMuzzledConsole, errMsg } from "./util.js";
+import { mapWithConcurrency, withMuzzledConsole, errMsg, truncateContent } from "./util.js";
 
 export interface FetchOptions {
   maxChars: number;
@@ -421,11 +421,6 @@ function sanitizeMarkdown(content: string): string {
   content = content.replace(/^Edit on GitHub\s*\n/gm, "");
   content = content.replace(/\n{3,}/g, "\n\n");
   return content.trim();
-}
-
-function truncateContent(content: string, maxChars: number): string {
-  if (content.length <= maxChars) return content;
-  return content.slice(0, maxChars) + "\n\n[TRUNCATED — content exceeded character limit]";
 }
 
 /**
