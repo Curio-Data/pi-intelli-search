@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Type } from "typebox";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { SearchResult } from "../types.js";
+import type { SearchResult, OnUpdate } from "../types.js";
 import { SEARCH_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { textContent, extractSourceUrls } from "../util.js";
@@ -27,7 +27,7 @@ export const intelliSearchTool = {
     _toolCallId: string,
     params: { query: string; domains?: string[] },
     signal: AbortSignal | undefined,
-    _onUpdate: any,
+    _onUpdate: OnUpdate | undefined,
     ctx: ExtensionContext,
   ) {
     const settings = await loadSettings({

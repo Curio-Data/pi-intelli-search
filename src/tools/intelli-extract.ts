@@ -9,6 +9,7 @@ import { callLlm } from "../llm.js";
 import { textContent, inferSourceType, inferCurrentness } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import { buildExtractionMessage } from "./shared.js";
+import type { OnUpdate } from "../types.js";
 
 export const intelliExtractTool = {
   name: "intelli_extract",
@@ -31,7 +32,7 @@ export const intelliExtractTool = {
     _toolCallId: string,
     params: { url: string; title: string; content: string; query: string; focusPrompt?: string },
     signal: AbortSignal | undefined,
-    _onUpdate: any,
+    _onUpdate: OnUpdate | undefined,
     ctx: ExtensionContext,
   ) {
     const settings = await loadSettings({

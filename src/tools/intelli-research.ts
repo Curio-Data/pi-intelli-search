@@ -17,7 +17,7 @@ import { mkdir, writeFile, rm, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
-import type { FetchedPage, ExtractResult, ModelConfig, ResearchSettings } from "../types.js";
+import type { FetchedPage, ExtractResult, ModelConfig, ResearchSettings, ToolResultLike, OnUpdate, PiTheme } from "../types.js";
 import { appendDomainFilter, buildExtractionMessage, buildCollationMessage, formatCacheAppendix } from "./shared.js";
 
 // ── Progress bar: pipeline stages ──
@@ -78,13 +78,13 @@ export const intelliResearchTool = {
   }),
 
   renderResult(
-    result: any,
+    result: ToolResultLike,
     { isPartial }: { isPartial: boolean; expanded: boolean },
-    theme: any,
-    _context: any,
+    theme: PiTheme,
+    _context: unknown,
   ): Text {
     if (isPartial && result.details?.stage) {
-      return renderProgressBar(result.details as ProgressDetails, theme);
+      return renderProgressBar(result.details as unknown as ProgressDetails, theme);
     }
     // Final result: show the collated summary text (compact fallback)
     const content = result.content?.[0];
@@ -96,7 +96,7 @@ export const intelliResearchTool = {
     _toolCallId: string,
     params: ResearchParams,
     signal: AbortSignal | undefined,
-    onUpdate: any,
+    onUpdate: OnUpdate | undefined,
     ctx: ExtensionContext,
   ) {
     const settings = await loadSettings({
@@ -193,7 +193,7 @@ interface PipelineCtx {
   extractConfig: ModelConfig;
   collateConfig: ModelConfig;
   signal: AbortSignal | undefined;
-  onUpdate: any;
+  onUpdate: OnUpdate | undefined;
   cachePath: string;
 }
 
@@ -814,7 +814,7 @@ export function progressUpdate(
  * Called by renderResult when isPartial is true during tool streaming.
  * Shows overall bar, stage pills, current message, and optional sub-progress.
  */
-export function renderProgressBar(details: ProgressDetails, theme: any): Text {
+export function renderProgressBar(details: ProgressDetails, theme: PiTheme): Text {
   const { stage, stageIdx, totalStages, message, subProgress } = details;
 
   // Overall progress bar

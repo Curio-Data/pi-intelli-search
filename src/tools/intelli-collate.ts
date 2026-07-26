@@ -10,7 +10,7 @@ import { makeCachePath, writeCacheFiles, writeReportFile, cacheLockDir, indexLoc
 import { textContent } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import { buildCollationMessage, formatCacheAppendix } from "./shared.js";
-import type { ExtractResult } from "../types.js";
+import type { ExtractResult, OnUpdate } from "../types.js";
 
 const extractionSchema = Type.Object({
   url: Type.String(),
@@ -58,7 +58,7 @@ export const intelliCollateTool = {
       fullPages?: Array<{ url: string; title: string; content: string }>;
     },
     signal: AbortSignal | undefined,
-    _onUpdate: any,
+    _onUpdate: OnUpdate | undefined,
     ctx: ExtensionContext,
   ) {
     const settings = await loadSettings({
