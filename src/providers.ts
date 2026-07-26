@@ -12,19 +12,16 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { homedir } from "node:os";
+import { getAgentDir } from "./util.js";
 
 /**
- * Resolve the pi agent directory. Respects PI_CODING_AGENT_DIR when set,
- * which is used for isolated testing, custom deployments, or containerised
- * environments. Falls back to ~/.pi/agent.
+ * Resolve models.json lazily inside each call: PI_CODING_AGENT_DIR may be
+ * set after module load (isolated test and E2E environments), so a
+ * module-level constant would go stale.
  */
-function resolveAgentDir(): string {
-  if (process.env.PI_CODING_AGENT_DIR) return process.env.PI_CODING_AGENT_DIR;
-  return join(homedir(), ".pi", "agent");
+function modelsJsonPath(): string {
+  return join(getAgentDir(), "models.json");
 }
-
-const MODELS_JSON_PATH = join(resolveAgentDir(), "models.json");
 
 /** Models this extension needs, to be merged into the openrouter provider. */
 export const REQUIRED_MODELS = [
@@ -65,12 +62,13 @@ interface ModelsJson {
  * Returns the list of models that were added.
  */
 export async function ensureCustomModels(): Promise<string[]> {
+  const modelsJsonPath_ = modelsJsonPath();
   let config: ModelsJson = {};
 
   // Read existing models.json if it exists
-  if (existsSync(MODELS_JSON_PATH)) {
+  if (existsSync(modelsJsonPath_)) {
     try {
-      const raw = await readFile(MODELS_JSON_PATH, "utf-8");
+      const raw = await readFile(modelsJsonPath_, "utf-8");
       config = JSON.parse(raw);
     } catch {
       // Invalid JSON — start fresh (don't overwrite yet)
@@ -96,8 +94,8 @@ export async function ensureCustomModels(): Promise<string[]> {
 
   // Only write if we added something
   if (added.length > 0) {
-    await mkdir(dirname(MODELS_JSON_PATH), { recursive: true });
-    await writeFile(MODELS_JSON_PATH, JSON.stringify(config, null, 2) + "\n");
+    await mkdir(dirname(modelsJsonPath_), { recursive: true });
+    await writeFile(modelsJsonPath_, JSON.stringify(config, null, 2) + "\n");
   }
 
   return added;
