@@ -233,6 +233,72 @@ function compareVersions(a: number[], b: number[]): number {
 }
 
 /**
+ * Keys accepted inside the nested `pi-intelli-search` settings namespace.
+ * Every key must appear here exactly once; the parametric round-trip test
+ * asserts each one independently.
+ */
+const NESTED_KEYS = [
+  "searchModel",
+  "extractModel",
+  "collateModel",
+  "defaultUrls",
+  "maxUrls",
+  "cacheDir",
+  "extractMaxChars",
+  "fetchTimeoutMs",
+  "fetchConcurrency",
+  "extractionConcurrency",
+  "extractionMaxTokens",
+  "collationMaxTokens",
+  "browserFingerprint",
+  "disableLlmsFullDiscovery",
+  "disableTelemetry",
+  "llmTimeoutMs",
+  "llmRetryAttempts",
+  "retryBaseDelayMs",
+  "retryMaxDelayMs",
+  "searchRetryAttempts",
+  "minRequestIntervalMs",
+] as const;
+
+/**
+ * Flat `intelli*` keys (deprecated) to settings keys. Applied only when the
+ * nested namespace did not already set the same key, so nested always wins.
+ * intelliMaxUrls maps to maxUrls (the cap), matching what users always
+ * assumed it did.
+ */
+const FLAT_KEY_MAP: Record<string, keyof ResearchSettings> = {
+  intelliSearchModel: "searchModel",
+  intelliExtractModel: "extractModel",
+  intelliCollateModel: "collateModel",
+  intelliMaxUrls: "maxUrls",
+  intelliCacheDir: "cacheDir",
+  intelliExtractMaxChars: "extractMaxChars",
+  intelliFetchTimeoutMs: "fetchTimeoutMs",
+  intelliFetchConcurrency: "fetchConcurrency",
+  intelliExtractionMaxTokens: "extractionMaxTokens",
+  intelliCollationMaxTokens: "collationMaxTokens",
+  intelliBrowserFingerprint: "browserFingerprint",
+  intelliDisableLlmsFullDiscovery: "disableLlmsFullDiscovery",
+  intelliDisableTelemetry: "disableTelemetry",
+  intelliLlmTimeoutMs: "llmTimeoutMs",
+  intelliLlmRetryAttempts: "llmRetryAttempts",
+  intelliRetryBaseDelayMs: "retryBaseDelayMs",
+  intelliRetryMaxDelayMs: "retryMaxDelayMs",
+  intelliSearchRetryAttempts: "searchRetryAttempts",
+  intelliMinRequestIntervalMs: "minRequestIntervalMs",
+};
+
+/**
+ * A settings value counts as present when it is non-null and, for strings,
+ * non-empty. This reproduces the pre-table semantics exactly: truthiness for
+ * model objects and strings, `!= null` for numbers and booleans.
+ */
+function isPresent(value: unknown): boolean {
+  return value != null && !(typeof value === "string" && value.length === 0);
+}
+
+/**
  * Read a settings.json file and extract overrides, supporting both
  * the nested `pi-intelli-search` namespace (preferred) and flat
  * `intelli*`-prefixed keys (deprecated, fallback).
@@ -250,50 +316,21 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
   // Nested namespace (preferred)
   const ns = parsed["pi-intelli-search"] as Record<string, unknown> | undefined;
   if (ns) {
-    if (ns.searchModel) overrides.searchModel = ns.searchModel as ResearchSettings["searchModel"];
-    if (ns.extractModel) overrides.extractModel = ns.extractModel as ResearchSettings["extractModel"];
-    if (ns.collateModel) overrides.collateModel = ns.collateModel as ResearchSettings["collateModel"];
-    if (ns.defaultUrls != null) overrides.defaultUrls = ns.defaultUrls as number;
-    if (ns.maxUrls != null) overrides.maxUrls = ns.maxUrls as number;
-    if (ns.cacheDir) overrides.cacheDir = ns.cacheDir as string;
-    if (ns.extractMaxChars != null) overrides.extractMaxChars = ns.extractMaxChars as number;
-    if (ns.fetchTimeoutMs != null) overrides.fetchTimeoutMs = ns.fetchTimeoutMs as number;
-    if (ns.fetchConcurrency != null) overrides.fetchConcurrency = ns.fetchConcurrency as number;
-    if (ns.extractionConcurrency != null) overrides.extractionConcurrency = ns.extractionConcurrency as number;
-    if (ns.extractionMaxTokens != null) overrides.extractionMaxTokens = ns.extractionMaxTokens as number;
-    if (ns.collationMaxTokens != null) overrides.collationMaxTokens = ns.collationMaxTokens as number;
-    if (ns.browserFingerprint) overrides.browserFingerprint = ns.browserFingerprint as string;
-    if (ns.disableLlmsFullDiscovery != null) overrides.disableLlmsFullDiscovery = ns.disableLlmsFullDiscovery as boolean;
-    if (ns.disableTelemetry != null) overrides.disableTelemetry = ns.disableTelemetry as boolean;
-    if (ns.llmTimeoutMs != null) overrides.llmTimeoutMs = ns.llmTimeoutMs as number;
-    if (ns.llmRetryAttempts != null) overrides.llmRetryAttempts = ns.llmRetryAttempts as number;
-    if (ns.retryBaseDelayMs != null) overrides.retryBaseDelayMs = ns.retryBaseDelayMs as number;
-    if (ns.retryMaxDelayMs != null) overrides.retryMaxDelayMs = ns.retryMaxDelayMs as number;
-    if (ns.searchRetryAttempts != null) overrides.searchRetryAttempts = ns.searchRetryAttempts as number;
-    if (ns.minRequestIntervalMs != null) overrides.minRequestIntervalMs = ns.minRequestIntervalMs as number;
+    for (const key of NESTED_KEYS) {
+      const value = ns[key];
+      if (isPresent(value)) {
+        (overrides as Record<string, unknown>)[key] = value;
+      }
+    }
   }
 
   // Flat intelli* keys (deprecated fallback: nested namespace wins when both present).
-  // intelliMaxUrls maps to maxUrls (the cap), matching what users always assumed it did.
-  if (parsed.intelliSearchModel && !overrides.searchModel) overrides.searchModel = parsed.intelliSearchModel as ResearchSettings["searchModel"];
-  if (parsed.intelliExtractModel && !overrides.extractModel) overrides.extractModel = parsed.intelliExtractModel as ResearchSettings["extractModel"];
-  if (parsed.intelliCollateModel && !overrides.collateModel) overrides.collateModel = parsed.intelliCollateModel as ResearchSettings["collateModel"];
-  if (parsed.intelliMaxUrls != null && overrides.maxUrls == null) overrides.maxUrls = parsed.intelliMaxUrls as number;
-  if (parsed.intelliCacheDir && !overrides.cacheDir) overrides.cacheDir = parsed.intelliCacheDir as string;
-  if (parsed.intelliExtractMaxChars != null && overrides.extractMaxChars == null) overrides.extractMaxChars = parsed.intelliExtractMaxChars as number;
-  if (parsed.intelliFetchTimeoutMs != null && overrides.fetchTimeoutMs == null) overrides.fetchTimeoutMs = parsed.intelliFetchTimeoutMs as number;
-  if (parsed.intelliFetchConcurrency != null && overrides.fetchConcurrency == null) overrides.fetchConcurrency = parsed.intelliFetchConcurrency as number;
-  if (parsed.intelliExtractionMaxTokens != null && overrides.extractionMaxTokens == null) overrides.extractionMaxTokens = parsed.intelliExtractionMaxTokens as number;
-  if (parsed.intelliCollationMaxTokens != null && overrides.collationMaxTokens == null) overrides.collationMaxTokens = parsed.intelliCollationMaxTokens as number;
-  if (parsed.intelliBrowserFingerprint && !overrides.browserFingerprint) overrides.browserFingerprint = parsed.intelliBrowserFingerprint as string;
-  if (parsed.intelliDisableLlmsFullDiscovery != null && overrides.disableLlmsFullDiscovery == null) overrides.disableLlmsFullDiscovery = parsed.intelliDisableLlmsFullDiscovery as boolean;
-  if (parsed.intelliDisableTelemetry != null && overrides.disableTelemetry == null) overrides.disableTelemetry = parsed.intelliDisableTelemetry as boolean;
-  if (parsed.intelliLlmTimeoutMs != null && overrides.llmTimeoutMs == null) overrides.llmTimeoutMs = parsed.intelliLlmTimeoutMs as number;
-  if (parsed.intelliLlmRetryAttempts != null && overrides.llmRetryAttempts == null) overrides.llmRetryAttempts = parsed.intelliLlmRetryAttempts as number;
-  if (parsed.intelliRetryBaseDelayMs != null && overrides.retryBaseDelayMs == null) overrides.retryBaseDelayMs = parsed.intelliRetryBaseDelayMs as number;
-  if (parsed.intelliRetryMaxDelayMs != null && overrides.retryMaxDelayMs == null) overrides.retryMaxDelayMs = parsed.intelliRetryMaxDelayMs as number;
-  if (parsed.intelliSearchRetryAttempts != null && overrides.searchRetryAttempts == null) overrides.searchRetryAttempts = parsed.intelliSearchRetryAttempts as number;
-  if (parsed.intelliMinRequestIntervalMs != null && overrides.minRequestIntervalMs == null) overrides.minRequestIntervalMs = parsed.intelliMinRequestIntervalMs as number;
+  for (const [flatKey, key] of Object.entries(FLAT_KEY_MAP)) {
+    const value = parsed[flatKey];
+    if (isPresent(value) && (overrides as Record<string, unknown>)[key] == null) {
+      (overrides as Record<string, unknown>)[key] = value;
+    }
+  }
 
   // intelliDefaultUrls has no flat fallback by design: the key did not
   // exist in 0.7.0 (which is the only version that produced flat keys),
