@@ -13,9 +13,7 @@ import { intelliResearchTool } from "./tools/intelli-research.js";
 import { ensureCustomModels as defaultEnsureCustomModels } from "./providers.js";
 import { invalidateSettingsCache, hasFlatKeys, migrateDefaults, loadSettings, setMigrationContext } from "./settings.js";
 import { getAgentDir, errMsg, logErr } from "./util.js";
-
-// Exported so the version-consistency test can assert it matches package.json.
-export const CURRENT_VERSION = "0.12.0";
+import { getExtensionVersion } from "./telemetry.js";
 
 /** Narrow injectable seam for deterministic model-registry refresh tests. */
 export const __harness: {
@@ -100,34 +98,6 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
   });
 
   // ═══════════════════════════════════════════════
-  // Working indicator lifecycle tracking
-  // ═══════════════════════════════════════════════
-  // Track when our tools are executing. The intelli_research tool uses
-  // ctx.ui.setWorkingIndicator() directly for its custom spinner.
-  // These handlers are available for future use (e.g. cross-tool
-  // indicator coordination).
-  pi.on("tool_execution_start", (event) => {
-    if (
-      event.toolName === "intelli_research" ||
-      event.toolName === "intelli_search" ||
-      event.toolName === "intelli_extract" ||
-      event.toolName === "intelli_collate"
-    ) {
-      // Extension tools are running — indicator set by intelli_research.execute()
-    }
-  });
-  pi.on("tool_execution_end", (event) => {
-    if (
-      event.toolName === "intelli_research" ||
-      event.toolName === "intelli_search" ||
-      event.toolName === "intelli_extract" ||
-      event.toolName === "intelli_collate"
-    ) {
-      // Extension tools finished — indicator restored by intelli_research.execute()
-    }
-  });
-
-  // ═══════════════════════════════════════════════
   // Session lifecycle
   // ═══════════════════════════════════════════════
   // On first session_start, merge Perplexity Sonar models into models.json.
@@ -208,6 +178,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
       // user runs pi from.
       const agentDir = getAgentDir();
       const versionPath = join(agentDir, ".pi-intelli-search-version.json");
+      const currentVersion = await getExtensionVersion();
       let previousVersion: string | undefined;
 
       try {
@@ -218,7 +189,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
         // No previous version file — fresh install or cleared state
       }
 
-      if (previousVersion && previousVersion !== CURRENT_VERSION) {
+      if (previousVersion && previousVersion !== currentVersion) {
         // Check for migration changes BEFORE setting the migration
         // context. loadSettings() applies pendingMigration in-memory,
         // so we must detect changes on the raw (unmigrated) settings.
@@ -227,7 +198,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
             cwd: ctx.cwd,
             projectTrusted: ctx.isProjectTrusted(),
           });
-          const { changes } = migrateDefaults(previousVersion, CURRENT_VERSION, userSettings);
+          const { changes } = migrateDefaults(previousVersion, currentVersion, userSettings);
           if (changes.length > 0) {
             notify(
               `[pi-intelli-search] Default models updated:\n` +
@@ -246,7 +217,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
         // Invalidate the cache so loadSettings() rebuilds with
         // pendingMigration applied (the earlier call for notification
         // populated the cache without migration).
-        setMigrationContext(previousVersion, CURRENT_VERSION);
+        setMigrationContext(previousVersion, currentVersion);
         invalidateSettingsCache();
       }
 
@@ -255,7 +226,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
       await mkdir(agentDir, { recursive: true });
       await writeFile(
         versionPath,
-        JSON.stringify({ version: CURRENT_VERSION, settingsFormat: "nested" }, null, 2) + "\n",
+        JSON.stringify({ version: currentVersion, settingsFormat: "nested" }, null, 2) + "\n",
       );
 
       // Flat key deprecation notice — check on every session_start,

@@ -231,11 +231,11 @@ let cachedVersion: string | null = null;
  * returns "unknown" on any read or parse failure so a packaging quirk cannot
  * break telemetry or the pipeline.
  *
- * Note: this is intentionally independent of the hardcoded `CURRENT_VERSION`
- * constant in `src/index.ts`, which is used only for upgrade-migration
- * detection and is not authoritative for the published version.
+ * This is the single source of truth for the extension version: index.ts
+ * uses it for upgrade-migration detection and the telemetry sidecar stamps
+ * it as `extensionVersion`.
  */
-async function getExtensionVersion(): Promise<string> {
+export async function getExtensionVersion(): Promise<string> {
   if (cachedVersion) return cachedVersion;
   // dist/telemetry.js -> repo root (../). Also works for src/ via tsx where
   // import.meta.url points at the source file.

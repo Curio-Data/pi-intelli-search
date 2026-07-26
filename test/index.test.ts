@@ -15,14 +15,14 @@ describe("extension module structure", () => {
 });
 
 describe("version consistency", () => {
-  it("CURRENT_VERSION matches package.json version", async () => {
+  it("extension version resolves from package.json (single source)", async () => {
     const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
     const pkg = JSON.parse(await readFile(join(repoRoot, "package.json"), "utf-8"));
-    const mod = await import("../src/index.js");
+    const { getExtensionVersion } = await import("../src/telemetry.js");
     assert.strictEqual(
-      mod.CURRENT_VERSION,
+      await getExtensionVersion(),
       pkg.version,
-      "CURRENT_VERSION in src/index.ts drifted from package.json version",
+      "extension version should resolve from package.json",
     );
   });
 });
@@ -86,28 +86,6 @@ describe("extension registration", () => {
     );
   });
 
-  it("subscribes to tool_execution_start/end for working indicator", async () => {
-    const recordedEvents: string[] = [];
-
-    const mockPi = {
-      registerTool() {},
-      on(event: string) {
-        recordedEvents.push(event);
-      },
-    };
-
-    const mod = await import("../src/index.js");
-    mod.default(mockPi);
-
-    assert.ok(
-      recordedEvents.includes("tool_execution_start"),
-      "should subscribe to tool_execution_start",
-    );
-    assert.ok(
-      recordedEvents.includes("tool_execution_end"),
-      "should subscribe to tool_execution_end",
-    );
-  });
 });
 
 describe("after_provider_response handler", () => {
