@@ -14,7 +14,8 @@ import { ensureCustomModels as defaultEnsureCustomModels } from "./providers.js"
 import { invalidateSettingsCache, hasFlatKeys, migrateDefaults, loadSettings, setMigrationContext } from "./settings.js";
 import { getAgentDir } from "./util.js";
 
-const CURRENT_VERSION = "0.12.0";
+// Exported so the version-consistency test can assert it matches package.json.
+export const CURRENT_VERSION = "0.12.0";
 
 /** Narrow injectable seam for deterministic model-registry refresh tests. */
 export const __harness: {

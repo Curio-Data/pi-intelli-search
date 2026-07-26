@@ -249,6 +249,81 @@ describe("intelli_research telemetry wiring", () => {
       restore(env);
     }
   });
+
+  it("writes outcome=extraction-failed sidecar when every extraction fails", async () => {
+    const env = await isolatedEnv({ disableTelemetry: false });
+    try {
+      __harness.callLlm = ((_ctx: any, _cfg: any, sysPrompt: string) => {
+        if (sysPrompt === SEARCH_SYSTEM_PROMPT) return Promise.resolve(SEARCH_WITH_LINKS);
+        if (sysPrompt === EXTRACTION_SYSTEM_PROMPT) return Promise.reject(new Error("extract boom"));
+        return resolveByPrompt(sysPrompt);
+      }) as any;
+      __harness.fetchPages = (() =>
+        Promise.resolve([makePage("https://example.com/page1", "defuddle")])) as any;
+      const res = await intelliResearchTool.execute(
+        "tc6",
+        { query: "extraction failed degraded", maxUrls: 1 },
+        undefined,
+        undefined,
+        makeCtx(env.cwd) as any,
+      );
+      const meta = await readMeta(env.cwd);
+      assert.ok(meta, "degraded extraction-failed run wrote no sidecar");
+      assert.equal(meta!.outcome, "extraction-failed");
+      assert.equal(meta!.stages.extract.succeeded, 0);
+      assert.equal(meta!.stages.extract.failed, 1);
+      const text = res.content[0]?.type === "text" ? res.content[0].text : "";
+      assert.ok(
+        text.includes("No content was extracted"),
+        "result should explain that no content was extracted",
+      );
+    } finally {
+      restore(env);
+    }
+  });
+
+  it("runs the cache-suggest judge and appends related searches when the index has entries", async () => {
+    const env = await isolatedEnv({ disableTelemetry: false });
+    try {
+      // Pre-populate the shared cache index with one older search.
+      await mkdir(join(env.cwd, ".search"), { recursive: true });
+      await writeFile(
+        join(env.cwd, ".search", ".index.json"),
+        JSON.stringify({
+          searches: [
+            { slug: "2026-01-01-old-search-abc123", query: "old related query", timestamp: "2026-01-01T00:00:00.000Z" },
+          ],
+        }),
+        "utf-8",
+      );
+      __harness.callLlm = ((_ctx: any, _cfg: any, sysPrompt: string) => {
+        if (sysPrompt === SEARCH_SYSTEM_PROMPT) return Promise.resolve(SEARCH_WITH_LINKS);
+        if (sysPrompt === CACHE_SUGGEST_PROMPT) {
+          return Promise.resolve('[{"index": 1, "relevance": "same topic"}]');
+        }
+        return resolveByPrompt(sysPrompt);
+      }) as any;
+      __harness.fetchPages = (() =>
+        Promise.resolve([makePage("https://example.com/page1", "defuddle")])) as any;
+      const res = await intelliResearchTool.execute(
+        "tc7",
+        { query: "cache suggest wiring", maxUrls: 1 },
+        undefined,
+        undefined,
+        makeCtx(env.cwd) as any,
+      );
+      const meta = await readMeta(env.cwd);
+      assert.ok(meta, "happy-path run wrote no sidecar");
+      assert.equal(meta!.stages.cacheSuggest.ran, true, "judge should run against a non-empty index");
+      assert.equal(meta!.stages.cacheSuggest.surfaced, 1);
+      assert.deepEqual(meta!.stages.cacheSuggest.slugs, ["2026-01-01-old-search-abc123"]);
+      const text = res.content[0]?.type === "text" ? res.content[0].text : "";
+      assert.ok(text.includes("Related cached searches"), "output should carry the suggestions appendix");
+      assert.ok(text.includes("old related query"), "appendix should list the matched query");
+    } finally {
+      restore(env);
+    }
+  });
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

@@ -2,13 +2,28 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 describe("extension module structure", () => {
   it("exports a default function", async () => {
     const mod = await import("../src/index.js");
     assert.strictEqual(typeof mod.default, "function");
+  });
+});
+
+describe("version consistency", () => {
+  it("CURRENT_VERSION matches package.json version", async () => {
+    const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+    const pkg = JSON.parse(await readFile(join(repoRoot, "package.json"), "utf-8"));
+    const mod = await import("../src/index.js");
+    assert.strictEqual(
+      mod.CURRENT_VERSION,
+      pkg.version,
+      "CURRENT_VERSION in src/index.ts drifted from package.json version",
+    );
   });
 });
 

@@ -523,3 +523,127 @@ describe("migrateDefaults", () => {
     assert.strictEqual(searchChange, undefined, "search model should not be migrated");
   });
 });
+
+// ── Parametric round-trip: every documented settings key ────────────────────
+//
+// Characterization tests written before the extractOverrides() table refactor.
+// Each key is set to a distinct non-default value so a dropped, swapped, or
+// misspelled mapping fails exactly one named subtest. The tables below are
+// deliberately independent copies of the mapping: importing the production
+// table would let a production deletion pass silently.
+
+describe("parametric settings round-trip (all keys)", () => {
+  // Distinct value per numeric key so cross-key swaps are caught.
+  const NESTED_CASES: Array<[string, unknown]> = [
+    ["searchModel", { provider: "testprovider", model: "tm-search" }],
+    ["extractModel", { provider: "testprovider", model: "tm-extract" }],
+    ["collateModel", { provider: "testprovider", model: "tm-collate" }],
+    ["defaultUrls", 3],
+    ["maxUrls", 11],
+    ["cacheDir", ".test-cache"],
+    ["extractMaxChars", 11111],
+    ["fetchTimeoutMs", 22222],
+    ["fetchConcurrency", 7],
+    ["extractionConcurrency", 6],
+    ["extractionMaxTokens", 3333],
+    ["collationMaxTokens", 4444],
+    ["browserFingerprint", "firefox_test"],
+    ["disableLlmsFullDiscovery", true],
+    ["disableTelemetry", true],
+    ["llmTimeoutMs", 55555],
+    ["llmRetryAttempts", 9],
+    ["retryBaseDelayMs", 777],
+    ["retryMaxDelayMs", 88888],
+    ["searchRetryAttempts", 5],
+    ["minRequestIntervalMs", 1234],
+  ];
+
+  const FLAT_KEY_MAP: Record<string, string> = {
+    intelliSearchModel: "searchModel",
+    intelliExtractModel: "extractModel",
+    intelliCollateModel: "collateModel",
+    intelliMaxUrls: "maxUrls",
+    intelliCacheDir: "cacheDir",
+    intelliExtractMaxChars: "extractMaxChars",
+    intelliFetchTimeoutMs: "fetchTimeoutMs",
+    intelliFetchConcurrency: "fetchConcurrency",
+    intelliExtractionMaxTokens: "extractionMaxTokens",
+    intelliCollationMaxTokens: "collationMaxTokens",
+    intelliBrowserFingerprint: "browserFingerprint",
+    intelliDisableLlmsFullDiscovery: "disableLlmsFullDiscovery",
+    intelliDisableTelemetry: "disableTelemetry",
+    intelliLlmTimeoutMs: "llmTimeoutMs",
+    intelliLlmRetryAttempts: "llmRetryAttempts",
+    intelliRetryBaseDelayMs: "retryBaseDelayMs",
+    intelliRetryMaxDelayMs: "retryMaxDelayMs",
+    intelliSearchRetryAttempts: "searchRetryAttempts",
+    intelliMinRequestIntervalMs: "minRequestIntervalMs",
+  };
+
+  const valueFor = (key: string): unknown =>
+    NESTED_CASES.find(([k]) => k === key)?.[1];
+
+  async function loadWith(content: Record<string, unknown>): Promise<ResearchSettings> {
+    const dir = mkdtempSync(join(tmpdir(), "pi-intelli-param-"));
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+    try {
+      writeFileSync(join(dir, "settings.json"), JSON.stringify(content));
+      invalidateSettingsCache();
+      return await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+      invalidateSettingsCache();
+    }
+  }
+
+  for (const [key, value] of NESTED_CASES) {
+    it(`nested key "${key}" round-trips`, async () => {
+      const settings = await loadWith({ "pi-intelli-search": { [key]: value } });
+      assert.deepStrictEqual(
+        (settings as Record<string, unknown>)[key],
+        value,
+        `nested key "${key}" was not applied`,
+      );
+    });
+  }
+
+  for (const [flatKey, key] of Object.entries(FLAT_KEY_MAP)) {
+    it(`flat key "${flatKey}" maps to "${key}"`, async () => {
+      const value = valueFor(key);
+      const settings = await loadWith({ [flatKey]: value });
+      assert.deepStrictEqual(
+        (settings as Record<string, unknown>)[key],
+        value,
+        `flat key "${flatKey}" was not applied to "${key}"`,
+      );
+    });
+
+    it(`nested "${key}" wins over flat "${flatKey}"`, async () => {
+      const nestedValue = valueFor(key);
+      const flatValue =
+        typeof nestedValue === "number"
+          ? (nestedValue as number) + 1
+          : typeof nestedValue === "boolean"
+            ? !nestedValue
+            : typeof nestedValue === "string"
+              ? nestedValue + "-flat"
+              : { provider: "flatprovider", model: "flat-model" };
+      const settings = await loadWith({
+        "pi-intelli-search": { [key]: nestedValue },
+        [flatKey]: flatValue,
+      });
+      assert.deepStrictEqual(
+        (settings as Record<string, unknown>)[key],
+        nestedValue,
+        `nested "${key}" should win over flat "${flatKey}"`,
+      );
+    });
+  }
+
+  it("top-level httpProxy is honoured", async () => {
+    const settings = await loadWith({ httpProxy: "http://127.0.0.1:8123" });
+    assert.strictEqual(settings.httpProxy, "http://127.0.0.1:8123");
+  });
+});
