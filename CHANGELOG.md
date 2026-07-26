@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] - 2026-07-26
+
+### Changed
+
+- **Internal simplification: 28% lower code complexity with zero behaviour change.** The four tools previously maintained their own copies of settings parsing, cache locking, prompt assembly, truncation markers, and error formatting. These are now single-sourced, the research pipeline's orchestrator is split into focused stage functions, and Prettier enforces formatting. Test coverage grew across every settings key, the degraded pipeline paths, and the extracted shared builders, and an independent adversarial review by a second model found no user-observable changes.
+
 ## [0.12.0] - 2026-07-24
 
 ### Changed
@@ -289,6 +295,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.12.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.1
 [0.12.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.0
 [0.11.3]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.3
 [0.11.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.2

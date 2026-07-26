@@ -68,13 +68,15 @@ src/
 ├── providers.ts          # Custom model registration (Sonar) into models.json
 ├── settings.ts           # Settings loader with caching and invalidation
 ├── cache.ts              # .search/ cache read/write and index management
+├── telemetry.ts          # Local-only meta.json sidecar: schema, builder, atomic write, version source
 ├── types.ts              # Shared TypeScript interfaces
 ├── util.ts               # URL extraction, inference, concurrency + retry/backoff/timeout/throttle helpers
 └── tools/
     ├── intelli-research.ts   # Full pipeline orchestrator (5 stages)
     ├── intelli-search.ts     # Standalone search via Perplexity Sonar
     ├── intelli-extract.ts    # Standalone per-page LLM extraction
-    └── intelli-collate.ts    # Standalone collation + cache write
+    ├── intelli-collate.ts    # Standalone collation + cache write
+    └── shared.ts             # Shared builders: domain filter, extraction/collation messages, appendix
 ```
 
 ## Cache Structure

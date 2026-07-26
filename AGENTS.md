@@ -213,7 +213,8 @@ src/
     ├── intelli-research.ts   # Full pipeline orchestrator (5 stages)
     ├── intelli-search.ts     # Standalone search via Perplexity Sonar
     ├── intelli-extract.ts    # Standalone per-page LLM extraction
-    └── intelli-collate.ts    # Standalone collation + cache write
+    ├── intelli-collate.ts    # Standalone collation + cache write
+    └── shared.ts             # Shared builders: domain filter, extraction/collation messages, appendix
 
 skills/
 └── intelli-search/
@@ -228,9 +229,12 @@ test/
 ├── telemetry.test.ts
 ├── fetch.test.ts
 ├── index.test.ts
+├── llm.test.ts
 ├── prompts.test.ts
 ├── providers.test.ts
 ├── research.test.ts
+├── research-telemetry.test.ts
+├── shared.test.ts
 ├── e2e/
 │   ├── 01_main.sh
 │   ├── 02_cap.sh
