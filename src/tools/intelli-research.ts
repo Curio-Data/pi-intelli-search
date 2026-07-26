@@ -12,13 +12,13 @@ import { makeCachePath, writeCacheFiles, writeReportFile, readIndex, formatIndex
 import { textContent, extractSourceUrls, inferSourceType, inferCurrentness, mapWithConcurrency, sleep, createRateLimiter, errMsg, logErr } from "../util.js";
 import type { LlmRetryConfig } from "../llm.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
-import { appendDomainFilter, buildExtractionMessage, buildCollationMessage, formatCacheAppendix } from "./shared.js";
 import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "../telemetry.js";
 import { mkdir, writeFile, rm, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
-import type { FetchedPage, ExtractResult } from "../types.js";
+import type { FetchedPage, ExtractResult, ModelConfig, ResearchSettings } from "../types.js";
+import { appendDomainFilter, buildExtractionMessage, buildCollationMessage, formatCacheAppendix } from "./shared.js";
 
 // ── Progress bar: pipeline stages ──
 const STAGES = ["search", "fetch", "extract", "collate", "cache"] as const;
@@ -40,6 +40,18 @@ interface ProgressDetails {
   pct: number;
   subProgress?: { current: number; total: number };
 }
+
+interface ResearchParams {
+  query: string;
+  maxUrls?: number;
+  domains?: string[];
+  focusPrompt?: string;
+}
+
+type ResearchToolResult = {
+  content: Array<{ type: "text"; text: string }>;
+  details: Record<string, unknown>;
+};
 
 export const intelliResearchTool = {
   name: "intelli_research",
@@ -82,12 +94,7 @@ export const intelliResearchTool = {
 
   async execute(
     _toolCallId: string,
-    params: {
-      query: string;
-      maxUrls?: number;
-      domains?: string[];
-      focusPrompt?: string;
-    },
+    params: ResearchParams,
     signal: AbortSignal | undefined,
     onUpdate: any,
     ctx: ExtensionContext,
@@ -106,14 +113,6 @@ export const intelliResearchTool = {
       baseDelayMs: settings.retryBaseDelayMs,
       maxDelayMs: settings.retryMaxDelayMs,
     };
-    // Min-interval gate for the extract fan-out (no-op when interval is 0).
-    const gate = createRateLimiter(settings.minRequestIntervalMs);
-
-    // Telemetry accumulator. Constructed only when telemetry is enabled so
-    // the disabled path does zero allocation. Each stage records its slice;
-    // the sidecar is written once at the end of executePipeline(). A write
-    // failure is caught and logged, never surfacing to the pipeline result.
-    const tel = settings.disableTelemetry ? null : await TelemetryBuilder.create(params.query);
 
     const searchConfig = resolveModelConfig(settings, "search");
     const extractConfig = resolveModelConfig(settings, "extract");
@@ -146,380 +145,520 @@ export const intelliResearchTool = {
     const ui = ctx.ui as { setWorkingIndicator?(opts?: { frames?: string[]; intervalMs?: number }): void };
     const INDICATOR_FRAMES = ["🔍", "🌐", "📄", "✨"];
     ui.setWorkingIndicator?.({ frames: INDICATOR_FRAMES, intervalMs: 400 });
-    // Ensure cleanup on any exit path
-    const restoreIndicator = () => ui.setWorkingIndicator?.();
     try {
-      return await executePipeline();
-    } finally {
-      restoreIndicator();
-    }
-
-    async function executePipeline() {
-    // cachePath depends only on the query, cwd, and settings, so it is
-    // computed once up front. Degraded early-return paths (no links, all
-    // fetches failed, all extractions failed) still write a telemetry sidecar
-    // into this directory so the analysis script can measure degradation.
-    const cachePath = makeCachePath(params.query, ctx.cwd, settings.cacheDir);
-    // ═══════════════════════════════════════════
-    // Stage 1: Search
-    // ═══════════════════════════════════════════
-    onUpdate?.(progressUpdate("search", `Querying ${searchConfig.provider}/${searchConfig.model}...`));
-
-    let searchQuery = appendDomainFilter(params.query, params.domains);
-
-    // The search model occasionally returns a valid response with no markdown
-    // links (a "degraded 200" — common under provider load). callLlm's retry
-    // only covers transport errors, so retry the search call itself a bounded
-    // number of times until it yields at least one URL.
-    let searchResult = "";
-    let urls: Array<{ url: string; title: string }> = [];
-    const searchAttempts = Math.max(1, settings.searchRetryAttempts);
-    let searchAttemptsUsed = 0;
-    for (let attempt = 1; attempt <= searchAttempts; attempt++) {
-      searchAttemptsUsed = attempt;
-      searchResult = await __harness.callLlm(ctx, searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {
-        maxTokens: 2000,
-        signal,
+      const p: PipelineCtx = {
+        ctx,
+        params,
+        settings,
+        maxUrls,
         retry,
-        timeoutMs: settings.llmTimeoutMs,
-      });
-      urls = extractSourceUrls(searchResult).slice(0, maxUrls);
-      if (urls.length > 0 || signal?.aborted || attempt === searchAttempts) break;
-      onUpdate?.(progressUpdate("search", `Search returned no links — retrying (${attempt}/${searchAttempts - 1})...`));
-      await sleep(settings.retryBaseDelayMs, signal);
-    }
-
-    // User cancel during search: propagate abort rather than returning a
-    // misleading "no links" diagnostic.
-    if (signal?.aborted) {
-      throw new DOMException("Aborted", "AbortError");
-    }
-
-    tel?.recordSearch({
-      model: `${searchConfig.provider}/${searchConfig.model}`,
-      linksReturned: urls.length,
-      retryFired: searchAttemptsUsed > 1,
-      attempts: searchAttemptsUsed,
-      degraded: urls.length === 0,
-    });
-
-    if (urls.length === 0) {
-      await writeTelemetrySidecar(tel, cachePath, "no-links");
-      return {
-        content: [textContent(
-          `Search returned no links for query: "${params.query}" after ${searchAttempts} attempt(s). ` +
-          `This is a degraded search response (the model replied without markdown links), ` +
-          `not a fetch or extraction failure.\n\nSearch summary:\n${searchResult}`,
-        )],
-        details: { cachePath: "", urlsSearched: 0, pagesFetched: 0, pagesFailed: 0 } as Record<string, unknown>,
-      };
-    }
-
-    // ═══════════════════════════════════════════
-    // Stage 2: Fetch pages via wreq-js + Defuddle
-    // ═══════════════════════════════════════════
-    onUpdate?.(progressUpdate("fetch", `Fetching ${urls.length} pages...`));
-    const pages = await __harness.fetchPages(urls.map((u) => u.url), signal, {
-      timeoutMs: settings.fetchTimeoutMs,
-      browser: settings.browserFingerprint as unknown as import("wreq-js").BrowserProfile,
-      concurrency: settings.fetchConcurrency,
-      proxy: settings.httpProxy,
-    });
-    const successPages = pages.filter((p) => p.status === "success");
-
-    // Tally fetch-variant winners from the per-page `source` field that
-    // fetch.ts stamps ("defuddle" | "markdown"). Falls back to "unknown"
-    // for any page lacking the field.
-    const fetchWinners: Record<string, number> = {};
-    for (const p of successPages) {
-      const variant = p.source ?? "unknown";
-      fetchWinners[variant] = (fetchWinners[variant] ?? 0) + 1;
-    }
-    tel?.recordFetch({
-      requested: urls.length,
-      succeeded: successPages.length,
-      failed: pages.length - successPages.length,
-      winners: fetchWinners,
-    });
-
-    if (successPages.length === 0) {
-      await writeTelemetrySidecar(tel, cachePath, "fetch-failed");
-      return {
-        content: [textContent(
-          `All ${urls.length} pages failed to fetch.\n\nSearch summary:\n${searchResult}`,
-        )],
-        details: { cachePath: "", urlsSearched: urls.length, pagesFetched: 0, pagesFailed: urls.length } as Record<string, unknown>,
-      };
-    }
-
-    // ═══════════════════════════════════════════
-    // Stage 3: Extract per-page via LLM (parallel)
-    // ═══════════════════════════════════════════
-    onUpdate?.(progressUpdate("extract", `Extracting from ${successPages.length} pages...`, {
-      current: 0,
-      total: successPages.length,
-    }));
-
-    // Extract pages through a bounded worker pool (settings.extractionConcurrency)
-    // rather than all at once. With maxUrls up to 16, an unbounded Promise.all
-    // would fire that many simultaneous LLM calls and trip provider rate limits.
-    // Progress is emitted on each page's completion (via onSettled), so the
-    // sub-progress bar reflects real work done instead of jumping to N/N at launch.
-    let extractDone = 0;
-    const rawExtractions = await mapWithConcurrency(
-      successPages,
-      settings.extractionConcurrency,
-      async (page) => {
-        // Space out concurrent extract calls when a throttle is configured.
-        await gate(signal);
-        return extractPage(ctx, extractConfig, page, params.query, params.focusPrompt, settings.extractMaxChars, settings.extractionMaxTokens, signal, retry, settings.llmTimeoutMs);
-      },
-      {
+        // Min-interval gate for the extract fan-out (no-op when interval is 0).
+        gate: createRateLimiter(settings.minRequestIntervalMs),
+        // Telemetry accumulator. Constructed only when telemetry is enabled so
+        // the disabled path does zero allocation. Each stage records its slice;
+        // the sidecar is written once per exit path. A write failure is caught
+        // and logged, never surfacing to the pipeline result.
+        tel: settings.disableTelemetry ? null : await TelemetryBuilder.create(params.query),
+        searchConfig,
+        extractConfig,
+        collateConfig,
         signal,
-        onSettled: (page) => {
-          extractDone++;
-          onUpdate?.(progressUpdate("extract",
-            `Page ${extractDone}/${successPages.length}: ${(page.title || page.url).slice(0, 40)}...`,
-            { current: extractDone, total: successPages.length },
-          ));
-        },
+        onUpdate,
+        // cachePath depends only on the query, cwd, and settings, so it is
+        // computed once up front. Degraded early-return paths (no links, all
+        // fetches failed, all extractions failed) still write a telemetry
+        // sidecar into this directory so the analysis script can measure
+        // degradation.
+        cachePath: makeCachePath(params.query, ctx.cwd, settings.cacheDir),
+      };
+      return await executePipeline(p);
+    } finally {
+      // Ensure cleanup on any exit path
+      ui.setWorkingIndicator?.();
+    }
+  },
+};
+
+// ── Pipeline context: everything a stage needs, assembled once in execute() ──
+
+interface PipelineCtx {
+  ctx: ExtensionContext;
+  params: ResearchParams;
+  settings: ResearchSettings;
+  maxUrls: number;
+  retry: LlmRetryConfig;
+  gate: (signal?: AbortSignal) => Promise<void>;
+  tel: TelemetryBuilder | null;
+  searchConfig: ModelConfig;
+  extractConfig: ModelConfig;
+  collateConfig: ModelConfig;
+  signal: AbortSignal | undefined;
+  onUpdate: any;
+  cachePath: string;
+}
+
+/**
+ * The 5-stage research pipeline. Each stage is a module-level function that
+ * records its own telemetry slice; degraded exits go through degradedReturn()
+ * so every early return writes its sidecar the same way.
+ */
+async function executePipeline(p: PipelineCtx): Promise<ResearchToolResult> {
+  // ═══════════════════════════════════════════
+  // Stage 1: Search
+  // ═══════════════════════════════════════════
+  const search = await runSearchStage(p);
+  if (search.urls.length === 0) {
+    return degradedReturn(
+      p,
+      "no-links",
+      `Search returned no links for query: "${p.params.query}" after ${search.maxAttempts} attempt(s). ` +
+      `This is a degraded search response (the model replied without markdown links), ` +
+      `not a fetch or extraction failure.\n\nSearch summary:\n${search.searchResult}`,
+      { cachePath: "", urlsSearched: 0, pagesFetched: 0, pagesFailed: 0 },
+    );
+  }
+
+  // ═══════════════════════════════════════════
+  // Stage 2: Fetch pages via wreq-js + Defuddle
+  // ═══════════════════════════════════════════
+  const fetched = await runFetchStage(p, search.urls);
+  if (fetched.successPages.length === 0) {
+    return degradedReturn(
+      p,
+      "fetch-failed",
+      `All ${search.urls.length} pages failed to fetch.\n\nSearch summary:\n${search.searchResult}`,
+      { cachePath: "", urlsSearched: search.urls.length, pagesFetched: 0, pagesFailed: search.urls.length },
+    );
+  }
+
+  // ═══════════════════════════════════════════
+  // Stage 3: Extract per-page via LLM (parallel)
+  // ═══════════════════════════════════════════
+  const extracted = await runExtractStage(p, fetched.successPages, fetched.pages);
+
+  // ═══════════════════════════════════════════
+  // Stage 4: Collate via LLM + write cache
+  // ═══════════════════════════════════════════
+  // The collate banner is emitted before the degraded check so progress
+  // ordering matches the pre-split pipeline on every exit path.
+  p.onUpdate?.(progressUpdate("collate", "Synthesising results..."));
+
+  const allExtractions = [...extracted.extractions, ...extracted.blockedExtractions];
+  const succeededExtractions = allExtractions.filter((e) => e.status === "success");
+
+  // If no extractions produced useful content (all fetches failed or all
+  // extraction LLM calls errored), return the search summary without
+  // creating cache artifacts or running collation.
+  if (succeededExtractions.length === 0) {
+    const fetchFailed = extracted.blockedExtractions.length;
+    const extractFailed = extracted.extractions.filter((e) => e.status === "failed").length;
+    const reason = fetchFailed > 0
+      ? `${fetchFailed} page(s) failed to fetch`
+      : `${extractFailed} extraction(s) failed`;
+    return degradedReturn(
+      p,
+      "extraction-failed",
+      `${reason}. No content was extracted.\n\nSearch summary:\n${search.searchResult}`,
+      {
+        cachePath: "",
+        urlsSearched: search.urls.length,
+        pagesFetched: fetched.successPages.length,
+        pagesFailed: fetched.pages.length - fetched.successPages.length,
       },
     );
+  }
 
-    // Indices left unrun by an aborted signal become a failed extraction so the
-    // result array stays aligned with successPages and fully typed.
-    const extractions: ExtractResult[] = rawExtractions.map((e, i) => e ?? {
-      url: successPages[i].url,
-      title: successPages[i].title,
+  const collation = await runCollateStage(p, search.searchResult, succeededExtractions);
+
+  // Start llms-full downloads BEFORE acquiring any lock, then write cache
+  // artifacts under the per-cache-path lock (only local file I/O there).
+  const llms = startLlmsFullDownloads(p, fetched.successPages);
+  await writeCacheArtifacts(p, allExtractions, fetched, search.searchResult, collation, llms);
+
+  // ═══════════════════════════════════════════
+  // Stage 5: Cache suggest — find related previous searches
+  // ═══════════════════════════════════════════
+  const suggestionsAppendix = await runCacheSuggestStage(p);
+
+  // ── Telemetry sidecar refresh ──
+  // The sidecar was already written under the cache lock with all core
+  // stages recorded. Rewrite it now that cache-suggest data is available
+  // so the final sidecar is complete. Atomic via temp-file + rename; a
+  // failure is caught and logged, never surfaced to the pipeline.
+  await writeTelemetrySidecar(p.tel, p.cachePath, "completed");
+
+  // ═══════════════════════════════════════════
+  // Return concise injection
+  // ═══════════════════════════════════════════
+  const failedCount = fetched.pages.length - fetched.successPages.length;
+  const result =
+    collation +
+    formatCacheAppendix(p.cachePath, fetched.successPages.length, failedCount) +
+    suggestionsAppendix;
+
+  return {
+    content: [textContent(result)],
+    details: {
+      cachePath: p.cachePath,
+      urlsSearched: search.urls.length,
+      pagesFetched: fetched.successPages.length,
+      pagesFailed: failedCount,
+    },
+  };
+}
+
+// ── Stage 1: Search ──
+
+interface SearchStageOut {
+  searchResult: string;
+  urls: Array<{ url: string; title: string }>;
+  /** Iterations actually executed. */
+  attemptsUsed: number;
+  /** Configured cap on iterations (1 = no retry). */
+  maxAttempts: number;
+}
+
+async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
+  p.onUpdate?.(progressUpdate("search", `Querying ${p.searchConfig.provider}/${p.searchConfig.model}...`));
+
+  const searchQuery = appendDomainFilter(p.params.query, p.params.domains);
+
+  // The search model occasionally returns a valid response with no markdown
+  // links (a "degraded 200" — common under provider load). callLlm's retry
+  // only covers transport errors, so retry the search call itself a bounded
+  // number of times until it yields at least one URL.
+  let searchResult = "";
+  let urls: Array<{ url: string; title: string }> = [];
+  const maxAttempts = Math.max(1, p.settings.searchRetryAttempts);
+  let attemptsUsed = 0;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    attemptsUsed = attempt;
+    searchResult = await __harness.callLlm(p.ctx, p.searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {
+      maxTokens: 2000,
+      signal: p.signal,
+      retry: p.retry,
+      timeoutMs: p.settings.llmTimeoutMs,
+    });
+    urls = extractSourceUrls(searchResult).slice(0, p.maxUrls);
+    if (urls.length > 0 || p.signal?.aborted || attempt === maxAttempts) break;
+    p.onUpdate?.(progressUpdate("search", `Search returned no links — retrying (${attempt}/${maxAttempts - 1})...`));
+    await sleep(p.settings.retryBaseDelayMs, p.signal);
+  }
+
+  // User cancel during search: propagate abort rather than returning a
+  // misleading "no links" diagnostic.
+  if (p.signal?.aborted) {
+    throw new DOMException("Aborted", "AbortError");
+  }
+
+  p.tel?.recordSearch({
+    model: `${p.searchConfig.provider}/${p.searchConfig.model}`,
+    linksReturned: urls.length,
+    retryFired: attemptsUsed > 1,
+    attempts: attemptsUsed,
+    degraded: urls.length === 0,
+  });
+
+  return { searchResult, urls, attemptsUsed, maxAttempts };
+}
+
+// ── Stage 2: Fetch ──
+
+interface FetchStageOut {
+  pages: FetchedPage[];
+  successPages: FetchedPage[];
+}
+
+async function runFetchStage(
+  p: PipelineCtx,
+  urls: Array<{ url: string; title: string }>,
+): Promise<FetchStageOut> {
+  p.onUpdate?.(progressUpdate("fetch", `Fetching ${urls.length} pages...`));
+  const pages = await __harness.fetchPages(urls.map((u) => u.url), p.signal, {
+    timeoutMs: p.settings.fetchTimeoutMs,
+    browser: p.settings.browserFingerprint as unknown as import("wreq-js").BrowserProfile,
+    concurrency: p.settings.fetchConcurrency,
+    proxy: p.settings.httpProxy,
+  });
+  const successPages = pages.filter((pg) => pg.status === "success");
+
+  // Tally fetch-variant winners from the per-page `source` field that
+  // fetch.ts stamps ("defuddle" | "markdown"). Falls back to "unknown"
+  // for any page lacking the field.
+  const fetchWinners: Record<string, number> = {};
+  for (const pg of successPages) {
+    const variant = pg.source ?? "unknown";
+    fetchWinners[variant] = (fetchWinners[variant] ?? 0) + 1;
+  }
+  p.tel?.recordFetch({
+    requested: urls.length,
+    succeeded: successPages.length,
+    failed: pages.length - successPages.length,
+    winners: fetchWinners,
+  });
+
+  return { pages, successPages };
+}
+
+// ── Stage 3: Extract ──
+
+interface ExtractStageOut {
+  extractions: ExtractResult[];
+  blockedExtractions: ExtractResult[];
+}
+
+async function runExtractStage(
+  p: PipelineCtx,
+  successPages: FetchedPage[],
+  pages: FetchedPage[],
+): Promise<ExtractStageOut> {
+  p.onUpdate?.(progressUpdate("extract", `Extracting from ${successPages.length} pages...`, {
+    current: 0,
+    total: successPages.length,
+  }));
+
+  // Extract pages through a bounded worker pool (settings.extractionConcurrency)
+  // rather than all at once. With maxUrls up to 16, an unbounded Promise.all
+  // would fire that many simultaneous LLM calls and trip provider rate limits.
+  // Progress is emitted on each page's completion (via onSettled), so the
+  // sub-progress bar reflects real work done instead of jumping to N/N at launch.
+  let extractDone = 0;
+  const rawExtractions = await mapWithConcurrency(
+    successPages,
+    p.settings.extractionConcurrency,
+    async (page) => {
+      // Space out concurrent extract calls when a throttle is configured.
+      await p.gate(p.signal);
+      return extractPage(p, page);
+    },
+    {
+      signal: p.signal,
+      onSettled: (page) => {
+        extractDone++;
+        p.onUpdate?.(progressUpdate("extract",
+          `Page ${extractDone}/${successPages.length}: ${(page.title || page.url).slice(0, 40)}...`,
+          { current: extractDone, total: successPages.length },
+        ));
+      },
+    },
+  );
+
+  // Indices left unrun by an aborted signal become a failed extraction so the
+  // result array stays aligned with successPages and fully typed.
+  const extractions: ExtractResult[] = rawExtractions.map((e, i) => e ?? {
+    url: successPages[i].url,
+    title: successPages[i].title,
+    extraction: "",
+    sourceType: "unknown",
+    currentness: "unknown",
+    status: "failed" as const,
+  });
+
+  // Include failed pages as blocked extractions
+  const blockedExtractions: ExtractResult[] = pages
+    .filter((pg) => pg.status !== "success")
+    .map((pg) => ({
+      url: pg.url,
+      title: "",
       extraction: "",
       sourceType: "unknown",
       currentness: "unknown",
-      status: "failed" as const,
-    });
+      status: "blocked" as const,
+    }));
 
-    // Include failed pages as blocked extractions
-    const blockedExtractions: ExtractResult[] = pages
-      .filter((p) => p.status !== "success")
-      .map((p) => ({
-        url: p.url,
-        title: "",
-        extraction: "",
-        sourceType: "unknown",
-        currentness: "unknown",
-        status: "blocked" as const,
-      }));
+  // Telemetry: tally extract outcomes and char throughput. Input chars are
+  // the truncated page content actually fed to each extraction; output is
+  // the returned extraction text. Blocked pages contributed no input.
+  const succeededExtr = extractions.filter((e) => e.status === "success");
+  const failedExtr = extractions.length - succeededExtr.length;
+  // Input chars are not retained per-page post-call; approximate from the
+  // pages that were fed in (capped at extractMaxChars each).
+  const totalIn = successPages.reduce(
+    (sum, pg) => sum + Math.min(pg.content.length, p.settings.extractMaxChars), 0,
+  );
+  const totalOut = succeededExtr.reduce((sum, e) => sum + e.extraction.length, 0);
+  p.tel?.recordExtract({
+    model: `${p.extractConfig.provider}/${p.extractConfig.model}`,
+    succeeded: succeededExtr.length,
+    failed: failedExtr,
+    totalInputCharsApprox: totalIn,
+    totalOutputChars: totalOut,
+  });
 
-    // Telemetry: tally extract outcomes and char throughput. Input chars are
-    // the truncated page content actually fed to each extraction; output is
-    // the returned extraction text. Blocked pages contributed no input.
-    {
-      const succeededExtr = extractions.filter((e) => e.status === "success");
-      const failedExtr = extractions.length - succeededExtr.length;
-      // Input chars are not retained per-page post-call; approximate from the
-      // pages that were fed in (capped at extractMaxChars each).
-      const totalIn = successPages.reduce(
-        (sum, p) => sum + Math.min(p.content.length, settings.extractMaxChars), 0,
-      );
-      const totalOut = succeededExtr.reduce((sum, e) => sum + e.extraction.length, 0);
-      tel?.recordExtract({
-        model: `${extractConfig.provider}/${extractConfig.model}`,
-        succeeded: succeededExtr.length,
-        failed: failedExtr,
-        totalInputCharsApprox: totalIn,
-        totalOutputChars: totalOut,
-      });
+  return { extractions, blockedExtractions };
+}
+
+// ── Stage 4: Collate + cache write ──
+
+async function runCollateStage(
+  p: PipelineCtx,
+  searchResult: string,
+  succeededExtractions: ExtractResult[],
+): Promise<string> {
+  // Build collation prompt (no files written yet — lock is never held
+  // across the LLM call). Path references in the prompt are resolved
+  // later when cache files are written.
+  const collationUserMsg = buildCollationMessage(p.params.query, p.cachePath, searchResult, succeededExtractions);
+
+  const collation = await __harness.callLlm(p.ctx, p.collateConfig, COLLATION_SYSTEM_PROMPT, collationUserMsg, {
+    maxTokens: p.settings.collationMaxTokens,
+    signal: p.signal,
+    retry: p.retry,
+    timeoutMs: p.settings.llmTimeoutMs,
+  });
+
+  p.tel?.recordCollate({
+    model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
+    summaryChars: collation.length,
+  });
+
+  return collation;
+}
+
+interface LlmsDownloads {
+  staging: string;
+  futures: Array<Promise<string | null>>;
+}
+
+/**
+ * Start llms-full downloads to a unique per-run staging dir. Network I/O
+ * never happens under the cache lock. The staging dir is unique to this run
+ * so concurrent same-query runs never interleave their downloads.
+ */
+function startLlmsFullDownloads(p: PipelineCtx, successPages: FetchedPage[]): LlmsDownloads {
+  const staging = join(
+    tmpdir(),
+    `pi-intelli-llms-${process.pid}-${randomBytes(4).toString("hex")}`,
+  );
+  let futures: Array<Promise<string | null>> = [];
+  if (!p.settings.disableLlmsFullDiscovery && !p.signal?.aborted) {
+    const sampleUrlByHost = new Map<string, string>();
+    for (const pg of successPages) {
+      try {
+        const h = new URL(pg.url).hostname;
+        if (!sampleUrlByHost.has(h)) sampleUrlByHost.set(h, pg.url);
+      } catch { /* skip malformed URLs */ }
     }
-
-    // ═══════════════════════════════════════════
-    // Stage 4: Collate via LLM + write cache
-    // ═══════════════════════════════════════════
-    onUpdate?.(progressUpdate("collate", "Synthesising results..."));
-
-    const allExtractions = [...extractions, ...blockedExtractions];
-
-    // Build collation message
-    const succeededExtractions = allExtractions.filter((e) => e.status === "success");
-
-    // If no extractions produced useful content (all fetches failed or all
-    // extraction LLM calls errored), return the search summary without
-    // creating cache artifacts or running collation.
-    if (succeededExtractions.length === 0) {
-      const fetchFailed = blockedExtractions.length;
-      const extractFailed = extractions.filter((e) => e.status === "failed").length;
-      await writeTelemetrySidecar(tel, cachePath, "extraction-failed");
-      const reason = fetchFailed > 0
-        ? `${fetchFailed} page(s) failed to fetch`
-        : `${extractFailed} extraction(s) failed`;
-      return {
-        content: [textContent(
-          `${reason}. No content was extracted.\n\nSearch summary:\n${searchResult}`,
-        )],
-        details: {
-          cachePath: "",
-          urlsSearched: urls.length,
-          pagesFetched: successPages.length,
-          pagesFailed: pages.length - successPages.length,
-        } as Record<string, unknown>,
-      };
-    }
-
-    // Build collation prompt (no files written yet — lock is never held
-    // across the LLM call). Path references in the prompt are resolved
-    // later when cache files are written.
-    const collationUserMsg = buildCollationMessage(params.query, cachePath, searchResult, succeededExtractions);
-
-    const collation = await __harness.callLlm(ctx, collateConfig, COLLATION_SYSTEM_PROMPT, collationUserMsg, {
-      maxTokens: settings.collationMaxTokens,
-      signal,
-      retry,
-      timeoutMs: settings.llmTimeoutMs,
-    });
-
-    tel?.recordCollate({
-      model: `${collateConfig.provider}/${collateConfig.model}`,
-      summaryChars: collation.length,
-    });
-
-    // ═══════════════════════════════════════════════════════════════
-    // Start llms-full downloads to a unique per-run staging dir
-    // BEFORE acquiring any lock. Network I/O never happens under
-    // the cache lock. The staging dir is unique to this run so
-    // concurrent same-query runs never interleave their downloads.
-    // ═══════════════════════════════════════════════════════════════
-    const llmsStaging = join(
-      tmpdir(),
-      `pi-intelli-llms-${process.pid}-${randomBytes(4).toString("hex")}`,
+    futures = [...sampleUrlByHost.values()].map((sampleUrl) =>
+      downloadLlmsFullToCache(sampleUrl, staging, p.signal, undefined, p.settings.httpProxy).catch(() => null),
     );
-    let llmsFullFutures: Array<Promise<string | null>> = [];
-    if (!settings.disableLlmsFullDiscovery && !signal?.aborted) {
-      const sampleUrlByHost = new Map<string, string>();
-      for (const p of successPages) {
-        try {
-          const h = new URL(p.url).hostname;
-          if (!sampleUrlByHost.has(h)) sampleUrlByHost.set(h, p.url);
-        } catch { /* skip malformed URLs */ }
-      }
-      llmsFullFutures = [...sampleUrlByHost.values()].map((sampleUrl) =>
-        downloadLlmsFullToCache(sampleUrl, llmsStaging, signal, undefined, settings.httpProxy).catch(() => null),
-      );
-    }
+  }
+  return { staging, futures };
+}
 
-    // ═══════════════════════════════════════════════════════════════
-    // Write cache artifacts under the per-cache-path lock.
-    // Only local file I/O happens here — no network calls.
-    // The lock serialises two concurrent same-query runs.
-    // ═══════════════════════════════════════════════════════════════
-    await withLock(cacheLockDir(cachePath), async () => {
+/**
+ * Write cache artifacts under the per-cache-path lock (only local file I/O
+ * happens under the lock; it serialises two concurrent same-query runs),
+ * then commit any remaining llms-full downloads under a second short lock.
+ */
+async function writeCacheArtifacts(
+  p: PipelineCtx,
+  allExtractions: ExtractResult[],
+  fetched: FetchStageOut,
+  searchResult: string,
+  collation: string,
+  llms: LlmsDownloads,
+): Promise<void> {
+  await withLock(cacheLockDir(p.cachePath), async () => {
     // Write cache files (staging-based atomic, no partial visibility)
-    await writeCacheFiles(cachePath, allExtractions, successPages, searchResult, params.query);
+    await writeCacheFiles(p.cachePath, allExtractions, fetched.successPages, searchResult, p.params.query);
 
     // Write report (atomic via temp-file + rename)
-    await writeReportFile(cachePath, params.query, collation, allExtractions, pages);
+    await writeReportFile(p.cachePath, p.params.query, collation, allExtractions, fetched.pages);
 
     // Write telemetry sidecar (atomic via temp-file + rename)
-    await writeTelemetrySidecar(tel, cachePath, "completed");
+    await writeTelemetrySidecar(p.tel, p.cachePath, "completed");
 
     // Move any already-completed llms-full downloads from the per-run
     // staging dir into cachePath/sources/. Pending downloads stay in
     // staging and are moved after the lock is released.
-    await flushLlmsStaging(llmsStaging, join(cachePath, "sources"));
+    await flushLlmsStaging(llms.staging, join(p.cachePath, "sources"));
 
-    // ═══════════════════════════════════════════════════════════════
     // Atomic index update under a separate lock scoped to the cache
     // directory. Different cache paths contend only on this short
     // index update, not on the per-cache-path bulk writes.
-    // ═══════════════════════════════════════════════════════════════
-    await withLock(indexLockDir(settings.cacheDir), async () => {
-      const slug = cachePath.split("/").pop() ?? cachePath;
-      await updateIndex(settings.cacheDir, slug, params.query);
+    await withLock(indexLockDir(p.settings.cacheDir), async () => {
+      const slug = p.cachePath.split("/").pop() ?? p.cachePath;
+      await updateIndex(p.settings.cacheDir, slug, p.params.query);
     });
-    });
+  });
 
-    // Await remaining llms-full downloads outside the lock. Commit their
-    // staged files under the cache lock so concurrent same-query runs cannot
-    // interleave writes to identical llms-full filenames.
-    await Promise.all(llmsFullFutures);
-    await withLock(cacheLockDir(cachePath), () =>
-      flushLlmsStaging(llmsStaging, join(cachePath, "sources")),
-    );
-    // Clean up the staging dir.
-    await rm(llmsStaging, { recursive: true, force: true }).catch(() => {});
+  // Await remaining llms-full downloads outside the lock. Commit their
+  // staged files under the cache lock so concurrent same-query runs cannot
+  // interleave writes to identical llms-full filenames.
+  await Promise.all(llms.futures);
+  await withLock(cacheLockDir(p.cachePath), () =>
+    flushLlmsStaging(llms.staging, join(p.cachePath, "sources")),
+  );
+  // Clean up the staging dir.
+  await rm(llms.staging, { recursive: true, force: true }).catch(() => {});
+}
 
-    // ═══════════════════════════════════════════
-    // Stage 5: Cache suggest — find related previous searches
-    // ═══════════════════════════════════════════
-    // Runs after the pipeline completes and after both cache and index
-    // locks are released. Uses the extract model as a cheap LLM judge to
-    // find semantically related cached searches. Never blocks the main
-    // result — graceful degradation on failure. No lock is needed:
-    // reading .index.json is safe (atomic rename on write) and the only
-    // writer (updateIndex) has already released the index lock.
-    // ── Stage 5 notification ──
-    onUpdate?.(progressUpdate("cache", "Checking related cached research..."));
+// ── Stage 5: Cache suggest ──
 
-    const currentSlug = cachePath.split("/").pop() ?? "";
-    let suggestionsAppendix = "";
-    // Tracked for telemetry regardless of whether the judge runs.
-    let cacheSuggestRan = false;
-    let cacheSuggestSurfaced = 0;
-    let cacheSuggestSlugs: string[] = [];
-    try {
-      const index = await readIndex(settings.cacheDir);
-      // Only run judge if there are other searches to compare against
-      if (index.searches.some((e) => e.slug !== currentSlug)) {
-        const indexText = formatIndexForJudge(index, currentSlug);
-        const judgeUserMsg = `Current query: "${params.query}"\n\nPrevious searches:\n${indexText}`;
-        const judgeResponse = await __harness.callLlm(ctx, extractConfig, CACHE_SUGGEST_PROMPT, judgeUserMsg, {
-          maxTokens: 500,
-          signal,
-          retry,
-          timeoutMs: settings.llmTimeoutMs,
-        });
-        const matches = parseJudgeResponse(judgeResponse, index, currentSlug);
-        cacheSuggestRan = true;
-        cacheSuggestSurfaced = matches.length;
-        cacheSuggestSlugs = matches.map((m) => m.entry.slug);
-        suggestionsAppendix = formatCacheSuggestions(matches, settings.cacheDir);
-      }
-    } catch (err: unknown) {
-      // Cache suggest is purely additive — never fail the pipeline
-      logErr(`Cache suggest failed: ${errMsg(err)}`);
+/**
+ * Find related previous searches and return the formatted appendix (empty
+ * string when none). Runs after the pipeline completes and after both cache
+ * and index locks are released. Uses the extract model as a cheap LLM judge.
+ * Never blocks the main result — graceful degradation on failure. No lock is
+ * needed: reading .index.json is safe (atomic rename on write) and the only
+ * writer (updateIndex) has already released the index lock.
+ */
+async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
+  p.onUpdate?.(progressUpdate("cache", "Checking related cached research..."));
+
+  const currentSlug = p.cachePath.split("/").pop() ?? "";
+  let suggestionsAppendix = "";
+  // Tracked for telemetry regardless of whether the judge runs.
+  let cacheSuggestRan = false;
+  let cacheSuggestSurfaced = 0;
+  let cacheSuggestSlugs: string[] = [];
+  try {
+    const index = await readIndex(p.settings.cacheDir);
+    // Only run judge if there are other searches to compare against
+    if (index.searches.some((e) => e.slug !== currentSlug)) {
+      const indexText = formatIndexForJudge(index, currentSlug);
+      const judgeUserMsg = `Current query: "${p.params.query}"\n\nPrevious searches:\n${indexText}`;
+      const judgeResponse = await __harness.callLlm(p.ctx, p.extractConfig, CACHE_SUGGEST_PROMPT, judgeUserMsg, {
+        maxTokens: 500,
+        signal: p.signal,
+        retry: p.retry,
+        timeoutMs: p.settings.llmTimeoutMs,
+      });
+      const matches = parseJudgeResponse(judgeResponse, index, currentSlug);
+      cacheSuggestRan = true;
+      cacheSuggestSurfaced = matches.length;
+      cacheSuggestSlugs = matches.map((m) => m.entry.slug);
+      suggestionsAppendix = formatCacheSuggestions(matches, p.settings.cacheDir);
     }
+  } catch (err: unknown) {
+    // Cache suggest is purely additive — never fail the pipeline
+    logErr(`Cache suggest failed: ${errMsg(err)}`);
+  }
 
-    tel?.recordCacheSuggest({
-      ran: cacheSuggestRan,
-      surfaced: cacheSuggestSurfaced,
-      slugs: cacheSuggestSlugs,
-    });
+  p.tel?.recordCacheSuggest({
+    ran: cacheSuggestRan,
+    surfaced: cacheSuggestSurfaced,
+    slugs: cacheSuggestSlugs,
+  });
 
-    // ── Telemetry sidecar refresh ──
-    // The sidecar was already written under the cache lock with all core
-    // stages recorded. Rewrite it now that cache-suggest data is available
-    // so the final sidecar is complete. Atomic via temp-file + rename; a
-    // failure is caught and logged, never surfaced to the pipeline.
-    await writeTelemetrySidecar(tel, cachePath, "completed");
+  return suggestionsAppendix;
+}
 
-    // ═══════════════════════════════════════════
-    // Return concise injection
-    // ═══════════════════════════════════════════
-    const failedCount = pages.length - successPages.length;
-    const result =
-      collation +
-      formatCacheAppendix(cachePath, successPages.length, failedCount) +
-      suggestionsAppendix;
-
-    return {
-      content: [textContent(result)],
-      details: {
-        cachePath,
-        urlsSearched: urls.length,
-        pagesFetched: successPages.length,
-        pagesFailed: failedCount,
-      },
-    };
-    } // end executePipeline()
-  },
-};
+/**
+ * Shared degraded-exit path: stamp the outcome, write the sidecar, and
+ * return the fallback result. Every early return in executePipeline() goes
+ * through here so the three degraded outcomes stay structurally uniform.
+ */
+async function degradedReturn(
+  p: PipelineCtx,
+  outcome: TelemetryOutcome,
+  message: string,
+  details: Record<string, unknown>,
+): Promise<ResearchToolResult> {
+  await writeTelemetrySidecar(p.tel, p.cachePath, outcome);
+  return { content: [textContent(message)], details };
+}
 
 /**
  * Move completed llms-full downloads from a per-run staging directory
@@ -606,26 +745,20 @@ export function validateModelConfigs(
 /**
  * Extract query-relevant content from a single page.
  */
-async function extractPage(
-  ctx: ExtensionContext,
-  extractConfig: { provider: string; model: string },
-  page: FetchedPage,
-  query: string,
-  focusPrompt: string | undefined,
-  maxChars: number,
-  maxTokens: number,
-  signal: AbortSignal | undefined,
-  retry: LlmRetryConfig,
-  timeoutMs: number,
-): Promise<ExtractResult> {
+async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractResult> {
   try {
-    const userMessage = buildExtractionMessage(page.content, query, focusPrompt, maxChars);
+    const userMessage = buildExtractionMessage(
+      page.content,
+      p.params.query,
+      p.params.focusPrompt,
+      p.settings.extractMaxChars,
+    );
 
-    const extraction = await __harness.callLlm(ctx, extractConfig, EXTRACTION_SYSTEM_PROMPT, userMessage, {
-      maxTokens,
-      signal,
-      retry,
-      timeoutMs,
+    const extraction = await __harness.callLlm(p.ctx, p.extractConfig, EXTRACTION_SYSTEM_PROMPT, userMessage, {
+      maxTokens: p.settings.extractionMaxTokens,
+      signal: p.signal,
+      retry: p.retry,
+      timeoutMs: p.settings.llmTimeoutMs,
     });
 
     const firstLine = extraction.split("\n")[0] ?? "";
