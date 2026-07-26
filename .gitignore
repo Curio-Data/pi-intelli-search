@@ -35,3 +35,4 @@ npm-debug.log*
 .e2e-collate-tight/
 .e2e-llmsfull/
 .e2e-logs/
+/review-*.md

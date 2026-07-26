@@ -234,6 +234,25 @@ in a separate herdr pane so the owner can watch and attach.
 | GLM reviewer stalls or context-blows | Checkpoint idiom: `herdr agent send` + `pane send-keys Enter` if idle with unsubmitted text; its window (1M) fits the whole repo |
 | Scope creep into formatting/prettier | Explicitly deferred; separate PR |
 
+## Execution Log
+
+- **Phase 1 (characterization tests):** done. 320 tests green on unmodified
+  source (one additive export: `CURRENT_VERSION`).
+- **Phase 2 (refactor, 10 steps):** done, one commit per step, 331 then 330
+  tests green after every step.
+- **Phase 3 (verification):** build clean, 330 unit tests green, smoke green,
+  full E2E suite 7/7 passed via `E2E_GAP_SECONDS=30 ./test/run-e2e-all.sh`.
+- **Phase 4 (adversarial review):** GLM 5.2 (`pi --provider zai --model
+  glm-5.2`, herdr pane `review-glm`) reviewed plan + full diff. Verdict:
+  SHIP, 0 HIGH, 0 MEDIUM, 1 LOW. Report kept out of git (GLM-authored markdown trips the em-dash CI gate; the fal-web-app convention likewise gitignores review-*.md). Copy: /tmp/review-v0.12.1-glm.md.
+  - LOW disposition (accepted, no fix): `buildCollationMessage` guards the
+    search-summary block with `if (searchSummary)` where the old research path
+    emitted it unconditionally. Unreachable: reaching collation implies
+    `searchResult` yielded URLs and is therefore non-empty. The guard matches
+    the pre-existing collate-tool behaviour. Spot-verified against
+    `git show main` by the builder.
+- **Phase 5 (wrap-up):** stats below; version bump deferred to release prep.
+
 ## Verification of This Plan
 
 Methodology checked against current external guidance via `intelli_research`
