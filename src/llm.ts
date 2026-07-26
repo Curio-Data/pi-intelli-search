@@ -10,7 +10,13 @@ import {
   type SimpleStreamOptions,
 } from "@earendil-works/pi-ai/compat";
 import type { ModelConfig } from "./types.js";
-import { withRetry, isRetryableMessage, parseRetryAfterMs, callWithAbortTimeout, errMsg } from "./util.js";
+import {
+  withRetry,
+  isRetryableMessage,
+  parseRetryAfterMs,
+  callWithAbortTimeout,
+  errMsg,
+} from "./util.js";
 
 /** Narrow injectable seam for deterministic callLlm tests. */
 export const __harness: {
@@ -51,7 +57,12 @@ export async function callLlm(
   config: ModelConfig,
   systemPrompt: string,
   userMessage: string,
-  options?: { maxTokens?: number; signal?: AbortSignal; retry?: LlmRetryConfig; timeoutMs?: number },
+  options?: {
+    maxTokens?: number;
+    signal?: AbortSignal;
+    retry?: LlmRetryConfig;
+    timeoutMs?: number;
+  },
 ): Promise<string> {
   // 1. Resolve model from registry
   const model = ctx.modelRegistry.find(config.provider, config.model);
@@ -157,7 +168,7 @@ export async function callLlm(
     },
     (result, error) => {
       if (userSignal?.aborted) return { retry: false }; // genuine user cancel
-      if (lastAttemptTimedOut) return { retry: true };  // our timeout fired
+      if (lastAttemptTimedOut) return { retry: true }; // our timeout fired
       if (error) {
         const m = errMsg(error);
         return isRetryableMessage(m)
@@ -165,7 +176,10 @@ export async function callLlm(
           : { retry: false };
       }
       if (result?.stopReason === "error" && isRetryableMessage(result.errorMessage)) {
-        return { retry: true, retryAfterMs: parseRetryAfterMs(result.errorMessage) ?? onResponseRetryAfterMs };
+        return {
+          retry: true,
+          retryAfterMs: parseRetryAfterMs(result.errorMessage) ?? onResponseRetryAfterMs,
+        };
       }
       return { retry: false };
     },

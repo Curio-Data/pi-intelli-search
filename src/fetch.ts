@@ -41,7 +41,11 @@ const DEFAULT_FETCH_OPTIONS: FetchOptions = {
  * Fetch a single URL. Fetches HTML→Defuddle and markdown variant in parallel,
  * compares quality, returns the better result.
  */
-async function fetchSingle(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage> {
+async function fetchSingle(
+  url: string,
+  opts: FetchOptions,
+  signal?: AbortSignal,
+): Promise<FetchedPage> {
   try {
     return await fetchWithComparison(url, opts, signal);
   } catch (err: unknown) {
@@ -59,7 +63,11 @@ async function fetchSingle(url: string, opts: FetchOptions, signal?: AbortSignal
  * Fetch via both HTML→Defuddle and markdown endpoint,
  * compare quality, return the better result.
  */
-async function fetchWithComparison(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage> {
+async function fetchWithComparison(
+  url: string,
+  opts: FetchOptions,
+  signal?: AbortSignal,
+): Promise<FetchedPage> {
   // Run both fetches in parallel
   const [defuddleRes, markdownRes] = await Promise.allSettled([
     fetchViaDefuddle(url, opts, signal),
@@ -117,7 +125,9 @@ function scoreContent(content: string): number {
   score += (content.match(/^\|/gm) ?? []).length * 20;
 
   // Penalty for nav chrome artifacts
-  score -= (content.match(/Skip to content|Was this helpful|Edit page|Report issue|Copy page/g) ?? []).length * 500;
+  score -=
+    (content.match(/Skip to content|Was this helpful|Edit page|Report issue|Copy page/g) ?? [])
+      .length * 500;
 
   // Penalty for YAML frontmatter (should have been cleaned)
   if (content.startsWith("---")) score -= 1000;
@@ -129,7 +139,11 @@ function scoreContent(content: string): number {
 // Pipeline 1: HTML → Defuddle → markdown
 // ---------------------------------------------------------------------------
 
-async function fetchViaDefuddle(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage> {
+async function fetchViaDefuddle(
+  url: string,
+  opts: FetchOptions,
+  signal?: AbortSignal,
+): Promise<FetchedPage> {
   const response = await rawFetch(url, opts, signal);
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
@@ -167,12 +181,16 @@ async function fetchViaDefuddle(url: string, opts: FetchOptions, signal?: AbortS
   if (degraded || !extracted) {
     // Defuddle failed or degraded. Fall back to basic DOM text extraction.
     const title = document.querySelector("title")?.textContent?.trim() ?? "";
-    const metaDesc = document.querySelector('meta[name="description"]')?.getAttribute("content")?.trim() ?? "";
+    const metaDesc =
+      document.querySelector('meta[name="description"]')?.getAttribute("content")?.trim() ?? "";
     const bodyText = document.body?.textContent?.replace(/\s+/g, " ").trim() ?? "";
-    const content = [`# ${title}`,
+    const content = [
+      `# ${title}`,
       metaDesc ? `> ${metaDesc}` : "",
       bodyText.length > 0 ? bodyText : "(No parseable text content)",
-    ].filter(Boolean).join("\n\n");
+    ]
+      .filter(Boolean)
+      .join("\n\n");
 
     return {
       url,
@@ -198,7 +216,11 @@ async function fetchViaDefuddle(url: string, opts: FetchOptions, signal?: AbortS
 // Pipeline 2: Markdown endpoint (Accept header or alt-link)
 // ---------------------------------------------------------------------------
 
-async function fetchMarkdownVariant(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage | null> {
+async function fetchMarkdownVariant(
+  url: string,
+  opts: FetchOptions,
+  signal?: AbortSignal,
+): Promise<FetchedPage | null> {
   // a) Accept: text/markdown header (VitePress, FastAPI docs, etc.)
   const acceptResult = await fetchWithAcceptHeader(url, opts, signal);
   if (acceptResult) return acceptResult;
@@ -210,7 +232,11 @@ async function fetchMarkdownVariant(url: string, opts: FetchOptions, signal?: Ab
   return null;
 }
 
-async function fetchWithAcceptHeader(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage | null> {
+async function fetchWithAcceptHeader(
+  url: string,
+  opts: FetchOptions,
+  signal?: AbortSignal,
+): Promise<FetchedPage | null> {
   try {
     const combinedSignal = combineSignal(signal, opts.timeoutMs);
     const response = await wreqFetch(url, {
@@ -228,7 +254,11 @@ async function fetchWithAcceptHeader(url: string, opts: FetchOptions, signal?: A
   }
 }
 
-async function findMarkdownAlternate(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<string | null> {
+async function findMarkdownAlternate(
+  url: string,
+  opts: FetchOptions,
+  signal?: AbortSignal,
+): Promise<string | null> {
   try {
     const response = await rawFetch(url, opts, signal);
     if (!response.ok) return null;
@@ -248,7 +278,11 @@ async function findMarkdownAlternate(url: string, opts: FetchOptions, signal?: A
   }
 }
 
-async function fetchMarkdown(mdUrl: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage> {
+async function fetchMarkdown(
+  mdUrl: string,
+  opts: FetchOptions,
+  signal?: AbortSignal,
+): Promise<FetchedPage> {
   const response = await rawFetch(mdUrl, opts, signal);
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   return processMarkdownResponse(mdUrl, response, opts);
@@ -348,7 +382,6 @@ async function downloadLlmsFullFile(
   signal?: AbortSignal,
   proxy?: string,
 ): Promise<string | null> {
-
   try {
     const response = await wreqFetch(llmsFullUrl, {
       browser: "chrome_145",
@@ -436,11 +469,11 @@ function sanitizeMarkdown(content: string): string {
  * elements with unsalvageable values.
  */
 function cleanBrokenMetadata(document: Document, pageUrl: string): void {
-  const elements = document.querySelectorAll('meta[content], link[href], a[href]');
+  const elements = document.querySelectorAll("meta[content], link[href], a[href]");
   for (const el of Array.from(elements)) {
     const tag = (el as Element).tagName.toLowerCase();
 
-    for (const attr of tag === 'meta' ? ['content'] : ['href']) {
+    for (const attr of tag === "meta" ? ["content"] : ["href"]) {
       const val = (el as Element).getAttribute(attr);
       if (!val) continue;
 
@@ -488,7 +521,11 @@ function cleanBrokenMetadata(document: Document, pageUrl: string): void {
 }
 
 function safeHostname(url: string): string | null {
-  try { return new URL(url).hostname; } catch { return null; }
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -513,7 +550,14 @@ export async function fetchPages(
     { signal },
   );
 
-  return results.map((r, i) =>
-    r ?? { url: urls[i], title: "", content: "", status: "error" as const, error: "Worker did not complete" },
+  return results.map(
+    (r, i) =>
+      r ?? {
+        url: urls[i],
+        title: "",
+        content: "",
+        status: "error" as const,
+        error: "Worker did not complete",
+      },
   );
 }

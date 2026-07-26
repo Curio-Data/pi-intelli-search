@@ -4,7 +4,12 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveModelConfig, loadSettings, hasFlatKeys, invalidateSettingsCache } from "../src/settings.js";
+import {
+  resolveModelConfig,
+  loadSettings,
+  hasFlatKeys,
+  invalidateSettingsCache,
+} from "../src/settings.js";
 import type { ResearchSettings } from "../src/types.js";
 
 const baseSettings: ResearchSettings = {
@@ -158,7 +163,11 @@ describe("loadSettings nested namespace", () => {
       invalidateSettingsCache();
       const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
       assert.strictEqual(settings.maxUrls, 12, "nested maxUrls (cap) should win over flat key");
-      assert.strictEqual(settings.defaultUrls, 8, "defaultUrls should remain at default when not overridden");
+      assert.strictEqual(
+        settings.defaultUrls,
+        8,
+        "defaultUrls should remain at default when not overridden",
+      );
     } finally {
       if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
       else delete process.env.PI_CODING_AGENT_DIR;
@@ -348,14 +357,20 @@ describe("trusted project settings", () => {
     process.env.PI_CODING_AGENT_DIR = agentDir;
 
     try {
-      writeFileSync(join(agentDir, "settings.json"), JSON.stringify({
-        "pi-intelli-search": { cacheDir: ".global-cache", maxUrls: 7 },
-      }));
+      writeFileSync(
+        join(agentDir, "settings.json"),
+        JSON.stringify({
+          "pi-intelli-search": { cacheDir: ".global-cache", maxUrls: 7 },
+        }),
+      );
       mkdirSync(join(projectDir, ".pi"), { recursive: true });
-      writeFileSync(join(projectDir, ".pi", "settings.json"), JSON.stringify({
-        "pi-intelli-search": { cacheDir: ".project-cache", maxUrls: 2 },
-        intelliCacheDir: ".deprecated-project-cache",
-      }));
+      writeFileSync(
+        join(projectDir, ".pi", "settings.json"),
+        JSON.stringify({
+          "pi-intelli-search": { cacheDir: ".project-cache", maxUrls: 2 },
+          intelliCacheDir: ".deprecated-project-cache",
+        }),
+      );
 
       invalidateSettingsCache();
       const untrusted = await loadSettings({ cwd: projectDir, projectTrusted: false });
@@ -457,14 +472,22 @@ describe("migrateDefaults", () => {
     const { changes, settings } = migrateDefaults("0.7.0", "0.8.0", userSettings);
 
     assert.ok(changes.length > 0, "should have migration changes");
-    assert.deepStrictEqual(settings.extractModel, {
-      provider: "openrouter",
-      model: "minimax/minimax-m2.7",
-    }, "extract should migrate to 0.8.0 default");
-    assert.deepStrictEqual(settings.collateModel, {
-      provider: "openrouter",
-      model: "minimax/minimax-m2.7",
-    }, "collate should migrate to 0.8.0 default");
+    assert.deepStrictEqual(
+      settings.extractModel,
+      {
+        provider: "openrouter",
+        model: "minimax/minimax-m2.7",
+      },
+      "extract should migrate to 0.8.0 default",
+    );
+    assert.deepStrictEqual(
+      settings.collateModel,
+      {
+        provider: "openrouter",
+        model: "minimax/minimax-m2.7",
+      },
+      "collate should migrate to 0.8.0 default",
+    );
   });
 
   it("does NOT migrate when user customized a model", async () => {
@@ -480,15 +503,23 @@ describe("migrateDefaults", () => {
     const { changes, settings } = migrateDefaults("0.7.0", "0.8.0", userSettings);
 
     // Extract should NOT change (user customized)
-    assert.deepStrictEqual(settings.extractModel, {
-      provider: "openai",
-      model: "gpt-4o-mini",
-    }, "customized extract should not be migrated");
+    assert.deepStrictEqual(
+      settings.extractModel,
+      {
+        provider: "openai",
+        model: "gpt-4o-mini",
+      },
+      "customized extract should not be migrated",
+    );
     // Collate matched old default — should migrate
-    assert.deepStrictEqual(settings.collateModel, {
-      provider: "openrouter",
-      model: "minimax/minimax-m2.7",
-    }, "default-matching collate should migrate");
+    assert.deepStrictEqual(
+      settings.collateModel,
+      {
+        provider: "openrouter",
+        model: "minimax/minimax-m2.7",
+      },
+      "default-matching collate should migrate",
+    );
 
     const extractChange = changes.find((c) => c.includes("extract"));
     assert.strictEqual(extractChange, undefined, "no extract change when customized");
@@ -580,8 +611,7 @@ describe("parametric settings round-trip (all keys)", () => {
     intelliMinRequestIntervalMs: "minRequestIntervalMs",
   };
 
-  const valueFor = (key: string): unknown =>
-    NESTED_CASES.find(([k]) => k === key)?.[1];
+  const valueFor = (key: string): unknown => NESTED_CASES.find(([k]) => k === key)?.[1];
 
   async function loadWith(content: Record<string, unknown>): Promise<ResearchSettings> {
     const dir = mkdtempSync(join(tmpdir(), "pi-intelli-param-"));

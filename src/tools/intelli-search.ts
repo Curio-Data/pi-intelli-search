@@ -17,7 +17,8 @@ export const intelliSearchTool = {
   description:
     "Search the web and return a concise answer with source URLs. " +
     "For multi-page deep research, use intelli_research instead.",
-  promptSnippet: "intelli_search(query): search the web and return synthesised results with source URLs",
+  promptSnippet:
+    "intelli_search(query): search the web and return synthesised results with source URLs",
   parameters: Type.Object({
     query: Type.String({ description: "Search query" }),
     domains: Type.Optional(Type.Array(Type.String(), { description: "Restrict to these domains" })),

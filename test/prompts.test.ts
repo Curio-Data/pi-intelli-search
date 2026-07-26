@@ -1,7 +1,12 @@
 // test/prompts.test.ts — Snapshot tests for prompt templates
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT, CACHE_SUGGEST_PROMPT } from "../src/prompts.js";
+import {
+  SEARCH_SYSTEM_PROMPT,
+  EXTRACTION_SYSTEM_PROMPT,
+  COLLATION_SYSTEM_PROMPT,
+  CACHE_SUGGEST_PROMPT,
+} from "../src/prompts.js";
 
 describe("SEARCH_SYSTEM_PROMPT", () => {
   it("is a non-empty string", () => {
@@ -95,7 +100,10 @@ describe("CACHE_SUGGEST_PROMPT", () => {
   });
 
   it("cautions against false positives", () => {
-    assert.ok(CACHE_SUGGEST_PROMPT.includes("genuinely related"), "should warn about false positives");
+    assert.ok(
+      CACHE_SUGGEST_PROMPT.includes("genuinely related"),
+      "should warn about false positives",
+    );
     assert.ok(CACHE_SUGGEST_PROMPT.includes("NOT related"), "should give negative example");
   });
 

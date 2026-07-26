@@ -95,9 +95,7 @@ export async function acquireLock(
       }
 
       if (Date.now() >= deadline) {
-        throw new Error(
-          `Lock timeout: could not acquire ${lockDir} within ${timeoutMs}ms`,
-        );
+        throw new Error(`Lock timeout: could not acquire ${lockDir} within ${timeoutMs}ms`);
       }
 
       // Jittered backoff to avoid thundering-herd on lock release.
@@ -107,10 +105,7 @@ export async function acquireLock(
   }
 }
 
-async function isLockStale(
-  lockDir: string,
-  staleMs: number,
-): Promise<boolean> {
+async function isLockStale(lockDir: string, staleMs: number): Promise<boolean> {
   try {
     const s = await stat(lockDir);
     return Date.now() - s.birthtimeMs > staleMs;
@@ -129,10 +124,7 @@ async function isLockStale(
  * per-cache-path lock (`cacheLockDir`), never the reverse. Callers nesting
  * two withLock calls must keep that order.
  */
-export async function withLock<T>(
-  lockDir: string,
-  fn: () => Promise<T>,
-): Promise<T> {
+export async function withLock<T>(lockDir: string, fn: () => Promise<T>): Promise<T> {
   const release = await acquireLock(lockDir);
   try {
     return await fn();
@@ -146,14 +138,8 @@ export async function withLock<T>(
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Write a file atomically: write to a unique temp name, then rename(2). */
-async function atomicWriteFile(
-  filePath: string,
-  content: string,
-): Promise<void> {
-  const tmp = filePath +
-    "." + process.pid +
-    "." + randomBytes(4).toString("hex") +
-    ".tmp";
+async function atomicWriteFile(filePath: string, content: string): Promise<void> {
+  const tmp = filePath + "." + process.pid + "." + randomBytes(4).toString("hex") + ".tmp";
   await writeFile(tmp, content, "utf-8");
   await rename(tmp, filePath);
 }
@@ -265,10 +251,7 @@ export async function writeCacheFiles(
  * structure. Uses rename(2) which is atomic per-file on the same filesystem.
  * Existing files at the target are replaced.
  */
-async function moveStagedFiles(
-  staging: string,
-  target: string,
-): Promise<void> {
+async function moveStagedFiles(staging: string, target: string): Promise<void> {
   const entries = await readdir(staging, { withFileTypes: true });
   for (const entry of entries) {
     const src = join(staging, entry.name);
@@ -338,11 +321,7 @@ export async function writeReportFile(
  * rename into place. A crash mid-write leaves a stray .tmp (cleaned up by the
  * next successful write), never a partial .index.json.
  */
-export async function updateIndex(
-  cacheDir: string,
-  slug: string,
-  query: string,
-): Promise<void> {
+export async function updateIndex(cacheDir: string, slug: string, query: string): Promise<void> {
   await mkdir(cacheDir, { recursive: true });
   const indexPath = join(cacheDir, ".index.json");
 
@@ -381,9 +360,7 @@ export async function readIndex(cacheDir: string): Promise<CacheIndex> {
  */
 export function formatIndexForJudge(index: CacheIndex, excludeSlug?: string): string {
   // Take most recent entries, excluding the current search
-  const entries = index.searches
-    .filter((e) => e.slug !== excludeSlug)
-    .slice(-MAX_JUDGE_ENTRIES);
+  const entries = index.searches.filter((e) => e.slug !== excludeSlug).slice(-MAX_JUDGE_ENTRIES);
 
   if (entries.length === 0) return "No previous searches.";
 
@@ -449,11 +426,13 @@ export function formatCacheSuggestions(
 
   let out = "\n---\n\n## 📚 Related cached searches\n\n";
   out += "The following previous searches may contain relevant supplementary information. ";
-  out += "Read a report with `read .search/<slug>/report.md` if the live results are insufficient.\n\n";
+  out +=
+    "Read a report with `read .search/<slug>/report.md` if the live results are insufficient.\n\n";
   out += "| # | Query | Age | Why related |\n";
   out += "|---|-------|-----|-------------|\n";
   for (const [i, m] of matches.entries()) {
-    const queryTrunc = m.entry.query.length > 60 ? m.entry.query.slice(0, 57) + "..." : m.entry.query;
+    const queryTrunc =
+      m.entry.query.length > 60 ? m.entry.query.slice(0, 57) + "..." : m.entry.query;
     out += `| ${i + 1} | \`${queryTrunc}\` | ${age(m.entry.timestamp)} | ${m.relevance} |\n`;
   }
   out += `\nCache directory: \`${cacheDir}/\`\n`;

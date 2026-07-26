@@ -11,7 +11,13 @@ import { intelliExtractTool } from "./tools/intelli-extract.js";
 import { intelliCollateTool } from "./tools/intelli-collate.js";
 import { intelliResearchTool } from "./tools/intelli-research.js";
 import { ensureCustomModels as defaultEnsureCustomModels } from "./providers.js";
-import { invalidateSettingsCache, hasFlatKeys, migrateDefaults, loadSettings, setMigrationContext } from "./settings.js";
+import {
+  invalidateSettingsCache,
+  hasFlatKeys,
+  migrateDefaults,
+  loadSettings,
+  setMigrationContext,
+} from "./settings.js";
 import { getAgentDir, errMsg, logErr } from "./util.js";
 import { getExtensionVersion } from "./telemetry.js";
 
@@ -145,10 +151,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
         }
       } catch (err: unknown) {
         const message = errMsg(err);
-        notify(
-          `[pi-intelli-search] Warning: could not update models.json: ${message}`,
-          "warning",
-        );
+        notify(`[pi-intelli-search] Warning: could not update models.json: ${message}`, "warning");
       }
     }
 
@@ -161,7 +164,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
       if (authMissing) {
         notify(
           `[pi-intelli-search] No OpenRouter API key found. ` +
-          `This extension requires one. Run /login or add 'openrouter' to auth.json.`,
+            `This extension requires one. Run /login or add 'openrouter' to auth.json.`,
           "warning",
         );
       }
@@ -202,8 +205,9 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
           if (changes.length > 0) {
             notify(
               `[pi-intelli-search] Default models updated:\n` +
-              changes.map((c) => `  ${c}`).join("\n") + "\n" +
-              `Update your settings.json to make these permanent.`,
+                changes.map((c) => `  ${c}`).join("\n") +
+                "\n" +
+                `Update your settings.json to make these permanent.`,
               "warning",
             );
           }
@@ -240,8 +244,8 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
         if (flatKeysExist) {
           notify(
             `[pi-intelli-search] Flat 'intelli*' settings keys are deprecated. ` +
-            `Nest them under 'pi-intelli-search' in settings.json. ` +
-            `See CHANGELOG.md for details.`,
+              `Nest them under 'pi-intelli-search' in settings.json. ` +
+              `See CHANGELOG.md for details.`,
             "warning",
           );
         }

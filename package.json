@@ -36,6 +36,7 @@
     "@earendil-works/pi-ai": "^0.80.9",
     "@earendil-works/pi-coding-agent": "^0.80.9",
     "@earendil-works/pi-tui": "^0.80.9",
+    "prettier": "^3.9.6",
     "tsx": "^4.19.0",
     "typebox": "*",
     "typescript": "^5.7.0"

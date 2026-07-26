@@ -49,10 +49,13 @@ export const REQUIRED_MODELS = [
 ];
 
 interface ModelsJson {
-  providers?: Record<string, {
-    models?: Array<Record<string, unknown>>;
-    [key: string]: unknown;
-  }>;
+  providers?: Record<
+    string,
+    {
+      models?: Array<Record<string, unknown>>;
+      [key: string]: unknown;
+    }
+  >;
   [key: string]: unknown;
 }
 

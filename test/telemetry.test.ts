@@ -27,11 +27,26 @@ function buildSampleMeta(version: string): TelemetryMeta {
     durationMs: 1234,
     outcome: "completed",
     stages: {
-      search: { model: "openrouter/perplexity/sonar", linksReturned: 5, retryFired: false, attempts: 1 },
+      search: {
+        model: "openrouter/perplexity/sonar",
+        linksReturned: 5,
+        retryFired: false,
+        attempts: 1,
+      },
       fetch: { requested: 5, succeeded: 4, failed: 1, winners: { defuddle: 3, markdown: 1 } },
-      extract: { model: "openrouter/minimax/minimax-m2.7", succeeded: 4, failed: 0, totalInputCharsApprox: 200_000, totalOutputChars: 16_000 },
+      extract: {
+        model: "openrouter/minimax/minimax-m2.7",
+        succeeded: 4,
+        failed: 0,
+        totalInputCharsApprox: 200_000,
+        totalOutputChars: 16_000,
+      },
       collate: { model: "openrouter/minimax/minimax-m2.7", summaryChars: 4_000 },
-      cacheSuggest: { ran: true, surfaced: 2, slugs: ["2026-05-01-foo-abc123", "2026-05-02-bar-def456"] },
+      cacheSuggest: {
+        ran: true,
+        surfaced: 2,
+        slugs: ["2026-05-01-foo-abc123", "2026-05-02-bar-def456"],
+      },
     },
   };
 }
@@ -125,7 +140,13 @@ describe("TelemetryBuilder", () => {
     const builder = await TelemetryBuilder.create("q");
     builder.recordSearch({ model: "p/m", linksReturned: 3, retryFired: true, attempts: 2 });
     builder.recordFetch({ requested: 3, succeeded: 2, failed: 1, winners: { defuddle: 2 } });
-    builder.recordExtract({ model: "p/m", succeeded: 2, failed: 0, totalInputCharsApprox: 10, totalOutputChars: 5 });
+    builder.recordExtract({
+      model: "p/m",
+      succeeded: 2,
+      failed: 0,
+      totalInputCharsApprox: 10,
+      totalOutputChars: 5,
+    });
     builder.recordCollate({ model: "p/m", summaryChars: 100 });
     builder.recordCacheSuggest({ ran: false, surfaced: 0, slugs: [] });
     builder.setOutcome("extraction-failed");
@@ -152,7 +173,13 @@ describe("TelemetryBuilder", () => {
   it("search stage records degraded=true for no-links responses", async () => {
     _resetVersionCacheForTests();
     const builder = await TelemetryBuilder.create("q");
-    builder.recordSearch({ model: "p/m", linksReturned: 0, retryFired: true, attempts: 2, degraded: true });
+    builder.recordSearch({
+      model: "p/m",
+      linksReturned: 0,
+      retryFired: true,
+      attempts: 2,
+      degraded: true,
+    });
     const meta = builder.finalize();
     assert.strictEqual(meta.stages.search.degraded, true);
     assert.strictEqual(meta.stages.search.linksReturned, 0);

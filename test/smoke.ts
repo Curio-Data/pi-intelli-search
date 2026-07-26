@@ -29,7 +29,12 @@ async function main() {
 
   // 3. Check tool registration
   console.log("3. Registered tools:");
-  const expectedTools = ["intelli_search", "intelli_extract", "intelli_collate", "intelli_research"];
+  const expectedTools = [
+    "intelli_search",
+    "intelli_extract",
+    "intelli_collate",
+    "intelli_research",
+  ];
   for (const name of expectedTools) {
     const found = recordedTools.some((t) => t.name === name);
     console.log(`   ${found ? "✓" : "✗"} ${name}`);
@@ -80,11 +85,16 @@ async function main() {
   // 6. Verify providers.ts module loads (models.json merge logic)
   console.log("\n6. Provider module:");
   const providers = await import("../src/providers.js");
-  assert(typeof providers.ensureCustomModels === "function", "ensureCustomModels should be a function");
+  assert(
+    typeof providers.ensureCustomModels === "function",
+    "ensureCustomModels should be a function",
+  );
   console.log("   ✓ ensureCustomModels exported");
   const added = await providers.ensureCustomModels();
   assert(Array.isArray(added), "should return an array");
-  console.log(`   ✓ Idempotent: ${added.length === 0 ? "models already present" : `added: ${added.join(", ")}`}`);
+  console.log(
+    `   ✓ Idempotent: ${added.length === 0 ? "models already present" : `added: ${added.join(", ")}`}`,
+  );
 
   console.log("\n=== All smoke tests passed ===");
 }

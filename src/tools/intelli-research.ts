@@ -5,11 +5,38 @@
 import { Type } from "typebox";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT, CACHE_SUGGEST_PROMPT } from "../prompts.js";
+import {
+  SEARCH_SYSTEM_PROMPT,
+  EXTRACTION_SYSTEM_PROMPT,
+  COLLATION_SYSTEM_PROMPT,
+  CACHE_SUGGEST_PROMPT,
+} from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
-import { makeCachePath, writeCacheFiles, writeReportFile, readIndex, formatIndexForJudge, parseJudgeResponse, formatCacheSuggestions, cacheLockDir, indexLockDir, withLock, updateIndex } from "../cache.js";
-import { textContent, extractSourceUrls, inferSourceType, inferCurrentness, mapWithConcurrency, sleep, createRateLimiter, errMsg, logErr } from "../util.js";
+import {
+  makeCachePath,
+  writeCacheFiles,
+  writeReportFile,
+  readIndex,
+  formatIndexForJudge,
+  parseJudgeResponse,
+  formatCacheSuggestions,
+  cacheLockDir,
+  indexLockDir,
+  withLock,
+  updateIndex,
+} from "../cache.js";
+import {
+  textContent,
+  extractSourceUrls,
+  inferSourceType,
+  inferCurrentness,
+  mapWithConcurrency,
+  sleep,
+  createRateLimiter,
+  errMsg,
+  logErr,
+} from "../util.js";
 import type { LlmRetryConfig } from "../llm.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "../telemetry.js";
@@ -17,8 +44,21 @@ import { mkdir, writeFile, rm, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
-import type { FetchedPage, ExtractResult, ModelConfig, ResearchSettings, ToolResultLike, OnUpdate, PiTheme } from "../types.js";
-import { appendDomainFilter, buildExtractionMessage, buildCollationMessage, formatCacheAppendix } from "./shared.js";
+import type {
+  FetchedPage,
+  ExtractResult,
+  ModelConfig,
+  ResearchSettings,
+  ToolResultLike,
+  OnUpdate,
+  PiTheme,
+} from "../types.js";
+import {
+  appendDomainFilter,
+  buildExtractionMessage,
+  buildCollationMessage,
+  formatCacheAppendix,
+} from "./shared.js";
 
 // ── Progress bar: pipeline stages ──
 const STAGES = ["search", "fetch", "extract", "collate", "cache"] as const;
@@ -61,7 +101,8 @@ export const intelliResearchTool = {
     "page, and deduplicate into a concise summary. Caches all results under " +
     ".search/ for follow-up. This is the primary research tool; for quick " +
     "factual lookups, use intelli_search instead.",
-  promptSnippet: "intelli_research(query): full search → fetch → extract → collate pipeline with caching",
+  promptSnippet:
+    "intelli_research(query): full search → fetch → extract → collate pipeline with caching",
   executionMode: "sequential" as const,
   promptGuidelines: [
     "Use intelli_research when the user needs current web information (docs, APIs, best practices, library updates). For quick factual questions, use intelli_search alone.",
@@ -72,8 +113,12 @@ export const intelliResearchTool = {
   ],
   parameters: Type.Object({
     query: Type.String({ description: "What to research" }),
-    maxUrls: Type.Optional(Type.Number({ description: "Max URLs to fetch (default: 8, capped by settings.maxUrls)" })),
-    domains: Type.Optional(Type.Array(Type.String(), { description: "Restrict search to these domains" })),
+    maxUrls: Type.Optional(
+      Type.Number({ description: "Max URLs to fetch (default: 8, capped by settings.maxUrls)" }),
+    ),
+    domains: Type.Optional(
+      Type.Array(Type.String(), { description: "Restrict search to these domains" }),
+    ),
     focusPrompt: Type.Optional(Type.String({ description: "Focus guidance for all extractions" })),
   }),
 
@@ -127,13 +172,11 @@ export const intelliResearchTool = {
       { role: "collate", config: collateConfig },
     ]);
     if (missingModels.length > 0) {
-      const lines = missingModels.map(
-        (m) => `  ${m.role}: ${m.config.provider}/${m.config.model}`,
-      );
+      const lines = missingModels.map((m) => `  ${m.role}: ${m.config.provider}/${m.config.model}`);
       throw new Error(
         `Configured model(s) not found in Pi's model registry:\n${lines.join("\n")}\n` +
-        `Check your settings.json for typos or missing provider configuration. ` +
-        `Run /login to add API keys, or /model to see available models.`,
+          `Check your settings.json for typos or missing provider configuration. ` +
+          `Run /login to add API keys, or /model to see available models.`,
       );
     }
 
@@ -142,7 +185,9 @@ export const intelliResearchTool = {
     // ═══════════════════════════════════════════
     // setWorkingIndicator was added in pi 0.68.0.
     // Gracefully degrade on older versions.
-    const ui = ctx.ui as { setWorkingIndicator?(opts?: { frames?: string[]; intervalMs?: number }): void };
+    const ui = ctx.ui as {
+      setWorkingIndicator?(opts?: { frames?: string[]; intervalMs?: number }): void;
+    };
     const INDICATOR_FRAMES = ["🔍", "🌐", "📄", "✨"];
     ui.setWorkingIndicator?.({ frames: INDICATOR_FRAMES, intervalMs: 400 });
     try {
@@ -212,8 +257,8 @@ async function executePipeline(p: PipelineCtx): Promise<ResearchToolResult> {
       p,
       "no-links",
       `Search returned no links for query: "${p.params.query}" after ${search.maxAttempts} attempt(s). ` +
-      `This is a degraded search response (the model replied without markdown links), ` +
-      `not a fetch or extraction failure.\n\nSearch summary:\n${search.searchResult}`,
+        `This is a degraded search response (the model replied without markdown links), ` +
+        `not a fetch or extraction failure.\n\nSearch summary:\n${search.searchResult}`,
       { cachePath: "", urlsSearched: 0, pagesFetched: 0, pagesFailed: 0 },
     );
   }
@@ -227,7 +272,12 @@ async function executePipeline(p: PipelineCtx): Promise<ResearchToolResult> {
       p,
       "fetch-failed",
       `All ${search.urls.length} pages failed to fetch.\n\nSearch summary:\n${search.searchResult}`,
-      { cachePath: "", urlsSearched: search.urls.length, pagesFetched: 0, pagesFailed: search.urls.length },
+      {
+        cachePath: "",
+        urlsSearched: search.urls.length,
+        pagesFetched: 0,
+        pagesFailed: search.urls.length,
+      },
     );
   }
 
@@ -252,9 +302,10 @@ async function executePipeline(p: PipelineCtx): Promise<ResearchToolResult> {
   if (succeededExtractions.length === 0) {
     const fetchFailed = extracted.blockedExtractions.length;
     const extractFailed = extracted.extractions.filter((e) => e.status === "failed").length;
-    const reason = fetchFailed > 0
-      ? `${fetchFailed} page(s) failed to fetch`
-      : `${extractFailed} extraction(s) failed`;
+    const reason =
+      fetchFailed > 0
+        ? `${fetchFailed} page(s) failed to fetch`
+        : `${extractFailed} extraction(s) failed`;
     return degradedReturn(
       p,
       "extraction-failed",
@@ -319,7 +370,9 @@ interface SearchStageOut {
 }
 
 async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
-  p.onUpdate?.(progressUpdate("search", `Querying ${p.searchConfig.provider}/${p.searchConfig.model}...`));
+  p.onUpdate?.(
+    progressUpdate("search", `Querying ${p.searchConfig.provider}/${p.searchConfig.model}...`),
+  );
 
   const searchQuery = appendDomainFilter(p.params.query, p.params.domains);
 
@@ -333,15 +386,26 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
   let attemptsUsed = 0;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     attemptsUsed = attempt;
-    searchResult = await __harness.callLlm(p.ctx, p.searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {
-      maxTokens: 2000,
-      signal: p.signal,
-      retry: p.retry,
-      timeoutMs: p.settings.llmTimeoutMs,
-    });
+    searchResult = await __harness.callLlm(
+      p.ctx,
+      p.searchConfig,
+      SEARCH_SYSTEM_PROMPT,
+      searchQuery,
+      {
+        maxTokens: 2000,
+        signal: p.signal,
+        retry: p.retry,
+        timeoutMs: p.settings.llmTimeoutMs,
+      },
+    );
     urls = extractSourceUrls(searchResult).slice(0, p.maxUrls);
     if (urls.length > 0 || p.signal?.aborted || attempt === maxAttempts) break;
-    p.onUpdate?.(progressUpdate("search", `Search returned no links — retrying (${attempt}/${maxAttempts - 1})...`));
+    p.onUpdate?.(
+      progressUpdate(
+        "search",
+        `Search returned no links — retrying (${attempt}/${maxAttempts - 1})...`,
+      ),
+    );
     await sleep(p.settings.retryBaseDelayMs, p.signal);
   }
 
@@ -374,12 +438,16 @@ async function runFetchStage(
   urls: Array<{ url: string; title: string }>,
 ): Promise<FetchStageOut> {
   p.onUpdate?.(progressUpdate("fetch", `Fetching ${urls.length} pages...`));
-  const pages = await __harness.fetchPages(urls.map((u) => u.url), p.signal, {
-    timeoutMs: p.settings.fetchTimeoutMs,
-    browser: p.settings.browserFingerprint as unknown as import("wreq-js").BrowserProfile,
-    concurrency: p.settings.fetchConcurrency,
-    proxy: p.settings.httpProxy,
-  });
+  const pages = await __harness.fetchPages(
+    urls.map((u) => u.url),
+    p.signal,
+    {
+      timeoutMs: p.settings.fetchTimeoutMs,
+      browser: p.settings.browserFingerprint as unknown as import("wreq-js").BrowserProfile,
+      concurrency: p.settings.fetchConcurrency,
+      proxy: p.settings.httpProxy,
+    },
+  );
   const successPages = pages.filter((pg) => pg.status === "success");
 
   // Tally fetch-variant winners from the per-page `source` field that
@@ -412,10 +480,12 @@ async function runExtractStage(
   successPages: FetchedPage[],
   pages: FetchedPage[],
 ): Promise<ExtractStageOut> {
-  p.onUpdate?.(progressUpdate("extract", `Extracting from ${successPages.length} pages...`, {
-    current: 0,
-    total: successPages.length,
-  }));
+  p.onUpdate?.(
+    progressUpdate("extract", `Extracting from ${successPages.length} pages...`, {
+      current: 0,
+      total: successPages.length,
+    }),
+  );
 
   // Extract pages through a bounded worker pool (settings.extractionConcurrency)
   // rather than all at once. With maxUrls up to 16, an unbounded Promise.all
@@ -435,24 +505,30 @@ async function runExtractStage(
       signal: p.signal,
       onSettled: (page) => {
         extractDone++;
-        p.onUpdate?.(progressUpdate("extract",
-          `Page ${extractDone}/${successPages.length}: ${(page.title || page.url).slice(0, 40)}...`,
-          { current: extractDone, total: successPages.length },
-        ));
+        p.onUpdate?.(
+          progressUpdate(
+            "extract",
+            `Page ${extractDone}/${successPages.length}: ${(page.title || page.url).slice(0, 40)}...`,
+            { current: extractDone, total: successPages.length },
+          ),
+        );
       },
     },
   );
 
   // Indices left unrun by an aborted signal become a failed extraction so the
   // result array stays aligned with successPages and fully typed.
-  const extractions: ExtractResult[] = rawExtractions.map((e, i) => e ?? {
-    url: successPages[i].url,
-    title: successPages[i].title,
-    extraction: "",
-    sourceType: "unknown",
-    currentness: "unknown",
-    status: "failed" as const,
-  });
+  const extractions: ExtractResult[] = rawExtractions.map(
+    (e, i) =>
+      e ?? {
+        url: successPages[i].url,
+        title: successPages[i].title,
+        extraction: "",
+        sourceType: "unknown",
+        currentness: "unknown",
+        status: "failed" as const,
+      },
+  );
 
   // Include failed pages as blocked extractions
   const blockedExtractions: ExtractResult[] = pages
@@ -474,7 +550,8 @@ async function runExtractStage(
   // Input chars are not retained per-page post-call; approximate from the
   // pages that were fed in (capped at extractMaxChars each).
   const totalIn = successPages.reduce(
-    (sum, pg) => sum + Math.min(pg.content.length, p.settings.extractMaxChars), 0,
+    (sum, pg) => sum + Math.min(pg.content.length, p.settings.extractMaxChars),
+    0,
   );
   const totalOut = succeededExtr.reduce((sum, e) => sum + e.extraction.length, 0);
   p.tel?.recordExtract({
@@ -498,14 +575,25 @@ async function runCollateStage(
   // Build collation prompt (no files written yet — lock is never held
   // across the LLM call). Path references in the prompt are resolved
   // later when cache files are written.
-  const collationUserMsg = buildCollationMessage(p.params.query, p.cachePath, searchResult, succeededExtractions);
+  const collationUserMsg = buildCollationMessage(
+    p.params.query,
+    p.cachePath,
+    searchResult,
+    succeededExtractions,
+  );
 
-  const collation = await __harness.callLlm(p.ctx, p.collateConfig, COLLATION_SYSTEM_PROMPT, collationUserMsg, {
-    maxTokens: p.settings.collationMaxTokens,
-    signal: p.signal,
-    retry: p.retry,
-    timeoutMs: p.settings.llmTimeoutMs,
-  });
+  const collation = await __harness.callLlm(
+    p.ctx,
+    p.collateConfig,
+    COLLATION_SYSTEM_PROMPT,
+    collationUserMsg,
+    {
+      maxTokens: p.settings.collationMaxTokens,
+      signal: p.signal,
+      retry: p.retry,
+      timeoutMs: p.settings.llmTimeoutMs,
+    },
+  );
 
   p.tel?.recordCollate({
     model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
@@ -537,10 +625,14 @@ function startLlmsFullDownloads(p: PipelineCtx, successPages: FetchedPage[]): Ll
       try {
         const h = new URL(pg.url).hostname;
         if (!sampleUrlByHost.has(h)) sampleUrlByHost.set(h, pg.url);
-      } catch { /* skip malformed URLs */ }
+      } catch {
+        /* skip malformed URLs */
+      }
     }
     futures = [...sampleUrlByHost.values()].map((sampleUrl) =>
-      downloadLlmsFullToCache(sampleUrl, staging, p.signal, undefined, p.settings.httpProxy).catch(() => null),
+      downloadLlmsFullToCache(sampleUrl, staging, p.signal, undefined, p.settings.httpProxy).catch(
+        () => null,
+      ),
     );
   }
   return { staging, futures };
@@ -561,7 +653,13 @@ async function writeCacheArtifacts(
 ): Promise<void> {
   await withLock(cacheLockDir(p.cachePath), async () => {
     // Write cache files (staging-based atomic, no partial visibility)
-    await writeCacheFiles(p.cachePath, allExtractions, fetched.successPages, searchResult, p.params.query);
+    await writeCacheFiles(
+      p.cachePath,
+      allExtractions,
+      fetched.successPages,
+      searchResult,
+      p.params.query,
+    );
 
     // Write report (atomic via temp-file + rename)
     await writeReportFile(p.cachePath, p.params.query, collation, allExtractions, fetched.pages);
@@ -619,12 +717,18 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
     if (index.searches.some((e) => e.slug !== currentSlug)) {
       const indexText = formatIndexForJudge(index, currentSlug);
       const judgeUserMsg = `Current query: "${p.params.query}"\n\nPrevious searches:\n${indexText}`;
-      const judgeResponse = await __harness.callLlm(p.ctx, p.extractConfig, CACHE_SUGGEST_PROMPT, judgeUserMsg, {
-        maxTokens: 500,
-        signal: p.signal,
-        retry: p.retry,
-        timeoutMs: p.settings.llmTimeoutMs,
-      });
+      const judgeResponse = await __harness.callLlm(
+        p.ctx,
+        p.extractConfig,
+        CACHE_SUGGEST_PROMPT,
+        judgeUserMsg,
+        {
+          maxTokens: 500,
+          signal: p.signal,
+          retry: p.retry,
+          timeoutMs: p.settings.llmTimeoutMs,
+        },
+      );
       const matches = parseJudgeResponse(judgeResponse, index, currentSlug);
       cacheSuggestRan = true;
       cacheSuggestSurfaced = matches.length;
@@ -667,10 +771,7 @@ async function degradedReturn(
  * the cache lock; the staging directory is unique per run and the lock
  * serialises writes to matching destination filenames.
  */
-async function flushLlmsStaging(
-  staging: string,
-  targetDir: string,
-): Promise<void> {
+async function flushLlmsStaging(staging: string, targetDir: string): Promise<void> {
   const stagingSources = join(staging, "sources");
   let entries: string[];
   try {
@@ -754,12 +855,18 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       p.settings.extractMaxChars,
     );
 
-    const extraction = await __harness.callLlm(p.ctx, p.extractConfig, EXTRACTION_SYSTEM_PROMPT, userMessage, {
-      maxTokens: p.settings.extractionMaxTokens,
-      signal: p.signal,
-      retry: p.retry,
-      timeoutMs: p.settings.llmTimeoutMs,
-    });
+    const extraction = await __harness.callLlm(
+      p.ctx,
+      p.extractConfig,
+      EXTRACTION_SYSTEM_PROMPT,
+      userMessage,
+      {
+        maxTokens: p.settings.extractionMaxTokens,
+        signal: p.signal,
+        retry: p.retry,
+        timeoutMs: p.settings.llmTimeoutMs,
+      },
+    );
 
     const firstLine = extraction.split("\n")[0] ?? "";
     return {

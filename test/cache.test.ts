@@ -26,7 +26,10 @@ import { tmpdir } from "node:os";
 
 describe("domainSlug", () => {
   it("extracts hostname and converts dots to hyphens", () => {
-    assert.strictEqual(domainSlug("https://developers.cloudflare.com/d1/"), "developers-cloudflare-com");
+    assert.strictEqual(
+      domainSlug("https://developers.cloudflare.com/d1/"),
+      "developers-cloudflare-com",
+    );
   });
 
   it("strips www. prefix", () => {
@@ -42,7 +45,10 @@ describe("domainSlug", () => {
   });
 
   it("handles deeply nested paths", () => {
-    assert.strictEqual(domainSlug("https://docs.python.org/3/library/asyncio.html"), "docs-python-org");
+    assert.strictEqual(
+      domainSlug("https://docs.python.org/3/library/asyncio.html"),
+      "docs-python-org",
+    );
   });
 });
 
@@ -69,7 +75,11 @@ describe("makeCachePath", () => {
     const original = Date.prototype.toISOString;
     Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
     try {
-      const result = makeCachePath("this is a very long query with many words", "/project", ".search");
+      const result = makeCachePath(
+        "this is a very long query with many words",
+        "/project",
+        ".search",
+      );
       assert.ok(result.startsWith(".search/2026-04-20-this-is-a-very-long-"), result);
       assert.match(result, HASH);
     } finally {
@@ -222,9 +232,21 @@ describe("readIndex", () => {
 describe("formatIndexForJudge", () => {
   const index: CacheIndex = {
     searches: [
-      { slug: "2026-04-20-podman-rootless", query: "podman rootless setup", timestamp: "2026-04-20T10:00:00Z" },
-      { slug: "2026-04-21-svelte-runes", query: "Svelte 5 runes tutorial", timestamp: "2026-04-21T10:00:00Z" },
-      { slug: "2026-04-22-cloudflare-kv", query: "Cloudflare Workers KV limits", timestamp: "2026-04-22T10:00:00Z" },
+      {
+        slug: "2026-04-20-podman-rootless",
+        query: "podman rootless setup",
+        timestamp: "2026-04-20T10:00:00Z",
+      },
+      {
+        slug: "2026-04-21-svelte-runes",
+        query: "Svelte 5 runes tutorial",
+        timestamp: "2026-04-21T10:00:00Z",
+      },
+      {
+        slug: "2026-04-22-cloudflare-kv",
+        query: "Cloudflare Workers KV limits",
+        timestamp: "2026-04-22T10:00:00Z",
+      },
     ],
   };
 
@@ -287,9 +309,21 @@ describe("formatIndexForJudge", () => {
 describe("parseJudgeResponse", () => {
   const index: CacheIndex = {
     searches: [
-      { slug: "2026-04-20-podman-rootless", query: "podman rootless setup", timestamp: "2026-04-20T10:00:00Z" },
-      { slug: "2026-04-21-svelte-runes", query: "Svelte 5 runes tutorial", timestamp: "2026-04-21T10:00:00Z" },
-      { slug: "2026-04-22-cloudflare-kv", query: "Cloudflare Workers KV limits", timestamp: "2026-04-22T10:00:00Z" },
+      {
+        slug: "2026-04-20-podman-rootless",
+        query: "podman rootless setup",
+        timestamp: "2026-04-20T10:00:00Z",
+      },
+      {
+        slug: "2026-04-21-svelte-runes",
+        query: "Svelte 5 runes tutorial",
+        timestamp: "2026-04-21T10:00:00Z",
+      },
+      {
+        slug: "2026-04-22-cloudflare-kv",
+        query: "Cloudflare Workers KV limits",
+        timestamp: "2026-04-22T10:00:00Z",
+      },
     ],
   };
 
@@ -302,7 +336,8 @@ describe("parseJudgeResponse", () => {
   });
 
   it("parses multiple matches", () => {
-    const response = '[{"index": 1, "relevance": "podman"}, {"index": 3, "relevance": "KV limits"}]';
+    const response =
+      '[{"index": 1, "relevance": "podman"}, {"index": 3, "relevance": "KV limits"}]';
     const results = parseJudgeResponse(response, index);
     assert.strictEqual(results.length, 2);
     assert.strictEqual(results[0].entry.slug, "2026-04-20-podman-rootless");
@@ -377,7 +412,11 @@ describe("formatCacheSuggestions", () => {
   it("formats single match with header and table", () => {
     const matches = [
       {
-        entry: { slug: "2026-04-20-podman", query: "podman rootless setup", timestamp: new Date().toISOString() },
+        entry: {
+          slug: "2026-04-20-podman",
+          query: "podman rootless setup",
+          timestamp: new Date().toISOString(),
+        },
         relevance: "Same topic",
       },
     ];
@@ -393,12 +432,20 @@ describe("formatCacheSuggestions", () => {
     const now = Date.now();
     const matches = [
       {
-        entry: { slug: "a", query: "first query", timestamp: new Date(now - 7200000).toISOString() },
+        entry: {
+          slug: "a",
+          query: "first query",
+          timestamp: new Date(now - 7200000).toISOString(),
+        },
         relevance: "Related topic A",
       },
       {
-        entry: { slug: "b", query: "second query that is quite long and should be truncated because it exceeds sixty characters",
-          timestamp: new Date(now - 172800000).toISOString() },
+        entry: {
+          slug: "b",
+          query:
+            "second query that is quite long and should be truncated because it exceeds sixty characters",
+          timestamp: new Date(now - 172800000).toISOString(),
+        },
         relevance: "Related topic B",
       },
     ];
@@ -414,7 +461,8 @@ describe("formatCacheSuggestions", () => {
       {
         entry: {
           slug: "a",
-          query: "This is a very long search query that definitely exceeds sixty characters by a wide margin",
+          query:
+            "This is a very long search query that definitely exceeds sixty characters by a wide margin",
           timestamp: new Date().toISOString(),
         },
         relevance: "test",
@@ -433,7 +481,10 @@ describe("formatCacheSuggestions", () => {
       },
     ];
     const result = formatCacheSuggestions(matches, ".search");
-    assert.ok(result.includes("read .search/<slug>/report.md"), "should explain how to read reports");
+    assert.ok(
+      result.includes("read .search/<slug>/report.md"),
+      "should explain how to read reports",
+    );
   });
 });
 
@@ -627,12 +678,32 @@ describe("writeCacheFiles", () => {
       await writeCacheFiles(
         cachePath,
         [
-          { url: "https://ok.com", title: "OK", extraction: "ok", sourceType: "blog", currentness: "undated", status: "success" },
-          { url: "https://fail.com", title: "Fail", extraction: "", sourceType: "unknown", currentness: "undated", status: "failed" },
+          {
+            url: "https://ok.com",
+            title: "OK",
+            extraction: "ok",
+            sourceType: "blog",
+            currentness: "undated",
+            status: "success",
+          },
+          {
+            url: "https://fail.com",
+            title: "Fail",
+            extraction: "",
+            sourceType: "unknown",
+            currentness: "undated",
+            status: "failed",
+          },
         ],
         [
           { url: "https://ok.com", title: "OK", content: "ok page", status: "success" },
-          { url: "https://blocked.com", title: "Blocked", content: "", status: "error", error: "403" },
+          {
+            url: "https://blocked.com",
+            title: "Blocked",
+            content: "",
+            status: "error",
+            error: "403",
+          },
         ],
         "",
         "test query",
@@ -740,10 +811,22 @@ describe("concurrent same-query cache writes", () => {
           await writeCacheFiles(
             cachePath,
             [
-              { url: `https://${suffix}.com`, title: suffix, extraction: `extract-${suffix}`, sourceType: "blog", currentness: "undated", status: "success" },
+              {
+                url: `https://${suffix}.com`,
+                title: suffix,
+                extraction: `extract-${suffix}`,
+                sourceType: "blog",
+                currentness: "undated",
+                status: "success",
+              },
             ],
             [
-              { url: `https://${suffix}.com`, title: suffix, content: `page-${suffix}`, status: "success" },
+              {
+                url: `https://${suffix}.com`,
+                title: suffix,
+                content: `page-${suffix}`,
+                status: "success",
+              },
             ],
             "",
             "test query",

@@ -170,7 +170,11 @@ describe("intelli_research telemetry wiring", () => {
   });
 
   it("records search retryFired=true when the first search yields no links", async () => {
-    const env = await isolatedEnv({ disableTelemetry: false, searchRetryAttempts: 3, retryBaseDelayMs: 1 });
+    const env = await isolatedEnv({
+      disableTelemetry: false,
+      searchRetryAttempts: 3,
+      retryBaseDelayMs: 1,
+    });
     try {
       let searchCall = 0;
       __harness.callLlm = ((...args: any[]) => {
@@ -228,7 +232,9 @@ describe("intelli_research telemetry wiring", () => {
     const env = await isolatedEnv({ disableTelemetry: false });
     try {
       __harness.callLlm = ((_ctx: any, _cfg: any, sysPrompt: string) =>
-        sysPrompt === SEARCH_SYSTEM_PROMPT ? Promise.resolve(SEARCH_WITH_LINKS) : resolveByPrompt(sysPrompt)) as any;
+        sysPrompt === SEARCH_SYSTEM_PROMPT
+          ? Promise.resolve(SEARCH_WITH_LINKS)
+          : resolveByPrompt(sysPrompt)) as any;
       __harness.fetchPages = (() =>
         Promise.resolve([
           { url: "https://example.com/x", title: "", content: "", status: "error", error: "boom" },
@@ -255,7 +261,8 @@ describe("intelli_research telemetry wiring", () => {
     try {
       __harness.callLlm = ((_ctx: any, _cfg: any, sysPrompt: string) => {
         if (sysPrompt === SEARCH_SYSTEM_PROMPT) return Promise.resolve(SEARCH_WITH_LINKS);
-        if (sysPrompt === EXTRACTION_SYSTEM_PROMPT) return Promise.reject(new Error("extract boom"));
+        if (sysPrompt === EXTRACTION_SYSTEM_PROMPT)
+          return Promise.reject(new Error("extract boom"));
         return resolveByPrompt(sysPrompt);
       }) as any;
       __harness.fetchPages = (() =>
@@ -291,7 +298,11 @@ describe("intelli_research telemetry wiring", () => {
         join(env.cwd, ".search", ".index.json"),
         JSON.stringify({
           searches: [
-            { slug: "2026-01-01-old-search-abc123", query: "old related query", timestamp: "2026-01-01T00:00:00.000Z" },
+            {
+              slug: "2026-01-01-old-search-abc123",
+              query: "old related query",
+              timestamp: "2026-01-01T00:00:00.000Z",
+            },
           ],
         }),
         "utf-8",
@@ -314,11 +325,18 @@ describe("intelli_research telemetry wiring", () => {
       );
       const meta = await readMeta(env.cwd);
       assert.ok(meta, "happy-path run wrote no sidecar");
-      assert.equal(meta!.stages.cacheSuggest.ran, true, "judge should run against a non-empty index");
+      assert.equal(
+        meta!.stages.cacheSuggest.ran,
+        true,
+        "judge should run against a non-empty index",
+      );
       assert.equal(meta!.stages.cacheSuggest.surfaced, 1);
       assert.deepEqual(meta!.stages.cacheSuggest.slugs, ["2026-01-01-old-search-abc123"]);
       const text = res.content[0]?.type === "text" ? res.content[0].text : "";
-      assert.ok(text.includes("Related cached searches"), "output should carry the suggestions appendix");
+      assert.ok(
+        text.includes("Related cached searches"),
+        "output should carry the suggestions appendix",
+      );
       assert.ok(text.includes("old related query"), "appendix should list the matched query");
     } finally {
       restore(env);

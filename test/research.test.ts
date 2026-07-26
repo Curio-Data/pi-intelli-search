@@ -20,11 +20,14 @@ describe("validateModelConfigs", () => {
     };
 
     const { validateModelConfigs } = await import("../src/tools/intelli-research.js");
-    const result = validateModelConfigs(mockCtx as unknown as import("@earendil-works/pi-coding-agent").ExtensionContext, [
-      { role: "search", config: { provider: "openrouter", model: "perplexity/sonar" } },
-      { role: "extract", config: { provider: "openrouter", model: "minimax/minimax-m2.7" } },
-      { role: "collate", config: { provider: "openrouter", model: "minimax/minimax-m2.7" } },
-    ]);
+    const result = validateModelConfigs(
+      mockCtx as unknown as import("@earendil-works/pi-coding-agent").ExtensionContext,
+      [
+        { role: "search", config: { provider: "openrouter", model: "perplexity/sonar" } },
+        { role: "extract", config: { provider: "openrouter", model: "minimax/minimax-m2.7" } },
+        { role: "collate", config: { provider: "openrouter", model: "minimax/minimax-m2.7" } },
+      ],
+    );
 
     assert.deepStrictEqual(result, [], "should return empty when all models found");
   });
@@ -43,11 +46,14 @@ describe("validateModelConfigs", () => {
     };
 
     const { validateModelConfigs } = await import("../src/tools/intelli-research.js");
-    const result = validateModelConfigs(mockCtx as unknown as import("@earendil-works/pi-coding-agent").ExtensionContext, [
-      { role: "search", config: { provider: "openrouter", model: "perplexity/sonar" } },
-      { role: "extract", config: { provider: "openrouter", model: "minimax/M3.7" } },
-      { role: "collate", config: { provider: "openrouter", model: "minimax/M3.7" } },
-    ]);
+    const result = validateModelConfigs(
+      mockCtx as unknown as import("@earendil-works/pi-coding-agent").ExtensionContext,
+      [
+        { role: "search", config: { provider: "openrouter", model: "perplexity/sonar" } },
+        { role: "extract", config: { provider: "openrouter", model: "minimax/M3.7" } },
+        { role: "collate", config: { provider: "openrouter", model: "minimax/M3.7" } },
+      ],
+    );
 
     assert.strictEqual(result.length, 2, "should detect two missing models");
     assert.strictEqual(result[0].role, "extract");
@@ -61,18 +67,19 @@ describe("validateModelConfigs", () => {
       modelRegistry: {
         find(provider: string, _model: string) {
           // Only openrouter models exist
-          return provider === "openrouter"
-            ? { id: "test", name: "Test" }
-            : null;
+          return provider === "openrouter" ? { id: "test", name: "Test" } : null;
         },
       },
     };
 
     const { validateModelConfigs } = await import("../src/tools/intelli-research.js");
-    const result = validateModelConfigs(mockCtx as unknown as import("@earendil-works/pi-coding-agent").ExtensionContext, [
-      { role: "search", config: { provider: "openrouter", model: "perplexity/sonar" } },
-      { role: "extract", config: { provider: "typo-provider", model: "gpt-4" } },
-    ]);
+    const result = validateModelConfigs(
+      mockCtx as unknown as import("@earendil-works/pi-coding-agent").ExtensionContext,
+      [
+        { role: "search", config: { provider: "openrouter", model: "perplexity/sonar" } },
+        { role: "extract", config: { provider: "typo-provider", model: "gpt-4" } },
+      ],
+    );
 
     assert.strictEqual(result.length, 1, "should detect one missing");
     assert.strictEqual(result[0].role, "extract");
@@ -81,11 +88,18 @@ describe("validateModelConfigs", () => {
 
   it("returns empty when no configs provided", async () => {
     const mockCtx: MockCtx = {
-      modelRegistry: { find() { return null; } },
+      modelRegistry: {
+        find() {
+          return null;
+        },
+      },
     };
 
     const { validateModelConfigs } = await import("../src/tools/intelli-research.js");
-    const result = validateModelConfigs(mockCtx as unknown as import("@earendil-works/pi-coding-agent").ExtensionContext, []);
+    const result = validateModelConfigs(
+      mockCtx as unknown as import("@earendil-works/pi-coding-agent").ExtensionContext,
+      [],
+    );
 
     assert.deepStrictEqual(result, [], "empty configs should yield empty result");
   });
@@ -99,8 +113,12 @@ describe("progressUpdate", () => {
   const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
   const theme = {
-    fg(_color: string, text: string) { return text; },
-    bold(text: string) { return text; },
+    fg(_color: string, text: string) {
+      return text;
+    },
+    bold(text: string) {
+      return text;
+    },
   };
 
   it("returns correct stage index for each of the 5 stages", async () => {
@@ -167,13 +185,21 @@ describe("progressUpdate", () => {
 
 describe("renderProgressBar", () => {
   const theme = {
-    fg(_color: string, text: string) { return text; },
-    bold(text: string) { return text; },
+    fg(_color: string, text: string) {
+      return text;
+    },
+    bold(text: string) {
+      return text;
+    },
   };
 
   const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
-  function buildDetails(stage: string, message: string, subProgress?: { current: number; total: number }) {
+  function buildDetails(
+    stage: string,
+    message: string,
+    subProgress?: { current: number; total: number },
+  ) {
     const stages = ["search", "fetch", "extract", "collate", "cache"];
     const stageIdx = stages.indexOf(stage);
     return {
@@ -279,7 +305,10 @@ describe("renderProgressBar", () => {
       const details = buildDetails(stage, "test");
       const result = renderProgressBar(details, theme);
       const lines = result.render(80);
-      assert.ok(lines[0].includes(expected), `${stage} bar should show ${expected}, got: ${lines[0]}`);
+      assert.ok(
+        lines[0].includes(expected),
+        `${stage} bar should show ${expected}, got: ${lines[0]}`,
+      );
     }
   });
 

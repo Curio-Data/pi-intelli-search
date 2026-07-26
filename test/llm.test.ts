@@ -1,7 +1,12 @@
 // test/llm.test.ts — LLM auth forwarding tests
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import type { AssistantMessage, Context, Model, SimpleStreamOptions } from "@earendil-works/pi-ai/compat";
+import type {
+  AssistantMessage,
+  Context,
+  Model,
+  SimpleStreamOptions,
+} from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { __harness, callLlm } from "../src/llm.js";
 

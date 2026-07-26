@@ -6,7 +6,15 @@ import { Type } from "typebox";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { COLLATION_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
-import { makeCachePath, writeCacheFiles, writeReportFile, cacheLockDir, indexLockDir, withLock, updateIndex } from "../cache.js";
+import {
+  makeCachePath,
+  writeCacheFiles,
+  writeReportFile,
+  cacheLockDir,
+  indexLockDir,
+  withLock,
+  updateIndex,
+} from "../cache.js";
 import { textContent } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import { buildCollationMessage, formatCacheAppendix } from "./shared.js";
@@ -34,25 +42,36 @@ export const intelliCollateTool = {
     "concise summary. Caches results to .search/ for follow-up. Use this " +
     "after extracting multiple pages with intelli_extract; for end-to-end " +
     "research, use intelli_research.",
-  promptSnippet: "intelli_collate(extractions, query): deduplicate and synthesise extractions into concise summary",
+  promptSnippet:
+    "intelli_collate(extractions, query): deduplicate and synthesise extractions into concise summary",
   executionMode: "sequential" as const,
   parameters: Type.Object({
     extractions: Type.Array(extractionSchema, {
       description: "Array of per-page extraction results from intelli_extract",
     }),
     query: Type.String({ description: "The original search query" }),
-    searchSummary: Type.Optional(Type.String({
-      description: "Summary from the initial search step",
-    })),
-    fullPages: Type.Optional(Type.Array(fullPageSchema, {
-      description: "Full page content for caching (not sent to LLM)",
-    })),
+    searchSummary: Type.Optional(
+      Type.String({
+        description: "Summary from the initial search step",
+      }),
+    ),
+    fullPages: Type.Optional(
+      Type.Array(fullPageSchema, {
+        description: "Full page content for caching (not sent to LLM)",
+      }),
+    ),
   }),
 
   async execute(
     _toolCallId: string,
     params: {
-      extractions: Array<{ url: string; title: string; extraction: string; sourceType: string; status: string }>;
+      extractions: Array<{
+        url: string;
+        title: string;
+        extraction: string;
+        sourceType: string;
+        status: string;
+      }>;
       query: string;
       searchSummary?: string;
       fullPages?: Array<{ url: string; title: string; content: string }>;
@@ -109,7 +128,13 @@ export const intelliCollateTool = {
     // ═══════════════════════════════════════════════════════════════
     await withLock(cacheLockDir(cachePath), async () => {
       // Write cache files (staging-based atomic, no partial visibility)
-      await writeCacheFiles(cachePath, extractResults, fetchedPages, params.searchSummary ?? "", params.query);
+      await writeCacheFiles(
+        cachePath,
+        extractResults,
+        fetchedPages,
+        params.searchSummary ?? "",
+        params.query,
+      );
 
       // Write report (atomic via temp-file + rename)
       await writeReportFile(cachePath, params.query, collation, extractResults, fetchedPages);
@@ -122,7 +147,9 @@ export const intelliCollateTool = {
     });
 
     return {
-      content: [textContent(collation + formatCacheAppendix(cachePath, succeeded.length, blocked.length))],
+      content: [
+        textContent(collation + formatCacheAppendix(cachePath, succeeded.length, blocked.length)),
+      ],
       details: { cachePath, sourcesFetched: succeeded.length + blocked.length },
     };
   },

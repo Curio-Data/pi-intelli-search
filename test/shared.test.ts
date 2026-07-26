@@ -23,17 +23,11 @@ describe("appendDomainFilter", () => {
   });
 
   it("appends a single site filter", () => {
-    assert.strictEqual(
-      appendDomainFilter("q", ["docs.python.org"]),
-      "q site:docs.python.org",
-    );
+    assert.strictEqual(appendDomainFilter("q", ["docs.python.org"]), "q site:docs.python.org");
   });
 
   it("joins multiple domains with OR site:", () => {
-    assert.strictEqual(
-      appendDomainFilter("q", ["a.com", "b.com"]),
-      "q site:a.com OR site:b.com",
-    );
+    assert.strictEqual(appendDomainFilter("q", ["a.com", "b.com"]), "q site:a.com OR site:b.com");
   });
 });
 
@@ -109,7 +103,9 @@ describe("buildCollationMessage", () => {
   });
 
   it("omits the search summary section when not given", () => {
-    const msg = buildCollationMessage("q", ".search/x", undefined, [makeExt("https://a.com/", "t")]);
+    const msg = buildCollationMessage("q", ".search/x", undefined, [
+      makeExt("https://a.com/", "t"),
+    ]);
     assert.ok(!msg.includes("Search summary"));
   });
 });

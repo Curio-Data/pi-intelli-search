@@ -26,11 +26,7 @@ export const SCHEMA_VERSION = 1 as const;
 /** Run outcome. Degraded runs also write a sidecar (v0.11.0+) so the analysis
  * script can measure how often the pipeline degraded, not just how often it
  * succeeded. */
-export type TelemetryOutcome =
-  | "completed"
-  | "no-links"
-  | "fetch-failed"
-  | "extraction-failed";
+export type TelemetryOutcome = "completed" | "no-links" | "fetch-failed" | "extraction-failed";
 
 /**
  * Canonical telemetry payload. Additive-only evolution: new fields optional.
@@ -111,7 +107,13 @@ export class TelemetryBuilder {
       stages: {
         search: { model: "", linksReturned: 0, retryFired: false, attempts: 0, degraded: false },
         fetch: { requested: 0, succeeded: 0, failed: 0, winners: {} },
-        extract: { model: "", succeeded: 0, failed: 0, totalInputCharsApprox: 0, totalOutputChars: 0 },
+        extract: {
+          model: "",
+          succeeded: 0,
+          failed: 0,
+          totalInputCharsApprox: 0,
+          totalOutputChars: 0,
+        },
         collate: { model: "", summaryChars: 0 },
         cacheSuggest: { ran: false, surfaced: 0, slugs: [] },
       },
@@ -191,16 +193,10 @@ export class TelemetryBuilder {
  * The caller wraps this in a try/catch so a write failure never surfaces to
  * the pipeline result.
  */
-export async function writeTelemetry(
-  cachePath: string,
-  meta: TelemetryMeta,
-): Promise<void> {
+export async function writeTelemetry(cachePath: string, meta: TelemetryMeta): Promise<void> {
   await sweepStaleTempFiles(cachePath);
   const target = join(cachePath, "meta.json");
-  const tmp = join(
-    cachePath,
-    `.meta.json.${process.pid}.${randomBytes(4).toString("hex")}.tmp`,
-  );
+  const tmp = join(cachePath, `.meta.json.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
   await writeFile(tmp, JSON.stringify(meta, null, 2) + "\n", "utf-8");
   await rename(tmp, target);
 }

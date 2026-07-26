@@ -179,7 +179,8 @@ Also bare reference https://kit.svelte.dev.
   });
 
   it("extracts bare URLs from inline code backtick syntax", () => {
-    const text = "Source: `https://openrouter.ai/google/gemini-flash-1.5/providers` is the pricing page.";
+    const text =
+      "Source: `https://openrouter.ai/google/gemini-flash-1.5/providers` is the pricing page.";
     const urls = extractSourceUrls(text);
     assert.strictEqual(urls.length, 1);
     assert.strictEqual(urls[0].url, "https://openrouter.ai/google/gemini-flash-1.5/providers");
@@ -246,12 +247,9 @@ describe("mapWithConcurrency", () => {
   it("invokes onSettled exactly once per item with index and result", async () => {
     const items = ["a", "b", "c"];
     const settled: Array<{ item: string; index: number; result: string }> = [];
-    await mapWithConcurrency(
-      items,
-      2,
-      async (s, i) => `${s}-${i}`,
-      { onSettled: (item, index, result) => settled.push({ item, index, result }) },
-    );
+    await mapWithConcurrency(items, 2, async (s, i) => `${s}-${i}`, {
+      onSettled: (item, index, result) => settled.push({ item, index, result }),
+    });
     assert.strictEqual(settled.length, 3);
     // Sort by index for a stable assertion (completion order is non-deterministic).
     settled.sort((a, b) => a.index - b.index);
@@ -279,7 +277,10 @@ describe("mapWithConcurrency", () => {
     );
     assert.ok(started < items.length, `expected early stop, but started all ${started}`);
     // Unrun indices are left undefined.
-    assert.ok(results.some((r) => r === undefined), "aborted run should leave holes");
+    assert.ok(
+      results.some((r) => r === undefined),
+      "aborted run should leave holes",
+    );
   });
 
   it("handles an empty item list", async () => {
@@ -401,7 +402,10 @@ describe("withRetry", () => {
     const { delays, fn } = makeSleep();
     let calls = 0;
     const result = await withRetry(
-      async () => { calls++; return "ok"; },
+      async () => {
+        calls++;
+        return "ok";
+      },
       () => ({ retry: false }),
       { attempts: 3, baseDelayMs: 1000, maxDelayMs: 20000, sleep: fn },
     );
@@ -414,7 +418,10 @@ describe("withRetry", () => {
     const { delays, fn } = makeSleep();
     let calls = 0;
     const result = await withRetry(
-      async () => { calls++; return calls < 2 ? "bad" : "good"; },
+      async () => {
+        calls++;
+        return calls < 2 ? "bad" : "good";
+      },
       (r) => (r === "bad" ? { retry: true } : { retry: false }),
       { attempts: 3, baseDelayMs: 1000, maxDelayMs: 20000, sleep: fn, random: () => 1 },
     );
@@ -425,22 +432,26 @@ describe("withRetry", () => {
 
   it("uses full-jitter exponential schedule (random()=1)", async () => {
     const { delays, fn } = makeSleep();
-    await withRetry(
-      async () => "x",
-      alwaysRetry,
-      { attempts: 4, baseDelayMs: 1000, maxDelayMs: 20000, sleep: fn, random: () => 1 },
-    );
+    await withRetry(async () => "x", alwaysRetry, {
+      attempts: 4,
+      baseDelayMs: 1000,
+      maxDelayMs: 20000,
+      sleep: fn,
+      random: () => 1,
+    });
     // attempt 1 -> 1000*2^0, 2 -> 2000, 3 -> 4000 (3 sleeps for 4 attempts)
     assert.deepStrictEqual(delays, [1000, 2000, 4000]);
   });
 
   it("caps each delay at maxDelayMs", async () => {
     const { delays, fn } = makeSleep();
-    await withRetry(
-      async () => "x",
-      alwaysRetry,
-      { attempts: 4, baseDelayMs: 10000, maxDelayMs: 15000, sleep: fn, random: () => 1 },
-    );
+    await withRetry(async () => "x", alwaysRetry, {
+      attempts: 4,
+      baseDelayMs: 10000,
+      maxDelayMs: 15000,
+      sleep: fn,
+      random: () => 1,
+    });
     assert.deepStrictEqual(delays, [10000, 15000, 15000]);
   });
 
@@ -466,7 +477,10 @@ describe("withRetry", () => {
     const { fn } = makeSleep();
     let calls = 0;
     const result = await withRetry(
-      async () => { calls++; return `try-${calls}`; },
+      async () => {
+        calls++;
+        return `try-${calls}`;
+      },
       alwaysRetry,
       { attempts: 3, baseDelayMs: 1, maxDelayMs: 10, sleep: fn, random: () => 0 },
     );
@@ -479,7 +493,10 @@ describe("withRetry", () => {
     let calls = 0;
     await assert.rejects(
       withRetry(
-        async () => { calls++; throw new Error(`boom-${calls}`); },
+        async () => {
+          calls++;
+          throw new Error(`boom-${calls}`);
+        },
         () => ({ retry: true }),
         { attempts: 2, baseDelayMs: 1, maxDelayMs: 10, sleep: fn, random: () => 0 },
       ),
@@ -493,7 +510,11 @@ describe("withRetry", () => {
     const ac = new AbortController();
     let calls = 0;
     const result = await withRetry(
-      async () => { calls++; ac.abort(); return "bad"; },
+      async () => {
+        calls++;
+        ac.abort();
+        return "bad";
+      },
       alwaysRetry,
       { attempts: 5, baseDelayMs: 1, maxDelayMs: 10, sleep: fn, signal: ac.signal },
     );
@@ -523,20 +544,17 @@ describe("createRateLimiter", () => {
 
 describe("callWithAbortTimeout", () => {
   it("returns the value and timedOut=false when run resolves first", async () => {
-    const { value, timedOut } = await callWithAbortTimeout(
-      async () => "done",
-      1000,
-    );
+    const { value, timedOut } = await callWithAbortTimeout(async () => "done", 1000);
     assert.strictEqual(value, "done");
     assert.strictEqual(timedOut, false);
   });
 
   it("passes a no-op (undefined) signal through when timeout disabled", async () => {
     let received: AbortSignal | undefined = {} as AbortSignal;
-    const { value, timedOut } = await callWithAbortTimeout(
-      async (signal) => { received = signal; return 42; },
-      0,
-    );
+    const { value, timedOut } = await callWithAbortTimeout(async (signal) => {
+      received = signal;
+      return 42;
+    }, 0);
     assert.strictEqual(value, 42);
     assert.strictEqual(timedOut, false);
     assert.strictEqual(received, undefined);
@@ -578,14 +596,11 @@ describe("withMuzzledConsole", () => {
     const real = console.error;
     console.error = (...args: unknown[]) => seen.push(args);
     try {
-      const { value, muzzled } = await withMuzzledConsole(
-        async () => {
-          // Simulate Defuddle's internal catch log: console.error('Defuddle', '...', err)
-          console.error("Defuddle", "Error processing document:", new Error("boom"));
-          return "ok";
-        },
-        ["Defuddle"],
-      );
+      const { value, muzzled } = await withMuzzledConsole(async () => {
+        // Simulate Defuddle's internal catch log: console.error('Defuddle', '...', err)
+        console.error("Defuddle", "Error processing document:", new Error("boom"));
+        return "ok";
+      }, ["Defuddle"]);
       assert.strictEqual(value, "ok");
       assert.strictEqual(muzzled, true);
       assert.strictEqual(seen.length, 0, "the Defuddle log must not reach the real console.error");
@@ -599,15 +614,12 @@ describe("withMuzzledConsole", () => {
     const real = console.error;
     console.error = (...args: unknown[]) => seen.push(args);
     try {
-      const { value, muzzled } = await withMuzzledConsole(
-        async () => {
-          console.error("[pi-intelli-search]", "unrelated");
-          console.error("Defuddle", "swallowed", new Error("x"));
-          console.error("another", "unrelated");
-          return 42;
-        },
-        ["Defuddle"],
-      );
+      const { value, muzzled } = await withMuzzledConsole(async () => {
+        console.error("[pi-intelli-search]", "unrelated");
+        console.error("Defuddle", "swallowed", new Error("x"));
+        console.error("another", "unrelated");
+        return 42;
+      }, ["Defuddle"]);
       assert.strictEqual(value, 42);
       assert.strictEqual(muzzled, true);
       assert.strictEqual(seen.length, 2, "only the unrelated logs pass through");
@@ -621,12 +633,18 @@ describe("withMuzzledConsole", () => {
   it("reports muzzled=false and skips setup when no tags are given", async () => {
     const real = console.error;
     let touched = false;
-    console.error = () => { touched = true; };
+    console.error = () => {
+      touched = true;
+    };
     try {
       const { value, muzzled } = await withMuzzledConsole(async () => "clean", []);
       assert.strictEqual(value, "clean");
       assert.strictEqual(muzzled, false);
-      assert.strictEqual(touched, false, "console.error must not be replaced when there is nothing to muzzle");
+      assert.strictEqual(
+        touched,
+        false,
+        "console.error must not be replaced when there is nothing to muzzle",
+      );
     } finally {
       console.error = real;
     }
@@ -635,7 +653,9 @@ describe("withMuzzledConsole", () => {
   it("always restores console.error, even when fn throws", async () => {
     const real = console.error;
     await assert.rejects(
-      withMuzzledConsole(async () => { throw new Error("fn failed"); }, ["Defuddle"]),
+      withMuzzledConsole(async () => {
+        throw new Error("fn failed");
+      }, ["Defuddle"]),
       /fn failed/,
     );
     assert.strictEqual(console.error, real, "console.error must be restored after a throw");

@@ -59,11 +59,14 @@ const DEFAULT_SETTINGS: ResearchSettings = {
  * whose extractModel still says minimax/MiniMax-M2.7 gets migrated
  * to the 0.8.0 default.
  */
-const DEFAULT_HISTORY: Record<string, {
-  extractModel?: ModelConfig;
-  collateModel?: ModelConfig;
-  searchModel?: ModelConfig;
-}> = {
+const DEFAULT_HISTORY: Record<
+  string,
+  {
+    extractModel?: ModelConfig;
+    collateModel?: ModelConfig;
+    searchModel?: ModelConfig;
+  }
+> = {
   // Every entry MUST include every model role, even when unchanged from
   // prior versions. Migration skips roles missing from either old or new
   // defaults, so a gap in one entry silently strands upgrades that route
@@ -177,16 +180,11 @@ export function migrateDefaults(
     if (!oldDefault || !newDefault) continue;
 
     // Only migrate if the defaults actually changed between versions
-    if (
-      oldDefault.provider === newDefault.provider &&
-      oldDefault.model === newDefault.model
-    ) continue;
+    if (oldDefault.provider === newDefault.provider && oldDefault.model === newDefault.model)
+      continue;
 
     const userSetting = settings[key];
-    if (
-      userSetting.provider === oldDefault.provider &&
-      userSetting.model === oldDefault.model
-    ) {
+    if (userSetting.provider === oldDefault.provider && userSetting.model === oldDefault.model) {
       // User was using the old default: migrate to new default
       (settings as Record<string, unknown>)[key] = { ...newDefault };
       changes.push(
@@ -199,14 +197,11 @@ export function migrateDefaults(
   // default-fallback to a hard cap. Only fire for users who actually
   // set a maxUrls value (custom or old default); users on the new
   // default (16) don't need the warning.
-  if (
-    isUpgradeAcross(previousVersion, currentVersion, "0.8.0") &&
-    userSettings.maxUrls !== 16
-  ) {
+  if (isUpgradeAcross(previousVersion, currentVersion, "0.8.0") && userSettings.maxUrls !== 16) {
     changes.push(
       `maxUrls is now a hard cap (was the default before 0.8.0). ` +
-      `Your current maxUrls=${userSettings.maxUrls} will clamp all ` +
-      `intelli_research calls. The new agent fallback is defaultUrls (default: 8).`,
+        `Your current maxUrls=${userSettings.maxUrls} will clamp all ` +
+        `intelli_research calls. The new agent fallback is defaultUrls (default: 8).`,
     );
   }
 
@@ -218,10 +213,7 @@ function isUpgradeAcross(from: string, to: string, boundary: string): boolean {
   const vFrom = from.split(".").map(Number);
   const vTo = to.split(".").map(Number);
   const vBoundary = boundary.split(".").map(Number);
-  return (
-    compareVersions(vFrom, vBoundary) < 0 &&
-    compareVersions(vTo, vBoundary) >= 0
-  );
+  return compareVersions(vFrom, vBoundary) < 0 && compareVersions(vTo, vBoundary) >= 0;
 }
 
 function compareVersions(a: number[], b: number[]): number {
@@ -409,10 +401,16 @@ export async function loadSettings(context: SettingsContext): Promise<ResearchSe
   return settings;
 }
 
-export function resolveModelConfig(settings: ResearchSettings, role: "search" | "extract" | "collate"): ModelConfig {
+export function resolveModelConfig(
+  settings: ResearchSettings,
+  role: "search" | "extract" | "collate",
+): ModelConfig {
   switch (role) {
-    case "search": return settings.searchModel;
-    case "extract": return settings.extractModel;
-    case "collate": return settings.collateModel;
+    case "search":
+      return settings.searchModel;
+    case "extract":
+      return settings.extractModel;
+    case "collate":
+      return settings.collateModel;
   }
 }

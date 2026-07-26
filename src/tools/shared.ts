@@ -72,11 +72,7 @@ export function buildCollationMessage(
  * Appended after the collation text in both intelli_research and
  * intelli_collate results.
  */
-export function formatCacheAppendix(
-  cachePath: string,
-  succeeded: number,
-  failed: number,
-): string {
+export function formatCacheAppendix(cachePath: string, succeeded: number, failed: number): string {
   let out = `\n\n---\n`;
   out += `**Cache**: \`${cachePath}/\`\n`;
   out += `**Report**: \`${cachePath}/report.md\`\n`;

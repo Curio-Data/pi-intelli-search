@@ -142,9 +142,7 @@ export async function callWithAbortTimeout<T>(
 }
 
 /** Decision returned by a {@link withRetry} classifier. */
-export type RetryDecision =
-  | { retry: true; retryAfterMs?: number }
-  | { retry: false };
+export type RetryDecision = { retry: true; retryAfterMs?: number } | { retry: false };
 
 export interface RetryOptions {
   /** Total attempts including the first try (>= 1). */
@@ -297,9 +295,7 @@ export async function withMuzzledConsole<T>(
  * otherwise-concurrent requests (e.g. the extract fan-out). `minIntervalMs <= 0`
  * makes the gate a no-op. The gate is abortable via the passed signal.
  */
-export function createRateLimiter(
-  minIntervalMs: number,
-): (signal?: AbortSignal) => Promise<void> {
+export function createRateLimiter(minIntervalMs: number): (signal?: AbortSignal) => Promise<void> {
   let next = 0;
   return async (signal?: AbortSignal) => {
     if (minIntervalMs <= 0) return;
@@ -365,9 +361,8 @@ export function extractSourceUrls(text: string): Array<{ url: string; title: str
       try {
         const u = new URL(url);
         const parts = u.pathname.split("/").filter(Boolean);
-        const title = parts.length > 0
-          ? parts[parts.length - 1].replace(/\.[^.]+$/, "")
-          : u.hostname;
+        const title =
+          parts.length > 0 ? parts[parts.length - 1].replace(/\.[^.]+$/, "") : u.hostname;
         urls.push({ url, title });
       } catch {
         // Malformed URL that passed the regex: skip.
@@ -386,7 +381,8 @@ export function extractSourceUrls(text: string): Array<{ url: string; title: str
   for (const m of text.matchAll(absoluteSpanPattern)) {
     absoluteSpans.push({ start: m.index, end: m.index + m[0].length });
   }
-  const domainPattern = /(?<!:\/\/)(?<![A-Za-z0-9@._-])((?:www\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?:\/[^\s<>"{}*()|\\`\[\]]*)?)/g;
+  const domainPattern =
+    /(?<!:\/\/)(?<![A-Za-z0-9@._-])((?:www\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?:\/[^\s<>"{}*()|\\`\[\]]*)?)/g;
   for (const m of text.matchAll(domainPattern)) {
     if (absoluteSpans.some(({ start, end }) => m.index >= start && m.index < end)) continue;
     const domainReference = m[1].replace(/[.,;:!]+$/, "");
@@ -396,9 +392,7 @@ export function extractSourceUrls(text: string): Array<{ url: string; title: str
       const u = new URL(url);
       seen.add(url);
       const parts = u.pathname.split("/").filter(Boolean);
-      const title = parts.length > 0
-        ? parts[parts.length - 1].replace(/\.[^.]+$/, "")
-        : u.hostname;
+      const title = parts.length > 0 ? parts[parts.length - 1].replace(/\.[^.]+$/, "") : u.hostname;
       urls.push({ url, title });
     } catch {
       // Defensive: the domain-shaped match should form a valid URL.

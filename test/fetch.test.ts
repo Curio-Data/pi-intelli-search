@@ -77,7 +77,9 @@ describe("content scoring logic (indirect)", () => {
     score += (content.match(/```/g) ?? []).length * 100;
     score += (content.match(/^#{1,6}\s/gm) ?? []).length * 50;
     score += (content.match(/^\|/gm) ?? []).length * 20;
-    score -= (content.match(/Skip to content|Was this helpful|Edit page|Report issue|Copy page/g) ?? []).length * 500;
+    score -=
+      (content.match(/Skip to content|Was this helpful|Edit page|Report issue|Copy page/g) ?? [])
+        .length * 500;
     if (content.startsWith("---")) score -= 1000;
     return score;
   }
@@ -126,11 +128,11 @@ describe("cleanBrokenMetadata (via DOM simulation)", () => {
     });
 
     // Verify that new URL(relative, base) resolves correctly
-    const resolved = new URL(
-      "/firecracker-microvm/firecracker/releases",
-      "https://github.com",
+    const resolved = new URL("/firecracker-microvm/firecracker/releases", "https://github.com");
+    assert.strictEqual(
+      resolved.href,
+      "https://github.com/firecracker-microvm/firecracker/releases",
     );
-    assert.strictEqual(resolved.href, "https://github.com/firecracker-microvm/firecracker/releases");
   });
 
   it("removes meta tags with literal undefined content", async () => {
@@ -141,10 +143,10 @@ describe("cleanBrokenMetadata (via DOM simulation)", () => {
     </head><body></body></html>`);
 
     // Simulate cleanBrokenMetadata
-    const elements = document.querySelectorAll('meta[content], link[href], a[href]');
+    const elements = document.querySelectorAll("meta[content], link[href], a[href]");
     for (const el of Array.from(elements)) {
       const tag = (el as any).tagName.toLowerCase();
-      for (const attr of tag === 'meta' ? ['content'] : ['href']) {
+      for (const attr of tag === "meta" ? ["content"] : ["href"]) {
         const val = (el as any).getAttribute(attr);
         if (!val) continue;
         if (/^(undefined|null)$/i.test(val)) {
@@ -167,10 +169,10 @@ describe("cleanBrokenMetadata (via DOM simulation)", () => {
     </head><body></body></html>`);
 
     const pageUrl = "https://github.com/firecracker-microvm/firecracker/releases";
-    const elements = document.querySelectorAll('meta[content], link[href], a[href]');
+    const elements = document.querySelectorAll("meta[content], link[href], a[href]");
     for (const el of Array.from(elements)) {
       const tag = (el as any).tagName.toLowerCase();
-      for (const attr of tag === 'meta' ? ['content'] : ['href']) {
+      for (const attr of tag === "meta" ? ["content"] : ["href"]) {
         const val = (el as any).getAttribute(attr);
         if (!val) continue;
         if (/^(undefined|null)$/i.test(val)) {
@@ -193,7 +195,7 @@ describe("cleanBrokenMetadata (via DOM simulation)", () => {
 
     const canonical = document.querySelector('link[rel="canonical"]');
     assert.strictEqual(
-      (canonical as any).getAttribute('href'),
+      (canonical as any).getAttribute("href"),
       "https://github.com/firecracker-microvm/firecracker/releases",
     );
   });
@@ -236,10 +238,10 @@ describe("cleanBrokenMetadata (via DOM simulation)", () => {
     const { document } = parseHTML(githubHtml);
 
     // Apply the fix — same logic as cleanBrokenMetadata in fetch.ts
-    const elements = document.querySelectorAll('meta[content], link[href], a[href]');
+    const elements = document.querySelectorAll("meta[content], link[href], a[href]");
     for (const el of Array.from(elements)) {
       const tag = (el as any).tagName.toLowerCase();
-      for (const attr of tag === 'meta' ? ['content'] : ['href']) {
+      for (const attr of tag === "meta" ? ["content"] : ["href"]) {
         const val = (el as any).getAttribute(attr);
         if (!val) continue;
         if (/^(undefined|null)$/i.test(val)) {
@@ -278,15 +280,25 @@ describe("cleanBrokenMetadata (via DOM simulation)", () => {
     const pageUrl = "https://example.com";
 
     // Apply cleanBrokenMetadata logic
-    const elements = document.querySelectorAll('meta[content], link[href], a[href]');
+    const elements = document.querySelectorAll("meta[content], link[href], a[href]");
     for (const el of Array.from(elements)) {
       const tag = (el as any).tagName.toLowerCase();
-      for (const attr of tag === 'meta' ? ['content'] : ['href']) {
+      for (const attr of tag === "meta" ? ["content"] : ["href"]) {
         const val = (el as any).getAttribute(attr);
         if (!val) continue;
-        if (/^(undefined|null)$/i.test(val)) { el.remove(); break; }
-        try { new URL(val); } catch {
-          try { (el as any).setAttribute(attr, new URL(val, pageUrl).href); } catch { el.remove(); break; }
+        if (/^(undefined|null)$/i.test(val)) {
+          el.remove();
+          break;
+        }
+        try {
+          new URL(val);
+        } catch {
+          try {
+            (el as any).setAttribute(attr, new URL(val, pageUrl).href);
+          } catch {
+            el.remove();
+            break;
+          }
         }
       }
     }
@@ -295,16 +307,23 @@ describe("cleanBrokenMetadata (via DOM simulation)", () => {
     const ldJsonScripts = document.querySelectorAll('script[type="application/ld+json"]');
     for (const script of Array.from(ldJsonScripts)) {
       const text = script.textContent?.trim();
-      if (!text) { script.remove(); continue; }
-      try { JSON.parse(text); } catch { script.remove(); }
+      if (!text) {
+        script.remove();
+        continue;
+      }
+      try {
+        JSON.parse(text);
+      } catch {
+        script.remove();
+      }
     }
 
     // Valid JSON script should remain
     const remaining = document.querySelectorAll('script[type="application/ld+json"]');
     assert.strictEqual(remaining.length, 1);
-    assert.ok(remaining[0].textContent?.includes('VideoObject'));
-    assert.ok(document.querySelector('title'));
-    assert.ok(document.querySelector('p'));
+    assert.ok(remaining[0].textContent?.includes("VideoObject"));
+    assert.ok(document.querySelector("title"));
+    assert.ok(document.querySelector("p"));
   });
 
   it("Defuddle fallback extracts basic content when Defuddle degrades", async () => {
@@ -329,9 +348,12 @@ describe("cleanBrokenMetadata (via DOM simulation)", () => {
 
     // Simulate the fallback extraction
     const title = document.querySelector("title")?.textContent?.trim() ?? "";
-    const metaDesc = document.querySelector('meta[name="description"]')?.getAttribute("content")?.trim() ?? "";
+    const metaDesc =
+      document.querySelector('meta[name="description"]')?.getAttribute("content")?.trim() ?? "";
     const bodyText = document.body?.textContent?.replace(/\s+/g, " ").trim() ?? "";
-    const content = [`# ${title}`, metaDesc ? `> ${metaDesc}` : "", bodyText].filter(Boolean).join("\n\n");
+    const content = [`# ${title}`, metaDesc ? `> ${metaDesc}` : "", bodyText]
+      .filter(Boolean)
+      .join("\n\n");
 
     assert.strictEqual(title, "Fallback Test Page");
     assert.ok(content.includes("Fallback Test Page"));

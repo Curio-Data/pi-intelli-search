@@ -85,7 +85,6 @@ describe("extension registration", () => {
       "should subscribe to after_provider_response",
     );
   });
-
 });
 
 describe("after_provider_response handler", () => {
@@ -107,8 +106,12 @@ describe("after_provider_response handler", () => {
 
     const mockCtx = {
       hasUI: true,
-      get cwd() { return process.cwd(); },
-      isProjectTrusted() { return true; },
+      get cwd() {
+        return process.cwd();
+      },
+      isProjectTrusted() {
+        return true;
+      },
       ui: {
         setStatus(key: string, text: string | undefined) {
           if (text === undefined) statuses.delete(key);
@@ -127,7 +130,10 @@ describe("after_provider_response handler", () => {
 
     // 200 should clear rate-limit status
     handler!({ status: 200, headers: {} }, mockCtx);
-    assert.ok(!statuses.has("pi-intelli-search:ratelimit"), "should clear rate-limit status on success");
+    assert.ok(
+      !statuses.has("pi-intelli-search:ratelimit"),
+      "should clear rate-limit status on success",
+    );
   });
 
   it("debounces 429 notifications (only one per 30s)", async () => {
@@ -146,8 +152,12 @@ describe("after_provider_response handler", () => {
 
     const mockCtx = {
       hasUI: true,
-      get cwd() { return process.cwd(); },
-      isProjectTrusted() { return true; },
+      get cwd() {
+        return process.cwd();
+      },
+      isProjectTrusted() {
+        return true;
+      },
       ui: {
         setStatus(key: string, text: string | undefined) {
           setStatusCalls.push([key, text]);
@@ -274,8 +284,12 @@ describe("auth pre-flight check", () => {
 
     const mockCtx = {
       hasUI: true,
-      get cwd() { return process.cwd(); },
-      isProjectTrusted() { return true; },
+      get cwd() {
+        return process.cwd();
+      },
+      isProjectTrusted() {
+        return true;
+      },
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -326,8 +340,12 @@ describe("auth pre-flight check", () => {
 
     const mockCtx = {
       hasUI: true,
-      get cwd() { return process.cwd(); },
-      isProjectTrusted() { return true; },
+      get cwd() {
+        return process.cwd();
+      },
+      isProjectTrusted() {
+        return true;
+      },
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -381,8 +399,12 @@ describe("auth pre-flight check", () => {
 
     const mockCtx = {
       hasUI: true,
-      get cwd() { return process.cwd(); },
-      isProjectTrusted() { return true; },
+      get cwd() {
+        return process.cwd();
+      },
+      isProjectTrusted() {
+        return true;
+      },
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -410,10 +432,7 @@ describe("auth pre-flight check", () => {
       const cwd = mkdtempSync(join(tmpdir(), "pi-intelli-deprecation-"));
       const piDir = join(cwd, ".pi");
       mkdirSync(piDir, { recursive: true });
-      writeFileSync(
-        join(piDir, "settings.json"),
-        JSON.stringify({ intelliMaxUrls: 12 }),
-      );
+      writeFileSync(join(piDir, "settings.json"), JSON.stringify({ intelliMaxUrls: 12 }));
 
       process.chdir(cwd);
 
@@ -424,9 +443,14 @@ describe("auth pre-flight check", () => {
       await sessionStartHandler!({}, mockCtx);
 
       const deprecationNotices = notifications.filter(
-        (n) => n.type === "warning" && n.msg.includes("Flat 'intelli*' settings keys are deprecated"),
+        (n) =>
+          n.type === "warning" && n.msg.includes("Flat 'intelli*' settings keys are deprecated"),
       );
-      assert.strictEqual(deprecationNotices.length, 1, "should fire deprecation notice on upgrade with flat keys");
+      assert.strictEqual(
+        deprecationNotices.length,
+        1,
+        "should fire deprecation notice on upgrade with flat keys",
+      );
     } finally {
       process.chdir(savedCwd);
       if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
@@ -455,8 +479,12 @@ describe("auth pre-flight check", () => {
 
     const mockCtx = {
       hasUI: true,
-      get cwd() { return process.cwd(); },
-      isProjectTrusted() { return true; },
+      get cwd() {
+        return process.cwd();
+      },
+      isProjectTrusted() {
+        return true;
+      },
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -484,7 +512,8 @@ describe("auth pre-flight check", () => {
       await sessionStartHandler!({}, mockCtx);
 
       const deprecationNotices = notifications.filter(
-        (n) => n.type === "warning" && n.msg.includes("Flat 'intelli*' settings keys are deprecated"),
+        (n) =>
+          n.type === "warning" && n.msg.includes("Flat 'intelli*' settings keys are deprecated"),
       );
       assert.strictEqual(deprecationNotices.length, 0, "no deprecation notice on fresh install");
     } finally {
@@ -517,8 +546,12 @@ describe("auth pre-flight check", () => {
 
     const mockCtx = {
       hasUI: true,
-      get cwd() { return process.cwd(); },
-      isProjectTrusted() { return true; },
+      get cwd() {
+        return process.cwd();
+      },
+      isProjectTrusted() {
+        return true;
+      },
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -568,19 +601,31 @@ describe("auth pre-flight check", () => {
       );
       assert.strictEqual(migrationNotices.length, 1, "should fire migration notification");
       assert.ok(
-        migrationNotices[0].msg.includes("extract: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m2.7"),
+        migrationNotices[0].msg.includes(
+          "extract: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m2.7",
+        ),
         "should list extract migration",
       );
       assert.ok(
-        migrationNotices[0].msg.includes("collate: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m2.7"),
+        migrationNotices[0].msg.includes(
+          "collate: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m2.7",
+        ),
         "should list collate migration",
       );
 
       // Verify the pipeline actually runs on migrated settings (C1 regression guard).
       const { loadSettings } = await import("../src/settings.js");
       const post = await loadSettings({ cwd, projectTrusted: true });
-      assert.strictEqual(post.extractModel.provider, "openrouter", "extract model should be migrated");
-      assert.strictEqual(post.collateModel.provider, "openrouter", "collate model should be migrated");
+      assert.strictEqual(
+        post.extractModel.provider,
+        "openrouter",
+        "extract model should be migrated",
+      );
+      assert.strictEqual(
+        post.collateModel.provider,
+        "openrouter",
+        "collate model should be migrated",
+      );
       assert.strictEqual(post.extractModel.model, "minimax/minimax-m2.7");
       assert.strictEqual(post.collateModel.model, "minimax/minimax-m2.7");
     } finally {
@@ -612,8 +657,12 @@ describe("auth pre-flight check", () => {
 
     const mockCtx = {
       hasUI: true,
-      get cwd() { return process.cwd(); },
-      isProjectTrusted() { return true; },
+      get cwd() {
+        return process.cwd();
+      },
+      isProjectTrusted() {
+        return true;
+      },
       ui: {
         notify(msg: string, type: string) {
           notifications.push({ msg, type });
@@ -662,10 +711,7 @@ describe("auth pre-flight check", () => {
       // Should still migrate collate (matched old default) but NOT extract
       assert.strictEqual(migrationNotices.length, 1, "should fire for collate only");
       const notice = migrationNotices[0].msg;
-      assert.ok(
-        !notice.includes("extract:"),
-        "should NOT mention extract (user customized)",
-      );
+      assert.ok(!notice.includes("extract:"), "should NOT mention extract (user customized)");
       assert.ok(
         notice.includes("collate: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m2.7"),
         "should list collate migration",
