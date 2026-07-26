@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Internal simplification: 28% lower code complexity with zero behaviour change.** The four tools previously maintained their own copies of settings parsing, cache locking, prompt assembly, truncation markers, and error formatting. These are now single-sourced, the research pipeline's orchestrator is split into focused stage functions, and Prettier enforces formatting. Test coverage grew across every settings key, the degraded pipeline paths, and the extracted shared builders, and an independent adversarial review by a second model found no user-observable changes.
+- **Internal simplification: 28% lower code complexity, no behaviour change.**
 
 ## [0.12.0] - 2026-07-24
 
