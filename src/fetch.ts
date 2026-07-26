@@ -61,24 +61,25 @@ async function fetchSingle(url: string, opts: FetchOptions, signal?: AbortSignal
  */
 async function fetchWithComparison(url: string, opts: FetchOptions, signal?: AbortSignal): Promise<FetchedPage> {
   // Run both fetches in parallel
-  const results = await Promise.allSettled([
+  const [defuddleRes, markdownRes] = await Promise.allSettled([
     fetchViaDefuddle(url, opts, signal),
     fetchMarkdownVariant(url, opts, signal),
   ]);
 
-  const defuddlePage = results[0].status === "fulfilled" ? results[0].value : null;
-  const markdownPage = results[1].status === "fulfilled" ? results[1].value : null;
+  const defuddlePage = defuddleRes.status === "fulfilled" ? defuddleRes.value : null;
+  const markdownPage = markdownRes.status === "fulfilled" ? markdownRes.value : null;
 
-  if (!defuddlePage && !markdownPage) {
-    const e0 = results[0].status === "rejected" ? results[0].reason : null;
-    const e1 = results[1].status === "rejected" ? results[1].reason : null;
-    const err = e0 ?? e1 ?? new Error("Both fetch pipelines failed");
-    throw err;
+  if (defuddlePage && markdownPage) {
+    return compareAndPick(defuddlePage, markdownPage);
   }
-  if (!defuddlePage) return markdownPage!;
-  if (!markdownPage) return defuddlePage;
+  const onlyPage = defuddlePage ?? markdownPage;
+  if (onlyPage) return onlyPage;
 
-  return compareAndPick(defuddlePage, markdownPage);
+  const reason =
+    (defuddleRes.status === "rejected" ? defuddleRes.reason : null) ??
+    (markdownRes.status === "rejected" ? markdownRes.reason : null) ??
+    new Error("Both fetch pipelines failed");
+  throw reason;
 }
 
 /**

@@ -333,12 +333,11 @@ export function extractSourceUrls(text: string): Array<{ url: string; title: str
 
   // Pass 1: markdown links [title](url)
   const linkPattern = /\[([^\]]*)\]\((https?:\/\/(?:[^()\s]|\([^()\s]*\))*)\)/g;
-  let match;
-  while ((match = linkPattern.exec(text)) !== null) {
-    const url = match[2];
+  for (const m of text.matchAll(linkPattern)) {
+    const url = m[2];
     if (!seen.has(url)) {
       seen.add(url);
-      urls.push({ url, title: match[1] });
+      urls.push({ url, title: m[1] });
     }
   }
 
@@ -355,11 +354,10 @@ export function extractSourceUrls(text: string): Array<{ url: string; title: str
   // `...format(v=net-8.0)`) are matched via the explicit balanced-paren
   // alternative, not via the general character class.
   const barePattern = /(https?:\/\/(?:[^\s<>"{}*()|\\^`\[\]]|\([^()\s]*\))+)/g;
-  while ((match = barePattern.exec(text)) !== null) {
-    let url = match[1];
+  for (const m of text.matchAll(barePattern)) {
     // Strip trailing punctuation that is not part of the URL: period, comma,
     // semicolon, colon, or exclamation mark.
-    url = url.replace(/[.,;:!]+$/, "");
+    const url = m[1].replace(/[.,;:!]+$/, "");
     if (!seen.has(url)) {
       seen.add(url);
       // Derive a title from the URL: use the path's last segment (minus
@@ -385,13 +383,13 @@ export function extractSourceUrls(text: string): Array<{ url: string; title: str
   // `net-8.0` in a query parameter must not become a second source.
   const absoluteSpans: Array<{ start: number; end: number }> = [];
   const absoluteSpanPattern = /https?:\/\/\S+/g;
-  while ((match = absoluteSpanPattern.exec(text)) !== null) {
-    absoluteSpans.push({ start: match.index, end: match.index + match[0].length });
+  for (const m of text.matchAll(absoluteSpanPattern)) {
+    absoluteSpans.push({ start: m.index, end: m.index + m[0].length });
   }
   const domainPattern = /(?<!:\/\/)(?<![A-Za-z0-9@._-])((?:www\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?:\/[^\s<>"{}*()|\\`\[\]]*)?)/g;
-  while ((match = domainPattern.exec(text)) !== null) {
-    if (absoluteSpans.some(({ start, end }) => match!.index >= start && match!.index < end)) continue;
-    const domainReference = match[1].replace(/[.,;:!]+$/, "");
+  for (const m of text.matchAll(domainPattern)) {
+    if (absoluteSpans.some(({ start, end }) => m.index >= start && m.index < end)) continue;
+    const domainReference = m[1].replace(/[.,;:!]+$/, "");
     const url = `https://${domainReference}`;
     if (seen.has(url)) continue;
     try {
