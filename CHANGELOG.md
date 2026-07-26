@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Internal simplification: 28% lower code complexity, no behaviour change.**
+- Internal refactor reducing cyclomatic complexity by ≈27%. Test suite grew from 257 to 330. No user-visible behaviour change.
 
 ## [0.12.0] - 2026-07-24
 
