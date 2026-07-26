@@ -9,6 +9,21 @@ export function textContent(text: string): { type: "text"; text: string } {
   return { type: "text" as const, text };
 }
 
+/** Extract a human-readable message from an unknown thrown value. */
+export function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Log a non-fatal pipeline diagnostic with the extension prefix. When `err`
+ * is given it is passed through as a second console argument (preserving the
+ * stack), matching the previous inline call sites.
+ */
+export function logErr(msg: string, err?: unknown): void {
+  if (err !== undefined) console.error(`[pi-intelli-search] ${msg}`, err);
+  else console.error(`[pi-intelli-search] ${msg}`);
+}
+
 /**
  * Get the pi agent directory path.
  * Respects PI_CODING_AGENT_DIR for isolated environments (e.g. E2E tests).

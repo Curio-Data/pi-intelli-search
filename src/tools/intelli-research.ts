@@ -9,7 +9,7 @@ import { SEARCH_SYSTEM_PROMPT, EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT
 import { callLlm } from "../llm.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
 import { makeCachePath, domainSlug, writeCacheFiles, writeReportFile, readIndex, formatIndexForJudge, parseJudgeResponse, formatCacheSuggestions, cacheLockDir, indexLockDir, acquireLock, updateIndex } from "../cache.js";
-import { textContent, extractSourceUrls, inferSourceType, inferCurrentness, mapWithConcurrency, sleep, createRateLimiter } from "../util.js";
+import { textContent, extractSourceUrls, inferSourceType, inferCurrentness, mapWithConcurrency, sleep, createRateLimiter, errMsg, logErr } from "../util.js";
 import type { LlmRetryConfig } from "../llm.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "../telemetry.js";
@@ -507,8 +507,7 @@ export const intelliResearchTool = {
       }
     } catch (err: unknown) {
       // Cache suggest is purely additive — never fail the pipeline
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`[pi-intelli-search] Cache suggest failed: ${message}`);
+      logErr(`Cache suggest failed: ${errMsg(err)}`);
     }
 
     tel?.recordCacheSuggest({
@@ -610,8 +609,7 @@ async function writeTelemetrySidecar(
     await mkdir(cachePath, { recursive: true });
     await writeTelemetry(cachePath, tel.finalize());
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[pi-intelli-search] Telemetry write failed: ${message}`);
+    logErr(`Telemetry write failed: ${errMsg(err)}`);
   }
 }
 
@@ -679,8 +677,7 @@ async function extractPage(
     };
   } catch (err: unknown) {
     // Log extraction error but don't fail the whole pipeline
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[pi-intelli-search] Extraction failed for ${page.url}: ${message}`);
+    logErr(`Extraction failed for ${page.url}: ${errMsg(err)}`);
     return {
       url: page.url,
       title: page.title,

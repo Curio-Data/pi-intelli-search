@@ -12,7 +12,7 @@ import { intelliCollateTool } from "./tools/intelli-collate.js";
 import { intelliResearchTool } from "./tools/intelli-research.js";
 import { ensureCustomModels as defaultEnsureCustomModels } from "./providers.js";
 import { invalidateSettingsCache, hasFlatKeys, migrateDefaults, loadSettings, setMigrationContext } from "./settings.js";
-import { getAgentDir } from "./util.js";
+import { getAgentDir, errMsg, logErr } from "./util.js";
 
 // Exported so the version-consistency test can assert it matches package.json.
 export const CURRENT_VERSION = "0.12.0";
@@ -166,8 +166,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
           try {
             await registry.refresh?.();
           } catch (refreshErr: unknown) {
-            const message = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
-            console.error(`[pi-intelli-search] Model registry refresh failed: ${message}`);
+            logErr(`Model registry refresh failed: ${errMsg(refreshErr)}`);
           }
           notify(
             `[pi-intelli-search] Added models: ${added.join(", ")}. Use /model to select them.`,
@@ -175,7 +174,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
           );
         }
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errMsg(err);
         notify(
           `[pi-intelli-search] Warning: could not update models.json: ${message}`,
           "warning",
@@ -198,7 +197,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
       }
     } catch (err: unknown) {
       // Auth check is best-effort; never block session startup
-      console.error(`[pi-intelli-search] Auth check failed:`, err);
+      logErr("Auth check failed:", err);
     }
 
     // Version tracking, default migration, and settings deprecation notice
@@ -239,7 +238,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
           }
         } catch (err: unknown) {
           // Migration is best-effort; never block session startup
-          console.error(`[pi-intelli-search] Default migration error:`, err);
+          logErr("Default migration error:", err);
         }
 
         // Set migration context so subsequent loadSettings() calls
@@ -280,7 +279,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
       }
     } catch (err: unknown) {
       // Version tracking is best-effort; never break session startup
-      console.error(`[pi-intelli-search] Version tracking error:`, err);
+      logErr("Version tracking error:", err);
     }
   });
 

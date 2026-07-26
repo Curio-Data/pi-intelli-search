@@ -10,7 +10,7 @@ import {
   type SimpleStreamOptions,
 } from "@earendil-works/pi-ai/compat";
 import type { ModelConfig } from "./types.js";
-import { withRetry, isRetryableMessage, parseRetryAfterMs, callWithAbortTimeout } from "./util.js";
+import { withRetry, isRetryableMessage, parseRetryAfterMs, callWithAbortTimeout, errMsg } from "./util.js";
 
 /** Narrow injectable seam for deterministic callLlm tests. */
 export const __harness: {
@@ -159,7 +159,7 @@ export async function callLlm(
       if (userSignal?.aborted) return { retry: false }; // genuine user cancel
       if (lastAttemptTimedOut) return { retry: true };  // our timeout fired
       if (error) {
-        const m = error instanceof Error ? error.message : String(error);
+        const m = errMsg(error);
         return isRetryableMessage(m)
           ? { retry: true, retryAfterMs: parseRetryAfterMs(m) ?? onResponseRetryAfterMs }
           : { retry: false };

@@ -15,7 +15,7 @@ import { parseHTML } from "linkedom";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FetchedPage } from "./types.js";
-import { mapWithConcurrency, withMuzzledConsole } from "./util.js";
+import { mapWithConcurrency, withMuzzledConsole, errMsg } from "./util.js";
 
 export interface FetchOptions {
   maxChars: number;
@@ -50,7 +50,7 @@ async function fetchSingle(url: string, opts: FetchOptions, signal?: AbortSignal
       title: "",
       content: "",
       status: "error",
-      error: err instanceof Error ? err.message : String(err),
+      error: errMsg(err),
     };
   }
 }
