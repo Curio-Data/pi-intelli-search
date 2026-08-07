@@ -135,12 +135,13 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
         const added = await __harness.ensureCustomModels();
         if (added.length > 0) {
           // We wrote new models to models.json. Refresh the registry so they're
-          // available immediately without restarting pi. refresh() has been on the
-          // public ModelRegistry type since Pi 0.84.0; it existed at runtime on the
-          // concrete instance in earlier versions (our peer minimum is 0.80.8), so
-          // this call is safe across the whole supported range. The return value
-          // (ModelsRefreshResult since 0.84.0) is intentionally ignored: a provider
-          // catalog failure should not block session startup.
+          // available immediately without restarting pi. refresh() has been public
+          // on ModelRegistry throughout the package's history; Pi 0.84.0 widened
+          // it from (): Promise<void> to (options?: ModelsRefreshOptions):
+          // Promise<ModelsRefreshResult>, which is what invalidated the local
+          // cast this code used to carry. The direct call is compatible with the
+          // whole peer range (>=0.80.8). The return value is intentionally
+          // ignored: a provider catalog failure should not block session startup.
           try {
             await ctx.modelRegistry.refresh();
           } catch (refreshErr: unknown) {

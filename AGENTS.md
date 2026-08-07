@@ -507,7 +507,7 @@ Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): the changelog i
 Releases are routinely missed because steps 3 and 4 below are skipped or done halfway. Follow every step. Do not assume.
 
 1. **Verify CI is green.** Confirm all changes are merged to `main` and the latest run is passing.
-2. **Bump `version` in `package.json`** following [SemVer](https://semver.org/).
+2. **Bump `version` in `package.json`** following [SemVer](https://semver.org/), then sync derived state before anything else: run `npm install --package-lock-only` so the `package-lock.json` root version matches, and add a `DEFAULT_HISTORY` entry for the new version in `src/settings.ts` (defaults unchanged is fine). Both drifts are silent: the lockfile drift was missed in v0.12.1, and a missing history entry disables default migration for upgrading users. Run `npm test` after the bump; the migration guard reads the live package version.
 3. **Update `CHANGELOG.md` in two places.** Both are required:
    - **Top of file:** Add a new `## [X.Y.Z] - YYYY-MM-DD` section above the previous entry. Use the standard sub-headings (`### Added`, `### Changed`, `### Fixed`, `### Compatibility`, `### Removed`, `### Security`) as needed. List user-visible changes only; internal refactors do not need entries unless they affect compatibility.
    - **Bottom of file:** Add a corresponding reference link `[X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/vX.Y.Z` below the existing reference block. Without this entry the version heading at the top will not link to the GitHub release.

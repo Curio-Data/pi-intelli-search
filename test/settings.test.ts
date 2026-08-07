@@ -1,7 +1,7 @@
 // test/settings.test.ts — Unit tests for settings loading
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -459,6 +459,32 @@ describe("hasFlatKeys", () => {
 });
 
 describe("migrateDefaults", () => {
+  it("current package version is a known migration target", async () => {
+    // Guard: a release that bumps package.json without adding a
+    // DEFAULT_HISTORY entry silently disables default migration for every
+    // upgrading user (migrateDefaults returns zero changes when the
+    // current version is unknown). This test reads the live package
+    // version, so the next release cannot forget the entry.
+    const { migrateDefaults } = await import("../src/settings.js");
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")) as {
+      version: string;
+    };
+
+    // A user still on the 0.7.0 defaults must see migration changes no
+    // matter which release they upgrade into.
+    const userSettings: ResearchSettings = {
+      ...baseSettings,
+      extractModel: { provider: "minimax", model: "MiniMax-M2.7" },
+      collateModel: { provider: "minimax", model: "MiniMax-M2.7" },
+    };
+
+    const { changes } = migrateDefaults("0.7.0", pkg.version, userSettings);
+    assert.ok(
+      changes.length > 0,
+      `DEFAULT_HISTORY has no entry for ${pkg.version}; upgrading users would silently skip default migration`,
+    );
+  });
+
   it("migrates extract model when it matches old default", async () => {
     const { migrateDefaults } = await import("../src/settings.js");
 

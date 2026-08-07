@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Internal maintenance release verified against `Pi` through 0.84.1, adapting to the model-registry refresh API made public in `Pi` 0.84.0. No user-visible behaviour change.
+- Internal maintenance release restoring the build against `Pi` 0.84.x, adapting to the `ModelRegistry.refresh()` signature change in `Pi` 0.84.0 (now returns `ModelsRefreshResult`). Verified against `Pi` 0.84.1. No user-visible behaviour change.
 
 ## [0.12.1] - 2026-07-26
 
