@@ -36,3 +36,4 @@ npm-debug.log*
 .e2e-llmsfull/
 .e2e-logs/
 /review-*.md
+.tmp/

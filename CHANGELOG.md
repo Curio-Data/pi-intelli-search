@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.2] - 2026-08-07
+
+### Changed
+
+- Internal maintenance release verified against `Pi` through 0.84.1, adapting to the model-registry refresh API made public in `Pi` 0.84.0. No user-visible behaviour change.
+
 ## [0.12.1] - 2026-07-26
 
 ### Changed
@@ -295,6 +301,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.12.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.2
 [0.12.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.1
 [0.12.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.0
 [0.11.3]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.11.3
