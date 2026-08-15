@@ -135,6 +135,29 @@ function scoreContent(content: string): number {
   return score;
 }
 
+/**
+ * Console tags muzzled for the duration of a `Defuddle()` call.
+ *
+ * `error`: Defuddle logs unrecoverable internal errors as
+ * `console.error('Defuddle', 'Error ...', error)` from its own catch, then
+ * returns a degraded result. Swallowing one of these means the output is
+ * degraded, so the caller routes to the DOM-text fallback.
+ *
+ * `warn`: Defuddle's MetadataExtractor catches invalid metadata URLs and logs
+ * a benign warning with the full stack (`console.warn('Failed to parse URL:',
+ * e)` and the `'Failed to parse base URL:'` variant). One trigger is a page
+ * whose JSON-LD blocks repeat the same `url`: `getSchemaProperty` joins the
+ * matches with `', '` and `new URL()` throws on the composite. The extraction
+ * itself is unaffected (only the `domain` metadata field is left empty), so
+ * these warnings must NOT drive the fallback.
+ *
+ * Exported for the regression test in `test/fetch.test.ts`.
+ */
+export const DEFUDDLE_MUZZLE_TAGS = {
+  error: ["Defuddle"],
+  warn: ["Failed to parse URL:", "Failed to parse base URL:"],
+} as const;
+
 // ---------------------------------------------------------------------------
 // Pipeline 1: HTML → Defuddle → markdown
 // ---------------------------------------------------------------------------
@@ -156,7 +179,7 @@ async function fetchViaDefuddle(
   const { document } = parseHTML(body);
   cleanBrokenMetadata(document, url);
 
-  // Try Defuddle first. Two failure modes are handled:
+  // Try Defuddle first. Failure modes handled:
   //   1. Defuddle throws (rare). Caught below.
   //   2. Defuddle logs to console.error from its own internal catch and returns
   //      a degraded result (raw serialized body, no clean markdown). This is
@@ -164,15 +187,18 @@ async function fetchViaDefuddle(
   //      prints the full stack to the user's terminal; we muzzle just that log
   //      for the duration of the call and, when it fires, route to our own DOM
   //      text fallback so the output stays clean and structured.
+  //   3. Defuddle logs a benign console.warn from MetadataExtractor when a
+  //      metadata URL is unparseable (see DEFUDDLE_MUZZLE_TAGS). Also muzzled,
+  //      but never treated as degraded.
   let extracted: Awaited<ReturnType<typeof Defuddle>> | undefined;
   let degraded = false;
   try {
     const out = await withMuzzledConsole(
       () => Defuddle(document, url, { markdown: true }),
-      // Defuddle logs as `console.error('Defuddle', 'Error ...', error)`.
-      ["Defuddle"],
+      DEFUDDLE_MUZZLE_TAGS,
     );
     extracted = out.value;
+    // Only the error channel signals degradation. A swallowed warn is benign.
     degraded = out.muzzled;
   } catch {
     degraded = true;

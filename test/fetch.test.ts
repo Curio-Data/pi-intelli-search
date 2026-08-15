@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { downloadLlmsFullToCache, LLMS_FULL_TIMEOUT_MS } from "../src/fetch.js";
+import { downloadLlmsFullToCache, LLMS_FULL_TIMEOUT_MS, DEFUDDLE_MUZZLE_TAGS } from "../src/fetch.js";
+import { withMuzzledConsole } from "../src/util.js";
 
 describe("fetch module structure", () => {
   it("exports fetchPages as a function", async () => {
@@ -360,5 +361,77 @@ describe("cleanBrokenMetadata (via DOM simulation)", () => {
     assert.ok(content.includes("A description for fallback testing"));
     assert.ok(content.includes("Main Heading"));
     assert.ok(content.includes("Some paragraph text"));
+  });
+});
+
+// Regression: pages with duplicate JSON-LD url fields and no og:url make
+// Defuddle's MetadataExtractor join the matches into an invalid composite URL
+// ("https://a, https://a"), catch the throw, and log a benign
+// console.warn('Failed to parse URL:', err) with the full stack. That warning
+// used to leak straight into the Pi TUI because the muzzle only covered
+// console.error. DEFUDDLE_MUZZLE_TAGS must now swallow it on the warn channel
+// without flagging the result as degraded.
+describe("Defuddle benign metadata warning is muzzled (regression)", () => {
+  const html = `<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Duplicate Schema URL Page</title>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Example","url":"https://www.example.com"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Example","url":"https://www.example.com"}</script>
+</head>
+<body>
+  <h1>Heading</h1>
+  <p>Body text for the duplicate schema url regression fixture.</p>
+</body></html>`;
+
+  it("the fixture genuinely triggers Defuddle's console.warn (sanity)", async () => {
+    const { parseHTML } = await import("linkedom");
+    const { Defuddle } = await import("defuddle/node");
+    const { document } = parseHTML(html);
+
+    const seenWarn: unknown[] = [];
+    const real = console.warn;
+    console.warn = (...args: unknown[]) => seenWarn.push(args);
+    try {
+      await Defuddle(document, "https://www.example.com/", { markdown: true });
+    } finally {
+      console.warn = real;
+    }
+    assert.ok(
+      seenWarn.some((args) => args[0] === "Failed to parse URL:"),
+      "fixture must trigger Defuddle's benign 'Failed to parse URL:' warning; " +
+        "if a Defuddle upgrade changes this, revisit DEFUDDLE_MUZZLE_TAGS",
+    );
+  });
+
+  it("DEFUDDLE_MUZZLE_TAGS swallows the warning as benign (warned, not muzzled)", async () => {
+    const { parseHTML } = await import("linkedom");
+    const { Defuddle } = await import("defuddle/node");
+    const { document } = parseHTML(html);
+
+    const seenWarn: unknown[] = [];
+    const seenError: unknown[] = [];
+    const realWarn = console.warn;
+    const realError = console.error;
+    console.warn = (...args: unknown[]) => seenWarn.push(args);
+    console.error = (...args: unknown[]) => seenError.push(args);
+    try {
+      const { value, muzzled, warned } = await withMuzzledConsole(
+        () => Defuddle(document, "https://www.example.com/", { markdown: true }),
+        DEFUDDLE_MUZZLE_TAGS,
+      );
+      assert.ok(value, "Defuddle still returns a result");
+      assert.strictEqual(warned, true, "the benign warning was swallowed on the warn channel");
+      assert.strictEqual(
+        muzzled,
+        false,
+        "a benign metadata warning must not flag the result as degraded",
+      );
+      assert.strictEqual(seenWarn.length, 0, "no warning may reach the real console.warn");
+      assert.strictEqual(seenError.length, 0, "no error may reach the real console.error");
+    } finally {
+      console.warn = realWarn;
+      console.error = realError;
+    }
   });
 });

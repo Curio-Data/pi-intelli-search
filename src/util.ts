@@ -245,7 +245,7 @@ export function parseRetryAfterMs(msg: string | undefined): number | undefined {
 }
 
 /**
- * Run `fn` with `console.error` selectively muzzled.
+ * Run `fn` with `console.error` and `console.warn` selectively muzzled.
  *
  * Some dependencies (notably _Defuddle_) print unrecoverable internal errors
  * to `console.error` from inside their own try/catch, then return a degraded
@@ -254,38 +254,66 @@ export function parseRetryAfterMs(msg: string | undefined): number | undefined {
  * degradation. Swallowing those logs during the call keeps the experience
  * clean.
  *
- * Only logs whose first argument matches one of `muzzledTags` are swallowed
- * (matched by identity against Defuddle's `'Defuddle'` tag, so a plain string
- * like `'[pi-intelli-search]'` is never caught up). Everything else is passed
- * straight through to the real `console.error`, so unrelated errors during the
- * call window are still surfaced. `console.error` is always restored in a
- * `finally`, including on throw.
+ * Defuddle also logs fully benign warnings via `console.warn` (for example
+ * `'Failed to parse URL:'` when its metadata extractor joins duplicate
+ * schema.org `url` values into an invalid composite). These carry the full
+ * stack too and are pure noise: the caller recovers nothing because nothing
+ * is wrong. They are muzzled through the separate `warn` channel.
  *
- * Returns `{ value, muzzled }`. `muzzled` is true when at least one matching
- * log was swallowed, which lets the caller detect the degraded path and route
- * to its own fallback instead of consuming the dependency's degraded output.
+ * Only logs whose first argument matches one of the channel's tags are
+ * swallowed (matched by identity against Defuddle's tags, so a plain string
+ * like `'[pi-intelli-search]'` is never caught up). Everything else is passed
+ * straight through to the real console method, so unrelated output during the
+ * call window is still surfaced. Both console methods are always restored in
+ * a `finally`, including on throw.
+ *
+ * Returns `{ value, muzzled, warned }`. `muzzled` is true when at least one
+ * matching `console.error` log was swallowed, which lets the caller detect
+ * the degraded path and route to its own fallback instead of consuming the
+ * dependency's degraded output. `warned` is true when a matching
+ * `console.warn` log was swallowed; it is informational only and must not
+ * drive fallback behaviour, because the warn channel is benign.
  */
 export async function withMuzzledConsole<T>(
   fn: () => Promise<T>,
-  muzzledTags: ReadonlyArray<unknown>,
-): Promise<{ value: T; muzzled: boolean }> {
-  if (muzzledTags.length === 0) {
-    return { value: await fn(), muzzled: false };
+  muzzleTags: {
+    error?: ReadonlyArray<unknown>;
+    warn?: ReadonlyArray<unknown>;
+  },
+): Promise<{ value: T; muzzled: boolean; warned: boolean }> {
+  const errorTags = muzzleTags.error ?? [];
+  const warnTags = muzzleTags.warn ?? [];
+  if (errorTags.length === 0 && warnTags.length === 0) {
+    return { value: await fn(), muzzled: false, warned: false };
   }
-  const original = console.error;
+  const originalError = console.error;
+  const originalWarn = console.warn;
   let muzzled = false;
+  let warned = false;
   try {
-    console.error = (...args: unknown[]) => {
-      if (muzzledTags.includes(args[0])) {
-        muzzled = true;
-        return;
-      }
-      original(...args);
-    };
+    if (errorTags.length > 0) {
+      console.error = (...args: unknown[]) => {
+        if (errorTags.includes(args[0])) {
+          muzzled = true;
+          return;
+        }
+        originalError(...args);
+      };
+    }
+    if (warnTags.length > 0) {
+      console.warn = (...args: unknown[]) => {
+        if (warnTags.includes(args[0])) {
+          warned = true;
+          return;
+        }
+        originalWarn(...args);
+      };
+    }
     const value = await fn();
-    return { value, muzzled };
+    return { value, muzzled, warned };
   } finally {
-    console.error = original;
+    console.error = originalError;
+    console.warn = originalWarn;
   }
 }
 

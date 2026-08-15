@@ -485,6 +485,38 @@ describe("migrateDefaults", () => {
     );
   });
 
+  it("current-version defaults match the live defaults in every role", async () => {
+    // Guard: DEFAULT_HISTORY[currentVersion] must carry the same three model
+    // roles as the live defaults, or upgrading users on the previous defaults
+    // get silently migrated to a wrong model. A typo here once rewrote every
+    // upgrader's searchModel from perplexity/sonar to minimax/minimax-m2.7
+    // (caught in review of 0.12.4). If this release intentionally changes a
+    // default, update the live defaults and this test's expectation together.
+    const { migrateDefaults } = await import("../src/settings.js");
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")) as {
+      version: string;
+    };
+
+    // A user exactly on the current live defaults (all three roles) must see
+    // ZERO migration changes when upgrading from the previous release into
+    // this one. Any role drift in DEFAULT_HISTORY[pkg.version] surfaces as a
+    // spurious change here.
+    const userSettings: ResearchSettings = {
+      ...baseSettings,
+      extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+      collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+      searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+    };
+
+    const { changes } = migrateDefaults("0.12.3", pkg.version, userSettings);
+    assert.deepStrictEqual(
+      changes,
+      [],
+      `DEFAULT_HISTORY[${pkg.version}] drifts from the live defaults: ${JSON.stringify(changes)}. ` +
+        "If this release intentionally changes a model default, update both the live defaults and this test.",
+    );
+  });
+
   it("migrates extract model when it matches old default", async () => {
     const { migrateDefaults } = await import("../src/settings.js");
 

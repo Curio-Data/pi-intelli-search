@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.4] - 2026-08-15
+
+### Fixed
+
+- Pages with repeated schema.org `url` values and no `og:url` (for example, sites shipping both `Organization` and `WebSite` JSON-LD blocks) no longer print a full `TypeError: Invalid URL` stack trace to the terminal during fetch. [Defuddle](https://github.com/kepano/defuddle) joins the duplicate values into an invalid composite URL, catches the throw, and logs a benign `console.warn`; the console muzzle now covers that warning channel in addition to the existing error channel. Extraction results were and remain unaffected. The upstream root fix is tracked in [#5](https://github.com/Curio-Data/pi-intelli-search/issues/5).
+
 ## [0.12.3] - 2026-08-14
 
 ### Changed
@@ -307,6 +313,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.12.4]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.4
 [0.12.3]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.3
 [0.12.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.2
 [0.12.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.1

@@ -122,6 +122,14 @@ const DEFAULT_HISTORY: Record<
     collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   },
+  "0.12.4": {
+    // Defaults unchanged from 0.12.3. Bugfix release; no model
+    // changes. Retained so migrations from older releases compare against
+    // an explicit current-version entry.
+    extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+    collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  },
 };
 
 /** In-memory settings cache, isolated by the configuration source context. */

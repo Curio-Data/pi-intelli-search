@@ -596,13 +596,14 @@ describe("withMuzzledConsole", () => {
     const real = console.error;
     console.error = (...args: unknown[]) => seen.push(args);
     try {
-      const { value, muzzled } = await withMuzzledConsole(async () => {
+      const { value, muzzled, warned } = await withMuzzledConsole(async () => {
         // Simulate Defuddle's internal catch log: console.error('Defuddle', '...', err)
         console.error("Defuddle", "Error processing document:", new Error("boom"));
         return "ok";
-      }, ["Defuddle"]);
+      }, { error: ["Defuddle"] });
       assert.strictEqual(value, "ok");
       assert.strictEqual(muzzled, true);
+      assert.strictEqual(warned, false);
       assert.strictEqual(seen.length, 0, "the Defuddle log must not reach the real console.error");
     } finally {
       console.error = real;
@@ -619,7 +620,7 @@ describe("withMuzzledConsole", () => {
         console.error("Defuddle", "swallowed", new Error("x"));
         console.error("another", "unrelated");
         return 42;
-      }, ["Defuddle"]);
+      }, { error: ["Defuddle"] });
       assert.strictEqual(value, 42);
       assert.strictEqual(muzzled, true);
       assert.strictEqual(seen.length, 2, "only the unrelated logs pass through");
@@ -630,35 +631,105 @@ describe("withMuzzledConsole", () => {
     }
   });
 
-  it("reports muzzled=false and skips setup when no tags are given", async () => {
-    const real = console.error;
+  it("reports muzzled=false, warned=false and skips setup when no tags are given", async () => {
+    const realError = console.error;
+    const realWarn = console.warn;
     let touched = false;
     console.error = () => {
       touched = true;
     };
+    console.warn = () => {
+      touched = true;
+    };
     try {
-      const { value, muzzled } = await withMuzzledConsole(async () => "clean", []);
+      const { value, muzzled, warned } = await withMuzzledConsole(async () => "clean", {});
       assert.strictEqual(value, "clean");
       assert.strictEqual(muzzled, false);
+      assert.strictEqual(warned, false);
       assert.strictEqual(
         touched,
         false,
-        "console.error must not be replaced when there is nothing to muzzle",
+        "console methods must not be replaced when there is nothing to muzzle",
       );
     } finally {
-      console.error = real;
+      console.error = realError;
+      console.warn = realWarn;
     }
   });
 
-  it("always restores console.error, even when fn throws", async () => {
-    const real = console.error;
+  it("swallows console.warn logs matching warn tags and reports warned=true, not muzzled", async () => {
+    const seenWarn: unknown[] = [];
+    const real = console.warn;
+    console.warn = (...args: unknown[]) => seenWarn.push(args);
+    try {
+      // Simulate Defuddle's MetadataExtractor benign warnings:
+      // console.warn('Failed to parse URL:', err) / ('Failed to parse base URL:', err)
+      const { value, muzzled, warned } = await withMuzzledConsole(async () => {
+        console.warn("Failed to parse URL:", new Error("Invalid URL"));
+        console.warn("Failed to parse base URL:", new Error("Invalid URL"));
+        return "ok";
+      }, { warn: ["Failed to parse URL:", "Failed to parse base URL:"] });
+      assert.strictEqual(value, "ok");
+      assert.strictEqual(warned, true);
+      assert.strictEqual(muzzled, false, "benign warnings must never flag degradation");
+      assert.strictEqual(seenWarn.length, 0, "the Defuddle warnings must not reach the real console.warn");
+    } finally {
+      console.warn = real;
+    }
+  });
+
+  it("passes unrelated console.warn calls straight through", async () => {
+    const seenWarn: unknown[] = [];
+    const real = console.warn;
+    console.warn = (...args: unknown[]) => seenWarn.push(args);
+    try {
+      const { warned } = await withMuzzledConsole(async () => {
+        console.warn("[pi-intelli-search]", "unrelated");
+        console.warn("Failed to parse URL:", new Error("Invalid URL"));
+        return "ok";
+      }, { warn: ["Failed to parse URL:"] });
+      assert.strictEqual(warned, true);
+      assert.strictEqual(seenWarn.length, 1, "only the unrelated warning passes through");
+      assert.strictEqual(seenWarn[0][0], "[pi-intelli-search]");
+    } finally {
+      console.warn = real;
+    }
+  });
+
+  it("muzzles error and warn channels independently in one call", async () => {
+    const seenError: unknown[] = [];
+    const seenWarn: unknown[] = [];
+    const realError = console.error;
+    const realWarn = console.warn;
+    console.error = (...args: unknown[]) => seenError.push(args);
+    console.warn = (...args: unknown[]) => seenWarn.push(args);
+    try {
+      const { muzzled, warned } = await withMuzzledConsole(async () => {
+        console.error("Defuddle", "degraded", new Error("x"));
+        console.warn("Failed to parse URL:", new Error("Invalid URL"));
+        return "ok";
+      }, { error: ["Defuddle"], warn: ["Failed to parse URL:"] });
+      assert.strictEqual(muzzled, true);
+      assert.strictEqual(warned, true);
+      assert.strictEqual(seenError.length, 0);
+      assert.strictEqual(seenWarn.length, 0);
+    } finally {
+      console.error = realError;
+      console.warn = realWarn;
+    }
+  });
+
+  it("always restores console methods, even when fn throws", async () => {
+    const realError = console.error;
+    const realWarn = console.warn;
     await assert.rejects(
       withMuzzledConsole(async () => {
         throw new Error("fn failed");
-      }, ["Defuddle"]),
+      }, { error: ["Defuddle"], warn: ["Failed to parse URL:"] }),
       /fn failed/,
     );
-    assert.strictEqual(console.error, real, "console.error must be restored after a throw");
+    assert.strictEqual(console.error, realError, "console.error must be restored after a throw");
+    assert.strictEqual(console.warn, realWarn, "console.warn must be restored after a throw");
   });
 
   it("restores console.error even when fn rejects after a log", async () => {
@@ -667,7 +738,7 @@ describe("withMuzzledConsole", () => {
       withMuzzledConsole(async () => {
         console.error("Defuddle", "oops");
         throw new Error("post-log");
-      }, ["Defuddle"]),
+      }, { error: ["Defuddle"] }),
       /post-log/,
     );
     assert.strictEqual(console.error, real);
