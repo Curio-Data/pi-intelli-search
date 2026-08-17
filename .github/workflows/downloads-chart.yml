@@ -1,0 +1,36 @@
+name: Downloads chart
+
+on:
+  schedule:
+    - cron: '17 6 * * 1' # Mondays 06:17 UTC, off the hour to dodge runner contention
+  workflow_dispatch: # manual fallback; scheduled workflows auto-disable after 60 days of repo inactivity
+
+permissions:
+  contents: write
+
+concurrency:
+  group: downloads-chart
+  cancel-in-progress: false
+
+jobs:
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - run: node scripts/plot-downloads.mts
+
+      - name: Commit if changed
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add data/downloads.json docs/images/downloads-*.svg
+          git diff --staged --quiet || git commit -m 'chore: refresh download chart'
+          git push

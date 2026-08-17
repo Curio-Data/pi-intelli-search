@@ -463,6 +463,17 @@ pi install /path/to/pi-intelli-search
 - [Skill guide](skills/intelli-search/SKILL.md): Agent-facing usage instructions.
 - [Contributor guide](AGENTS.md): Coding conventions and project structure.
 
+## Downloads
+
+Weekly npm downloads across all published versions, refreshed every Monday by a scheduled GitHub Action. The chart is rendered with [rough.js](https://roughjs.com) from an append-only daily cache in `data/downloads.json` (see `scripts/plot-downloads.mts`).
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/downloads-dark.svg">
+    <img alt="Weekly npm downloads for @curio-data/pi-intelli-search" src="docs/images/downloads-light.svg" width="800" />
+  </picture>
+</p>
+
 ## Provenance
 
 Git history was rewritten in `v0.9.0` to normalise commit author and committer metadata on the path to a stable `v1` release. The `gitHead` SHAs recorded in `npm` SLSA provenance attestations for versions 0.3.1 through 0.8.0 reference pre-rewrite commits that no longer resolve in this repository. Published tarballs and their tree-level contents are unchanged; only commit metadata was altered. From v0.9.0 onwards, attestations track the rewritten history. See the [Changelog](CHANGELOG.md) entry for v0.9.0 for the full account.
