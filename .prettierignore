@@ -3,3 +3,5 @@ dist/
 .search/
 .e2e-*/
 *.md
+docs/images/downloads-*.svg
+data/downloads.json

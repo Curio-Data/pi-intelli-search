@@ -1,8 +1,44 @@
 # scripts/
 
 Helper scripts for analysing how the `pi-intelli-search` extension is used on
-this host. These are developer/operator tools, not part of the published npm
-package.
+this host, plus the download-chart generator. These are developer/operator
+tools, not part of the published npm package.
+
+## plot-downloads.mts
+
+Renders the weekly npm download chart shown in `README.md` as a hand-drawn
+style SVG (light and dark themes), using [rough.js](https://roughjs.com) with
+explicit seeds so output is byte-identical across runs.
+
+Run directly with Node 22.18+ (type stripping is on by default). No build
+step:
+
+```bash
+node scripts/plot-downloads.mts            # fetch new data, render SVGs
+node scripts/plot-downloads.mts --offline  # render from cache, no network
+npm run chart                              # same as the first command
+```
+
+### Inputs and outputs
+
+| Path | Role |
+|---|---|
+| `data/downloads.json` | Append-only daily download cache (the real asset; committed) |
+| `docs/images/downloads-light.svg` | Light-theme chart (committed) |
+| `docs/images/downloads-dark.svg` | Dark-theme chart (committed) |
+
+The script fetches only the gap between the cache and the last complete day
+from the npm downloads API, so the 18-month API query ceiling never matters
+once history has accumulated. A weekly GitHub Action
+(`.github/workflows/downloads-chart.yml`) runs it every Monday and commits
+only when the rendered output changed.
+
+### Why determinism matters
+
+Every rough.js call passes an explicit integer `seed`. Unseeded calls
+re-randomise the scribble on every run, which would churn the SVGs in git even
+when the numbers are unchanged and defeat the workflow's "commit if changed"
+guard.
 
 ## analyze-sessions.sh
 

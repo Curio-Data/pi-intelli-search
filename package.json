@@ -25,7 +25,8 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "node --import tsx --test test/*.test.ts",
-    "test:smoke": "node --import tsx test/smoke.ts"
+    "test:smoke": "node --import tsx test/smoke.ts",
+    "chart": "node scripts/plot-downloads.mts"
   },
   "dependencies": {
     "defuddle": "^0.16.0",
@@ -37,6 +38,7 @@
     "@earendil-works/pi-coding-agent": "^0.84.2",
     "@earendil-works/pi-tui": "^0.84.2",
     "prettier": "^3.9.6",
+    "roughjs": "^4.6.6",
     "tsx": "^4.19.0",
     "typebox": "*",
     "typescript": "^5.7.0"
