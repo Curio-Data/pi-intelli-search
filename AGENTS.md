@@ -548,5 +548,5 @@ The workflow authenticates to `npm` via OIDC; no stored token is used. The trust
 
 ## Compatibility
 
-- **`Pi` >= 0.80.8:** Core functionality, trusted project settings, `CONFIG_DIR_NAME`, `pi-ai/compat`, and async model-registry refresh. Compatibility audited and verified through `Pi` 0.84.2 (2026-08-14; see CHANGELOG).
+- **`Pi` >= 0.80.8:** Core functionality, trusted project settings, `CONFIG_DIR_NAME`, `pi-ai/compat`, and async model-registry refresh. Compatibility audited and verified through `Pi` 0.84.3 (2026-08-24; see CHANGELOG).
 .

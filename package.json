@@ -34,9 +34,9 @@
     "wreq-js": "^2.3.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.84.2",
-    "@earendil-works/pi-coding-agent": "^0.84.2",
-    "@earendil-works/pi-tui": "^0.84.2",
+    "@earendil-works/pi-ai": "^0.84.3",
+    "@earendil-works/pi-coding-agent": "^0.84.3",
+    "@earendil-works/pi-tui": "^0.84.3",
     "prettier": "^3.9.6",
     "roughjs": "^4.6.6",
     "tsx": "^4.19.0",
