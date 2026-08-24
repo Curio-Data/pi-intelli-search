@@ -1,14 +1,14 @@
 // src/llm.ts — LLM calling utilities using pi native auth
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
-  completeSimple as defaultCompleteSimple,
   type Api,
   type AssistantMessage,
   type Context,
   type Message,
   type Model,
+  type Provider,
   type SimpleStreamOptions,
-} from "@earendil-works/pi-ai/compat";
+} from "@earendil-works/pi-ai";
 import type { ModelConfig } from "./types.js";
 import {
   withRetry,
@@ -18,15 +18,25 @@ import {
   errMsg,
 } from "./util.js";
 
-/** Narrow injectable seam for deterministic callLlm tests. */
+/**
+ * Narrow injectable seam for deterministic callLlm tests.
+ *
+ * The transport is the provider's streamSimple() (the pi-ai root API), the
+ * same primitive Pi's own ModelRuntime dispatches to. The deprecated
+ * @earendil-works/pi-ai/compat entrypoint is not imported anywhere: upstream
+ * documents it as deleted with the ModelManager migration, and test/
+ * compat-guard.test.ts enforces that.
+ */
 export const __harness: {
-  completeSimple: (
+  streamSimple: (
+    provider: Provider,
     model: Model<Api>,
     context: Context,
     options?: SimpleStreamOptions,
   ) => Promise<AssistantMessage>;
 } = {
-  completeSimple: defaultCompleteSimple,
+  streamSimple: (provider, model, context, options) =>
+    provider.streamSimple(model, context, options).result(),
 };
 
 /** Transport-level retry config for a single {@link callLlm} call. */
@@ -37,10 +47,11 @@ export interface LlmRetryConfig {
 }
 
 /**
- * Call an LLM via pi's model registry + pi-ai completeSimple().
+ * Call an LLM via pi's model registry + the provider's streamSimple()
+ * (pi-ai root API, reached through ctx.modelRegistry.getProvider()).
  * Uses pi's native auth system (auth.json, env vars, OAuth).
- * Uses completeSimple() which handles reasoning models correctly
- * (required for MiniMax M2.7 and other reasoning models).
+ * streamSimple() carries the provider-neutral reasoning parameter, which
+ * is required for reasoning models (MiniMax M2.7 and others).
  *
  * Transient failures (HTTP 429, 5xx, network/timeout) are retried with
  * full-jitter exponential backoff, honouring any Retry-After hint in the
@@ -81,6 +92,27 @@ export async function callLlm(
     );
   }
 
+  // 2b. Resolve the provider. This is the same composed Provider object
+  //     (models.json overlays included) that Pi's own ModelRuntime dispatches
+  //     to. modelRegistry.getProvider() exists since Pi 0.81.1; on older
+  //     versions surface a clear version error instead of a TypeError.
+  if (typeof ctx.modelRegistry.getProvider !== "function") {
+    throw new Error(
+      `modelRegistry.getProvider() is unavailable; pi-intelli-search >= 0.12.5 requires Pi >= 0.81.1. ` +
+        `Update Pi, or stay on pi-intelli-search 0.12.4.`,
+    );
+  }
+  const provider: Provider | undefined = ctx.modelRegistry.getProvider(config.provider);
+  if (!provider || typeof provider.streamSimple !== "function") {
+    throw new Error(
+      `No API provider registered for ${config.provider} (needed by ${config.provider}/${config.model}). ` +
+        `Check ~/.pi/agent/models.json or provider registration.`,
+    );
+  }
+  // 2c. Mirror ModelRuntime.prepareRequest: apply the auth-resolved baseUrl
+  //     as a per-request model override (proxy endpoints, custom gateways).
+  const requestModel: Model<Api> = auth.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model;
+
   // 3. Build messages
   const messages: Message[] = [
     {
@@ -90,15 +122,15 @@ export async function callLlm(
     },
   ];
 
-  // 4. Call via pi-ai — use completeSimple which sends reasoning params
-  //    for reasoning models (required by MiniMax M2.7 etc.).
+  // 4. Call via pi-ai: provider.streamSimple() sends the provider-neutral
+  //    reasoning parameter, normalised per API (required by MiniMax M2.7 etc.).
   //
   //    Retry is owned by withRetry below, not by the SDK: maxRetries is forced
   //    to 0 so the SDK's own (Retry-After-blind, non-abortable) retries don't
   //    compound with ours and amplify load. Since Pi 0.76.0 the SDK default is
   //    also 0, so this force is defensive: it keeps these tools aligned even if
   //    a user raises retry.provider.maxRetries globally. onResponse only OBSERVES — it must
-  //    not throw, because a throw propagates out of completeSimple and would
+  //    not throw, because a throw propagates out of the stream and would
   //    bypass the retry loop. On the OpenRouter path a 429 never arrives here as
   //    a 2xx anyway; it surfaces as stopReason "error" with the status in
   //    errorMessage, which the classifier below inspects. The capture is kept
@@ -123,15 +155,16 @@ export async function callLlm(
       // default. callWithAbortTimeout aborts the whole call (combined with the
       // user's signal so Esc still cancels) and reports whether it timed out.
       //
-      // completeSimple may resolve or throw on abort depending on the
+      // The stream may resolve or throw on abort depending on the
       // provider path — the try/catch ensures lastAttemptTimedOut is set
       // correctly either way so the classifier can distinguish a retryable
       // timeout from a genuine (non-retryable) error.
       try {
         const { value, timedOut } = await callWithAbortTimeout(
           (signal) =>
-            __harness.completeSimple(
-              model,
+            __harness.streamSimple(
+              provider,
+              requestModel,
               { systemPrompt, messages },
               {
                 apiKey: auth.apiKey,
@@ -156,7 +189,7 @@ export async function callLlm(
         lastAttemptTimedOut = timedOut;
         return value;
       } catch (err) {
-        // When our timer abort causes completeSimple to throw instead of
+        // When our timer abort causes the stream to throw instead of
         // resolve, lastAttemptTimedOut is still false. Infer it from signal
         // state: if userSignal is NOT aborted, the most likely cause is our
         // timeout. This lets the classifier issue a retry.

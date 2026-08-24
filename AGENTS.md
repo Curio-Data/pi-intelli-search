@@ -189,7 +189,7 @@ When creating commits:
 | [wreq-js](https://github.com/sqdshguy/wreq-js) | Browser-grade TLS/HTTP fingerprinting for page fetching |
 | [defuddle](https://github.com/kepano/defuddle) | HTML content extraction (strips nav, ads, sidebars to Markdown) |
 | [linkedom](https://github.com/WebReflection/linkedom) | Lightweight DOM for [defuddle](https://github.com/kepano/defuddle) (no full browser) |
-| `@earendil-works/pi-ai` | LLM calling via `Pi`'s auth system (`completeSimple`) |
+| `@earendil-works/pi-ai` | LLM calling via `Pi`'s auth system (provider `streamSimple()`; root entrypoint, not the deprecated `/compat` shim) |
 | `@earendil-works/pi-coding-agent` | Extension API types (`ExtensionAPI`, `ExtensionContext`) |
 | `typebox` | JSON Schema and parameter definitions for tool inputs |
 
@@ -266,9 +266,9 @@ The pipeline is self-contained. `Pi` extensions cannot call other tools from `ex
 
 ### LLM Integration
 
-- Uses `completeSimple()` from `@earendil-works/pi-ai` (not `complete()`) because MiniMax M2.7 is a reasoning model and needs `reasoning: "low"` parameter.
+- Uses `ctx.modelRegistry.getProvider(provider).streamSimple()` (root `@earendil-works/pi-ai` API), not the deprecated `pi-ai/compat` `completeSimple()` shim and not `ModelRegistry.complete()` (which drops the provider-neutral reasoning parameter). `streamSimple` sends `reasoning: "low"`, which MiniMax M2.7 and other reasoning models require. `test/compat-guard.test.ts` enforces that no file imports `pi-ai/compat`. Auth is resolved by `Pi` (`getApiKeyAndHeaders`) before dispatch, mirroring `ModelRuntime.prepareRequest` including the `baseUrl` override; models registered outside `Pi`'s registry (for example `pi-ai`'s `registerFauxProvider`) are not consulted.
 - Auth flows through `Pi`'s native system (`auth.json`, env vars, OAuth). No API key management happens in this code.
-- **Retry and timeout are owned by `callLlm()`, not the SDK.** It passes `maxRetries: 0` to `completeSimple()` so the SDK's own retries do not compound with ours, then wraps the call in `withRetry()` (full-jitter exponential backoff, honours Retry-After, bounded by `llmRetryAttempts`/`retryBaseDelayMs`/`retryMaxDelayMs`). On the OpenRouter path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and `completeSimple()` resolves with `stopReason: "error"` and the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header); it must never throw, because a throw propagates out of `completeSimple()` and bypasses retry.
+- **Retry and timeout are owned by `callLlm()`, not the SDK.** It passes `maxRetries: 0` to the provider stream so the SDK's own retries do not compound with ours, then wraps the call in `withRetry()` (full-jitter exponential backoff, honours Retry-After, bounded by `llmRetryAttempts`/`retryBaseDelayMs`/`retryMaxDelayMs`). On the OpenRouter path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and the stream resolves with `stopReason: "error"` and the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header); it must never throw, because a throw propagates out of the stream and bypasses retry.
 - **Per-call timeout via `callWithAbortTimeout()` (`util.ts`).** The SDK request timeout does not cover a stalled streaming body, so `callLlm()` aborts the whole call with an `AbortController` after `llmTimeoutMs`, combined with the tool's signal so Esc still cancels. A timeout surfaces as a retryable condition; if it survives all attempts, `callLlm()` throws a clear timeout error.
 - **Application-level search retry.** Stage 1 retries up to `searchRetryAttempts` times when the search model returns a valid response with zero usable links (a degraded 200 that transport retry cannot catch).
 - **Optional extract throttle.** `minRequestIntervalMs` (default 0, off) spaces concurrent extract calls via a per-run rate limiter for keys with tight rate limits.
@@ -331,7 +331,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 - **Extension API pattern:** Single `export default function(pi: ExtensionAPI)` in `index.ts`.
 - **Tool definition pattern:** Each tool exports an object with `name`, `label`, `description`, `promptSnippet`, `promptGuidelines`, `parameters` (TypeBox schema), and `execute()`.
 - **Error handling:** Extraction failures are caught per-page (do not fail the whole pipeline). Transient failures (429, 5xx, timeouts) are retried with full-jitter backoff honouring Retry-After; a failure that survives all attempts throws an actionable error.
-- **`Pi` 0.80.8 baseline:** The extension uses the supported settings trust APIs, `CONFIG_DIR_NAME`, and async model-registry refresh semantics from this version.
+- **`Pi` 0.81.1 baseline:** The extension uses the supported settings trust APIs, `CONFIG_DIR_NAME`, async model-registry refresh semantics, and `modelRegistry.getProvider()` from this version.
 - **No cross-tool calls:** `Pi` extensions cannot invoke other tools from `execute()`. Therefore `intelli_research` inlines all stages.
 - **SPDX headers:** Source files include `// SPDX-License-Identifier: Apache-2.0` and copyright notices.
 
@@ -466,7 +466,7 @@ No API keys are needed.
 ## Important Design Decisions
 
 1. **Per-page extraction before collation:** 8 pages multiplied by 50K equals 400K chars. This exceeds LLM context. Extracting per-page first compresses to ≈32K total for comfortable synthesis.
-2. **`completeSimple()` over `complete()`:** Sends `reasoning: "low"`, which is required for reasoning models (MiniMax M2.7, DeepSeek, etc.) and is harmless for non-reasoning ones.
+2. **`streamSimple()` over `complete()`:** Sends `reasoning: "low"`, which is required for reasoning models (MiniMax M2.7, DeepSeek, etc.) and is harmless for non-reasoning ones.
 3. **models.json merge over `registerProvider()`:** The latter replaces all models for a provider. The former adds non-destructively.
 4. **Dual fetch (Defuddle plus Markdown):** Some sites serve cleaner content via Markdown endpoints. The quality score comparison picks the better version automatically.
 5. **`focusPrompt` is critical:** Without it the extraction LLM works generically. The `promptGuidelines` instruct the agent to always provide it.
@@ -548,5 +548,5 @@ The workflow authenticates to `npm` via OIDC; no stored token is used. The trust
 
 ## Compatibility
 
-- **`Pi` >= 0.80.8:** Core functionality, trusted project settings, `CONFIG_DIR_NAME`, `pi-ai/compat`, and async model-registry refresh. Compatibility audited and verified through `Pi` 0.84.3 (2026-08-24; see CHANGELOG).
+- **`Pi` >= 0.81.1:** Core functionality, trusted project settings, `CONFIG_DIR_NAME`, provider-based `pi-ai` calls (`modelRegistry.getProvider()` + `streamSimple()`, not the deprecated `/compat` shim), and async model-registry refresh. Compatibility audited and verified through `Pi` 0.84.3 (2026-08-24; see CHANGELOG).
 .

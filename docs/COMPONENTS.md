@@ -56,7 +56,7 @@ These packages are provided by the hosting `Pi` runtime and are not bundled with
 - **Repository:** https://github.com/earendil-works/pi
 - **Author:** Mario Zechner
 - **License:** Apache-2.0
-- **Usage:** LLM calling via `Pi`'s auth system (`completeSimple()`).
+- **Usage:** LLM calling via `Pi`'s auth system (provider `streamSimple()`).
 
 ### @earendil-works/pi-coding-agent
 

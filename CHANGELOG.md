@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.5] - 2026-08-24
+
+### Changed
+
+- LLM transport migrated from the deprecated `pi-ai/compat` entrypoint (which upstream `Pi` will remove with its ModelManager migration) to the stable provider API: `ctx.modelRegistry.getProvider()` plus `streamSimple()`. Pipeline behaviour, model defaults, retry, and timeout semantics are unchanged. This keeps the extension loading on future `Pi` releases after the compat entrypoint is deleted.
+
+### Compatibility
+
+- Minimum `Pi` version is now **0.81.1** (was 0.80.8). The `modelRegistry.getProvider()` facade method this release relies on shipped in `Pi` 0.81.1. On older versions the extension now reports a clear error naming the required version. Verified on `Pi` 0.84.3.
+- For downstream code that embeds these tools: LLM calls now dispatch to the provider registered in `Pi`'s model registry. Test fixtures that inject models through `pi-ai`'s `registerFauxProvider` (rather than the registry) are no longer consulted by the pipeline's LLM stages. Register faux providers through `Pi` (`models.json`, `pi.registerProvider`) instead.
+
 ## [0.12.4] - 2026-08-15
 
 ### Fixed
@@ -313,6 +324,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.12.5]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.5
 [0.12.4]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.4
 [0.12.3]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.3
 [0.12.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.2
