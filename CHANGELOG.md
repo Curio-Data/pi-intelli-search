@@ -9,12 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- LLM transport migrated from the deprecated `pi-ai/compat` entrypoint (which upstream `Pi` will remove with its ModelManager migration) to the stable provider API: `ctx.modelRegistry.getProvider()` plus `streamSimple()`. Pipeline behaviour, model defaults, retry, and timeout semantics are unchanged. This keeps the extension loading on future `Pi` releases after the compat entrypoint is deleted.
+- Maintenance release moving the internal LLM transport from the deprecated `pi-ai/compat` entrypoint onto `Pi`'s stable provider API, ahead of upstream `Pi` deleting that entrypoint (verified on `Pi` 0.84.3). No user-visible behaviour change; model defaults, retry, and timeout semantics are unchanged.
 
 ### Compatibility
 
-- Minimum `Pi` version is now **0.81.1** (was 0.80.8). The `modelRegistry.getProvider()` facade method this release relies on shipped in `Pi` 0.81.1. On older versions the extension now reports a clear error naming the required version. Verified on `Pi` 0.84.3.
-- For downstream code that embeds these tools: LLM calls now dispatch to the provider registered in `Pi`'s model registry. Test fixtures that inject models through `pi-ai`'s `registerFauxProvider` (rather than the registry) are no longer consulted by the pipeline's LLM stages. Register faux providers through `Pi` (`models.json`, `pi.registerProvider`) instead.
+- Minimum `Pi` version is now **0.81.1** (was 0.80.8). On older versions the extension reports a clear error naming the required version.
+- Downstream code embedding these tools: custom providers must be registered through `Pi` (`models.json`, `pi.registerProvider`); models injected via `pi-ai`'s `registerFauxProvider` outside `Pi` are no longer consulted.
 
 ## [0.12.4] - 2026-08-15
 
