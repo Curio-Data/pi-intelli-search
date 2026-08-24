@@ -24,6 +24,16 @@ A `Pi` extension for deep web research. It searches via [Perplexity Sonar](https
 - 🎯 **Configurable:** Swap any pipeline stage (search, extract, collate) to any model `Pi` supports.
 - 💰 **Low cost:** Approximately $0.05 per research session with default settings.
 
+## Launch Blog Post
+
+<p align="center">
+  <a href="https://blog.curiodata.pro/posts/22-pi-intelli-search/">
+    <img src="docs/images/blog-banner.png" alt="Vintage engraving-style banner for pi-intelli-search. A large magnifying glass dominates the centre, revealing a mechanical Pi symbol constructed from metal plates, rivets, and gears. The title &quot;pi-intelli-search&quot; appears in copper serif lettering at the top. Surrounding the magnifying glass are pen-and-ink scholarly motifs in laurel-wreath medallions: open books, quill pens and ink bottles, hourglasses, armillary spheres, distillation apparatus, and filing boxes. A GitHub logo and the repository URL sit on a ribbon at the bottom." width="800" />
+  </a>
+</p>
+
+Read the launch post, [_pi-intelli-search: LLM-Native Web Research for the Pi Coding Agent_](https://blog.curiodata.pro/posts/22-pi-intelli-search/), for the design story behind the pipeline: why per-page LLM extraction beats raw page dumps, how collation keeps the agent context clean, and a full cost breakdown at ≈$0.05 per session.
+
 ## What It Adds Over Other Extensions
 
 <p align="center">
@@ -497,6 +507,9 @@ Licensed under the [Apache License, Version 2.0](./LICENSE).
 Large Language Models were used extensively during the development of this project:
 
 - **`Pi` agent** (primary development environment).
-- **_GLM_ 5.1:** Primary model for code generation and architecture.
+- **_GLM_ 5.1/5.2/5.3:** Primary model family for code generation and architecture, across successive releases.
+- **_Kimi_ K3:** Code generation, review, and vision-dependent verification.
+- **_MiniMax_ M3:** Adversarial review and analysis.
+- **_Qwen_ 3.8 Max:** Review and deep research.
 - **_DeepSeek_ V4 Pro:** Research and data analysis.
 - **_Qwen_ 3.6 Plus:** Secondary model for review and documentation.
