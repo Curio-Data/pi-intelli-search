@@ -1,6 +1,6 @@
 {
   "name": "@curio-data/pi-intelli-search",
-  "version": "0.12.5",
+  "version": "0.12.6",
   "description": "Intelligent web research for Pi: search, extract, collate, and cache grounded web context in one tool call.",
   "license": "Apache-2.0",
   "repository": {
@@ -34,9 +34,9 @@
     "wreq-js": "^2.3.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.84.3",
-    "@earendil-works/pi-coding-agent": "^0.84.3",
-    "@earendil-works/pi-tui": "^0.84.3",
+    "@earendil-works/pi-ai": "^0.84.4",
+    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@earendil-works/pi-tui": "^0.84.4",
     "prettier": "^3.9.6",
     "roughjs": "^4.6.6",
     "tsx": "^4.19.0",
