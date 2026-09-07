@@ -59,6 +59,10 @@ if ! command -v pi &>/dev/null; then
   exit 1
 fi
 
+# shellcheck source=/dev/null
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+e2e_setup_loop_model || exit 1
+
 # ── Create isolated agent directory ────────────────────────────────
 ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-override-XXXXXX)"
 E2E_CWD="$(mktemp -d -t pi-e2e-override-cwd-XXXXXX)"
@@ -70,17 +74,17 @@ echo "📂 Isolated working directory: $E2E_CWD"
 mkdir -p "$ISOLATED_AGENT_DIR/sessions"
 
 # ── auth.json — OpenRouter key only ────────────────────────────────
-cat > "$ISOLATED_AGENT_DIR/auth.json" <<EOF
-{"openrouter":{"type":"api_key","key":"$OPENROUTER_API_KEY"}}
-EOF
+e2e_write_auth "$ISOLATED_AGENT_DIR"
 
 # ── settings.json — override extract/collate to Gemini 3 Flash ─────
 # Uses the nested pi-intelli-search namespace.
 # Search stays on Perplexity Sonar; extract and collate use a different
-# model to prove that settings.json overrides are respected.
+# model to prove that settings.json overrides are respected. The loop
+# model uses the split defaultProvider/defaultModel form (lib.sh).
 cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
 {
-  "defaultModel": "openrouter/google/gemini-3-flash-preview",
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
   "pi-intelli-search": {
     "searchModel": {
       "provider": "openrouter",
@@ -124,27 +128,16 @@ echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 PROMPT='Use intelli_research with maxUrls=1 and domains=["deno.com"] to research: the current Deno release. Return the official release source.'
 
-OUTPUT="$(
-  cd "$E2E_CWD"
-  PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" \
-    timeout --foreground "${E2E_TIMEOUT_SECONDS:-300}s" pi \
-      --no-extensions \
-      --no-skills \
-      --no-prompt-templates \
-      --no-context-files \
-      --no-session \
-      -e "$E2E_EXTENSION_PATH" \
-      -p "$PROMPT" \
-      2>&1
-)" || {
+if ! e2e_run_pi "$ISOLATED_AGENT_DIR" "$E2E_CWD" "$PROMPT" "${E2E_TIMEOUT_SECONDS:-300}"; then
   echo ""
-  echo "❌ pi exited with an error"
+  echo "❌ pi failed (no cache sidecar after retries)"
   echo ""
   echo "--- pi output ---"
-  echo "$OUTPUT"
+  echo "$E2E_LAST_OUTPUT"
   echo "-----------------"
   exit 1
-}
+fi
+OUTPUT="$E2E_LAST_OUTPUT"
 
 # ── Verify output ──────────────────────────────────────────────────
 echo "$OUTPUT"

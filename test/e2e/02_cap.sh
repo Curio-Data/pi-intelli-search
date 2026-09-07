@@ -18,6 +18,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck disable=SC2034  # consumed by e2e_run_pi in lib.sh
 E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
@@ -59,6 +60,10 @@ if ! command -v pi &>/dev/null; then
   exit 1
 fi
 
+# shellcheck source=/dev/null
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+e2e_setup_loop_model || exit 1
+
 # ═══════════════════════════════════════════════════════════════════
 # Scenario 1: Low cap (maxUrls=3)
 # ═══════════════════════════════════════════════════════════════════
@@ -77,15 +82,14 @@ echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR1"
 
 mkdir -p "$ISOLATED_AGENT_DIR1/sessions"
 
-cat > "$ISOLATED_AGENT_DIR1/auth.json" <<EOF
-{"openrouter":{"type":"api_key","key":"$OPENROUTER_API_KEY"}}
-EOF
+e2e_write_auth "$ISOLATED_AGENT_DIR1"
 
 # Set defaultUrls=8, maxUrls=3 (tight cap).
 # Agent's SKILL.md says 12 for exhaustive, but the cap clamps to 3.
 cat > "$ISOLATED_AGENT_DIR1/settings.json" <<EOF
 {
-  "defaultModel": "openrouter/perplexity/sonar",
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
   "pi-intelli-search": {
     "searchModel": {
       "provider": "openrouter",
@@ -115,26 +119,16 @@ echo "⚙️  Expected: agent requests 12 → clamped to 3"
 
 PROMPT1="Use intelli_research with maxUrls=12 to research: what is the latest Node.js LTS version"
 
-OUTPUT1="$(
-  PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR1" \
-    pi \
-      --no-extensions \
-      --no-skills \
-      --no-prompt-templates \
-      --no-context-files \
-      --no-session \
-      -e "$E2E_EXTENSION_PATH" \
-      -p "$PROMPT1" \
-      2>&1
-)" || {
+if ! e2e_run_pi "$ISOLATED_AGENT_DIR1" "$PROJECT_DIR" "$PROMPT1"; then
   echo ""
-  echo "❌ pi exited with an error"
+  echo "❌ pi failed (no cache sidecar after retries)"
   echo ""
   echo "--- pi output ---"
-  echo "$OUTPUT1"
+  echo "$E2E_LAST_OUTPUT"
   echo "-----------------"
   exit 1
-}
+fi
+OUTPUT1="$E2E_LAST_OUTPUT"
 
 echo "$OUTPUT1"
 
@@ -212,13 +206,12 @@ echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR2"
 
 mkdir -p "$ISOLATED_AGENT_DIR2/sessions"
 
-cat > "$ISOLATED_AGENT_DIR2/auth.json" <<EOF
-{"openrouter":{"type":"api_key","key":"$OPENROUTER_API_KEY"}}
-EOF
+e2e_write_auth "$ISOLATED_AGENT_DIR2"
 
 cat > "$ISOLATED_AGENT_DIR2/settings.json" <<EOF
 {
-  "defaultModel": "openrouter/perplexity/sonar",
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
   "pi-intelli-search": {
     "searchModel": {
       "provider": "openrouter",
@@ -250,26 +243,16 @@ echo ""
 # Prompt does NOT mention maxUrls — agent should use defaultUrls=3
 PROMPT2="Use intelli_research to find the latest TypeScript version"
 
-OUTPUT2="$(
-  PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR2" \
-    pi \
-      --no-extensions \
-      --no-skills \
-      --no-prompt-templates \
-      --no-context-files \
-      --no-session \
-      -e "$E2E_EXTENSION_PATH" \
-      -p "$PROMPT2" \
-      2>&1
-)" || {
+if ! e2e_run_pi "$ISOLATED_AGENT_DIR2" "$PROJECT_DIR" "$PROMPT2"; then
   echo ""
-  echo "❌ pi exited with an error"
+  echo "❌ pi failed (no cache sidecar after retries)"
   echo ""
   echo "--- pi output ---"
-  echo "$OUTPUT2"
+  echo "$E2E_LAST_OUTPUT"
   echo "-----------------"
   exit 1
-}
+fi
+OUTPUT2="$E2E_LAST_OUTPUT"
 
 echo "$OUTPUT2"
 

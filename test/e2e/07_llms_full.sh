@@ -51,6 +51,10 @@ if ! command -v pi &>/dev/null; then
   exit 1
 fi
 
+# shellcheck source=/dev/null
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+e2e_setup_loop_model || exit 1
+
 E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
@@ -113,13 +117,12 @@ trap 'rm -rf "$ISO" "$CACHE_DIR"' EXIT
 
 mkdir -p "$ISO/sessions"
 
-cat > "$ISO/auth.json" <<EOF
-{"openrouter":{"type":"api_key","key":"$OPENROUTER_API_KEY"}}
-EOF
+e2e_write_auth "$ISO"
 
 cat > "$ISO/settings.json" <<EOF
 {
-  "defaultModel": "openrouter/perplexity/sonar",
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
   "pi-intelli-search": {
     "searchModel": {
       "provider": "openrouter",
@@ -151,23 +154,13 @@ MEOF
 # discovered hostname. The domains filter is applied at the Sonar search stage
 # and keeps the result set small (maxUrls=1), so the first returned page is
 # almost certainly from the target domain.
-OUTPUT="$(
-  PI_CODING_AGENT_DIR="$ISO" \
-    pi \
-      --no-extensions \
-      --no-skills \
-      --no-prompt-templates \
-      --no-context-files \
-      --no-session \
-      -e "$E2E_EXTENSION_PATH" \
-      -p "Use intelli_research with maxUrls=1 and domains=[\"$FOUND_HOSTNAME\"] to research: getting started guide" \
-      2>&1
-)" || {
+if ! e2e_run_pi "$ISO" "$PROJECT_DIR" "Use intelli_research with maxUrls=1 and domains=[\"$FOUND_HOSTNAME\"] to research: getting started guide"; then
   echo ""
-  echo "❌ pi exited with an error"
-  echo "$OUTPUT"
+  echo "❌ pi failed (no cache sidecar after retries)"
+  echo "$E2E_LAST_OUTPUT"
   exit 1
-}
+fi
+OUTPUT="$E2E_LAST_OUTPUT"
 
 echo "$OUTPUT"
 rm -rf "$ISO"

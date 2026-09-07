@@ -63,6 +63,10 @@ if ! command -v pi &>/dev/null; then
   exit 1
 fi
 
+# shellcheck source=/dev/null
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+e2e_setup_loop_model || exit 1
+
 # ── Create isolated agent directory ────────────────────────────────
 ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-migration-XXXXXX)"
 trap 'rm -rf "$ISOLATED_AGENT_DIR"' EXIT
@@ -83,15 +87,16 @@ EOF
 echo "📄 Wrote 0.7.0 version marker"
 
 # ── auth.json ───────────────────────────────────────────────────────
-cat > "$ISOLATED_AGENT_DIR/auth.json" <<EOF
-{"openrouter":{"type":"api_key","key":"$OPENROUTER_API_KEY"}}
-EOF
+e2e_write_auth "$ISOLATED_AGENT_DIR"
 
 # ── settings.json — old 0.7.0 defaults (flat keys, minimax direct) ──
 # These are what a user who never customized would have after using 0.7.0.
+# The flat intelli* keys are the scenario subject and stay verbatim; the
+# loop model is scaffolding (split form per lib.sh).
 cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
 {
-  "defaultModel": "openrouter/perplexity/sonar",
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
   "intelliSearchModel": {
     "provider": "openrouter",
     "model": "perplexity/sonar"
@@ -129,26 +134,16 @@ echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 PROMPT="Use intelli_research with maxUrls=3 to research: what is the latest Bun version"
 
-OUTPUT="$(
-  PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" \
-    pi \
-      --no-extensions \
-      --no-skills \
-      --no-prompt-templates \
-      --no-context-files \
-      --no-session \
-      -e "$E2E_EXTENSION_PATH" \
-      -p "$PROMPT" \
-      2>&1
-)" || {
+if ! e2e_run_pi "$ISOLATED_AGENT_DIR" "$PROJECT_DIR" "$PROMPT"; then
   echo ""
-  echo "❌ pi exited with an error"
+  echo "❌ pi failed (no cache sidecar after retries)"
   echo ""
   echo "--- pi output ---"
-  echo "$OUTPUT"
+  echo "$E2E_LAST_OUTPUT"
   echo "-----------------"
   exit 1
-}
+fi
+OUTPUT="$E2E_LAST_OUTPUT"
 
 # ── Verify output ──────────────────────────────────────────────────
 echo "$OUTPUT"

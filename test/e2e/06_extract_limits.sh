@@ -65,6 +65,10 @@ if ! command -v pi &>/dev/null; then
   exit 1
 fi
 
+# shellcheck source=/dev/null
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+e2e_setup_loop_model || exit 1
+
 E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
@@ -90,13 +94,12 @@ trap "rm -rf $ISO1 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
 
 mkdir -p "$ISO1/sessions"
 
-cat > "$ISO1/auth.json" <<EOF
-{"openrouter":{"type":"api_key","key":"$OPENROUTER_API_KEY"}}
-EOF
+e2e_write_auth "$ISO1"
 
 cat > "$ISO1/settings.json" <<EOF
 {
-  "defaultModel": "openrouter/perplexity/sonar",
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
   "pi-intelli-search": {
     "searchModel": {
       "provider": "openrouter",
@@ -125,23 +128,13 @@ cat > "$ISO1/models.json" <<'MEOF'
 {}
 MEOF
 
-OUTPUT1="$(
-  PI_CODING_AGENT_DIR="$ISO1" \
-    pi \
-      --no-extensions \
-      --no-skills \
-      --no-prompt-templates \
-      --no-context-files \
-      --no-session \
-      -e "$E2E_EXTENSION_PATH" \
-      -p "$RESEARCH_PROMPT" \
-      2>&1
-)" || {
+if ! e2e_run_pi "$ISO1" "$PROJECT_DIR" "$RESEARCH_PROMPT"; then
   echo ""
-  echo "❌ Run 1 (default) exited with an error"
-  echo "$OUTPUT1"
+  echo "❌ Run 1 (default) failed (no cache sidecar after retries)"
+  echo "$E2E_LAST_OUTPUT"
   exit 1
-}
+fi
+OUTPUT1="$E2E_LAST_OUTPUT"
 
 echo "$OUTPUT1"
 rm -rf "$ISO1"
@@ -165,13 +158,12 @@ trap "rm -rf $ISO2 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
 
 mkdir -p "$ISO2/sessions"
 
-cat > "$ISO2/auth.json" <<EOF
-{"openrouter":{"type":"api_key","key":"$OPENROUTER_API_KEY"}}
-EOF
+e2e_write_auth "$ISO2"
 
 cat > "$ISO2/settings.json" <<EOF
 {
-  "defaultModel": "openrouter/perplexity/sonar",
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
   "pi-intelli-search": {
     "searchModel": {
       "provider": "openrouter",
@@ -200,23 +192,13 @@ cat > "$ISO2/models.json" <<'MEOF'
 {}
 MEOF
 
-OUTPUT2="$(
-  PI_CODING_AGENT_DIR="$ISO2" \
-    pi \
-      --no-extensions \
-      --no-skills \
-      --no-prompt-templates \
-      --no-context-files \
-      --no-session \
-      -e "$E2E_EXTENSION_PATH" \
-      -p "$RESEARCH_PROMPT" \
-      2>&1
-)" || {
+if ! e2e_run_pi "$ISO2" "$PROJECT_DIR" "$RESEARCH_PROMPT"; then
   echo ""
-  echo "❌ Run 2 (tight) exited with an error"
-  echo "$OUTPUT2"
+  echo "❌ Run 2 (tight) failed (no cache sidecar after retries)"
+  echo "$E2E_LAST_OUTPUT"
   exit 1
-}
+fi
+OUTPUT2="$E2E_LAST_OUTPUT"
 
 echo "$OUTPUT2"
 rm -rf "$ISO2"

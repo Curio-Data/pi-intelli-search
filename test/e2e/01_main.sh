@@ -8,7 +8,8 @@
 # This test uses the default pipeline models: Sonar for search,
 # MiniMax M3 via OpenRouter for extract and collate. All three stages
 # route through OpenRouter, requiring only a single API key. The
-# headless agent loop runs on m2.7 (TEST_MODEL).
+# headless agent loop runs on the shared E2E loop model (lib.sh;
+# kimi-coding/k3 when its key exists).
 #
 # Usage:
 #   ./test/01_main.sh
@@ -16,7 +17,7 @@
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
 #   TEST_MODEL           Override the headless agent-loop model
-#                        (default: openrouter/minimax/minimax-m2.7)
+#                        (default: see test/e2e/lib.sh)
 #
 # The .env file (gitignored) can hold OPENROUTER_API_KEY for convenience.
 #
@@ -52,8 +53,12 @@ fi
 # Agent-loop model for the headless run; the pipeline models are pinned
 # in settings.json below. The loop model is incidental to what this test
 # proves; m2.7 keeps loop-call cost down.
-TEST_MODEL="${TEST_MODEL:-openrouter/minimax/minimax-m2.7}"
 E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
+
+# shellcheck source=/dev/null
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck disable=SC2034  # consumed by e2e_setup_loop_model in lib.sh
+E2E_LOOP_MODEL_ID="${TEST_MODEL:-}"
 
 # ── Check prerequisites ────────────────────────────────────────────
 # Auto-detect OPENROUTER_API_KEY from ~/.pi/agent/auth.json if not
@@ -83,6 +88,8 @@ if ! command -v pi &>/dev/null; then
   exit 1
 fi
 
+e2e_setup_loop_model || exit 1
+
 # ── Create isolated agent directory ────────────────────────────────
 ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-agent-XXXXXX)"
 E2E_CWD="$(mktemp -d -t pi-e2e-cwd-XXXXXX)"
@@ -94,18 +101,19 @@ echo "📂 Isolated working directory: $E2E_CWD"
 mkdir -p "$ISOLATED_AGENT_DIR/sessions"
 
 # ── auth.json — minimal isolated file
-# Only OpenRouter is needed. All three pipeline stages route through
-# OpenRouter, so a single API key covers everything.
-cat > "$ISOLATED_AGENT_DIR/auth.json" <<EOF
-{"openrouter":{"type":"api_key","key":"$OPENROUTER_API_KEY"}}
-EOF
+# OpenRouter covers all three pipeline stages; the loop provider's
+# entry is merged in by lib.sh when the loop model is non-OpenRouter.
+e2e_write_auth "$ISOLATED_AGENT_DIR"
 
 # ── settings.json — default model + intelli config (nested namespace) ─
 # Uses nested pi-intelli-search namespace with bare keys.
-# All three model roles route through OpenRouter.
+# All three model roles route through OpenRouter. The loop model uses
+# the split defaultProvider/defaultModel form (lib.sh); slash-form
+# defaultModel breaks when models.json gains a providers block.
 cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
 {
-  "defaultModel": "$TEST_MODEL",
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
   "pi-intelli-search": {
     "searchModel": {
       "provider": "openrouter",
@@ -133,7 +141,7 @@ cat > "$ISOLATED_AGENT_DIR/models.json" <<'MEOF'
 MEOF
 
 echo "📄 Wrote vanilla models.json (extension will add perplexity models)"
-echo "⚙️  Test model: $TEST_MODEL"
+echo "⚙️  Test loop model: $E2E_LOOP_PROVIDER/$E2E_LOOP_MODEL"
 echo "⚙️  Extract/Collate: openrouter/minimax/minimax-m3 (default)"
 echo ""
 
@@ -147,27 +155,16 @@ echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 PROMPT='Use intelli_research with maxUrls=1 and domains=["typescriptlang.org"] to research: the current TypeScript release. Return the official release source.'
 
-OUTPUT="$(
-  cd "$E2E_CWD"
-  PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" \
-    timeout --foreground "${E2E_TIMEOUT_SECONDS}s" pi \
-      --no-extensions \
-      --no-skills \
-      --no-prompt-templates \
-      --no-context-files \
-      --no-session \
-      -e "$E2E_EXTENSION_PATH" \
-      -p "$PROMPT" \
-      2>&1
-)" || {
+if ! e2e_run_pi "$ISOLATED_AGENT_DIR" "$E2E_CWD" "$PROMPT" "${E2E_TIMEOUT_SECONDS}"; then
   echo ""
-  echo "❌ pi exited with an error"
+  echo "❌ pi failed (no cache sidecar after retries)"
   echo ""
   echo "--- pi output ---"
-  echo "$OUTPUT"
+  echo "$E2E_LAST_OUTPUT"
   echo "-----------------"
   exit 1
-}
+fi
+OUTPUT="$E2E_LAST_OUTPUT"
 
 # ── Verify output ──────────────────────────────────────────────────
 echo "$OUTPUT"

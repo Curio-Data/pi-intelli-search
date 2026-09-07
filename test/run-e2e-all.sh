@@ -24,7 +24,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 GAP="${E2E_GAP_SECONDS:-20}"
-SCRIPT_TIMEOUT="${E2E_SCRIPT_TIMEOUT_SECONDS:-600}"
+SCRIPT_TIMEOUT="${E2E_SCRIPT_TIMEOUT_SECONDS:-1200}"
 
 # Load .env if present (gitignored)
 if [ -f "$PROJECT_DIR/.env" ]; then

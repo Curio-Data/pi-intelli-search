@@ -67,6 +67,11 @@ if ! command -v pi &>/dev/null; then
   exit 1
 fi
 
+# shellcheck source=/dev/null
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+e2e_setup_loop_model || exit 1
+
+# shellcheck disable=SC2034  # consumed by e2e_run_pi in lib.sh
 E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
 ERRORS=0
 
@@ -78,45 +83,21 @@ make_env() {
   agent="$(mktemp -d -t "recipe-$1-agent-XXXXXX")"
   cwd="$(mktemp -d -t "recipe-$1-cwd-XXXXXX")"
   mkdir -p "$agent/sessions"
-  printf '{"openrouter":{"type":"api_key","key":"%s"}}' "$OPENROUTER_API_KEY" > "$agent/auth.json"
+  e2e_write_auth "$agent"
   echo '{}' > "$agent/models.json"
   echo "$agent $cwd"
 }
 
-# run_pi <agent> <cwd> <prompt> — runs pi once with up to two retries;
-# returns non-zero when all attempts fail. Retries fire both on a non-zero
-# exit AND on an exit-0 run that produced no cache entry: OpenRouter
-# intermittently leaks the tool call into the answer text as
-# `functions.<tool>:<id>{...}` (native-call serialization failure, any
-# loop model), so pi exits 0 without ever invoking the tool. Detecting
-# the missing meta.json catches that class; see docs/BENCHMARKS.md.
+# run_pi <agent> <cwd> <prompt> — thin wrapper over lib.sh's e2e_run_pi
+# (retry on non-zero exit AND on exit-0 runs with no fresh cache
+# sidecar: the print-mode tool-call leak; see docs/BENCHMARKS.md).
+# Sets LAST_OUTPUT for compatibility with the scenario error paths.
 run_pi() {
-  local agent="$1" cwd="$2" prompt="$3" attempt out ec ran
-  for attempt in 1 2 3; do
-    out="$(
-      cd "$cwd"
-      PI_CODING_AGENT_DIR="$agent" \
-        timeout --foreground "${E2E_TIMEOUT_SECONDS:-360}s" pi \
-          --no-extensions --no-skills --no-prompt-templates \
-          --no-context-files --no-session \
-          -e "$E2E_EXTENSION_PATH" \
-          -p "$prompt" 2>&1
-    )" && ec=0 || ec=$?
-    ran=0
-    if [ "$ec" -eq 0 ]; then
-      # Exit 0 is not proof the pipeline ran: probe for any cache sidecar.
-      if find "$cwd" -maxdepth 4 -name meta.json -print -quit 2>/dev/null | grep -q .; then
-        ran=1
-      fi
-    fi
-    if [ "$ran" -eq 1 ]; then
-      LAST_OUTPUT="$out"
-      return 0
-    fi
-    echo "   ⚠️  pi attempt $attempt failed (exit $ec, cache written: $ran); retrying after 30s"
-    sleep 30
-  done
-  LAST_OUTPUT="$out"
+  if e2e_run_pi "$1" "$2" "$3"; then
+    LAST_OUTPUT="$E2E_LAST_OUTPUT"
+    return 0
+  fi
+  LAST_OUTPUT="$E2E_LAST_OUTPUT"
   return 1
 }
 
@@ -165,8 +146,8 @@ GAP="${E2E_RUN_GAP_SECONDS:-20}"
 echo ""
 echo "═══ R1: zero configuration (no pi-intelli-search key at all) ═══"
 read -r AGENT CWD <<<"$(make_env r1)"
-cat > "$AGENT/settings.json" <<'EOF'
-{"defaultModel": "openrouter/minimax/minimax-m2.7"}
+cat > "$AGENT/settings.json" <<EOF
+{"defaultProvider": "$E2E_LOOP_PROVIDER", "defaultModel": "$E2E_LOOP_MODEL"}
 EOF
 sleep "$GAP"
 if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"nodejs.org\"] to research: the current Node.js LTS schedule."; then
@@ -183,9 +164,10 @@ rm -rf "$AGENT" "$CWD"
 echo ""
 echo "═══ R4: pin eight pages (partial block: defaultUrls/maxUrls only) ═══"
 read -r AGENT CWD <<<"$(make_env r4)"
-cat > "$AGENT/settings.json" <<'EOF'
+cat > "$AGENT/settings.json" <<EOF
 {
-  "defaultModel": "openrouter/minimax/minimax-m2.7",
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
   "pi-intelli-search": {
     "defaultUrls": 8,
     "maxUrls": 16
@@ -208,9 +190,10 @@ rm -rf "$AGENT" "$CWD"
 echo ""
 echo "═══ R5: economy extract/collate (google/gemini-3.7-flash) ═══"
 read -r AGENT CWD <<<"$(make_env r5)"
-cat > "$AGENT/settings.json" <<'EOF'
+cat > "$AGENT/settings.json" <<EOF
 {
-  "defaultModel": "openrouter/minimax/minimax-m2.7",
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
   "pi-intelli-search": {
     "extractModel": {
       "provider": "openrouter",
@@ -237,9 +220,10 @@ rm -rf "$AGENT" "$CWD"
 echo ""
 echo "═══ R6: stronger collation (collateModel only; extract stays default) ═══"
 read -r AGENT CWD <<<"$(make_env r6)"
-cat > "$AGENT/settings.json" <<'EOF'
+cat > "$AGENT/settings.json" <<EOF
 {
-  "defaultModel": "openrouter/minimax/minimax-m2.7",
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
   "pi-intelli-search": {
     "collateModel": {
       "provider": "openrouter",
@@ -262,9 +246,10 @@ rm -rf "$AGENT" "$CWD"
 echo ""
 echo "═══ R7: free-tier resilience keys ═══"
 read -r AGENT CWD <<<"$(make_env r7)"
-cat > "$AGENT/settings.json" <<'EOF'
+cat > "$AGENT/settings.json" <<EOF
 {
-  "defaultModel": "openrouter/minimax/minimax-m2.7",
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
   "pi-intelli-search": {
     "defaultUrls": 5,
     "minRequestIntervalMs": 3000,
@@ -290,7 +275,7 @@ echo "═══ R8: per-project override (project .pi/settings.json via trust) �
 read -r AGENT CWD <<<"$(make_env r8)"
 # Global settings carry NO pi-intelli-search block: the project file is the
 # only configuration source. Trust is pre-seeded the way /trust persists it.
-printf '{"defaultModel": "openrouter/minimax/minimax-m2.7"}\n' > "$AGENT/settings.json"
+printf '{"defaultProvider": "%s", "defaultModel": "%s"}\n' "$E2E_LOOP_PROVIDER" "$E2E_LOOP_MODEL" > "$AGENT/settings.json"
 printf '{ "%s": true }\n' "$CWD" > "$AGENT/trust.json"
 mkdir -p "$CWD/.pi"
 cat > "$CWD/.pi/settings.json" <<'EOF'
