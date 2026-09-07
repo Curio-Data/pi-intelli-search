@@ -158,6 +158,16 @@ const DEFAULT_HISTORY: Record<
     collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   },
+  "0.13.0": {
+    // Model defaults unchanged from 0.12.6 (searchModel stays on sonar;
+    // the post-sunset alternatives are opt-in). Non-model defaults did
+    // change this release (defaultUrls 8 -> 10, maxUrls 16 -> 20) but are
+    // not part of match-based model migration: unpinned users pick up the
+    // new values automatically, pinned users keep theirs.
+    extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+    collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  },
 };
 
 /** In-memory settings cache, isolated by the configuration source context. */
