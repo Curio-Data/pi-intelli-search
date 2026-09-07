@@ -72,6 +72,24 @@ OpenRouter pricing on 2026-09-07: minimax-m2.7 and minimax-m3 are identically pr
 
 Run 4B's cache slug matched the baseline series exactly, and the report opened by stating its ranking methodology and the primacy of GitHub stars, matching the recorded m3 epistemic signature. Per-page extraction output (4.0K over 7 pages) sits just under the recorded m3 band (4.7K to 5.3K) on a smaller corpus (55.2K input versus 92K to 104K baseline).
 
+### Late Series
+
+2026-09-07 late evening, extension build 0.14.0, loop model `kimi-coding/k3`, after an OpenRouter credit top-up. Runs interleaved m3, gemini, m3, gemini. One print-mode leak retry fired (5B, attempt 1) and recovered on attempt 2: the first live proof of the harness retry guard.
+
+| Run | Extract/Collate Model | Duration | Fetch Ok/Fail | Extract In | Extract Out | Per Page | Collate Out |
+|-----|-----------------------|----------|---------------|------------|-------------|----------|-------------|
+| 5B | minimax-m3 | 63.4s | 7/1 | 139.3K | 40.1K | 5.7K | 10.9K |
+| 3A | gemini-3.8-flash | 41.2s | 7/1 | 139.6K | 22.9K | 3.3K | 7.8K |
+| 6B | minimax-m3 | 49.1s | 7/1 | 139.6K | 34.6K | 4.9K | 7.5K |
+| 4A | gemini-3.8-flash | 34.8s | 7/1 | 55.2K | 20.5K | 2.9K | 6.2K |
+
+Late-series findings:
+
+1. **Verbosity and epistemics reproduce on a converged corpus.** Runs 5B, 3A and 6B fetched the same seven sources (139.3K to 139.6K input). On that identical corpus m3 wrote 5.7K and 4.9K per page against gemini's 3.3K, and only the m3 reports opened by stating their evidence base ("across five independent sources..."). The same-URL extraction of dev.to measures the pure model effect directly: 6.7K (m3) versus 4.2K (gemini).
+2. **Latency tracks extract verbosity.** gemini completed in 41.2s and 34.8s against m3's 63.4s and 49.1s, consistent with m3 writing 1.5 to 1.7 times gemini's extract output.
+3. **The head of the ranking stays invariant; the number one slot moves only on the small corpus.** shadcn-svelte ranked first in 5B, 3A and 6B (the converged corpus) and second in 4A, whose 55.2K input matched the prior evening's 4B fetch exactly. 4A alone promoted daisyUI (framework-agnostic, 40,000+ stars) to first. Skeleton UI held the top three in all four runs.
+4. **The recorded decision holds.** Two more runs per model reproduce every property that motivated the v0.14.0 default switch to m3 (methodology-first collation, transparent low-evidence handling, approximately 1M context) and its accepted cost (1.5 to 1.7 times gemini's extract tokens and correspondingly longer runs).
+
 ### Findings
 
 1. **The head of the ranking is invariant.** shadcn-svelte at #1 and Skeleton UI at #2 in all five runs, across three models and five corpora. Flowbite Svelte held top-5 in all five runs.
