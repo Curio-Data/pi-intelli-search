@@ -176,7 +176,171 @@ Copying this block pins every value explicitly, which also opts you out of futur
 }
 ```
 
-See [Model Configuration](#model-configuration) for all options and [Settings](#settings) for the full reference.
+See [Model Configuration](#model-configuration) for all options, [Configuration Recipes](#configuration-recipes) for complete copy-paste examples, and [Settings](#settings) for the full reference.
+
+## Configuration Recipes
+
+Each recipe is a complete `~/.pi/agent/settings.json`. Copy it whole, or lift the `pi-intelli-search` block into your existing file. Project-level overrides go in `<project>/.pi/settings.json` (applies only after `Pi` approves the project; the global file always applies).
+
+Two loader rules to keep in mind:
+
+- An object you set replaces its default wholesale. The `searchWebSearch` block and the model blocks have no per-key merge: set every key you care about.
+- Nested `pi-intelli-search` keys always win over the deprecated flat `intelli*` keys.
+
+| You want | Recipe |
+|---|---|
+| Works immediately, nothing to write | [Zero Configuration](#recipe-1-zero-configuration) |
+| Off Sonar before 2026-09-27, cheapest | [Web Search Tool + Nano](#recipe-2-web-search-tool--nano) |
+| Off Sonar, strongest search quality | [Sonar Pro Search](#recipe-3-sonar-pro-search) |
+| The pre-0.13 page count and spend | [Pin Eight Pages](#recipe-4-pin-eight-pages) |
+| Cheaper extraction and collation | [Economy Extract and Collate](#recipe-5-economy-extract-and-collate) |
+| Better final summaries | [Stronger Collation](#recipe-6-stronger-collation) |
+| A free-tier or shared OpenRouter key | [Free-Tier Resilience](#recipe-7-free-tier-resilience) |
+| A different search model for one repo only | [Per-Project Override](#recipe-8-per-project-override) |
+
+### Recipe 1: Zero Configuration
+
+Write nothing. You get Sonar search with citation harvesting, MiniMax M2.7 extraction and collation, 10 pages per session, and the `.search/` cache. Every other recipe below changes exactly one concern from this baseline.
+
+### Recipe 2: Web Search Tool + Nano
+
+Any OpenRouter chat model gains live search through the `openrouter:web_search` server tool, so nothing depends on a search-native model family. This is the cheapest post-sunset migration (≈$0.008 per search). The `reasoning: "minimal"` pin matters: GPT-5 family models burn their completion budget on reasoning when left unconstrained.
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "searchModel": {
+      "provider": "openrouter",
+      "model": "openai/gpt-5-nano"
+    },
+    "searchWebSearch": {
+      "enabled": true,
+      "engine": "exa",
+      "maxResults": 8,
+      "reasoning": "minimal"
+    },
+    "extractModel": {
+      "provider": "openrouter",
+      "model": "minimax/minimax-m2.7"
+    },
+    "collateModel": {
+      "provider": "openrouter",
+      "model": "minimax/minimax-m2.7"
+    }
+  }
+}
+```
+
+### Recipe 3: Sonar Pro Search
+
+Agentic multi-step search on the Perplexity stack, reached through a settings-only model swap. Best raw search quality of the options, at ≈$0.05 per search ($18 per 1,000 requests plus tokens). `searchWebSearch` is disabled explicitly so this recipe stays correct even if you previously enabled the tool.
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "searchModel": {
+      "provider": "openrouter",
+      "model": "perplexity/sonar-pro-search"
+    },
+    "searchWebSearch": {
+      "enabled": false
+    },
+    "extractModel": {
+      "provider": "openrouter",
+      "model": "minimax/minimax-m2.7"
+    },
+    "collateModel": {
+      "provider": "openrouter",
+      "model": "minimax/minimax-m2.7"
+    }
+  }
+}
+```
+
+### Recipe 4: Pin Eight Pages
+
+v0.13.0 raised `defaultUrls` to 10 and `maxUrls` to 20 because citation harvesting fills the URL list. If you prefer the earlier page count and spend, pin both values (each extra page costs ≈$0.004 to extract).
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "defaultUrls": 8,
+    "maxUrls": 16
+  }
+}
+```
+
+### Recipe 5: Economy Extract and Collate
+
+Extraction and collation run 10+1 times per session, so token rates dominate cost. Swap both stages to a cheaper OpenRouter model; search is untouched. Any model `Pi` supports works for these stages.
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "extractModel": {
+      "provider": "openrouter",
+      "model": "google/gemini-3.7-flash"
+    },
+    "collateModel": {
+      "provider": "openrouter",
+      "model": "google/gemini-3.7-flash"
+    }
+  }
+}
+```
+
+Check the model's context window against `extractMaxChars` (150K chars is roughly 37K tokens); lower `extractMaxChars` for smaller-window models.
+
+### Recipe 6: Stronger Collation
+
+Keep extraction cheap and spend on the final synthesis, where cross-source reasoning and contradiction-flagging live. Only `collateModel` changes.
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "collateModel": {
+      "provider": "openrouter",
+      "model": "openai/gpt-5-mini"
+    }
+  }
+}
+```
+
+### Recipe 7: Free-Tier Resilience
+
+Free-tier OpenRouter keys share a ≈0.33 requests/second bucket. The extract stage fires up to 4 concurrent calls, which trips it. Space the calls, lengthen the retries, and shrink the page count.
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "defaultUrls": 5,
+    "minRequestIntervalMs": 3000,
+    "extractionConcurrency": 2,
+    "llmRetryAttempts": 4,
+    "llmTimeoutMs": 120000
+  }
+}
+```
+
+Paid keys can ignore every key in this recipe; the defaults assume no hard rate limit.
+
+### Recipe 8: Per-Project Override
+
+A trusted project can override individual keys for one repository only. Put the override in `<project>/.pi/settings.json`; everything not listed keeps its global value.
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "searchModel": {
+      "provider": "openrouter",
+      "model": "perplexity/sonar-pro-search"
+    },
+    "cacheDir": ".search-client-x"
+  }
+}
+```
+
+Use this to give a client project a dedicated cache directory and a stronger search model while every other project stays on the global defaults.
 
 ## Tools
 
