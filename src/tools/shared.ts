@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { sourceFilename } from "../cache.js";
 import { truncateContent } from "../util.js";
-import type { ExtractResult } from "../types.js";
+import type { ExtractResult, ResearchSettings } from "../types.js";
 
 /**
  * Append a `site:` filter to a search query. Returns the query unchanged
@@ -19,6 +19,49 @@ import type { ExtractResult } from "../types.js";
 export function appendDomainFilter(query: string, domains?: string[]): string {
   if (!domains?.length) return query;
   return query + " site:" + domains.join(" OR site:");
+}
+
+const WEB_SEARCH_ENGINES = new Set(["auto", "native", "exa", "parallel", "perplexity", "firecrawl"]);
+
+/**
+ * Build an onPayload patch attaching OpenRouter's openrouter:web_search
+ * server tool to a search-stage request. Returns undefined when the feature
+ * is disabled, the provider is not OpenRouter (the tool id is
+ * OpenRouter-specific), or the request already carries tools (never the
+ * case for our search calls, which pass no Context tools, but defensive).
+ *
+ * Per-call `domains` (the tool's optional domains parameter) merge with
+ * settings-level allowedDomains; per-call entries win on collision. Unknown
+ * engine strings and out-of-range maxResults are dropped/clamped rather than
+ * sent, so a typo degrades to OpenRouter defaults instead of a 400.
+ */
+export function buildSearchPayloadPatch(
+  settings: ResearchSettings,
+  provider: string,
+  domains?: string[],
+): ((payload: Record<string, unknown>) => Record<string, unknown>) | undefined {
+  const ws = settings.searchWebSearch;
+  if (!ws?.enabled || provider !== "openrouter") return undefined;
+
+  const parameters: Record<string, unknown> = {};
+  if (ws.engine && ws.engine !== "auto" && WEB_SEARCH_ENGINES.has(ws.engine)) {
+    parameters.engine = ws.engine;
+  }
+  if (typeof ws.maxResults === "number" && Number.isFinite(ws.maxResults)) {
+    parameters.max_results = Math.min(25, Math.max(1, Math.round(ws.maxResults)));
+  }
+  if (ws.searchContextSize) parameters.search_context_size = ws.searchContextSize;
+  const allowed = [...(ws.allowedDomains ?? []), ...(domains ?? [])].filter(
+    (d, i, arr) => arr.indexOf(d) === i,
+  );
+  if (allowed.length > 0) parameters.allowed_domains = allowed;
+  if (ws.excludedDomains?.length) parameters.excluded_domains = [...ws.excludedDomains];
+
+  const serverTool = { type: "openrouter:web_search", parameters };
+  return (payload) => {
+    if (payload.tools) return payload; // never clobber an existing tools array
+    return { ...payload, tools: [serverTool] };
+  };
 }
 
 /**

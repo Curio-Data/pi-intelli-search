@@ -10,7 +10,7 @@ import { callLlm } from "../llm.js";
 import { createAnnotationSink, mergeCitations } from "../annotations.js";
 import { textContent, extractSourceUrls } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
-import { appendDomainFilter } from "./shared.js";
+import { appendDomainFilter, buildSearchPayloadPatch } from "./shared.js";
 
 export const intelliSearchTool = {
   name: "intelli_search",
@@ -44,12 +44,16 @@ export const intelliSearchTool = {
     // with text-scraped links so search-grounded models contribute every source
     // they actually consulted, not just the ones written into the prose.
     const annotationSink = createAnnotationSink();
+    // Optional OpenRouter web search server tool (settings: searchWebSearch).
+    const payloadPatch = buildSearchPayloadPatch(settings, searchConfig.provider, params.domains);
 
     try {
       const responseText = await callLlm(ctx, searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {
         maxTokens: 2000,
         signal,
         annotations: annotationSink,
+        payloadPatch,
+        reasoning: payloadPatch ? (settings.searchWebSearch.reasoning ?? "low") : undefined,
       });
 
       const sources = mergeCitations(extractSourceUrls(responseText), annotationSink);

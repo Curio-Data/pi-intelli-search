@@ -627,6 +627,10 @@ describe("parametric settings round-trip (all keys)", () => {
     ["searchModel", { provider: "testprovider", model: "tm-search" }],
     ["extractModel", { provider: "testprovider", model: "tm-extract" }],
     ["collateModel", { provider: "testprovider", model: "tm-collate" }],
+    [
+      "searchWebSearch",
+      { enabled: true, engine: "exa", maxResults: 5, reasoning: "minimal" },
+    ],
     ["defaultUrls", 3],
     ["maxUrls", 11],
     ["cacheDir", ".test-cache"],

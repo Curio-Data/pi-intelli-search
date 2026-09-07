@@ -12,6 +12,12 @@ export interface SettingsContext {
 
 const DEFAULT_SETTINGS: ResearchSettings = {
   searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  // OpenRouter web search server tool: off by default. When enabled, the
+  // search stage attaches openrouter:web_search to the searchModel call so
+  // any OpenRouter chat model becomes search-grounded (see shared.ts
+  // buildSearchPayloadPatch). "minimal" reasoning avoids reasoning-budget
+  // burn observed with GPT-5 family models when left unconstrained.
+  searchWebSearch: { enabled: false, engine: "auto", maxResults: 8, reasoning: "minimal" },
   extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
   collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
   defaultUrls: 8,
@@ -280,6 +286,7 @@ const NESTED_KEYS = [
   "searchModel",
   "extractModel",
   "collateModel",
+  "searchWebSearch",
   "defaultUrls",
   "maxUrls",
   "cacheDir",

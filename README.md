@@ -232,6 +232,31 @@ All three pipeline stages use independently configurable models. Defaults are ch
 - **Is non-destructive.** The patch merges new models by ID. It never replaces existing OpenRouter models.
 - **Is idempotent.** It is safe across extension reloads and updates.
 
+### OpenRouter Web Search Server Tool
+
+The search stage normally relies on a search-native model (default: _Sonar_). The `searchWebSearch` setting decouples it: [OpenRouter](https://openrouter.ai)'s `openrouter:web_search` server tool attaches live search grounding to **any** OpenRouter chat model, so the pipeline keeps working regardless of which search-native models exist. Perplexity sunsets its Sonar Chat Completions API on **2026-09-27**; this setting is the migration path that needs no Perplexity models at all, and `perplexity/sonar-pro-search` (registered by the extension) is the drop-in model alternative.
+
+A probe-validated pairing (2026-09): `openai/gpt-5-nano` with engine `exa` and `reasoning: "minimal"`, at ≈$0.008 per search with 5-17 cited sources:
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "searchModel": {
+      "provider": "openrouter",
+      "model": "openai/gpt-5-nano"
+    },
+    "searchWebSearch": {
+      "enabled": true,
+      "engine": "exa",
+      "maxResults": 8,
+      "reasoning": "minimal"
+    }
+  }
+}
+```
+
+Search-grounded models also return machine-readable `url_citation` annotations listing every source consulted, typically many more than the links written into the prose (observed: 20 annotations versus 3 prose links from _Sonar_). The pipeline harvests these via a response-body side channel and merges them with text links before the fetch stage, so switching models does not lose sources.
+
 ### Swapping the Extract and Collate Model
 
 _MiniMax_ M2.7 (via OpenRouter) is the default because it is cheap and effective for extraction and collation. However, you can use any model `Pi` supports. Override in `~/.pi/agent/settings.json` or `.pi/settings.json`:
@@ -386,6 +411,7 @@ Override defaults in `~/.pi/agent/settings.json` or, for a trusted project, `<pr
 | Setting | Stage | Default | What It Does |
 |---|---|---|---|
 | `searchModel` | 1. Search | `openrouter/perplexity/sonar` | Model for the initial web search. Swap to a stronger model for deeper search results, or to a cheaper one to reduce the ≈$0.02 search cost. See [Model Configuration](#model-configuration). |
+| `searchWebSearch` | 1. Search | `{ "enabled": false }` | Attach [OpenRouter](https://openrouter.ai)'s `openrouter:web_search` server tool to the search stage so **any** OpenRouter chat model becomes search-grounded (no search-native model needed). Keys: `enabled`, `engine` (`auto`, `native`, `exa`, `parallel`, `perplexity`, `firecrawl`), `maxResults` (1-25), `searchContextSize`, `allowedDomains`, `excludedDomains`, `reasoning` (defaults to `minimal` when enabled). The whole object replaces the default; there is no per-key merge. See [OpenRouter Web Search Server Tool](#openrouter-web-search-server-tool). |
 | `extractModel` | 3. Extract | `openrouter/minimax/minimax-m2.7` | Model for per-page content extraction. Runs 8 times per session so low cost per token matters. Ensure the model's context window exceeds `extractMaxChars` plus the system prompt. For a model with a smaller window (e.g. 256K), lower `extractMaxChars` to match. See [Model Configuration](#model-configuration). |
 | `collateModel` | 4. Collate | `openrouter/minimax/minimax-m2.7` | Model for cross-source synthesis and deduplication. Sees all extractions at once so it needs enough context and instruction-following to flag contradictions. A model with ≥128K context handles 8 full extractions comfortably. See [Model Configuration](#model-configuration). |
 | `defaultUrls` | 1 → 2 | `8` | Fallback when the agent does not pass `maxUrls` per call. Lower values reduce cost and latency but give less thorough results. The agent's [skill guide](skills/intelli-search/SKILL.md) recommends 3 (targeted), 8 (broad), or 12 (exhaustive). |

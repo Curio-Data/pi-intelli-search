@@ -3,7 +3,9 @@
 export const SEARCH_SYSTEM_PROMPT =
   "You are a web search assistant. Answer the query with cited sources. " +
   "Always include source URLs in markdown link format: [title](url). " +
-  "Include as many relevant source URLs as possible.";
+  "End your response with a Sources section that lists every source you " +
+  "used, one markdown link per line. " +
+  "Include as many relevant source URLs as possible (aim for 6 or more).";
 
 export const EXTRACTION_SYSTEM_PROMPT = `You are a technical content extraction assistant. Your job is to
 extract relevant information from a web page for a software developer.

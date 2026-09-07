@@ -145,6 +145,50 @@ describe("callLlm provider dispatch (pi-ai root API)", () => {
     assert.strictEqual(typeof captured[1]?.fetch, "function", "sink present: wrapper forwarded");
   });
 
+  it("forwards payloadPatch as onPayload and per-call reasoning override", async () => {
+    let received: SimpleStreamOptions | undefined;
+    __harness.streamSimple = (async (
+      _provider: Provider,
+      _model: Model<Api>,
+      _context: Context,
+      options?: SimpleStreamOptions,
+    ) => {
+      received = options;
+      return successfulResponse();
+    }) as typeof __harness.streamSimple;
+
+    const patch = (payload: Record<string, unknown>) => ({ ...payload, tools: [{ type: "openrouter:web_search" }] });
+    await callLlm(contextFor({ ok: true, apiKey: "secret" }), CFG, "system", "user", {
+      maxTokens: 10,
+      payloadPatch: patch,
+      reasoning: "minimal",
+    });
+
+    assert.strictEqual(typeof received?.onPayload, "function");
+    // The patch runs through onPayload: our server tool lands on the payload.
+    const patched = (received?.onPayload as (p: unknown) => unknown)({ model: CFG.model });
+    assert.deepStrictEqual(patched, {
+      model: CFG.model,
+      tools: [{ type: "openrouter:web_search" }],
+    });
+    assert.strictEqual(received?.reasoning, "minimal");
+
+    // Without overrides the defaults hold: no onPayload, reasoning low.
+    let plain: SimpleStreamOptions | undefined;
+    __harness.streamSimple = (async (
+      _p: Provider,
+      _m: Model<Api>,
+      _c: Context,
+      options?: SimpleStreamOptions,
+    ) => {
+      plain = options;
+      return successfulResponse();
+    }) as typeof __harness.streamSimple;
+    await callLlm(contextFor({ ok: true, apiKey: "secret" }), CFG, "system", "user", { maxTokens: 10 });
+    assert.strictEqual(plain?.onPayload, undefined);
+    assert.strictEqual(plain?.reasoning, "low");
+  });
+
   it("applies the auth-resolved baseUrl onto the request model, mirroring ModelRuntime.prepareRequest", async () => {
     let receivedModel: Model<Api> | undefined;
     __harness.streamSimple = (async (

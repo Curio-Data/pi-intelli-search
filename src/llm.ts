@@ -8,6 +8,7 @@ import {
   type Model,
   type Provider,
   type SimpleStreamOptions,
+  type ThinkingLevel,
 } from "@earendil-works/pi-ai";
 import type { ModelConfig } from "./types.js";
 import type { AnnotationSink } from "./annotations.js";
@@ -82,6 +83,15 @@ export async function callLlm(
      * sink.citations with their text-parsed URLs after the call returns.
      */
     annotations?: AnnotationSink;
+    /**
+     * Mutate the outgoing provider payload before dispatch (forwarded as
+     * the pi-ai onPayload hook). Used by the search stage to attach the
+     * OpenRouter openrouter:web_search server tool. Return the payload
+     * unchanged when nothing applies.
+     */
+    payloadPatch?: (payload: Record<string, unknown>) => Record<string, unknown>;
+    /** Per-call reasoning override. Default "low" when omitted. */
+    reasoning?: ThinkingLevel;
   },
 ): Promise<string> {
   // 1. Resolve model from registry
@@ -189,7 +199,13 @@ export async function callLlm(
                 signal,
                 ...(annotationFetch ? { fetch: annotationFetch } : {}),
                 maxTokens: options?.maxTokens,
-                reasoning: "low",
+                reasoning: options?.reasoning ?? "low",
+                ...(options?.payloadPatch
+                  ? {
+                      onPayload: (payload: unknown) =>
+                        options!.payloadPatch!(payload as Record<string, unknown>),
+                    }
+                  : {}),
                 maxRetries: 0,
                 onResponse: (res) => {
                   if (res.status === 429 || res.status >= 500) {

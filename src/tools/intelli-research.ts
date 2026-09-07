@@ -56,6 +56,7 @@ import type {
 } from "../types.js";
 import {
   appendDomainFilter,
+  buildSearchPayloadPatch,
   buildExtractionMessage,
   buildCollationMessage,
   formatCacheAppendix,
@@ -389,6 +390,10 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
   // many more sources than the prose links they write, and the transport
   // drops them (see annotations.ts). Merged into urls after each attempt.
   const annotationSink = createAnnotationSink();
+  // Optional OpenRouter web search server tool (settings: searchWebSearch).
+  // Attaches search grounding to any OpenRouter chat model.
+  const payloadPatch = buildSearchPayloadPatch(p.settings, p.searchConfig.provider, p.params.domains);
+  const searchReasoning = payloadPatch ? (p.settings.searchWebSearch.reasoning ?? "low") : undefined;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     attemptsUsed = attempt;
     searchResult = await __harness.callLlm(
@@ -402,6 +407,8 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
         retry: p.retry,
         timeoutMs: p.settings.llmTimeoutMs,
         annotations: annotationSink,
+        payloadPatch,
+        reasoning: searchReasoning,
       },
     );
     urls = mergeCitations(extractSourceUrls(searchResult), annotationSink).slice(0, p.maxUrls);
