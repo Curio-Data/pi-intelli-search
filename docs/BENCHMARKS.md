@@ -26,7 +26,7 @@ Per model, the harness:
 3. Starts headless `pi` with `PI_CODING_AGENT_DIR` pointed at the isolated directory, loading `dist/index.js`, with the tool-call parameters pinned verbatim in the prompt.
 4. Prints the run's telemetry row from the `meta.json` sidecar (duration, links, fetch outcomes, extraction chars in/out, collation chars).
 
-The agent-loop model is pinned to `google/gemini-3.8-flash` in every run; only the pipeline's extract/collate models vary.
+The agent-loop model is pinned per sitting (default: `kimi-coding/k3` when its key exists, overridable via `BENCH_LOOP_MODEL`); only the pipeline's extract/collate models vary. The 2026-09-07 baseline series ran with `google/gemini-3.8-flash` as the loop model.
 
 ### Fixed Stimulus
 
@@ -42,7 +42,7 @@ The headless agent, not the harness, composes the tool call. Two checks verify f
 ### Confounds And Limitations
 
 - **Search nondeterminism dominates.** The search stage is a live Sonar call; identical queries return different link sets run to run. Corpus quality differences are entangled with model differences. Only pages fetched by two runs can be compared as pure model effects (compare the same-numbered extraction files across cache directories).
-- **The agent loop is a variable, not just the pipeline.** Print-mode runs intermittently leak the tool call into the answer text as `functions.intelli_research:0{...}` instead of a native tool-call block; `Pi` treats it as prose, exits 0, and the pipeline never runs. On 2026-09-07 this started mid-session and then reproduced for every loop model (m2.7, m3, gemini-3.8-flash), every prompt shape, and even for `Pi`'s own built-in `bash` tool with no extension loaded: an upstream `Pi`/OpenRouter streaming regression, not a model or extension property. Direct API probes (non-streaming and streaming, same key) returned well-formed `tool_calls` throughout. Mitigations: the E2E config-recipes runner retries any exit-0 run that produced no cache entry; the benchmark harness verifies the pipeline actually ran via the cache slug. Verify parameter fidelity through the cache slug, never through the loop's self-report.
+- **The agent loop is a variable, not just the pipeline.** Print-mode runs can leak the tool call into the answer text as `functions.intelli_research:0{...}` instead of a native tool-call block; `Pi` treats it as prose, exits 0, and the pipeline never runs. Root cause (fully diagnosed on 2026-09-07 evening, after the baseline series): `Pi` refreshes remote model catalogs from pi.dev every 4 hours and on extension-triggered registry refreshes. zai glm models require the `zaiToolStream` compat flag for native tool-call streaming; on the catalog-restore and `models.json` round-trip paths that flag is lost, so glm-5.3 emits tool calls as text and the headless loop exits without executing them. A models.json restore (257K bytes of catalog cache) reproduces this without the extension loaded. `kimi-coding/k3` is immune because its tool calls need no special compat flags. A second trap: a `models.json` containing a providers block breaks slash-form `defaultModel` resolution at `Pi` startup, routing the loop call to an OpenRouter fallback model. Harness mitigations: the loop model defaults to `kimi-coding/k3` when its key exists, the generated `settings.json` uses the split `defaultProvider` + `defaultModel` form, any exit-0 run that produced no cache entry is retried, and the E2E config-recipes runner applies the same retry. Verify parameter fidelity through the cache slug, never through the loop's self-report.
 - **Adjacency converges.** Back-to-back runs share more links than runs hours apart; Sonar's index drifts on an hours scale. Interleave models (A, B, A, B) rather than blocking them when comparing more than two.
 - **One query, one sitting.** Results are for the Svelte UI libraries query; other domains may rank differently.
 - **Cache suggest only runs when the working directory has a populated `.search` index.** Fresh benchmark cwds have none, so that stage stays cold in all benchmark runs.
@@ -61,6 +61,16 @@ Baseline series, 2026-09-07. Extension build 0.13.0. Search: Sonar. Agent loop: 
 | 3C | minimax-m2.7 | 68.1s | 7/1 | 95.0K | 18.6K | 2.7K | 4.8K |
 
 OpenRouter pricing on 2026-09-07: minimax-m2.7 and minimax-m3 are identically priced at $0.30/M input and $1.20/M output; gemini-3.8-flash is cheaper per token. Latency showed no consistent model ordering across this series (42.8s to 68.1s spread; the slowest single run was m2.7).
+
+### Harness Verification Series
+
+2026-09-07 evening, extension build 0.14.0, after the print-mode tool-call leak was root-caused and the harness fixed (see Confounds And Limitations). Loop model: `kimi-coding/k3`.
+
+| Run | Extract/Collate Model | Duration | Fetch Ok/Fail | Extract In | Extract Out | Per Page | Collate Out |
+|-----|-----------------------|----------|---------------|------------|-------------|----------|-------------|
+| 4B | minimax-m3 | 58.1s | 7/1 | 55.2K | 28.2K | 4.0K | 7.3K |
+
+Run 4B's cache slug matched the baseline series exactly, and the report opened by stating its ranking methodology and the primacy of GitHub stars, matching the recorded m3 epistemic signature. Per-page extraction output (4.0K over 7 pages) sits just under the recorded m3 band (4.7K to 5.3K) on a smaller corpus (55.2K input versus 92K to 104K baseline).
 
 ### Findings
 
