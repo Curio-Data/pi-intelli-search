@@ -1,6 +1,8 @@
 # v0.12.1 Simplification Refactor Plan
 
-Status: draft. Branch: `refactor/v0.12.1-simplification` (from `main` @ 5673adf).
+Status: completed (shipped in v0.12.1, 2026-07-26). Retained for historical reference; describes the codebase as it was before that release.
+
+Original planning status: draft. Branch: `refactor/v0.12.1-simplification` (from `main` @ 5673adf).
 
 ## Scope and Constraints
 

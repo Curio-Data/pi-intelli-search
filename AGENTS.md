@@ -200,21 +200,22 @@ All `Pi` SDK packages are **peer dependencies**. They are provided by the hostin
 ```
 src/
 ├── index.ts                  # Extension entry: registers tools, events, model setup
-├── llm.ts                    # callLlm() - pi native auth + retry/backoff + per-call timeout
+├── annotations.ts            # Harvest url_citation annotations from provider response bodies
+├── llm.ts                    # callLlm() - pi native auth + retry/backoff + per-call timeout + payloadPatch/reasoning/fetch hooks
 ├── fetch.ts                  # Page fetching: Defuddle vs Markdown comparison, llms-full.txt
 ├── prompts.ts                # System prompts for search, extraction, collation, cache suggest
-├── providers.ts              # Custom model registration (Sonar) into models.json
+├── providers.ts              # Custom model registration (Perplexity models) into models.json
 ├── settings.ts               # Settings loader with caching and invalidation
 ├── cache.ts                  # .search/ cache read/write, index management, cache suggest helpers
 ├── telemetry.ts             # Local-only meta.json sidecar: schema, builder, atomic write, version source
 ├── types.ts                  # Shared TypeScript interfaces
-├── util.ts                   # URL extraction, inference, concurrency + retry/backoff/timeout/throttle helpers
+├── util.ts                   # URL extraction, source-section strip, inference, concurrency + retry/backoff/timeout/throttle helpers
 └── tools/
     ├── intelli-research.ts   # Full pipeline orchestrator (5 stages)
-    ├── intelli-search.ts     # Standalone search via Perplexity Sonar
+    ├── intelli-search.ts     # Standalone search via the configured search model
     ├── intelli-extract.ts    # Standalone per-page LLM extraction
     ├── intelli-collate.ts    # Standalone collation + cache write
-    └── shared.ts             # Shared builders: domain filter, extraction/collation messages, appendix
+    └── shared.ts             # Shared builders: domain filter, web-search tool patch, extraction/collation messages, appendix
 
 skills/
 └── intelli-search/
@@ -225,7 +226,9 @@ docs/
 └── COMPONENTS.md             # Third-party dependency attribution
 
 test/
+├── annotations.test.ts
 ├── cache.test.ts
+├── compat-guard.test.ts
 ├── telemetry.test.ts
 ├── fetch.test.ts
 ├── index.test.ts
@@ -242,9 +245,12 @@ test/
 │   ├── 04_migration.sh
 │   ├── 05_collation_limits.sh
 │   ├── 06_extract_limits.sh
-│   └── 07_llms_full.sh
+│   ├── 07_llms_full.sh
+│   ├── 08_websearch_tool.sh
+│   └── 09_sonar_pro_search.sh
 ├── run-e2e-all.sh
 ├── run-e2e-publish.sh
+├── run-e2e-publish-local.sh
 ├── settings.test.ts
 ├── smoke.ts
 └── util.test.ts
@@ -256,7 +262,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline descripti
 
 ### Pipeline (`intelli_research`)
 
-1. **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai) returns a synthesised answer with source URLs.
+1. **Search:** a search-grounded model (default [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai)) returns a synthesised answer; prose links are merged with harvested `url_citation` annotations before the URL list is clamped. Alternatives: `perplexity/sonar-pro-search` (model swap) or any OpenRouter chat model plus the `searchWebSearch` server tool.
 2. **Fetch:** Each page is fetched two ways in parallel (HTML to [Defuddle](https://github.com/kepano/defuddle) and Markdown variant). They are compared by quality score; the best is picked.
 3. **Extract:** Configurable model (default: MiniMax M2.7) per-page extraction (bounded-parallel via `extractionConcurrency`, default 4), compressing ≈50K to ≈3-5K chars.
 4. **Collate:** Configurable model (default: MiniMax M2.7) deduplicates across extractions, produces summary and cache.
@@ -266,7 +272,9 @@ The pipeline is self-contained. `Pi` extensions cannot call other tools from `ex
 
 ### LLM Integration
 
-- Uses `ctx.modelRegistry.getProvider(provider).streamSimple()` (root `@earendil-works/pi-ai` API), not the deprecated `pi-ai/compat` `completeSimple()` shim and not `ModelRegistry.complete()` (which drops the provider-neutral reasoning parameter). `streamSimple` sends `reasoning: "low"`, which MiniMax M2.7 and other reasoning models require. `test/compat-guard.test.ts` enforces that no file imports `pi-ai/compat`. Auth is resolved by `Pi` (`getApiKeyAndHeaders`) before dispatch, mirroring `ModelRuntime.prepareRequest` including the `baseUrl` override; models registered outside `Pi`'s registry (for example `pi-ai`'s `registerFauxProvider`) are not consulted.
+- Uses `ctx.modelRegistry.getProvider(provider).streamSimple()` (root `@earendil-works/pi-ai` API), not the deprecated `pi-ai/compat` `completeSimple()` shim and not `ModelRegistry.complete()` (which drops the provider-neutral reasoning parameter). `streamSimple` sends `reasoning: "low"`, which MiniMax M2.7 and other reasoning models require; the search stage overrides it per call (`minimal` when the web search tool is enabled). `test/compat-guard.test.ts` enforces that no file imports `pi-ai/compat`. Auth is resolved by `Pi` (`getApiKeyAndHeaders`) before dispatch, mirroring `ModelRuntime.prepareRequest` including the `baseUrl` override; models registered outside `Pi`'s registry (for example `pi-ai`'s `registerFauxProvider`) are not consulted.
+- **Per-call payload patching and reasoning.** `callLlm()` accepts `payloadPatch` (forwarded as pi-ai's `onPayload`) and `reasoning` (default `"low"`). The search stage uses both to attach `openrouter:web_search`. A patch must return the payload untouched when it does not apply and never overwrite an existing `tools` array.
+- **Annotation side channel.** When `annotations` is passed, `callLlm()` injects a wrapped `fetch` through `ProviderRequestOptions.fetch` that tees each response body and parses `url_citation` entries into the sink. The sink is cleared at the start of every retry attempt, and `callLlm()` awaits the background reads (bounded at 2s) before returning. Every failure in this path is swallowed by design. **Both hooks fail silently if upstream pi-ai changes them**: re-check `ProviderRequestOptions.fetch` and `onPayload` on every peer-dependency bump; `test/annotations.test.ts` covers the parser, not the injection point.
 - Auth flows through `Pi`'s native system (`auth.json`, env vars, OAuth). No API key management happens in this code.
 - **Retry and timeout are owned by `callLlm()`, not the SDK.** It passes `maxRetries: 0` to the provider stream so the SDK's own retries do not compound with ours, then wraps the call in `withRetry()` (full-jitter exponential backoff, honours Retry-After, bounded by `llmRetryAttempts`/`retryBaseDelayMs`/`retryMaxDelayMs`). On the OpenRouter path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and the stream resolves with `stopReason: "error"` and the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header); it must never throw, because a throw propagates out of the stream and bypasses retry.
 - **Per-call timeout via `callWithAbortTimeout()` (`util.ts`).** The SDK request timeout does not cover a stalled streaming body, so `callLlm()` aborts the whole call with an `AbortController` after `llmTimeoutMs`, combined with the tool's signal so Esc still cancels. A timeout surfaces as a retryable condition; if it survives all attempts, `callLlm()` throws a clear timeout error.
@@ -277,7 +285,7 @@ The pipeline is self-contained. `Pi` extensions cannot call other tools from `ex
 
 ### Model Registration
 
-[_Perplexity Sonar_](https://docs.perplexity.ai) is not in `Pi`'s built-in model list. The extension merges it into `~/.pi/agent/models.json` on first `session_start` (idempotent, non-destructive). Never use `registerProvider()` for [OpenRouter](https://openrouter.ai) because that would replace all OpenRouter models.
+The [_Perplexity_](https://docs.perplexity.ai) models (`perplexity/sonar`, `perplexity/sonar-pro`, `perplexity/sonar-pro-search`) are not in `Pi`'s built-in model list. The extension merges them into `~/.pi/agent/models.json` on first `session_start` (idempotent, non-destructive, adding only what is missing). Never use `registerProvider()` for [OpenRouter](https://openrouter.ai) because that would replace all OpenRouter models.
 
 ### Fetch Strategy
 
@@ -290,13 +298,13 @@ After extraction, every unique domain in the results is probed for `llms-full.tx
 
 ### Settings
 
-Loaded from `~/.pi/agent/settings.json` and, only for trusted projects, `<project>/<CONFIG_DIR_NAME>/settings.json`. The nested `pi-intelli-search` namespace is preferred; flat `intelli*` prefixed keys are a deprecated fallback. Cached by agent directory, project directory, trust state, and configuration-directory name, then invalidated on `session_start`. Rate-limit resilience keys (`llmTimeoutMs`, `llmRetryAttempts`, `retryBaseDelayMs`, `retryMaxDelayMs`, `searchRetryAttempts`, `minRequestIntervalMs`) tune retry, timeout, and throttling. See README for all settings keys and defaults (the canonical reference).
+Loaded from `~/.pi/agent/settings.json` and, only for trusted projects, `<project>/<CONFIG_DIR_NAME>/settings.json`. The nested `pi-intelli-search` namespace is preferred; flat `intelli*` prefixed keys are a deprecated fallback. Cached by agent directory, project directory, trust state, and configuration-directory name, then invalidated on `session_start`. Rate-limit resilience keys (`llmTimeoutMs`, `llmRetryAttempts`, `retryBaseDelayMs`, `retryMaxDelayMs`, `searchRetryAttempts`, `minRequestIntervalMs`) tune retry, timeout, and throttling. The `searchWebSearch` block (OpenRouter web search server tool, off by default, OpenRouter provider only) replaces the whole default object when set: there is no per-key merge, and an omitted `reasoning` falls back to `low`. See README for all settings keys and defaults (the canonical reference).
 
 ### Cache
 
 Written to `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. The collation model sees cache paths so it can reference them in output.
 
-**Telemetry sidecar** (v0.11.0+). Each `intelli_research` run also writes a local-only `meta.json` into its cache directory, recording per-stage outcomes (pages fetched/failed, fetch-variant winners, search-retry, cache-suggest hits, latency). The schema is owned by `src/telemetry.ts`, is additive-only, and carries an independent `schemaVersion` decoupled from `extensionVersion`. The write is atomic (temp file then `rename`) and fail-safe: failures are caught and logged, never surfacing to the pipeline result. Suppressed entirely when `disableTelemetry` is true. No network call is added; the word "telemetry" refers to local runtime signals, not remote reporting. The bundled `scripts/analyze-sessions.sh` aggregates these sidecars.
+**Telemetry sidecar** (v0.11.0+). Each `intelli_research` run also writes a local-only `meta.json` into its cache directory, recording per-stage outcomes (pages fetched/failed, fetch-variant winners, links returned and annotations harvested, search-retry, cache-suggest hits, latency). The schema is owned by `src/telemetry.ts`, is additive-only, and carries an independent `schemaVersion` decoupled from `extensionVersion`. The write is atomic (temp file then `rename`) and fail-safe: failures are caught and logged, never surfacing to the pipeline result. Suppressed entirely when `disableTelemetry` is true. No network call is added; the word "telemetry" refers to local runtime signals, not remote reporting. The bundled `scripts/analyze-sessions.sh` aggregates these sidecars.
 
 **Cache suggest** (Stage 5) reads `.index.json` back after each research call. It feeds up to 20 recent entries to an LLM judge (using the extract model for cost efficiency) which returns semantically related previous searches. Results are formatted as a `📚 Related cached searches` table appended to the tool output. This is purely supplementary. The live search always runs, and the cache suggestions give the agent (and user) a pointer to prior research if live results are insufficient.
 
@@ -348,7 +356,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | Category | Purpose | Files | Network |
 |---|---|---|---|
 | **Structural/smoke** | Extension loads, tools register, events bind | `smoke.ts` | No |
-| **Unit (pure logic)** | Functions without filesystem or network deps | `cache.test.ts`, `telemetry.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
+| **Unit (pure logic)** | Functions without filesystem or network deps | `annotations.test.ts`, `cache.test.ts`, `telemetry.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
 | **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts` | No |
 | **E2E** | Full pipeline with real LLM calls in isolated Pi env | `e2e/01_main.sh`, `e2e/02_cap.sh`, `e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`, `e2e/07_llms_full.sh`, `e2e/04_migration.sh`, `e2e/03_model_override.sh`, `e2e/08_websearch_tool.sh`, `e2e/09_sonar_pro_search.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
 | **Publish** | Validates the published npm package structure | `run-e2e-publish.sh` (registry install), `run-e2e-publish-local.sh` (local tarball install; CI gate for peer-dep drift) | Yes (npm only) |
@@ -409,7 +417,7 @@ Configuration errors (model typos, missing keys) must be caught before LLM calls
 
 ### Principle 4: E2E Tests Exercise Real Config Paths
 
-E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. There are seven scenario scripts plus a sequential runner:
+E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. The scenario scripts below run through the sequential runner:
 
 | Test | What it proves |
 |---|---|
@@ -420,11 +428,11 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `e2e/06_extract_limits.sh` | `extractMaxChars` and `extractionMaxTokens` are enforced; back-to-back comparison proves truncation |
 | `e2e/05_collation_limits.sh` | `collationMaxTokens` is enforced; back-to-back comparison proves output clamping |
 | `e2e/07_llms_full.sh` | Automatic llms-full.txt discovery works; probes candidate sites, verifies file lands in cache |
-| `e2e/08_websearch_tool.sh` | The `searchWebSearch` block injects OpenRouter's `openrouter:web_search` server tool through the real transport (onPayload survives adapter serialization); a non-search-native model (`openai/gpt-5-nano`) returns fetchable links and harvested annotations |
-| `e2e/09_sonar_pro_search.sh` | Settings-only swap to `perplexity/sonar-pro-search`: models.json merge registers it in a vanilla agent dir, pre-flight resolves it, the pipeline completes with links and annotations |
+| `e2e/08_websearch_tool.sh` | Exercises the configured server-tool path with a chat model: verifies the selected model, non-empty links, completed pipeline, and cached sources. Annotation count is diagnostic, not a pass condition |
+| `e2e/09_sonar_pro_search.sh` | Verifies registration and settings-based selection of `perplexity/sonar-pro-search` in a vanilla agent dir, then checks non-empty links, completed pipeline, and cached sources. Reports the annotation count |
 | `run-e2e-all.sh` | Runs every scenario script one at a time with a spacing gap (`E2E_GAP_SECONDS`, default 20). Use this instead of launching scripts in parallel or back-to-back: bursting many calls at one key depletes the rate-limit bucket and produces degraded or hung runs. |
 
-Both write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
+The scenarios write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
 
 **Rate-limit caution:** the scenario scripts consume live provider quota. Run them through `run-e2e-all.sh` (or singly with gaps) on free or shared keys. The paired limit comparisons (`e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`) use one official documentation source and an internal cooldown (`E2E_RUN_GAP_SECONDS`, default 30) between runs.
 
@@ -550,5 +558,4 @@ The workflow authenticates to `npm` via OIDC; no stored token is used. The trust
 
 ## Compatibility
 
-- **`Pi` >= 0.81.1:** Core functionality, trusted project settings, `CONFIG_DIR_NAME`, provider-based `pi-ai` calls (`modelRegistry.getProvider()` + `streamSimple()`, not the deprecated `/compat` shim), and async model-registry refresh. Compatibility audited and verified through `Pi` 0.84.4 (2026-09-01; see CHANGELOG).
-.
+- **`Pi` >= 0.81.1:** Core functionality, trusted project settings, `CONFIG_DIR_NAME`, provider-based `pi-ai` calls (`modelRegistry.getProvider()` + `streamSimple()`, not the deprecated `/compat` shim), and async model-registry refresh. Compatibility audited and verified through `Pi` 0.84.4 (2026-09-01; see CHANGELOG). The `fetch`/`onPayload` request hooks used by annotation harvesting and the web search tool are verified against pi-ai 0.84.4.

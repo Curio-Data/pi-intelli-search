@@ -9,7 +9,7 @@ description: "Research the web for current information. Use when you need docs, 
 
 ### Quick Factual Question: Use `intelli_search`
 
-When you need a fast answer with sources but no deep analysis:
+When you need a fast answer with sources but no deep analysis. The source list is capped at the top `defaultUrls` (default 10) entries; a search-grounded model can cite twenty or more. Read the summary; treat the source list as an index to follow up from, not as reading.
 
 ```
 intelli_search(query="TypeScript 5.8 release date")
@@ -76,8 +76,8 @@ intelli_research(
 
 ### Other Parameters
 
-- `maxUrls`: `3` for quick targeted research, `8` (default) for broad research, `12` for exhaustive research. The setting caps this at `maxUrls` (default 16). Requests above the cap are silently clamped.
-- `domains`: Restrict to trusted sources, for example `domains=["react.dev", "github.com"]`.
+- `maxUrls`: `3` for quick targeted research, `10` (default) for broad research, `16` for exhaustive research. The setting caps this at `maxUrls` (default 20). Requests above the cap are silently clamped.
+- `domains`: Guide search toward given sources, for example `domains=["react.dev", "github.com"]`. This adds a `site:` filter and, with the web search tool enabled, an engine domain filter. It is guidance, not a hard boundary: returned URLs are not checked against a local allowlist before fetching.
 
 ### When Search Results Mix Source Types
 
@@ -93,7 +93,7 @@ When collating, the LLM resolves conflicts using source priority: official docs 
 When you need **different focus per URL** (for example, comparing alternatives side-by-side), orchestrate step by step instead of using `intelli_research`:
 
 1. `intelli_search(query)` to discover URLs.
-2. `web_fetch` or `batch_web_fetch` to fetch specific pages.
+2. Fetch the pages with a web-fetch tool if one is installed (`intelli-search` does not provide one), or with available shell/HTTP tools. Pass the actual page content to the next step; a URL alone is insufficient.
 3. `intelli_extract(url, title, content, query, focusPrompt)` to give each URL a different focus.
 4. `intelli_collate(extractions, query)` to deduplicate and cache.
 
@@ -124,7 +124,7 @@ The cache lives at `.search/<date>-<slug>-<hash>/`. The tool output includes the
 | Full original page content | `read .search/<slug>/sources/01-*.md` |
 | Collated overview | `read .search/<slug>/report.md` |
 | Per-stage outcomes (v0.11.0+) | `read .search/<slug>/meta.json` |
-| Re-fetch a single URL fresh | `web_fetch(url, format="Markdown")` |
+| Re-fetch a single URL fresh | Use an installed web-fetch tool or shell/HTTP tools; `intelli-search` provides no standalone fetch tool |
 
 ## How It Works
 
@@ -132,7 +132,7 @@ Reference material for the curious. The decision logic above is what matters in 
 
 `intelli_research` runs a 5-stage pipeline inside a single tool call:
 
-1. **Search:** [_Perplexity Sonar_](https://docs.perplexity.ai) returns a synthesised answer with source URLs.
+1. **Search:** a search-grounded model (default [_Perplexity Sonar_](https://docs.perplexity.ai)) returns a synthesised answer plus every source it cited: prose links are merged with machine-readable `url_citation` annotations harvested from the response body, so sources the model consulted but did not link are still fetched.
 2. **Fetch:** Each page is fetched and cleaned to Markdown via [_Defuddle_](https://github.com/kepano/defuddle) (strips nav, ads, sidebars).
 3. **Extract:** A configurable LLM (default _MiniMax_ M2.7 via OpenRouter) pulls out only the content relevant to the query. A 50K-char page becomes ≈3-5K chars of focused extraction. Extraction adapts to source type: official docs preserve exact API signatures, blog posts capture practical patterns, forums capture accepted solutions.
 4. **Collate:** Another LLM call deduplicates across extractions and produces one concise summary. When sources conflict, official docs win.
