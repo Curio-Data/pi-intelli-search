@@ -198,6 +198,8 @@ Two loader rules to keep in mind:
 | A free-tier or shared OpenRouter key | [Free-Tier Resilience](#recipe-7-free-tier-resilience) |
 | A different search model for one repo only | [Per-Project Override](#recipe-8-per-project-override) |
 
+Every recipe is exercised end-to-end in its own isolated environment by [`test/e2e/10_config_recipes.sh`](test/e2e/10_config_recipes.sh); recipes 2 and 3 by `08_websearch_tool.sh` and `09_sonar_pro_search.sh`.
+
 ### Recipe 1: Zero Configuration
 
 Write nothing. You get Sonar search with citation harvesting, MiniMax M2.7 extraction and collation, 10 pages per session, and the `.search/` cache. Every other recipe below changes exactly one concern from this baseline.

@@ -358,7 +358,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | **Structural/smoke** | Extension loads, tools register, events bind | `smoke.ts` | No |
 | **Unit (pure logic)** | Functions without filesystem or network deps | `annotations.test.ts`, `cache.test.ts`, `telemetry.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
 | **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts` | No |
-| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `e2e/01_main.sh`, `e2e/02_cap.sh`, `e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`, `e2e/07_llms_full.sh`, `e2e/04_migration.sh`, `e2e/03_model_override.sh`, `e2e/08_websearch_tool.sh`, `e2e/09_sonar_pro_search.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
+| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `e2e/01_main.sh`, `e2e/02_cap.sh`, `e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`, `e2e/07_llms_full.sh`, `e2e/04_migration.sh`, `e2e/03_model_override.sh`, `e2e/08_websearch_tool.sh`, `e2e/09_sonar_pro_search.sh`, `e2e/10_config_recipes.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
 | **Publish** | Validates the published npm package structure | `run-e2e-publish.sh` (registry install), `run-e2e-publish-local.sh` (local tarball install; CI gate for peer-dep drift) | Yes (npm only) |
 
 ### Principle 1: Tests Must Be Deterministic
@@ -430,6 +430,7 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `e2e/07_llms_full.sh` | Automatic llms-full.txt discovery works; probes candidate sites, verifies file lands in cache |
 | `e2e/08_websearch_tool.sh` | Exercises the configured server-tool path with a chat model: verifies the selected model, non-empty links, completed pipeline, and cached sources. Annotation count is diagnostic, not a pass condition |
 | `e2e/09_sonar_pro_search.sh` | Verifies registration and settings-based selection of `perplexity/sonar-pro-search` in a vanilla agent dir, then checks non-empty links, completed pipeline, and cached sources. Reports the annotation count |
+| `e2e/10_config_recipes.sh` | Runs each README Configuration Recipe's settings block in a fresh isolated agent dir + cwd and asserts the effective behaviour from telemetry: zero-config defaults, partial blocks preserving unspecified defaults, extract/collate overrides, free-tier pacing keys, and per-project settings via pre-seeded trust.json (the only project-level-settings coverage) |
 | `run-e2e-all.sh` | Runs every scenario script one at a time with a spacing gap (`E2E_GAP_SECONDS`, default 20). Use this instead of launching scripts in parallel or back-to-back: bursting many calls at one key depletes the rate-limit bucket and produces degraded or hung runs. |
 
 The scenarios write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
