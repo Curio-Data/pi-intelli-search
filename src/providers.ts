@@ -56,7 +56,7 @@ export const REQUIRED_MODELS = [
     id: "perplexity/sonar-pro-search",
     name: "Perplexity Sonar Pro Search",
     reasoning: false,
-    input: ["text"],
+    input: ["text", "image"],
     cost: { input: 3.0, output: 15.0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 200000,
     maxTokens: 8192,

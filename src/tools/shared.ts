@@ -96,7 +96,7 @@ export function buildCollationMessage(
   let msg = `Original query: ${query}\n`;
   msg += `Cache path: ${cachePath}/\n\n`;
   if (searchSummary) {
-    msg += `Search summary (from Sonar):\n${searchSummary}\n\n`;
+    msg += `Search summary (from the search model):\n${searchSummary}\n\n`;
   }
   for (const [i, ext] of succeededExtractions.entries()) {
     const filename = sourceFilename(i, ext.url);

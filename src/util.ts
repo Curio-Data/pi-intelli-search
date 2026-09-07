@@ -452,3 +452,31 @@ export function inferCurrentness(line: string): string {
   if (lower.includes("outdated") || lower.includes("old")) return "possibly outdated";
   return "undated";
 }
+
+/**
+ * Strip a trailing "Sources" section from a search model's response.
+ *
+ * The search prompt asks for one so the links land in the text where
+ * extractSourceUrls() can parse them. The pipeline extracts URLs itself
+ * (text pass plus annotation harvesting) and builds its own canonical
+ * source list, so the model's rendered section must not flow downstream:
+ * intelli_search already prints its own Sources block, and the collation
+ * input would otherwise carry a duplicate, differently-ordered list.
+ *
+ * Recognises a heading-like line containing only "Sources" (optionally a
+ * markdown heading, bold markers, or a trailing colon) followed by the
+ * section body, anchored at the end of the text. The section is only
+ * removed when its body contains at least one URL, so prose that merely
+ * mentions sources is never touched. Text with no such trailing section
+ * returns unchanged.
+ */
+export function stripTrailingSourcesSection(text: string): string {
+  const trimmedEnd = text.replace(/[ \t]+$/g, "");
+  const match = trimmedEnd.match(
+    /\n[ \t]*(?:#{1,6}[ \t]*)?\*{0,2}Sources\*{0,2}[ \t]*:?[ \t]*\n[\s\S]*$/i,
+  );
+  if (!match) return text;
+  if (!/https?:\/\/|\bwww\./.test(match[0])) return text;
+  const cut = trimmedEnd.slice(0, match.index).replace(/\s+$/g, "");
+  return cut + "\n";
+}

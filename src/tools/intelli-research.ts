@@ -30,6 +30,7 @@ import {
 import {
   textContent,
   extractSourceUrls,
+  stripTrailingSourcesSection,
   inferSourceType,
   inferCurrentness,
   mapWithConcurrency,
@@ -108,7 +109,7 @@ export const intelliResearchTool = {
   executionMode: "sequential" as const,
   promptGuidelines: [
     "Use intelli_research when the user needs current web information (docs, APIs, best practices, library updates). For quick factual questions, use intelli_search alone.",
-    "Use maxUrls to control breadth: 3 for targeted, 8 (default) for broad, 12 for exhaustive. The setting caps requests at maxUrls (default 16).",
+    "Use maxUrls to control breadth: 3 for targeted, 10 (default) for broad, 16 for exhaustive. The setting caps requests at maxUrls (default 20).",
     "Always provide focusPrompt to guide extraction. Without it the LLM extracts generically. Translate the user's intent into a specific extraction focus.",
     "The tool result contains a concise summary — use it directly. Only read .search/ cache files when the summary is insufficient.",
     "Use domains to target specific sites (e.g., ['docs.python.org']) when the user references a specific documentation source.",
@@ -427,6 +428,13 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
   if (p.signal?.aborted) {
     throw new DOMException("Aborted", "AbortError");
   }
+
+  // Drop the model's trailing Sources section before the text flows
+  // downstream: URLs are extracted above from the FULL text (the section is
+  // link-dense), and collation/error summaries get the canonical source
+  // list from the extractions and cache appendix instead of a duplicate,
+  // differently-ordered rendered list.
+  searchResult = stripTrailingSourcesSection(searchResult);
 
   p.tel?.recordSearch({
     model: `${p.searchConfig.provider}/${p.searchConfig.model}`,

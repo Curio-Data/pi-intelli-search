@@ -8,7 +8,7 @@ import type { SearchResult, OnUpdate } from "../types.js";
 import { SEARCH_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
 import { createAnnotationSink, mergeCitations } from "../annotations.js";
-import { textContent, extractSourceUrls } from "../util.js";
+import { textContent, extractSourceUrls, stripTrailingSourcesSection } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import { appendDomainFilter, buildSearchPayloadPatch } from "./shared.js";
 
@@ -56,10 +56,19 @@ export const intelliSearchTool = {
         reasoning: payloadPatch ? (settings.searchWebSearch.reasoning ?? "low") : undefined,
       });
 
-      const sources = mergeCitations(extractSourceUrls(responseText), annotationSink);
+      // Extract URLs from the FULL text (the trailing Sources section the
+      // prompt requests is link-dense), then cap the list at defaultUrls:
+      // annotation harvesting can surface 20+ cited sources, and an
+      // unbounded list would flood the agent context. The summary handed
+      // downstream drops the model's own Sources section; the tool renders
+      // its own canonical block from this list.
+      const sources = mergeCitations(extractSourceUrls(responseText), annotationSink).slice(
+        0,
+        Math.max(1, settings.defaultUrls),
+      );
 
       const result: SearchResult = {
-        summary: responseText,
+        summary: stripTrailingSourcesSection(responseText),
         sources,
         query: params.query,
         timestamp: new Date().toISOString(),

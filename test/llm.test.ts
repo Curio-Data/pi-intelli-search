@@ -16,6 +16,7 @@ import type {
   SimpleStreamOptions,
 } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { AnnotationSink } from "../src/annotations.js";
 import { __harness, callLlm } from "../src/llm.js";
 
 function successfulResponse(text = "ok"): AssistantMessage {
@@ -187,6 +188,33 @@ describe("callLlm provider dispatch (pi-ai root API)", () => {
     await callLlm(contextFor({ ok: true, apiKey: "secret" }), CFG, "system", "user", { maxTokens: 10 });
     assert.strictEqual(plain?.onPayload, undefined);
     assert.strictEqual(plain?.reasoning, "low");
+  });
+
+  it("awaits the annotation side channel before returning text", async () => {
+    let releaseRead: (() => void) | undefined;
+    const sink: AnnotationSink = {
+      citations: [],
+      reads: [
+        new Promise<void>((resolve) => {
+          releaseRead = resolve;
+        }),
+      ],
+    };
+    __harness.streamSimple = (async () => successfulResponse()) as typeof __harness.streamSimple;
+
+    let finished = false;
+    const call = callLlm(contextFor({ ok: true, apiKey: "secret" }), CFG, "system", "user", {
+      maxTokens: 10,
+      annotations: sink,
+    }).then((text) => {
+      finished = true;
+      return text;
+    });
+    await new Promise((r) => setTimeout(r, 25));
+    assert.strictEqual(finished, false, "callLlm must not resolve while a read is in flight");
+    releaseRead!();
+    assert.strictEqual(await call, "ok");
+    assert.strictEqual(finished, true);
   });
 
   it("applies the auth-resolved baseUrl onto the request model, mirroring ModelRuntime.prepareRequest", async () => {

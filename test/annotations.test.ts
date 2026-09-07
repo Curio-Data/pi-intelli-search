@@ -7,10 +7,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  settleAnnotationSink,
   createAnnotationSink,
   mergeCitations,
   parseCitations,
   wrapFetchForAnnotations,
+  type AnnotationSink,
 } from "../src/annotations.js";
 
 const ANN = (url: string, title?: string) =>
@@ -156,5 +158,50 @@ describe("mergeCitations", () => {
     sink.citations.push({ url: "https://no-title.example/1" });
     const merged = mergeCitations([], sink);
     assert.deepStrictEqual(merged, [{ url: "https://no-title.example/1", title: "https://no-title.example/1" }]);
+  });
+});
+
+describe("settleAnnotationSink", () => {
+  it("resolves once all background reads complete, making citations visible", async () => {
+    const sink = createAnnotationSink();
+    let releaseRead: (() => void) | undefined;
+    const read = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    sink.reads = [read];
+    let settled = false;
+    const settlePromise = settleAnnotationSink(sink).then(() => {
+      settled = true;
+    });
+    await new Promise((r) => setTimeout(r, 25));
+    assert.strictEqual(settled, false, "must not settle while a read is in flight");
+    releaseRead!();
+    await settlePromise;
+    assert.strictEqual(settled, true);
+  });
+
+  it("returns immediately when there are no reads (plain sinks from callers)", async () => {
+    const sink: AnnotationSink = { citations: [] };
+    await settleAnnotationSink(sink, 5);
+  });
+
+  it("is bounded: a hanging read resolves via the timeout, not by hanging forever", async () => {
+    const sink = createAnnotationSink();
+    sink.reads = [new Promise<void>(() => {})];
+    const t0 = Date.now();
+    await settleAnnotationSink(sink, 50);
+    assert.ok(Date.now() - t0 < 2_000, "timeout must bound the wait");
+  });
+});
+
+describe("wrapFetchForAnnotations read tracking", () => {
+  it("records the background read on the sink so callers can settle it", async () => {
+    const sink = createAnnotationSink();
+    const response = new Response(sseChunk([ANN("https://tracked.example/1")]), { status: 200 });
+    const wrapped = wrapFetchForAnnotations((async () => response) as typeof fetch, sink);
+    await wrapped("https://api.example/v1/chat/completions");
+    assert.ok(sink.reads && sink.reads.length === 1, "read promise recorded");
+    await settleAnnotationSink(sink);
+    assert.deepStrictEqual(sink.citations, [{ url: "https://tracked.example/1" }]);
   });
 });

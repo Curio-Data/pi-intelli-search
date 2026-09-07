@@ -15,6 +15,7 @@ import {
   callWithAbortTimeout,
   withMuzzledConsole,
   type RetryDecision,
+  stripTrailingSourcesSection,
 } from "../src/util.js";
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 5));
@@ -742,5 +743,38 @@ describe("withMuzzledConsole", () => {
       /post-log/,
     );
     assert.strictEqual(console.error, real);
+  });
+});
+
+describe("stripTrailingSourcesSection", () => {
+  it("strips a markdown-heading sources section at the end", () => {
+    const text = "Answer prose.\n\n## Sources\n- [A](https://a.example/1)\n- [B](https://b.example/2)\n";
+    assert.strictEqual(stripTrailingSourcesSection(text), "Answer prose.\n");
+  });
+
+  it("strips bold and colon heading forms", () => {
+    assert.strictEqual(
+      stripTrailingSourcesSection("Prose.\n\n**Sources**\n[1] https://a.example/1\n"),
+      "Prose.\n",
+    );
+    assert.strictEqual(
+      stripTrailingSourcesSection("Prose.\n\nSources:\nhttps://a.example/1\n"),
+      "Prose.\n",
+    );
+  });
+
+  it("leaves text without a trailing sources section unchanged", () => {
+    const text = "Answer with an inline [link](https://a.example/1) and more prose.";
+    assert.strictEqual(stripTrailingSourcesSection(text), text);
+  });
+
+  it("does not touch a sources heading whose body has no URLs", () => {
+    const text = "Prose.\n\nSources\nnone available\n";
+    assert.strictEqual(stripTrailingSourcesSection(text), text);
+  });
+
+  it("does not strip when Sources appears mid-text but not as a trailing section", () => {
+    const text = "Sources say X.\n\nMore prose about https://a.example/1 follows here.\n";
+    assert.strictEqual(stripTrailingSourcesSection(text), text);
   });
 });

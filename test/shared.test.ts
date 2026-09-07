@@ -86,7 +86,7 @@ describe("buildCollationMessage", () => {
     );
     assert.ok(msg.startsWith("Original query: the query\n"));
     assert.ok(msg.includes("Cache path: .search/2026-01-01-slug-hash/\n\n"));
-    assert.ok(msg.includes("Search summary (from Sonar):\nSEARCH SUMMARY\n\n"));
+    assert.ok(msg.includes("Search summary (from the search model):\nSEARCH SUMMARY\n\n"));
     assert.ok(msg.includes("--- Source 1: https://example.com/a ---\n"));
     assert.ok(msg.includes("Title: Page A\n"));
     assert.ok(msg.includes("Type: official docs\n"));

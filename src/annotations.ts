@@ -33,6 +33,32 @@ export interface HarvestedCitation {
 /** Out-param filled by the fetch wrapper while the SDK reads the real body. */
 export interface AnnotationSink {
   citations: HarvestedCitation[];
+  /** In-flight background body reads started by the fetch wrapper. */
+  reads?: Promise<void>[];
+}
+
+/**
+ * Wait (bounded) for all in-flight annotation body reads to finish.
+ *
+ * The wrapper's clone reads run in the background and normally complete
+ * within microseconds of the SDK finishing its own read of the same teed
+ * stream, but nothing guarantees ordering: without this barrier a caller
+ * merging the sink immediately after the stream resolves can race the last
+ * chunk. Bounded so a stalled clone read never delays the pipeline: after
+ * `timeoutMs` the sink is read as-is and whatever arrived is merged.
+ */
+export async function settleAnnotationSink(sink: AnnotationSink, timeoutMs = 2_000): Promise<void> {
+  const reads = sink.reads;
+  if (!reads || reads.length === 0) return;
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  try {
+    await Promise.race([Promise.allSettled(reads).then(() => undefined), timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 export function createAnnotationSink(): AnnotationSink {
@@ -143,7 +169,7 @@ export function wrapFetchForAnnotations(baseFetch: FetchFunction, sink: Annotati
         // called before the SDK touches response.body — it is, synchronously
         // here, before the response is returned.
         const tee = response.clone();
-        void tee
+        const read = tee
           .text()
           .then((bodyText) => {
             for (const citation of parseCitations(bodyText)) pushCitation(sink, citation);
@@ -151,6 +177,7 @@ export function wrapFetchForAnnotations(baseFetch: FetchFunction, sink: Annotati
           .catch(() => {
             /* aborted or failed stream: the main path owns the error */
           });
+        sink.reads = [...(sink.reads ?? []), read];
       }
     } catch {
       /* clone() failed (never consumed body, but be safe): side channel only */

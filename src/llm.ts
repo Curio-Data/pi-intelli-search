@@ -12,14 +12,8 @@ import {
 } from "@earendil-works/pi-ai";
 import type { ModelConfig } from "./types.js";
 import type { AnnotationSink } from "./annotations.js";
-import { wrapFetchForAnnotations } from "./annotations.js";
-import {
-  withRetry,
-  isRetryableMessage,
-  parseRetryAfterMs,
-  callWithAbortTimeout,
-  errMsg,
-} from "./util.js";
+import { settleAnnotationSink, wrapFetchForAnnotations } from "./annotations.js";
+import { withRetry, isRetryableMessage, parseRetryAfterMs, callWithAbortTimeout, errMsg } from "./util.js";
 
 /**
  * Narrow injectable seam for deterministic callLlm tests.
@@ -287,6 +281,11 @@ export async function callLlm(
   }
 
   // 6. Extract text (skip thinking blocks)
+  // Before returning, give the annotation side channel a bounded moment to
+  // finish its background body reads: the teed clone normally completes with
+  // the SDK's own read, but callers merge the sink immediately after this
+  // returns and would otherwise race the final chunks.
+  if (options?.annotations) await settleAnnotationSink(options.annotations);
   return response.content
     .filter((c): c is { type: "text"; text: string } => c.type === "text")
     .map((c) => c.text)
