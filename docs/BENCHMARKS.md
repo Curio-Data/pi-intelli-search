@@ -90,6 +90,29 @@ Late-series findings:
 3. **The head of the ranking stays invariant; the number one slot moves only on the small corpus.** shadcn-svelte ranked first in 5B, 3A and 6B (the converged corpus) and second in 4A, whose 55.2K input matched the prior evening's 4B fetch exactly. 4A alone promoted daisyUI (framework-agnostic, 40,000+ stars) to first. Skeleton UI held the top three in all four runs.
 4. **The recorded decision holds.** Two more runs per model reproduce every property that motivated the v0.14.0 default switch to m3 (methodology-first collation, transparent low-evidence handling, approximately 1M context) and its accepted cost (1.5 to 1.7 times gemini's extract tokens and correspondingly longer runs).
 
+### New-Model Series
+
+2026-09-07 late night, extension build 0.14.0, loop model `kimi-coding/k3`. Interleaved order: m3 anchor, qwen, glm-flash, deepseek, qwen, glm-flash, deepseek. None of the requested `:nitro` routing variants are published on OpenRouter (verified against the models endpoint); the base ids were benchmarked.
+
+| Run | Extract/Collate Model | Duration | Fetch Ok/Fail | Extract In | Extract Out | Per Page | Collate Out |
+|-----|-----------------------|----------|---------------|------------|-------------|----------|-------------|
+| 7B | minimax-m3 (anchor) | 195.5s | 6/2 | 80.8K | 26.8K | 4.5K | 12.6K |
+| 1Q | qwen3.6-35b-a3b | 83.6s | 7/1 | 86.5K | 22.9K | 3.3K | 5.8K |
+| 1G | glm-5.3-flash | 78.1s | 7/1 | 55.2K | 19.3K | 2.8K | 7.4K |
+| 1D | deepseek-v4-flash | 284.3s | 6/2 | 42.5K | 18.6K | 3.1K | 5.6K |
+| 2Q | qwen3.6-35b-a3b | 89.6s | 7/1 | 131.3K | 18.8K | 2.7K | 0.9K |
+| 2G | glm-5.3-flash | 103.8s | 7/1 | 55.2K | 18.3K | 2.6K | 5.8K |
+| 2D | deepseek-v4-flash | 147.1s | 6/2 | 84.4K | 21.5K | 3.6K | 5.8K |
+
+New-model findings:
+
+1. **Per-page verbosity lands in gemini's band for all three** (2.6K to 3.6K), well under m3's 4.5K to 5.7K. Pricing is also far below m3's $0.30/M input and $1.20/M output: glm-5.3-flash $0.10/M input and $0.25/M output, deepseek-v4-flash approximately $0.09/M and $0.18/M, qwen3.6-35b-a3b $0.10/M and $0.90/M.
+2. **Collation consistency splits the field.** glm-5.3-flash is tight (7.4K and 5.8K); deepseek-v4-flash is steady but thin (5.6K and 5.8K); qwen3.6-35b-a3b is bimodal: 5.8K in run 1Q, then 0.9K in 2Q with the fifth entry truncated mid-sentence (the Melt UI entry ends at its heading). Unreliable summary length is a disqualifying property for a default collate model.
+3. **Epistemics.** glm-5.3-flash stated its evidence base and cited the cache path (the m3 signature, and the only new model to do so); qwen stated its popularity criteria both runs; deepseek produced a sources-cited ranking table but no stated methodology.
+4. **Latency.** qwen (83.6s to 89.6s) and glm-5.3-flash (78.1s to 103.8s) are the fastest sittings recorded; deepseek-v4-flash is the slowest model measured (147.1s to 284.3s). The m3 anchor itself ran 195.5s, approximately three times its late-series durations, so within-sitting comparisons only; provider routing variance dominates absolute latency.
+5. **Queued, not run** (deferred by request): `openai/gpt-oss-120b` and `openai/gpt-5.6-luna-pro` (no `:nitro` variants published; queued as base ids).
+6. **No default change recommended.** glm-5.3-flash is the strongest budget candidate (m3-style epistemics at roughly one quarter the per-token price with a 1.3M context), but m3 keeps the depth advantage and the recorded default.
+
 ### Findings
 
 1. **The head of the ranking is invariant.** shadcn-svelte at #1 and Skeleton UI at #2 in all five runs, across three models and five corpora. Flowbite Svelte held top-5 in all five runs.
