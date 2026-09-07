@@ -18,6 +18,14 @@ describe("SEARCH_SYSTEM_PROMPT", () => {
     assert.ok(SEARCH_SYSTEM_PROMPT.includes("[title](url)"), "should specify markdown link format");
     assert.ok(SEARCH_SYSTEM_PROMPT.includes("source"), "should mention sources");
   });
+
+  it("requires a trailing Sources section so links land in the text", () => {
+    // Models using OpenRouter's web search server tool can cite mostly via
+    // annotations; the Sources section forces text links the pipeline can
+    // parse without the annotation side channel (probe-validated 2026-09).
+    assert.ok(/sources? section/i.test(SEARCH_SYSTEM_PROMPT));
+    assert.ok(SEARCH_SYSTEM_PROMPT.includes("6 or more"));
+  });
 });
 
 describe("EXTRACTION_SYSTEM_PROMPT", () => {
@@ -66,9 +74,11 @@ describe("COLLATION_SYSTEM_PROMPT", () => {
 // If prompts are intentionally modified, update these values.
 describe("prompt snapshots (length)", () => {
   it("SEARCH_SYSTEM_PROMPT length is stable", () => {
+    // Range widened 2026-09: the Sources-section requirement (web search
+    // server tool support) pushed the prompt past the original 300 cap.
     assert.ok(
-      SEARCH_SYSTEM_PROMPT.length > 100 && SEARCH_SYSTEM_PROMPT.length < 300,
-      `Search prompt length ${SEARCH_SYSTEM_PROMPT.length} outside expected range 100-300`,
+      SEARCH_SYSTEM_PROMPT.length > 100 && SEARCH_SYSTEM_PROMPT.length < 400,
+      `Search prompt length ${SEARCH_SYSTEM_PROMPT.length} outside expected range 100-400`,
     );
   });
 

@@ -12,6 +12,7 @@ import {
   CACHE_SUGGEST_PROMPT,
 } from "../prompts.js";
 import { callLlm } from "../llm.js";
+import { createAnnotationSink, mergeCitations } from "../annotations.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
 import {
   makeCachePath,
@@ -29,6 +30,7 @@ import {
 import {
   textContent,
   extractSourceUrls,
+  stripTrailingSourcesSection,
   inferSourceType,
   inferCurrentness,
   mapWithConcurrency,
@@ -55,6 +57,7 @@ import type {
 } from "../types.js";
 import {
   appendDomainFilter,
+  buildSearchPayloadPatch,
   buildExtractionMessage,
   buildCollationMessage,
   formatCacheAppendix,
@@ -106,7 +109,7 @@ export const intelliResearchTool = {
   executionMode: "sequential" as const,
   promptGuidelines: [
     "Use intelli_research when the user needs current web information (docs, APIs, best practices, library updates). For quick factual questions, use intelli_search alone.",
-    "Use maxUrls to control breadth: 3 for targeted, 8 (default) for broad, 12 for exhaustive. The setting caps requests at maxUrls (default 16).",
+    "Use maxUrls to control breadth: 3 for targeted, 10 (default) for broad, 16 for exhaustive. The setting caps requests at maxUrls (default 20).",
     "Always provide focusPrompt to guide extraction. Without it the LLM extracts generically. Translate the user's intent into a specific extraction focus.",
     "The tool result contains a concise summary — use it directly. Only read .search/ cache files when the summary is insufficient.",
     "Use domains to target specific sites (e.g., ['docs.python.org']) when the user references a specific documentation source.",
@@ -384,6 +387,14 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
   let urls: Array<{ url: string; title: string }> = [];
   const maxAttempts = Math.max(1, p.settings.searchRetryAttempts);
   let attemptsUsed = 0;
+  // Side channel for url_citation annotations: search-grounded models cite
+  // many more sources than the prose links they write, and the transport
+  // drops them (see annotations.ts). Merged into urls after each attempt.
+  const annotationSink = createAnnotationSink();
+  // Optional OpenRouter web search server tool (settings: searchWebSearch).
+  // Attaches search grounding to any OpenRouter chat model.
+  const payloadPatch = buildSearchPayloadPatch(p.settings, p.searchConfig.provider, p.params.domains);
+  const searchReasoning = payloadPatch ? (p.settings.searchWebSearch.reasoning ?? "low") : undefined;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     attemptsUsed = attempt;
     searchResult = await __harness.callLlm(
@@ -396,9 +407,12 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
         signal: p.signal,
         retry: p.retry,
         timeoutMs: p.settings.llmTimeoutMs,
+        annotations: annotationSink,
+        payloadPatch,
+        reasoning: searchReasoning,
       },
     );
-    urls = extractSourceUrls(searchResult).slice(0, p.maxUrls);
+    urls = mergeCitations(extractSourceUrls(searchResult), annotationSink).slice(0, p.maxUrls);
     if (urls.length > 0 || p.signal?.aborted || attempt === maxAttempts) break;
     p.onUpdate?.(
       progressUpdate(
@@ -415,12 +429,20 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
     throw new DOMException("Aborted", "AbortError");
   }
 
+  // Drop the model's trailing Sources section before the text flows
+  // downstream: URLs are extracted above from the FULL text (the section is
+  // link-dense), and collation/error summaries get the canonical source
+  // list from the extractions and cache appendix instead of a duplicate,
+  // differently-ordered rendered list.
+  searchResult = stripTrailingSourcesSection(searchResult);
+
   p.tel?.recordSearch({
     model: `${p.searchConfig.provider}/${p.searchConfig.model}`,
     linksReturned: urls.length,
     retryFired: attemptsUsed > 1,
     attempts: attemptsUsed,
     degraded: urls.length === 0,
+    annotationsHarvested: annotationSink.citations.length,
   });
 
   return { searchResult, urls, attemptsUsed, maxAttempts };

@@ -48,6 +48,7 @@ export interface TelemetryMeta {
       retryFired: boolean; // true if more than one search iteration ran
       attempts: number; // iterations actually executed
       degraded: boolean; // true when the search returned text but zero extractable URLs
+      annotationsHarvested?: number; // url_citation annotations collected via the fetch side channel
     };
     fetch: {
       requested: number;
@@ -136,6 +137,7 @@ export class TelemetryBuilder {
     retryFired: boolean;
     attempts: number;
     degraded?: boolean;
+    annotationsHarvested?: number;
   }): void {
     this.meta.stages.search = { degraded: false, ...input };
   }

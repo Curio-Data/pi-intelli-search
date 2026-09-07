@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-09-07
+
+### Added
+
+- **Citation annotation harvesting.** Search-grounded models return a machine-readable `url_citation` list naming every source they consulted, a larger set than the links they write into the prose (probe: 20 annotations against 3 prose links from Sonar). `intelli_research` and `intelli_search` merge those citations with the prose links before the URL limit, so the fetch stage sees sources the model consulted but did not link. The harvest reads a tee of the HTTP response body, is awaited (bounded at 2 seconds) so it cannot race the caller, and never blocks or fails the pipeline. No configuration required.
+- **`searchWebSearch` setting (default: off).** Attaches OpenRouter's `openrouter:web_search` server tool to the search-stage call, giving any OpenRouter chat model access to live search without a search-native model. Requires `searchModel.provider` to be `openrouter`. Probe-validated pairing: `openai/gpt-5-nano` with `engine: "exa"` and `reasoning: "minimal"` at ≈$0.008 per search. See the README `searchWebSearch` reference for keys and engine restrictions.
+- **`perplexity/sonar-pro-search` registered as a selectable search model.** OpenRouter-exclusive agentic model, usable as `searchModel` today via a settings-only change. Bills $18 per 1,000 requests on top of $3/$15 per 1M tokens (≈$0.05 per search).
+- Telemetry records `stages.search.annotationsHarvested` (additive, optional field).
+
+### Changed
+
+- **Search prompt requires a trailing Sources section** and asks for six or more sources, raising the number of parseable links from models that answer in prose.
+- **`defaultUrls` raised from 8 to 10 and `maxUrls` from 16 to 20.** Annotation harvesting fills the URL list with every cited source, so the defaults now acknowledge the wider source pool. Users who pinned either value keep theirs.
+- **`intelli_search` caps its rendered source list at the top `defaultUrls` entries** (10 by default) instead of printing every cited source into the agent context.
+- **The search model's own rendered Sources section no longer flows downstream.** The pipeline extracts URLs itself and renders its own canonical source list; the duplicated upstream section is stripped from the `intelli_search` summary and the collation input.
+- **Sessions fetch closer to the URL cap than before**, so typical per-session cost moves from ≈$0.05 toward ≈$0.06 (10 pages). Fewer degraded zero-link runs. Lower `defaultUrls` to hold earlier spend.
+
+### Compatibility
+
+- Model defaults are unchanged: `searchModel` remains `openrouter/perplexity-sonar`, `searchWebSearch` remains off, and no settings migration is required. Annotation harvesting is automatic on every search call.
+- Perplexity retires its Sonar Chat Completions API on 2026-09-27. Whether the `openrouter/perplexity/sonar` route survives that date is up to OpenRouter, which has published no statement; both supported alternatives (web search tool, `sonar-pro-search`) are settings-only changes documented in the README.
+
 ## [0.12.6] - 2026-09-01
 
 ### Changed
@@ -328,6 +350,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.13.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.13.0
 [0.12.6]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.6
 [0.12.5]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.5
 [0.12.4]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.4

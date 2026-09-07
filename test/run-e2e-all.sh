@@ -53,6 +53,9 @@ SCRIPTS=(
   e2e/05_collation_limits.sh
   e2e/06_extract_limits.sh
   e2e/07_llms_full.sh
+  e2e/08_websearch_tool.sh
+  e2e/09_sonar_pro_search.sh
+  e2e/10_config_recipes.sh
 )
 
 echo "🧪 Sequential E2E run — ${#SCRIPTS[@]} scripts, ${GAP}s gap, ${SCRIPT_TIMEOUT}s timeout per script"

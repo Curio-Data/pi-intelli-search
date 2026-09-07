@@ -50,7 +50,7 @@ How each extension discovers which URLs to fetch.
 
 | Extension | Search Backend | Multiple Sources | API Keys Required |
 | --- | --- | :---: | :---: |
-| **intelli-search** | Perplexity Sonar via OpenRouter | Single high-quality source | 1 (OpenRouter) |
+| **intelli-search** | Perplexity Sonar via OpenRouter (default; any OpenRouter model via the `searchWebSearch` server tool) | Every cited source via annotation harvesting | 1 (OpenRouter) |
 | **pi-web-providers** | 15+ providers (Exa, Perplexity, Gemini, Brave, Firecrawl, Linkup, etc.) | Configurable per-tool | 1 per provider used |
 | **pi-web-access** | Exa → Perplexity → Gemini → Gemini Web (sequential fallback) | Tried in order | 1 per provider used |
 | **ollama-web-search** | Ollama native web search | Single source | Ollama API key |
@@ -62,7 +62,7 @@ How each extension discovers which URLs to fetch.
 
 `intelli-search` uses a single [_OpenRouter_](https://openrouter.ai) API key to access [_Perplexity Sonar_](https://docs.perplexity.ai) for search _and_ any model for extraction and collation. `pi-web-providers` and `pi-web-access` give more search backends, but each requires its own API key, account, and setup. `rpiv-web-tools` and `pi-amplike` also require separate provider accounts.
 
-Perplexity Sonar is the default search model. OpenRouter also exposes a `web_search` server tool that equips any model with URL-cited search results (using Exa, Parallel, Firecrawl, or native provider engines). If a future model surpasses Sonar for grounded search, the architecture swaps it via `searchModel` in the `pi-intelli-search` settings namespace without changing the rest of the pipeline.
+Perplexity Sonar is the default search model, and since v0.13.0 the `searchWebSearch` setting attaches OpenRouter's `openrouter:web_search` server tool to the search stage, equipping any OpenRouter chat model with URL-cited results through Exa, Parallel, Firecrawl, Perplexity, or the base model's native engine. The search stage is therefore not tied to any one model's continued availability: swapping it is a settings change that leaves the rest of the pipeline untouched. Search stages also merge every source the model cited (machine-readable `url_citation` annotations), not only the links written into the prose. Note (2026-09): Perplexity retires its Sonar Chat Completions API on 2026-09-27; see the README advisory for the supported alternative configurations.
 
 ## Fetch
 
@@ -146,22 +146,22 @@ What happens to results after the session ends.
 
 ## Cost
 
-Approximate cost per research session with 8 pages. Token rates sourced from provider pricing pages as of May 2026.
+Approximate cost per research session with 10 pages. Token rates sourced from provider pricing pages as of September 2026.
 
 **`intelli-search` token rates used:**
 
-| Stage | Model | Input (per 1M tokens) | Output (per 1M tokens) |
-| --- | --- | --- | --- |
-| Search | Perplexity Sonar | $2.00 | $8.00 |
-| Extract | MiniMax M2.7 (via OpenRouter) | $0.279 | $1.20 |
-| Collate | MiniMax M2.7 (via OpenRouter) | $0.279 | $1.20 |
-| Cache suggest | MiniMax M2.7 (via OpenRouter) | $0.279 | $1.20 |
+| Stage | Model | Input (per 1M tokens) | Output (per 1M tokens) | Search fee |
+| --- | --- | --- | --- | --- |
+| Search | Perplexity Sonar | $1.00 | $1.00 | $5.00 per 1K calls |
+| Extract | MiniMax M2.7 (via OpenRouter) | $0.279 | $1.20 | |
+| Collate | MiniMax M2.7 (via OpenRouter) | $0.279 | $1.20 | |
+| Cache suggest | MiniMax M2.7 (via OpenRouter) | $0.279 | $1.20 | |
 
 **Per-session breakdown:**
 
 | Extension | Search | Fetch | Extract + Collate | Cache Suggest | **Total** |
 | --- | --- | --- | --- | --- | --- |
-| **intelli-search** | ≈$0.02 (Sonar) | FREE | ≈$0.035 (M2.7 × 9 calls) | ≈$0.0002 | **≈$0.05** |
+| **intelli-search** | ≈$0.007 (Sonar) | FREE | ≈$0.045 (M2.7 × 11 calls) | ≈$0.0002 | **≈$0.06** |
 | **pi-web-providers** | Provider-dependent | Provider-dependent | Free (no LLM) | Free | **Varies** |
 | **pi-web-access** | Free (fallback chain) | Free (Readability/Jina) | Free (no LLM extraction) | Free | **FREE** |
 | **pi-smart-fetch** | N/A | Free | Free (no LLM) | Free | **FREE** |
@@ -171,6 +171,6 @@ Approximate cost per research session with 8 pages. Token rates sourced from pro
 
 ### Cost: Key Difference
 
-`intelli-search` has a cost because it does more work: LLM extraction, LLM collation, and LLM cache suggest. The ≈$0.05 per session is intentional. It buys targeted, deduplicated, cached results. Extensions without LLM processing are free but deliver raw content to the agent, which then spends its own reasoning tokens (and context) sorting through it. The persistent cache reduces costs over time through reuse.
+`intelli-search` has a cost because it does more work: LLM extraction, LLM collation, and LLM cache suggest. The ≈$0.06 per session is intentional. It buys targeted, deduplicated, cached results. Extensions without LLM processing are free but deliver raw content to the agent, which then spends its own reasoning tokens (and context) sorting through it. The persistent cache reduces costs over time through reuse.
 
 Costs scale with the chosen models. The figures above use the defaults (Sonar for search, MiniMax M2.7 via OpenRouter for extraction and collation). Swapping to cheaper or more expensive models changes the per-session cost proportionally.

@@ -7,9 +7,10 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { SearchResult, OnUpdate } from "../types.js";
 import { SEARCH_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
-import { textContent, extractSourceUrls } from "../util.js";
+import { createAnnotationSink, mergeCitations } from "../annotations.js";
+import { textContent, extractSourceUrls, stripTrailingSourcesSection } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
-import { appendDomainFilter } from "./shared.js";
+import { appendDomainFilter, buildSearchPayloadPatch } from "./shared.js";
 
 export const intelliSearchTool = {
   name: "intelli_search",
@@ -39,16 +40,35 @@ export const intelliSearchTool = {
 
     const searchQuery = appendDomainFilter(params.query, params.domains);
 
+    // Side channel for url_citation annotations (see annotations.ts): merged
+    // with text-scraped links so search-grounded models contribute every source
+    // they actually consulted, not just the ones written into the prose.
+    const annotationSink = createAnnotationSink();
+    // Optional OpenRouter web search server tool (settings: searchWebSearch).
+    const payloadPatch = buildSearchPayloadPatch(settings, searchConfig.provider, params.domains);
+
     try {
       const responseText = await callLlm(ctx, searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {
         maxTokens: 2000,
         signal,
+        annotations: annotationSink,
+        payloadPatch,
+        reasoning: payloadPatch ? (settings.searchWebSearch.reasoning ?? "low") : undefined,
       });
 
-      const sources = extractSourceUrls(responseText);
+      // Extract URLs from the FULL text (the trailing Sources section the
+      // prompt requests is link-dense), then cap the list at defaultUrls:
+      // annotation harvesting can surface 20+ cited sources, and an
+      // unbounded list would flood the agent context. The summary handed
+      // downstream drops the model's own Sources section; the tool renders
+      // its own canonical block from this list.
+      const sources = mergeCitations(extractSourceUrls(responseText), annotationSink).slice(
+        0,
+        Math.max(1, settings.defaultUrls),
+      );
 
       const result: SearchResult = {
-        summary: responseText,
+        summary: stripTrailingSourcesSection(responseText),
         sources,
         query: params.query,
         timestamp: new Date().toISOString(),

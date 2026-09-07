@@ -16,8 +16,8 @@ const baseSettings: ResearchSettings = {
   searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
   collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
-  defaultUrls: 8,
-  maxUrls: 16,
+  defaultUrls: 10,
+  maxUrls: 20,
   cacheDir: ".search",
   extractMaxChars: 150_000,
   fetchTimeoutMs: 20_000,
@@ -72,8 +72,8 @@ describe("loadSettings defaults", () => {
     invalidateSettingsCache();
     const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
 
-    assert.strictEqual(settings.defaultUrls, 8);
-    assert.strictEqual(settings.maxUrls, 16);
+    assert.strictEqual(settings.defaultUrls, 10);
+    assert.strictEqual(settings.maxUrls, 20);
     assert.strictEqual(settings.cacheDir, ".search");
     assert.strictEqual(settings.extractMaxChars, 150_000);
     assert.strictEqual(settings.fetchTimeoutMs, 20_000);
@@ -165,7 +165,7 @@ describe("loadSettings nested namespace", () => {
       assert.strictEqual(settings.maxUrls, 12, "nested maxUrls (cap) should win over flat key");
       assert.strictEqual(
         settings.defaultUrls,
-        8,
+        10,
         "defaultUrls should remain at default when not overridden",
       );
     } finally {
@@ -317,7 +317,7 @@ describe("loadSettings nested namespace", () => {
       invalidateSettingsCache();
       const settings = await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
       assert.strictEqual(settings.maxUrls, 6, "old maxUrls → cap");
-      assert.strictEqual(settings.defaultUrls, 8, "defaultUrls stays at new default");
+      assert.strictEqual(settings.defaultUrls, 10, "defaultUrls stays at new default");
     } finally {
       if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
       else delete process.env.PI_CODING_AGENT_DIR;
@@ -627,6 +627,10 @@ describe("parametric settings round-trip (all keys)", () => {
     ["searchModel", { provider: "testprovider", model: "tm-search" }],
     ["extractModel", { provider: "testprovider", model: "tm-extract" }],
     ["collateModel", { provider: "testprovider", model: "tm-collate" }],
+    [
+      "searchWebSearch",
+      { enabled: true, engine: "exa", maxResults: 5, reasoning: "minimal" },
+    ],
     ["defaultUrls", 3],
     ["maxUrls", 11],
     ["cacheDir", ".test-cache"],

@@ -7,6 +7,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildSearchPayloadPatch,
   appendDomainFilter,
   buildExtractionMessage,
   buildCollationMessage,
@@ -85,7 +86,7 @@ describe("buildCollationMessage", () => {
     );
     assert.ok(msg.startsWith("Original query: the query\n"));
     assert.ok(msg.includes("Cache path: .search/2026-01-01-slug-hash/\n\n"));
-    assert.ok(msg.includes("Search summary (from Sonar):\nSEARCH SUMMARY\n\n"));
+    assert.ok(msg.includes("Search summary (from the search model):\nSEARCH SUMMARY\n\n"));
     assert.ok(msg.includes("--- Source 1: https://example.com/a ---\n"));
     assert.ok(msg.includes("Title: Page A\n"));
     assert.ok(msg.includes("Type: official docs\n"));
@@ -119,5 +120,62 @@ describe("formatCacheAppendix", () => {
     assert.ok(out.includes("**Sources**: 3 succeeded, 2 failed\n"));
     assert.ok(out.includes("- Read the extraction: `read .search/slug/extractions/01-*.md`\n"));
     assert.ok(out.includes("- Read the full page: `read .search/slug/sources/01-*.md`\n"));
+  });
+});
+
+describe("buildSearchPayloadPatch", () => {
+  const baseSettings = {
+    searchWebSearch: { enabled: true, engine: "exa", maxResults: 8, reasoning: "minimal" },
+  } as unknown as Parameters<typeof buildSearchPayloadPatch>[0];
+
+  it("returns undefined when the feature is disabled", () => {
+    const settings = { searchWebSearch: { enabled: false } } as unknown as Parameters<
+      typeof buildSearchPayloadPatch
+    >[0];
+    assert.strictEqual(buildSearchPayloadPatch(settings, "openrouter"), undefined);
+  });
+
+  it("returns undefined for non-OpenRouter providers (tool id is OpenRouter-specific)", () => {
+    assert.strictEqual(buildSearchPayloadPatch(baseSettings, "minimax"), undefined);
+  });
+
+  it("attaches the openrouter:web_search server tool with mapped parameters", () => {
+    const patch = buildSearchPayloadPatch(baseSettings, "openrouter");
+    assert.ok(patch);
+    const patched = patch({});
+    const tools = patched.tools as Array<{ type: string; parameters: Record<string, unknown> }>;
+    assert.strictEqual(tools.length, 1);
+    assert.strictEqual(tools[0].type, "openrouter:web_search");
+    assert.strictEqual(tools[0].parameters.engine, "exa");
+    assert.strictEqual(tools[0].parameters.max_results, 8);
+  });
+
+  it("merges per-call domains with settings allowedDomains, deduped", () => {
+    const settings = {
+      searchWebSearch: { enabled: true, allowedDomains: ["docs.a.example"], excludedDomains: ["x.example"] },
+    } as unknown as Parameters<typeof buildSearchPayloadPatch>[0];
+    const patch = buildSearchPayloadPatch(settings, "openrouter", ["docs.b.example", "docs.a.example"]);
+    const patched = patch({}) as { tools: Array<{ parameters: Record<string, unknown> }> };
+    assert.deepStrictEqual(patched.tools[0].parameters.allowed_domains, [
+      "docs.a.example",
+      "docs.b.example",
+    ]);
+    assert.deepStrictEqual(patched.tools[0].parameters.excluded_domains, ["x.example"]);
+  });
+
+  it("drops unknown engines and clamps out-of-range maxResults instead of sending them", () => {
+    const settings = {
+      searchWebSearch: { enabled: true, engine: "bogus", maxResults: 999 },
+    } as unknown as Parameters<typeof buildSearchPayloadPatch>[0];
+    const patch = buildSearchPayloadPatch(settings, "openrouter");
+    const patched = patch({}) as { tools: Array<{ parameters: Record<string, unknown> }> };
+    assert.strictEqual(patched.tools[0].parameters.engine, undefined);
+    assert.strictEqual(patched.tools[0].parameters.max_results, 25);
+  });
+
+  it("never clobbers an existing tools array on the payload", () => {
+    const patch = buildSearchPayloadPatch(baseSettings, "openrouter");
+    const existing = { tools: [{ type: "function", function: { name: "x" } }] };
+    assert.strictEqual(patch(existing), existing);
   });
 });

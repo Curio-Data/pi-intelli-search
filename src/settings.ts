@@ -12,10 +12,19 @@ export interface SettingsContext {
 
 const DEFAULT_SETTINGS: ResearchSettings = {
   searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  // OpenRouter web search server tool: off by default. When enabled, the
+  // search stage attaches openrouter:web_search to the searchModel call so
+  // any OpenRouter chat model becomes search-grounded (see shared.ts
+  // buildSearchPayloadPatch). "minimal" reasoning avoids reasoning-budget
+  // burn observed with GPT-5 family models when left unconstrained.
+  searchWebSearch: { enabled: false, engine: "auto", maxResults: 8, reasoning: "minimal" },
   extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
   collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
-  defaultUrls: 8,
-  maxUrls: 16,
+  defaultUrls: 10,
+  // 0.13.0 raised both defaults (8/16 to 10/20): annotation harvesting
+  // fills the URL list with every cited source, so the old defaults
+  // under-delivered pages the pipeline can now use.
+  maxUrls: 20,
   cacheDir: ".search",
   extractMaxChars: 150_000,
   fetchTimeoutMs: 20_000,
@@ -84,6 +93,10 @@ const DEFAULT_HISTORY: Record<
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
     // maxUrls is now a hard cap (was a default pre-0.8.0).
     // defaultUrls is the new agent fallback.
+    //
+    // 0.13.0 raised both live defaults (8/16 to 10/20): annotation
+    // harvesting fills the URL list with every cited source, so the old
+    // defaults under-delivered pages the pipeline can now use.
   },
   "0.10.0": {
     // Defaults unchanged from 0.8.0. No model changes.
@@ -141,6 +154,16 @@ const DEFAULT_HISTORY: Record<
     // Defaults unchanged from 0.12.5. Maintenance release (Pi 0.84.4
     // re-verification); no model changes. Retained so migrations from
     // older releases compare against an explicit current-version entry.
+    extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+    collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  },
+  "0.13.0": {
+    // Model defaults unchanged from 0.12.6 (searchModel stays on sonar;
+    // the post-sunset alternatives are opt-in). Non-model defaults did
+    // change this release (defaultUrls 8 -> 10, maxUrls 16 -> 20) but are
+    // not part of match-based model migration: unpinned users pick up the
+    // new values automatically, pinned users keep theirs.
     extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
     collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
@@ -244,11 +267,11 @@ export function migrateDefaults(
   // default-fallback to a hard cap. Only fire for users who actually
   // set a maxUrls value (custom or old default); users on the new
   // default (16) don't need the warning.
-  if (isUpgradeAcross(previousVersion, currentVersion, "0.8.0") && userSettings.maxUrls !== 16) {
+  if (isUpgradeAcross(previousVersion, currentVersion, "0.8.0") && userSettings.maxUrls !== DEFAULT_SETTINGS.maxUrls) {
     changes.push(
       `maxUrls is now a hard cap (was the default before 0.8.0). ` +
         `Your current maxUrls=${userSettings.maxUrls} will clamp all ` +
-        `intelli_research calls. The new agent fallback is defaultUrls (default: 8).`,
+        `intelli_research calls. The new agent fallback is defaultUrls (see the Settings Reference).`,
     );
   }
 
@@ -280,6 +303,7 @@ const NESTED_KEYS = [
   "searchModel",
   "extractModel",
   "collateModel",
+  "searchWebSearch",
   "defaultUrls",
   "maxUrls",
   "cacheDir",

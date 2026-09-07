@@ -13,6 +13,7 @@ Each runtime dependency provides one specific capability. The table below shows 
 | DOM in Node.js (required by Defuddle) | [`linkedom`](https://github.com/WebReflection/linkedom) | Easy. `jsdom` is a heavier alternative; switching is a one-line change in `src/fetch.ts`. |
 | LLM dispatch and `Pi`-native auth | [`@earendil-works/pi-ai`](https://github.com/earendil-works/pi) | No. `Pi`-bound by design; all auth flows route through `Pi`'s native system. |
 | Extension API surface (`ExtensionAPI`, `ExtensionContext`, event types) | [`@earendil-works/pi-coding-agent`](https://github.com/earendil-works/pi) | No. `Pi`-bound by design. |
+| Tool-output progress rendering | [`@earendil-works/pi-tui`](https://github.com/earendil-works/pi) | No. Supplied as a peer dependency by the hosting `Pi` runtime. |
 | JSON Schema and tool-input parameter typing | [`typebox`](https://github.com/sinclairzx81/typebox) | Hard. `Pi`'s extension contract is built around TypeBox 1.x; replacing it would require coordinated upstream changes. |
 
 ## Runtime Dependencies
@@ -55,19 +56,26 @@ These packages are provided by the hosting `Pi` runtime and are not bundled with
 
 - **Repository:** https://github.com/earendil-works/pi
 - **Author:** Mario Zechner
-- **License:** Apache-2.0
-- **Usage:** LLM calling via `Pi`'s auth system (provider `streamSimple()`).
+- **License:** MIT
+- **Usage:** LLM calling via `Pi`'s auth system (provider `streamSimple()`), plus two request-level hooks: `ProviderRequestOptions.fetch` (response-body tee for citation harvesting) and `onPayload` (web search server-tool injection). Both hooks fail silently if a future `pi-ai` release changes them: re-check on every peer-dependency bump. Verified against 0.84.4.
 
 ### @earendil-works/pi-coding-agent
 
 - **Repository:** https://github.com/earendil-works/pi
 - **Author:** Mario Zechner
-- **License:** Apache-2.0
+- **License:** MIT
 - **Usage:** Extension API types (`ExtensionAPI`, `ExtensionContext`, event types).
+
+### @earendil-works/pi-tui
+
+- **Repository:** https://github.com/earendil-works/pi
+- **Author:** Mario Zechner
+- **License:** MIT
+- **Usage:** Tool-output progress rendering via `Text`. Supplied as a peer dependency by the hosting `Pi` runtime.
 
 ## License Compliance
 
-- All dependencies are MIT, ISC, or Apache-2.0 licensed. This is compatible with this project's Apache-2.0 license.
+- All dependencies are MIT or ISC licensed. This is compatible with this project's Apache-2.0 license.
 - No dependency uses a copyleft license (GPL, AGPL, etc.).
 - No NOTICE files are distributed by any dependency requiring attribution preservation.
 - No source code from these projects has been copied, modified, or embedded. All usage is via standard library API calls through `npm` dependencies.

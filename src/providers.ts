@@ -46,6 +46,21 @@ export const REQUIRED_MODELS = [
     contextWindow: 200000,
     maxTokens: 8192,
   },
+  {
+    // OpenRouter-exclusive agentic model (powers Perplexity Pro Search).
+    // Distinct integration from the legacy Sonar Chat Completions surface
+    // that Perplexity sunsets on 2026-09-27, so it remains usable as a
+    // searchModel after that date. Note the per-request search fee:
+    // $18 per 1,000 requests on top of the token rates below (this cost
+    // shape cannot express per-request fees; see openrouter.ai model card).
+    id: "perplexity/sonar-pro-search",
+    name: "Perplexity Sonar Pro Search",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: { input: 3.0, output: 15.0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 200000,
+    maxTokens: 8192,
+  },
 ];
 
 interface ModelsJson {

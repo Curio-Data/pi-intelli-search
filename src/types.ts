@@ -30,6 +30,30 @@ export interface ModelConfig {
   model: string;
 }
 
+/**
+ * OpenRouter web search server tool (openrouter:web_search) configuration
+ * for the search stage. Attaches search grounding to ANY OpenRouter chat
+ * model, so the pipeline no longer depends on a search-native model family
+ * such as Perplexity Sonar. Off by default; enable to decouple the search
+ * stage from a specific provider's model lineup.
+ */
+export interface SearchWebSearchSettings {
+  /** Attach the openrouter:web_search server tool to search-stage calls. */
+  enabled: boolean;
+  /** Search engine: auto (default), native (base model's provider), exa, parallel, perplexity, firecrawl. */
+  engine?: "auto" | "native" | "exa" | "parallel" | "perplexity" | "firecrawl";
+  /** Results requested per search (1-25). */
+  maxResults?: number;
+  /** Context window per result: low (5K), medium (15K, default), high (30K). */
+  searchContextSize?: "low" | "medium" | "high";
+  /** Restrict search to these domains (settings level; merged with per-call domains). */
+  allowedDomains?: string[];
+  /** Exclude these domains from search. */
+  excludedDomains?: string[];
+  /** Reasoning effort for the search model when the tool is enabled. */
+  reasoning?: "minimal" | "low" | "medium" | "high";
+}
+
 import type { AgentToolResult, AgentToolUpdateCallback } from "@earendil-works/pi-coding-agent";
 
 /** Structured details payload our tools attach to results. */
@@ -51,6 +75,8 @@ export interface ResearchSettings {
   searchModel: ModelConfig;
   extractModel: ModelConfig;
   collateModel: ModelConfig;
+  /** OpenRouter web search server tool for the search stage (default: off). */
+  searchWebSearch: SearchWebSearchSettings;
   defaultUrls: number;
   maxUrls: number;
   cacheDir: string;
