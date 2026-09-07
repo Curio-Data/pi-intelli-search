@@ -110,8 +110,27 @@ New-model findings:
 2. **Collation consistency splits the field.** glm-5.3-flash is tight (7.4K and 5.8K); deepseek-v4-flash is steady but thin (5.6K and 5.8K); qwen3.6-35b-a3b is bimodal: 5.8K in run 1Q, then 0.9K in 2Q with the fifth entry truncated mid-sentence (the Melt UI entry ends at its heading). Unreliable summary length is a disqualifying property for a default collate model.
 3. **Epistemics.** glm-5.3-flash stated its evidence base and cited the cache path (the m3 signature, and the only new model to do so); qwen stated its popularity criteria both runs; deepseek produced a sources-cited ranking table but no stated methodology.
 4. **Latency.** qwen (83.6s to 89.6s) and glm-5.3-flash (78.1s to 103.8s) are the fastest sittings recorded; deepseek-v4-flash is the slowest model measured (147.1s to 284.3s). The m3 anchor itself ran 195.5s, approximately three times its late-series durations, so within-sitting comparisons only; provider routing variance dominates absolute latency.
-5. **Queued, not run** (deferred by request): `openai/gpt-oss-120b` and `openai/gpt-5.6-luna-pro` (no `:nitro` variants published; queued as base ids).
+5. **Run later the same night** in the Queued-Model Series below (`openai/gpt-oss-120b`, `openai/gpt-5.6-luna-pro`); no `:nitro` variants are published, so base ids are used throughout.
 6. **No default change recommended.** glm-5.3-flash is the strongest budget candidate (m3-style epistemics at roughly one quarter the per-token price with a 1.3M context), but m3 keeps the depth advantage and the recorded default.
+
+### Queued-Model Series
+
+2026-09-07 late night, extension build 0.14.0, loop model `kimi-coding/k3`. Interleaved order: m3 anchor, oss-120b, luna-pro, oss-120b, luna-pro. The two models deferred from the New-Model Series; base ids (no `:nitro` variants published).
+
+| Run | Extract/Collate Model | Duration | Fetch Ok/Fail | Extract In | Extract Out | Per Page | Collate Out |
+|-----|-----------------------|----------|---------------|------------|-------------|----------|-------------|
+| 8B | minimax-m3 (anchor) | 52.5s | 6/2 | 79.4K | 25.5K | 4.3K | 7.4K |
+| 1O | gpt-oss-120b | 118.0s | 6/2 | 79.4K | 30.6K | 5.1K | 9.1K |
+| 1L | gpt-5.6-luna-pro | 67.4s | 6/2 | 79.4K | 31.6K | 5.3K | 7.3K |
+| 2O | gpt-oss-120b | 237.7s | 7/1 | 113.5K | 29.8K | 4.3K | 9.0K |
+| 2L | gpt-5.6-luna-pro | 63.7s | 5/3 | 77.9K | 26.8K | 5.4K | 7.4K |
+
+Queued-model findings:
+
+1. **Context window was not the binding constraint for gpt-oss-120b (131K).** The per-page extract architecture keeps stage inputs small: the largest single page was 32K chars (approximately 8K tokens) and collation input stayed near 8K tokens, far below the 131K window. This series therefore provides no direct evidence for requiring more than 512K context under default settings; that preference rests on headroom (user-raised `extractMaxChars`, `maxUrls` toward 20 with verbose extractors, llms-full.txt-scale pages). A dedicated stress run is the honest way to demonstrate the ceiling if one is needed.
+2. **gpt-oss-120b: m3-grade methodology framing, unreliable content.** Both reports opened by naming sources and a conflict-resolution policy, but the ranking table carried figures no source reports (13k stars and 150k weekly downloads for shadcn-svelte against the sourced approximately 8.4k), and both runs produced near-empty extractions for at least one page (629, 951, and 1186 chars). Latency was second slowest measured (118.0s and 237.7s). Rejected on reliability and precision.
+3. **gpt-5.6-luna-pro: the strongest premium alternative measured.** Fastest runs of the sitting (63.7s and 67.4s), substantial and consistent per-page extraction (5.3K and 5.4K), tight collation (7.3K and 7.4K), priced at m3's level ($0.20/M input, $1.20/M output, 1.05M context). It opened with a cache-path source listing rather than a methodology statement, so m3 keeps the epistemics advantage.
+4. **No default change.** m3 remains extract/collate default.
 
 ### Findings
 
