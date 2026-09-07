@@ -9,11 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Model benchmark harness and recorded results.** `scripts/benchmark-models.sh` runs the identical research request through competing extract/collate models in isolated environments and prints per-run telemetry; `docs/BENCHMARKS.md` records the methodology, the five-run baseline series (gemini-3.8-flash, minimax-m3, minimax-m2.7), and the findings that motivated this release's default change. Reuse it to benchmark any model `Pi` supports.
+- **Model benchmark harness.** `scripts/benchmark-models.sh` replays the identical research request through competing extract/collate models in isolated `Pi` environments and prints per-run telemetry. `docs/BENCHMARKS.md` records the methodology and the five-run baseline (gemini-3.8-flash, minimax-m3, minimax-m2.7) behind this release's default change. Any model `Pi` supports can be benchmarked the same way.
 
 ### Changed
 
-- **Default extract and collate model moved from `openrouter/minimax/minimax-m2.7` to `openrouter/minimax/minimax-m3`.** Same per-token price on OpenRouter, an approximately 1M context window, and measurably stronger collation epistemics: m3 reports state their ranking methodology, caveat popularity claims that lack authoritative data, surface low-evidence entries instead of dropping them, and flag Svelte 5-style compatibility warnings (2 for 2 in the benchmark; m2.7 and gemini-3.8-flash did neither). Extractions run roughly twice as long as m2.7's, so a default 10-page session costs ≈$0.09 instead of ≈$0.06. Users upgrading from the m2.7 default are migrated automatically; customized configurations are untouched. Pin `minimax/minimax-m2.7` explicitly to keep the leaner extractions.
+- **Default extract and collate model moved from `openrouter/minimax/minimax-m2.7` to `openrouter/minimax/minimax-m3`.** Identical per-token pricing on OpenRouter, an approximately 1M context window, and the strongest collation epistemics measured.
+- **m3 reports state their evidence base.** In the benchmark series m3 opened every report by naming its ranking methodology and caveating the absence of authoritative npm statistics, surfaced low-evidence entries instead of dropping them, and flagged Svelte 5 compatibility warnings; m2.7 and gemini-3.8-flash did none of these (2 for 2 against 0 for 3).
+- **Extractions run roughly twice as long as m2.7's.** A default 10-page session costs ≈$0.09 instead of ≈$0.06. Pin `minimax/minimax-m2.7` explicitly to keep the leaner extractions.
+
+### Compatibility
+
+- Users whose model settings still match the 0.13.0 default are migrated to the new default automatically; customized configurations are untouched. Migration is in-memory and never writes to `settings.json`.
+- No other defaults change: `searchModel` remains `openrouter/perplexity-sonar`, and no action is required beyond updating.
 
 ## [0.13.0] - 2026-09-07
 
@@ -360,6 +367,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.14.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.14.0
 [0.13.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.13.0
 [0.12.6]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.6
 [0.12.5]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.5
@@ -380,7 +388,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.7.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.6.0
 [0.5.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.5.1
-[0.14.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.14.0
 [0.5.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.5.0
 [0.4.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.4.0
