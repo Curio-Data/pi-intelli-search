@@ -121,6 +121,30 @@ describe("callLlm provider dispatch (pi-ai root API)", () => {
     assert.strictEqual(received?.maxTokens, 123);
   });
 
+  it("forwards an annotation-harvesting fetch wrapper only when an annotations sink is provided", async () => {
+    const captured: Array<SimpleStreamOptions | undefined> = [];
+    __harness.streamSimple = (async (
+      _provider: Provider,
+      _model: Model<Api>,
+      _context: Context,
+      options?: SimpleStreamOptions,
+    ) => {
+      captured.push(options);
+      return successfulResponse();
+    }) as typeof __harness.streamSimple;
+
+    const ctx = contextFor({ ok: true, apiKey: "secret" });
+    await callLlm(ctx, CFG, "system", "user", { maxTokens: 10 });
+    await callLlm(ctx, CFG, "system", "user", {
+      maxTokens: 10,
+      annotations: { citations: [] },
+    });
+
+    assert.strictEqual(captured.length, 2);
+    assert.strictEqual(captured[0]?.fetch, undefined, "no sink: no fetch wrapper");
+    assert.strictEqual(typeof captured[1]?.fetch, "function", "sink present: wrapper forwarded");
+  });
+
   it("applies the auth-resolved baseUrl onto the request model, mirroring ModelRuntime.prepareRequest", async () => {
     let receivedModel: Model<Api> | undefined;
     __harness.streamSimple = (async (

@@ -7,6 +7,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { SearchResult, OnUpdate } from "../types.js";
 import { SEARCH_SYSTEM_PROMPT } from "../prompts.js";
 import { callLlm } from "../llm.js";
+import { createAnnotationSink, mergeCitations } from "../annotations.js";
 import { textContent, extractSourceUrls } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import { appendDomainFilter } from "./shared.js";
@@ -39,13 +40,19 @@ export const intelliSearchTool = {
 
     const searchQuery = appendDomainFilter(params.query, params.domains);
 
+    // Side channel for url_citation annotations (see annotations.ts): merged
+    // with text-scraped links so search-grounded models contribute every source
+    // they actually consulted, not just the ones written into the prose.
+    const annotationSink = createAnnotationSink();
+
     try {
       const responseText = await callLlm(ctx, searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {
         maxTokens: 2000,
         signal,
+        annotations: annotationSink,
       });
 
-      const sources = extractSourceUrls(responseText);
+      const sources = mergeCitations(extractSourceUrls(responseText), annotationSink);
 
       const result: SearchResult = {
         summary: responseText,

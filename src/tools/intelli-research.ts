@@ -12,6 +12,7 @@ import {
   CACHE_SUGGEST_PROMPT,
 } from "../prompts.js";
 import { callLlm } from "../llm.js";
+import { createAnnotationSink, mergeCitations } from "../annotations.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
 import {
   makeCachePath,
@@ -384,6 +385,10 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
   let urls: Array<{ url: string; title: string }> = [];
   const maxAttempts = Math.max(1, p.settings.searchRetryAttempts);
   let attemptsUsed = 0;
+  // Side channel for url_citation annotations: search-grounded models cite
+  // many more sources than the prose links they write, and the transport
+  // drops them (see annotations.ts). Merged into urls after each attempt.
+  const annotationSink = createAnnotationSink();
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     attemptsUsed = attempt;
     searchResult = await __harness.callLlm(
@@ -396,9 +401,10 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
         signal: p.signal,
         retry: p.retry,
         timeoutMs: p.settings.llmTimeoutMs,
+        annotations: annotationSink,
       },
     );
-    urls = extractSourceUrls(searchResult).slice(0, p.maxUrls);
+    urls = mergeCitations(extractSourceUrls(searchResult), annotationSink).slice(0, p.maxUrls);
     if (urls.length > 0 || p.signal?.aborted || attempt === maxAttempts) break;
     p.onUpdate?.(
       progressUpdate(
@@ -421,6 +427,7 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
     retryFired: attemptsUsed > 1,
     attempts: attemptsUsed,
     degraded: urls.length === 0,
+    annotationsHarvested: annotationSink.citations.length,
   });
 
   return { searchResult, urls, attemptsUsed, maxAttempts };

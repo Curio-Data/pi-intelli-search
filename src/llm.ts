@@ -10,6 +10,8 @@ import {
   type SimpleStreamOptions,
 } from "@earendil-works/pi-ai";
 import type { ModelConfig } from "./types.js";
+import type { AnnotationSink } from "./annotations.js";
+import { wrapFetchForAnnotations } from "./annotations.js";
 import {
   withRetry,
   isRetryableMessage,
@@ -73,6 +75,13 @@ export async function callLlm(
     signal?: AbortSignal;
     retry?: LlmRetryConfig;
     timeoutMs?: number;
+    /**
+     * When provided, a wrapped fetch tees each response body and harvests
+     * url_citation annotations into this sink (search-grounded models emit
+     * many more citations than the prose links they write). Callers merge
+     * sink.citations with their text-parsed URLs after the call returns.
+     */
+    annotations?: AnnotationSink;
   },
 ): Promise<string> {
   // 1. Resolve model from registry
@@ -138,6 +147,12 @@ export async function callLlm(
   const retry = options?.retry;
   const userSignal = options?.signal;
   const timeoutMs = options?.timeoutMs;
+  // Annotation side channel: wrap fetch once; the sink is cleared at each
+  // attempt start so a retry never accumulates citations from failed
+  // attempts alongside the successful one.
+  const annotationFetch = options?.annotations
+    ? wrapFetchForAnnotations(globalThis.fetch.bind(globalThis), options.annotations)
+    : undefined;
   let onResponseRetryAfterMs: number | undefined;
   // Tracks whether OUR per-attempt timeout (not a user Esc) aborted the last
   // attempt, so the classifier can retry it and the post-loop check can throw
@@ -148,6 +163,7 @@ export async function callLlm(
     async () => {
       onResponseRetryAfterMs = undefined;
       lastAttemptTimedOut = false;
+      if (options?.annotations) options.annotations.citations.length = 0;
 
       // Hard per-attempt timeout. The SDK's request timeout does not cover a
       // stalled *streaming* body — under rate limiting a provider can hold the
@@ -171,6 +187,7 @@ export async function callLlm(
                 headers: auth.headers,
                 env: auth.env,
                 signal,
+                ...(annotationFetch ? { fetch: annotationFetch } : {}),
                 maxTokens: options?.maxTokens,
                 reasoning: "low",
                 maxRetries: 0,
