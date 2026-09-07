@@ -5,16 +5,18 @@
 # Runs the extension inside an isolated pi agent environment to verify
 # the install experience works in a fresh session with real LLM calls.
 #
-# This test uses the default models: Sonar for search, MiniMax M2.7
-# via OpenRouter for extract and collate. All three stages route through
-# OpenRouter, requiring only a single API key.
+# This test uses the default pipeline models: Sonar for search,
+# MiniMax M3 via OpenRouter for extract and collate. All three stages
+# route through OpenRouter, requiring only a single API key. The
+# headless agent loop runs on m2.7 (TEST_MODEL).
 #
 # Usage:
 #   ./test/01_main.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
-#   TEST_MODEL           Override default model (default: openrouter/minimax/minimax-m2.7)
+#   TEST_MODEL           Override the headless agent-loop model
+#                        (default: openrouter/minimax/minimax-m2.7)
 #
 # The .env file (gitignored) can hold OPENROUTER_API_KEY for convenience.
 #
@@ -47,7 +49,9 @@ if [ -f "$PROJECT_DIR/.env" ]; then
   set +a
 fi
 
-# Use a cheap model by default. Override with TEST_MODEL if desired.
+# Agent-loop model for the headless run; the pipeline models are pinned
+# in settings.json below. The loop model is incidental to what this test
+# proves; m2.7 keeps loop-call cost down.
 TEST_MODEL="${TEST_MODEL:-openrouter/minimax/minimax-m2.7}"
 E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
 
@@ -109,11 +113,11 @@ cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
     },
     "extractModel": {
       "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
+      "model": "minimax/minimax-m3"
     },
     "collateModel": {
       "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
+      "model": "minimax/minimax-m3"
     },
     "defaultUrls": 1,
     "maxUrls": 1
@@ -130,7 +134,7 @@ MEOF
 
 echo "📄 Wrote vanilla models.json (extension will add perplexity models)"
 echo "⚙️  Test model: $TEST_MODEL"
-echo "⚙️  Extract/Collate: openrouter/minimax/minimax-m2.7 (default)"
+echo "⚙️  Extract/Collate: openrouter/minimax/minimax-m3 (default)"
 echo ""
 
 echo "╔══════════════════════════════════════════════════════╗"

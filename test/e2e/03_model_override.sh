@@ -3,7 +3,7 @@
 # test/03_model_override.sh — E2E test for model override via settings
 #
 # Demonstrates that changing the extract/collate model in settings.json
-# is read and used by the pipeline. Replaces the default MiniMax M2.7
+# is read and used by the pipeline. Replaces the default MiniMax M3
 # with google/gemini-3-flash-preview from OpenRouter.
 #
 # Usage:

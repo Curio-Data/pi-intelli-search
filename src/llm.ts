@@ -48,7 +48,7 @@ export interface LlmRetryConfig {
  * (pi-ai root API, reached through ctx.modelRegistry.getProvider()).
  * Uses pi's native auth system (auth.json, env vars, OAuth).
  * streamSimple() carries the provider-neutral reasoning parameter, which
- * is required for reasoning models (MiniMax M2.7 and others).
+ * is required for reasoning models (MiniMax M3 and others).
  *
  * Transient failures (HTTP 429, 5xx, network/timeout) are retried with
  * full-jitter exponential backoff, honouring any Retry-After hint in the
@@ -136,7 +136,7 @@ export async function callLlm(
   ];
 
   // 4. Call via pi-ai: provider.streamSimple() sends the provider-neutral
-  //    reasoning parameter, normalised per API (required by MiniMax M2.7 etc.).
+  //    reasoning parameter, normalised per API (required by MiniMax M3 etc.).
   //
   //    Retry is owned by withRetry below, not by the SDK: maxRetries is forced
   //    to 0 so the SDK's own (Retry-After-blind, non-abortable) retries don't

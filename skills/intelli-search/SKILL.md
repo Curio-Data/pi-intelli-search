@@ -134,7 +134,7 @@ Reference material for the curious. The decision logic above is what matters in 
 
 1. **Search:** a search-grounded model (default [_Perplexity Sonar_](https://docs.perplexity.ai)) returns a synthesised answer plus every source it cited: prose links are merged with machine-readable `url_citation` annotations harvested from the response body, so sources the model consulted but did not link are still fetched.
 2. **Fetch:** Each page is fetched and cleaned to Markdown via [_Defuddle_](https://github.com/kepano/defuddle) (strips nav, ads, sidebars).
-3. **Extract:** A configurable LLM (default _MiniMax_ M2.7 via OpenRouter) pulls out only the content relevant to the query. A 50K-char page becomes ≈3-5K chars of focused extraction. Extraction adapts to source type: official docs preserve exact API signatures, blog posts capture practical patterns, forums capture accepted solutions.
+3. **Extract:** A configurable LLM (default _MiniMax_ M3 via OpenRouter) pulls out only the content relevant to the query. A 50K-char page becomes ≈3-5K chars of focused extraction. Extraction adapts to source type: official docs preserve exact API signatures, blog posts capture practical patterns, forums capture accepted solutions.
 4. **Collate:** Another LLM call deduplicates across extractions and produces one concise summary. When sources conflict, official docs win.
 5. **Cache suggest:** An LLM judge finds semantically related previous searches in `.search/` and surfaces them as a supplementary `📚 Related cached searches` table.
 

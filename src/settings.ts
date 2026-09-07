@@ -18,8 +18,12 @@ const DEFAULT_SETTINGS: ResearchSettings = {
   // buildSearchPayloadPatch). "minimal" reasoning avoids reasoning-budget
   // burn observed with GPT-5 family models when left unconstrained.
   searchWebSearch: { enabled: false, engine: "auto", maxResults: 8, reasoning: "minimal" },
-  extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
-  collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+  // 0.14.0 moved extract/collate from MiniMax M2.7 to MiniMax M3: same
+  // per-token price, 1M context, and measurably better epistemics in
+  // collation (states ranking methodology, flags low-evidence entries,
+  // surfaces pre-Svelte-5-style compatibility warnings).
+  extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+  collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
   defaultUrls: 10,
   // 0.13.0 raised both defaults (8/16 to 10/20): annotation harvesting
   // fills the URL list with every cited source, so the old defaults
@@ -166,6 +170,16 @@ const DEFAULT_HISTORY: Record<
     // new values automatically, pinned users keep theirs.
     extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
     collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  },
+  "0.14.0": {
+    // Extract/collate default moved from MiniMax M2.7 to MiniMax M3.
+    // Same per-token pricing on OpenRouter ($0.30/M in, $1.20/M out);
+    // M3 brings a 1M context and stronger collation epistemics (stated
+    // ranking methodology, caveated popularity claims, compatibility
+    // warnings) at the cost of roughly 30% longer extractions.
+    extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+    collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   },
 };

@@ -501,20 +501,57 @@ describe("migrateDefaults", () => {
     // ZERO migration changes when upgrading from the previous release into
     // this one. Any role drift in DEFAULT_HISTORY[pkg.version] surfaces as a
     // spurious change here.
-    const userSettings: ResearchSettings = {
+    const onLiveDefaults: ResearchSettings = {
       ...baseSettings,
-      extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
-      collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+      extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+      collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
       searchModel: { provider: "openrouter", model: "perplexity/sonar" },
     };
 
-    const { changes } = migrateDefaults("0.12.3", pkg.version, userSettings);
+    const { changes } = migrateDefaults("0.13.0", pkg.version, onLiveDefaults);
     assert.deepStrictEqual(
       changes,
       [],
       `DEFAULT_HISTORY[${pkg.version}] drifts from the live defaults: ${JSON.stringify(changes)}. ` +
         "If this release intentionally changes a model default, update both the live defaults and this test.",
     );
+  });
+
+  it("migrates a user on the 0.13.0 default to the new default exactly", async () => {
+    // 0.14.0 changes the extract/collate default (M2.7 -> M3), so the
+    // no-drift guard above cannot by itself pin the new history entry's
+    // content. This test pins the exact migration a 0.13.0 default user
+    // sees: extract and collate move to M3 with the exact notification
+    // strings, and search is untouched.
+    const { migrateDefaults } = await import("../src/settings.js");
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")) as {
+      version: string;
+    };
+
+    const onPreviousDefault: ResearchSettings = {
+      ...baseSettings,
+      extractModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+      collateModel: { provider: "openrouter", model: "minimax/minimax-m2.7" },
+      searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+    };
+
+    const { changes, settings } = migrateDefaults("0.13.0", pkg.version, onPreviousDefault);
+    assert.deepStrictEqual(changes, [
+      "extract: openrouter/minimax/minimax-m2.7 → openrouter/minimax/minimax-m3",
+      "collate: openrouter/minimax/minimax-m2.7 → openrouter/minimax/minimax-m3",
+    ]);
+    assert.deepStrictEqual(settings.extractModel, {
+      provider: "openrouter",
+      model: "minimax/minimax-m3",
+    });
+    assert.deepStrictEqual(settings.collateModel, {
+      provider: "openrouter",
+      model: "minimax/minimax-m3",
+    });
+    assert.deepStrictEqual(settings.searchModel, {
+      provider: "openrouter",
+      model: "perplexity/sonar",
+    });
   });
 
   it("migrates extract model when it matches old default", async () => {

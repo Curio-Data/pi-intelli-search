@@ -4,7 +4,8 @@
 #
 # Simulates a user upgrading from 0.7.0. In 0.7.0, the
 # default extract/collate model was minimax/MiniMax-M2.7 (direct
-# provider). The current release keeps it on openrouter/minimax/minimax-m2.7.
+# provider). The current release migrates it to
+# openrouter/minimax/minimax-m3 (default changed in 0.14.0).
 #
 # The test writes a 0.7.0 version marker and old-style settings,
 # then runs the current extension. Verifies:
@@ -108,7 +109,7 @@ EOF
 
 echo "📄 Wrote 0.7.0-style settings (flat keys + minimax direct)"
 echo "⚙️  Extract/Collate: minimax/MiniMax-M2.7 (old default)"
-echo "⚙️  Migration expected: → openrouter/minimax/minimax-m2.7"
+echo "⚙️  Migration expected: → openrouter/minimax/minimax-m3"
 echo ""
 
 # ── models.json — vanilla/empty ────────────────────────────────────

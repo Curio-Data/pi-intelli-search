@@ -83,11 +83,16 @@ make_env() {
   echo "$agent $cwd"
 }
 
-# run_pi <agent> <cwd> <prompt> — runs pi once with a single
-# retry on failure; returns non-zero when both attempts fail.
+# run_pi <agent> <cwd> <prompt> — runs pi once with up to two retries;
+# returns non-zero when all attempts fail. Retries fire both on a non-zero
+# exit AND on an exit-0 run that produced no cache entry: OpenRouter
+# intermittently leaks the tool call into the answer text as
+# `functions.<tool>:<id>{...}` (native-call serialization failure, any
+# loop model), so pi exits 0 without ever invoking the tool. Detecting
+# the missing meta.json catches that class; see docs/BENCHMARKS.md.
 run_pi() {
-  local agent="$1" cwd="$2" prompt="$3" attempt out ec
-  for attempt in 1 2; do
+  local agent="$1" cwd="$2" prompt="$3" attempt out ec ran
+  for attempt in 1 2 3; do
     out="$(
       cd "$cwd"
       PI_CODING_AGENT_DIR="$agent" \
@@ -97,11 +102,18 @@ run_pi() {
           -e "$E2E_EXTENSION_PATH" \
           -p "$prompt" 2>&1
     )" && ec=0 || ec=$?
+    ran=0
     if [ "$ec" -eq 0 ]; then
+      # Exit 0 is not proof the pipeline ran: probe for any cache sidecar.
+      if find "$cwd" -maxdepth 4 -name meta.json -print -quit 2>/dev/null | grep -q .; then
+        ran=1
+      fi
+    fi
+    if [ "$ran" -eq 1 ]; then
       LAST_OUTPUT="$out"
       return 0
     fi
-    echo "   ⚠️  pi attempt $attempt failed (exit $ec); retrying after 30s"
+    echo "   ⚠️  pi attempt $attempt failed (exit $ec, cache written: $ran); retrying after 30s"
     sleep 30
   done
   LAST_OUTPUT="$out"
@@ -159,7 +171,7 @@ EOF
 sleep "$GAP"
 if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"nodejs.org\"] to research: the current Node.js LTS schedule."; then
   assert_eq "search model defaulted" "$(meta_value "$CWD/.search" '.stages.search.model')" "openrouter/perplexity/sonar"
-  assert_eq "extract model defaulted" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m2.7"
+  assert_eq "extract model defaulted" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
   assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
   assert_ge "sources fetched" "$(meta_value "$CWD/.search" '.stages.fetch.succeeded // 0')" 1
 else
@@ -239,7 +251,7 @@ EOF
 sleep "$GAP"
 if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
   assert_eq "collate model overridden" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/openai/gpt-5-mini"
-  assert_eq "extract model still default" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m2.7"
+  assert_eq "extract model still default" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
   assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
 else
   echo "   ❌ pi failed both attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5

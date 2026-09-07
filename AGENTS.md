@@ -223,7 +223,12 @@ skills/
 
 docs/
 ├── ARCHITECTURE.md           # Detailed pipeline and design decisions
+├── BENCHMARKS.md             # Extract/collate model benchmark: methodology, harness, recorded results
 └── COMPONENTS.md             # Third-party dependency attribution
+
+scripts/
+├── analyze-sessions.sh       # Aggregate meta.json telemetry sidecars across sessions
+└── benchmark-models.sh       # A/B benchmark harness for extract/collate models (live quota)
 
 test/
 ├── annotations.test.ts
@@ -264,15 +269,15 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline descripti
 
 1. **Search:** a search-grounded model (default [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai)) returns a synthesised answer; prose links are merged with harvested `url_citation` annotations before the URL list is clamped. Alternatives: `perplexity/sonar-pro-search` (model swap) or any OpenRouter chat model plus the `searchWebSearch` server tool.
 2. **Fetch:** Each page is fetched two ways in parallel (HTML to [Defuddle](https://github.com/kepano/defuddle) and Markdown variant). They are compared by quality score; the best is picked.
-3. **Extract:** Configurable model (default: MiniMax M2.7) per-page extraction (bounded-parallel via `extractionConcurrency`, default 4), compressing ≈50K to ≈3-5K chars.
-4. **Collate:** Configurable model (default: MiniMax M2.7) deduplicates across extractions, produces summary and cache.
+3. **Extract:** Configurable model (default: MiniMax M3) per-page extraction (bounded-parallel via `extractionConcurrency`, default 4), compressing ≈50K to ≈3-5K chars.
+4. **Collate:** Configurable model (default: MiniMax M3) deduplicates across extractions, produces summary and cache.
 5. **Cache suggest:** LLM judge (extract model) compares current query against `.search/.index.json` and appends related previous searches to the output. This is purely additive and never blocks or gates the main result.
 
 The pipeline is self-contained. `Pi` extensions cannot call other tools from `execute()`, so all stages are inlined in `intelli-research.ts`.
 
 ### LLM Integration
 
-- Uses `ctx.modelRegistry.getProvider(provider).streamSimple()` (root `@earendil-works/pi-ai` API), not the deprecated `pi-ai/compat` `completeSimple()` shim and not `ModelRegistry.complete()` (which drops the provider-neutral reasoning parameter). `streamSimple` sends `reasoning: "low"`, which MiniMax M2.7 and other reasoning models require; the search stage overrides it per call (`minimal` when the web search tool is enabled). `test/compat-guard.test.ts` enforces that no file imports `pi-ai/compat`. Auth is resolved by `Pi` (`getApiKeyAndHeaders`) before dispatch, mirroring `ModelRuntime.prepareRequest` including the `baseUrl` override; models registered outside `Pi`'s registry (for example `pi-ai`'s `registerFauxProvider`) are not consulted.
+- Uses `ctx.modelRegistry.getProvider(provider).streamSimple()` (root `@earendil-works/pi-ai` API), not the deprecated `pi-ai/compat` `completeSimple()` shim and not `ModelRegistry.complete()` (which drops the provider-neutral reasoning parameter). `streamSimple` sends `reasoning: "low"`, which MiniMax M3 and other reasoning models require; the search stage overrides it per call (`minimal` when the web search tool is enabled). `test/compat-guard.test.ts` enforces that no file imports `pi-ai/compat`. Auth is resolved by `Pi` (`getApiKeyAndHeaders`) before dispatch, mirroring `ModelRuntime.prepareRequest` including the `baseUrl` override; models registered outside `Pi`'s registry (for example `pi-ai`'s `registerFauxProvider`) are not consulted.
 - **Per-call payload patching and reasoning.** `callLlm()` accepts `payloadPatch` (forwarded as pi-ai's `onPayload`) and `reasoning` (default `"low"`). The search stage uses both to attach `openrouter:web_search`. A patch must return the payload untouched when it does not apply and never overwrite an existing `tools` array.
 - **Annotation side channel.** When `annotations` is passed, `callLlm()` injects a wrapped `fetch` through `ProviderRequestOptions.fetch` that tees each response body and parses `url_citation` entries into the sink. The sink is cleared at the start of every retry attempt, and `callLlm()` awaits the background reads (bounded at 2s) before returning. Every failure in this path is swallowed by design. **Both hooks fail silently if upstream pi-ai changes them**: re-check `ProviderRequestOptions.fetch` and `onPayload` on every peer-dependency bump; `test/annotations.test.ts` covers the parser, not the injection point.
 - Auth flows through `Pi`'s native system (`auth.json`, env vars, OAuth). No API key management happens in this code.
@@ -317,6 +322,7 @@ npm run dev              # Watch mode (tsc --watch)
 npm test                 # Run all unit tests
 npm run test:smoke       # Smoke test (structural validation)
 ./test/e2e/01_main.sh        # End-to-end test (live LLM calls, isolated env)
+scripts/benchmark-models.sh <model-id>...   # A/B benchmark extract/collate models (live quota, see docs/BENCHMARKS.md)
 ```
 
 **Testing in `Pi`:**
@@ -421,7 +427,7 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 
 | Test | What it proves |
 |---|---|
-| `e2e/01_main.sh` | Default pipeline (Sonar + M2.7 via OpenRouter) works end-to-end with nested settings |
+| `e2e/01_main.sh` | Default pipeline (Sonar + M3 via OpenRouter) works end-to-end with nested settings |
 | `e2e/04_migration.sh` | Upgrade from 0.7.0 defaults auto-migrates to 0.8.0 OpenRouter defaults |
 | `e2e/03_model_override.sh` | Model override in `pi-intelli-search` settings namespace is read and used |
 | `e2e/02_cap.sh` | `defaultUrls` and `maxUrls` (cap) are enforced; agent requests above cap are silently clamped |
@@ -477,7 +483,7 @@ No API keys are needed.
 ## Important Design Decisions
 
 1. **Per-page extraction before collation:** 8 pages multiplied by 50K equals 400K chars. This exceeds LLM context. Extracting per-page first compresses to ≈32K total for comfortable synthesis.
-2. **`streamSimple()` over `complete()`:** Sends `reasoning: "low"`, which is required for reasoning models (MiniMax M2.7, DeepSeek, etc.) and is harmless for non-reasoning ones.
+2. **`streamSimple()` over `complete()`:** Sends `reasoning: "low"`, which is required for reasoning models (MiniMax M3, DeepSeek, etc.) and is harmless for non-reasoning ones.
 3. **models.json merge over `registerProvider()`:** The latter replaces all models for a provider. The former adds non-destructively.
 4. **Dual fetch (Defuddle plus Markdown):** Some sites serve cleaner content via Markdown endpoints. The quality score comparison picks the better version automatically.
 5. **`focusPrompt` is critical:** Without it the extraction LLM works generically. The `promptGuidelines` instruct the agent to always provide it.

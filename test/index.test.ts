@@ -602,13 +602,13 @@ describe("auth pre-flight check", () => {
       assert.strictEqual(migrationNotices.length, 1, "should fire migration notification");
       assert.ok(
         migrationNotices[0].msg.includes(
-          "extract: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m2.7",
+          "extract: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m3",
         ),
         "should list extract migration",
       );
       assert.ok(
         migrationNotices[0].msg.includes(
-          "collate: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m2.7",
+          "collate: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m3",
         ),
         "should list collate migration",
       );
@@ -626,8 +626,8 @@ describe("auth pre-flight check", () => {
         "openrouter",
         "collate model should be migrated",
       );
-      assert.strictEqual(post.extractModel.model, "minimax/minimax-m2.7");
-      assert.strictEqual(post.collateModel.model, "minimax/minimax-m2.7");
+      assert.strictEqual(post.extractModel.model, "minimax/minimax-m3");
+      assert.strictEqual(post.collateModel.model, "minimax/minimax-m3");
     } finally {
       process.chdir(savedCwd);
       if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
@@ -713,7 +713,7 @@ describe("auth pre-flight check", () => {
       const notice = migrationNotices[0].msg;
       assert.ok(!notice.includes("extract:"), "should NOT mention extract (user customized)");
       assert.ok(
-        notice.includes("collate: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m2.7"),
+        notice.includes("collate: minimax/MiniMax-M2.7 → openrouter/minimax/minimax-m3"),
         "should list collate migration",
       );
     } finally {
