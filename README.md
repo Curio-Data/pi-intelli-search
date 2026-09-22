@@ -25,7 +25,7 @@ A `Pi` extension for deep web research. It searches via a search-grounded model 
 - 🎯 **Configurable:** Swap any pipeline stage (search, extract, collate) to any model `Pi` supports.
 - 💰 **Low cost:** ≈$0.09 per research session with default settings.
 
-> **Search model advisory (2026-09).** Perplexity retires the Sonar Chat Completions endpoints on **2026-09-27**. Whether the `openrouter/perplexity/sonar` route survives that date is up to [OpenRouter](https://openrouter.ai), which has published no statement. Two supported configurations do not depend on that route, and both are settings-only changes: [the web search server tool](#openrouter-web-search-server-tool) (any OpenRouter chat model, from ≈$0.008 per search) and [`perplexity/sonar-pro-search`](#choosing-an-alternative-search-configuration) (drop-in model swap, ≈$0.05 per search). The default is unchanged in v0.13.0.
+> **Search model advisory (2026-09).** Perplexity retires the Sonar Chat Completions endpoints on **2026-09-27**. Whether the `openrouter/perplexity/sonar` route survives that date is up to [OpenRouter](https://openrouter.ai), which has published no statement. Two alternatives are [the web search server tool](#openrouter-web-search-server-tool) (any OpenRouter chat model, from ≈$0.008 per search) and [`perplexity/sonar-pro-search`](#choosing-an-alternative-search-configuration) (drop-in model swap, ≈$0.05 per search); both are settings-only changes. The default search model is unchanged.
 
 ## Launch Blog Post
 
