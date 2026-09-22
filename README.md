@@ -707,7 +707,7 @@ Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<has
 
 ## Compatibility
 
-- **`Pi` >= 0.81.1:** Core functionality, trusted project settings, the configurable `CONFIG_DIR_NAME`, provider-based `pi-ai` calls, and sequential cache-writing tools. Compatibility audited and verified through `Pi` 0.84.4; the `fetch`/`onPayload` request hooks used by citation harvesting and the web search tool are verified against pi-ai 0.84.4.
+- **`Pi` >= 0.81.1:** Core functionality, trusted project settings, the configurable `CONFIG_DIR_NAME`, provider-based `pi-ai` calls, and sequential cache-writing tools. On `Pi` >= 0.86, LLM calls dispatch through the `ctx.modelRegistry.streamSimple()` facade so system prompts reach the model; `Pi` 0.81.1 through 0.85.x use the direct provider path. Compatibility audited and verified through `Pi` 0.87.0; the `fetch`/`onPayload` request hooks used by citation harvesting and the web search tool are verified against pi-ai 0.87.0.
 - UI notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, RPC).
 - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
 - Retry and timeout are owned by the extension (`callLlm()`), independent of `Pi`'s `retry.provider.maxRetries`. The extension forces `maxRetries: 0` and runs its own full-jitter backoff, so changing `Pi`'s provider-retry setting has no effect on these tools.

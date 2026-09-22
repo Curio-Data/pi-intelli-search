@@ -13,20 +13,68 @@ import {
 import type { ModelConfig } from "./types.js";
 import type { AnnotationSink } from "./annotations.js";
 import { settleAnnotationSink, wrapFetchForAnnotations } from "./annotations.js";
-import { withRetry, isRetryableMessage, parseRetryAfterMs, callWithAbortTimeout, errMsg } from "./util.js";
+import {
+  withRetry,
+  isRetryableMessage,
+  parseRetryAfterMs,
+  callWithAbortTimeout,
+  errMsg,
+} from "./util.js";
+
+/**
+ * The `Pi` >= 0.86 model registry (facade method added in `Pi` 0.86.0, #8964).
+ *
+ * `Pi` 0.86 normalised the pi-ai provider stream contract: Provider.streamSimple()
+ * now requires a branded TranscriptContext whose system prompt lives in a leading
+ * system message (produced only by pi-ai's normalizeContext()). A raw Context
+ * passed straight to a provider compiles fine on older typings but the provider
+ * silently drops the systemPrompt field. The registry's streamSimple() accepts a
+ * raw Context, normalises it, resolves auth, and applies the auth baseUrl
+ * override internally — exactly what this file did by hand before, plus
+ * normalisation. Structural subset of `Pi`'s ModelRegistry; on `Pi` <= 0.85 the
+ * streamSimple property is absent and the legacy provider path below is used
+ * instead.
+ *
+ * The seam carries the REGISTRY OBJECT, not a detached streamSimple function:
+ * Pi's implementation reads `this.runtime`, so a detached call throws
+ * "Cannot read properties of undefined (reading 'runtime')".
+ */
+export interface ModelRegistryFacade {
+  streamSimple(
+    model: Model<Api>,
+    context: Context,
+    options?: SimpleStreamOptions,
+  ): { result(): Promise<AssistantMessage> };
+}
 
 /**
  * Narrow injectable seam for deterministic callLlm tests.
  *
- * The transport is the provider's streamSimple() (the pi-ai root API), the
- * same primitive Pi's own ModelRuntime dispatches to. The deprecated
- * @earendil-works/pi-ai/compat entrypoint is not imported anywhere: upstream
- * documents it as deleted with the ModelManager migration, and test/
- * compat-guard.test.ts enforces that.
+ * Two transports, dispatched by feature detection of the registry facade:
+ *
+ * - Pi >= 0.86: ctx.modelRegistry.streamSimple(model, context, options), the
+ *   facade introduced for extension model calls. It normalises the context
+ *   (folding systemPrompt into the transcript), resolves auth, and applies the
+ *   baseUrl override internally.
+ * - Pi 0.81.1-0.85.x: the provider's streamSimple() (the pi-ai root API),
+ *   reached through ctx.modelRegistry.getProvider() with auth and the baseUrl
+ *   override applied by hand here.
+ *
+ * The deprecated @earendil-works/pi-ai/compat entrypoint is not imported
+ * anywhere: upstream documents it as deleted with the ModelManager migration,
+ * and test/compat-guard.test.ts enforces that.
  */
 export const __harness: {
+  /** Legacy transport (Pi <= 0.85): the composed Provider object. */
   streamSimple: (
     provider: Provider,
+    model: Model<Api>,
+    context: Context,
+    options?: SimpleStreamOptions,
+  ) => Promise<AssistantMessage>;
+  /** Facade transport (`Pi` >= 0.86): the registry object (method call, not detached). */
+  registryStreamSimple: (
+    registry: ModelRegistryFacade,
     model: Model<Api>,
     context: Context,
     options?: SimpleStreamOptions,
@@ -34,6 +82,8 @@ export const __harness: {
 } = {
   streamSimple: (provider, model, context, options) =>
     provider.streamSimple(model, context, options).result(),
+  registryStreamSimple: (registry, model, context, options) =>
+    registry.streamSimple(model, context, options).result(),
 };
 
 /** Transport-level retry config for a single {@link callLlm} call. */
@@ -44,11 +94,19 @@ export interface LlmRetryConfig {
 }
 
 /**
- * Call an LLM via pi's model registry + the provider's streamSimple()
- * (pi-ai root API, reached through ctx.modelRegistry.getProvider()).
- * Uses pi's native auth system (auth.json, env vars, OAuth).
- * streamSimple() carries the provider-neutral reasoning parameter, which
- * is required for reasoning models (MiniMax M3 and others).
+ * Call an LLM via pi's model registry, dispatched by feature detection:
+ *
+ * - `Pi` >= 0.86: `ctx.modelRegistry.streamSimple()` (the registry facade).
+ *   It normalises the context (the systemPrompt must be folded into the
+ *   transcript before a provider sees it), resolves auth, and applies the
+ *   auth baseUrl override.
+ * - `Pi` 0.81.1-0.85.x: the provider's `streamSimple()` (pi-ai root API,
+ *   reached through `ctx.modelRegistry.getProvider()`), with auth and the
+ *   baseUrl override applied by hand here.
+ *
+ * Both paths use pi's native auth system (auth.json, env vars, OAuth) and
+ * carry the provider-neutral reasoning parameter, which is required for
+ * reasoning models (MiniMax M3 and others).
  *
  * Transient failures (HTTP 429, 5xx, network/timeout) are retried with
  * full-jitter exponential backoff, honouring any Retry-After hint in the
@@ -122,9 +180,16 @@ export async function callLlm(
         `Check ~/.pi/agent/models.json or provider registration.`,
     );
   }
-  // 2c. Mirror ModelRuntime.prepareRequest: apply the auth-resolved baseUrl
-  //     as a per-request model override (proxy endpoints, custom gateways).
-  const requestModel: Model<Api> = auth.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model;
+  // 2c. Feature-detect the `Pi` >= 0.86 registry facade. On those versions the
+  //     facade is the correct dispatch point (it normalises the context before
+  //     the provider sees it); on older versions the property is absent and
+  //     the manual path below applies the auth-resolved baseUrl as a
+  //     per-request model override, mirroring ModelRuntime.prepareRequest
+  //     (proxy endpoints, custom gateways).
+  const registry86 = ctx.modelRegistry as unknown as ModelRegistryFacade | undefined;
+  const useFacade = typeof registry86?.streamSimple === "function";
+  const requestModel: Model<Api> =
+    !useFacade && auth.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model;
 
   // 3. Build messages
   const messages: Message[] = [
@@ -163,6 +228,43 @@ export async function callLlm(
   // a clear timeout error rather than returning an empty aborted response.
   let lastAttemptTimedOut = false;
 
+  // Per-attempt stream options (the abort signal differs per attempt). Both
+  // transports receive the identical option set: the facade merges auth into
+  // these itself (same values, same source), the provider path depends on
+  // them entirely.
+  const buildStreamOptions = (signal: AbortSignal | undefined): SimpleStreamOptions => ({
+    apiKey: auth.apiKey,
+    headers: auth.headers,
+    env: auth.env,
+    ...(signal ? { signal } : {}),
+    ...(annotationFetch ? { fetch: annotationFetch } : {}),
+    maxTokens: options?.maxTokens,
+    reasoning: options?.reasoning ?? "low",
+    ...(options?.payloadPatch
+      ? {
+          onPayload: (payload: unknown) =>
+            options!.payloadPatch!(payload as Record<string, unknown>),
+        }
+      : {}),
+    maxRetries: 0,
+    onResponse: (res) => {
+      if (res.status === 429 || res.status >= 500) {
+        const ra = res.headers["retry-after"];
+        const secs = ra ? Number(ra) : NaN;
+        onResponseRetryAfterMs = Number.isFinite(secs) ? secs * 1000 : undefined;
+      }
+    },
+  });
+  // The raw Context is passed on both paths: on Pi >= 0.86 the facade folds
+  // systemPrompt into the normalised transcript; on Pi <= 0.85 the provider
+  // reads the field directly. Either way the system prompt reaches the model.
+  const context: Context = { systemPrompt, messages };
+  const dispatch = useFacade
+    ? (signal: AbortSignal | undefined) =>
+        __harness.registryStreamSimple(registry86!, model, context, buildStreamOptions(signal))
+    : (signal: AbortSignal | undefined) =>
+        __harness.streamSimple(provider, requestModel, context, buildStreamOptions(signal));
+
   const response = await withRetry(
     async () => {
       onResponseRetryAfterMs = undefined;
@@ -180,39 +282,7 @@ export async function callLlm(
       // correctly either way so the classifier can distinguish a retryable
       // timeout from a genuine (non-retryable) error.
       try {
-        const { value, timedOut } = await callWithAbortTimeout(
-          (signal) =>
-            __harness.streamSimple(
-              provider,
-              requestModel,
-              { systemPrompt, messages },
-              {
-                apiKey: auth.apiKey,
-                headers: auth.headers,
-                env: auth.env,
-                signal,
-                ...(annotationFetch ? { fetch: annotationFetch } : {}),
-                maxTokens: options?.maxTokens,
-                reasoning: options?.reasoning ?? "low",
-                ...(options?.payloadPatch
-                  ? {
-                      onPayload: (payload: unknown) =>
-                        options!.payloadPatch!(payload as Record<string, unknown>),
-                    }
-                  : {}),
-                maxRetries: 0,
-                onResponse: (res) => {
-                  if (res.status === 429 || res.status >= 500) {
-                    const ra = res.headers["retry-after"];
-                    const secs = ra ? Number(ra) : NaN;
-                    onResponseRetryAfterMs = Number.isFinite(secs) ? secs * 1000 : undefined;
-                  }
-                },
-              },
-            ),
-          timeoutMs,
-          userSignal,
-        );
+        const { value, timedOut } = await callWithAbortTimeout(dispatch, timeoutMs, userSignal);
         lastAttemptTimedOut = timedOut;
         return value;
       } catch (err) {

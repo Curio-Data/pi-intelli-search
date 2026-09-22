@@ -57,7 +57,7 @@ These packages are provided by the hosting `Pi` runtime and are not bundled with
 - **Repository:** https://github.com/earendil-works/pi
 - **Author:** Mario Zechner
 - **License:** MIT
-- **Usage:** LLM calling via `Pi`'s auth system (provider `streamSimple()`), plus two request-level hooks: `ProviderRequestOptions.fetch` (response-body tee for citation harvesting) and `onPayload` (web search server-tool injection). Both hooks fail silently if a future `pi-ai` release changes them: re-check on every peer-dependency bump. Verified against 0.84.4.
+- **Usage:** LLM calling via `Pi`'s auth system. `Pi` >= 0.86 dispatches through the `ctx.modelRegistry.streamSimple()` facade; `Pi` 0.81.1 through 0.85.x call the provider's `streamSimple()` directly (the facade normalises the context, which those versions do themselves). Two request-level hooks are used: `ProviderRequestOptions.fetch` (response-body tee for citation harvesting) and `onPayload` (web search server-tool injection). Both hooks fail silently if a future `pi-ai` release changes them: re-check on every peer-dependency bump. Verified against 0.87.0.
 
 ### @earendil-works/pi-coding-agent
 

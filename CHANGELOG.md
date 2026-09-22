@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **m3 reports state their evidence base.** In the benchmark series m3 opened every report by naming its ranking methodology and caveating the absence of authoritative npm statistics, surfaced low-evidence entries instead of dropping them, and flagged Svelte 5 compatibility warnings; m2.7 and gemini-3.8-flash did none of these (2 for 2 against 0 for 3).
 - **Extractions run roughly twice as long as m2.7's.** A default 10-page session costs ≈$0.09 instead of ≈$0.06. Pin `minimax/minimax-m2.7` explicitly to keep the leaner extractions.
 
+### Fixed
+
+- **System prompts now reach the model on `Pi` 0.86 and newer.** `Pi` 0.86 changed the `pi-ai` provider stream contract: a context passed directly to a provider no longer folds its `systemPrompt` field into the request, so on `Pi` 0.86 and 0.87 every stage (search, extract, collate, cache suggest) ran without its system prompt. Output quality degraded with no error. The LLM transport now detects the `Pi` >= 0.86 model-registry facade and dispatches through it, which normalises the context before the provider sees it. `Pi` 0.81.1 through 0.85.x keep the previous direct-provider path unchanged. No settings change is required on either range.
+
 ### Compatibility
 
 - Users whose model settings still match the 0.13.0 default are migrated to the new default automatically; customized configurations are untouched. Migration is in-memory and never writes to `settings.json`.
