@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.81.1-blueviolet)](https://github.com/earendil-works/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/tests-371%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-376%20passing-brightgreen)
 
 Intelligent web research for [`Pi`](https://github.com/earendil-works/pi): search, extract, collate, and cache grounded web context in one tool call.
 
@@ -23,7 +23,7 @@ A `Pi` extension for deep web research. It searches via a search-grounded model 
 - 🔗 **Collate:** Cross-source deduplication, inconsistency detection, and synthesis into a focused ≈5K summary.
 - 💾 **Cache:** Persistent `.search/` cache with automatic cache suggest. Related previous searches surfaced on each query.
 - 🎯 **Configurable:** Swap any pipeline stage (search, extract, collate) to any model `Pi` supports.
-- 💰 **Low cost:** Approximately $0.06 per research session with default settings.
+- 💰 **Low cost:** ≈$0.09 per research session with default settings.
 
 > **Search model advisory (2026-09).** Perplexity retires the Sonar Chat Completions endpoints on **2026-09-27**. Whether the `openrouter/perplexity/sonar` route survives that date is up to [OpenRouter](https://openrouter.ai), which has published no statement. Two supported configurations do not depend on that route, and both are settings-only changes: [the web search server tool](#openrouter-web-search-server-tool) (any OpenRouter chat model, from ≈$0.008 per search) and [`perplexity/sonar-pro-search`](#choosing-an-alternative-search-configuration) (drop-in model swap, ≈$0.05 per search). The default is unchanged in v0.13.0.
 
@@ -291,7 +291,7 @@ Extraction and collation run 10+1 times per session, so token rates dominate cos
 }
 ```
 
-Check the model's context window against `extractMaxChars` (150K chars is roughly 37K tokens); lower `extractMaxChars` for smaller-window models.
+Check the model's context window against `extractMaxChars` (150K chars is ≈37K tokens); lower `extractMaxChars` for smaller-window models.
 
 ### Recipe 6: Stronger Collation
 
@@ -494,7 +494,7 @@ The model swap is settings-only:
 
 ### Swapping the Extract and Collate Model
 
-_MiniMax_ M3 (via OpenRouter) is the default because its collations state their ranking methodology, caveat low-evidence claims, and flag compatibility warnings, and its ≈1M context never clips a full `extractMaxChars` page. It costs the same per token as M2.7 but writes roughly twice the extraction output, so sessions cost ≈2× the extract stage of M2.7. To spend less, pin `minimax/minimax-m2.7` explicitly. You can also use any model `Pi` supports. Override in `~/.pi/agent/settings.json` or `.pi/settings.json`:
+_MiniMax_ M3 (via OpenRouter) is the default because its collations state their ranking methodology, caveat low-evidence claims, and flag compatibility warnings, and its ≈1M context never clips a full `extractMaxChars` page. It costs the same per token as M2.7 but writes ≈2× the extraction output, so sessions cost ≈2× the extract stage of M2.7. To spend less, pin `minimax/minimax-m2.7` explicitly. The benchmark methodology, harness, and recorded runs behind this choice live in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). You can also use any model `Pi` supports. Override in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 
 **Option A: Use a `Pi` Built-In Provider** (auth via `/login`):
 
@@ -602,7 +602,7 @@ Per research session with the default 10 pages: **≈$0.09**
 | Collate (M3 via OpenRouter)         | 1                | ≈$0.01   |
 | Cache suggest (M3 via OpenRouter)   | 1                | ≈$0.0002 |
 
-Since v0.13.0 the search stage contributes every source the model cited, not only the ones it wrote into the prose, so sessions reach the `defaultUrls` page count more often than before. The ≈$0.09 figure is the typical cost of a full 10-page session with the v0.14.0 default models (M3 extracts cost the same per token as M2.7 but run roughly twice the output); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost (see [Choosing an Alternative Search Configuration](#choosing-an-alternative-search-configuration)); the extract and collate rows scale with your chosen models.
+Since v0.13.0 the search stage contributes every source the model cited, not only the ones it wrote into the prose, so sessions reach the `defaultUrls` page count more often than before. The ≈$0.09 figure is the typical cost of a full 10-page session with the v0.14.0 default models (M3 extracts cost the same per token as M2.7 but write ≈2× the output tokens); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost (see [Choosing an Alternative Search Configuration](#choosing-an-alternative-search-configuration)); the extract and collate rows scale with your chosen models.
 
 ## Settings
 
@@ -650,9 +650,9 @@ Override defaults in `~/.pi/agent/settings.json` or, for a trusted project, `<pr
 | `extractModel` | 3. Extract | `openrouter/minimax/minimax-m3` | Model for per-page content extraction. Runs 10 times per session so low cost per token matters. Ensure the model's context window exceeds `extractMaxChars` plus the system prompt. For a model with a smaller window (e.g. 256K), lower `extractMaxChars` to match. See [Model Configuration](#model-configuration). |
 | `collateModel` | 4. Collate | `openrouter/minimax/minimax-m3` | Model for cross-source synthesis and deduplication. Sees all extractions at once so it needs enough context and instruction-following to flag contradictions. A model with ≥128K context handles 8 full extractions comfortably. See [Model Configuration](#model-configuration). |
 | `defaultUrls` | 1 → 2 | `10` | Fallback when the agent does not pass `maxUrls` per call; also caps `intelli_search`'s rendered source list. Lower values reduce cost and latency but give less thorough results. The agent's [skill guide](skills/intelli-search/SKILL.md) recommends 3 (targeted), 10 (broad), or 16 (exhaustive). Raised from 8 in v0.13.0: citation harvesting fills the URL list, so the pipeline can use more sources than prose links alone provided. |
-| `maxUrls` | 1 → 2 | `20` | Hard cap on URLs fetched. Lower caps mean faster responses and lower cost; higher caps allow more thorough research. Each extra URL adds roughly $0.007 in extract cost with the default model. Requests above the cap are silently clamped. Raised from 16 in v0.13.0. |
+| `maxUrls` | 1 → 2 | `20` | Hard cap on URLs fetched. Lower caps mean faster responses and lower cost; higher caps allow more thorough research. Each extra URL adds ≈$0.007 in extract cost with the default model. Requests above the cap are silently clamped. Raised from 16 in v0.13.0. |
 | `cacheDir` | 4, 5 | `.search` | Directory where research sessions are cached. Change this to keep project-specific research separate. Example: `".my-research-cache"`. |
-| `extractMaxChars` | 3. Extract | `150000` | Maximum characters of raw page content fed to the extract LLM per page. **Lower this when using an extract model with a small context window** (e.g. 256K) to prevent context overflow. Raise it if pages are truncated and your model has ample headroom. Each 50K chars consumes roughly 12K input tokens. |
+| `extractMaxChars` | 3. Extract | `150000` | Maximum characters of raw page content fed to the extract LLM per page. **Lower this when using an extract model with a small context window** (e.g. 256K) to prevent context overflow. Raise it if pages are truncated and your model has ample headroom. Each 50K chars consumes ≈12K input tokens. |
 | `extractionConcurrency` | 3. Extract | `4` | Number of per-page extractions sent to the extract model simultaneously. Bounded so a wide result set does not fire many concurrent LLM calls and trigger rate limiting. Raise it (6-8) on generous rate limits for faster extraction; lower it (1-2) on tight limits. |
 | `extractionMaxTokens` | 3. Extract | `3000` | Maximum output tokens for each per-page extraction. Higher values preserve more detail at higher cost. **Lower this when using a model with a small context window** so the output does not crowd out the input. The extract prompt targets 3,000-5,000 characters; 3,000 tokens covers this comfortably. |
 | `collationMaxTokens` | 4. Collate | `4000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. **Lower this when using a collation model with a small context window** (the output must fit alongside all extraction inputs). The summary you see in the agent context is bounded by this setting. |

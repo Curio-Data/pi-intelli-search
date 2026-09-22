@@ -177,7 +177,8 @@ const DEFAULT_HISTORY: Record<
     // Same per-token pricing on OpenRouter ($0.30/M in, $1.20/M out);
     // M3 brings a 1M context and stronger collation epistemics (stated
     // ranking methodology, caveated popularity claims, compatibility
-    // warnings) at the cost of roughly 30% longer extractions.
+    // warnings) at the cost of ≈2× the extraction output tokens
+    // (2.7K vs 4.7K to 5.3K chars per page; see docs/BENCHMARKS.md).
     extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },

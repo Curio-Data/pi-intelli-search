@@ -145,4 +145,4 @@ This is strictly local telemetry. No network call is added, no data leaves the h
 
 ## Cost Estimate
 
-The canonical, current cost estimate lives in the README [Cost](../README.md#cost) section so model and engine changes require one edit, not two. The summary: ≈$0.06 per 10-page session with default models, search ≈$0.007; alternative search configurations are itemised in the README's [Choosing an Alternative Search Configuration](../README.md#choosing-an-alternative-search-configuration) table.
+The canonical, current cost estimate lives in the README [Cost](../README.md#cost) section so model and engine changes require one edit, not two; alternative search configurations are itemised in the README's [Choosing an Alternative Search Configuration](../README.md#choosing-an-alternative-search-configuration) table.

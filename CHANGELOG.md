@@ -9,13 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Model benchmark harness.** `scripts/benchmark-models.sh` replays the identical research request through competing extract/collate models in isolated `Pi` environments and prints per-run telemetry. `docs/BENCHMARKS.md` records the methodology and the five-run baseline (gemini-3.8-flash, minimax-m3, minimax-m2.7) behind this release's default change. Any model `Pi` supports can be benchmarked the same way.
+- **Model benchmark harness.** `scripts/benchmark-models.sh` replays the identical research request through competing extract/collate models in isolated `Pi` environments and prints per-run telemetry. `docs/BENCHMARKS.md` records the methodology and the five-run baseline (`gemini-3.8-flash`, `minimax-m3`, `minimax-m2.7`) behind this release's default change. Any model `Pi` supports can be benchmarked the same way.
 
 ### Changed
 
-- **Default extract and collate model moved from `openrouter/minimax/minimax-m2.7` to `openrouter/minimax/minimax-m3`.** Identical per-token pricing on OpenRouter, an approximately 1M context window, and the strongest collation epistemics measured.
-- **m3 reports state their evidence base.** In the benchmark series m3 opened every report by naming its ranking methodology and caveating the absence of authoritative npm statistics, surfaced low-evidence entries instead of dropping them, and flagged Svelte 5 compatibility warnings; m2.7 and gemini-3.8-flash did none of these (2 for 2 against 0 for 3).
-- **Extractions run roughly twice as long as m2.7's.** A default 10-page session costs ≈$0.09 instead of ≈$0.06. Pin `minimax/minimax-m2.7` explicitly to keep the leaner extractions.
+- **Default extract and collate model moved from `openrouter/minimax/minimax-m2.7` to `openrouter/minimax/minimax-m3`.** Identical per-token pricing on OpenRouter, an ≈1M context window, and the strongest collation epistemics measured.
+- **MiniMax M3 reports state their evidence base.** In the benchmark series M3 opened every report by naming its ranking methodology and caveating the absence of authoritative npm statistics, surfaced low-evidence entries instead of dropping them, and flagged Svelte 5 compatibility warnings; M2.7 and Gemini 3.8 Flash did none of these (2 for 2 against 0 for 3).
+- **Extraction output runs ≈2× M2.7's.** A default 10-page session costs ≈$0.09 instead of ≈$0.06. Pin `minimax/minimax-m2.7` explicitly to keep the leaner extractions.
 
 ### Fixed
 

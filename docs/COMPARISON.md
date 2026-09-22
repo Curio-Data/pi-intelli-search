@@ -173,4 +173,4 @@ Approximate cost per research session with 10 pages. Token rates sourced from pr
 
 `intelli-search` has a cost because it does more work: LLM extraction, LLM collation, and LLM cache suggest. The ≈$0.09 per session is intentional. It buys targeted, deduplicated, cached results. Extensions without LLM processing are free but deliver raw content to the agent, which then spends its own reasoning tokens (and context) sorting through it. The persistent cache reduces costs over time through reuse.
 
-Costs scale with the chosen models. The figures above use the defaults (Sonar for search, MiniMax M3 via OpenRouter for extraction and collation; M3 writes roughly twice the extraction output of M2.7 at the same per-token price). Swapping to cheaper or more expensive models changes the per-session cost proportionally.
+Costs scale with the chosen models. The figures above use the defaults (Sonar for search, MiniMax M3 via OpenRouter for extraction and collation; M3 writes ≈2× the extraction output of M2.7 at the same per-token price). Swapping to cheaper or more expensive models changes the per-session cost proportionally.
