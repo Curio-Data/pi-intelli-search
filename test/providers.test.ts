@@ -40,7 +40,7 @@ describe("REQUIRED_MODELS pricing", () => {
     assert.strictEqual(pro!.cost.output, 15.0);
   });
 
-  it("registers perplexity/sonar-pro-search (post-Sonar-sunset search model)", () => {
+  it("registers perplexity/sonar-pro-search (alternative search model)", () => {
     const sps = REQUIRED_MODELS.find((m) => m.id === "perplexity/sonar-pro-search");
     assert.ok(sps, "perplexity/sonar-pro-search should be defined");
     assert.strictEqual(sps!.cost.input, 3.0);

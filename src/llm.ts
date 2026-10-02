@@ -31,9 +31,12 @@ import {
  * silently drops the systemPrompt field. The registry's streamSimple() accepts a
  * raw Context, normalises it, resolves auth, and applies the auth baseUrl
  * override internally — exactly what this file did by hand before, plus
- * normalisation. Structural subset of `Pi`'s ModelRegistry; on `Pi` <= 0.85 the
- * streamSimple property is absent and the legacy provider path below is used
- * instead.
+ * normalisation. pi-ai 1.0.0 formalised the contract in the type system:
+ * the Provider interface now declares streamSimple(model, context:
+ * TranscriptContext, ...), which makes this facade the only type-correct
+ * dispatch on current `Pi`. Structural subset of `Pi`'s ModelRegistry; on
+ * `Pi` <= 0.85 the streamSimple property is absent and the legacy provider
+ * path below is used instead.
  *
  * The seam carries the REGISTRY OBJECT, not a detached streamSimple function:
  * Pi's implementation reads `this.runtime`, so a detached call throws

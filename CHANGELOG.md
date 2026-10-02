@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Removed the Sonar retirement advisory.** OpenRouter continues to serve `perplexity/sonar` past Perplexity's direct-API sunset date, so the README advisory, the sunset framing in the alternative-search-configuration docs, and stale references in code comments and tests are gone. The default search model is unchanged.
+
+### Compatibility
+
+- **Audited and verified through `Pi` 1.0.0** (0.87.1, 0.99.0-0.99.2, and 1.0.0 reviewed; no code changes required). The model-registry facade, the `fetch`/`onPayload` request hooks, the settings trust APIs, and the event surface are intact; pi-ai 1.0.0 formalises the 0.86 `TranscriptContext` contract in its types, which the dual-path dispatch already handles. Full unit suite and the live E2E pipeline pass on `Pi` 1.0.0. The minimum supported version stays `Pi` 0.81.1.
+
 ## [0.14.0] - 2026-09-07
 
 ### Added

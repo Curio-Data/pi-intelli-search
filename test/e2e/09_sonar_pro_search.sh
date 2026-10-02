@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
 # test/e2e/09_sonar_pro_search.sh — E2E test for perplexity/sonar-pro-search
-# as the search model (the post-Sonar-sunset drop-in option)
+# as the search model (the settings-only drop-in option)
 #
 # Proves the full path: the extension's models.json merge registers
 # perplexity/sonar-pro-search on first session_start in a VANILLA isolated
 # agent dir, pre-flight validation resolves it, the live call succeeds, and
 # the response yields links the pipeline can fetch. This is the
 # configuration users adopt with a settings.json change only (no code
-# change) after Perplexity sunsets Sonar Chat Completions on 2026-09-27.
+# change) when they want the agentic multi-step search model.
 #
 # Usage:
 #   ./test/e2e/09_sonar_pro_search.sh
@@ -82,7 +82,7 @@ e2e_write_auth "$ISOLATED_AGENT_DIR"
 
 # ── settings.json — search model swapped to sonar-pro-search ──────
 # Everything else stays on defaults. This is exactly the settings.json
-# change a user makes to adopt the post-sunset search model. The loop
+# change a user makes to adopt the alternative search model. The loop
 # model is scaffolding (split form per lib.sh).
 cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
 {

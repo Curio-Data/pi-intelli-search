@@ -25,8 +25,6 @@ A `Pi` extension for deep web research. It searches via a search-grounded model 
 - 🎯 **Configurable:** Swap any pipeline stage (search, extract, collate) to any model `Pi` supports.
 - 💰 **Low cost:** ≈$0.09 per research session with default settings.
 
-> **Search model advisory (2026-09).** Perplexity retires the Sonar Chat Completions endpoints on **2026-09-27**. Whether the `openrouter/perplexity/sonar` route survives that date is up to [OpenRouter](https://openrouter.ai), which has published no statement. Two alternatives are [the web search server tool](#openrouter-web-search-server-tool) (any OpenRouter chat model, from ≈$0.008 per search) and [`perplexity/sonar-pro-search`](#choosing-an-alternative-search-configuration) (drop-in model swap, ≈$0.05 per search); both are settings-only changes. The default search model is unchanged.
-
 ## Launch Blog Post
 
 <p align="center">
@@ -206,7 +204,7 @@ Write nothing. You get Sonar search with citation harvesting, MiniMax M3 extract
 
 ### Recipe 2: Web Search Tool + Nano
 
-Any OpenRouter chat model gains live search through the `openrouter:web_search` server tool, so nothing depends on a search-native model family. This is the cheapest post-sunset migration (≈$0.008 per search). The `reasoning: "minimal"` pin matters: GPT-5 family models burn their completion budget on reasoning when left unconstrained.
+Any OpenRouter chat model gains live search through the `openrouter:web_search` server tool, so nothing depends on a search-native model family. This is the cheapest search configuration (≈$0.008 per search). The `reasoning: "minimal"` pin matters: GPT-5 family models burn their completion budget on reasoning when left unconstrained.
 
 ```jsonc
 {
@@ -415,7 +413,7 @@ All three pipeline stages use independently configurable models. Defaults are ch
 
 - **Is idempotent.** It is safe across extension reloads and updates.
 
-The same single-key argument covers the post-sunset alternatives: the [web search server tool](#openrouter-web-search-server-tool) and [`perplexity/sonar-pro-search`](#choosing-an-alternative-search-configuration) both route through the same OpenRouter account.
+The same single-key argument covers the alternative search configurations: the [web search server tool](#openrouter-web-search-server-tool) and [`perplexity/sonar-pro-search`](#choosing-an-alternative-search-configuration) both route through the same OpenRouter account.
 
 ### Source Harvesting from Citations
 
@@ -466,13 +464,13 @@ The extension exposes a subset of the server tool's parameters. Upstream `mode`,
 
 ### Choosing an Alternative Search Configuration
 
-Perplexity states that its Sonar API is supported until September 27, 2026 (see its [migration guide](https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/overview)). This release does not change the default search model. It adds two configurable alternatives. Check [OpenRouter](https://openrouter.ai) for current availability: the direct API sunset notice does not by itself establish the retirement date of each OpenRouter model.
+The default search model is `perplexity/sonar` (≈$0.007 per search). Two configurable alternatives use the same OpenRouter account:
 
 | Option | Model | Setting | Cost per search |
 |---|---|---|---|
 | Server tool | `openai/gpt-5-nano` + `engine: "exa"` | `searchWebSearch.enabled: true` | ≈$0.008 |
 | Model swap | `perplexity/sonar-pro-search` | `searchModel` only | ≈$0.05 |
-| Current default | `perplexity/sonar` | none | ≈$0.007, direct API retires 2026-09-27 |
+| Current default | `perplexity/sonar` | none | ≈$0.007 |
 
 The model swap is settings-only:
 
@@ -490,7 +488,7 @@ The model swap is settings-only:
 }
 ```
 
-`perplexity/sonar-pro-search` bills $18 per 1,000 requests on top of $3/$15 per 1M tokens ([model card](https://openrouter.ai/perplexity/sonar-pro-search)). It buys agentic multi-step search; it is not the cheap migration. Explicitly disabling `searchWebSearch` in the example makes it safe to apply after previously enabling the server tool: changing `searchModel` alone does not clear that separate setting.
+`perplexity/sonar-pro-search` bills $18 per 1,000 requests on top of $3/$15 per 1M tokens ([model card](https://openrouter.ai/perplexity/sonar-pro-search)). It buys agentic multi-step search; it is not the cheap option. Explicitly disabling `searchWebSearch` in the example makes it safe to apply after previously enabling the server tool: changing `searchModel` alone does not clear that separate setting.
 
 ### Swapping the Extract and Collate Model
 
@@ -707,7 +705,7 @@ Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<has
 
 ## Compatibility
 
-- **`Pi` >= 0.81.1:** Core functionality, trusted project settings, the configurable `CONFIG_DIR_NAME`, provider-based `pi-ai` calls, and sequential cache-writing tools. On `Pi` >= 0.86, LLM calls dispatch through the `ctx.modelRegistry.streamSimple()` facade so system prompts reach the model; `Pi` 0.81.1 through 0.85.x use the direct provider path. Compatibility audited and verified through `Pi` 0.87.0; the `fetch`/`onPayload` request hooks used by citation harvesting and the web search tool are verified against pi-ai 0.87.0.
+- **`Pi` >= 0.81.1:** Core functionality, trusted project settings, the configurable `CONFIG_DIR_NAME`, provider-based `pi-ai` calls, and sequential cache-writing tools. On `Pi` >= 0.86, LLM calls dispatch through the `ctx.modelRegistry.streamSimple()` facade so system prompts reach the model; `Pi` 0.81.1 through 0.85.x use the direct provider path. Compatibility audited and verified through `Pi` 1.0.0 (2026-10-02); the `fetch`/`onPayload` request hooks used by citation harvesting and the web search tool are verified against pi-ai 1.0.0.
 - UI notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, RPC).
 - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
 - Retry and timeout are owned by the extension (`callLlm()`), independent of `Pi`'s `retry.provider.maxRetries`. The extension forces `maxRetries: 0` and runs its own full-jitter backoff, so changing `Pi`'s provider-retry setting has no effect on these tools.
