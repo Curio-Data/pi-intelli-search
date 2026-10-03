@@ -11,7 +11,7 @@ The owner approved the architecture and specified the MCP package name on 2026-1
 1. Read root [`AGENTS.md`](../../../AGENTS.md), including compatibility, testing, documentation and release rules.
 2. Read [Research and Decisions](RESEARCH.md) for the approved direction, inspected source revision, official references and evidence limitations.
 3. Read [Phase 0 Results](PHASE-0.md) and the [fixture guide](../../../test/fixtures/native-contract/README.md) for verified interfaces, baseline contracts and test commands.
-4. Read [Phase 1 Results](PHASE-1.md) for implemented interfaces, the cache-path correction and current verification.
+4. Read [Phase 1 Results](PHASE-1.md) and [Phase 1 Peer Review](PHASE-1-REVIEW.md) for implemented interfaces, the cache-path correction, independent findings and current verification.
 5. Read [Implementation Plan](IMPLEMENTATION.md) for the target layout, compatibility contract, dependency boundaries, phased work and acceptance matrix.
 6. Start at Phase 2. Check the current working tree and run the native fixture suite before moving code; do not regenerate its expected files to hide a regression.
 
@@ -31,6 +31,8 @@ The handoff is self-contained in tracked documentation. The optional `.search/` 
 ## Handover Verification
 
 Before Phase 1, a fresh `Pi` session using native `zai/glm-5.3` reviewed the Phase 0 handoff without prior conversation, memory or research-cache access. Its verdict was PASS WITH NONBLOCKING NOTES; both entry checks passed. The documentation notes have been incorporated. See [Cold-Start Handover Review](HANDOVER-GLM.md) for scope, provenance, changes and limitations. This historical review does not cover the Phase 1 implementation; its evidence is recorded in [Phase 1 Results](PHASE-1.md#verification).
+
+The subsequent [Phase 1 Peer Review](PHASE-1-REVIEW.md) used two independent native reviewers, `zai/glm-5.3` and `deepseek/deepseek-flash`. Neither found a blocker. The custom-cache instruction defect was fixed, contract comments were clarified, and both reviewers checked the follow-up changes. The review record distinguishes corrected findings, a retracted false positive and later-phase work.
 
 ## Fresh-Agent Entry Checks
 
@@ -56,7 +58,7 @@ Read the documents in the order above before editing. The entry checks are deter
 
 ## Planning Verification
 
-The initial planning commit contained documentation only. The following historical checks exercised the existing implementation on the planning host, not the proposed MCP architecture. Current checkpoint evidence is in [Phase 1 Results](PHASE-1.md#verification).
+The initial planning commit contained documentation only. The following historical checks exercised the existing implementation on the planning host, not the proposed MCP architecture. Current checkpoint evidence is in [Phase 1 Results](PHASE-1.md#verification) and the subsequent [peer-review verification](PHASE-1-REVIEW.md#verification).
 
 | Check | Result | Meaning |
 |---|---|---|

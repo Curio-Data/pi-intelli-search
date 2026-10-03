@@ -473,6 +473,21 @@ describe("formatCacheSuggestions", () => {
     assert.ok(!result.includes("by a wide margin"), "should not contain the full long query");
   });
 
+  it("uses the configured display root for report instructions and the directory label", () => {
+    const matches = [
+      {
+        entry: { slug: "prior", query: "test", timestamp: "2026-01-01T00:00:00.000Z" },
+        relevance: "Related topic",
+      },
+    ];
+    for (const cacheDir of [".cache/research", "/cache/shared", "../shared"]) {
+      const result = formatCacheSuggestions(matches, cacheDir);
+      assert.ok(result.includes(`read ${cacheDir}/<slug>/report.md`), result);
+      assert.ok(result.includes(`Cache directory: \`${cacheDir}/\``), result);
+      assert.ok(!result.includes("read .search/"), result);
+    }
+  });
+
   it("includes instruction to read report.md", () => {
     const matches = [
       {

@@ -6,17 +6,22 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 export type CacheDisplayPolicy = "configured" | "absolute";
 
 export interface WorkspacePaths {
+  /** Absolute session workspace supplied by the adapter. */
   readonly workspaceRoot: string;
+  /** May lie outside workspaceRoot for absolute or parent-relative native settings. */
   readonly cacheRoot: string;
+  /** Under cacheRoot, not necessarily under workspaceRoot. */
   readonly stagingRoot: string;
   /** Textual root for prompts/results, not for filesystem access. */
   readonly cacheDisplayRoot: string;
 }
 
 /**
- * Resolve native-compatible paths without consulting process.cwd(). Absolute
- * and parent-relative native cache settings remain supported. This is not an
- * MCP containment validator: that adapter must validate traversal/symlinks.
+ * Require an absolute workspaceRoot from the adapter. A relative root is a
+ * caller error: resolving it against process.cwd() would break workspace independence.
+ * Absolute and parent-relative native cache settings remain supported, so
+ * cacheRoot and stagingRoot may lie outside workspaceRoot. This is not an MCP
+ * containment validator: that adapter must validate traversal/symlinks.
  */
 export function resolveWorkspacePaths(
   workspaceRoot: string,

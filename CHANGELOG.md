@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Cache files, locks, indexes and telemetry now resolve against the `Pi` session workspace when it differs from the process working directory. Paths shown in prompts, reports and results retain their configured form.
+- Related-cache suggestions now use the configured cache directory in their report-reading instruction instead of always pointing to `.search/`.
 
 ### Changed
 

@@ -157,6 +157,12 @@ async function createStagingDir(parent: string): Promise<string> {
   return staging;
 }
 
+/**
+ * Return an absolute physical cache path. `cwd` must be an absolute workspace
+ * root; relative roots are rejected rather than resolved against process.cwd().
+ * `cacheDir` accepts a configured relative path or an already-resolved absolute
+ * cache root (which takes precedence over `cwd`). Use displayCachePath for text.
+ */
 export function makeCachePath(query: string, cwd: string, cacheDir: string): string {
   const date = new Date().toISOString().slice(0, 10);
   const words = query
@@ -428,8 +434,7 @@ export function formatCacheSuggestions(
 
   let out = "\n---\n\n## 📚 Related cached searches\n\n";
   out += "The following previous searches may contain relevant supplementary information. ";
-  out +=
-    "Read a report with `read .search/<slug>/report.md` if the live results are insufficient.\n\n";
+  out += `Read a report with \`read ${cacheDir}/<slug>/report.md\` if the live results are insufficient.\n\n`;
   out += "| # | Query | Age | Why related |\n";
   out += "|---|-------|-----|-------------|\n";
   for (const [i, m] of matches.entries()) {

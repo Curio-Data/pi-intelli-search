@@ -54,6 +54,10 @@ The independence test denies package resolution explicitly so ancestor `node_mod
 
 The live scenario used its documented `kimi-coding/k3` agent loop and configured [_OpenRouter_](https://openrouter.ai) pipeline models. Real host credentials were read only by the existing isolated test harness; no host configuration was modified. No release, staged publication or plugin installation occurred.
 
+## Subsequent Peer Review
+
+Two independent native reviewers assessed this checkpoint and its follow-up corrections. [Phase 1 Peer Review](PHASE-1-REVIEW.md) records model provenance, findings, dispositions and re-run gates. The custom-cache suggestion instruction now uses its configured display root; the default frozen fixture text remains unchanged. Phase 2 is still next.
+
 ## Continuation
 
 Start Phase 2 by moving operation bodies behind the new model and execution contracts, preserving native registration and rendering. Keep the fixture JSON unchanged unless an intentional behavioural correction is separately documented. Move shared helpers with forwarding exports, then extract retry/timeout policy with one owner.
