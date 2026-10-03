@@ -16,6 +16,8 @@ The owner approved the architecture and specified the MCP package name on 2026-1
 6. Read [Implementation Plan](IMPLEMENTATION.md) for the target layout, compatibility contract, dependency boundaries, phased work and acceptance matrix.
 7. Start at Phase 3. Check the current working tree and run the native fixture suite before editing; do not regenerate its expected files to hide a regression.
 
+The reviewed Phase 2 implementation and corrections are committed in `86b1e4e`. Subsequent handoff-documentation commits remain on `plan/mcp-intelli-search`; use the current branch tip rather than resetting to the historical checkpoint.
+
 The handoff is self-contained in tracked documentation. The optional `.search/` cache and `.tmp/` verification logs are gitignored and are not required to understand or implement the plan.
 
 ## Fixed Requirements
@@ -35,11 +37,13 @@ Before Phase 1, a fresh `Pi` session using native `zai/glm-5.3` reviewed the Pha
 
 The subsequent [Phase 1 Peer Review](PHASE-1-REVIEW.md) used two independent native reviewers, `zai/glm-5.3` and `deepseek/deepseek-flash`. Neither found a blocker. The custom-cache instruction defect was fixed, contract comments were clarified, and both reviewers checked the follow-up changes. The review record distinguishes corrected findings, a retracted false positive and later-phase work. These reviews do not cover Phase 2. The subsequent [Phase 2 Peer Review](PHASE-2-REVIEW.md) used independent native `qwen-token-plan/qwen3.8-max` and `deepseek/deepseek-flash` reviewers. Both final verdicts were `PASS` after corrections and follow-up checks.
 
+A subsequent fresh native `zai/glm-5.3` agent verified the committed Phase 2 handoff without earlier conversation, memory or research-cache access. It reconstructed Phase 3 and passed every documented entry check. [Phase 2 Cold-Start Handover](HANDOVER-PHASE-2.md) records its initial `PASS WITH NONBLOCKING NOTES` verdict, evidence limits, documentation clarifications and subsequent documentation-only `PASS`.
+
 ## Fresh-Agent Entry Checks
 
 Resume from `plan/mcp-intelli-search`, not `main`. Fetch `origin` and inspect the working tree before switching branches or pulling. Preserve unrelated changes; do not reset or overwrite them. With a clean checkout, use `git switch plan/mcp-intelli-search` and `git pull --ff-only origin plan/mcp-intelli-search`.
 
-Run `npm ci` if dependencies are absent or differ from the committed lockfile. Then run these checks from the repository root:
+Run `npm ci` if dependencies are absent, differ from the committed lockfile or their provenance is uncertain. `npm ls --depth=0` detects missing or invalid top-level dependencies but does not establish exact lockfile equivalence; use a clean install when in doubt. Then run these checks from the repository root:
 
 ```bash
 mkdir -p .tmp/mcp-phase3

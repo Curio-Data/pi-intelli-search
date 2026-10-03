@@ -94,7 +94,7 @@ scripts/                         Build, packaging and validation helpers
 
 Keep forwarding exports at old internal paths while tests and adapters migrate. Remove them only after all repository consumers have been checked; preserving the public entry points is mandatory. Do not duplicate functions in old and new locations.
 
-The tree is a target, not a requirement to move every file in one commit. First introduce dependency seams, then move small groups of modules with tests.
+The tree is a target, not a requirement to move every file in one commit. First introduce dependency seams, then move small groups of modules with tests. In particular, `src/core/defaults.ts` does not exist at the Phase 2 checkpoint: tuning defaults still live in native `src/settings.ts`. Phase 3 must share the applicable tuning values without importing host settings discovery or making the native paid-provider/model defaults implicit standalone selections.
 
 ### Build Boundaries
 
