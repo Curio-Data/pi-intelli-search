@@ -263,6 +263,8 @@ docs/
 scripts/
 ├── analyze-sessions.sh       # Aggregate meta.json telemetry sidecars across sessions
 ├── benchmark-models.sh       # A/B benchmark harness for extract/collate models (live quota)
+├── plot-downloads.mts       # Download chart generation (npm run chart)
+├── README.md                # Script usage guide
 ├── build-mcp.mjs            # Audited standalone bundles and legal-file copies
 ├── verify-mcp-install.mjs    # Production-only install and native-fetch verification
 └── capture-native-contract.mts # Explicit compatibility-fixture regeneration
@@ -406,7 +408,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 - **Tool definition pattern:** Each tool exports an object with `name`, `label`, `description`, `promptSnippet`, `promptGuidelines`, `parameters` (TypeBox schema), and `execute()`.
 - **Error handling:** Extraction failures are caught per-page (do not fail the whole pipeline). Transient failures (429, 5xx, timeouts) are retried with full-jitter backoff honouring Retry-After; a failure that survives all attempts throws an actionable error.
 - **`Pi` 0.81.1 baseline:** The extension uses the supported settings trust APIs, `CONFIG_DIR_NAME`, async model-registry refresh semantics, and `modelRegistry.getProvider()` from this version; it feature-detects the `Pi` >= 0.86 registry facade for LLM dispatch.
-- **Standalone Boundary:** `packages/mcp/` bundles only the shared core and adapter source; every external runtime dependency belongs in its manifest. Keep `Pi` and protocol libraries out of each other's runtime graphs. Shared tuning lives in `src/core/defaults.ts`; native model defaults remain in `src/settings.ts`. Preserve both tarball-install gates. The standalone cache link checks reject existing escapes but are not a sandbox against concurrent hostile filesystem mutation.
+- **Standalone Boundary:** `packages/mcp/` bundles only the shared core and adapter source; every external runtime dependency belongs in its manifest. Keep `Pi` libraries out of the standalone runtime and MCP protocol libraries out of the native extension runtime. Phase 4 adds the protocol SDK only to the standalone package. Shared tuning lives in `src/core/defaults.ts`; native model defaults remain in `src/settings.ts`. Preserve both tarball-install gates. The standalone cache link checks reject existing escapes but are not a sandbox against concurrent hostile filesystem mutation.
 - **Self-Contained Pipeline:** `intelli_research` executes its stages directly rather than invoking registered host tools. Keep that design for baseline compatibility and host-independent reuse, even on hosts that provide `ctx.executeTool()`.
 - **SPDX headers:** Source files include `// SPDX-License-Identifier: Apache-2.0` and copyright notices.
 

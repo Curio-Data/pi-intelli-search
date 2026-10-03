@@ -17,7 +17,7 @@ The owner approved the architecture and specified the MCP package name on 2026-1
 7. Read [Implementation Plan](IMPLEMENTATION.md) for the target layout, compatibility contract, dependency boundaries, phased work and acceptance matrix.
 8. Start at Phase 4. Check the current working tree and run the native fixture suite before editing; do not regenerate its expected files to hide a regression.
 
-The reviewed Phase 2 implementation is the historical `86b1e4e` checkpoint. Phase 3 continues from `0c26972` on `plan/mcp-intelli-search`; use the current branch tip rather than resetting to either historical checkpoint.
+The reviewed Phase 2 implementation is the historical `86b1e4e` checkpoint. Phase 3 continues from `0c26972` and is committed as `59a3fa4` on `plan/mcp-intelli-search`. Subsequent handoff-documentation commits remain on that branch; use its current tip rather than resetting to a historical checkpoint.
 
 Both independent Phase 3 reviewers returned final `PASS` verdicts after corrections and frozen-tree follow-up. [Phase 3 Peer Review](PHASE-3-REVIEW.md) records findings, evidence and limits.
 
@@ -41,6 +41,8 @@ Before Phase 1, a fresh `Pi` session using native `zai/glm-5.3` reviewed the Pha
 The subsequent [Phase 1 Peer Review](PHASE-1-REVIEW.md) used two independent native reviewers, `zai/glm-5.3` and `deepseek/deepseek-flash`. Neither found a blocker. The custom-cache instruction defect was fixed, contract comments were clarified, and both reviewers checked the follow-up changes. The review record distinguishes corrected findings, a retracted false positive and later-phase work. These reviews do not cover Phase 2. The subsequent [Phase 2 Peer Review](PHASE-2-REVIEW.md) used independent native `qwen-token-plan/qwen3.8-max` and `deepseek/deepseek-flash` reviewers. Both final verdicts were `PASS` after corrections and follow-up checks.
 
 A subsequent fresh native `zai/glm-5.3` agent verified the committed Phase 2 handoff without earlier conversation, memory or research-cache access. It reconstructed Phase 3 and passed every documented entry check. [Phase 2 Cold-Start Handover](HANDOVER-PHASE-2.md) records its initial `PASS WITH NONBLOCKING NOTES` verdict, evidence limits, documentation clarifications and subsequent documentation-only `PASS`.
+
+A fresh native `zai/glm-5.3` session subsequently verified the committed Phase 3 handoff without prior conversation, memory or research-cache access. It reconstructed Phase 4 and passed every documented entry check after `npm ci`. [Phase 3 Cold-Start Handover](HANDOVER-PHASE-3.md) records its initial `PASS`, the documentation-only clarifications and follow-up `PASS`.
 
 ## Fresh-Agent Entry Checks
 
