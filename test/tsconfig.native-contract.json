@@ -9,6 +9,10 @@
   "include": [
     "native-contract.test.ts",
     "core-boundary.test.ts",
+    "core-operations.test.ts",
+    "core-llm.test.ts",
+    "core-cache.test.ts",
+    "core-console.test.ts",
     "native-model-client.test.ts",
     "workspace-paths.test.ts",
     "../scripts/capture-native-contract.mts"

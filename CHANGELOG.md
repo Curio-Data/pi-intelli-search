@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Cache files, locks, indexes and telemetry now resolve against the `Pi` session workspace when it differs from the process working directory. Paths shown in prompts, reports and results retain their configured form.
 - Related-cache suggestions now use the configured cache directory in their report-reading instruction instead of always pointing to `.search/`.
+- Documentation downloads stage under the configured cache root instead of the operating-system temporary directory, with cleanup after cancellation or cache-write failure.
+- Permanent provider exceptions no longer retry as application timeouts. Late citations from failed attempts cannot contaminate successful search results.
+- Cancellation propagates through research stages and cache-lock waits instead of returning a degraded success.
+- Optional documentation staging failures no longer discard completed research. Concurrent dependency diagnostic suppression restores console methods and keeps each fetch's error flags isolated.
 
 ### Changed
 

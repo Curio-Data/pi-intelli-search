@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
+
 // src/llm.ts — LLM calling utilities using pi native auth
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
@@ -13,14 +16,13 @@ import {
 import type { ModelConfig } from "./types.js";
 import type { ModelRetryConfig, ModelUsage } from "./core/contracts.js";
 import type { AnnotationSink } from "./annotations.js";
-import { settleAnnotationSink, wrapFetchForAnnotations } from "./annotations.js";
 import {
-  withRetry,
-  isRetryableMessage,
-  parseRetryAfterMs,
-  callWithAbortTimeout,
-  errMsg,
-} from "./util.js";
+  createAnnotationSink,
+  settleAnnotationSink,
+  wrapFetchForAnnotations,
+} from "./annotations.js";
+import { logErr } from "./util.js";
+import { runModelWithPolicy } from "./core/llm.js";
 
 /**
  * The `Pi` >= 0.86 model registry (facade method added in `Pi` 0.86.0, #8964).
@@ -110,7 +112,7 @@ export type LlmRetryConfig = ModelRetryConfig;
  *
  * Transient failures (HTTP 429, 5xx, network/timeout) are retried with
  * full-jitter exponential backoff, honouring any Retry-After hint in the
- * provider error. Retry is owned here rather than by the underlying SDK
+ * provider error. Retry is owned by the shared model policy, not the SDK
  * (maxRetries is forced to 0) so the two layers don't compound and so we can
  * honour Retry-After and the AbortSignal. Since Pi 0.76.0 the SDK default is
  * also 0 (retry.provider.maxRetries), so the forced 0 is now defensive rather
@@ -205,7 +207,7 @@ export async function callLlm(
   // 4. Call via pi-ai: provider.streamSimple() sends the provider-neutral
   //    reasoning parameter, normalised per API (required by MiniMax M3 etc.).
   //
-  //    Retry is owned by withRetry below, not by the SDK: maxRetries is forced
+  //    Retry is owned by runModelWithPolicy, not by the SDK: maxRetries is forced
   //    to 0 so the SDK's own (Retry-After-blind, non-abortable) retries don't
   //    compound with ours and amplify load. Since Pi 0.76.0 the SDK default is
   //    also 0, so this force is defensive: it keeps these tools aligned even if
@@ -215,149 +217,59 @@ export async function callLlm(
   //    a 2xx anyway; it surfaces as stopReason "error" with the status in
   //    errorMessage, which the classifier below inspects. The capture is kept
   //    for the rare 2xx-then-429-header case and non-OpenRouter providers.
-  const retry = options?.retry;
-  const userSignal = options?.signal;
-  const timeoutMs = options?.timeoutMs;
-  // Annotation side channel: wrap fetch once; the sink is cleared at each
-  // attempt start so a retry never accumulates citations from failed
-  // attempts alongside the successful one.
-  const annotationFetch = options?.annotations
-    ? wrapFetchForAnnotations(globalThis.fetch.bind(globalThis), options.annotations)
-    : undefined;
-  let onResponseRetryAfterMs: number | undefined;
-  // Tracks whether OUR per-attempt timeout (not a user Esc) aborted the last
-  // attempt, so the classifier can retry it and the post-loop check can throw
-  // a clear timeout error rather than returning an empty aborted response.
-  let lastAttemptTimedOut = false;
-
-  // Per-attempt stream options (the abort signal differs per attempt). Both
-  // transports receive the identical option set: the facade merges auth into
-  // these itself (same values, same source), the provider path depends on
-  // them entirely.
-  const buildStreamOptions = (signal: AbortSignal | undefined): SimpleStreamOptions => ({
-    apiKey: auth.apiKey,
-    headers: auth.headers,
-    env: auth.env,
-    ...(signal ? { signal } : {}),
-    ...(annotationFetch ? { fetch: annotationFetch } : {}),
-    maxTokens: options?.maxTokens,
-    reasoning: options?.reasoning ?? "low",
-    ...(options?.payloadPatch
-      ? {
-          onPayload: (payload: unknown) =>
-            options!.payloadPatch!(payload as Record<string, unknown>),
-        }
-      : {}),
-    maxRetries: 0,
-    onResponse: (res) => {
-      if (res.status === 429 || res.status >= 500) {
-        const ra = res.headers["retry-after"];
-        const secs = ra ? Number(ra) : NaN;
-        onResponseRetryAfterMs = Number.isFinite(secs) ? secs * 1000 : undefined;
-      }
-    },
-  });
-  // The raw Context is passed on both paths: on Pi >= 0.86 the facade folds
-  // systemPrompt into the normalised transcript; on Pi <= 0.85 the provider
-  // reads the field directly. Either way the system prompt reaches the model.
   const context: Context = { systemPrompt, messages };
-  const dispatch = useFacade
-    ? (signal: AbortSignal | undefined) =>
-        __harness.registryStreamSimple(registry86!, model, context, buildStreamOptions(signal))
-    : (signal: AbortSignal | undefined) =>
-        __harness.streamSimple(provider, requestModel, context, buildStreamOptions(signal));
-
-  const response = await withRetry(
-    async () => {
-      onResponseRetryAfterMs = undefined;
-      lastAttemptTimedOut = false;
+  const response = await runModelWithPolicy(
+    async (signal, hints) => {
+      // Each attempt has its own sink. Late reads from a failed attempt cannot
+      // contaminate successful citations even when an old clone is still settling.
+      const annotations = options?.annotations ? createAnnotationSink() : undefined;
       if (options?.annotations) options.annotations.citations.length = 0;
-
-      // Hard per-attempt timeout. The SDK's request timeout does not cover a
-      // stalled *streaming* body — under rate limiting a provider can hold the
-      // stream open after a 200, hanging the read until the SDK's ~10-minute
-      // default. callWithAbortTimeout aborts the whole call (combined with the
-      // user's signal so Esc still cancels) and reports whether it timed out.
-      //
-      // The stream may resolve or throw on abort depending on the
-      // provider path — the try/catch ensures lastAttemptTimedOut is set
-      // correctly either way so the classifier can distinguish a retryable
-      // timeout from a genuine (non-retryable) error.
-      try {
-        const { value, timedOut } = await callWithAbortTimeout(dispatch, timeoutMs, userSignal);
-        lastAttemptTimedOut = timedOut;
-        return value;
-      } catch (err) {
-        // When our timer abort causes the stream to throw instead of
-        // resolve, lastAttemptTimedOut is still false. Infer it from signal
-        // state: if userSignal is NOT aborted, the most likely cause is our
-        // timeout. This lets the classifier issue a retry.
-        if (!userSignal?.aborted) {
-          lastAttemptTimedOut = true;
-        }
-        throw err;
+      const annotationFetch = annotations
+        ? wrapFetchForAnnotations(globalThis.fetch.bind(globalThis), annotations)
+        : undefined;
+      const streamOptions: SimpleStreamOptions = {
+        apiKey: auth.apiKey,
+        headers: auth.headers,
+        env: auth.env,
+        ...(signal ? { signal } : {}),
+        ...(annotationFetch ? { fetch: annotationFetch } : {}),
+        maxTokens: options?.maxTokens,
+        reasoning: options?.reasoning ?? "low",
+        ...(options?.payloadPatch
+          ? {
+              onPayload: (payload: unknown) =>
+                options.payloadPatch!(payload as Record<string, unknown>),
+            }
+          : {}),
+        maxRetries: 0,
+        onResponse: (res) => {
+          if (res.status === 429 || res.status >= 500) {
+            const ra = res.headers["retry-after"];
+            const secs = ra ? Number(ra) : NaN;
+            hints.retryAfterMs = Number.isFinite(secs) ? secs * 1000 : undefined;
+          }
+        },
+      };
+      const value = useFacade
+        ? await __harness.registryStreamSimple(registry86!, model, context, streamOptions)
+        : await __harness.streamSimple(provider, requestModel, context, streamOptions);
+      if (value.stopReason === "error")
+        return { value, error: value.errorMessage ?? "unknown error" };
+      if (annotations) {
+        await settleAnnotationSink(annotations);
+        options!.annotations!.citations.push(...annotations.citations);
       }
-    },
-    (result, error) => {
-      if (userSignal?.aborted) return { retry: false }; // genuine user cancel
-      if (lastAttemptTimedOut) return { retry: true }; // our timeout fired
-      if (error) {
-        const m = errMsg(error);
-        return isRetryableMessage(m)
-          ? { retry: true, retryAfterMs: parseRetryAfterMs(m) ?? onResponseRetryAfterMs }
-          : { retry: false };
-      }
-      if (result?.stopReason === "error" && isRetryableMessage(result.errorMessage)) {
-        return {
-          retry: true,
-          retryAfterMs: parseRetryAfterMs(result.errorMessage) ?? onResponseRetryAfterMs,
-        };
-      }
-      return { retry: false };
+      return { value };
     },
     {
-      attempts: retry?.attempts ?? 1,
-      baseDelayMs: retry?.baseDelayMs ?? 1000,
-      maxDelayMs: retry?.maxDelayMs ?? 20_000,
-      signal: userSignal,
-      onRetry: ({ attempt, delayMs, reason }) => {
-        // Surface retry activity so a slow run under rate limiting is visible
-        // (otherwise backoff looks like a hang). Matches the console.error
-        // pattern used elsewhere for non-fatal pipeline diagnostics.
-        const why = lastAttemptTimedOut ? "timeout" : reason;
-        console.error(
-          `[pi-intelli-search] ${config.provider}/${config.model}: ${why} on attempt ${attempt}, ` +
-            `retrying in ${Math.round(delayMs)}ms`,
-        );
-      },
+      model: config,
+      signal: options?.signal,
+      retry: options?.retry,
+      timeoutMs: options?.timeoutMs,
     },
+    { error: logErr, warn: (message) => console.warn(`[pi-intelli-search] ${message}`) },
   );
 
-  // 5. Check for errors. A timeout on the final attempt surfaces as an
-  //    "aborted" stopReason (our signal fired, not the user's) — turn it into a
-  //    clear, actionable error instead of returning empty content.
-  if (lastAttemptTimedOut && !userSignal?.aborted) {
-    throw new Error(
-      `LLM call timed out (${config.provider}/${config.model}) after ${timeoutMs}ms ` +
-        `per attempt across ${retry?.attempts ?? 1} attempt(s). The provider may be rate limiting or overloaded.`,
-    );
-  }
-  // User cancel: surface as AbortError rather than a misleading failure.
-  if (userSignal?.aborted) {
-    throw new DOMException("Aborted", "AbortError");
-  }
-  if (response.stopReason === "error") {
-    throw new Error(
-      `LLM call failed (${config.provider}/${config.model}): ${response.errorMessage ?? "unknown error"}`,
-    );
-  }
-
-  // 6. Extract text (skip thinking blocks)
-  // Before returning, give the annotation side channel a bounded moment to
-  // finish its background body reads: the teed clone normally completes with
-  // the SDK's own read, but callers merge the sink immediately after this
-  // returns and would otherwise race the final chunks.
-  if (options?.annotations) await settleAnnotationSink(options.annotations);
   if (response.usage) options?.onUsage?.(response.usage);
   return response.content
     .filter((c): c is { type: "text"; text: string } => c.type === "text")

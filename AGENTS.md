@@ -202,26 +202,43 @@ All `Pi` SDK packages are **peer dependencies**. They are provided by the hostin
 ```
 src/
 ├── index.ts                  # Extension entry: registers tools, events, model setup
-├── core/                     # Host-neutral contracts, explicit path policy and dependency entry
-├── native-model-client.ts    # Per-operation model adapter delegating to existing callLlm()
+├── core/                     # Host-neutral execution and shared helpers
+│   ├── operations/          # Search, extract, collate and five-stage research
+│   ├── contracts.ts         # Context, model, result, progress and identity interfaces
+│   ├── schemas.ts           # Canonical tool parameters
+│   ├── llm.ts               # Single model retry/timeout policy
+│   ├── paths.ts             # Physical roots and display policy
+│   ├── cache.ts             # Artifacts, locks and index
+│   ├── fetch.ts             # Dual page fetch and documentation downloads
+│   ├── console.ts           # Async-scoped dependency diagnostic suppression
+│   ├── annotations.ts       # Citation harvesting
+│   ├── messages.ts          # Message and appendix builders
+│   ├── prompts.ts           # System prompts
+│   ├── progress.ts          # Host-neutral stage progress
+│   ├── telemetry.ts         # Local sidecar with injected identity
+│   ├── types.ts             # Shared data types
+│   └── util.ts              # URL, concurrency and resilience helpers
+├── native-operation-context.ts # Trusted native settings, paths and result/progress mapping
+├── native-model-client.ts    # Per-operation model adapter delegating to callLlm()
+├── native-identity.ts        # Native package identity from the installed manifest
 ├── agent-dir.ts              # Native agent-directory discovery, kept out of shared utilities
 ├── host-types.ts             # Native update callback, tool result and theme types
-├── annotations.ts            # Harvest url_citation annotations from provider response bodies
-├── llm.ts                    # callLlm() - pi native auth + retry/backoff + per-call timeout + payloadPatch/reasoning/fetch hooks
-├── fetch.ts                  # Page fetching: Defuddle vs Markdown comparison, llms-full.txt
-├── prompts.ts                # System prompts for search, extraction, collation, cache suggest
+├── annotations.ts            # Forwarding export to core/annotations.ts
+├── llm.ts                    # Native auth, dispatch and hooks; invokes core model policy once
+├── fetch.ts                  # Forwarding export to core/fetch.ts
+├── prompts.ts                # Forwarding export to core/prompts.ts
 ├── providers.ts              # Custom model registration (Perplexity models) into models.json
 ├── settings.ts               # Settings loader with caching and invalidation
-├── cache.ts                  # .search/ cache read/write, index management, cache suggest helpers
-├── telemetry.ts             # Local-only meta.json sidecar: schema, builder, atomic write, version source
-├── types.ts                  # Shared TypeScript interfaces
-├── util.ts                   # URL extraction, source-section strip, inference, concurrency + retry/backoff/timeout/throttle helpers
+├── cache.ts                  # Forwarding export to core/cache.ts
+├── telemetry.ts             # Native compatibility facade; implementation in core/telemetry.ts
+├── types.ts                  # Forwarding export to core/types.ts
+├── util.ts                   # Core utility forwards plus native diagnostic prefix
 └── tools/
-    ├── intelli-research.ts   # Full pipeline orchestrator (5 stages)
-    ├── intelli-search.ts     # Standalone search via the configured search model
-    ├── intelli-extract.ts    # Standalone per-page LLM extraction
-    ├── intelli-collate.ts    # Standalone collation + cache write
-    └── shared.ts             # Shared builders: domain filter, web-search tool patch, extraction/collation messages, appendix
+    ├── intelli-research.ts   # Native research registration, progress mapping and renderer
+    ├── intelli-search.ts     # Native search registration and wrapper
+    ├── intelli-extract.ts    # Native extraction registration and wrapper
+    ├── intelli-collate.ts    # Native collation registration and wrapper
+    └── shared.ts             # Forwarding export to core/messages.ts
 
 skills/
 └── intelli-search/
@@ -242,6 +259,13 @@ test/
 ├── annotations.test.ts
 ├── cache.test.ts
 ├── compat-guard.test.ts
+├── core-boundary.test.ts     # Source/declaration audit and isolated runtime
+├── core-cache.test.ts        # Independent-process cache writes and metadata
+├── core-console.test.ts      # Concurrent diagnostic scopes and restoration
+├── core-llm.test.ts          # Shared retry/timeout/cancellation policy
+├── core-operations.test.ts   # Injected engine outcomes, staging and cancellation
+├── native-model-client.test.ts # Native adapter state and policy delegation
+├── workspace-paths.test.ts   # Workspace/display path separation
 ├── telemetry.test.ts
 ├── fetch.test.ts
 ├── index.test.ts
@@ -249,6 +273,7 @@ test/
 ├── native-contract.test.ts
 ├── fixtures/native-contract/ # Frozen tool, prompt, result, cache and telemetry contracts
 ├── helpers/native-contract.ts # Isolated native contract capture
+├── helpers/core-context.ts   # Host-free deterministic operation context
 ├── probes/mcp-sdk.mjs         # Optional isolated SDK interface probe
 ├── tsconfig.native-contract.json # Type check for contract tests and generator
 ├── prompts.test.ts
@@ -288,17 +313,18 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline descripti
 4. **Collate:** Configurable model (default: MiniMax M3) deduplicates across extractions, produces summary and cache.
 5. **Cache suggest:** LLM judge (extract model) compares current query against `.search/.index.json` and appends related previous searches to the output. This is purely additive and never blocks or gates the main result.
 
-The pipeline is self-contained, with all stages inlined in `intelli-research.ts`. Current `Pi` hosts expose `ctx.executeTool()` for nested tool calls, but this pipeline does not depend on that newer capability. Direct stage execution preserves the supported native baseline and the planned host-independent engine boundary.
+The pipeline is self-contained in `src/core/operations/research.ts`. Former shared module paths (`fetch.ts`, `cache.ts`, `annotations.ts`, `prompts.ts`, `types.ts`, `util.ts`) forward to implementations under `src/core/`. Current `Pi` hosts expose `ctx.executeTool()` for nested tool calls, but this pipeline does not depend on that newer capability. Direct stage execution preserves the supported native baseline and the planned host-independent engine boundary.
 
 ### LLM Integration
 
-- All four tools use `createNativeModelClient()` from `src/native-model-client.ts`. It delegates to `callLlm()` without adding retries or provider fallback, and owns citation/usage state per completion. Host-neutral interfaces live in `src/core/contracts.ts`; operation bodies remain in `src/tools/` until Phase 2. Run `test/core-boundary.test.ts` to check source/declaration imports and isolated runtime loading, plus `node_modules/.bin/tsc -p test/tsconfig.native-contract.json` to type-check the seam and fixture tests.
+- All four native tools construct a context through `src/native-operation-context.ts` and invoke shared operations from `src/core/operations/`. `createNativeModelClient()` delegates to `callLlm()` without adding retries or provider fallback. `callLlm()` invokes `runModelWithPolicy()` in `src/core/llm.ts` exactly once. The core owns no host context, settings discovery or credentials. Run `test/core-*.test.ts` for dependency boundaries, engine operations, policy and cache tests, plus `node_modules/.bin/tsc -p test/tsconfig.native-contract.json` for their type check.
 - Dispatches by feature detection. On `Pi` >= 0.86 it calls `ctx.modelRegistry.streamSimple()` (the registry facade added in `Pi` 0.86.0), which normalises the context, resolves auth, and applies the `baseUrl` override internally. On `Pi` 0.81.1-0.85.x it calls `ctx.modelRegistry.getProvider(provider).streamSimple()` (root `@earendil-works/pi-ai` API) with auth resolved by `Pi` (`getApiKeyAndHeaders`) and the `baseUrl` override mirrored from `ModelRuntime.prepareRequest`. Critical contract: on `Pi` >= 0.86 a raw context passed straight to a provider silently drops `systemPrompt` (providers read the prompt from the transcript's system messages); never call `provider.streamSimple()` directly on those versions. Neither path uses the deprecated `pi-ai/compat` `completeSimple()` shim nor `ModelRegistry.complete()` (which drops the provider-neutral reasoning parameter). Both send `reasoning: "low"`, which MiniMax M3 and other reasoning models require; the search stage overrides it per call (`minimal` when the web search tool is enabled). `test/compat-guard.test.ts` enforces that no file imports `pi-ai/compat`. Models registered outside `Pi`'s registry (for example `pi-ai`'s `registerFauxProvider`) are not consulted.
 - **Per-call payload patching and reasoning.** `callLlm()` accepts `payloadPatch` (forwarded as pi-ai's `onPayload`) and `reasoning` (default `"low"`). The search stage uses both to attach `openrouter:web_search`. A patch must return the payload untouched when it does not apply and never overwrite an existing `tools` array.
-- **Annotation side channel.** When `annotations` is passed, `callLlm()` injects a wrapped `fetch` through `ProviderRequestOptions.fetch` that tees each response body and parses `url_citation` entries into the sink. The sink is cleared at the start of every retry attempt, and `callLlm()` awaits the background reads (bounded at 2s) before returning. Every failure in this path is swallowed by design. **Both hooks fail silently if upstream pi-ai changes them**: re-check `ProviderRequestOptions.fetch`, `onPayload` and the structural compatibility of the local `FetchFunction` alias in `src/annotations.ts` with the host fetch hook on every peer-dependency bump; `test/annotations.test.ts` covers the parser, not the injection point.
+- **Annotation side channel.** When `annotations` is passed, `callLlm()` injects a wrapped `fetch` through `ProviderRequestOptions.fetch` that tees each response body and parses `url_citation` entries into the sink. Every attempt has a separate sink, preventing late reads from failed attempts from contaminating successful citations. `callLlm()` awaits successful background reads (bounded at 2s) before copying citations to the caller. Every failure in this path is swallowed by design. **Both hooks fail silently if upstream pi-ai changes them**: re-check `ProviderRequestOptions.fetch`, `onPayload` and the structural compatibility of the local `FetchFunction` alias in `src/annotations.ts` with the host fetch hook on every peer-dependency bump; `test/annotations.test.ts` covers the parser, not the injection point.
 - Auth flows through `Pi`'s native system (`auth.json`, env vars, OAuth). No API key management happens in this code.
-- **Retry and timeout are owned by `callLlm()`, not the SDK.** It passes `maxRetries: 0` to the provider stream so the SDK's own retries do not compound with ours, then wraps the call in `withRetry()` (full-jitter exponential backoff, honours Retry-After, bounded by `llmRetryAttempts`/`retryBaseDelayMs`/`retryMaxDelayMs`). On the OpenRouter path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and the stream resolves with `stopReason: "error"` and the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header); it must never throw, because a throw propagates out of the stream and bypasses retry.
-- **Per-call timeout via `callWithAbortTimeout()` (`util.ts`).** The SDK request timeout does not cover a stalled streaming body, so `callLlm()` aborts the whole call with an `AbortController` after `llmTimeoutMs`, combined with the tool's signal so Esc still cancels. A timeout surfaces as a retryable condition; if it survives all attempts, `callLlm()` throws a clear timeout error.
+- **Retry and timeout are owned by `src/core/llm.ts`, not the SDK.** Native `callLlm()` passes `maxRetries: 0` to the provider stream and invokes the shared policy, which wraps each call in `withRetry()` (full-jitter exponential backoff, honours Retry-After, bounded by `llmRetryAttempts`/`retryBaseDelayMs`/`retryMaxDelayMs`). On the OpenRouter path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and the stream resolves with `stopReason: "error"` and the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header); it must never throw, because a throw propagates out of the stream and bypasses retry.
+- **Per-call timeout via `callWithAbortTimeout()` (`src/core/util.ts`).** The SDK request timeout does not cover a stalled streaming body, so the shared model policy aborts the whole call with an `AbortController` after `llmTimeoutMs`, combined with the tool's signal so Esc still cancels. Actual timer expiry is retryable; permanent provider exceptions are not classified as timeouts. Cancellation also propagates through stage boundaries and cache-lock waits.
+- **Policy Scope.** Configured model retries and application timeouts apply inside `intelli_research`. The native standalone search, extract and collate operations retain one attempt and no application-level timeout for compatibility. The standalone MCP adapter must apply explicit policy defaults for all its model calls before exposing tools.
 - **Application-level search retry.** Stage 1 retries up to `searchRetryAttempts` times when the search model returns a valid response with zero usable links (a degraded 200 that transport retry cannot catch).
 - **Optional extract throttle.** `minRequestIntervalMs` (default 0, off) spaces concurrent extract calls via a per-run rate limiter for keys with tight rate limits.
 - Provider-response monitoring via `after_provider_response` event surfaces a rate-limit status in the `Pi` footer even outside tool calls.
@@ -325,7 +351,9 @@ Loaded from `~/.pi/agent/settings.json` and, only for trusted projects, `<projec
 
 Written to `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. Physical paths, including indexes and locks, resolve against `ctx.cwd` rather than the process directory. Prompts, report headers and results use a separate configured display path. `makeCachePath()` returns an absolute physical path; use `displayCachePath()` for native text. Absolute and parent-relative native cache settings remain supported.
 
-**Telemetry sidecar** (v0.11.0+). Each `intelli_research` run also writes a local-only `meta.json` into its cache directory, recording per-stage outcomes (pages fetched/failed, fetch-variant winners, links returned and annotations harvested, search-retry, cache-suggest hits, latency). The schema is owned by `src/telemetry.ts`, is additive-only, and carries an independent `schemaVersion` decoupled from `extensionVersion`. The write is atomic (temp file then `rename`) and fail-safe: failures are caught and logged, never surfacing to the pipeline result. Suppressed entirely when `disableTelemetry` is true. No network call is added; the word "telemetry" refers to local runtime signals, not remote reporting. The bundled `scripts/analyze-sessions.sh` aggregates these sidecars.
+Documentation downloads use unique directories below the configured cache root's `.staging/`. No download runs under a cache lock. Writers settle before cleanup in `finally`, including cancellation and cache-write failure. Optional staging setup and cleanup errors are logged without discarding the research result. Native absolute and parent-relative cache settings remain valid, so staging can lie outside the workspace; standalone containment checks are a separate adapter responsibility.
+
+**Telemetry sidecar** (v0.11.0+). Each `intelli_research` run also writes a local-only `meta.json` into its cache directory, recording per-stage outcomes (pages fetched/failed, fetch-variant winners, links returned and annotations harvested, search-retry, cache-suggest hits, latency). The schema is owned by `src/core/telemetry.ts`, is additive-only, and carries an independent `schemaVersion` decoupled from `extensionVersion`. The write is atomic (temp file then `rename`) and fail-safe: failures are caught and logged, never surfacing to the pipeline result. Suppressed entirely when `disableTelemetry` is true. No network call is added; the word "telemetry" refers to local runtime signals, not remote reporting. The adapter injects package identity; the core never discovers its own package version. Native records retain their legacy shape, while non-native records add optional `packageName` and `adapter` fields. The bundled `scripts/analyze-sessions.sh` aggregates both record forms.
 
 **Cache suggest** (Stage 5) reads `.index.json` back after each research call. It feeds up to 20 recent entries to an LLM judge (using the extract model for cost efficiency) which returns semantically related previous searches. Results are formatted as a `📚 Related cached searches` table appended to the tool output. This is purely supplementary. The live search always runs, and the cache suggestions give the agent (and user) a pointer to prior research if live results are insufficient.
 
@@ -378,6 +406,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | Category | Purpose | Files | Network |
 |---|---|---|---|
 | **Structural/smoke** | Extension loads, tools register, events bind | `smoke.ts` | No |
+| **Shared Engine** | Host boundary, injected operations, policy, concurrent cache writes and console scopes | `core-*.test.ts`, `native-model-client.test.ts`, `workspace-paths.test.ts` | No |
 | **Unit (pure logic)** | Functions without filesystem or network deps | `annotations.test.ts`, `cache.test.ts`, `telemetry.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
 | **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts` | No |
 | **E2E** | Full pipeline with real LLM calls in isolated Pi env | `e2e/01_main.sh`, `e2e/02_cap.sh`, `e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`, `e2e/07_llms_full.sh`, `e2e/04_migration.sh`, `e2e/03_model_override.sh`, `e2e/08_websearch_tool.sh`, `e2e/09_sonar_pro_search.sh`, `e2e/10_config_recipes.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
@@ -505,7 +534,7 @@ No API keys are needed.
 5. **`focusPrompt` is critical:** Without it the extraction LLM works generically. The `promptGuidelines` instruct the agent to always provide it.
 6. **Cache suggest is additive, not a gate:** Stage 5 never blocks or replaces the live pipeline. It uses the cheap extract model as an LLM judge (≈500 input tokens, ≈$0.0002) to find related previous searches. Failures are caught and silently ignored.
 7. **Default migration is match-based, not tracked:** When defaults change between versions, users whose model configs match the OLD default exactly get auto-migrated to the NEW default in-memory. Users who customized their config are left alone. Migration never writes to the user's `settings.json`. A notification explains what changed and how to make it permanent. This is tested in `test/settings.test.ts` under `migrateDefaults`.
-8. **Rate-limit resilience is owned at the application layer:** `callLlm()` disables the SDK's retries (`maxRetries: 0`) and runs its own full-jitter backoff plus a hard `AbortController` timeout, because the SDK retries do not honour Retry-After, do not abort cleanly on Esc, and (critically) the SDK request timeout does not cover a stalled streaming body. Stage 1 additionally retries a degraded-200 search (valid response, zero links) that no transport-level check can catch. An opt-in `minRequestIntervalMs` throttle spaces the extract fan-out for tight-limit keys. The pure helpers (`withRetry`, `callWithAbortTimeout`, `isRetryableMessage`, `parseRetryAfterMs`, `createRateLimiter`) live in `util.ts` and are unit-tested in `test/util.test.ts`.
+8. **Rate-limit resilience is owned at the application layer:** `callLlm()` disables the SDK's retries (`maxRetries: 0`) and invokes the shared model policy's full-jitter backoff plus a hard `AbortController` timeout, because the SDK retries do not honour Retry-After, do not abort cleanly on Esc, and (critically) the SDK request timeout does not cover a stalled streaming body. Stage 1 additionally retries a degraded-200 search (valid response, zero links) that no transport-level check can catch. An opt-in `minRequestIntervalMs` throttle spaces the extract fan-out for tight-limit keys. The pure helpers (`withRetry`, `callWithAbortTimeout`, `isRetryableMessage`, `parseRetryAfterMs`, `createRateLimiter`) live in `util.ts` and are unit-tested in `test/util.test.ts`.
 
 ## Tool Naming
 

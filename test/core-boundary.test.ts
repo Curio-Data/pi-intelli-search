@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process";
 import ts from "typescript";
 
 const repo = fileURLToPath(new URL("../", import.meta.url));
+const runtimePackages = new Set(["wreq-js", "defuddle/node", "linkedom", "typebox"]);
 
 /** Walk type imports and re-exports too, not just executable imports. */
 async function auditGraph(
@@ -33,6 +34,7 @@ async function auditGraph(
   inspect(parsed);
   for (const { fileName } of ts.preProcessFile(source).importedFiles) {
     if (fileName.startsWith("node:")) continue;
+    if (runtimePackages.has(fileName)) continue;
     assert.ok(fileName.startsWith("."), `${entry} imports external dependency ${fileName}`);
     const path = resolve(dirname(entry), fileName.replace(/\.js$/, declaration ? ".d.ts" : ".ts"));
     await auditGraph(path, declaration, seen);
@@ -40,8 +42,8 @@ async function auditGraph(
   return seen;
 }
 
-describe("Phase 1 core dependency boundary", () => {
-  it("audits source/declarations and imports emitted code with all package resolution denied", async () => {
+describe("shared engine dependency boundary", () => {
+  it("audits source/declarations and imports the whole engine with host resolution denied", async () => {
     const scratch = join(repo, ".tmp");
     await mkdir(scratch, { recursive: true });
     const temp = await mkdtemp(join(scratch, "core-boundary-"));
@@ -49,7 +51,11 @@ describe("Phase 1 core dependency boundary", () => {
       const entries = [join(repo, "src/core/index.ts"), join(repo, "src/cache.ts")];
       const visited = new Set<string>();
       for (const entry of entries) await auditGraph(entry, false, visited);
-      assert.ok(visited.size >= 7, "audit must traverse shared data and helper modules");
+      assert.ok(visited.size >= 17, "audit must traverse all operations, schemas and helpers");
+      assert.ok([...visited].filter((p) => p.includes("/operations/")).length === 4);
+      assert.ok(
+        ![...visited].some((p) => /\/(settings|native-.+|host-types|agent-dir)\.ts$/.test(p)),
+      );
       const outDir = join(temp, "emitted");
       const program = ts.createProgram(entries, {
         target: ts.ScriptTarget.ES2022,
@@ -75,21 +81,27 @@ describe("Phase 1 core dependency boundary", () => {
       await auditGraph(join(outDir, "core/index.d.ts"), true);
       await auditGraph(join(outDir, "cache.d.ts"), true);
       await writeFile(join(outDir, "package.json"), '{"type":"module"}');
-      // Refuse every bare package import and every file outside the emitted tree.
-      // Thus parent node_modules cannot accidentally satisfy a host dependency.
+      // Only declared non-host packages may resolve from the checkout. Deny host
+      // packages at every depth, including from dependencies; no ancestor fallback.
       const loader = join(temp, "deny-packages.mjs");
       await writeFile(
         loader,
         `
-        import { fileURLToPath } from 'node:url';
+        import { fileURLToPath, pathToFileURL } from 'node:url';
+        const packages = new Set(${JSON.stringify([...runtimePackages])});
+        const deny = (specifier) => { throw Object.assign(new Error('Package unavailable: ' + specifier), { code: 'ERR_MODULE_NOT_FOUND' }); };
         export async function resolve(specifier, context, nextResolve) {
-          if (!specifier.startsWith('node:') && !specifier.startsWith('.') && !specifier.startsWith('file:')) {
-            throw Object.assign(new Error('Package unavailable: ' + specifier), { code: 'ERR_MODULE_NOT_FOUND' });
-          }
-          const result = await nextResolve(specifier, context);
-          if (result.url.startsWith('file:') && !fileURLToPath(result.url).startsWith(${JSON.stringify(outDir + "/")})) {
+          if (/pi-(ai|coding-agent|tui|agent-core)/.test(specifier)) deny(specifier);
+          const fromDependency = context.parentURL?.includes('/node_modules/');
+          const bare = !specifier.startsWith('node:') && !specifier.startsWith('.') && !specifier.startsWith('file:');
+          if (bare && !fromDependency && !packages.has(specifier)) deny(specifier);
+          const result = await nextResolve(specifier, bare && !fromDependency
+            ? { ...context, parentURL: pathToFileURL(${JSON.stringify(join(repo, "package.json"))}).href }
+            : context);
+          if (result.url.startsWith('file:') && !fileURLToPath(result.url).startsWith(${JSON.stringify(outDir + "/")}) && !result.url.includes('/node_modules/')) {
             throw new Error('Outside isolated tree: ' + result.url);
           }
+          if (/node_modules\\/(@earendil-works|@mariozechner)\\/pi-/.test(result.url)) deny(specifier);
           return result;
         }
       `,
@@ -111,6 +123,13 @@ describe("Phase 1 core dependency boundary", () => {
         assert.equal(core.resolveWorkspacePaths('/workspace', '.search').cacheRoot, '/workspace/.search');
         assert.equal(core.truncateContent('abc', 2), 'ab\\n\\n[TRUNCATED]');
         assert.deepEqual(core.parseCitations('{}'), []);
+        for (const name of ['search', 'extract', 'collate', 'research']) assert.equal(typeof core[name], 'function');
+        const settings = { searchModel: { provider: 'fixture', model: 'chosen' }, searchWebSearch: { enabled: false }, defaultUrls: 1 };
+        const result = await core.search({ query: 'independent' }, {
+          settings, models: { complete: async () => ({ text: '[Doc](https://example.com)', citations: [] }) },
+        });
+        assert.equal(result.outcome, 'completed');
+        assert.equal(result.details.sources[0].url, 'https://example.com');
         assert.ok(cache.makeCachePath('query', '/workspace', '.search').startsWith('/workspace/.search/'));
         process.stdout.write('isolated core import passed');
       `,

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
-import type { HarvestedCitation } from "../annotations.js";
-import type { ModelConfig, ResearchSettings } from "../types.js";
+import type { HarvestedCitation } from "./annotations.js";
+import type { ModelConfig, ResearchSettings } from "./types.js";
 import type { WorkspacePaths } from "./paths.js";
 
 export type DeepReadonly<T> = T extends object
@@ -128,7 +128,7 @@ export interface ModelCompletion {
 export interface ModelClient {
   /** Return missing model bindings before paid work. Credential checks remain adapter-owned. */
   preflight(bindings: readonly ModelBinding[]): Promise<ModelBinding[]>;
-  /** One policy owner: initially native callLlm; shared policy moves in Phase 2. */
+  /** Adapters invoke the shared model policy exactly once; operations do not retry transport. */
   complete(request: ModelRequest): Promise<ModelCompletion>;
 }
 

@@ -4,7 +4,7 @@
 
 Implement `@curio-data/mcp-intelli-search` in this repository while preserving the native `@curio-data/pi-intelli-search` package. Extract one shared research engine, expose it through a Model Context Protocol (MCP) server, and provide installation bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins).
 
-Read the [handoff](README.md) first and the [research record](RESEARCH.md) for approved decisions, sources and limitations. [Phase 0 results](PHASE-0.md) record the verified dependencies and native compatibility fixtures. [Phase 1 results](PHASE-1.md) record the implemented dependency contracts, native model adapter and explicit cache paths. Phase 2 is the next implementation step. The remaining proposed paths, commands and interfaces below must be created and tested before they are documented as available.
+Read the [handoff](README.md) first and the [research record](RESEARCH.md) for approved decisions, sources and limitations. [Phase 0 results](PHASE-0.md) record the verified dependencies and native compatibility fixtures. [Phase 1 results](PHASE-1.md) record the implemented dependency contracts, native model adapter and explicit cache paths. [Phase 2 results](PHASE-2.md) record the shared operations, model policy, native adapter, documentation staging and telemetry identity. Phase 3 is the next implementation step. The remaining proposed paths, commands and interfaces below must be created and tested before they are documented as available.
 
 ## Scope
 
@@ -242,6 +242,8 @@ Exit gate: native fixtures still match; a core module can be imported in an isol
 
 ### Phase 2: Shared Operations and Native Adapter
 
+Completed implementation, deliberate resilience corrections and verification are recorded in [Phase 2 Results](PHASE-2.md). Retain this checklist as the scope of that checkpoint.
+
 1. Move the four operation bodies into `src/core/operations/`. Retain the self-contained full pipeline and its distinct stage outcomes.
 2. Move shared fetch, prompts, cache, annotation, telemetry and pure utility code into the core, using temporary forwarding exports where needed.
 3. Extract retry/timeout policy behind the new model interface. Keep native provider request hooks, authentication and facade feature detection in the adapter.
@@ -256,7 +258,7 @@ Exit gate: all native checks and primary live scenario pass, stable fixture comp
 
 1. Add `packages/mcp/package.json`, the workspace lockfile entries, standalone type check and build script. Declare all external runtime dependencies explicitly.
 2. Implement the proposed CLI and validated configuration contract, including explicit workspace and provider selection.
-3. Implement the reference inference adapter with deterministic fake-transport tests for request construction, citations, errors, reasoning and search payloads.
+3. Implement the reference inference adapter with deterministic fake-transport tests for request construction, citations, errors, reasoning and search payloads. Apply explicit configured retry/timeout defaults at the standalone adapter boundary for all four operations, including the one-shot operations whose native requests omit them. Invoke the shared policy once; do not change native defaults or stack another retry loop.
 4. Exercise the same shared operations outside `Pi` before adding protocol registration. Confirm no host configuration is read or written.
 5. Build and pack the MCP artifact. Install it into a clean directory outside the repository dependency tree and run `--help`, `--version` and a fixture-backed operation.
 6. Test the dependency's native fetch assets in the fresh install. A successful bundle build does not establish a usable browser-fingerprint fetch runtime.

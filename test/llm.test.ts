@@ -223,15 +223,24 @@ describe("callLlm provider dispatch (pi-ai root API)", () => {
 
   it("awaits the annotation side channel before returning text", async () => {
     let releaseRead: (() => void) | undefined;
-    const sink: AnnotationSink = {
-      citations: [],
-      reads: [
-        new Promise<void>((resolve) => {
-          releaseRead = resolve;
+    const sink: AnnotationSink = { citations: [] };
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            releaseRead = () => {
+              controller.enqueue(new TextEncoder().encode("{}"));
+              controller.close();
+              releaseRead = undefined;
+            };
+          },
         }),
-      ],
+      );
+    __harness.streamSimple = async (_provider, _model, _context, options) => {
+      await options!.fetch!("https://fixture.invalid");
+      return successfulResponse();
     };
-    __harness.streamSimple = (async () => successfulResponse()) as typeof __harness.streamSimple;
 
     let finished = false;
     const call = callLlm(contextFor({ ok: true, apiKey: "secret" }), CFG, "system", "user", {
@@ -241,11 +250,61 @@ describe("callLlm provider dispatch (pi-ai root API)", () => {
       finished = true;
       return text;
     });
-    await new Promise((r) => setTimeout(r, 25));
-    assert.strictEqual(finished, false, "callLlm must not resolve while a read is in flight");
-    releaseRead!();
-    assert.strictEqual(await call, "ok");
-    assert.strictEqual(finished, true);
+    try {
+      await new Promise((r) => setTimeout(r, 25));
+      assert.strictEqual(finished, false, "callLlm must not resolve while a read is in flight");
+      releaseRead!();
+      assert.strictEqual(await call, "ok");
+      assert.strictEqual(finished, true);
+    } finally {
+      releaseRead?.();
+      await call;
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does not merge late citations from a failed attempt into the successful attempt", async () => {
+    const savedFetch = globalThis.fetch;
+    const sink: AnnotationSink = { citations: [] };
+    const citation = (url: string) =>
+      JSON.stringify({
+        choices: [{ message: { annotations: [{ type: "url_citation", url_citation: { url } }] } }],
+      });
+    let releaseOld: (() => void) | undefined;
+    let fetches = 0;
+    globalThis.fetch = async () => {
+      if (++fetches > 1) return new Response(citation("https://successful.example"));
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            releaseOld = () => {
+              controller.enqueue(new TextEncoder().encode(citation("https://failed.example")));
+              controller.close();
+              releaseOld = undefined;
+            };
+          },
+        }),
+      );
+    };
+    let attempts = 0;
+    __harness.streamSimple = async (_provider, _model, _context, options) => {
+      await options!.fetch!("https://fixture.invalid");
+      if (++attempts === 1)
+        return { ...successfulResponse(), stopReason: "error", errorMessage: "429" };
+      releaseOld?.();
+      return successfulResponse();
+    };
+    try {
+      await callLlm(contextFor({ ok: true, apiKey: "secret" }), CFG, "system", "user", {
+        annotations: sink,
+        retry: { attempts: 2, baseDelayMs: 0, maxDelayMs: 0 },
+      });
+      assert.deepEqual(sink.citations, [{ url: "https://successful.example" }]);
+      assert.equal(attempts, 2);
+    } finally {
+      releaseOld?.();
+      globalThis.fetch = savedFetch;
+    }
   });
 
   it("applies the auth-resolved baseUrl onto the request model, mirroring ModelRuntime.prepareRequest", async () => {

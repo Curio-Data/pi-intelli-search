@@ -15,7 +15,7 @@ export function validateModelConfigs(
 }
 
 /**
- * Per-operation adapter. The delegate remains the sole retry/timeout owner;
+ * Per-operation adapter. The delegate invokes the shared retry/timeout policy once;
  * no server dependencies, credential stores or alternative provider fallback.
  * Inject a delegate only for deterministic tests (including the legacy harness).
  */

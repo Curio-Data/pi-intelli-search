@@ -1,16 +1,12 @@
-// src/tools/intelli-extract.ts — intelli_extract tool
-//
-// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 // SPDX-License-Identifier: Apache-2.0
-import { Type } from "typebox";
+// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { EXTRACTION_SYSTEM_PROMPT } from "../prompts.js";
-import { createNativeModelClient } from "../native-model-client.js";
-import type { ExtractParams } from "../core/contracts.js";
-import { textContent, inferSourceType, inferCurrentness } from "../util.js";
-import { loadSettings, resolveModelConfig } from "../settings.js";
-import { buildExtractionMessage } from "./shared.js";
 import type { OnUpdate } from "../host-types.js";
+import type { ExtractParams } from "../core/contracts.js";
+import { extractSchema } from "../core/schemas.js";
+import { extract } from "../core/operations/extract.js";
+import { createNativeOperationContext, nativeResult } from "../native-operation-context.js";
 
 export const intelliExtractTool = {
   name: "intelli_extract",
@@ -22,15 +18,7 @@ export const intelliExtractTool = {
     "you already have; for end-to-end research, use intelli_research.",
   promptSnippet:
     "intelli_extract(page, query, focusPrompt?): LLM extraction of query-relevant content from a web page",
-  parameters: Type.Object({
-    url: Type.String({ description: "URL of the page to extract from" }),
-    title: Type.String({ description: "Page title" }),
-    content: Type.String({ description: "Full page content in markdown" }),
-    query: Type.String({ description: "The original search query" }),
-    focusPrompt: Type.Optional(
-      Type.String({ description: "Optional focus guidance for extraction" }),
-    ),
-  }),
+  parameters: extractSchema,
 
   async execute(
     _toolCallId: string,
@@ -39,34 +27,7 @@ export const intelliExtractTool = {
     _onUpdate: OnUpdate | undefined,
     ctx: ExtensionContext,
   ) {
-    const settings = await loadSettings({
-      cwd: ctx.cwd,
-      projectTrusted: ctx.isProjectTrusted(),
-    });
-    const extractConfig = resolveModelConfig(settings, "extract");
-
-    const userMessage = buildExtractionMessage(
-      params.content,
-      params.query,
-      params.focusPrompt,
-      settings.extractMaxChars,
-    );
-
-    const { text: extraction } = await createNativeModelClient(ctx).complete({
-      model: extractConfig,
-      systemPrompt: EXTRACTION_SYSTEM_PROMPT,
-      userMessage,
-      maxTokens: settings.extractionMaxTokens,
-      signal,
-    });
-
-    const firstLine = extraction.split("\n")[0] ?? "";
-    const sourceType = inferSourceType(firstLine);
-    const currentness = inferCurrentness(firstLine);
-
-    return {
-      content: [textContent(`### Extraction: ${params.title}\n\n${extraction}`)],
-      details: { url: params.url, extraction, sourceType, currentness },
-    };
+    const context = await createNativeOperationContext(ctx, signal);
+    return nativeResult(await extract(params, context));
   },
 };

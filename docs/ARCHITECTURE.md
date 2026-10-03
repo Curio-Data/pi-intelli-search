@@ -26,6 +26,8 @@ Each page is fetched two ways in parallel:
 
 For sites that provide `llms-full.txt` ([Cloudflare](https://developers.cloudflare.com), [Next.js](https://nextjs.org), [Vite](https://vite.dev), and others), the raw file is downloaded to `sources/` alongside individual pages. No LLM processing is applied. The agent can grep or search it for offline lookup.
 
+Dependency-specific console suppression uses async-local scopes and a single reference-counted dispatcher in `src/core/console.ts`. Console methods are patched only while a suppression region is active, then restored after the last region exits. Overlapping fetches cannot capture one another's diagnostic flags, and unrelated async work passes through. The fetch comparison emits no direct debug line; operation diagnostics use the injected logger. Native prefix formatting remains outside the core.
+
 ### Provider and Model Choices
 
 All three pipeline stages (search, extract, collate) use independently configurable models. The defaults are:
@@ -37,9 +39,9 @@ All three pipeline stages (search, extract, collate) use independently configura
 
 Search-grounded models attach machine-readable `url_citation` annotations to the assistant message, naming every source consulted. `Pi`'s chat-completions adapter reassembles only text, thinking, and tool-call blocks, so those annotations are dropped before extension code sees the response.
 
-Rather than fork the adapter, the extension passes a wrapped `fetch` through `ProviderRequestOptions.fetch`. The wrapper tees each response body: the SDK consumes the original stream unchanged, while a clone is read in the background and parsed for citations (both SSE chunks and plain JSON). `response.clone()` is called synchronously before the SDK can touch the body. Every failure path in this side channel is swallowed by design: the pipeline must never depend on it. The sink is cleared at the start of every retry attempt, so a failed attempt's citations never merge with a successful one's, and `callLlm()` awaits the background reads (bounded at 2 seconds) before returning so callers merge a settled sink.
+Rather than fork the adapter, the extension passes a wrapped `fetch` through `ProviderRequestOptions.fetch`. The wrapper tees each response body: the SDK consumes the original stream unchanged, while a clone is read in the background and parsed for citations (both SSE chunks and plain JSON). `response.clone()` is called synchronously before the SDK can touch the body. Every failure path in this side channel is swallowed by design: the pipeline must never depend on it. Each retry attempt owns a separate sink, so late citations from a failed attempt cannot contaminate a successful response. `callLlm()` awaits successful background reads (bounded at 2 seconds) before copying citations to the caller.
 
-Merging is text-first: prose links (with their markdown titles) come before annotation-only URLs, and exact URL duplicates are removed. The search prompt asks the model to end with a Sources section so links reliably land in the text; the pipeline extracts URLs from the full text, then strips that rendered section before the summary flows downstream (collation input, `intelli_search` output), which renders its own canonical source list instead. This is not a new pipeline stage: harvesting belongs to search. See `src/annotations.ts`.
+Merging is text-first: prose links (with their markdown titles) come before annotation-only URLs, and exact URL duplicates are removed. The search prompt asks the model to end with a Sources section so links reliably land in the text; the pipeline extracts URLs from the full text, then strips that rendered section before the summary flows downstream (collation input, `intelli_search` output), which renders its own canonical source list instead. This is not a new pipeline stage: harvesting belongs to search. See `src/core/annotations.ts`.
 
 ### Custom Model Registration
 
@@ -49,9 +51,9 @@ Merging is text-first: prose links (with their markdown titles) come before anno
 
 The extension monitors `after_provider_response` events to detect HTTP 429 (rate-limiting) and 5xx (server errors) from [OpenRouter](https://openrouter.ai). Rate-limit status appears in the `Pi` footer via `ctx.ui.setStatus()`, debounced to avoid flooding.
 
-Recovery is owned by `callLlm()`, not the underlying SDK. It passes `maxRetries: 0` to the provider stream so SDK retries do not compound with ours, then retries transient failures (429, 5xx, timeouts) with full-jitter exponential backoff that honours any Retry-After hint, bounded by `llmRetryAttempts`, `retryBaseDelayMs`, and `retryMaxDelayMs`. On the [OpenRouter](https://openrouter.ai) path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and the stream resolves with `stopReason: "error"` carrying the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header) and never throws, because a throw would propagate out of the stream and bypass the retry loop.
+Recovery is owned by `runModelWithPolicy()` in `src/core/llm.ts`, which `callLlm()` invokes once around native dispatch. Native streams receive `maxRetries: 0` so software development kit (SDK) retries do not compound with the shared policy. The policy retries transient failures (429, 5xx, timeouts) with full-jitter exponential backoff that honours any Retry-After hint, bounded by `llmRetryAttempts`, `retryBaseDelayMs`, and `retryMaxDelayMs`. On the [OpenRouter](https://openrouter.ai) path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and the stream resolves with `stopReason: "error"` carrying the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header) and never throws, because a throw would propagate out of the stream and bypass the retry loop.
 
-A hard per-call timeout (`llmTimeoutMs`) is applied with an `AbortController` via `callWithAbortTimeout()`, combined with the tool signal so Esc still cancels. This is necessary because the SDK request timeout does not cover a stalled streaming body, which a provider can hold open after a 200 under load. Stage 1 additionally retries a degraded-200 search (a valid response with zero links) up to `searchRetryAttempts` times, and `minRequestIntervalMs` optionally spaces the concurrent extract calls for keys with tight rate limits. The pure helpers live in `util.ts` and are unit-tested.
+A hard per-call timeout (`llmTimeoutMs`) is applied with an `AbortController` via `callWithAbortTimeout()`, combined with the tool signal so Esc still cancels. This is necessary because the SDK request timeout does not cover a stalled streaming body, which a provider can hold open after a 200 under load. Stage 1 additionally retries a degraded-200 search (a valid response with zero links) up to `searchRetryAttempts` times, and `minRequestIntervalMs` optionally spaces the concurrent extract calls for keys with tight rate limits. These configured retries and application timeouts apply inside `intelli_research`. Native standalone search, extract and collate retain one attempt without an application-level timeout. The pure helpers live in `src/core/util.ts` and are unit-tested. Only actual application timer expiry is classified as an application timeout; permanent provider exceptions are not retried as timeouts.
 
 ### Working Indicator and Progress Bar
 
@@ -67,35 +69,44 @@ This stage is purely additive. It never blocks or replaces the live pipeline. Fa
 
 ## Dependency Boundary
 
-All native tools delegate model calls through `src/native-model-client.ts` to the existing `callLlm()` transport. The adapter owns per-call citation and usage state; retry and timeout policy remain in `callLlm()`. Host settings discovery and model registration stay outside `src/core/`. Shared data types contain no host imports, while native callback and rendering types live in `src/host-types.ts`.
+Native tools construct an explicit operation context through `src/native-operation-context.ts`, then invoke `src/core/operations/`. The core receives resolved settings, model client, workspace paths, package identity, cancellation, progress and diagnostics. It returns text, details and an explicit completed or degraded outcome. Native wrappers preserve existing result payloads, registry diagnostics and rendering.
 
-`src/core/contracts.ts` defines the future operation context, model interface, progress and package identity. Operation bodies still live in `src/tools/`; the complete shared engine and standalone server are not implemented. [Phase 1 Results](plans/mcp-intelli-search/PHASE-1.md) records the verified boundary and the remaining extraction work.
+Model calls pass through `src/native-model-client.ts` to `callLlm()`. The native transport owns authentication, provider hooks and legacy/facade dispatch; `src/core/llm.ts` owns the single retry/timeout policy. Host settings discovery and model registration stay outside the core. Canonical schemas and shared helpers live in the core, with forwarding exports at former paths.
+
+Research dependencies are injected per operation rather than changed through a shared engine harness. The complete engine has no host imports; native callback and rendering types remain in `src/host-types.ts`. [Phase 2 Results](plans/mcp-intelli-search/PHASE-2.md) records verification and limits. The standalone package and server remain unimplemented.
 
 ## Source Code Structure
 
 ```
 src/
 ├── index.ts              # Extension entry: registers tools, events, model setup
-├── annotations.ts        # Harvest url_citation annotations from provider response bodies
-├── core/                 # Host-neutral contracts, path policy and dependency entry
-├── native-model-client.ts # Per-operation adapter delegating to callLlm()
-├── agent-dir.ts          # Native host-directory discovery
-├── host-types.ts         # Native callback, result and theme types
-├── llm.ts                # callLlm() - pi native auth + retry/backoff + per-call timeout
-├── fetch.ts              # Page fetching: Defuddle vs Markdown comparison, llms-full.txt
-├── prompts.ts            # System prompts for search, extraction, collation
-├── providers.ts          # Custom model registration (Perplexity models) into models.json
-├── settings.ts           # Settings loader with caching and invalidation
-├── cache.ts              # .search/ cache read/write and index management
-├── telemetry.ts          # Local-only meta.json sidecar: schema, builder, atomic write, version source
-├── types.ts              # Shared TypeScript interfaces
-├── util.ts               # URL extraction, source-section strip, inference, concurrency + retry helpers
-└── tools/
-    ├── intelli-research.ts   # Full pipeline orchestrator (5 stages)
-    ├── intelli-search.ts     # Standalone search via the configured search model
-    ├── intelli-extract.ts    # Standalone per-page LLM extraction
-    ├── intelli-collate.ts    # Standalone collation + cache write
-    └── shared.ts             # Shared builders: domain filter, web-search tool patch, extraction/collation messages, appendix
+├── core/
+│   ├── operations/         # Search, extract, collate and five-stage research
+│   ├── contracts.ts        # Context, model, progress, result and identity contracts
+│   ├── schemas.ts          # Canonical tool parameters
+│   ├── llm.ts              # Shared retry, timeout and cancellation policy
+│   ├── paths.ts            # Physical workspace roots and display policy
+│   ├── fetch.ts            # Dual fetch and documentation downloads
+│   ├── console.ts          # Async-scoped dependency diagnostic suppression
+│   ├── cache.ts            # Artifacts, locks and index
+│   ├── telemetry.ts        # Injected identity and local sidecar
+│   ├── annotations.ts      # Citation harvesting
+│   ├── messages.ts         # Prompt messages and cache appendices
+│   ├── prompts.ts          # System prompts
+│   ├── progress.ts         # Host-neutral pipeline progress
+│   ├── types.ts            # Shared data types
+│   └── util.ts             # Pure helpers and concurrency
+├── native-operation-context.ts # Native context and result/progress mapping
+├── native-model-client.ts  # Model adapter delegating to callLlm()
+├── native-identity.ts      # Native manifest identity
+├── agent-dir.ts            # Native host-directory discovery
+├── host-types.ts           # Native callback, result and theme types
+├── llm.ts                  # Native auth, dispatch and provider hooks
+├── providers.ts            # Custom model registration
+├── settings.ts             # Trusted host settings and migration
+├── telemetry.ts            # Compatibility facade with native identity
+├── cache.ts, fetch.ts, ... # Forwarding exports to shared helpers
+└── tools/                  # Native registration, wrappers and rendering
 ```
 
 ## Cache Structure
@@ -122,11 +133,11 @@ Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<has
 
 Both cache-writing tools resolve physical paths against the absolute session workspace, including the shared index and locks. `makeCachePath()` returns an absolute path. Prompts, result details, appendices and report headers use a separate display path, preserving native relative paths such as `.search/<slug>/`. Absolute and parent-relative native cache settings remain supported.
 
-The path contract includes a workspace/cache staging root, but documentation downloads still use the existing temporary-directory path. Moving those downloads and guaranteeing cleanup are part of the next extraction phase.
+Documentation downloads stage in unique directories under the configured cache root's `.staging/`, not the operating-system temporary directory. Writers settle before unconditional cleanup, including cancellation and cache-write failure. Downloads occur outside cache locks. Optional staging setup or cleanup failure is logged and does not discard the completed research result. Failed cleanup can leave a staging directory; there is no automatic sweep. Stop all research processes using the cache before inspecting the logged path and removing an abandoned directory. Native absolute and parent-relative cache settings can place staging outside the workspace; standalone containment validation remains separate work.
 
 ### Telemetry Sidecar
 
-Every `intelli_research` run writes a `meta.json` sidecar into its cache directory, including degraded runs that exit early (no links found, all fetches failed, all extractions failed). The `outcome` field records which exit path produced the file, so the analysis script can measure degradation rates, not just success. The schema is owned by `src/telemetry.ts` and is additive-only: future versions add optional fields and never rename or remove existing ones.
+Every `intelli_research` run writes a `meta.json` sidecar into its cache directory, including degraded runs that exit early (no links found, all fetches failed, all extractions failed). The `outcome` field records which exit path produced the file, so the analysis script can measure degradation rates, not just success. The schema is owned by `src/core/telemetry.ts` and is additive-only: future versions add optional fields and never rename or remove existing ones.
 
 ```jsonc
 {
@@ -157,7 +168,7 @@ Every `intelli_research` run writes a `meta.json` sidecar into its cache directo
 
 The file is written atomically (temp file then `rename`) so a crash never leaves a partial `meta.json`, and a best-effort sweep cleans up any `.tmp` orphan left by a prior crashed write. The write is fail-safe: failures are caught and logged, never surfacing to the pipeline result or the agent.
 
-This is strictly local telemetry. No network call is added, no data leaves the host, and no account or identity is recorded. Set `disableTelemetry: true` to suppress the sidecar entirely. The bundled `scripts/analyze-sessions.sh` aggregates sidecars across projects to report per-stage success rates.
+The adapter supplies package identity; the core never discovers a manifest relative to its own module. `extensionVersion` retains the emitting adapter version. Native records keep their existing shape, while non-native records add optional `packageName` and `adapter` fields. This is strictly local telemetry. No network call is added, no data leaves the host, and no account or personal identity is recorded. Set `disableTelemetry: true` to suppress the sidecar entirely. The bundled `scripts/analyze-sessions.sh` aggregates sidecars across projects to report per-stage success rates.
 
 ## Cost Estimate
 
