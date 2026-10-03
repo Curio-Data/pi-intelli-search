@@ -2,7 +2,7 @@
 
 This is a **`Pi` extension** that adds intelligent web research tools to the `Pi` coding agent. It provides a 5-stage research pipeline (search, fetch, extract, collate, and cache suggest) as a single tool call, plus individual tools for manual orchestration.
 
-For cross-host development, start at the [Model Context Protocol (MCP) implementation handoff](docs/plans/mcp-intelli-search/README.md). It records the current checkpoint, approved package boundaries, frozen compatibility contracts and next phase.
+For cross-host development, start at the [Model Context Protocol (MCP) implementation handoff](docs/plans/mcp-intelli-search/README.md). It records the current checkpoint, approved package boundaries, frozen compatibility contracts and next phase. Phase 3 supplies `packages/mcp/`, a standalone engine package without protocol serving; Phase 4 is next. Its strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
 
 ---
 
@@ -205,6 +205,8 @@ src/
 ├── core/                     # Host-neutral execution and shared helpers
 │   ├── operations/          # Search, extract, collate and five-stage research
 │   ├── contracts.ts         # Context, model, result, progress and identity interfaces
+│   ├── index.ts             # Host-neutral engine exports
+│   ├── defaults.ts          # Shared tuning; no provider/model selection
 │   ├── schemas.ts           # Canonical tool parameters
 │   ├── llm.ts               # Single model retry/timeout policy
 │   ├── paths.ts             # Physical roots and display policy
@@ -240,6 +242,14 @@ src/
     ├── intelli-collate.ts    # Native collation registration and wrapper
     └── shared.ts             # Forwarding export to core/messages.ts
 
+packages/
+└── mcp/
+    ├── package.json         # Standalone artifact and explicit runtime dependencies
+    ├── src/                 # CLI, strict config, workspace, provider and runtime adapters
+    ├── test/                # Config, CLI, console, provider and operation coverage
+    ├── tsconfig.json        # Standalone source and test type check
+    └── README.md            # Exact configuration and runtime interface
+
 skills/
 └── intelli-search/
     └── SKILL.md              # Agent-facing skill guide
@@ -253,6 +263,8 @@ docs/
 scripts/
 ├── analyze-sessions.sh       # Aggregate meta.json telemetry sidecars across sessions
 ├── benchmark-models.sh       # A/B benchmark harness for extract/collate models (live quota)
+├── build-mcp.mjs            # Audited standalone bundles and legal-file copies
+├── verify-mcp-install.mjs    # Production-only install and native-fetch verification
 └── capture-native-contract.mts # Explicit compatibility-fixture regeneration
 
 test/
@@ -275,6 +287,7 @@ test/
 ├── helpers/native-contract.ts # Isolated native contract capture
 ├── helpers/core-context.ts   # Host-free deterministic operation context
 ├── probes/mcp-sdk.mjs         # Optional isolated SDK interface probe
+├── probes/mcp-install.mjs     # Installed standalone operations and native fetch assets
 ├── tsconfig.native-contract.json # Type check for contract tests and generator
 ├── prompts.test.ts
 ├── providers.test.ts
@@ -363,7 +376,10 @@ Documentation downloads use unique directories below the configured cache root's
 npm install              # Install deps
 npm run build            # TypeScript -> dist/ (tsc)
 npm run dev              # Watch mode (tsc --watch)
-npm test                 # Run all unit tests
+npm test                 # Run native unit tests
+npm run build:all        # Native build, standalone type check and bundles
+npm run test:all         # Native and standalone deterministic tests
+npm run test:mcp:install # Independent production install and native fetch probe
 npm run test:smoke       # Smoke test (structural validation)
 ./test/e2e/01_main.sh        # End-to-end test (live LLM calls, isolated env)
 scripts/benchmark-models.sh <model-id>...   # A/B benchmark extract/collate models (live quota, see docs/BENCHMARKS.md)
@@ -390,6 +406,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 - **Tool definition pattern:** Each tool exports an object with `name`, `label`, `description`, `promptSnippet`, `promptGuidelines`, `parameters` (TypeBox schema), and `execute()`.
 - **Error handling:** Extraction failures are caught per-page (do not fail the whole pipeline). Transient failures (429, 5xx, timeouts) are retried with full-jitter backoff honouring Retry-After; a failure that survives all attempts throws an actionable error.
 - **`Pi` 0.81.1 baseline:** The extension uses the supported settings trust APIs, `CONFIG_DIR_NAME`, async model-registry refresh semantics, and `modelRegistry.getProvider()` from this version; it feature-detects the `Pi` >= 0.86 registry facade for LLM dispatch.
+- **Standalone Boundary:** `packages/mcp/` bundles only the shared core and adapter source; every external runtime dependency belongs in its manifest. Keep `Pi` and protocol libraries out of each other's runtime graphs. Shared tuning lives in `src/core/defaults.ts`; native model defaults remain in `src/settings.ts`. Preserve both tarball-install gates. The standalone cache link checks reject existing escapes but are not a sandbox against concurrent hostile filesystem mutation.
 - **Self-Contained Pipeline:** `intelli_research` executes its stages directly rather than invoking registered host tools. Keep that design for baseline compatibility and host-independent reuse, even on hosts that provide `ctx.executeTool()`.
 - **SPDX headers:** Source files include `// SPDX-License-Identifier: Apache-2.0` and copyright notices.
 

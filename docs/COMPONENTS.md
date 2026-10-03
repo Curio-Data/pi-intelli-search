@@ -73,6 +73,12 @@ These packages are provided by the hosting `Pi` runtime and are not bundled with
 - **License:** MIT
 - **Usage:** Tool-output progress rendering via `Text`. Supplied as a peer dependency by the hosting `Pi` runtime.
 
+## Standalone Package
+
+The `@curio-data/mcp-intelli-search` artifact shares the fetch dependencies above but declares `typebox` as a runtime dependency rather than a host peer. It neither installs nor imports `Pi` libraries. Third-party packages remain external to its bundle, preserving native fetch assets and their package-level licences.
+
+[_esbuild_](https://esbuild.github.io/) bundles the internal engine and adapter source during development. Its [source repository](https://github.com/evanw/esbuild) is MIT-licensed. It is a root development dependency, not a standalone runtime dependency. The current standalone adapter uses the built-in fetch transport; no provider SDK (software development kit) or Model Context Protocol SDK has been added at this checkpoint.
+
 ## License Compliance
 
 - All dependencies are MIT or ISC licensed. This is compatible with this project's Apache-2.0 license.

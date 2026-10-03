@@ -21,8 +21,15 @@
     ],
     "image": "https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/06.png"
   },
+  "workspaces": ["packages/mcp"],
   "scripts": {
     "build": "tsc",
+    "build:mcp": "npm run build --workspace @curio-data/mcp-intelli-search",
+    "typecheck:mcp": "npm run typecheck --workspace @curio-data/mcp-intelli-search",
+    "test:mcp": "npm run test --workspace @curio-data/mcp-intelli-search",
+    "test:mcp:install": "node scripts/verify-mcp-install.mjs",
+    "build:all": "npm run build && npm run typecheck:mcp && npm run build:mcp",
+    "test:all": "npm test && npm run test:mcp",
     "dev": "tsc --watch",
     "test": "node --import tsx --test test/*.test.ts",
     "test:smoke": "node --import tsx test/smoke.ts",
@@ -37,6 +44,7 @@
     "@earendil-works/pi-ai": "^0.84.4",
     "@earendil-works/pi-coding-agent": "^0.84.4",
     "@earendil-works/pi-tui": "^0.84.4",
+    "esbuild": "0.28.2",
     "prettier": "^3.9.6",
     "roughjs": "^4.6.6",
     "tsx": "^4.19.0",

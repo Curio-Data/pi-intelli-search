@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { ModelConfig, ResearchSettings } from "./types.js";
 import { getAgentDir } from "./agent-dir.js";
+import { tuningDefaults } from "./core/defaults.js";
 
 export interface SettingsContext {
   cwd: string;
@@ -12,51 +13,13 @@ export interface SettingsContext {
 
 const DEFAULT_SETTINGS: ResearchSettings = {
   searchModel: { provider: "openrouter", model: "perplexity/sonar" },
-  // OpenRouter web search server tool: off by default. When enabled, the
-  // search stage attaches openrouter:web_search to the searchModel call so
-  // any OpenRouter chat model becomes search-grounded (see shared.ts
-  // buildSearchPayloadPatch). "minimal" reasoning avoids reasoning-budget
-  // burn observed with GPT-5 family models when left unconstrained.
-  searchWebSearch: { enabled: false, engine: "auto", maxResults: 8, reasoning: "minimal" },
+  ...tuningDefaults(),
   // 0.14.0 moved extract/collate from MiniMax M2.7 to MiniMax M3: same
   // per-token price, 1M context, and measurably better epistemics in
   // collation (states ranking methodology, flags low-evidence entries,
   // surfaces pre-Svelte-5-style compatibility warnings).
   extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
   collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
-  defaultUrls: 10,
-  // 0.13.0 raised both defaults (8/16 to 10/20): annotation harvesting
-  // fills the URL list with every cited source, so the old defaults
-  // under-delivered pages the pipeline can now use.
-  maxUrls: 20,
-  cacheDir: ".search",
-  extractMaxChars: 150_000,
-  fetchTimeoutMs: 20_000,
-  fetchConcurrency: 4,
-  extractionConcurrency: 4,
-  extractionMaxTokens: 3000,
-  collationMaxTokens: 4000,
-  browserFingerprint: "chrome_145",
-  disableLlmsFullDiscovery: false,
-  // ── Local telemetry ──
-  // When false (default), each intelli_research run writes a meta.json
-  // sidecar into .search/<slug>/ recording per-stage outcomes. Strictly
-  // local: no network call, no data leaves the host. Set true to suppress.
-  disableTelemetry: false,
-  // Rate-limit resilience: 1 try + 2 retries, full-jitter backoff capped at 20s,
-  // honouring any Retry-After hint in the provider error. searchRetryAttempts
-  // covers the degraded-200 case (valid response, zero links). The min-interval
-  // throttle is off by default; free-tier OpenRouter users (~0.33 req/s bucket)
-  // should set minRequestIntervalMs to ~3000. llmTimeoutMs bounds a stalled
-  // connection (generous enough for slow reasoning models, short enough to
-  // turn a provider hang into a retryable timeout).
-  llmTimeoutMs: 90_000,
-  llmRetryAttempts: 3,
-  retryBaseDelayMs: 1500,
-  retryMaxDelayMs: 20_000,
-  searchRetryAttempts: 2,
-  minRequestIntervalMs: 0,
-  httpProxy: undefined,
 };
 
 /**

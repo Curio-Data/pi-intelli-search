@@ -73,7 +73,13 @@ Native tools construct an explicit operation context through `src/native-operati
 
 Model calls pass through `src/native-model-client.ts` to `callLlm()`. The native transport owns authentication, provider hooks and legacy/facade dispatch; `src/core/llm.ts` owns the single retry/timeout policy. Host settings discovery and model registration stay outside the core. Canonical schemas and shared helpers live in the core, with forwarding exports at former paths.
 
-Research dependencies are injected per operation rather than changed through a shared engine harness. The complete engine has no host imports; native callback and rendering types remain in `src/host-types.ts`. [Phase 2 Results](plans/mcp-intelli-search/PHASE-2.md) records verification and limits. The standalone package and server remain unimplemented.
+Research dependencies are injected per operation rather than changed through a shared engine harness. The complete engine has no host imports; native callback and rendering types remain in `src/host-types.ts`. [Phase 2 Results](plans/mcp-intelli-search/PHASE-2.md) records shared-engine verification and limits.
+
+### Standalone Adapter
+
+`packages/mcp/` supplies the separate `@curio-data/mcp-intelli-search` runtime. It uses the shared operations with explicit configuration, a canonical workspace, strict argument validation and a non-streaming OpenRouter transport. Shared tuning lives in `src/core/defaults.ts`; standalone model selections and environment-referenced credentials are mandatory. Catalogue preflight precedes paid work, and the shared retry policy applies once to every standalone model call.
+
+The standalone bundle externalises its declared third-party dependencies and imports no `Pi` library. Its installation gate denies ancestor dependency resolution and exercises both native fetch paths. Existing cache links and traversal are rejected; these checks do not sandbox hostile concurrent filesystem mutation. Results use absolute workspace cache paths and host-neutral file-reading guidance. [Phase 3 Results](plans/mcp-intelli-search/PHASE-3.md) and the [package guide](../packages/mcp/README.md) record exact interfaces and limits. Model Context Protocol (MCP) serving and plugins remain later work.
 
 ## Source Code Structure
 
@@ -84,6 +90,7 @@ src/
 │   ├── operations/         # Search, extract, collate and five-stage research
 │   ├── contracts.ts        # Context, model, progress, result and identity contracts
 │   ├── schemas.ts          # Canonical tool parameters
+│   ├── defaults.ts         # Tuning shared by native and standalone adapters
 │   ├── llm.ts              # Shared retry, timeout and cancellation policy
 │   ├── paths.ts            # Physical workspace roots and display policy
 │   ├── fetch.ts            # Dual fetch and documentation downloads
@@ -133,7 +140,7 @@ Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<has
 
 Both cache-writing tools resolve physical paths against the absolute session workspace, including the shared index and locks. `makeCachePath()` returns an absolute path. Prompts, result details, appendices and report headers use a separate display path, preserving native relative paths such as `.search/<slug>/`. Absolute and parent-relative native cache settings remain supported.
 
-Documentation downloads stage in unique directories under the configured cache root's `.staging/`, not the operating-system temporary directory. Writers settle before unconditional cleanup, including cancellation and cache-write failure. Downloads occur outside cache locks. Optional staging setup or cleanup failure is logged and does not discard the completed research result. Failed cleanup can leave a staging directory; there is no automatic sweep. Stop all research processes using the cache before inspecting the logged path and removing an abandoned directory. Native absolute and parent-relative cache settings can place staging outside the workspace; standalone containment validation remains separate work.
+Documentation downloads stage in unique directories under the configured cache root's `.staging/`, not the operating-system temporary directory. Writers settle before unconditional cleanup, including cancellation and cache-write failure. Downloads occur outside cache locks. Optional staging setup or cleanup failure is logged and does not discard the completed research result. Failed cleanup can leave a staging directory; there is no automatic sweep. Stop all research processes using the cache before inspecting the logged path and removing an abandoned directory. Native absolute and parent-relative cache settings can place staging outside the workspace; the standalone adapter separately validates workspace containment and rejects existing cache links.
 
 ### Telemetry Sidecar
 

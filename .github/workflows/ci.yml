@@ -36,11 +36,17 @@ jobs:
             exit 1
           fi
 
-      - name: Build
-        run: npm run build
+      - name: Build and type-check both artifacts
+        run: npm run build:all
 
-      - name: Test
-        run: npm test
+      - name: Test native and standalone operations
+        run: npm run test:all
+
+      - name: Type-check native compatibility tests
+        run: node_modules/.bin/tsc -p test/tsconfig.native-contract.json
+
+      - name: Install standalone tarball and exercise native fetch assets
+        run: npm run test:mcp:install
 
       - name: Verify package tarball
         run: npm pack --dry-run

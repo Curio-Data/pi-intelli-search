@@ -37,3 +37,7 @@ npm-debug.log*
 .e2e-logs/
 /review-*.md
 .tmp/
+
+# Standalone package legal files are copied from the canonical root at build time.
+/packages/mcp/LICENSE
+/packages/mcp/NOTICE

@@ -4,7 +4,7 @@
 
 Implement `@curio-data/mcp-intelli-search` in this repository while preserving the native `@curio-data/pi-intelli-search` package. Extract one shared research engine, expose it through a Model Context Protocol (MCP) server, and provide installation bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins).
 
-Read the [handoff](README.md) first and the [research record](RESEARCH.md) for approved decisions, sources and limitations. [Phase 0 results](PHASE-0.md) record the verified dependencies and native compatibility fixtures. [Phase 1 results](PHASE-1.md) record the implemented dependency contracts, native model adapter and explicit cache paths. [Phase 2 results](PHASE-2.md) record the shared operations, model policy, native adapter, documentation staging and telemetry identity. Phase 3 is the next implementation step. The remaining proposed paths, commands and interfaces below must be created and tested before they are documented as available.
+Read the [handoff](README.md) first and the [research record](RESEARCH.md) for approved decisions, sources and limitations. [Phase 0 results](PHASE-0.md) record the verified dependencies and native compatibility fixtures. [Phase 1 results](PHASE-1.md) record the implemented dependency contracts, native model adapter and explicit cache paths. [Phase 2 results](PHASE-2.md) record the shared operations, model policy, native adapter, documentation staging and telemetry identity. [Phase 3 results](PHASE-3.md) record the standalone runtime, configuration, provider transport and independent artifact verification. Phase 4 is the next implementation step. The remaining proposed paths, commands and interfaces below must be created and tested before they are documented as available.
 
 ## Scope
 
@@ -94,7 +94,7 @@ scripts/                         Build, packaging and validation helpers
 
 Keep forwarding exports at old internal paths while tests and adapters migrate. Remove them only after all repository consumers have been checked; preserving the public entry points is mandatory. Do not duplicate functions in old and new locations.
 
-The tree is a target, not a requirement to move every file in one commit. First introduce dependency seams, then move small groups of modules with tests. In particular, `src/core/defaults.ts` does not exist at the Phase 2 checkpoint: tuning defaults still live in native `src/settings.ts`. Phase 3 must share the applicable tuning values without importing host settings discovery or making the native paid-provider/model defaults implicit standalone selections.
+The tree is a target, not a requirement to move every file in one commit. First introduce dependency seams, then move small groups of modules with tests. Phase 3 introduces `src/core/defaults.ts` for shared tuning values. Native model defaults and settings discovery remain in `src/settings.ts`; standalone model/provider selections are explicit.
 
 ### Build Boundaries
 
@@ -256,6 +256,8 @@ Exit gate: all native checks and primary live scenario pass, stable fixture comp
 
 ### Phase 3: Standalone Runtime and Package
 
+Completed implementation, configuration, provider evidence and verification limits are recorded in [Phase 3 Results](PHASE-3.md). Retain the checklist below as the scope of that checkpoint. The independent install uses encrypted repository scratch and denies all ancestor resolution in both module systems instead of placing repository-derived files on an unrelated filesystem.
+
 1. Add `packages/mcp/package.json`, the workspace lockfile entries, standalone type check and build script. Declare all external runtime dependencies explicitly.
 2. Implement the proposed CLI and validated configuration contract, including explicit workspace and provider selection.
 3. Implement the reference inference adapter with deterministic fake-transport tests for request construction, citations, errors, reasoning and search payloads. Apply explicit configured retry/timeout defaults at the standalone adapter boundary for all four operations, including the one-shot operations whose native requests omit them. Invoke the shared policy once; do not change native defaults or stack another retry loop.
@@ -350,7 +352,7 @@ Run the full paced suite before a release:
 
 Do not launch the live scenarios concurrently or immediately repeat them after a quota failure. Existing tests use live provider quota and read configured credentials through their documented harness. Keep logs private and record exact failure classification rather than repeatedly spending quota to obtain one green run.
 
-New MCP build, test, pack and host-smoke commands must be added to package scripts and documented when they exist. The fresh MCP gate must install a tarball with development dependencies omitted, outside root `node_modules` resolution. A workspace test alone is insufficient.
+Phase 3 adds `npm run build:all`, `npm run test:all`, `npm run build:mcp`, `npm run typecheck:mcp`, `npm run test:mcp` and `npm run test:mcp:install`. The final command builds, packs and independently installs the standalone artifact, then exercises the installed engine and native fetch assets. Protocol and host-smoke commands remain Phase 4 work. The fresh MCP gate must install a tarball with development dependencies omitted, outside root `node_modules` resolution. A workspace test alone is insufficient.
 
 Run `shellcheck` on every new or modified shell script and execute each new end-to-end script to completion before committing it. Keep deterministic tests network-independent except for loopback fixture servers. Use free development-range ports for fixture listeners on this host.
 

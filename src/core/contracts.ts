@@ -96,6 +96,8 @@ export interface ModelUsage {
   cacheWrite1h?: number;
   reasoning?: number;
   totalTokens?: number;
+  /** Provider-reported total when no per-component cost breakdown is supplied. */
+  totalCost?: number;
   cost?: {
     input: number;
     output: number;
