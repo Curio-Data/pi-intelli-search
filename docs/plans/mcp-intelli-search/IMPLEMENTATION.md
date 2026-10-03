@@ -43,6 +43,8 @@ A server-side inference adapter has a smaller initial provider scope than the na
 | Telemetry | Preserve existing fields and disabled behaviour; new identity fields are additive. | `test/telemetry.test.ts`, `test/research-telemetry.test.ts` |
 | Cancellation | Propagate cancellation through network work, inference, queued work and cleanup. Do not convert user cancellation into a retry. | Abort and stalled-response tests |
 
+The peer ranges in `package.json` govern native compatibility. Development dependency pins, installed host versions and versions resolved by the fresh-install gate serve different purposes; none independently raises that compatibility floor.
+
 A deterministic fixture comparison must distinguish intended portability fixes from unintentional behaviour changes. Byte-for-byte equality is appropriate for stable schemas, prompts and fixture output; live model text is not deterministic.
 
 ## Proposed Layout
@@ -288,7 +290,7 @@ Exit gate: plugins install from copied/generated artifacts with no sibling check
 ### Phase 6: Documentation, Integration and Release Readiness
 
 1. Update `README.md` with distinct native, direct-MCP and plugin installation routes. Keep the existing native route prominent and unchanged.
-2. Update `docs/ARCHITECTURE.md`, component attribution, package READMEs and `AGENTS.md` to match the new boundaries. Correct the outdated universal no-cross-tool claim without changing pipeline orchestration.
+2. Update `docs/ARCHITECTURE.md`, component attribution, package READMEs and `AGENTS.md` to match the new boundaries. Preserve the self-contained pipeline rationale clarified during the [cold-start handover review](HANDOVER-GLM.md); the outdated universal no-cross-tool claim has already been corrected.
 3. Document initial MCP provider scope, separate inference billing, workspace setup, timeout requirements, local cache access, security limits and troubleshooting.
 4. Extend continuous integration to build/type-check both artifacts, test the core/adapters/protocol, validate generated manifests and install both tarballs independently. Keep the existing native fresh-install gate.
 5. Record a compatibility matrix with exact tested host versions and artifacts. Test the native minimum baseline, its legacy/facade dispatch boundary and the current host; use dependency-isolated installs where combinations cannot share a dependency tree. Do not claim support for untested plugin surfaces.

@@ -27,6 +27,10 @@ The handoff is self-contained in tracked documentation. The optional `.search/` 
 - Treat plugin catalogs as distribution metadata, not separate implementations.
 - Require explicit approval before any release or staged npm publication. Plan approval is not publication approval.
 
+## Handover Verification
+
+A fresh `Pi` session using native `zai/glm-5.3` reviewed the committed handoff without prior conversation, memory or research-cache access. Its verdict was PASS WITH NONBLOCKING NOTES; both entry checks passed. The documentation notes have been incorporated. See [Cold-Start Handover Review](HANDOVER-GLM.md) for scope, provenance, changes and limitations.
+
 ## Next-Agent Brief
 
 > Continue at Phase 1 of `docs/plans/mcp-intelli-search/IMPLEMENTATION.md`. Phase 0 is recorded in `PHASE-0.md`; the native fixtures already exist and run under `npm test`. Introduce host-neutral contracts and delegate through the existing native model transport before extracting operations. Keep the native extension usable and preserve the fixtures unless a deliberate change is separately explained. Add the MCP package, protocol and host plugins only in their later phases. Do not publish, modify real host credentials or silently switch inference providers.

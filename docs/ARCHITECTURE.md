@@ -8,7 +8,7 @@ This document describes the internal architecture of `pi-intelli-search`. It exp
   <img src="images/07B.png" alt="Vintage engraving-style infographic titled &quot;INTELLI_RESEARCH: The Five-Stage Pipeline,&quot; showing five sequentially linked numbered stages triggered by intelli_research(query): (1) Search: web discovery via Perplexity Sonar, OpenRouter/pi-native auth; (2) Fetch: dual fetch and quality comparison using wreq-js + Defuddle against raw markdown; (3) Extract: per-page parallel LLM extraction, default model MiniMax M2.7, configurable; (4) Collate: deduplication and persistent cache via MiniMax M2.7 (default, configurable), flags conflicts; (5) Cache Suggest: additive stage, LLM judge surfaces related prior searches. Stages are connected by bold arrows; each is illustrated with a period-appropriate vignette (armillary sphere, scrolls, alchemical still, filing cabinet, owl with documents)." width="800" />
 </p>
 
-No cross-tool invocation is used. `intelli_research` is self-contained. `Pi` extensions cannot call other tools from within `execute()`, so the orchestrator inlines the pipeline stages. *The illustration above shows the default configuration; alternative search configurations use the same five-stage pipeline.*
+No cross-tool invocation is used. `intelli_research` is self-contained, with the orchestrator executing its stages directly. Current `Pi` hosts support nested calls through `ctx.executeTool()`, but the pipeline does not depend on that newer capability. Direct stage execution preserves the supported native baseline and allows host-independent reuse. *The illustration above shows the default configuration; alternative search configurations use the same five-stage pipeline.*
 
 ### Why Per-Page Extraction Before Collation?
 

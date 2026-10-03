@@ -126,7 +126,7 @@ The official [_TypeScript_ SDK](https://github.com/modelcontextprotocol/typescri
 - Client timeout handling, workspace discovery and plugin environment interpolation require real-host tests.
 - Direct MCP configuration and plugin installation must be documented separately. A plugin limitation does not by itself prove that the same host lacks MCP support.
 - Search results included a third-party Codex marketplace CLI and unrelated vendor MCP integrations. They were excluded from the architectural evidence.
-- Current `Pi` documentation includes `ctx.executeTool()`. The older statement in `AGENTS.md` and `docs/ARCHITECTURE.md` that extensions cannot call tools is not a current universal limitation. Keep this pipeline self-contained for portability and older-host compatibility, not because newer hosts forbid nested calls.
+- Current `Pi` documentation includes `ctx.executeTool()`. At initial research, `AGENTS.md` and `docs/ARCHITECTURE.md` incorrectly treated the inability to call tools as a current universal limitation. The [cold-start handover review](HANDOVER-GLM.md) prompted correction of both files. Keep this pipeline self-contained for portability and older-host compatibility, not because newer hosts forbid nested calls.
 - Historical local skills also contain obsolete advice about no native MCP support and the removed `pi-ai/compat` shim. Do not restore that shim; `test/compat-guard.test.ts` and the current registry-dispatch implementation remain authoritative.
 
 ## Sources

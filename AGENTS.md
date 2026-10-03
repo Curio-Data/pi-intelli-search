@@ -2,6 +2,8 @@
 
 This is a **`Pi` extension** that adds intelligent web research tools to the `Pi` coding agent. It provides a 5-stage research pipeline (search, fetch, extract, collate, and cache suggest) as a single tool call, plus individual tools for manual orchestration.
 
+For cross-host development, start at the [Model Context Protocol (MCP) implementation handoff](docs/plans/mcp-intelli-search/README.md). It records the current checkpoint, approved package boundaries, frozen compatibility contracts and next phase.
+
 ---
 
 ## Shell Tool Preferences
@@ -174,7 +176,7 @@ When creating commits:
 
 ## Project Overview
 
-- **Package name:** `pi-intelli-search`
+- **Package name:** `@curio-data/pi-intelli-search`
 - **Language:** TypeScript (ESM, strict mode).
 - **Runtime:** Node.js (runs inside `Pi`'s extension host).
 - **Build:** `tsc` to `dist/`.
@@ -224,11 +226,13 @@ skills/
 docs/
 ├── ARCHITECTURE.md           # Detailed pipeline and design decisions
 ├── BENCHMARKS.md             # Extract/collate model benchmark: methodology, harness, recorded results
-└── COMPONENTS.md             # Third-party dependency attribution
+├── COMPONENTS.md             # Third-party dependency attribution
+└── plans/mcp-intelli-search/ # Cross-host research, checkpoints and implementation handoff
 
 scripts/
 ├── analyze-sessions.sh       # Aggregate meta.json telemetry sidecars across sessions
-└── benchmark-models.sh       # A/B benchmark harness for extract/collate models (live quota)
+├── benchmark-models.sh       # A/B benchmark harness for extract/collate models (live quota)
+└── capture-native-contract.mts # Explicit compatibility-fixture regeneration
 
 test/
 ├── annotations.test.ts
@@ -238,6 +242,11 @@ test/
 ├── fetch.test.ts
 ├── index.test.ts
 ├── llm.test.ts
+├── native-contract.test.ts
+├── fixtures/native-contract/ # Frozen tool, prompt, result, cache and telemetry contracts
+├── helpers/native-contract.ts # Isolated native contract capture
+├── probes/mcp-sdk.mjs         # Optional isolated SDK interface probe
+├── tsconfig.native-contract.json # Type check for contract tests and generator
 ├── prompts.test.ts
 ├── providers.test.ts
 ├── research.test.ts
@@ -252,7 +261,9 @@ test/
 │   ├── 06_extract_limits.sh
 │   ├── 07_llms_full.sh
 │   ├── 08_websearch_tool.sh
-│   └── 09_sonar_pro_search.sh
+│   ├── 09_sonar_pro_search.sh
+│   ├── 10_config_recipes.sh
+│   └── lib.sh
 ├── run-e2e-all.sh
 ├── run-e2e-publish.sh
 ├── run-e2e-publish-local.sh
@@ -273,7 +284,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline descripti
 4. **Collate:** Configurable model (default: MiniMax M3) deduplicates across extractions, produces summary and cache.
 5. **Cache suggest:** LLM judge (extract model) compares current query against `.search/.index.json` and appends related previous searches to the output. This is purely additive and never blocks or gates the main result.
 
-The pipeline is self-contained. `Pi` extensions cannot call other tools from `execute()`, so all stages are inlined in `intelli-research.ts`.
+The pipeline is self-contained, with all stages inlined in `intelli-research.ts`. Current `Pi` hosts expose `ctx.executeTool()` for nested tool calls, but this pipeline does not depend on that newer capability. Direct stage execution preserves the supported native baseline and the planned host-independent engine boundary.
 
 ### LLM Integration
 
@@ -346,7 +357,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 - **Tool definition pattern:** Each tool exports an object with `name`, `label`, `description`, `promptSnippet`, `promptGuidelines`, `parameters` (TypeBox schema), and `execute()`.
 - **Error handling:** Extraction failures are caught per-page (do not fail the whole pipeline). Transient failures (429, 5xx, timeouts) are retried with full-jitter backoff honouring Retry-After; a failure that survives all attempts throws an actionable error.
 - **`Pi` 0.81.1 baseline:** The extension uses the supported settings trust APIs, `CONFIG_DIR_NAME`, async model-registry refresh semantics, and `modelRegistry.getProvider()` from this version; it feature-detects the `Pi` >= 0.86 registry facade for LLM dispatch.
-- **No cross-tool calls:** `Pi` extensions cannot invoke other tools from `execute()`. Therefore `intelli_research` inlines all stages.
+- **Self-Contained Pipeline:** `intelli_research` executes its stages directly rather than invoking registered host tools. Keep that design for baseline compatibility and host-independent reuse, even on hosts that provide `ctx.executeTool()`.
 - **SPDX headers:** Source files include `// SPDX-License-Identifier: Apache-2.0` and copyright notices.
 
 ## Testing Conventions
