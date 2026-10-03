@@ -4,10 +4,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Type } from "typebox";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { SearchResult, OnUpdate } from "../types.js";
+import type { SearchResult } from "../types.js";
+import type { OnUpdate } from "../host-types.js";
 import { SEARCH_SYSTEM_PROMPT } from "../prompts.js";
-import { callLlm } from "../llm.js";
-import { createAnnotationSink, mergeCitations } from "../annotations.js";
+import { createNativeModelClient } from "../native-model-client.js";
+import type { SearchParams } from "../core/contracts.js";
+import { mergeCitations } from "../annotations.js";
 import { textContent, extractSourceUrls, stripTrailingSourcesSection } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import { appendDomainFilter, buildSearchPayloadPatch } from "./shared.js";
@@ -27,7 +29,7 @@ export const intelliSearchTool = {
 
   async execute(
     _toolCallId: string,
-    params: { query: string; domains?: string[] },
+    params: SearchParams,
     signal: AbortSignal | undefined,
     _onUpdate: OnUpdate | undefined,
     ctx: ExtensionContext,
@@ -43,15 +45,17 @@ export const intelliSearchTool = {
     // Side channel for url_citation annotations (see annotations.ts): merged
     // with text-scraped links so search-grounded models contribute every source
     // they actually consulted, not just the ones written into the prose.
-    const annotationSink = createAnnotationSink();
     // Optional OpenRouter web search server tool (settings: searchWebSearch).
     const payloadPatch = buildSearchPayloadPatch(settings, searchConfig.provider, params.domains);
 
     try {
-      const responseText = await callLlm(ctx, searchConfig, SEARCH_SYSTEM_PROMPT, searchQuery, {
+      const { text: responseText, citations } = await createNativeModelClient(ctx).complete({
+        model: searchConfig,
+        systemPrompt: SEARCH_SYSTEM_PROMPT,
+        userMessage: searchQuery,
         maxTokens: 2000,
         signal,
-        annotations: annotationSink,
+        collectCitations: true,
         payloadPatch,
         reasoning: payloadPatch ? (settings.searchWebSearch.reasoning ?? "low") : undefined,
       });
@@ -62,7 +66,7 @@ export const intelliSearchTool = {
       // unbounded list would flood the agent context. The summary handed
       // downstream drops the model's own Sources section; the tool renders
       // its own canonical block from this list.
-      const sources = mergeCitations(extractSourceUrls(responseText), annotationSink).slice(
+      const sources = mergeCitations(extractSourceUrls(responseText), { citations }).slice(
         0,
         Math.max(1, settings.defaultUrls),
       );

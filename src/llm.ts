@@ -11,6 +11,7 @@ import {
   type ThinkingLevel,
 } from "@earendil-works/pi-ai";
 import type { ModelConfig } from "./types.js";
+import type { ModelRetryConfig, ModelUsage } from "./core/contracts.js";
 import type { AnnotationSink } from "./annotations.js";
 import { settleAnnotationSink, wrapFetchForAnnotations } from "./annotations.js";
 import {
@@ -90,11 +91,7 @@ export const __harness: {
 };
 
 /** Transport-level retry config for a single {@link callLlm} call. */
-export interface LlmRetryConfig {
-  attempts: number;
-  baseDelayMs: number;
-  maxDelayMs: number;
-}
+export type LlmRetryConfig = ModelRetryConfig;
 
 /**
  * Call an LLM via pi's model registry, dispatched by feature detection:
@@ -147,6 +144,8 @@ export async function callLlm(
     payloadPatch?: (payload: Record<string, unknown>) => Record<string, unknown>;
     /** Per-call reasoning override. Default "low" when omitted. */
     reasoning?: ThinkingLevel;
+    /** Successful provider usage, retained by the host-neutral adapter. */
+    onUsage?: (usage: ModelUsage) => void;
   },
 ): Promise<string> {
   // 1. Resolve model from registry
@@ -359,6 +358,7 @@ export async function callLlm(
   // the SDK's own read, but callers merge the sink immediately after this
   // returns and would otherwise race the final chunks.
   if (options?.annotations) await settleAnnotationSink(options.annotations);
+  if (response.usage) options?.onUsage?.(response.usage);
   return response.content
     .filter((c): c is { type: "text"; text: string } => c.type === "text")
     .map((c) => c.text)

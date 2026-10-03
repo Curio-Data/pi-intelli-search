@@ -8,6 +8,9 @@
   },
   "include": [
     "native-contract.test.ts",
+    "core-boundary.test.ts",
+    "native-model-client.test.ts",
+    "workspace-paths.test.ts",
     "../scripts/capture-native-contract.mts"
   ],
   "exclude": []

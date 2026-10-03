@@ -5,11 +5,12 @@
 import { Type } from "typebox";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { EXTRACTION_SYSTEM_PROMPT } from "../prompts.js";
-import { callLlm } from "../llm.js";
+import { createNativeModelClient } from "../native-model-client.js";
+import type { ExtractParams } from "../core/contracts.js";
 import { textContent, inferSourceType, inferCurrentness } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import { buildExtractionMessage } from "./shared.js";
-import type { OnUpdate } from "../types.js";
+import type { OnUpdate } from "../host-types.js";
 
 export const intelliExtractTool = {
   name: "intelli_extract",
@@ -33,7 +34,7 @@ export const intelliExtractTool = {
 
   async execute(
     _toolCallId: string,
-    params: { url: string; title: string; content: string; query: string; focusPrompt?: string },
+    params: ExtractParams,
     signal: AbortSignal | undefined,
     _onUpdate: OnUpdate | undefined,
     ctx: ExtensionContext,
@@ -51,7 +52,10 @@ export const intelliExtractTool = {
       settings.extractMaxChars,
     );
 
-    const extraction = await callLlm(ctx, extractConfig, EXTRACTION_SYSTEM_PROMPT, userMessage, {
+    const { text: extraction } = await createNativeModelClient(ctx).complete({
+      model: extractConfig,
+      systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+      userMessage,
       maxTokens: settings.extractionMaxTokens,
       signal,
     });

@@ -22,7 +22,8 @@
 // SSE/JSON. Failures are swallowed everywhere — the main pipeline must never
 // depend on this side channel.
 
-import type { FetchFunction } from "@earendil-works/pi-ai";
+/** Standard fetch surface, structurally compatible with the native provider hook. */
+export type FetchFunction = typeof globalThis.fetch;
 
 /** One harvested citation: a URL plus whatever title the provider supplied. */
 export interface HarvestedCitation {

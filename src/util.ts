@@ -1,6 +1,4 @@
 // src/util.ts — Shared utilities
-import { homedir } from "node:os";
-import { join } from "node:path";
 
 /**
  * Create a properly-typed text content object for tool results.
@@ -31,17 +29,6 @@ export const TRUNCATED_MARKER = "\n\n[TRUNCATED]";
 export function truncateContent(content: string, maxChars: number): string {
   if (content.length <= maxChars) return content;
   return content.slice(0, maxChars) + TRUNCATED_MARKER;
-}
-
-/**
- * Get the pi agent directory path.
- * Respects PI_CODING_AGENT_DIR for isolated environments (e.g. E2E tests).
- */
-export function getAgentDir(): string {
-  if (process.env.PI_CODING_AGENT_DIR) {
-    return process.env.PI_CODING_AGENT_DIR;
-  }
-  return join(homedir(), ".pi", "agent");
 }
 
 /**

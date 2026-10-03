@@ -12,7 +12,16 @@ import {
   CACHE_SUGGEST_PROMPT,
 } from "../prompts.js";
 import { callLlm } from "../llm.js";
-import { createAnnotationSink, mergeCitations } from "../annotations.js";
+import { mergeCitations } from "../annotations.js";
+import { createNativeModelClient } from "../native-model-client.js";
+export { validateModelConfigs } from "../native-model-client.js";
+import type {
+  ModelClient,
+  OperationProgress,
+  ResearchParams,
+  ResearchStage,
+} from "../core/contracts.js";
+import { resolveWorkspacePaths, displayCachePath, type WorkspacePaths } from "../core/paths.js";
 import { fetchPages, downloadLlmsFullToCache } from "../fetch.js";
 import {
   makeCachePath,
@@ -46,15 +55,8 @@ import { mkdir, writeFile, rm, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
-import type {
-  FetchedPage,
-  ExtractResult,
-  ModelConfig,
-  ResearchSettings,
-  ToolResultLike,
-  OnUpdate,
-  PiTheme,
-} from "../types.js";
+import type { FetchedPage, ExtractResult, ModelConfig, ResearchSettings } from "../types.js";
+import type { ToolResultLike, OnUpdate, PiTheme } from "../host-types.js";
 import {
   appendDomainFilter,
   buildSearchPayloadPatch,
@@ -65,7 +67,7 @@ import {
 
 // ── Progress bar: pipeline stages ──
 const STAGES = ["search", "fetch", "extract", "collate", "cache"] as const;
-type StageName = (typeof STAGES)[number];
+type StageName = ResearchStage;
 
 const STAGE_LABELS: Record<StageName, string> = {
   search: "Search",
@@ -75,21 +77,7 @@ const STAGE_LABELS: Record<StageName, string> = {
   cache: "Cache",
 };
 
-interface ProgressDetails {
-  stage: StageName;
-  stageIdx: number;
-  totalStages: number;
-  message: string;
-  pct: number;
-  subProgress?: { current: number; total: number };
-}
-
-interface ResearchParams {
-  query: string;
-  maxUrls?: number;
-  domains?: string[];
-  focusPrompt?: string;
-}
+type ProgressDetails = OperationProgress;
 
 type ResearchToolResult = {
   content: Array<{ type: "text"; text: string }>;
@@ -169,7 +157,8 @@ export const intelliResearchTool = {
     // Pre-flight: validate all three models exist in the registry before
     // starting the pipeline. This catches typos in settings.json (e.g.
     // "minimax/M3.7") before any LLM calls are made and cost incurred.
-    const missingModels = validateModelConfigs(ctx, [
+    const models = createNativeModelClient(ctx, __harness.callLlm);
+    const missingModels = await models.preflight([
       { role: "search", config: searchConfig },
       { role: "extract", config: extractConfig },
       { role: "collate", config: collateConfig },
@@ -194,8 +183,12 @@ export const intelliResearchTool = {
     const INDICATOR_FRAMES = ["🔍", "🌐", "📄", "✨"];
     ui.setWorkingIndicator?.({ frames: INDICATOR_FRAMES, intervalMs: 400 });
     try {
+      const paths = resolveWorkspacePaths(ctx.cwd, settings.cacheDir);
+      const physicalCachePath = makeCachePath(params.query, paths.workspaceRoot, paths.cacheRoot);
       const p: PipelineCtx = {
-        ctx,
+        models,
+        paths,
+        physicalCachePath,
         params,
         settings,
         maxUrls,
@@ -217,7 +210,7 @@ export const intelliResearchTool = {
         // fetches failed, all extractions failed) still write a telemetry
         // sidecar into this directory so the analysis script can measure
         // degradation.
-        cachePath: makeCachePath(params.query, ctx.cwd, settings.cacheDir),
+        cachePath: displayCachePath(paths, physicalCachePath),
       };
       return await executePipeline(p);
     } finally {
@@ -230,7 +223,9 @@ export const intelliResearchTool = {
 // ── Pipeline context: everything a stage needs, assembled once in execute() ──
 
 interface PipelineCtx {
-  ctx: ExtensionContext;
+  models: ModelClient;
+  paths: WorkspacePaths;
+  physicalCachePath: string;
   params: ResearchParams;
   settings: ResearchSettings;
   maxUrls: number;
@@ -339,7 +334,7 @@ async function executePipeline(p: PipelineCtx): Promise<ResearchToolResult> {
   // stages recorded. Rewrite it now that cache-suggest data is available
   // so the final sidecar is complete. Atomic via temp-file + rename; a
   // failure is caught and logged, never surfaced to the pipeline.
-  await writeTelemetrySidecar(p.tel, p.cachePath, "completed");
+  await writeTelemetrySidecar(p.tel, p.physicalCachePath, "completed");
 
   // ═══════════════════════════════════════════
   // Return concise injection
@@ -390,29 +385,34 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
   // Side channel for url_citation annotations: search-grounded models cite
   // many more sources than the prose links they write, and the transport
   // drops them (see annotations.ts). Merged into urls after each attempt.
-  const annotationSink = createAnnotationSink();
+  let annotationsHarvested = 0;
   // Optional OpenRouter web search server tool (settings: searchWebSearch).
   // Attaches search grounding to any OpenRouter chat model.
-  const payloadPatch = buildSearchPayloadPatch(p.settings, p.searchConfig.provider, p.params.domains);
-  const searchReasoning = payloadPatch ? (p.settings.searchWebSearch.reasoning ?? "low") : undefined;
+  const payloadPatch = buildSearchPayloadPatch(
+    p.settings,
+    p.searchConfig.provider,
+    p.params.domains,
+  );
+  const searchReasoning = payloadPatch
+    ? (p.settings.searchWebSearch.reasoning ?? "low")
+    : undefined;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     attemptsUsed = attempt;
-    searchResult = await __harness.callLlm(
-      p.ctx,
-      p.searchConfig,
-      SEARCH_SYSTEM_PROMPT,
-      searchQuery,
-      {
-        maxTokens: 2000,
-        signal: p.signal,
-        retry: p.retry,
-        timeoutMs: p.settings.llmTimeoutMs,
-        annotations: annotationSink,
-        payloadPatch,
-        reasoning: searchReasoning,
-      },
-    );
-    urls = mergeCitations(extractSourceUrls(searchResult), annotationSink).slice(0, p.maxUrls);
+    const completion = await p.models.complete({
+      model: p.searchConfig,
+      systemPrompt: SEARCH_SYSTEM_PROMPT,
+      userMessage: searchQuery,
+      maxTokens: 2000,
+      signal: p.signal,
+      retry: p.retry,
+      timeoutMs: p.settings.llmTimeoutMs,
+      collectCitations: true,
+      payloadPatch,
+      reasoning: searchReasoning,
+    });
+    searchResult = completion.text;
+    annotationsHarvested = completion.citations.length;
+    urls = mergeCitations(extractSourceUrls(searchResult), completion).slice(0, p.maxUrls);
     if (urls.length > 0 || p.signal?.aborted || attempt === maxAttempts) break;
     p.onUpdate?.(
       progressUpdate(
@@ -442,7 +442,7 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
     retryFired: attemptsUsed > 1,
     attempts: attemptsUsed,
     degraded: urls.length === 0,
-    annotationsHarvested: annotationSink.citations.length,
+    annotationsHarvested,
   });
 
   return { searchResult, urls, attemptsUsed, maxAttempts };
@@ -604,18 +604,15 @@ async function runCollateStage(
     succeededExtractions,
   );
 
-  const collation = await __harness.callLlm(
-    p.ctx,
-    p.collateConfig,
-    COLLATION_SYSTEM_PROMPT,
-    collationUserMsg,
-    {
-      maxTokens: p.settings.collationMaxTokens,
-      signal: p.signal,
-      retry: p.retry,
-      timeoutMs: p.settings.llmTimeoutMs,
-    },
-  );
+  const { text: collation } = await p.models.complete({
+    model: p.collateConfig,
+    systemPrompt: COLLATION_SYSTEM_PROMPT,
+    userMessage: collationUserMsg,
+    maxTokens: p.settings.collationMaxTokens,
+    signal: p.signal,
+    retry: p.retry,
+    timeoutMs: p.settings.llmTimeoutMs,
+  });
 
   p.tel?.recordCollate({
     model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
@@ -673,10 +670,10 @@ async function writeCacheArtifacts(
   collation: string,
   llms: LlmsDownloads,
 ): Promise<void> {
-  await withLock(cacheLockDir(p.cachePath), async () => {
+  await withLock(cacheLockDir(p.physicalCachePath), async () => {
     // Write cache files (staging-based atomic, no partial visibility)
     await writeCacheFiles(
-      p.cachePath,
+      p.physicalCachePath,
       allExtractions,
       fetched.successPages,
       searchResult,
@@ -684,22 +681,29 @@ async function writeCacheArtifacts(
     );
 
     // Write report (atomic via temp-file + rename)
-    await writeReportFile(p.cachePath, p.params.query, collation, allExtractions, fetched.pages);
+    await writeReportFile(
+      p.physicalCachePath,
+      p.params.query,
+      collation,
+      allExtractions,
+      fetched.pages,
+      p.cachePath,
+    );
 
     // Write telemetry sidecar (atomic via temp-file + rename)
-    await writeTelemetrySidecar(p.tel, p.cachePath, "completed");
+    await writeTelemetrySidecar(p.tel, p.physicalCachePath, "completed");
 
     // Move any already-completed llms-full downloads from the per-run
     // staging dir into cachePath/sources/. Pending downloads stay in
     // staging and are moved after the lock is released.
-    await flushLlmsStaging(llms.staging, join(p.cachePath, "sources"));
+    await flushLlmsStaging(llms.staging, join(p.physicalCachePath, "sources"));
 
     // Atomic index update under a separate lock scoped to the cache
     // directory. Different cache paths contend only on this short
     // index update, not on the per-cache-path bulk writes.
-    await withLock(indexLockDir(p.settings.cacheDir), async () => {
-      const slug = p.cachePath.split("/").pop() ?? p.cachePath;
-      await updateIndex(p.settings.cacheDir, slug, p.params.query);
+    await withLock(indexLockDir(p.paths.cacheRoot), async () => {
+      const slug = p.physicalCachePath.split("/").pop() ?? p.physicalCachePath;
+      await updateIndex(p.paths.cacheRoot, slug, p.params.query);
     });
   });
 
@@ -707,8 +711,8 @@ async function writeCacheArtifacts(
   // staged files under the cache lock so concurrent same-query runs cannot
   // interleave writes to identical llms-full filenames.
   await Promise.all(llms.futures);
-  await withLock(cacheLockDir(p.cachePath), () =>
-    flushLlmsStaging(llms.staging, join(p.cachePath, "sources")),
+  await withLock(cacheLockDir(p.physicalCachePath), () =>
+    flushLlmsStaging(llms.staging, join(p.physicalCachePath, "sources")),
   );
   // Clean up the staging dir.
   await rm(llms.staging, { recursive: true, force: true }).catch(() => {});
@@ -734,28 +738,25 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
   let cacheSuggestSurfaced = 0;
   let cacheSuggestSlugs: string[] = [];
   try {
-    const index = await readIndex(p.settings.cacheDir);
+    const index = await readIndex(p.paths.cacheRoot);
     // Only run judge if there are other searches to compare against
     if (index.searches.some((e) => e.slug !== currentSlug)) {
       const indexText = formatIndexForJudge(index, currentSlug);
       const judgeUserMsg = `Current query: "${p.params.query}"\n\nPrevious searches:\n${indexText}`;
-      const judgeResponse = await __harness.callLlm(
-        p.ctx,
-        p.extractConfig,
-        CACHE_SUGGEST_PROMPT,
-        judgeUserMsg,
-        {
-          maxTokens: 500,
-          signal: p.signal,
-          retry: p.retry,
-          timeoutMs: p.settings.llmTimeoutMs,
-        },
-      );
+      const { text: judgeResponse } = await p.models.complete({
+        model: p.extractConfig,
+        systemPrompt: CACHE_SUGGEST_PROMPT,
+        userMessage: judgeUserMsg,
+        maxTokens: 500,
+        signal: p.signal,
+        retry: p.retry,
+        timeoutMs: p.settings.llmTimeoutMs,
+      });
       const matches = parseJudgeResponse(judgeResponse, index, currentSlug);
       cacheSuggestRan = true;
       cacheSuggestSurfaced = matches.length;
       cacheSuggestSlugs = matches.map((m) => m.entry.slug);
-      suggestionsAppendix = formatCacheSuggestions(matches, p.settings.cacheDir);
+      suggestionsAppendix = formatCacheSuggestions(matches, p.paths.cacheDisplayRoot);
     }
   } catch (err: unknown) {
     // Cache suggest is purely additive — never fail the pipeline
@@ -782,7 +783,7 @@ async function degradedReturn(
   message: string,
   details: Record<string, unknown>,
 ): Promise<ResearchToolResult> {
-  await writeTelemetrySidecar(p.tel, p.cachePath, outcome);
+  await writeTelemetrySidecar(p.tel, p.physicalCachePath, outcome);
   return { content: [textContent(message)], details };
 }
 
@@ -847,25 +848,6 @@ async function writeTelemetrySidecar(
 }
 
 /**
- * Validate that all configured models exist in Pi's model registry.
- * Returns a list of models that are missing. An empty list means all OK.
- * Call this before starting any pipeline stages to fail fast on typos.
- */
-export function validateModelConfigs(
-  ctx: ExtensionContext,
-  configs: Array<{ role: string; config: { provider: string; model: string } }>,
-): Array<{ role: string; config: { provider: string; model: string } }> {
-  const missing: Array<{ role: string; config: { provider: string; model: string } }> = [];
-  for (const { role, config } of configs) {
-    const model = ctx.modelRegistry.find(config.provider, config.model);
-    if (!model) {
-      missing.push({ role, config });
-    }
-  }
-  return missing;
-}
-
-/**
  * Extract query-relevant content from a single page.
  */
 async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractResult> {
@@ -877,18 +859,15 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       p.settings.extractMaxChars,
     );
 
-    const extraction = await __harness.callLlm(
-      p.ctx,
-      p.extractConfig,
-      EXTRACTION_SYSTEM_PROMPT,
+    const { text: extraction } = await p.models.complete({
+      model: p.extractConfig,
+      systemPrompt: EXTRACTION_SYSTEM_PROMPT,
       userMessage,
-      {
-        maxTokens: p.settings.extractionMaxTokens,
-        signal: p.signal,
-        retry: p.retry,
-        timeoutMs: p.settings.llmTimeoutMs,
-      },
-    );
+      maxTokens: p.settings.extractionMaxTokens,
+      signal: p.signal,
+      retry: p.retry,
+      timeoutMs: p.settings.llmTimeoutMs,
+    });
 
     const firstLine = extraction.split("\n")[0] ?? "";
     return {

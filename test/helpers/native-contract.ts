@@ -125,7 +125,10 @@ async function cacheFiles(root: string, version: string): Promise<Record<string,
 // One scenario per isolated directory. The test file runs these serially because
 // the original implementation has global harness/settings/clock state. This is
 // a baseline harness, not a concurrency design for the future shared engine.
-export async function captureOperation(scenario: Scenario): Promise<unknown> {
+export async function captureOperation(
+  scenario: Scenario,
+  options: { separateProcessCwd?: boolean } = {},
+): Promise<unknown> {
   const scratch = join(REPO, ".tmp");
   await mkdir(scratch, { recursive: true });
   const root = await mkdtemp(join(scratch, "native-contract-"));
@@ -145,7 +148,9 @@ export async function captureOperation(scenario: Scenario): Promise<unknown> {
     const agent = join(root, "agent");
     await mkdir(agent);
     process.env.PI_CODING_AGENT_DIR = agent;
-    process.chdir(root);
+    const processDir = options.separateProcessCwd ? join(root, "launcher") : root;
+    await mkdir(processDir, { recursive: true });
+    process.chdir(processDir);
     invalidateSettingsCache();
     clearMigrationContext();
     _resetVersionCacheForTests();
@@ -361,6 +366,9 @@ export async function captureOperation(scenario: Scenario): Promise<unknown> {
     if (["search", "extract", "collate", "no-links"].includes(scenario)) assert.equal(pageCalls, 0);
     else assert.equal(pageCalls, 1);
     const files = await cacheFiles(root, version);
+    if (options.separateProcessCwd) {
+      assert.deepEqual(await readdir(processDir), [], "operation must not write into launcher cwd");
+    }
     // Full file inventory is captured, including unexpected residue. Only the
     // emitting package version is normalised; paths, dates and text are stable.
     return plain({ result, calls, updates, indicators, diagnostics, files });

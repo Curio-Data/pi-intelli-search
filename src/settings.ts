@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { ModelConfig, ResearchSettings } from "./types.js";
-import { getAgentDir } from "./util.js";
+import { getAgentDir } from "./agent-dir.js";
 
 export interface SettingsContext {
   cwd: string;

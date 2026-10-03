@@ -1,9 +1,9 @@
 // test/util.test.ts — Unit tests for shared utilities
+import { getAgentDir } from "../src/agent-dir.js";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   textContent,
-  getAgentDir,
   extractSourceUrls,
   inferSourceType,
   inferCurrentness,

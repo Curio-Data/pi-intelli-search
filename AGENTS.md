@@ -202,6 +202,10 @@ All `Pi` SDK packages are **peer dependencies**. They are provided by the hostin
 ```
 src/
 ├── index.ts                  # Extension entry: registers tools, events, model setup
+├── core/                     # Host-neutral contracts, explicit path policy and dependency entry
+├── native-model-client.ts    # Per-operation model adapter delegating to existing callLlm()
+├── agent-dir.ts              # Native agent-directory discovery, kept out of shared utilities
+├── host-types.ts             # Native update callback, tool result and theme types
 ├── annotations.ts            # Harvest url_citation annotations from provider response bodies
 ├── llm.ts                    # callLlm() - pi native auth + retry/backoff + per-call timeout + payloadPatch/reasoning/fetch hooks
 ├── fetch.ts                  # Page fetching: Defuddle vs Markdown comparison, llms-full.txt
@@ -288,6 +292,7 @@ The pipeline is self-contained, with all stages inlined in `intelli-research.ts`
 
 ### LLM Integration
 
+- All four tools use `createNativeModelClient()` from `src/native-model-client.ts`. It delegates to `callLlm()` without adding retries or provider fallback, and owns citation/usage state per completion. Host-neutral interfaces live in `src/core/contracts.ts`; operation bodies remain in `src/tools/` until Phase 2. Run `test/core-boundary.test.ts` to check source/declaration imports and isolated runtime loading, plus `node_modules/.bin/tsc -p test/tsconfig.native-contract.json` to type-check the seam and fixture tests.
 - Dispatches by feature detection. On `Pi` >= 0.86 it calls `ctx.modelRegistry.streamSimple()` (the registry facade added in `Pi` 0.86.0), which normalises the context, resolves auth, and applies the `baseUrl` override internally. On `Pi` 0.81.1-0.85.x it calls `ctx.modelRegistry.getProvider(provider).streamSimple()` (root `@earendil-works/pi-ai` API) with auth resolved by `Pi` (`getApiKeyAndHeaders`) and the `baseUrl` override mirrored from `ModelRuntime.prepareRequest`. Critical contract: on `Pi` >= 0.86 a raw context passed straight to a provider silently drops `systemPrompt` (providers read the prompt from the transcript's system messages); never call `provider.streamSimple()` directly on those versions. Neither path uses the deprecated `pi-ai/compat` `completeSimple()` shim nor `ModelRegistry.complete()` (which drops the provider-neutral reasoning parameter). Both send `reasoning: "low"`, which MiniMax M3 and other reasoning models require; the search stage overrides it per call (`minimal` when the web search tool is enabled). `test/compat-guard.test.ts` enforces that no file imports `pi-ai/compat`. Models registered outside `Pi`'s registry (for example `pi-ai`'s `registerFauxProvider`) are not consulted.
 - **Per-call payload patching and reasoning.** `callLlm()` accepts `payloadPatch` (forwarded as pi-ai's `onPayload`) and `reasoning` (default `"low"`). The search stage uses both to attach `openrouter:web_search`. A patch must return the payload untouched when it does not apply and never overwrite an existing `tools` array.
 - **Annotation side channel.** When `annotations` is passed, `callLlm()` injects a wrapped `fetch` through `ProviderRequestOptions.fetch` that tees each response body and parses `url_citation` entries into the sink. The sink is cleared at the start of every retry attempt, and `callLlm()` awaits the background reads (bounded at 2s) before returning. Every failure in this path is swallowed by design. **Both hooks fail silently if upstream pi-ai changes them**: re-check `ProviderRequestOptions.fetch` and `onPayload` on every peer-dependency bump; `test/annotations.test.ts` covers the parser, not the injection point.
@@ -318,7 +323,7 @@ Loaded from `~/.pi/agent/settings.json` and, only for trusted projects, `<projec
 
 ### Cache
 
-Written to `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. The collation model sees cache paths so it can reference them in output.
+Written to `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. Physical paths, including indexes and locks, resolve against `ctx.cwd` rather than the process directory. Prompts, report headers and results use a separate configured display path. `makeCachePath()` returns an absolute physical path; use `displayCachePath()` for native text. Absolute and parent-relative native cache settings remain supported.
 
 **Telemetry sidecar** (v0.11.0+). Each `intelli_research` run also writes a local-only `meta.json` into its cache directory, recording per-stage outcomes (pages fetched/failed, fetch-variant winners, links returned and annotations harvested, search-retry, cache-suggest hits, latency). The schema is owned by `src/telemetry.ts`, is additive-only, and carries an independent `schemaVersion` decoupled from `extensionVersion`. The write is atomic (temp file then `rename`) and fail-safe: failures are caught and logged, never surfacing to the pipeline result. Suppressed entirely when `disableTelemetry` is true. No network call is added; the word "telemetry" refers to local runtime signals, not remote reporting. The bundled `scripts/analyze-sessions.sh` aggregates these sidecars.
 

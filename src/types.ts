@@ -1,4 +1,6 @@
-// src/types.ts — Shared TypeScript interfaces
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
+// Host-neutral data types. Native UI types live in host-types.ts.
 
 export interface SearchResult {
   summary: string;
@@ -52,23 +54,6 @@ export interface SearchWebSearchSettings {
   excludedDomains?: string[];
   /** Reasoning effort for the search model when the tool is enabled. */
   reasoning?: "minimal" | "low" | "medium" | "high";
-}
-
-import type { AgentToolResult, AgentToolUpdateCallback } from "@earendil-works/pi-coding-agent";
-
-/** Structured details payload our tools attach to results. */
-type ToolDetails = Record<string, unknown> | undefined;
-
-/** Tool onUpdate callback (Pi's own callback type, specialised to our details). */
-export type OnUpdate = AgentToolUpdateCallback<ToolDetails>;
-
-/** Tool result shape for renderResult (Pi's own result type, specialised). */
-export type ToolResultLike = AgentToolResult<ToolDetails>;
-
-/** Minimal theme surface used by renderResult/renderProgressBar. */
-export interface PiTheme {
-  fg(color: string, text: string): string;
-  bold(text: string): string;
 }
 
 export interface ResearchSettings {

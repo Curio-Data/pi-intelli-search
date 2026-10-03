@@ -65,12 +65,22 @@ After the main pipeline completes, a lightweight LLM judge (using the extract mo
 
 This stage is purely additive. It never blocks or replaces the live pipeline. Failures are caught and silently ignored. Cost is minimal (≈500 input tokens, or ≈$0.0002).
 
+## Dependency Boundary
+
+All native tools delegate model calls through `src/native-model-client.ts` to the existing `callLlm()` transport. The adapter owns per-call citation and usage state; retry and timeout policy remain in `callLlm()`. Host settings discovery and model registration stay outside `src/core/`. Shared data types contain no host imports, while native callback and rendering types live in `src/host-types.ts`.
+
+`src/core/contracts.ts` defines the future operation context, model interface, progress and package identity. Operation bodies still live in `src/tools/`; the complete shared engine and standalone server are not implemented. [Phase 1 Results](plans/mcp-intelli-search/PHASE-1.md) records the verified boundary and the remaining extraction work.
+
 ## Source Code Structure
 
 ```
 src/
 ├── index.ts              # Extension entry: registers tools, events, model setup
 ├── annotations.ts        # Harvest url_citation annotations from provider response bodies
+├── core/                 # Host-neutral contracts, path policy and dependency entry
+├── native-model-client.ts # Per-operation adapter delegating to callLlm()
+├── agent-dir.ts          # Native host-directory discovery
+├── host-types.ts         # Native callback, result and theme types
 ├── llm.ts                # callLlm() - pi native auth + retry/backoff + per-call timeout
 ├── fetch.ts              # Page fetching: Defuddle vs Markdown comparison, llms-full.txt
 ├── prompts.ts            # System prompts for search, extraction, collation
@@ -107,6 +117,12 @@ src/
 ```
 
 Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short SHA-1 of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. The same query always produces the same hash, so re-running it refreshes the same directory instead of accumulating duplicates.
+
+### Physical and Display Paths
+
+Both cache-writing tools resolve physical paths against the absolute session workspace, including the shared index and locks. `makeCachePath()` returns an absolute path. Prompts, result details, appendices and report headers use a separate display path, preserving native relative paths such as `.search/<slug>/`. Absolute and parent-relative native cache settings remain supported.
+
+The path contract includes a workspace/cache staging root, but documentation downloads still use the existing temporary-directory path. Moving those downloads and guaranteeing cleanup are part of the next extraction phase.
 
 ### Telemetry Sidecar
 

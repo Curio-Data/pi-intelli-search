@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Cache files, locks, indexes and telemetry now resolve against the `Pi` session workspace when it differs from the process working directory. Paths shown in prompts, reports and results retain their configured form.
+
 ### Changed
 
 - **Removed the Sonar retirement advisory.** OpenRouter continues to serve `perplexity/sonar` past Perplexity's direct-API sunset date, so the README advisory, the sunset framing in the alternative-search-configuration docs, and stale references in code comments and tests are gone. The default search model is unchanged.

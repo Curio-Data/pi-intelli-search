@@ -5,7 +5,9 @@
 import { Type } from "typebox";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { COLLATION_SYSTEM_PROMPT } from "../prompts.js";
-import { callLlm } from "../llm.js";
+import { createNativeModelClient } from "../native-model-client.js";
+import type { CollateParams } from "../core/contracts.js";
+import { resolveWorkspacePaths, displayCachePath } from "../core/paths.js";
 import {
   makeCachePath,
   writeCacheFiles,
@@ -18,7 +20,8 @@ import {
 import { textContent } from "../util.js";
 import { loadSettings, resolveModelConfig } from "../settings.js";
 import { buildCollationMessage, formatCacheAppendix } from "./shared.js";
-import type { ExtractResult, OnUpdate } from "../types.js";
+import type { ExtractResult } from "../types.js";
+import type { OnUpdate } from "../host-types.js";
 
 const extractionSchema = Type.Object({
   url: Type.String(),
@@ -64,18 +67,7 @@ export const intelliCollateTool = {
 
   async execute(
     _toolCallId: string,
-    params: {
-      extractions: Array<{
-        url: string;
-        title: string;
-        extraction: string;
-        sourceType: string;
-        status: string;
-      }>;
-      query: string;
-      searchSummary?: string;
-      fullPages?: Array<{ url: string; title: string; content: string }>;
-    },
+    params: CollateParams,
     signal: AbortSignal | undefined,
     _onUpdate: OnUpdate | undefined,
     ctx: ExtensionContext,
@@ -86,7 +78,9 @@ export const intelliCollateTool = {
     });
     const collateConfig = resolveModelConfig(settings, "collate");
 
-    const cachePath = makeCachePath(params.query, ctx.cwd, settings.cacheDir);
+    const paths = resolveWorkspacePaths(ctx.cwd, settings.cacheDir);
+    const physicalPath = makeCachePath(params.query, paths.workspaceRoot, paths.cacheRoot);
+    const cachePath = displayCachePath(paths, physicalPath);
     const succeeded = params.extractions.filter((e) => e.status === "success");
     const blocked = params.extractions.filter((e) => e.status !== "success");
 
@@ -117,7 +111,10 @@ export const intelliCollateTool = {
     );
 
     // Call LLM for collation (no lock — never hold locks across LLM calls)
-    const collation = await callLlm(ctx, collateConfig, COLLATION_SYSTEM_PROMPT, userMessage, {
+    const { text: collation } = await createNativeModelClient(ctx).complete({
+      model: collateConfig,
+      systemPrompt: COLLATION_SYSTEM_PROMPT,
+      userMessage,
       maxTokens: settings.collationMaxTokens,
       signal,
     });
@@ -126,10 +123,10 @@ export const intelliCollateTool = {
     // Write cache artifacts under the per-cache-path lock so two
     // concurrent same-query runs do not interleave file writes.
     // ═══════════════════════════════════════════════════════════════
-    await withLock(cacheLockDir(cachePath), async () => {
+    await withLock(cacheLockDir(physicalPath), async () => {
       // Write cache files (staging-based atomic, no partial visibility)
       await writeCacheFiles(
-        cachePath,
+        physicalPath,
         extractResults,
         fetchedPages,
         params.searchSummary ?? "",
@@ -137,12 +134,19 @@ export const intelliCollateTool = {
       );
 
       // Write report (atomic via temp-file + rename)
-      await writeReportFile(cachePath, params.query, collation, extractResults, fetchedPages);
+      await writeReportFile(
+        physicalPath,
+        params.query,
+        collation,
+        extractResults,
+        fetchedPages,
+        cachePath,
+      );
 
       // Atomic index update under the shared cache-dir index lock.
-      await withLock(indexLockDir(settings.cacheDir), async () => {
-        const slug = cachePath.split("/").pop() ?? cachePath;
-        await updateIndex(settings.cacheDir, slug, params.query);
+      await withLock(indexLockDir(paths.cacheRoot), async () => {
+        const slug = physicalPath.split("/").pop() ?? physicalPath;
+        await updateIndex(paths.cacheRoot, slug, params.query);
       });
     });
 

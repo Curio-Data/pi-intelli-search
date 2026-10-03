@@ -4,7 +4,7 @@
 
 Implement `@curio-data/mcp-intelli-search` in this repository while preserving the native `@curio-data/pi-intelli-search` package. Extract one shared research engine, expose it through a Model Context Protocol (MCP) server, and provide installation bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins).
 
-Read the [handoff](README.md) first and the [research record](RESEARCH.md) for approved decisions, sources and limitations. [Phase 0 results](PHASE-0.md) record the verified dependencies and native compatibility fixtures. Phase 1 is the next implementation step. The remaining proposed paths, commands and interfaces below must be created and tested before they are documented as available.
+Read the [handoff](README.md) first and the [research record](RESEARCH.md) for approved decisions, sources and limitations. [Phase 0 results](PHASE-0.md) record the verified dependencies and native compatibility fixtures. [Phase 1 results](PHASE-1.md) record the implemented dependency contracts, native model adapter and explicit cache paths. Phase 2 is the next implementation step. The remaining proposed paths, commands and interfaces below must be created and tested before they are documented as available.
 
 ## Scope
 
@@ -190,7 +190,7 @@ An explicit configuration mapping for search, extract and collate is sufficient.
 
 ### Workspace Ownership
 
-Resolve all physical cache operations against one absolute root. The existing `cwd` argument to `makeCachePath()` does not currently anchor its return value, and callers pass `settings.cacheDir` directly to index and lock operations. Fix these together, with a regression case where process working directory and workspace differ.
+Resolve all physical cache operations against one absolute root. Phase 1 corrects the previously ignored `cwd` argument to `makeCachePath()` and anchors both cache-writing tools' index, lock and artifact operations to the workspace. Preserve the regression cases where process working directory and workspace differ, and keep display paths separate.
 
 Do not call `process.chdir()` per request. A long-running MCP server must not let one operation change another operation's path resolution.
 
@@ -229,6 +229,8 @@ Completed evidence, fixture maintenance and remaining limitations are recorded i
 Exit gate: baseline failures are understood and recorded, the provider/SDK dependency choices have evidence, and compatibility fixtures exist. A failed baseline is not permission to ignore the failure in the final release gate.
 
 ### Phase 1: Dependency Seams
+
+Completed interfaces, path corrections, verification and remaining boundaries are recorded in [Phase 1 Results](PHASE-1.md). Retain this checklist as the scope of that checkpoint.
 
 1. Introduce host-neutral operation, progress, model and package-identity interfaces.
 2. Split host types from data types; remove transitive host imports from the intended core boundary, including the annotation fetch type and agent-directory helper.
@@ -332,7 +334,8 @@ mkdir -p .tmp/mcp-verification
 export TMPDIR="$PWD/.tmp/mcp-verification"
 npm run build
 npm test
-npm run test:smoke
+mkdir -p "$TMPDIR/smoke-agent"
+PI_CODING_AGENT_DIR="$TMPDIR/smoke-agent" npm run test:smoke
 ./test/run-e2e-publish-local.sh
 ./test/e2e/01_main.sh
 ```

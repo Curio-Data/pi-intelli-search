@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { mkdir, writeFile, readFile, rename, rm, stat, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { resolveWorkspacePaths } from "./core/paths.js";
 import { createHash, randomBytes } from "node:crypto";
 import type { FetchedPage, ExtractResult } from "./types.js";
 
@@ -172,7 +173,7 @@ export function makeCachePath(query: string, cwd: string, cacheDir: string): str
   // deterministic (re-research refreshes its own directory).
   const hash = createHash("sha1").update(query).digest("hex").slice(0, 6);
   const stem = words ? `${words}-${hash}` : hash;
-  return join(cacheDir, `${date}-${stem}`);
+  return join(resolveWorkspacePaths(cwd, cacheDir).cacheRoot, `${date}-${stem}`);
 }
 
 export function domainSlug(url: string): string {
@@ -279,6 +280,7 @@ export async function writeReportFile(
   collation: string,
   extractions: ExtractResult[],
   pages: FetchedPage[],
+  displayPath: string = cachePath,
 ): Promise<void> {
   await mkdir(cachePath, { recursive: true });
   const now = new Date().toISOString();
@@ -287,7 +289,7 @@ export async function writeReportFile(
 
   let report = `# ${query}\n\n`;
   report += `> Searched: ${now}\n`;
-  report += `> Cache: ${cachePath}/\n`;
+  report += `> Cache: ${displayPath}/\n`;
   report += `> Sources: ${succeeded.length} succeeded, ${blocked.length} blocked\n\n`;
   report += collation + "\n\n";
 
