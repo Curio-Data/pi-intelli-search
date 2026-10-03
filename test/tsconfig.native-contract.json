@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "composite": false,
+    "noEmit": true,
+    "declaration": false
+  },
+  "include": [
+    "native-contract.test.ts",
+    "../scripts/capture-native-contract.mts"
+  ],
+  "exclude": []
+}

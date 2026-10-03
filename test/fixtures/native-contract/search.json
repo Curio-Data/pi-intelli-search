@@ -1,0 +1,62 @@
+{
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "## Search results for: \"Fixture research\"\n\nFixture answer.\n\n\n### Sources (2)\n\n1. [A](https://example.com/a)\n2. [B](https://example.org/b)\n"
+      }
+    ],
+    "details": {
+      "sources": [
+        {
+          "url": "https://example.com/a",
+          "title": "A"
+        },
+        {
+          "url": "https://example.org/b",
+          "title": "B"
+        }
+      ],
+      "query": "Fixture research"
+    }
+  },
+  "calls": [
+    {
+      "prompt": "SEARCH_SYSTEM_PROMPT",
+      "model": "fixture-search",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Fixture research site:example.com"
+            }
+          ],
+          "timestamp": 1767312000000
+        }
+      ],
+      "maxTokens": 2000,
+      "reasoning": "minimal",
+      "maxRetries": 0,
+      "payload": {
+        "model": "fixture-search",
+        "tools": [
+          {
+            "type": "openrouter:web_search",
+            "parameters": {
+              "max_results": 3,
+              "allowed_domains": [
+                "example.com"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "updates": [],
+  "indicators": [],
+  "diagnostics": [],
+  "files": {}
+}

@@ -117,12 +117,12 @@ An internal shared source directory is sufficient initially. Publishing a third 
 
 The official [_TypeScript_ SDK](https://github.com/modelcontextprotocol/typescript-sdk), where SDK means software development kit, described its second major release line as stable when researched. It separates `@modelcontextprotocol/server` and `@modelcontextprotocol/client`; its stdio example imports `McpServer` from the server package and `StdioServerTransport` from `@modelcontextprotocol/server/stdio`. It supports Standard Schema-compatible schema libraries.
 
-The implementation agent must verify registry availability, engine requirements and the exact API, or application programming interface, against the chosen release before adding dependencies. The earlier monolithic `@modelcontextprotocol/sdk` examples must not be mixed with split-package imports. Package registry resolution and interoperability with the installed clients were not tested during this research. Source: [M2](#m2-typescript-sdk).
+[Phase 0](PHASE-0.md#dependency-verification) subsequently verified registry availability, engine requirements and the request-context API, or application programming interface, through an isolated installed-package probe. Recheck the selected release before adding production dependencies. The earlier monolithic `@modelcontextprotocol/sdk` examples must not be mixed with split-package imports. Package registry resolution was not tested during the initial research but is now recorded in Phase 0. Interoperability with the installed agent clients remains untested. Source: [M2](#m2-typescript-sdk).
 
 ## Limitations and Rechecks
 
 - Host installation commands and manifests were documented, not exercised with this project's future artifacts.
-- The MCP SDK research did not establish the exact cancellation and progress callback signatures. Inspect the selected release's reference and examples before implementing those handlers.
+- The initial MCP SDK research did not establish the exact cancellation and progress callback signatures. Phase 0 closes that gap for its selected release through installed declarations and a synthetic executable probe; real-agent interoperability remains a later gate.
 - Client timeout handling, workspace discovery and plugin environment interpolation require real-host tests.
 - Direct MCP configuration and plugin installation must be documented separately. A plugin limitation does not by itself prove that the same host lacks MCP support.
 - Search results included a third-party Codex marketplace CLI and unrelated vendor MCP integrations. They were excluded from the architectural evidence.

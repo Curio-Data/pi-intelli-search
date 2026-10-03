@@ -1,0 +1,84 @@
+{
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Search returned no links for query: \"Fixture research\" after 1 attempt(s). This is a degraded search response (the model replied without markdown links), not a fetch or extraction failure.\n\nSearch summary:\nFixture answer without sources."
+      }
+    ],
+    "details": {
+      "cachePath": "",
+      "urlsSearched": 0,
+      "pagesFetched": 0,
+      "pagesFailed": 0
+    }
+  },
+  "calls": [
+    {
+      "prompt": "SEARCH_SYSTEM_PROMPT",
+      "model": "fixture-search",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Fixture research site:example.com"
+            }
+          ],
+          "timestamp": 1767312000000
+        }
+      ],
+      "maxTokens": 2000,
+      "reasoning": "minimal",
+      "maxRetries": 0,
+      "payload": {
+        "model": "fixture-search",
+        "tools": [
+          {
+            "type": "openrouter:web_search",
+            "parameters": {
+              "max_results": 3,
+              "allowed_domains": [
+                "example.com"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "updates": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "⚙️ Stage 1/5: Querying openrouter/fixture-search..."
+        }
+      ],
+      "details": {
+        "stage": "search",
+        "stageIdx": 0,
+        "totalStages": 5,
+        "message": "Querying openrouter/fixture-search...",
+        "pct": 20
+      }
+    }
+  ],
+  "indicators": [
+    {
+      "frames": [
+        "🔍",
+        "🌐",
+        "📄",
+        "✨"
+      ],
+      "intervalMs": 400
+    },
+    null
+  ],
+  "diagnostics": [],
+  "files": {
+    ".search/2026-01-02-fixture-research-ebdd02/meta.json": "{\n  \"schemaVersion\": 1,\n  \"extensionVersion\": \"<PACKAGE_VERSION>\",\n  \"query\": \"Fixture research\",\n  \"timestamp\": \"2026-01-02T00:00:00.000Z\",\n  \"durationMs\": 0,\n  \"outcome\": \"no-links\",\n  \"stages\": {\n    \"search\": {\n      \"degraded\": true,\n      \"model\": \"openrouter/fixture-search\",\n      \"linksReturned\": 0,\n      \"retryFired\": false,\n      \"attempts\": 1,\n      \"annotationsHarvested\": 0\n    },\n    \"fetch\": {\n      \"requested\": 0,\n      \"succeeded\": 0,\n      \"failed\": 0,\n      \"winners\": {}\n    },\n    \"extract\": {\n      \"model\": \"\",\n      \"succeeded\": 0,\n      \"failed\": 0,\n      \"totalInputCharsApprox\": 0,\n      \"totalOutputChars\": 0\n    },\n    \"collate\": {\n      \"model\": \"\",\n      \"summaryChars\": 0\n    },\n    \"cacheSuggest\": {\n      \"ran\": false,\n      \"surfaced\": 0,\n      \"slugs\": []\n    }\n  }\n}\n"
+  }
+}

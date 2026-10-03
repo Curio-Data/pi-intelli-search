@@ -4,14 +4,15 @@
 
 Extend `intelli-search` from one repository and one shared research engine. Preserve the native `@curio-data/pi-intelli-search` package and add `@curio-data/mcp-intelli-search`, a standalone Model Context Protocol (MCP) server. Provide thin [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin bundles around that server.
 
-The owner approved the architecture and specified the MCP package name on 2026-10-03. The planning branch is `plan/mcp-intelli-search`. This handoff contains research and an implementation specification only; no engine refactor, MCP runtime, plugin package or release has been created.
+The owner approved the architecture and specified the MCP package name on 2026-10-03. The planning branch is `plan/mcp-intelli-search`. Phase 0 adds verified dependency evidence and deterministic native compatibility fixtures. No engine refactor, MCP runtime, plugin package or release has been created. Phase 1, Dependency Seams, is the next implementation step.
 
 ## Reading Order
 
 1. Read root [`AGENTS.md`](../../../AGENTS.md), including compatibility, testing, documentation and release rules.
 2. Read [Research and Decisions](RESEARCH.md) for the approved direction, inspected source revision, official references and evidence limitations.
-3. Read [Implementation Plan](IMPLEMENTATION.md) for the target layout, compatibility contract, dependency boundaries, phased work and acceptance matrix.
-4. Start at Phase 0 of the implementation plan. Check the current working tree and repeat the baseline on the implementation revision before moving code.
+3. Read [Phase 0 Results](PHASE-0.md) and the [fixture guide](../../../test/fixtures/native-contract/README.md) for verified interfaces, baseline contracts and test commands.
+4. Read [Implementation Plan](IMPLEMENTATION.md) for the target layout, compatibility contract, dependency boundaries, phased work and acceptance matrix.
+5. Start at Phase 1. Check the current working tree and run the native fixture suite before moving code; do not regenerate its expected files to hide a regression.
 
 The handoff is self-contained in tracked documentation. The optional `.search/` cache and `.tmp/` verification logs are gitignored and are not required to understand or implement the plan.
 
@@ -28,11 +29,11 @@ The handoff is self-contained in tracked documentation. The optional `.search/` 
 
 ## Next-Agent Brief
 
-> Implement the phased plan in `docs/plans/mcp-intelli-search/IMPLEMENTATION.md`. Begin with baseline and contract tests, then extract the shared engine while keeping the native extension usable. Add the independently installable `@curio-data/mcp-intelli-search` package only after native parity is proved. Add protocol and host-plugin packaging in later increments. Record actual artifact and host verification; do not treat documented capability as a passing test. Do not publish, modify real host credentials or silently switch inference providers.
+> Continue at Phase 1 of `docs/plans/mcp-intelli-search/IMPLEMENTATION.md`. Phase 0 is recorded in `PHASE-0.md`; the native fixtures already exist and run under `npm test`. Introduce host-neutral contracts and delegate through the existing native model transport before extracting operations. Keep the native extension usable and preserve the fixtures unless a deliberate change is separately explained. Add the MCP package, protocol and host plugins only in their later phases. Do not publish, modify real host credentials or silently switch inference providers.
 
 ## Planning Verification
 
-The planning changes contain documentation only. The following checks exercised the existing implementation on the planning host, not the proposed MCP architecture.
+The initial planning commit contained documentation only. The following historical checks exercised the existing implementation on the planning host, not the proposed MCP architecture. Current checkpoint evidence is in [Phase 0 Results](PHASE-0.md#verification).
 
 | Check | Result | Meaning |
 |---|---|---|

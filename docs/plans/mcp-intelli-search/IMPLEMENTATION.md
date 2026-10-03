@@ -4,7 +4,7 @@
 
 Implement `@curio-data/mcp-intelli-search` in this repository while preserving the native `@curio-data/pi-intelli-search` package. Extract one shared research engine, expose it through a Model Context Protocol (MCP) server, and provide installation bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins).
 
-Read the [handoff](README.md) first and the [research record](RESEARCH.md) for approved decisions, sources and limitations. This is an implementation specification, not a description of completed work. Proposed paths, commands and interfaces below must be created and tested before they are documented as available.
+Read the [handoff](README.md) first and the [research record](RESEARCH.md) for approved decisions, sources and limitations. [Phase 0 results](PHASE-0.md) record the verified dependencies and native compatibility fixtures. Phase 1 is the next implementation step. The remaining proposed paths, commands and interfaces below must be created and tested before they are documented as available.
 
 ## Scope
 
@@ -147,7 +147,7 @@ Preserve native schema permissiveness during extraction. Stricter standalone val
 
 Return host-neutral operation results from the engine. The native adapter maps them to the current `content` and `details`; the MCP adapter maps them to text content and useful `structuredContent`. Add an output schema only when all success, degraded and error shapes satisfy it. Do not return the full fetched pages through MCP by default.
 
-Keep the distinction between completed, degraded and failed operations. Empty links or exhausted page extractions should preserve the documented degraded result rather than becoming a protocol crash. Invalid requests and unknown tools use protocol errors; executed operations that fail use an MCP tool error result with `isError` where appropriate.
+Keep the distinction between completed, degraded and failed operations. Empty links or exhausted page extractions should preserve the documented degraded result rather than becoming a protocol crash. Preserve the selected SDK's distinction between malformed protocol requests, unknown operations and invalid tool arguments. The Phase 0 probe verified that its high-level tool input validation returns `isError: true`; do not force that case into a different protocol error shape. Executed operations that fail also use an MCP tool error result where appropriate.
 
 ### Progress and Concurrency
 
@@ -213,6 +213,8 @@ Do not read a version by walking relative to a bundled core module. Test both pa
 ## Phased Implementation
 
 ### Phase 0: Baseline and Dependency Verification
+
+Completed evidence, fixture maintenance and remaining limitations are recorded in [Phase 0 Results](PHASE-0.md). Retain the checklist below as the scope of that checkpoint.
 
 1. Read this directory, root `AGENTS.md`, `package.json`, `src/llm.ts`, `src/settings.ts`, all four tool modules, cache/telemetry helpers and current tests.
 2. Check the working tree before editing. Do not discard unrelated changes. If a later agent resumes on another branch, locate or merge this planning branch rather than recreating a divergent plan.

@@ -1,0 +1,263 @@
+{
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "3 extraction(s) failed. No content was extracted.\n\nSearch summary:\nFixture answer.\n"
+      }
+    ],
+    "details": {
+      "cachePath": "",
+      "urlsSearched": 3,
+      "pagesFetched": 3,
+      "pagesFailed": 0
+    }
+  },
+  "calls": [
+    {
+      "prompt": "SEARCH_SYSTEM_PROMPT",
+      "model": "fixture-search",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Fixture research site:example.com"
+            }
+          ],
+          "timestamp": 1767312000000
+        }
+      ],
+      "maxTokens": 2000,
+      "reasoning": "minimal",
+      "maxRetries": 0,
+      "payload": {
+        "model": "fixture-search",
+        "tools": [
+          {
+            "type": "openrouter:web_search",
+            "parameters": {
+              "max_results": 3,
+              "allowed_domains": [
+                "example.com"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fetch": [
+        "https://example.com/a",
+        "https://example.org/b",
+        "https://example.net/c"
+      ],
+      "options": {
+        "timeoutMs": 20000,
+        "browser": "chrome_145",
+        "concurrency": 4
+      }
+    },
+    {
+      "prompt": "EXTRACTION_SYSTEM_PROMPT",
+      "model": "fixture-extract",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Web page content:\n---\nPage 1 fixture content with a deliberate\n\n[TRUNCATED]\n---\n\nExtract information relevant to: Fixture research\n\nFocus: Preserve fixture details.\n"
+            }
+          ],
+          "timestamp": 1767312000000
+        }
+      ],
+      "maxTokens": 123,
+      "reasoning": "low",
+      "maxRetries": 0
+    },
+    {
+      "prompt": "EXTRACTION_SYSTEM_PROMPT",
+      "model": "fixture-extract",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Web page content:\n---\nPage 2 fixture content with a deliberate\n\n[TRUNCATED]\n---\n\nExtract information relevant to: Fixture research\n\nFocus: Preserve fixture details.\n"
+            }
+          ],
+          "timestamp": 1767312000000
+        }
+      ],
+      "maxTokens": 123,
+      "reasoning": "low",
+      "maxRetries": 0
+    },
+    {
+      "prompt": "EXTRACTION_SYSTEM_PROMPT",
+      "model": "fixture-extract",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Web page content:\n---\nPage 3 fixture content with a deliberate\n\n[TRUNCATED]\n---\n\nExtract information relevant to: Fixture research\n\nFocus: Preserve fixture details.\n"
+            }
+          ],
+          "timestamp": 1767312000000
+        }
+      ],
+      "maxTokens": 123,
+      "reasoning": "low",
+      "maxRetries": 0
+    }
+  ],
+  "updates": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "⚙️ Stage 1/5: Querying openrouter/fixture-search..."
+        }
+      ],
+      "details": {
+        "stage": "search",
+        "stageIdx": 0,
+        "totalStages": 5,
+        "message": "Querying openrouter/fixture-search...",
+        "pct": 20
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "⚙️ Stage 2/5: Fetching 3 pages..."
+        }
+      ],
+      "details": {
+        "stage": "fetch",
+        "stageIdx": 1,
+        "totalStages": 5,
+        "message": "Fetching 3 pages...",
+        "pct": 40
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "⚙️ Stage 3/5: Extracting from 3 pages..."
+        }
+      ],
+      "details": {
+        "stage": "extract",
+        "stageIdx": 2,
+        "totalStages": 5,
+        "message": "Extracting from 3 pages...",
+        "pct": 60,
+        "subProgress": {
+          "current": 0,
+          "total": 3
+        }
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "⚙️ Stage 3/5: Page 1/3: Page A..."
+        }
+      ],
+      "details": {
+        "stage": "extract",
+        "stageIdx": 2,
+        "totalStages": 5,
+        "message": "Page 1/3: Page A...",
+        "pct": 60,
+        "subProgress": {
+          "current": 1,
+          "total": 3
+        }
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "⚙️ Stage 3/5: Page 2/3: Page B..."
+        }
+      ],
+      "details": {
+        "stage": "extract",
+        "stageIdx": 2,
+        "totalStages": 5,
+        "message": "Page 2/3: Page B...",
+        "pct": 60,
+        "subProgress": {
+          "current": 2,
+          "total": 3
+        }
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "⚙️ Stage 3/5: Page 3/3: Page C..."
+        }
+      ],
+      "details": {
+        "stage": "extract",
+        "stageIdx": 2,
+        "totalStages": 5,
+        "message": "Page 3/3: Page C...",
+        "pct": 60,
+        "subProgress": {
+          "current": 3,
+          "total": 3
+        }
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "⚙️ Stage 4/5: Synthesising results..."
+        }
+      ],
+      "details": {
+        "stage": "collate",
+        "stageIdx": 3,
+        "totalStages": 5,
+        "message": "Synthesising results...",
+        "pct": 80
+      }
+    }
+  ],
+  "indicators": [
+    {
+      "frames": [
+        "🔍",
+        "🌐",
+        "📄",
+        "✨"
+      ],
+      "intervalMs": 400
+    },
+    null
+  ],
+  "diagnostics": [
+    "[pi-intelli-search] Extraction failed for https://example.com/a: LLM call failed (openrouter/fixture-extract): fixture extraction refused",
+    "[pi-intelli-search] Extraction failed for https://example.org/b: LLM call failed (openrouter/fixture-extract): fixture extraction refused",
+    "[pi-intelli-search] Extraction failed for https://example.net/c: LLM call failed (openrouter/fixture-extract): fixture extraction refused"
+  ],
+  "files": {
+    ".search/2026-01-02-fixture-research-ebdd02/meta.json": "{\n  \"schemaVersion\": 1,\n  \"extensionVersion\": \"<PACKAGE_VERSION>\",\n  \"query\": \"Fixture research\",\n  \"timestamp\": \"2026-01-02T00:00:00.000Z\",\n  \"durationMs\": 0,\n  \"outcome\": \"extraction-failed\",\n  \"stages\": {\n    \"search\": {\n      \"degraded\": false,\n      \"model\": \"openrouter/fixture-search\",\n      \"linksReturned\": 3,\n      \"retryFired\": false,\n      \"attempts\": 1,\n      \"annotationsHarvested\": 2\n    },\n    \"fetch\": {\n      \"requested\": 3,\n      \"succeeded\": 3,\n      \"failed\": 0,\n      \"winners\": {\n        \"defuddle\": 2,\n        \"markdown\": 1\n      }\n    },\n    \"extract\": {\n      \"model\": \"openrouter/fixture-extract\",\n      \"succeeded\": 0,\n      \"failed\": 3,\n      \"totalInputCharsApprox\": 120,\n      \"totalOutputChars\": 0\n    },\n    \"collate\": {\n      \"model\": \"\",\n      \"summaryChars\": 0\n    },\n    \"cacheSuggest\": {\n      \"ran\": false,\n      \"surfaced\": 0,\n      \"slugs\": []\n    }\n  }\n}\n"
+  }
+}
