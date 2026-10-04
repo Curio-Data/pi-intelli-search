@@ -62,7 +62,7 @@
   "files": [
     "src/",
     "skills/",
-    "dist/",
+    "dist/","!dist/.tmp",
     "CHANGELOG.md",
     "NOTICE",
     "LICENSE",

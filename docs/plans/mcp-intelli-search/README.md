@@ -62,8 +62,8 @@ Resume from `plan/mcp-intelli-search`, not `main`. Fetch `origin` and inspect th
 Run `npm ci` if dependencies are absent, differ from the committed lockfile or their provenance is uncertain. `npm ls --depth=0` detects missing or invalid top-level dependencies but does not establish exact lockfile equivalence; use a clean install when in doubt. Then run these checks from the repository root:
 
 ```bash
-mkdir -p .tmp/mcp-phase6
-export TMPDIR="$PWD/.tmp/mcp-phase6"
+mkdir -p .tmp/mcp-release
+export TMPDIR="$PWD/.tmp/mcp-release"
 npm run build:all
 npm run test:mcp
 npm run check:plugins

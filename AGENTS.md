@@ -592,7 +592,7 @@ All tools use the `intelli_` prefix to avoid collisions with other `Pi` extensio
 
 Publishing is gated through `npm` staged publishing. CI submits the tarball; the user approves it on `npmjs.com` with 2FA before it goes live:
 - **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, generated-plugin drift, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
-- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. The tag selects exactly one package: `vX.Y.Z` stages the native `@curio-data/pi-intelli-search` package and `mcp-vX.Y.Z` stages `@curio-data/mcp-intelli-search`; any other tag fails. The workflow verifies the tag version against the selected package's manifest, builds and tests both artifacts, and runs `npm stage publish` against the `@curio-data` scope. Authentication is via OIDC trusted publishing (no stored token); provenance is signed automatically. The package is then **held in the staging queue** until a maintainer approves it on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) with 2FA. Until approval, the version does not appear on the public registry.
+- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. The tag selects exactly one package: `vX.Y.Z` stages the native `@curio-data/pi-intelli-search` package and `mcp-vX.Y.Z` stages `@curio-data/mcp-intelli-search`; any other tag fails. The workflow verifies the tag version against the selected package's manifest, builds and tests both artifacts, and runs `npm stage publish` against the `@curio-data` scope. The dist-tag is derived from the version: stable releases stage to `latest`, while a prerelease such as `0.2.0-alpha.0` stages to its first prerelease identifier (`alpha`), because `npm stage publish` inherits `npm publish`'s guard that throws on a prerelease version without an explicit `--tag`. Authentication is via OIDC trusted publishing (no stored token); provenance is signed automatically (possible exception: the very first staged version of a brand-new package, where npm's visibility check has no package to inspect). The package is then **held in the staging queue** until a maintainer approves it on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) with 2FA. Until approval, the version does not appear on the public registry.
 
 ### Changelog Principles
 
@@ -632,7 +632,7 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 
 1. **Verify CI is green** on `main` and confirm the owner has explicitly approved this release. Approval of one package is not approval of the other.
 2. **Bump `version` in `packages/mcp/package.json`** following [SemVer](https://semver.org/), then run `npm install --package-lock-only` so the lockfile workspace version matches.
-3. **Remove the not-published notice** from `packages/mcp/README.md` on the first public release only.
+3. **Remove the not-published notices** from `packages/mcp/README.md` and the root `README.md` (the `Publication Status` paragraph in `Use With Other Hosts`) on the first public release only.
 4. **Regenerate the plugin bundles** so the catalogs pin the new version: `npm run generate:plugins`, then confirm `npm run check:plugins` passes. Commit the regenerated catalogs with the version bump; they are what users install from.
 5. **Run the full paced live suite** `./test/run-e2e-all.sh`, including `11_mcp_stdio.sh` and `12_plugin_bundles.sh`, before tagging.
 6. **Update `CHANGELOG.md`** with a `## [mcp-X.Y.Z] - YYYY-MM-DD` section and a matching `[mcp-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-vX.Y.Z` reference link. Verify both with the grep checks from step 4 of the native checklist (adjusted for the `mcp-` prefix).
@@ -644,9 +644,11 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 Before the first real release, validate the pipeline with a pre-release:
 1. Bump version to a pre-release identifier (for example, `0.3.1-alpha.1`).
 2. Create a _GitHub_ Release with the **Pre-release** checkbox checked.
-3. The `published` event triggers the workflow, exercising the full publish path.
-4. `npm` will **not** set pre-release versions as `latest`. Early adopters will not get it by default.
+3. The `published` event triggers the workflow (it fires for pre-releases too), exercising the full publish path. The workflow derives the dist-tag from the prerelease identifier (`alpha`), which is what allows a prerelease version past `npm stage publish`'s inherited guard.
+4. `npm` will **not** set pre-release versions as `latest`, and the derived dist-tag keeps them off it doubly. Early adopters will not get it by default.
 5. Verify the package appears on `npm`, then delete the pre-release tag if not needed.
+
+A staged dist-tag is immutable once staged; changing it means rejecting the staged version and re-staging. Whether a staging-only trusted publisher may set a non-`latest` dist-tag at stage time is unverified until the first live run; watch the first `mcp-v*-alpha*` release for it.
 
 ### npm Trusted Publisher
 
@@ -659,6 +661,8 @@ The workflow authenticates to `npm` via OIDC; no stored token is used. Each pack
 - Allowed actions: `npm stage publish` only
 
 `@curio-data/mcp-intelli-search` requires the same binding on its own package page before its first release; the native package's binding does not cover it. Creating that binding is a maintainer action on `npmjs.com`, not something the agent can perform or verify from the repository.
+
+**Bootstrap caveat (peer-review finding, 2026-10-04).** npm's trusted-publisher documentation lists _package must exist_ as a prerequisite for configuring a trust relationship, and a never-published package has no package page. The staged-publish endpoint can create a brand-new package's first version, and trust configurations carry a `createStagedPackage` permission, so a bootstrap exists in principle, but the exact flow for binding a not-yet-existing package (pending-package UI, org-scope configuration, or a one-time token publish) is unverified. The maintainer must resolve this on `npmjs.com` before the first `mcp-v*` release; discovering it during the release is the expensive outcome.
 
 `npm publish` is intentionally **not** in the allowed actions list, so even a workflow compromise cannot push directly to the public registry; every release passes through the staged-publish approval gate.
 

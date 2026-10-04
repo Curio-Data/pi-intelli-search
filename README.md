@@ -186,11 +186,13 @@ The same research engine runs outside `Pi` as `@curio-data/mcp-intelli-search`, 
 | Direct MCP configuration | Any MCP-compatible host | `@curio-data/mcp-intelli-search` |
 | Host plugin | Claude Code or Codex users | This repository's plugin marketplace (launches the pinned MCP package) |
 
-The standalone server shares one engine with the native extension: the same five-stage pipeline, the same cache formats and the same local-only telemetry. It requires [Node.js](https://nodejs.org/) 22 or later, an explicitly selected JSON configuration file, an explicitly selected absolute workspace directory, and an [OpenRouter](https://openrouter.ai) key supplied through an environment variable. Inference is billed separately to that OpenRouter account; no `Pi` subscription or credential store is involved. The server reads no host credential stores, no `Pi` settings and no discovered project configuration. The complete configuration, security and troubleshooting reference is the [standalone package guide](packages/mcp/README.md).
+The standalone server shares one engine with the native extension: the same five-stage pipeline, the same cache formats and the same local-only telemetry. It requires [Node.js](https://nodejs.org/) 22 or later, an explicitly selected JSON configuration file, an explicitly selected absolute workspace directory, and an OpenRouter key supplied through an environment variable. Inference is billed separately to that OpenRouter account; no `Pi` subscription or credential store is involved. The server reads no host credential stores, no `Pi` settings and no discovered project configuration. The complete configuration, security and troubleshooting reference is the [standalone package guide](packages/mcp/README.md).
+
+**Publication Status:** the standalone package's first registry publication is pending. Until it lands, the `npx` and plugin routes below cannot resolve the pinned version, and the local-tarball development path in the [standalone package guide](packages/mcp/README.md) is the working one. This notice is removed at first publication.
 
 ### Route A: Direct MCP Configuration
 
-Any host that speaks MCP over stdio can register the server directly. The executable is `mcp-intelli-search`; a pinned `npx` launch needs no separate install step:
+Any host that speaks MCP over stdio can register the server directly. The executable is `mcp-intelli-search`; an `npx` launch needs no separate install step (append `@<version>` to the package name to pin an exact release; the plugin routes below pin for you):
 
 ```json
 {

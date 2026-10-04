@@ -19,6 +19,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
+          # Node 22 is the standalone package's engines floor; release.yml
+          # builds and stages on Node 24. The divergence is deliberate.
           node-version: 22
           cache: npm
 

@@ -81,14 +81,14 @@ The `@curio-data/mcp-intelli-search` artifact shares the fetch dependencies abov
 
 - **Repository:** https://github.com/modelcontextprotocol/typescript-sdk
 - **Author:** Anthropic, PBC and contributors
-- **License:** MIT
-- **Usage:** Model Context Protocol serving over stdio: tool registration, input-schema validation, progress notifications, cancellation and transport framing. The SDK is declared only by the standalone package and never enters the native extension's runtime. The companion `@modelcontextprotocol/client` package is a development dependency used by the protocol test suite. Both are lockfile-pinned at 2.3.0.
+- **License:** Apache-2.0 (the MCP project is transitioning from MIT to Apache-2.0; the shipped `LICENSE` is the transition notice followed by the Apache-2.0 text, and the registry metadata declares Apache-2.0)
+- **Usage:** Model Context Protocol serving over stdio: tool registration, input-schema validation, progress notifications, cancellation and transport framing. The SDK is declared only by the standalone package and never enters the native extension's runtime. The companion `@modelcontextprotocol/client` package (also Apache-2.0) is a development dependency used by the protocol test suite. Both are lockfile-pinned at 2.3.0.
 
 [_esbuild_](https://esbuild.github.io/) bundles the internal engine and adapter source during development. Its [source repository](https://github.com/evanw/esbuild) is MIT-licensed. It is a root development dependency, not a standalone runtime dependency. The standalone inference adapter uses the built-in fetch transport against the OpenRouter API; no provider SDK is bundled.
 
 ## License Compliance
 
-- All dependencies are MIT or ISC licensed. This is compatible with this project's Apache-2.0 license.
+- Dependencies are MIT, ISC or Apache-2.0 licensed. All three are compatible with this project's Apache-2.0 license.
 - No dependency uses a copyleft license (GPL, AGPL, etc.).
 - No NOTICE files are distributed by any dependency requiring attribution preservation.
 - No source code from these projects has been copied, modified, or embedded. All usage is via standard library API calls through `npm` dependencies.

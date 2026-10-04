@@ -44,13 +44,26 @@ jobs:
             echo "::error::Unrecognised release tag '${tag}'. Use 'vX.Y.Z' for the native package or 'mcp-vX.Y.Z' for the MCP package."
             exit 1
           fi
+          # npm stage publish inherits publish's guard: a prerelease version
+          # without an explicit dist-tag throws. Derive the tag from the
+          # version's first prerelease identifier (0.2.0-alpha.0 -> alpha);
+          # stable releases use latest.
+          if [[ "$version" == *-* ]]; then
+            prerelease="${version#*-}"
+            echo "dist_tag=${prerelease%%.*}" >> "$GITHUB_OUTPUT"
+          else
+            echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Verify tag version matches the package manifest
+        env:
+          TAG_VERSION: ${{ steps.select.outputs.version }}
+          PKG_DIR: ${{ steps.select.outputs.directory }}
         run: |
           set -euo pipefail
-          manifest_version=$(node -p "require('./${{ steps.select.outputs.directory }}/package.json').version")
-          if [ "$manifest_version" != "${{ steps.select.outputs.version }}" ]; then
-            echo "::error::Tag version '${{ steps.select.outputs.version }}' does not match ${{ steps.select.outputs.directory }}/package.json version '${manifest_version}'."
+          manifest_version=$(node -p "require('./${PKG_DIR}/package.json').version")
+          if [ "$manifest_version" != "$TAG_VERSION" ]; then
+            echo "::error::Tag version '$TAG_VERSION' does not match $PKG_DIR/package.json version '$manifest_version'."
             exit 1
           fi
 
@@ -69,4 +82,6 @@ jobs:
 
       - name: Stage publish
         working-directory: ${{ steps.select.outputs.directory }}
-        run: npm stage publish --access public
+        env:
+          DIST_TAG: ${{ steps.select.outputs.dist_tag }}
+        run: npm stage publish --access public --tag "$DIST_TAG"
