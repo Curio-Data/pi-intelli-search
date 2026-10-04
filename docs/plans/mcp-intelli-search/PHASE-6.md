@@ -35,6 +35,9 @@ Verification ran on `plan/mcp-intelli-search` (`db0441d` entry, `ff020fb` and `f
 | `test/e2e/11_mcp_stdio.sh` | Passed: real research through `Pi`'s native MCP client, `mcp` adapter identity in telemetry |
 | `test/e2e/12_plugin_bundles.sh` | Passed: 20 checks, 0 failures, 0 skips, credential-free, with both host CLIs present |
 | Workflow files | YAML parses; the release workflow has not executed (no release event). Its package-selection logic is unexercised evidence |
+| Branch CI | First run surfaced a latent fixture-harness defect (below); the corrected run passed all gates on Node 22, including both tarball installs and the plugin drift check |
+
+**CI-found harness defect.** The first branch CI run (Node 22) failed three subtests that pass on Node 24: Node 22 prints an `ExperimentalWarning` for `mock.timers` through `console.error` after the fixture capture mock is installed, polluting the `diagnostics` array the frozen fixtures compare. The fixtures themselves were correct; the harness now drops that specific warning (`8da3a9b`), keeping the comparison independent of the host Node.js version. The full native (467) and MCP (41) suites were verified on both Node 22.23.3 and Node 24.19.0 before the fix was pushed.
 
 Codex authentication was repaired by the operator before this phase; no credential file was copied, inspected or used by any check. The credentialed one-time host observations from Phase 5 were not re-run, per the standing prohibition.
 
