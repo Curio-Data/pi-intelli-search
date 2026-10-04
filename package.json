@@ -28,6 +28,8 @@
     "typecheck:mcp": "npm run typecheck --workspace @curio-data/mcp-intelli-search",
     "test:mcp": "npm run test --workspace @curio-data/mcp-intelli-search",
     "test:mcp:install": "node scripts/verify-mcp-install.mjs",
+    "generate:plugins": "node scripts/generate-plugin-bundles.mjs",
+    "check:plugins": "node scripts/generate-plugin-bundles.mjs --check",
     "build:all": "npm run build && npm run typecheck:mcp && npm run build:mcp",
     "test:all": "npm test && npm run test:mcp",
     "dev": "tsc --watch",

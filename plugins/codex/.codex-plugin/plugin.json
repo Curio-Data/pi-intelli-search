@@ -1,0 +1,31 @@
+{
+  "name": "intelli-search",
+  "version": "0.2.0-alpha.0",
+  "description": "Research the web with a five-stage pipeline (search, fetch, extract, collate, cache suggest) served over MCP by @curio-data/mcp-intelli-search.",
+  "author": {
+    "name": "Curio Data Pro Ltd",
+    "url": "https://github.com/Curio-Data"
+  },
+  "homepage": "https://github.com/Curio-Data/pi-intelli-search",
+  "repository": "https://github.com/Curio-Data/pi-intelli-search",
+  "license": "Apache-2.0",
+  "keywords": [
+    "research",
+    "web-search",
+    "documentation",
+    "mcp"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Intelli Search",
+    "shortDescription": "Intelligent web research",
+    "longDescription": "Research the web with a five-stage pipeline: search, fetch, per-page extraction, collation and cache suggestions. Serves the four intelli_* tools over MCP from the pinned @curio-data/mcp-intelli-search package.",
+    "developerName": "Curio Data Pro Ltd",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/Curio-Data/pi-intelli-search"
+  }
+}

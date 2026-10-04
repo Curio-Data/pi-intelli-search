@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "intelli_search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "--package",
+        "@curio-data/mcp-intelli-search@0.2.0-alpha.0",
+        "mcp-intelli-search"
+      ],
+      "env_vars": [
+        "OPENROUTER_API_KEY",
+        "INTELLI_SEARCH_CONFIG",
+        "INTELLI_SEARCH_WORKSPACE"
+      ]
+    }
+  }
+}

@@ -4,7 +4,7 @@
 
 Implement `@curio-data/mcp-intelli-search` in this repository while preserving the native `@curio-data/pi-intelli-search` package. Extract one shared research engine, expose it through a Model Context Protocol (MCP) server, and provide installation bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins).
 
-Read the [handoff](README.md) first and the [research record](RESEARCH.md) for approved decisions, sources and limitations. [Phase 0 results](PHASE-0.md) record the verified dependencies and native compatibility fixtures. [Phase 1 results](PHASE-1.md) record the implemented dependency contracts, native model adapter and explicit cache paths. [Phase 2 results](PHASE-2.md) record the shared operations, model policy, native adapter, documentation staging and telemetry identity. [Phase 3 results](PHASE-3.md) record the standalone runtime, configuration, provider transport and independent artifact verification. [Phase 4 results](PHASE-4.md) record protocol serving, queueing, framing, shutdown and host interoperability. Phase 5 is the next implementation step. The remaining proposed paths, commands and interfaces below must be created and tested before they are documented as available.
+Read the [handoff](README.md) first and the [research record](RESEARCH.md) for approved decisions, sources and limitations. [Phase 0 results](PHASE-0.md) record the verified dependencies and native compatibility fixtures. [Phase 1 results](PHASE-1.md) record the implemented dependency contracts, native model adapter and explicit cache paths. [Phase 2 results](PHASE-2.md) record the shared operations, model policy, native adapter, documentation staging and telemetry identity. [Phase 3 results](PHASE-3.md) record the standalone runtime, configuration, provider transport and independent artifact verification. [Phase 4 results](PHASE-4.md) record protocol serving, queueing, framing, shutdown and host interoperability. [Phase 5 results](PHASE-5.md) record the generated host plugin bundles, marketplace catalogs, empirical host findings and launcher design. Phase 6 is the next implementation step. The remaining proposed paths, commands and interfaces below must be created and tested before they are documented as available.
 
 ## Scope
 
@@ -86,7 +86,7 @@ packages/
     README.md
 plugins/
   claude-code/                   Claude manifest, MCP launcher and skill
-  codex/                         Portable manifest, MCP launcher and skill
+  codex/                         Compatibility manifest, MCP launcher and skill
 .claude-plugin/marketplace.json   Claude catalog for this repository
 .agents/plugins/marketplace.json Codex catalog for this repository
 scripts/                         Build, packaging and validation helpers
@@ -282,6 +282,8 @@ Completed implementation, review corrections and verification are recorded in [P
 Exit gate: the installed artifact passes protocol tests, no logs leak to standard output, and all network/model work is bounded or abortable.
 
 ### Phase 5: Host Plugins and Guidance
+
+Completed implementation, empirical host findings, launcher design and verification are recorded in [Phase 5 Results](PHASE-5.md) and [Phase 5 Peer Review](PHASE-5-REVIEW.md). The shipped Codex bundle uses the compatibility layout (`.codex-plugin/plugin.json` plus legacy `.mcp.json`) rather than the portable layout shown above, because Codex CLI 0.144.5 ignores portable `mcp.json`; see the empirical findings there. Retain this checklist as the scope of that checkpoint.
 
 1. Keep the existing native skill and produce host-appropriate guidance from a shared source or a generator. Do not maintain three independent workflow explanations.
 2. Preserve the guidance to provide `focusPrompt`, choose research breadth deliberately, use the concise summary first, and inspect cached pages only when needed.

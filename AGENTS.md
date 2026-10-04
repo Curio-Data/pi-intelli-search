@@ -2,7 +2,7 @@
 
 This is a **`Pi` extension** that adds intelligent web research tools to the `Pi` coding agent. It provides a 5-stage research pipeline (search, fetch, extract, collate, and cache suggest) as a single tool call, plus individual tools for manual orchestration.
 
-For cross-host development, start at the [Model Context Protocol (MCP) implementation handoff](docs/plans/mcp-intelli-search/README.md). It records the current checkpoint, approved package boundaries, frozen compatibility contracts and next phase. Phase 4 supplies `packages/mcp/` with stdio protocol serving through the official split server package; Phase 5 (host plugins) is next. Its strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
+For cross-host development, start at the [Model Context Protocol (MCP) implementation handoff](docs/plans/mcp-intelli-search/README.md). It records the current checkpoint, approved package boundaries, frozen compatibility contracts and next phase. Phase 4 supplies `packages/mcp/` with stdio protocol serving through the official split server package; Phase 5 supplies the generated host plugin bundles and repository marketplaces; Phase 6 (documentation, CI and release readiness) is next. Its strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
 
 ---
 
@@ -250,6 +250,17 @@ packages/
     ├── tsconfig.json        # Standalone source and test type check
     └── README.md            # Exact configuration and runtime interface
 
+guidance/
+├── research-guide.md        # Shared host-neutral guidance source (token template)
+└── setup-*.md               # Per-host setup fragments rendered into plugin skills
+
+plugins/
+├── claude-code/             # Generated Claude Code bundle (manifest, .mcp.json, skill)
+└── codex/                   # Generated Codex bundle (compatibility manifest, .mcp.json, skill)
+
+.claude-plugin/marketplace.json   # Generated Claude Code repository marketplace
+.agents/plugins/marketplace.json  # Generated Codex repository marketplace
+
 skills/
 └── intelli-search/
     └── SKILL.md              # Agent-facing skill guide
@@ -266,6 +277,7 @@ scripts/
 ├── plot-downloads.mts       # Download chart generation (npm run chart)
 ├── README.md                # Script usage guide
 ├── build-mcp.mjs            # Audited standalone bundles and legal-file copies
+├── generate-plugin-bundles.mjs # Plugin/marketplace generator; --check is the drift gate
 ├── verify-mcp-install.mjs    # Production-only install and native-fetch verification
 └── capture-native-contract.mts # Explicit compatibility-fixture regeneration
 
@@ -292,6 +304,7 @@ test/
 ├── probes/mcp-install.mjs     # Installed standalone operations and native fetch assets
 ├── tsconfig.native-contract.json # Type check for contract tests and generator
 ├── prompts.test.ts
+├── plugin-bundles.test.ts    # Generated plugin/marketplace shape, pins and drift gate
 ├── providers.test.ts
 ├── research.test.ts
 ├── research-telemetry.test.ts
@@ -308,6 +321,7 @@ test/
 │   ├── 09_sonar_pro_search.sh
 │   ├── 10_config_recipes.sh
 │   ├── 11_mcp_stdio.sh
+│   ├── 12_plugin_bundles.sh
 │   └── lib.sh
 ├── run-e2e-all.sh
 ├── run-e2e-publish.sh
@@ -383,6 +397,8 @@ npm test                 # Run native unit tests
 npm run build:all        # Native build, standalone type check and bundles
 npm run test:all         # Native and standalone deterministic tests
 npm run test:mcp:install # Independent production install and native fetch probe
+npm run generate:plugins # Regenerate plugin bundles and marketplaces after a version change
+npm run check:plugins    # Fail if committed plugin files drift from the generator
 npm run test:smoke       # Smoke test (structural validation)
 ./test/e2e/01_main.sh        # End-to-end test (live LLM calls, isolated env)
 scripts/benchmark-models.sh <model-id>...   # A/B benchmark extract/collate models (live quota, see docs/BENCHMARKS.md)
@@ -503,6 +519,7 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `e2e/09_sonar_pro_search.sh` | Verifies registration and settings-based selection of `perplexity/sonar-pro-search` in a vanilla agent dir, then checks non-empty links, completed pipeline, and cached sources. Reports the annotation count |
 | `e2e/10_config_recipes.sh` | Runs each README Configuration Recipe's settings block in a fresh isolated agent dir + cwd and asserts the effective behaviour from telemetry: zero-config defaults, partial blocks preserving unspecified defaults, extract/collate overrides, free-tier pacing keys, and per-project settings via pre-seeded trust.json (the only project-level-settings coverage) |
 | `e2e/11_mcp_stdio.sh` | Builds the standalone package, registers it in an isolated profile's `mcp.json` (direct exposure, no native extension) and drives a real research through `Pi`'s native MCP client, asserting connection, workspace cache, `mcp` telemetry identity and completed outcome. Establishes that `--no-extensions` disconnects MCP servers and that `codemode` exposure hides direct tool calls |
+| `e2e/12_plugin_bundles.sh` | Packs the standalone artifact, generates local-tarball plugin bundles (pre-publication evidence class), vendors the tarball, then exercises real host installation credential-free: Claude Code strict validation, marketplace add, install, `claude mcp list` connection and skill discovery; Codex marketplace add, catalog-path assertion, install, installed-cache layout and prompt-input skill discovery. Skips with a notice when a host CLI is absent. Credentialed session checks are deliberately excluded (OAuth refresh-token rotation hazard; see PHASE-5.md) |
 | `run-e2e-all.sh` | Runs every scenario script one at a time with a spacing gap (`E2E_GAP_SECONDS`, default 20). Use this instead of launching scripts in parallel or back-to-back: bursting many calls at one key depletes the rate-limit bucket and produces degraded or hung runs. |
 
 The scenarios write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.

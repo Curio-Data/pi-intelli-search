@@ -1,0 +1,22 @@
+{
+  "name": "curio-data-plugins",
+  "description": "Curio Data plugins: intelligent web research for coding agents.",
+  "owner": {
+    "name": "Curio Data Pro Ltd",
+    "url": "https://github.com/Curio-Data"
+  },
+  "plugins": [
+    {
+      "name": "intelli-search",
+      "source": "./plugins/claude-code",
+      "description": "Research the web with a five-stage pipeline (search, fetch, extract, collate, cache suggest) served over MCP by @curio-data/mcp-intelli-search.",
+      "category": "research",
+      "tags": [
+        "research",
+        "web-search",
+        "documentation",
+        "mcp"
+      ]
+    }
+  ]
+}
