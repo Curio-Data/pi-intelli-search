@@ -321,6 +321,7 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
       collectCitations: true,
       payloadPatch,
       reasoning: searchReasoning,
+      onRetryNotice: (msg) => p.onProgress?.(progress("search", msg)),
     });
     searchResult = completion.text;
     annotationsHarvested = completion.citations.length;
@@ -523,6 +524,7 @@ async function runCollateStage(
     signal: p.signal,
     retry: p.retry,
     timeoutMs: p.settings.llmTimeoutMs,
+    onRetryNotice: (msg) => p.onProgress?.(progress("collate", msg)),
   });
 
   p.tel?.recordCollate({
@@ -691,6 +693,7 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
         signal: p.signal,
         retry: p.retry,
         timeoutMs: p.settings.llmTimeoutMs,
+        onRetryNotice: (msg) => p.onProgress?.(progress("cache", msg)),
       });
       const matches = parseJudgeResponse(judgeResponse, index, currentSlug);
       cacheSuggestRan = true;
@@ -815,6 +818,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       signal: p.signal,
       retry: p.retry,
       timeoutMs: p.settings.llmTimeoutMs,
+      onRetryNotice: (msg) => p.onProgress?.(progress("extract", msg)),
     });
 
     const firstLine = extraction.split("\n")[0] ?? "";

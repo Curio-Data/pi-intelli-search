@@ -114,6 +114,28 @@ describe("native model client", () => {
     assert.notEqual(results[0].usage, usage);
   });
 
+  it("always supplies a retry-notice channel so retries never reach the console", async () => {
+    // The shared policy falls back to the adapter logger when no notice
+    // channel is present, and the native logger writes to the console, which
+    // paints over the Pi TUI (fixed in 0.14.1). The adapter must therefore
+    // forward the caller's callback or substitute a no-op.
+    const ctx = {} as ExtensionContext;
+    const seen: Array<unknown> = [];
+    const client = createNativeModelClient(ctx, async (_c, _m, _s, _u, options) => {
+      seen.push(options?.onRetryNotice);
+      return "ok";
+    });
+    const callerNotice = () => {};
+    await client.complete({ ...request, onRetryNotice: callerNotice });
+    await client.complete(request);
+    assert.strictEqual(seen[0], callerNotice, "caller callback forwarded verbatim");
+    assert.strictEqual(
+      typeof seen[1],
+      "function",
+      "missing callback replaced by a no-op, never left undefined",
+    );
+  });
+
   it("does not invent citations or usage or wrap delegate errors", async () => {
     const ctx = {} as ExtensionContext;
     const client = createNativeModelClient(ctx, async (_ctx, _model, _system, _user, options) => {

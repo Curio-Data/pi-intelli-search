@@ -85,6 +85,36 @@ function contextFor(auth: unknown, overrides: RegistryOverrides = {}): Extension
 
 const CFG = { provider: "openrouter", model: "perplexity/sonar" } as const;
 
+describe("console-write source audit (Pi TUI safety)", () => {
+  it("pipeline hot paths contain no direct console calls", async () => {
+    // Raw console writes from extensions bypass the Pi TUI layout and appear
+    // as stray lines in the window (reported against Pi 1.0, fixed in native
+    // 0.14.1 and ported here). Diagnostics flow through meta.json telemetry,
+    // injected callbacks or the progress channel instead.
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+    const paths = [
+      "src/llm.ts",
+      "src/core/llm.ts",
+      "src/core/fetch.ts",
+      "src/core/operations/research.ts",
+      "src/core/operations/search.ts",
+      "src/core/operations/extract.ts",
+      "src/core/operations/collate.ts",
+    ];
+    for (const rel of paths) {
+      const source = readFileSync(join(root, rel), "utf8");
+      // Strip comments: fetch.ts documents Defuddle's own console calls in
+      // its muzzle comments, which are not calls made by this package.
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/[^\n]*/g, "$1");
+      const hits = code.match(/console\.(log|warn|error|info)\(/g) ?? [];
+      assert.deepStrictEqual(hits, [], `${rel} must not call console.* directly`);
+    }
+  });
+});
+
 describe("callLlm provider dispatch (pi-ai root API)", () => {
   const original = __harness.streamSimple;
   const originalFacade = __harness.registryStreamSimple;

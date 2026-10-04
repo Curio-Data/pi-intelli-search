@@ -40,6 +40,46 @@ it("retries error-bearing responses once per policy, honouring text and header h
   assert.deepEqual(delays, [80, 100]);
 });
 
+it("routes retry notices to onRetryNotice when provided, otherwise the logger", async () => {
+  // Native tools wire onRetryNotice into stage progress so nothing touches
+  // the console (raw stderr bypasses the Pi TUI layout; fixed in native
+  // 0.14.1). Without the channel, the logger fallback serves stderr hosts
+  // such as the MCP server.
+  const notices: string[] = [];
+  const logged: string[] = [];
+  const attempts = { value: 0 };
+  const attempt = async () => {
+    attempts.value++;
+    return attempts.value === 1
+      ? { value: "", error: "429 rate limited" }
+      : { value: "ok" };
+  };
+  const fastRetry = { attempts: 2, baseDelayMs: 1, maxDelayMs: 5 };
+
+  const withChannel = await runModelWithPolicy(
+    attempt,
+    { ...request, retry: fastRetry, onRetryNotice: (m: string) => notices.push(m) },
+    { error: (m: string) => logged.push(m), warn() {} },
+    { random: () => 0, sleep: async () => {} },
+  );
+  assert.equal(withChannel, "ok");
+  assert.equal(notices.length, 1);
+  assert.match(notices[0], /fixture\/selected/);
+  assert.match(notices[0], /retrying in \d+ms/);
+  assert.equal(logged.length, 0);
+
+  attempts.value = 0;
+  const withFallback = await runModelWithPolicy(
+    attempt,
+    { ...request, retry: fastRetry },
+    { error: (m: string) => logged.push(m), warn() {} },
+    { random: () => 0, sleep: async () => {} },
+  );
+  assert.equal(withFallback, "ok");
+  assert.equal(logged.length, 1);
+  assert.match(logged[0], /retrying in \d+ms/);
+});
+
 for (const timeoutMs of [undefined, 1000]) {
   it(`does not mistake a thrown permanent error for timeout (${timeoutMs})`, async () => {
     let attempts = 0;

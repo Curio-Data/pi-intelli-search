@@ -25,7 +25,7 @@ export interface AttemptHints {
 /** Sole transport retry/timeout owner. Adapters must disable underlying SDK retries. */
 export async function runModelWithPolicy<T>(
   attempt: (signal: AbortSignal | undefined, hints: AttemptHints) => Promise<ModelAttemptResult<T>>,
-  request: Pick<ModelRequest, "model" | "signal" | "retry" | "timeoutMs">,
+  request: Pick<ModelRequest, "model" | "signal" | "retry" | "timeoutMs" | "onRetryNotice">,
   logger: OperationLogger,
   testing?: { sleep?: (ms: number, signal?: AbortSignal) => Promise<void>; random?: () => number },
 ): Promise<T> {
@@ -71,10 +71,16 @@ export async function runModelWithPolicy<T>(
         maxDelayMs: retry?.maxDelayMs ?? 20_000,
         signal,
         ...testing,
-        onRetry: ({ attempt, delayMs, reason }) =>
-          logger.error(
-            `${label}: ${timedOut ? "timeout" : reason} on attempt ${attempt}, retrying in ${Math.round(delayMs)}ms`,
-          ),
+        onRetry: ({ attempt, delayMs, reason }) => {
+          // Retry notices go to the caller's injected channel when present
+          // (native tools wire it to stage progress); the logger fallback
+          // suits stderr-based hosts such as the MCP server.
+          const message =
+            `${label}: ${timedOut ? "timeout" : reason} on attempt ${attempt}, ` +
+            `retrying in ${Math.round(delayMs)}ms`;
+          if (request.onRetryNotice) request.onRetryNotice(message);
+          else logger.error(message);
+        },
       },
     );
   } catch (error) {

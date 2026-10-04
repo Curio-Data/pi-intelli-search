@@ -38,6 +38,10 @@ export function createNativeModelClient(
         annotations,
         payloadPatch: request.payloadPatch,
         reasoning: request.reasoning,
+        // Always supply a notice channel natively: without one the shared
+        // policy falls back to the logger, whose native implementation writes
+        // to the console and would paint over the Pi TUI (fixed in 0.14.1).
+        onRetryNotice: request.onRetryNotice ?? (() => {}),
         onUsage: (reported) => {
           usage = { ...reported, ...(reported.cost ? { cost: { ...reported.cost } } : {}) };
         },

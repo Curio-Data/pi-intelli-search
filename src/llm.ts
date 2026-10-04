@@ -21,7 +21,6 @@ import {
   settleAnnotationSink,
   wrapFetchForAnnotations,
 } from "./annotations.js";
-import { logErr } from "./util.js";
 import { runModelWithPolicy } from "./core/llm.js";
 
 /**
@@ -146,6 +145,12 @@ export async function callLlm(
     payloadPatch?: (payload: Record<string, unknown>) => Record<string, unknown>;
     /** Per-call reasoning override. Default "low" when omitted. */
     reasoning?: ThinkingLevel;
+    /**
+     * Retry notifications. Wired by the caller into a UI-safe channel
+     * (stage progress); never console-logged, because raw stderr bypasses
+     * the `Pi` TUI layout (fixed in 0.14.1). Dropped when omitted.
+     */
+    onRetryNotice?: (message: string) => void;
     /** Successful provider usage, retained by the host-neutral adapter. */
     onUsage?: (usage: ModelUsage) => void;
   },
@@ -266,8 +271,14 @@ export async function callLlm(
       signal: options?.signal,
       retry: options?.retry,
       timeoutMs: options?.timeoutMs,
+      onRetryNotice: options?.onRetryNotice,
     },
-    { error: logErr, warn: (message) => console.warn(`[pi-intelli-search] ${message}`) },
+    // The native logger is deliberately silent: the model client always
+    // supplies onRetryNotice, and any residual logger fallback must not
+    // write to the console because raw stderr bypasses the Pi TUI layout
+    // (fixed in 0.14.1). Genuine configuration errors surface through
+    // ctx.ui notifications at the tool layer instead.
+    { error: () => {}, warn: () => {} },
   );
 
   if (response.usage) options?.onUsage?.(response.usage);
