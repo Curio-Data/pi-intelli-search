@@ -178,7 +178,14 @@ export async function captureOperation(
     mock.timers.enable({ apis: ["Date"], now: FIXED_NOW });
     clockEnabled = true;
     consoleMock = mock.method(console, "error", (...args: unknown[]) => {
-      diagnostics.push(args.map(String).join(" "));
+      const line = args.map(String).join(" ");
+      // Node < 24 prints an ExperimentalWarning for mock.timers through
+      // console.error (asynchronously, after this mock is installed).
+      // The frozen fixtures were captured on Node 24 where MockTimers is
+      // stable, so the warning is dropped to keep the fixture comparison
+      // independent of the host Node.js version.
+      if (/^\(node:\d+\) ExperimentalWarning: The MockTimers API/.test(line)) return;
+      diagnostics.push(line);
     });
     globalThis.fetch = async (input) => {
       assert.equal(
