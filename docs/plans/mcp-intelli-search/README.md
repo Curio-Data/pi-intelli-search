@@ -53,7 +53,9 @@ A fresh native `zai/glm-5.3` session likewise verified the committed Phase 4 han
 
 A fresh native `zai/glm-5.3` session verified the Phase 5 handoff on the pre-commit working tree (base `67be4e4` plus the full Phase 5 change). It reconstructed Phase 6 as the next step, passed every documented entry check and independently verified the Phase 5 facts against the tree. [Phase 5 Cold-Start Handover](HANDOVER-PHASE-5.md) records its `PASS WITH NONBLOCKING NOTES` verdict and the two documentation corrections applied afterwards.
 
-A further fresh native `zai/glm-5.3` session verified the corrected post-Phase 5 handoff, including the TUI port and release hold. [Phase 6 Entry Verification](HANDOVER-PHASE-6-ENTRY.md) records its `PASS WITH NOTES` verdict, successful entry checks and the limits of that read-only pass. This is the current cold-start evidence; it does not claim Phase 6 is implemented.
+A further fresh native `zai/glm-5.3` session verified the corrected post-Phase 5 handoff, including the TUI port and release hold. [Phase 6 Entry Verification](HANDOVER-PHASE-6-ENTRY.md) records its `PASS WITH NOTES` verdict, successful entry checks and the limits of that read-only pass.
+
+A fresh native `zai/glm-5.3` session then verified the committed Phase 6 tree at `a8484d3`, after the peer-review corrections. [Phase 6 Cold-Start Handover](HANDOVER-PHASE-6.md) records its `PASS WITH NONBLOCKING NOTES` verdict, the verbatim entry checks and eight tree facts verified, and the two note dispositions. This is the current cold-start evidence; it covers the Phase 6 handoff, not publication readiness.
 
 ## Fresh-Agent Entry Checks
 
