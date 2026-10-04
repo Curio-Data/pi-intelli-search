@@ -25,14 +25,48 @@ jobs:
       - name: Upgrade npm
         run: npm install -g npm@latest
 
+      - name: Select package from release tag
+        id: select
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$tag" =~ ^mcp-v(.+)$ ]]; then
+            version="${BASH_REMATCH[1]}"
+            echo "package=@curio-data/mcp-intelli-search" >> "$GITHUB_OUTPUT"
+            echo "directory=packages/mcp" >> "$GITHUB_OUTPUT"
+            echo "version=${version}" >> "$GITHUB_OUTPUT"
+          elif [[ "$tag" =~ ^v(.+)$ ]]; then
+            version="${BASH_REMATCH[1]}"
+            echo "package=@curio-data/pi-intelli-search" >> "$GITHUB_OUTPUT"
+            echo "directory=." >> "$GITHUB_OUTPUT"
+            echo "version=${version}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Unrecognised release tag '${tag}'. Use 'vX.Y.Z' for the native package or 'mcp-vX.Y.Z' for the MCP package."
+            exit 1
+          fi
+
+      - name: Verify tag version matches the package manifest
+        run: |
+          set -euo pipefail
+          manifest_version=$(node -p "require('./${{ steps.select.outputs.directory }}/package.json').version")
+          if [ "$manifest_version" != "${{ steps.select.outputs.version }}" ]; then
+            echo "::error::Tag version '${{ steps.select.outputs.version }}' does not match ${{ steps.select.outputs.directory }}/package.json version '${manifest_version}'."
+            exit 1
+          fi
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      - name: Build both artifacts
+        run: npm run build:all
 
-      - name: Test
-        run: npm test
+      - name: Test native and standalone operations
+        run: npm run test:all
+
+      - name: Verify plugin catalogs pin the released MCP version
+        if: steps.select.outputs.package == '@curio-data/mcp-intelli-search'
+        run: npm run check:plugins
 
       - name: Stage publish
+        working-directory: ${{ steps.select.outputs.directory }}
         run: npm stage publish --access public
