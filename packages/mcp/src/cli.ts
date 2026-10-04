@@ -5,6 +5,7 @@
 import { parseArgs } from "node:util";
 import { identity } from "./identity.js";
 import { loadConfig } from "./config.js";
+import { installStdoutGuard } from "./stdout-guard.js";
 
 export function cliOptions(argv: string[], env: NodeJS.ProcessEnv = process.env) {
   const { values } = parseArgs({
@@ -34,7 +35,7 @@ async function main(): Promise<void> {
   }
   if (args.help) {
     process.stdout.write(
-      `Usage: mcp-intelli-search --config FILE --workspace ABSOLUTE_DIRECTORY\n\nOptions:\n  --config FILE       Explicit JSON configuration (or INTELLI_SEARCH_CONFIG)\n  --workspace DIR     Existing absolute workspace (or INTELLI_SEARCH_WORKSPACE)\n  --check-config      Validate configuration without inference or serving\n  --help              Show this help\n  --version           Show package version\n\nCommand-line values take precedence over environment values.\nPhase 3 provides the standalone engine. MCP protocol serving arrives in Phase 4.\n`,
+      `Usage: mcp-intelli-search --config FILE --workspace ABSOLUTE_DIRECTORY\n\nOptions:\n  --config FILE       Explicit JSON configuration (or INTELLI_SEARCH_CONFIG)\n  --workspace DIR     Existing absolute workspace (or INTELLI_SEARCH_WORKSPACE)\n  --check-config      Validate configuration without inference or serving\n  --help              Show this help\n  --version           Show package version\n\nCommand-line values take precedence over environment values.\nWithout --check-config the executable serves the four intelli_* research tools\nas a Model Context Protocol server over standard input/output. Diagnostics go\nto standard error; standard output carries protocol messages only.\n`,
     );
     return;
   }
@@ -46,13 +47,18 @@ async function main(): Promise<void> {
     throw new Error(
       "Explicit --config and --workspace are required (or their INTELLI_SEARCH_* environment equivalents)",
     );
-  await loadConfig(args.config, args.workspace);
+  const config = await loadConfig(args.config, args.workspace);
   if (args["check-config"]) {
     process.stdout.write("Configuration is valid.\n");
     return;
   }
-  throw new Error(
-    "Configuration is valid. MCP protocol serving is not implemented in this Phase 3 artifact; use the runtime entrypoint for engine verification",
+  // The guard must precede loading the server module: dependency import-time
+  // output would otherwise corrupt protocol framing on standard output.
+  installStdoutGuard();
+  const { startServer } = await import("./server.js");
+  await startServer(config);
+  process.stderr.write(
+    `[mcp-intelli-search] ${identity.name} ${identity.version} serving stdio\n`,
   );
 }
 // CLI is a dedicated bundle, not a library entrypoint.

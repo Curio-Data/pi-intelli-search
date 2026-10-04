@@ -13,11 +13,16 @@ await rm(join(pkg, "dist"), { recursive: true, force: true });
 await mkdir(join(pkg, "dist"), { recursive: true });
 const result = await build({
   absWorkingDir: root,
-  entryPoints: { cli: "packages/mcp/src/cli.ts", runtime: "packages/mcp/src/runtime.ts" },
+  entryPoints: {
+    cli: "packages/mcp/src/cli.ts",
+    runtime: "packages/mcp/src/runtime.ts",
+    server: "packages/mcp/src/server.ts",
+  },
   outdir: "packages/mcp/dist",
   bundle: true,
   platform: "node",
   format: "esm",
+  splitting: true,
   target: "node22",
   packages: "external",
   metafile: true,
@@ -39,4 +44,4 @@ for (const output of Object.values(result.metafile.outputs))
   }
 await chmod(join(pkg, "dist/cli.js"), 0o755);
 for (const file of ["LICENSE", "NOTICE"]) await copyFile(join(root, file), join(pkg, file));
-console.log("Built standalone CLI and runtime with declared external dependencies");
+console.log("Built standalone CLI, runtime and server with declared external dependencies");

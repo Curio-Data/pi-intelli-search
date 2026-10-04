@@ -37,7 +37,7 @@ test("CLI rejects invalid options without echoing values and requires explicit p
     assert(!result.stderr.includes("secret"));
   }
 });
-test("CLI paths override environment equivalents and valid setup does not start a premature server", async () => {
+test("CLI paths override environment equivalents and valid setup serves until input closes", async () => {
   const f = await fixture();
   try {
     const file = join(f.dir, "config.json");
@@ -49,10 +49,12 @@ test("CLI paths override environment equivalents and valid setup does not start 
         { INTELLI_SEARCH_CONFIG: "/nonexistent", INTELLI_SEARCH_WORKSPACE: "/nonexistent" },
       ],
     ] as [string[], NodeJS.ProcessEnv][]) {
+      // spawnSync closes standard input immediately: the server starts, sees
+      // end-of-input and exits cleanly without emitting protocol messages.
       const result = invoke(args, env);
-      assert.equal(result.status, 1);
+      assert.equal(result.status, 0);
       assert.equal(result.stdout, "");
-      assert.match(result.stderr, /MCP protocol serving is not implemented/);
+      assert.match(result.stderr, /serving stdio/);
       const checked = invoke([...args, "--check-config"], env);
       assert.equal(checked.status, 0);
       assert.equal(checked.stdout, "Configuration is valid.\n");

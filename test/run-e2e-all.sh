@@ -56,6 +56,7 @@ SCRIPTS=(
   e2e/08_websearch_tool.sh
   e2e/09_sonar_pro_search.sh
   e2e/10_config_recipes.sh
+  e2e/11_mcp_stdio.sh
 )
 
 echo "🧪 Sequential E2E run — ${#SCRIPTS[@]} scripts, ${GAP}s gap, ${SCRIPT_TIMEOUT}s timeout per script"

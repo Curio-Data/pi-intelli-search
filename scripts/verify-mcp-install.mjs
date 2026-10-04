@@ -74,6 +74,7 @@ try {
   for (const name of [
     "dist/cli.js",
     "dist/runtime.js",
+    "dist/server.js",
     "README.md",
     "LICENSE",
     "NOTICE",
@@ -146,6 +147,154 @@ try {
   const evidence = JSON.parse(result.stdout);
   assert.equal(evidence.outcome, "completed");
   assert(!(await readdir(dir)).includes("forbidden-agent"));
+  // Protocol smoke against the installed executable, without the SDK or any
+  // network: initialize, list, invalid-argument rejection and clean shutdown.
+  const protocolWorkspace = join(dir, "protocol-workspace");
+  await mkdir(protocolWorkspace);
+  const protocolConfig = join(dir, "protocol-config.json");
+  await writeFile(
+    protocolConfig,
+    JSON.stringify({
+      providers: { openrouter: { apiKeyEnv: "INSTALL_FIXTURE_KEY" } },
+      models: {
+        search: { provider: "openrouter", model: "perplexity/sonar" },
+        extract: { provider: "openrouter", model: "fixture/extract" },
+        collate: { provider: "openrouter", model: "fixture/collate" },
+      },
+    }),
+  );
+  const server = spawn(
+    cli,
+    ["--config", protocolConfig, "--workspace", protocolWorkspace],
+    { cwd: dir, env: { ...env, ...isolated }, stdio: ["pipe", "pipe", "pipe"] },
+  );
+  const frames = [];
+  let protocolBuffer = "";
+  server.stdout.on("data", (chunk) => {
+    protocolBuffer += chunk;
+    const split = protocolBuffer.split("\n");
+    protocolBuffer = split.pop();
+    frames.push(...split.filter((line) => line.trim()));
+  });
+  let protocolStderr = "";
+  server.stderr.on("data", (chunk) => {
+    protocolStderr += chunk;
+  });
+  const send = (message) => server.stdin.write(`${JSON.stringify(message)}\n`);
+  send({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "install-gate", version: "0.0.0" },
+    },
+  });
+  send({ jsonrpc: "2.0", method: "notifications/initialized" });
+  send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+  send({
+    jsonrpc: "2.0",
+    id: 3,
+    method: "tools/call",
+    params: { name: "intelli_search", arguments: { query: 42 } },
+  });
+  const deadline = Date.now() + 60_000;
+  while (frames.length < 3) {
+    if (Date.now() > deadline) throw new Error("Installed server did not answer in time");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  server.stdin.end();
+  const exitCode = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      server.kill("SIGKILL");
+      reject(new Error("Installed server did not exit on input closure"));
+    }, 30_000);
+    server.once("error", reject);
+    server.once("exit", (code) => {
+      clearTimeout(timer);
+      resolve(code);
+    });
+  });
+  assert.equal(exitCode, 0, `installed server exit (${exitCode})\n${protocolStderr}`);
+  const messages = frames.map((line) => {
+    const parsed = JSON.parse(line);
+    assert.equal(parsed.jsonrpc, "2.0", "stdout carries protocol messages only");
+    return parsed;
+  });
+  assert.equal(messages[0].result.serverInfo.name, "@curio-data/mcp-intelli-search");
+  const tools = messages[1].result.tools.map((tool) => tool.name);
+  assert.deepEqual(tools, [
+    "intelli_search",
+    "intelli_extract",
+    "intelli_collate",
+    "intelli_research",
+  ]);
+  assert.equal(messages[2].result.isError, true, "invalid arguments reject without inference");
+  assert.equal(
+    (await readdir(protocolWorkspace)).includes(".search"),
+    false,
+    "rejected calls perform no cache work",
+  );
+  evidence.protocol = { frames: messages.length, tools: tools.length };
+  // A host closing the server's stdout must end in a graceful close, not an
+  // unhandled EPIPE crash (the guard's error sink plus the SDK close path).
+  const epipe = spawn(
+    cli,
+    ["--config", protocolConfig, "--workspace", protocolWorkspace],
+    { cwd: dir, env: { ...env, ...isolated }, stdio: ["pipe", "pipe", "pipe"] },
+  );
+  let epipeFrames = 0;
+  epipe.stdout.on("data", () => {
+    epipeFrames++;
+  });
+  let epipeStderr = "";
+  epipe.stderr.on("data", (chunk) => {
+    epipeStderr += chunk;
+  });
+  epipe.stdin.write(
+    `${JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "install-gate", version: "0.0.0" },
+      },
+    })}\n`,
+  );
+  while (epipeFrames < 1) {
+    if (Date.now() > deadline) throw new Error("Installed server did not initialize");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  epipe.stdout.destroy();
+  epipe.stdin.write(
+    `${JSON.stringify({
+      jsonrpc: "2.0",
+      id: 9,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "install-gate", version: "0.0.0" },
+      },
+    })}\n`,
+  );
+  const epipeExit = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      epipe.kill("SIGKILL");
+      reject(new Error(`Installed server did not close after stdout closure\n${epipeStderr}`));
+    }, 30_000);
+    epipe.once("error", reject);
+    epipe.once("exit", (code) => {
+      clearTimeout(timer);
+      resolve(code);
+    });
+  });
+  assert.equal(epipeExit, 0, `stdout-closure exit (${epipeExit})\n${epipeStderr}`);
+  assert.doesNotMatch(epipeStderr, /Unhandled 'error' event|EPIPE/);
+  evidence.protocol.epipeExit = epipeExit;
   console.log(
     JSON.stringify(
       {

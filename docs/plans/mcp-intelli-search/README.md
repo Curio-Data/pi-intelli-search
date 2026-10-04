@@ -4,7 +4,7 @@
 
 Extend `intelli-search` from one repository and one shared research engine. Preserve the native `@curio-data/pi-intelli-search` package and add `@curio-data/mcp-intelli-search`, a standalone Model Context Protocol (MCP) server. Provide thin [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin bundles around that server.
 
-The owner approved the architecture and specified the MCP package name on 2026-10-03. The planning branch is `plan/mcp-intelli-search`. Phase 0 records dependency evidence and deterministic native compatibility fixtures. Phase 1 introduces host-neutral contracts, a native model adapter and explicit cache paths. Phase 2 moves operations, shared helpers and model policy into the core, with workspace-local documentation staging and injected telemetry identity. Phase 3 adds the standalone runtime and independently installable package, with strict configuration, explicit workspace ownership and an OpenRouter transport. Protocol serving, plugins and publication remain unimplemented. Phase 4, MCP Protocol, is the next implementation step.
+The owner approved the architecture and specified the MCP package name on 2026-10-03. The planning branch is `plan/mcp-intelli-search`. Phase 0 records dependency evidence and deterministic native compatibility fixtures. Phase 1 introduces host-neutral contracts, a native model adapter and explicit cache paths. Phase 2 moves operations, shared helpers and model policy into the core, with workspace-local documentation staging and injected telemetry identity. Phase 3 adds the standalone runtime and independently installable package, with strict configuration, explicit workspace ownership and an OpenRouter transport. Phase 4 adds protocol serving over standard input/output (stdio) through the official split server package, with bounded queueing, progress, cancellation, shutdown and clean framing. Plugins and publication remain unimplemented. Phase 5, Host Plugins and Guidance, is the next implementation step.
 
 ## Reading Order
 
@@ -14,10 +14,11 @@ The owner approved the architecture and specified the MCP package name on 2026-1
 4. Read [Phase 1 Results](PHASE-1.md) and [Phase 1 Peer Review](PHASE-1-REVIEW.md) for implemented interfaces, the cache-path correction, independent findings and current verification.
 5. Read [Phase 2 Results](PHASE-2.md) and [Phase 2 Peer Review](PHASE-2-REVIEW.md) for the implemented operations, shared policy, review corrections, staging, telemetry identity and verification limits.
 6. Read [Phase 3 Results](PHASE-3.md), [Phase 3 Peer Review](PHASE-3-REVIEW.md) and the [standalone configuration guide](../../../packages/mcp/README.md) for runtime entrypoints, provider evidence, strict validation and installation verification.
-7. Read [Implementation Plan](IMPLEMENTATION.md) for the target layout, compatibility contract, dependency boundaries, phased work and acceptance matrix.
-8. Start at Phase 4. Check the current working tree and run the native fixture suite before editing; do not regenerate its expected files to hide a regression.
+7. Read [Phase 4 Results](PHASE-4.md) for protocol serving, queueing, framing, host-interoperability findings and verification limits.
+8. Read [Implementation Plan](IMPLEMENTATION.md) for the target layout, compatibility contract, dependency boundaries, phased work and acceptance matrix.
+9. Start at Phase 5. Check the current working tree and run the native fixture suite before editing; do not regenerate its expected files to hide a regression.
 
-The reviewed Phase 2 implementation is the historical `86b1e4e` checkpoint. Phase 3 continues from `0c26972` and is committed as `59a3fa4` on `plan/mcp-intelli-search`. Subsequent handoff-documentation commits remain on that branch; use its current tip rather than resetting to a historical checkpoint.
+The reviewed Phase 2 implementation is the historical `86b1e4e` checkpoint. Phase 3 continues from `0c26972` and is committed as `59a3fa4` on `plan/mcp-intelli-search`. Phase 4 continues from `1b09318`; use the branch tip rather than resetting to a historical checkpoint.
 
 Both independent Phase 3 reviewers returned final `PASS` verdicts after corrections and frozen-tree follow-up. [Phase 3 Peer Review](PHASE-3-REVIEW.md) records findings, evidence and limits.
 
@@ -51,8 +52,8 @@ Resume from `plan/mcp-intelli-search`, not `main`. Fetch `origin` and inspect th
 Run `npm ci` if dependencies are absent, differ from the committed lockfile or their provenance is uncertain. `npm ls --depth=0` detects missing or invalid top-level dependencies but does not establish exact lockfile equivalence; use a clean install when in doubt. Then run these checks from the repository root:
 
 ```bash
-mkdir -p .tmp/mcp-phase4
-export TMPDIR="$PWD/.tmp/mcp-phase4"
+mkdir -p .tmp/mcp-phase5
+export TMPDIR="$PWD/.tmp/mcp-phase5"
 npm run build:all
 npm run test:mcp
 node --import tsx --test test/native-contract.test.ts
@@ -65,7 +66,7 @@ Read the documents in the order above before editing. The entry checks are deter
 
 ## Next-Agent Brief
 
-> Continue at Phase 4 of `docs/plans/mcp-intelli-search/IMPLEMENTATION.md`. Read `PHASE-3.md` and `packages/mcp/README.md` for the standalone runtime, strict configuration, provider policy and filesystem limits. Implement actual stdio MCP registration, result/progress mapping, bounded queueing, cancellation and shutdown. Use safe runtime error categories and retain `--check-config`. Prove import-time and direct stdout framing: the existing async console guard only covers operation-time console output. Recheck the split SDK and Phase 0 probe before adding protocol dependencies. Preserve the native package and frozen fixtures, and retain both independent installation gates. Plugins remain Phase 5. Do not publish, modify real host credentials or silently switch inference providers.
+> Continue at Phase 5 of `docs/plans/mcp-intelli-search/IMPLEMENTATION.md`. Read `PHASE-4.md` and `packages/mcp/README.md` for the served protocol, queueing, framing and host-interoperability findings. Generate host guidance from a shared source, accounting for host-qualified MCP tool names, and add the Claude Code and Codex plugin manifests, launchers and repository marketplaces. Prefer a pinned `npx` launcher for an exact `@curio-data/mcp-intelli-search` version; for pre-publication tests generate equivalent local-tarball launchers and label the two evidence classes separately. Test each host's environment substitution rules and cold-start stdout cleanliness. Preserve the native package and frozen fixtures, and retain both independent installation gates. Publication remains Phase 6 and requires explicit approval. Do not publish, modify real host credentials or silently switch inference providers.
 
 ## Planning Verification
 
