@@ -48,15 +48,15 @@ Codex authentication was repaired by the operator before this phase; no credenti
 - The `@curio-data/mcp-intelli-search` trusted-publisher binding does not exist yet and cannot be created from the repository. Without it the `mcp-v*` release path fails at the staging step.
 - Post-publication registry-pin verification (plugins installing the published version through `npx`) remains an open gate, labelled separately from the local-tarball evidence class.
 - No full research call has been driven through either host plugin; per-host live research in _Claude Code_ and _Codex_ remains open evidence in the acceptance matrix.
-- The eventual native release version from this branch is the owner's decision at release time; the reconciled 0.14.1 metadata only matches `main`'s unreleased state and does not presuppose the next tag.
-- This phase has no independent peer review or cold-start handover yet; both remain to be scheduled before the branch is offered for merge.
+- The eventual native release version from this branch is the owner's decision at release time; the reconciled 0.14.1 metadata only matches `main`'s unreleased state and does not presuppose the next tag. The owner has indicated 0.20 is under consideration.
+- The peer review found and fixed one release-time defect (the prerelease dist-tag guard) plus documentation and hygiene items; see [Phase 6 Peer Review](PHASE-6-REVIEW.md). Corrections are committed at `96b463a`. A cold-start handover remains to be scheduled before the branch is offered for merge.
 
 ## Continuation
 
 Publication preparation, in order, each step requiring its own approval:
 
-1. Owner reviews the release-workflow change (`fe74ca0`) and creates the `@curio-data/mcp-intelli-search` trusted-publisher binding on `npmjs.com` (`release.yml`, `npm stage publish` only).
-2. Independent peer review and a cold-start handover of Phase 6.
+1. Owner reviews the release-workflow change (`fe74ca0`, amended by `96b463a`) and creates the `@curio-data/mcp-intelli-search` trusted-publisher binding on `npmjs.com` (`release.yml`, `npm stage publish` only), resolving the bootstrap prerequisite recorded in root `AGENTS.md` (the package must exist; the flow for a not-yet-existing package is owner-verified).
+2. A cold-start handover of the corrected Phase 6 tree.
 3. Full paced live suite `./test/run-e2e-all.sh` immediately before tagging.
 4. On explicit approval, the MCP release checklist in root `AGENTS.md` (version bump decision, not-published notice removal, plugin-catalog regeneration, tag `mcp-vX.Y.Z`), then the post-publication registry-pin gate recorded in [the compatibility matrix](../../../docs/COMPATIBILITY.md).
 5. Merge to `main` only after the MCP package resolves on the registry; the native release version and CHANGELOG heading are decided at that point.
