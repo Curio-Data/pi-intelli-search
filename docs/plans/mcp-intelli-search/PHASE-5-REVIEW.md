@@ -43,7 +43,7 @@ Reports: `.tmp/agents/2026-10-04-p5-review/reports/{qwen,deepseek}.md` (gitignor
 
 ## The Credential Incident
 
-While developing the credentialed Codex session check, the orchestrator copied `~/.codex/auth.json` into isolated `CODEX_HOME` directories. OAuth refresh-token rotation made a copy the valid chain; cleanup deleted it, invalidating the host's real Codex login ("refresh token was already used"). The operator re-authenticated by hand. Claude Code's login survived the equivalent copies (no refresh occurred in those sessions). Consequences, all recorded in `PHASE-5.md`: the repeatable e2e is now fully credential-free; the credentialed tool-name and handshake evidence is one-time recorded evidence with dates and host versions; copying OAuth credential files into disposable directories is prohibited for future work.
+While developing the credentialed Codex session check, the orchestrator copied `~/.codex/auth.json` into isolated `CODEX_HOME` directories. OAuth refresh-token rotation made a copy the valid chain; cleanup deleted it, invalidating the host's real Codex login ("refresh token was already used"). The login remains broken until the operator runs `codex login` again; the operator was informed in the completion report. Claude Code's login survived the equivalent copies (no refresh occurred in those sessions). Consequences, all recorded in `PHASE-5.md`: the repeatable e2e is now fully credential-free; the credentialed tool-name and handshake evidence is one-time recorded evidence with dates and host versions; copying OAuth credential files into disposable directories is prohibited for future work.
 
 ## Verification of the Corrections
 
