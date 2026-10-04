@@ -4,7 +4,7 @@
 
 Implement `@curio-data/mcp-intelli-search` in this repository while preserving the native `@curio-data/pi-intelli-search` package. Extract one shared research engine, expose it through a Model Context Protocol (MCP) server, and provide installation bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins).
 
-Read the [handoff](README.md) first and the [research record](RESEARCH.md) for approved decisions, sources and limitations. [Phase 0 results](PHASE-0.md) record the verified dependencies and native compatibility fixtures. [Phase 1 results](PHASE-1.md) record the implemented dependency contracts, native model adapter and explicit cache paths. [Phase 2 results](PHASE-2.md) record the shared operations, model policy, native adapter, documentation staging and telemetry identity. [Phase 3 results](PHASE-3.md) record the standalone runtime, configuration, provider transport and independent artifact verification. Phase 4 is the next implementation step. The remaining proposed paths, commands and interfaces below must be created and tested before they are documented as available.
+Read the [handoff](README.md) first and the [research record](RESEARCH.md) for approved decisions, sources and limitations. [Phase 0 results](PHASE-0.md) record the verified dependencies and native compatibility fixtures. [Phase 1 results](PHASE-1.md) record the implemented dependency contracts, native model adapter and explicit cache paths. [Phase 2 results](PHASE-2.md) record the shared operations, model policy, native adapter, documentation staging and telemetry identity. [Phase 3 results](PHASE-3.md) record the standalone runtime, configuration, provider transport and independent artifact verification. [Phase 4 results](PHASE-4.md) record protocol serving, queueing, framing, shutdown and host interoperability. Phase 5 is the next implementation step. The remaining proposed paths, commands and interfaces below must be created and tested before they are documented as available.
 
 ## Scope
 
@@ -269,6 +269,8 @@ Exit gate: an installed MCP package can run its engine without the root package,
 
 ### Phase 4: MCP Protocol
 
+Completed implementation, review corrections and verification are recorded in [Phase 4 Results](PHASE-4.md) and [Phase 4 Peer Review](PHASE-4-REVIEW.md). Retain this checklist as the scope of that checkpoint.
+
 1. Register the four existing tool names through the selected SDK and canonical schemas.
 2. Return concise text, structured fields and intentional error mapping. Keep protocol registration separate from CLI startup for testing.
 3. Translate cancellation and progress, implement bounded queueing, and abort pending work on input closure or process termination.
@@ -352,7 +354,7 @@ Run the full paced suite before a release:
 
 Do not launch the live scenarios concurrently or immediately repeat them after a quota failure. Existing tests use live provider quota and read configured credentials through their documented harness. Keep logs private and record exact failure classification rather than repeatedly spending quota to obtain one green run.
 
-Phase 3 adds `npm run build:all`, `npm run test:all`, `npm run build:mcp`, `npm run typecheck:mcp`, `npm run test:mcp` and `npm run test:mcp:install`. The final command builds, packs and independently installs the standalone artifact, then exercises the installed engine and native fetch assets. Protocol and host-smoke commands remain Phase 4 work. The fresh MCP gate must install a tarball with development dependencies omitted, outside root `node_modules` resolution. A workspace test alone is insufficient.
+Phase 3 adds `npm run build:all`, `npm run test:all`, `npm run build:mcp`, `npm run typecheck:mcp`, `npm run test:mcp` and `npm run test:mcp:install`. The final command builds, packs and independently installs the standalone artifact, then exercises the installed engine and native fetch assets. Phase 4 adds the protocol suite (under `npm run test:mcp`), an installed-artifact protocol and stdout-closure smoke inside the install gate, and the live host smoke `test/e2e/11_mcp_stdio.sh`. The fresh MCP gate must install a tarball with development dependencies omitted, outside root `node_modules` resolution. A workspace test alone is insufficient.
 
 Run `shellcheck` on every new or modified shell script and execute each new end-to-end script to completion before committing it. Keep deterministic tests network-independent except for loopback fixture servers. Use free development-range ports for fixture listeners on this host.
 

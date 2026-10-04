@@ -14,13 +14,11 @@ The owner approved the architecture and specified the MCP package name on 2026-1
 4. Read [Phase 1 Results](PHASE-1.md) and [Phase 1 Peer Review](PHASE-1-REVIEW.md) for implemented interfaces, the cache-path correction, independent findings and current verification.
 5. Read [Phase 2 Results](PHASE-2.md) and [Phase 2 Peer Review](PHASE-2-REVIEW.md) for the implemented operations, shared policy, review corrections, staging, telemetry identity and verification limits.
 6. Read [Phase 3 Results](PHASE-3.md), [Phase 3 Peer Review](PHASE-3-REVIEW.md) and the [standalone configuration guide](../../../packages/mcp/README.md) for runtime entrypoints, provider evidence, strict validation and installation verification.
-7. Read [Phase 4 Results](PHASE-4.md) for protocol serving, queueing, framing, host-interoperability findings and verification limits.
+7. Read [Phase 4 Results](PHASE-4.md) and [Phase 4 Peer Review](PHASE-4-REVIEW.md) for protocol serving, queueing, framing, host-interoperability findings, independent findings, follow-up verdicts and verification limits.
 8. Read [Implementation Plan](IMPLEMENTATION.md) for the target layout, compatibility contract, dependency boundaries, phased work and acceptance matrix.
 9. Start at Phase 5. Check the current working tree and run the native fixture suite before editing; do not regenerate its expected files to hide a regression.
 
 The reviewed Phase 2 implementation is the historical `86b1e4e` checkpoint. Phase 3 continues from `0c26972` and is committed as `59a3fa4` on `plan/mcp-intelli-search`. Phase 4 continues from `1b09318`; use the branch tip rather than resetting to a historical checkpoint.
-
-Both independent Phase 3 reviewers returned final `PASS` verdicts after corrections and frozen-tree follow-up. [Phase 3 Peer Review](PHASE-3-REVIEW.md) records findings, evidence and limits.
 
 The handoff is self-contained in tracked documentation. The optional `.search/` cache and `.tmp/` verification logs are gitignored and are not required to understand or implement the plan.
 
@@ -39,11 +37,13 @@ The handoff is self-contained in tracked documentation. The optional `.search/` 
 
 Before Phase 1, a fresh `Pi` session using native `zai/glm-5.3` reviewed the Phase 0 handoff without prior conversation, memory or research-cache access. Its verdict was PASS WITH NONBLOCKING NOTES; both entry checks passed. The documentation notes have been incorporated. See [Cold-Start Handover Review](HANDOVER-GLM.md) for scope, provenance, changes and limitations. This historical review does not cover the Phase 1 implementation; its evidence is recorded in [Phase 1 Results](PHASE-1.md#verification).
 
-The subsequent [Phase 1 Peer Review](PHASE-1-REVIEW.md) used two independent native reviewers, `zai/glm-5.3` and `deepseek/deepseek-flash`. Neither found a blocker. The custom-cache instruction defect was fixed, contract comments were clarified, and both reviewers checked the follow-up changes. The review record distinguishes corrected findings, a retracted false positive and later-phase work. These reviews do not cover Phase 2. The subsequent [Phase 2 Peer Review](PHASE-2-REVIEW.md) used independent native `qwen-token-plan/qwen3.8-max` and `deepseek/deepseek-flash` reviewers. Both final verdicts were `PASS` after corrections and follow-up checks.
+The subsequent [Phase 1 Peer Review](PHASE-1-REVIEW.md) used two independent native reviewers, `zai/glm-5.3` and `deepseek/deepseek-flash`. Neither found a blocker. The custom-cache instruction defect was fixed, contract comments were clarified, and both reviewers checked the follow-up changes. The review record distinguishes corrected findings, a retracted false positive and later-phase work. These reviews do not cover Phase 2. The subsequent [Phase 2 Peer Review](PHASE-2-REVIEW.md) used independent native `qwen-token-plan/qwen3.8-max` and `deepseek/deepseek-flash` reviewers. Both final verdicts were `PASS` after corrections and follow-up checks. The [Phase 3 Peer Review](PHASE-3-REVIEW.md) and [Phase 4 Peer Review](PHASE-4-REVIEW.md) used the same two reviewers independently; each phase reached final `PASS` verdicts from both after corrections and follow-up checks on the corrected tree.
 
 A subsequent fresh native `zai/glm-5.3` agent verified the committed Phase 2 handoff without earlier conversation, memory or research-cache access. It reconstructed Phase 3 and passed every documented entry check. [Phase 2 Cold-Start Handover](HANDOVER-PHASE-2.md) records its initial `PASS WITH NONBLOCKING NOTES` verdict, evidence limits, documentation clarifications and subsequent documentation-only `PASS`.
 
 A fresh native `zai/glm-5.3` session subsequently verified the committed Phase 3 handoff without prior conversation, memory or research-cache access. It reconstructed Phase 4 and passed every documented entry check after `npm ci`. [Phase 3 Cold-Start Handover](HANDOVER-PHASE-3.md) records its initial `PASS`, the documentation-only clarifications and follow-up `PASS`.
+
+A fresh native `zai/glm-5.3` session likewise verified the committed Phase 4 handoff at `a1c67e2`. It reconstructed Phase 5 as the next step and passed every documented entry check without credentials. [Phase 4 Cold-Start Handover](HANDOVER-PHASE-4.md) records its initial `PASS WITH NONBLOCKING NOTES`, the three documentation corrections (stale plan pointers, an orphaned review record, an unrecorded schema caveat) and the documentation-only follow-up `PASS`.
 
 ## Fresh-Agent Entry Checks
 
@@ -66,7 +66,7 @@ Read the documents in the order above before editing. The entry checks are deter
 
 ## Next-Agent Brief
 
-> Continue at Phase 5 of `docs/plans/mcp-intelli-search/IMPLEMENTATION.md`. Read `PHASE-4.md` and `packages/mcp/README.md` for the served protocol, queueing, framing and host-interoperability findings. Generate host guidance from a shared source, accounting for host-qualified MCP tool names, and add the Claude Code and Codex plugin manifests, launchers and repository marketplaces. Prefer a pinned `npx` launcher for an exact `@curio-data/mcp-intelli-search` version; for pre-publication tests generate equivalent local-tarball launchers and label the two evidence classes separately. Test each host's environment substitution rules and cold-start stdout cleanliness. Preserve the native package and frozen fixtures, and retain both independent installation gates. Publication remains Phase 6 and requires explicit approval. Do not publish, modify real host credentials or silently switch inference providers.
+> Continue at Phase 5 of `docs/plans/mcp-intelli-search/IMPLEMENTATION.md`. Read `PHASE-4.md` and `packages/mcp/README.md` for the served protocol, queueing, framing and host-interoperability findings. Generate host guidance from a shared source, accounting for host-qualified MCP tool names, and add the Claude Code and Codex plugin manifests, launchers and repository marketplaces. Prefer a pinned `npx` launcher for an exact `@curio-data/mcp-intelli-search` version; for pre-publication tests generate equivalent local-tarball launchers and label the two evidence classes separately. Test each host's environment substitution rules and cold-start stdout cleanliness. A pre-existing stale `maxUrls` schema description (`default: 8` versus the shared default 10) is frozen in the native contract; do not propagate it into generated guidance. Preserve the native package and frozen fixtures, and retain both independent installation gates. Publication remains Phase 6 and requires explicit approval. Do not publish, modify real host credentials or silently switch inference providers.
 
 ## Planning Verification
 
