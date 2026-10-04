@@ -77,7 +77,14 @@ These packages are provided by the hosting `Pi` runtime and are not bundled with
 
 The `@curio-data/mcp-intelli-search` artifact shares the fetch dependencies above but declares `typebox` as a runtime dependency rather than a host peer. It neither installs nor imports `Pi` libraries. Third-party packages remain external to its bundle, preserving native fetch assets and their package-level licences.
 
-[_esbuild_](https://esbuild.github.io/) bundles the internal engine and adapter source during development. Its [source repository](https://github.com/evanw/esbuild) is MIT-licensed. It is a root development dependency, not a standalone runtime dependency. The current standalone adapter uses the built-in fetch transport; no provider SDK (software development kit) or Model Context Protocol SDK has been added at this checkpoint.
+### @modelcontextprotocol/server
+
+- **Repository:** https://github.com/modelcontextprotocol/typescript-sdk
+- **Author:** Anthropic, PBC and contributors
+- **License:** MIT
+- **Usage:** Model Context Protocol serving over stdio: tool registration, input-schema validation, progress notifications, cancellation and transport framing. The SDK is declared only by the standalone package and never enters the native extension's runtime. The companion `@modelcontextprotocol/client` package is a development dependency used by the protocol test suite. Both are lockfile-pinned at 2.3.0.
+
+[_esbuild_](https://esbuild.github.io/) bundles the internal engine and adapter source during development. Its [source repository](https://github.com/evanw/esbuild) is MIT-licensed. It is a root development dependency, not a standalone runtime dependency. The standalone inference adapter uses the built-in fetch transport against the OpenRouter API; no provider SDK is bundled.
 
 ## License Compliance
 

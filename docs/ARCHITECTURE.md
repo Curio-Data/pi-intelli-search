@@ -79,7 +79,15 @@ Research dependencies are injected per operation rather than changed through a s
 
 `packages/mcp/` supplies the separate `@curio-data/mcp-intelli-search` runtime. It uses the shared operations with explicit configuration, a canonical workspace, strict argument validation and a non-streaming OpenRouter transport. Shared tuning lives in `src/core/defaults.ts`; standalone model selections and environment-referenced credentials are mandatory. Catalogue preflight precedes paid work, and the shared retry policy applies once to every standalone model call.
 
-The standalone bundle externalises its declared third-party dependencies and imports no `Pi` library. Its installation gate denies ancestor dependency resolution and exercises both native fetch paths. Existing cache links and traversal are rejected; these checks do not sandbox hostile concurrent filesystem mutation. Results use absolute workspace cache paths and host-neutral file-reading guidance. [Phase 3 Results](plans/mcp-intelli-search/PHASE-3.md) and the [package guide](../packages/mcp/README.md) record exact interfaces and limits. Model Context Protocol (MCP) serving and plugins remain later work.
+The standalone bundle externalises its declared third-party dependencies and imports no `Pi` library. Its installation gate denies ancestor dependency resolution and exercises both native fetch paths. Existing cache links and traversal are rejected; these checks do not sandbox hostile concurrent filesystem mutation. Results use absolute workspace cache paths and host-neutral file-reading guidance. [Phase 3 Results](plans/mcp-intelli-search/PHASE-3.md) and the [package guide](../packages/mcp/README.md) record exact interfaces and limits.
+
+### Protocol Serving
+
+The standalone package serves the four canonical tools as a Model Context Protocol (MCP) server over standard input/output (stdio) through the official split server package (`@modelcontextprotocol/server`, lockfile-pinned). Tool names and input schemas mirror the native tools; descriptions embed the guidance the protocol has no separate channel for. One operation runs at a time with a bounded queue; stage progress maps to `notifications/progress` when the client supplies a token, and client cancellation aborts through the shared model policy. A startup guard diverts every non-protocol write away from standard output, so the stream carries protocol frames only; diagnostics use standard error. Closing standard input or receiving `SIGINT`/`SIGTERM` drains and aborts in-flight and queued work. [Phase 4 Results](plans/mcp-intelli-search/PHASE-4.md) records the protocol verification.
+
+### Host Plugins
+
+Thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/`, generated from one shared guidance source in `guidance/` by `scripts/generate-plugin-bundles.mjs`; repository marketplace catalogs live at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. Launchers pin the exact MCP package version through `npx` and contain no pipeline code or credentials; each host's credential and workspace forwarding follows its own environment rules, documented in the generated skills. `npm run check:plugins` is the bidirectional drift gate between the generator and the committed tree. [Phase 5 Results](plans/mcp-intelli-search/PHASE-5.md) records the empirical host findings that drove the launcher design.
 
 ## Source Code Structure
 
@@ -114,6 +122,13 @@ src/
 ├── telemetry.ts            # Compatibility facade with native identity
 ├── cache.ts, fetch.ts, ... # Forwarding exports to shared helpers
 └── tools/                  # Native registration, wrappers and rendering
+
+packages/mcp/
+├── src/                    # CLI, strict config, workspace, provider, runtime and protocol adapters
+└── dist/                   # Generated self-contained executable and runtime bundles
+
+guidance/                   # Shared host-neutral guidance source and per-host setup fragments
+plugins/                    # Generated Claude Code and Codex bundles (manifests, launchers, skills)
 ```
 
 ## Cache Structure

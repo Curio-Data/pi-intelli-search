@@ -146,6 +146,13 @@ const DEFAULT_HISTORY: Record<
     collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   },
+  "0.14.1": {
+    // Defaults unchanged from 0.14.0. Diagnostics-only release (TUI-safe
+    // fetch/retry output); no model changes.
+    extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+    collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  },
 };
 
 /** In-memory settings cache, isolated by the configuration source context. */

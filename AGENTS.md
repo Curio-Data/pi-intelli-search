@@ -2,7 +2,7 @@
 
 This is a **`Pi` extension** that adds intelligent web research tools to the `Pi` coding agent. It provides a 5-stage research pipeline (search, fetch, extract, collate, and cache suggest) as a single tool call, plus individual tools for manual orchestration.
 
-For cross-host development, start at the [Model Context Protocol (MCP) implementation handoff](docs/plans/mcp-intelli-search/README.md). It records the current checkpoint, approved package boundaries, frozen compatibility contracts and next phase. Phase 4 supplies `packages/mcp/` with stdio protocol serving through the official split server package; Phase 5 supplies the generated host plugin bundles and repository marketplaces; Phase 6 (documentation, CI and release readiness) is next. Its strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
+For cross-host development, start at the [Model Context Protocol (MCP) implementation handoff](docs/plans/mcp-intelli-search/README.md). It records the current checkpoint, approved package boundaries, frozen compatibility contracts and next phase. Phase 4 supplies `packages/mcp/` with stdio protocol serving through the official split server package; Phase 5 supplies the generated host plugin bundles and repository marketplaces; Phase 6 supplies the three installation routes, compatibility matrix, extended CI and two-package release wiring. Publication remains on hold pending the owner's explicit approval. Its strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
 
 ---
 
@@ -591,8 +591,8 @@ All tools use the `intelli_` prefix to avoid collisions with other `Pi` extensio
 **The agent must never create a _GitHub_ Release or trigger `npm` publication without the user's explicit permission.**
 
 Publishing is gated through `npm` staged publishing. CI submits the tarball; the user approves it on `npmjs.com` with 2FA before it goes live:
-- **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
-- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. Builds, tests, and runs `npm stage publish` against the `@curio-data` scope. Authentication is via OIDC trusted publishing (no stored token); provenance is signed automatically. The package is then **held in the staging queue** until a maintainer approves it on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) with 2FA. Until approval, the version does not appear on the public registry.
+- **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, generated-plugin drift, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
+- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. The tag selects exactly one package: `vX.Y.Z` stages the native `@curio-data/pi-intelli-search` package and `mcp-vX.Y.Z` stages `@curio-data/mcp-intelli-search`; any other tag fails. The workflow verifies the tag version against the selected package's manifest, builds and tests both artifacts, and runs `npm stage publish` against the `@curio-data` scope. Authentication is via OIDC trusted publishing (no stored token); provenance is signed automatically. The package is then **held in the staging queue** until a maintainer approves it on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) with 2FA. Until approval, the version does not appear on the public registry.
 
 ### Changelog Principles
 
@@ -626,6 +626,19 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 8. **User approves the staged package** on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) via the Staged Packages tab, providing 2FA. The agent must never attempt to approve a staged publish, even if given credentials.
 9. **Verify publication.** After approval, check `https://www.npmjs.com/package/@curio-data/pi-intelli-search` shows the new version.
 
+### Releasing the MCP Package
+
+`@curio-data/mcp-intelli-search` has its own version, release tag prefix and staging queue. The native checklist above does not apply except where noted; in particular the MCP package has no `DEFAULT_HISTORY` and its version changes must never trigger native model migration.
+
+1. **Verify CI is green** on `main` and confirm the owner has explicitly approved this release. Approval of one package is not approval of the other.
+2. **Bump `version` in `packages/mcp/package.json`** following [SemVer](https://semver.org/), then run `npm install --package-lock-only` so the lockfile workspace version matches.
+3. **Remove the not-published notice** from `packages/mcp/README.md` on the first public release only.
+4. **Regenerate the plugin bundles** so the catalogs pin the new version: `npm run generate:plugins`, then confirm `npm run check:plugins` passes. Commit the regenerated catalogs with the version bump; they are what users install from.
+5. **Run the full paced live suite** `./test/run-e2e-all.sh`, including `11_mcp_stdio.sh` and `12_plugin_bundles.sh`, before tagging.
+6. **Update `CHANGELOG.md`** with a `## [mcp-X.Y.Z] - YYYY-MM-DD` section and a matching `[mcp-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-vX.Y.Z` reference link. Verify both with the grep checks from step 4 of the native checklist (adjusted for the `mcp-` prefix).
+7. **Commit and push**, then create the _GitHub_ Release with tag `mcp-vX.Y.Z` only after explicit approval. The workflow stages the package; the user approves it on `npmjs.com` with 2FA.
+8. **Post-publication gate:** verify the registry-pin installation route that pre-publication tests could not exercise: install the Claude Code and Codex plugins from the committed catalogs into clean profiles and confirm the `npx` launcher downloads and starts the published version. Record this evidence separately from the local-tarball class in [the compatibility matrix](docs/COMPATIBILITY.md).
+
 ### Testing the Publish Pipeline
 
 Before the first real release, validate the pipeline with a pre-release:
@@ -637,13 +650,15 @@ Before the first real release, validate the pipeline with a pre-release:
 
 ### npm Trusted Publisher
 
-The workflow authenticates to `npm` via OIDC; no stored token is used. The trusted publisher is configured on the `@curio-data/pi-intelli-search` package page on `npmjs.com` under **Settings → Trusted Publishers** with the following bindings:
+The workflow authenticates to `npm` via OIDC; no stored token is used. Each package needs its own binding. The trusted publisher is configured on the `@curio-data/pi-intelli-search` package page on `npmjs.com` under **Settings → Trusted Publishers** with the following bindings:
 
 - Organization: `Curio-Data`
 - Repository: `pi-intelli-search`
 - Workflow filename: `release.yml`
 - Environment: (none)
 - Allowed actions: `npm stage publish` only
+
+`@curio-data/mcp-intelli-search` requires the same binding on its own package page before its first release; the native package's binding does not cover it. Creating that binding is a maintainer action on `npmjs.com`, not something the agent can perform or verify from the repository.
 
 `npm publish` is intentionally **not** in the allowed actions list, so even a workflow compromise cannot push directly to the public registry; every release passes through the staged-publish approval gate.
 

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, plan/mcp-intelli-search]
   pull_request:
     branches: [main]
 
@@ -44,6 +44,9 @@ jobs:
 
       - name: Type-check native compatibility tests
         run: node_modules/.bin/tsc -p test/tsconfig.native-contract.json
+
+      - name: Verify generated plugin bundles match the generator
+        run: npm run check:plugins
 
       - name: Install standalone tarball and exercise native fetch assets
         run: npm run test:mcp:install

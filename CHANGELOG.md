@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The research engine also ships as a standalone MCP server (unpublished).** `@curio-data/mcp-intelli-search` serves the same four `intelli_*` tools over Model Context Protocol stdio without a `Pi` installation, with explicit JSON configuration, workspace ownership and an OpenRouter adapter, plus generated [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin bundles installable from this repository's marketplaces. The README documents the three installation routes and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) records the tested host versions. The package is not yet on the registry; the plugin launchers become installable at publication.
+
 ### Fixed
 
 - Routine fetch-comparison diagnostics no longer write over the `Pi` terminal interface. Native retry notices now use the research tool's stage progress instead of console output; aggregate fetch-variant winners remain in local telemetry. Native operation-error diagnostics still use the existing logger; this change does not intercept all extension console output.
@@ -23,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Compatibility
 
-- **Audited and verified through `Pi` 1.0.0** (0.87.1, 0.99.0-0.99.2, and 1.0.0 reviewed; no code changes required). The model-registry facade, the `fetch`/`onPayload` request hooks, the settings trust APIs, and the event surface are intact; pi-ai 1.0.0 formalises the 0.86 `TranscriptContext` contract in its types, which the dual-path dispatch already handles. Full unit suite and the live E2E pipeline pass on `Pi` 1.0.0. The minimum supported version stays `Pi` 0.81.1.
+- **Audited and verified through `Pi` 1.0.0** (0.87.1, 0.99.0-0.99.2, and 1.0.0 reviewed; no code changes required). The model-registry facade, the `fetch`/`onPayload` request hooks, the settings trust APIs, and the event surface are intact; pi-ai 1.0.0 formalises the 0.86 `TranscriptContext` contract in its types, which the dual-path dispatch already handles. Full unit suite and the live E2E pipeline pass on `Pi` 1.0.0. The minimum supported version stays `Pi` 0.81.1, with real load checks of both dispatch paths on 0.81.1 (legacy provider) and 0.86.0 (registry facade) on 2026-10-04.
 
 ## [0.14.0] - 2026-09-07
 
