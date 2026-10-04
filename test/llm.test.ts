@@ -85,12 +85,57 @@ function contextFor(auth: unknown, overrides: RegistryOverrides = {}): Extension
 
 const CFG = { provider: "openrouter", model: "perplexity/sonar" } as const;
 
+describe("native retry notice delivery", () => {
+  const originalLegacy = __harness.streamSimple;
+  const originalFacade = __harness.registryStreamSimple;
+  afterEach(() => {
+    __harness.streamSimple = originalLegacy;
+    __harness.registryStreamSimple = originalFacade;
+  });
+
+  for (const withFacade of [false, true]) {
+    for (const withNotice of [false, true]) {
+      it(`${withFacade ? "facade" : "legacy"} retries stay console-free ${withNotice ? "with" : "without"} a notice callback`, async (t) => {
+        let attempts = 0;
+        const attempt = async () => {
+          attempts++;
+          return attempts === 1
+            ? { ...successfulResponse(), stopReason: "error", errorMessage: "429 rate limited" } as AssistantMessage
+            : successfulResponse();
+        };
+        __harness.streamSimple = attempt as typeof __harness.streamSimple;
+        __harness.registryStreamSimple = attempt as typeof __harness.registryStreamSimple;
+        const consoleCalls: unknown[][] = [];
+        for (const method of ["error", "warn", "log", "info"] as const) {
+          t.mock.method(console, method, (...args: unknown[]) => { consoleCalls.push(args); });
+        }
+        const notices: string[] = [];
+        const text = await callLlm(
+          contextFor({ ok: true, apiKey: "synthetic" }, { withFacade }),
+          CFG,
+          "system",
+          "user",
+          {
+            retry: { attempts: 2, baseDelayMs: 0, maxDelayMs: 0 },
+            ...(withNotice ? { onRetryNotice: (message: string) => { notices.push(message); } } : {}),
+          },
+        );
+        assert.equal(text, "ok");
+        assert.equal(attempts, 2);
+        assert.equal(notices.length, withNotice ? 1 : 0);
+        if (withNotice) assert.match(notices[0], /openrouter\/perplexity\/sonar: .*attempt 1, retrying in 0ms/);
+        assert.deepEqual(consoleCalls, []);
+      });
+    }
+  }
+});
+
 describe("console-write source audit (Pi TUI safety)", () => {
   it("pipeline hot paths contain no direct console calls", async () => {
     // Raw console writes from extensions bypass the Pi TUI layout and appear
-    // as stray lines in the window (reported against Pi 1.0, fixed in native
-    // 0.14.1 and ported here). Diagnostics flow through meta.json telemetry,
-    // injected callbacks or the progress channel instead.
+    // as stray lines in the window (reported against Pi 1.0). This audit
+    // covers direct calls in the listed modules, not transitive logger
+    // writes; the behavioural tests above cover native retry delivery.
     const { readFileSync } = await import("node:fs");
     const { join, dirname } = await import("node:path");
     const { fileURLToPath } = await import("node:url");

@@ -38,7 +38,7 @@ Reports: `.tmp/agents/2026-10-04-p5-review/reports/{qwen,deepseek}.md` (gitignor
 ### Recorded, Not Fixed Here
 
 - **Codex `interface` block casing and compat-layout support** (qwen F9 residual): `websiteURL` matches the published manifest example, but whether the compatibility-layout parser honours a top-level `interface` block is unknown; install and discovery work either way. Settle before any public-directory submission (out of scope; no submission is planned).
-- **Codemode exposure of plugin tools** on either host: not exercised; recorded in `PHASE-5.md` limitations.
+- **Codemode evidence:** the one-time Codex observation covered catalogue discovery and a call with a placeholder provider key, not completed research. Equivalent Claude Code codemode verification was not performed; see `PHASE-5.md` limitations.
 - **Live research through either host plugin** remains Phase 6 acceptance-matrix scope ("Live Behaviour"), as does the post-publication registry-pin re-run.
 
 ## The Credential Incident

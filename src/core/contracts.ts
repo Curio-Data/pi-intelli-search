@@ -122,8 +122,8 @@ export interface ModelRequest {
   /**
    * Retry notifications. The message is suitable for a progress update or
    * diagnostic log. Hosts with a TUI must route it to a UI channel, never
-   * the console: raw stderr writes bypass the `Pi` TUI layout (fixed in
-   * native 0.14.1). When omitted the adapter's logger fallback applies.
+   * the console: raw stderr writes bypass the Pi TUI layout.
+   * When omitted the adapter's logger fallback applies.
    */
   onRetryNotice?: (message: string) => void;
 }

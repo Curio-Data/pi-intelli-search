@@ -42,8 +42,8 @@ it("retries error-bearing responses once per policy, honouring text and header h
 
 it("routes retry notices to onRetryNotice when provided, otherwise the logger", async () => {
   // Native tools wire onRetryNotice into stage progress so nothing touches
-  // the console (raw stderr bypasses the Pi TUI layout; fixed in native
-  // 0.14.1). Without the channel, the logger fallback serves stderr hosts
+  // the console (raw stderr bypasses the Pi TUI layout).
+  // Without the channel, the logger fallback serves stderr hosts
   // such as the MCP server.
   const notices: string[] = [];
   const logged: string[] = [];

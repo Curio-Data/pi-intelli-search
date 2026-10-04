@@ -38,9 +38,9 @@ export function createNativeModelClient(
         annotations,
         payloadPatch: request.payloadPatch,
         reasoning: request.reasoning,
-        // Always supply a notice channel natively: without one the shared
-        // policy falls back to the logger, whose native implementation writes
-        // to the console and would paint over the Pi TUI (fixed in 0.14.1).
+        // Always supply a native notice channel rather than depending on
+        // the shared policy's logger fallback. Native callLlm also uses a
+        // silent logger defensively.
         onRetryNotice: request.onRetryNotice ?? (() => {}),
         onUsage: (reported) => {
           usage = { ...reported, ...(reported.cost ? { cost: { ...reported.cost } } : {}) };

@@ -88,7 +88,7 @@ The Claude tool-name observation and Codex session handshake each spent one smal
 - Codex findings pin CLI `0.144.5`. The portable layout may become loadable in later releases; the compatibility layout remains supported per the official build guide. Claude Code's `${CLAUDE_PROJECT_DIR}` MCP `env` expansion is observed on `2.1.289` only.
 - The Codex TUI and the IDE extension (which does not support plugins at all) were not exercised; `codex exec` sessions drove the credentialed evidence.
 - The npx cold-start path (download time, registry availability) is untestable before publication and remains open evidence.
-- The codemode exposure of the plugin's tools (as opposed to direct tool calls) was not exercised on either host.
+- The one-time Codex observation exercised its codemode tool catalogue and a call with a placeholder provider key. It did not establish completed research. Equivalent Claude Code codemode verification was not performed.
 
 ## Continuation
 

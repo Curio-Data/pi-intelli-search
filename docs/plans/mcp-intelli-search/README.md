@@ -6,6 +6,10 @@ Extend `intelli-search` from one repository and one shared research engine. Pres
 
 The owner approved the architecture and specified the MCP package name on 2026-10-03. The planning branch is `plan/mcp-intelli-search`. Phase 0 records dependency evidence and deterministic native compatibility fixtures. Phase 1 introduces host-neutral contracts, a native model adapter and explicit cache paths. Phase 2 moves operations, shared helpers and model policy into the core, with workspace-local documentation staging and injected telemetry identity. Phase 3 adds the standalone runtime and independently installable package, with strict configuration, explicit workspace ownership and an OpenRouter transport. Phase 4 adds protocol serving over standard input/output (stdio) through the official split server package, with bounded queueing, progress, cancellation, shutdown and clean framing. Phase 5 adds the generated host plugin bundles, repository marketplaces and shared guidance. Publication remains unimplemented. Phase 6, Documentation, Integration and Release Readiness, is the next implementation step.
 
+## Current Checkpoint
+
+Read [Post-Phase 5 Checkpoint](POST-PHASE-5.md) before continuing. It records the TUI diagnostic fix at `e9af554`, the owner's explicit release hold, the unreleased native preparation already on `main`, the remaining console-diagnostic scope and the rule against further credential-copy tests. Phase 6 is next; this handoff does not authorise publication or Codex authentication repair.
+
 ## Reading Order
 
 1. Read root [`AGENTS.md`](../../../AGENTS.md), including compatibility, testing, documentation and release rules.
@@ -16,7 +20,7 @@ The owner approved the architecture and specified the MCP package name on 2026-1
 6. Read [Phase 3 Results](PHASE-3.md), [Phase 3 Peer Review](PHASE-3-REVIEW.md) and the [standalone configuration guide](../../../packages/mcp/README.md) for runtime entrypoints, provider evidence, strict validation and installation verification.
 7. Read [Phase 4 Results](PHASE-4.md) and [Phase 4 Peer Review](PHASE-4-REVIEW.md) for protocol serving, queueing, framing, host-interoperability findings, independent findings, follow-up verdicts and verification limits.
 8. Read [Phase 5 Results](PHASE-5.md) and [Phase 5 Peer Review](PHASE-5-REVIEW.md) for the generated plugin bundles, empirical host behavior, launcher design, evidence classes, the credential-rotation incident, independent findings, follow-up verdicts and verification limits.
-9. Read [Implementation Plan](IMPLEMENTATION.md) for the target layout, compatibility contract, dependency boundaries, phased work and acceptance matrix.
+9. Read [Post-Phase 5 Checkpoint](POST-PHASE-5.md) for the current branch state and release hold, then [Implementation Plan](IMPLEMENTATION.md) for the target layout, compatibility contract, build and dependency boundaries, phased work and acceptance matrix.
 10. Start at Phase 6. Check the current working tree and run the native fixture suite before editing; do not regenerate its expected files to hide a regression.
 
 The reviewed Phase 2 implementation is the historical `86b1e4e` checkpoint. Phase 3 continues from `0c26972` and is committed as `59a3fa4` on `plan/mcp-intelli-search`. Phase 4 continues from `1b09318` and Phase 5 from `67be4e4`; use the branch tip rather than resetting to a historical checkpoint.
@@ -32,7 +36,7 @@ The handoff is self-contained in tracked documentation. The optional `.search/` 
 - Start with local standard input/output (stdio) transport, explicit provider configuration and explicit workspace ownership.
 - Preserve existing research semantics, cache formats and local-only telemetry.
 - Treat plugin catalogs as distribution metadata, not separate implementations.
-- Require explicit approval before any release or staged npm publication. Plan approval is not publication approval.
+- Publication is on hold at the owner's request. The TUI fix is already on this branch (`e9af554`); do not create a separate native patch release or automatically cherry-pick `b0f49aa`. Require renewed explicit approval before any release or staged npm publication.
 - Do not merge `plan/mcp-intelli-search` to `main` before `@curio-data/mcp-intelli-search` is published: the committed plugin catalogs pin a registry version that must resolve at install time.
 
 ## Handover Verification
@@ -48,6 +52,8 @@ A fresh native `zai/glm-5.3` session subsequently verified the committed Phase 3
 A fresh native `zai/glm-5.3` session likewise verified the committed Phase 4 handoff at `a1c67e2`. It reconstructed Phase 5 as the next step and passed every documented entry check without credentials. [Phase 4 Cold-Start Handover](HANDOVER-PHASE-4.md) records its initial `PASS WITH NONBLOCKING NOTES`, the three documentation corrections (stale plan pointers, an orphaned review record, an unrecorded schema caveat) and the documentation-only follow-up `PASS`.
 
 A fresh native `zai/glm-5.3` session verified the Phase 5 handoff on the pre-commit working tree (base `67be4e4` plus the full Phase 5 change). It reconstructed Phase 6 as the next step, passed every documented entry check and independently verified the Phase 5 facts against the tree. [Phase 5 Cold-Start Handover](HANDOVER-PHASE-5.md) records its `PASS WITH NONBLOCKING NOTES` verdict and the two documentation corrections applied afterwards.
+
+A further fresh native `zai/glm-5.3` session verified the corrected post-Phase 5 handoff, including the TUI port and release hold. [Phase 6 Entry Verification](HANDOVER-PHASE-6-ENTRY.md) records its `PASS WITH NOTES` verdict, successful entry checks and the limits of that read-only pass. This is the current cold-start evidence; it does not claim Phase 6 is implemented.
 
 ## Fresh-Agent Entry Checks
 
@@ -71,7 +77,7 @@ Read the documents in the order above before editing. The entry checks are deter
 
 ## Next-Agent Brief
 
-> Continue at Phase 6 of `docs/plans/mcp-intelli-search/IMPLEMENTATION.md`. Read `PHASE-5.md` for the generated plugin bundles, empirical host findings, launcher design and the two evidence classes (pre-publication local-tarball versus post-publication registry). Update the root README with the three installation routes, extend CI to validate the generated manifests and install both tarballs, record the compatibility matrix with exact host versions, and wire release automation for `@curio-data/mcp-intelli-search` with explicit approval and its own trusted-publisher binding. Re-run the full paced live suite before any release, including `test/e2e/12_plugin_bundles.sh`. Preserve the native package and frozen fixtures, retain both independent installation gates, and keep the generator as the single source for plugin manifests and guidance. Publication requires explicit approval; the committed registry pin (`0.2.0-alpha.0`) only becomes installable at publication. Do not publish, modify real host credentials or silently switch inference providers.
+> Continue at Phase 6 of `docs/plans/mcp-intelli-search/IMPLEMENTATION.md`, starting with `POST-PHASE-5.md`. Publication is explicitly on hold; prepare documentation, CI and release wiring, but do not create a release or publish. Leave Codex authentication recovery to the operator and never copy OAuth credentials into disposable profiles. Read `PHASE-5.md` for the generated plugin bundles, empirical host findings, launcher design and the two evidence classes (pre-publication local-tarball versus post-publication registry). Update the root README with the three installation routes, extend CI to validate the generated manifests and install both tarballs, record the compatibility matrix with exact host versions, and wire release automation for `@curio-data/mcp-intelli-search` with explicit approval and its own trusted-publisher binding. Re-run the full paced live suite before any release, including `test/e2e/12_plugin_bundles.sh`. Preserve the native package and frozen fixtures, retain both independent installation gates, and keep the generator as the single source for plugin manifests and guidance. Publication requires explicit approval; the committed registry pin (`0.2.0-alpha.0`) only becomes installable at publication. Do not publish, modify real host credentials or silently switch inference providers.
 
 ## Planning Verification
 

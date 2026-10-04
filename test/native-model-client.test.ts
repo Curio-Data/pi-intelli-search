@@ -115,10 +115,9 @@ describe("native model client", () => {
   });
 
   it("always supplies a retry-notice channel so retries never reach the console", async () => {
-    // The shared policy falls back to the adapter logger when no notice
-    // channel is present, and the native logger writes to the console, which
-    // paints over the Pi TUI (fixed in 0.14.1). The adapter must therefore
-    // forward the caller's callback or substitute a no-op.
+    // Forward a supplied progress channel; otherwise use a no-op so native
+    // retries never depend on an adapter logger. Native callLlm also uses a
+    // silent policy logger defensively.
     const ctx = {} as ExtensionContext;
     const seen: Array<unknown> = [];
     const client = createNativeModelClient(ctx, async (_c, _m, _s, _u, options) => {

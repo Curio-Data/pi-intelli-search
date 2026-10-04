@@ -148,7 +148,7 @@ export async function callLlm(
     /**
      * Retry notifications. Wired by the caller into a UI-safe channel
      * (stage progress); never console-logged, because raw stderr bypasses
-     * the `Pi` TUI layout (fixed in 0.14.1). Dropped when omitted.
+     * the Pi TUI layout. Dropped when omitted.
      */
     onRetryNotice?: (message: string) => void;
     /** Successful provider usage, retained by the host-neutral adapter. */
@@ -276,8 +276,8 @@ export async function callLlm(
     // The native logger is deliberately silent: the model client always
     // supplies onRetryNotice, and any residual logger fallback must not
     // write to the console because raw stderr bypasses the Pi TUI layout
-    // (fixed in 0.14.1). Genuine configuration errors surface through
-    // ctx.ui notifications at the tool layer instead.
+    // instead of going through the renderer. Configuration errors are
+    // thrown to the tool layer; session-start notices use ctx.ui.notify.
     { error: () => {}, warn: () => {} },
   );
 
