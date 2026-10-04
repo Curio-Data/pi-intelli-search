@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-04
+
+### Fixed
+
+- **Extension diagnostics no longer paint over the `Pi` TUI.** The per-page fetch-comparison line (`[pi-intelli-search fetch] <url>: defuddle=<n> markdown=<n> → picked <variant>`) and the rate-limit retry notice were written with `console.error`, which in interactive mode lands on the terminal outside the TUI layout and appears as stray log lines between the prompt field and the footer on `Pi` 1.0. The fetch comparison is already recorded in the local telemetry sidecar (`meta.json` `fetch.winners`), so the line is removed. Retry notices now flow through an injected callback, which `intelli_research` wires into its stage progress updates (for example `Stage 1/5: openrouter/perplexity/sonar: 429 on attempt 1, retrying in 1200ms`); one-shot tools drop them silently. No extension console output is produced during a normal research run.
+
 ### Changed
 
 - **Removed the Sonar retirement advisory.** OpenRouter continues to serve `perplexity/sonar` past Perplexity's direct-API sunset date, so the README advisory, the sunset framing in the alternative-search-configuration docs, and stale references in code comments and tests are gone. The default search model is unchanged.
@@ -381,6 +387,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[0.14.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.14.1
 [0.14.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.14.0
 [0.13.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.13.0
 [0.12.6]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.6

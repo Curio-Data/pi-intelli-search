@@ -85,6 +85,113 @@ function contextFor(auth: unknown, overrides: RegistryOverrides = {}): Extension
 
 const CFG = { provider: "openrouter", model: "perplexity/sonar" } as const;
 
+describe("callLlm retry notices (no console writes)", () => {
+  const original = __harness.streamSimple;
+
+  afterEach(() => {
+    __harness.streamSimple = original;
+  });
+
+  it("routes retry notices to onRetryNotice and never to the console", async () => {
+    // Raw console writes from extensions bypass the Pi TUI layout and appear
+    // as stray lines in the window (reported against Pi 1.0), so retry
+    // activity must reach the caller through the injected channel only.
+    let calls = 0;
+    __harness.streamSimple = (async () => {
+      calls++;
+      if (calls === 1) {
+        return {
+          role: "assistant",
+          content: [],
+          stopReason: "error",
+          errorMessage: "429 rate limited",
+          timestamp: Date.now(),
+        } as AssistantMessage;
+      }
+      return successfulResponse();
+    }) as typeof __harness.streamSimple;
+
+    const notices: string[] = [];
+    const consoleCalls: string[] = [];
+    const realError = console.error;
+    const realWarn = console.warn;
+    const realLog = console.log;
+    console.error = (...args: unknown[]) => consoleCalls.push(String(args[0]));
+    console.warn = (...args: unknown[]) => consoleCalls.push(String(args[0]));
+    console.log = (...args: unknown[]) => consoleCalls.push(String(args[0]));
+    try {
+      const result = await callLlm(contextFor({ ok: true, apiKey: "secret" }), CFG, "system", "user", {
+        retry: { attempts: 2, baseDelayMs: 1, maxDelayMs: 5 },
+        timeoutMs: 5_000,
+        onRetryNotice: (message) => notices.push(message),
+      });
+      assert.strictEqual(result, "ok");
+    } finally {
+      console.error = realError;
+      console.warn = realWarn;
+      console.log = realLog;
+    }
+
+    assert.strictEqual(calls, 2);
+    assert.strictEqual(notices.length, 1);
+    assert.match(notices[0], /openrouter\/perplexity\/sonar/);
+    assert.match(notices[0], /retrying in \d+ms/);
+    assert.deepStrictEqual(consoleCalls, []);
+  });
+
+  it("drops retry notices silently when no onRetryNotice is provided", async () => {
+    let calls = 0;
+    __harness.streamSimple = (async () => {
+      calls++;
+      if (calls === 1) {
+        return {
+          role: "assistant",
+          content: [],
+          stopReason: "error",
+          errorMessage: "429 rate limited",
+          timestamp: Date.now(),
+        } as AssistantMessage;
+      }
+      return successfulResponse();
+    }) as typeof __harness.streamSimple;
+
+    const consoleCalls: string[] = [];
+    const realError = console.error;
+    console.error = (...args: unknown[]) => consoleCalls.push(String(args[0]));
+    try {
+      const result = await callLlm(contextFor({ ok: true, apiKey: "secret" }), CFG, "system", "user", {
+        retry: { attempts: 2, baseDelayMs: 1, maxDelayMs: 5 },
+        timeoutMs: 5_000,
+      });
+      assert.strictEqual(result, "ok");
+    } finally {
+      console.error = realError;
+    }
+    assert.strictEqual(calls, 2);
+    assert.deepStrictEqual(consoleCalls, []);
+  });
+});
+
+describe("console-write source audit", () => {
+  it("src/llm.ts and src/fetch.ts contain no direct console calls", async () => {
+    // Regression pin for the Pi 1.0 TUI pollution report: pipeline hot paths
+    // must not write to the console. Diagnostics flow through telemetry
+    // (meta.json) or injected callbacks instead.
+    const { readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+    for (const rel of ["src/llm.ts", "src/fetch.ts"]) {
+      const source = readFileSync(join(root, rel), "utf8");
+      // Strip comments: fetch.ts documents Defuddle's own console calls in
+      // its muzzle comments, which are not calls made by this package.
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/[^\n]*/g, "$1");
+      const hits = code.match(/console\.(log|warn|error|info)\(/g) ?? [];
+      assert.deepStrictEqual(hits, [], `${rel} must not call console.* directly`);
+    }
+  });
+});
+
 describe("callLlm provider dispatch (pi-ai root API)", () => {
   const original = __harness.streamSimple;
   const originalFacade = __harness.registryStreamSimple;

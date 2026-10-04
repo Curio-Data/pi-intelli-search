@@ -147,6 +147,13 @@ export async function callLlm(
     payloadPatch?: (payload: Record<string, unknown>) => Record<string, unknown>;
     /** Per-call reasoning override. Default "low" when omitted. */
     reasoning?: ThinkingLevel;
+    /**
+     * Retry notifications. The notice text is suitable for a progress
+     * update; when omitted, retry activity is silent (the tool's working
+     * indicator still animates). Never console-log this: raw stderr
+     * bypasses the Pi TUI layout.
+     */
+    onRetryNotice?: (message: string) => void;
   },
 ): Promise<string> {
   // 1. Resolve model from registry
@@ -323,11 +330,13 @@ export async function callLlm(
       signal: userSignal,
       onRetry: ({ attempt, delayMs, reason }) => {
         // Surface retry activity so a slow run under rate limiting is visible
-        // (otherwise backoff looks like a hang). Matches the console.error
-        // pattern used elsewhere for non-fatal pipeline diagnostics.
+        // (otherwise backoff looks like a hang). Never write to the console:
+        // raw stderr bypasses the Pi TUI layout (reported against Pi 1.0).
+        // Callers with a progress channel pass onRetryNotice; without one the
+        // notice is dropped rather than polluting the terminal.
         const why = lastAttemptTimedOut ? "timeout" : reason;
-        console.error(
-          `[pi-intelli-search] ${config.provider}/${config.model}: ${why} on attempt ${attempt}, ` +
+        options?.onRetryNotice?.(
+          `${config.provider}/${config.model}: ${why} on attempt ${attempt}, ` +
             `retrying in ${Math.round(delayMs)}ms`,
         );
       },

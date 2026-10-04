@@ -410,6 +410,7 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
         annotations: annotationSink,
         payloadPatch,
         reasoning: searchReasoning,
+        onRetryNotice: (msg) => p.onUpdate?.(progressUpdate("search", msg)),
       },
     );
     urls = mergeCitations(extractSourceUrls(searchResult), annotationSink).slice(0, p.maxUrls);
@@ -614,6 +615,7 @@ async function runCollateStage(
       signal: p.signal,
       retry: p.retry,
       timeoutMs: p.settings.llmTimeoutMs,
+      onRetryNotice: (msg) => p.onUpdate?.(progressUpdate("collate", msg)),
     },
   );
 
@@ -749,6 +751,7 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
           signal: p.signal,
           retry: p.retry,
           timeoutMs: p.settings.llmTimeoutMs,
+          onRetryNotice: (msg) => p.onUpdate?.(progressUpdate("cache", msg)),
         },
       );
       const matches = parseJudgeResponse(judgeResponse, index, currentSlug);
@@ -887,6 +890,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
         signal: p.signal,
         retry: p.retry,
         timeoutMs: p.settings.llmTimeoutMs,
+        onRetryNotice: (msg) => p.onUpdate?.(progressUpdate("extract", msg)),
       },
     );
 

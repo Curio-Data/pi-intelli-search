@@ -98,12 +98,9 @@ function compareAndPick(a: FetchedPage, b: FetchedPage): FetchedPage {
   const aScore = scoreContent(a.content);
   const bScore = scoreContent(b.content);
 
-  // Log the comparison for debugging
-  if (aScore !== bScore) {
-    console.error(
-      `[pi-intelli-search fetch] ${a.url}: defuddle=${aScore} markdown=${bScore} → picked ${bScore > aScore ? "markdown" : "defuddle"}`,
-    );
-  }
+  // No console output here: raw stderr writes bypass the Pi TUI layout and
+  // appear as stray lines in the window (reported against Pi 1.0). The
+  // per-page winner is already recorded in meta.json telemetry (fetch.winners).
 
   if (bScore > aScore) {
     return { ...b, status: "success", source: "markdown" };
