@@ -398,7 +398,7 @@ Two loader rules to keep in mind:
 | You want | Recipe |
 |---|---|
 | Works immediately, nothing to write | [Zero Configuration](#recipe-1-zero-configuration) |
-| Off Sonar before 2026-09-27, cheapest | [Web Search Tool + Nano](#recipe-2-web-search-tool--nano) |
+| Off Sonar, cheapest | [Web Search Tool + Nano](#recipe-2-web-search-tool--nano) |
 | Off Sonar, strongest search quality | [Sonar Pro Search](#recipe-3-sonar-pro-search) |
 | The pre-0.13 page count and spend | [Pin Eight Pages](#recipe-4-pin-eight-pages) |
 | Cheaper extraction and collation | [Economy Extract and Collate](#recipe-5-economy-extract-and-collate) |
