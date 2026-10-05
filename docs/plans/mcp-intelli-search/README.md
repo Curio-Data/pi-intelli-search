@@ -8,7 +8,9 @@ The owner approved the architecture and specified the MCP package name on 2026-1
 
 ## Current Checkpoint
 
-Read [Phase 6 Results](PHASE-6.md) and [Phase 6 Peer Review](PHASE-6-REVIEW.md) before continuing. They record the documentation, CI, compatibility and release-wiring work at `ff020fb` and `fe74ca0`, the verification including real load checks on `Pi` 0.81.1 and 0.86.0, the independent two-reviewer pass and its corrections at `96b463a` (including the prerelease dist-tag fix), the open gates and the ordered publication-preparation steps. The earlier [Post-Phase 5 Checkpoint](POST-PHASE-5.md) records the TUI diagnostic fix at `e9af554`, the owner's explicit release hold, the remaining console-diagnostic scope and the rule against further credential-copy tests; its release hold and credential rules remain in force. This handoff does not authorise publication.
+Start with [Post-Phase 6 Checkpoint](POST-PHASE-6.md). It records the Claude Code plugin key option, the credentialed host scenarios and their safe authentication procedure, an independent two-reviewer pass with its fixes at `8d4d805`, and a fresh-agent pass that followed the README as a new user. That pass left open findings, led by Claude Code dropping the text summary from tool results; its ordered fix list is the next work.
+
+For the state before it, read [Phase 6 Results](PHASE-6.md) and [Phase 6 Peer Review](PHASE-6-REVIEW.md). They record the documentation, CI, compatibility and release-wiring work at `ff020fb` and `fe74ca0`, the verification including real load checks on `Pi` 0.81.1 and 0.86.0, the independent two-reviewer pass and its corrections at `96b463a` (including the prerelease dist-tag fix), the open gates and the ordered publication-preparation steps. The earlier [Post-Phase 5 Checkpoint](POST-PHASE-5.md) records the TUI diagnostic fix at `e9af554`, the owner's explicit release hold, the remaining console-diagnostic scope and the rule against further credential-copy tests; its release hold and credential rules remain in force. This handoff does not authorise publication.
 
 ## Reading Order
 
@@ -21,7 +23,8 @@ Read [Phase 6 Results](PHASE-6.md) and [Phase 6 Peer Review](PHASE-6-REVIEW.md) 
 7. Read [Phase 4 Results](PHASE-4.md) and [Phase 4 Peer Review](PHASE-4-REVIEW.md) for protocol serving, queueing, framing, host-interoperability findings, independent findings, follow-up verdicts and verification limits.
 8. Read [Phase 5 Results](PHASE-5.md) and [Phase 5 Peer Review](PHASE-5-REVIEW.md) for the generated plugin bundles, empirical host behavior, launcher design, evidence classes, the credential-rotation incident, independent findings, follow-up verdicts and verification limits.
 9. Read [Post-Phase 5 Checkpoint](POST-PHASE-5.md) for the release hold and credential rules, then [Phase 6 Results](PHASE-6.md) and [Phase 6 Peer Review](PHASE-6-REVIEW.md) for the documentation, CI, compatibility and release-wiring work, the reviewed corrections, the verification and the open publication gates, then [Implementation Plan](IMPLEMENTATION.md) for the target layout, compatibility contract, build and dependency boundaries, phased work and acceptance matrix.
-10. The next work is publication preparation, not a new implementation phase. Check the current working tree and run the native fixture suite before editing; do not regenerate its expected files to hide a regression.
+10. Read [Post-Phase 6 Checkpoint](POST-PHASE-6.md) for the host plugin verification, the credentialed scenarios and the open findings.
+11. The next work is the Post-Phase 6 fix list, then publication preparation, not a new implementation phase. Check the current working tree and run the native fixture suite before editing; do not regenerate its expected files to hide a regression.
 
 The reviewed Phase 2 implementation is the historical `86b1e4e` checkpoint. Phase 3 continues from `0c26972` and is committed as `59a3fa4` on `plan/mcp-intelli-search`. Phase 4 continues from `1b09318` and Phase 5 from `67be4e4`; use the branch tip rather than resetting to a historical checkpoint.
 
