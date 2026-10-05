@@ -23,8 +23,7 @@
 // relative paths made absolute so they resolve on npmjs.com.
 //
 // Modes:
-//   (default)          Write the committed derived READMEs: packages/mcp and
-//                      the native preview in docs/readmes/.
+//   (default)          Write the committed derived READMEs (see PACKAGES).
 //   --check            Validate the source and fail on committed drift.
 //   --print PKG        Print one derived README (pi or mcp) to stdout.
 //   --publish-native   prepublishOnly hook: back up the root README to
@@ -49,10 +48,15 @@ const GENERATED_HEADER =
   "<!-- Generated from the repository README.md by scripts/generate-package-readmes.mjs. " +
   "Edit the root README.md, then run npm run generate:readmes. -->";
 
-// Package key -> committed output path. The native package ships the root
-// README.md path itself, so its committed copy is a reviewable preview that
-// --publish-native reproduces at publish time.
-export const PACKAGES = { pi: "docs/readmes/pi-intelli-search.md", mcp: "packages/mcp/README.md" };
+// Package key -> committed output paths. Every path is a real file: npm drops
+// a symlinked README from the tarball, and GitHub shows a symlink as its
+// target path instead of rendering it. The root <pkg>.README.md copies are
+// previews; the native package ships the root README.md path itself, so
+// --publish-native writes the same derivation there at publish time.
+export const PACKAGES = {
+  pi: ["pi.README.md"],
+  mcp: ["mcp.README.md", "packages/mcp/README.md"],
+};
 
 const OPEN = /^<!-- packages:([a-z,]+) -->$/;
 const OPEN_HIDDEN = /^<!-- packages:([a-z,]+) hidden$/;
@@ -199,7 +203,7 @@ export function validateRoot(markdown, root = REPO_ROOT) {
     if (isExternal(url)) return url;
     if (url.startsWith("#")) {
       if (!anchors.has(url.slice(1))) problems.push(`missing anchor ${url}`);
-    } else if (!existsSync(join(root, url.split("#")[0]))) {
+    } else if (!existsSync(join(root, url.split("#")[0])) && !Object.values(PACKAGES).flat().includes(url.split("#")[0])) {
       problems.push(`missing file ${url}`);
     }
     return url;
@@ -261,9 +265,9 @@ export function generateAll(root = REPO_ROOT) {
 // Returns the committed outputs that differ from a fresh derivation.
 export function checkAgainstRepo(root = REPO_ROOT) {
   const generated = generateAll(root);
-  return Object.entries(PACKAGES)
-    .filter(([pkg, out]) => (!existsSync(join(root, out)) || readFileSync(join(root, out), "utf8") !== generated[pkg]))
-    .map(([, out]) => out);
+  return Object.entries(PACKAGES).flatMap(([pkg, outs]) =>
+    outs.filter((out) => !existsSync(join(root, out)) || readFileSync(join(root, out), "utf8") !== generated[pkg]),
+  );
 }
 
 export function publishNative(root = REPO_ROOT) {
@@ -300,10 +304,11 @@ function main(argv) {
   if (rest.length || (mode !== "--print" && arg !== undefined)) throw new Error(usage);
   if (mode === undefined) {
     const generated = generateAll();
-    for (const [pkg, out] of Object.entries(PACKAGES)) {
-      mkdirSync(dirname(join(REPO_ROOT, out)), { recursive: true });
-      writeFileSync(join(REPO_ROOT, out), generated[pkg]);
-      console.log(`Generated ${out}`);
+    for (const [pkg, outs] of Object.entries(PACKAGES)) {
+      for (const out of outs) {
+        writeFileSync(join(REPO_ROOT, out), generated[pkg]);
+        console.log(`Generated ${out}`);
+      }
     }
   } else if (mode === "--check") {
     const drifted = checkAgainstRepo();

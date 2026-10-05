@@ -165,7 +165,7 @@ The "Customise (Optional)" and "Model Configuration" sections in README.md use t
 
 ### 12. One Hand-Edited README
 
-The root `README.md` is the only README to edit by hand. `scripts/generate-package-readmes.mjs` derives each package's README from it: `packages/mcp/README.md` and the native preview `docs/readmes/pi-intelli-search.md` are committed and drift-checked in CI (`npm run check:readmes`), which also fails when a derived link does not resolve. The native package ships the root path itself, so its `prepublishOnly` hook writes the same derivation over the root README at publish time. Never edit `packages/mcp/README.md` directly. Tag package-specific sections with `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, repository-only sections with `<!-- packages:none -->`, and content only a package shows (its title and badges) with a hidden `<!-- packages:mcp hidden` ... `-->` block. Untagged content goes to both packages. The root `README.md` section `Development` documents the syntax. After any README edit run `npm run generate:toc` and `npm run generate:readmes`.
+The root `README.md` is the only README to edit by hand. `scripts/generate-package-readmes.mjs` derives each package's README from it: `packages/mcp/README.md` and the root previews `pi.README.md` and `mcp.README.md` are real generated files (never symlinks: npm drops a symlinked README and GitHub does not render one), committed and drift-checked in CI (`npm run check:readmes`), which also fails when a derived link does not resolve. The native package ships the root path itself, so its `prepublishOnly` hook writes the same derivation over the root README at publish time. Never edit `packages/mcp/README.md` or the root `*.README.md` previews directly. Tag package-specific sections with `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, repository-only sections with `<!-- packages:none -->`, and content only a package shows (its title and badges) with a hidden `<!-- packages:mcp hidden` ... `-->` block. Untagged content goes to both packages. The root `README.md` section `Development` documents the syntax. After any README edit run `npm run generate:toc` and `npm run generate:readmes`.
 
 ---
 
@@ -204,6 +204,8 @@ All `Pi` SDK packages are **peer dependencies**. They are provided by the hostin
 ## Source Structure
 
 ```
+pi.README.md                  # Generated native package README preview; never edit by hand
+mcp.README.md                 # Generated MCP package README preview; never edit by hand
 src/
 ├── index.ts                  # Extension entry: registers tools, events, model setup
 ├── core/                     # Host-neutral execution and shared helpers
@@ -273,7 +275,6 @@ docs/
 ├── ARCHITECTURE.md           # Detailed pipeline and design decisions
 ├── BENCHMARKS.md             # Extract/collate model benchmark: methodology, harness, recorded results
 ├── COMPONENTS.md             # Third-party dependency attribution
-├── readmes/pi-intelli-search.md # Generated native package README preview; never edit by hand
 └── plans/mcp-intelli-search/ # Cross-host research, checkpoints and implementation handoff
 
 scripts/
@@ -413,7 +414,7 @@ npm run generate:toc     # Regenerate README contents from headings
 npm run check:toc        # Fail if README contents drift from the generator
 npm run generate:plugins # Regenerate plugin bundles and marketplaces after a version change
 npm run check:plugins    # Fail if committed plugin files drift from the generator
-npm run generate:readmes # Regenerate packages/mcp/README.md and docs/readmes/ from the root README
+npm run generate:readmes # Regenerate packages/mcp/README.md and the root *.README.md previews
 npm run check:readmes    # Fail if package READMEs drift from the root README
 npm run restore:readme   # Restore the root README after a local publish or publish dry run
 npm run test:smoke       # Smoke test (structural validation)
@@ -671,7 +672,7 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 1. **Verify CI is green** on `main` and confirm the owner has explicitly approved this release. Approval of one package is not approval of the other.
 2. **First release only: publish manually, do not tag.** npm cannot bind a trusted publisher to a package that does not exist, so the first `mcp-v*` version bypasses the CI staging flow: follow the bootstrap sequence under `npm Trusted Publisher` (manual `npm publish --access public --tag alpha`, then bind the trust). From the second release onward every step of this checklist applies, including the GitHub Release tag.
 3. **Bump `version` in `packages/mcp/package.json`** following [SemVer](https://semver.org/), then run `npm install --package-lock-only` so the lockfile workspace version matches.
-4. **Remove the not-published notices** from the root `README.md` (the `Publication Status` paragraph under `MCP Server`, the pending-publication sentence under `Two Packages, One Engine` and the pre-publication launchers) on the first public release only (the first dev-marked alpha keeps them), then run `npm run generate:readmes`. Never edit `packages/mcp/README.md` directly.
+4. **Remove the not-published notices** from the root `README.md` (the `Publication Status` paragraph under `MCP Server`, the pending-publication sentence under `Two Packages, One Engine` and the pre-publication launchers) on the first public release only (the first dev-marked alpha keeps them), then run `npm run generate:readmes`. Never edit `packages/mcp/README.md` or the root `*.README.md` previews directly.
 5. **Regenerate the plugin bundles** so the catalogs pin the new version: `npm run generate:plugins`, then confirm `npm run check:plugins` passes. Commit the regenerated catalogs with the version bump; they are what users install from.
 6. **Run the full paced live suite** `./test/run-e2e-all.sh`, including `11_mcp_stdio.sh`, `12_plugin_bundles.sh`, `13_claude_code_plugin.sh` and `14_codex_plugin.sh`, before tagging.
 7. **Update `CHANGELOG.md`** with a `## [mcp-X.Y.Z] - YYYY-MM-DD` section and a matching `[mcp-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-vX.Y.Z` reference link. Core changes are not repeated: one pointer line to the native `[pi-X.Y.Z]` section covers them (see `Changelog Structure`). Verify both edits with the grep checks from step 4 of the native checklist (adjusted for the `mcp-` prefix).
