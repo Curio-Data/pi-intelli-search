@@ -38,7 +38,14 @@ export function scanHeadings(markdown) {
   const slug = createSlugger();
   let fenceLength = 0;
   let inToc = false;
+  let inComment = false;
   for (const line of markdown.split(/\r?\n/)) {
+    // Multi-line HTML comments (package-only README blocks) render nothing,
+    // so their headings neither reserve anchors nor enter the TOC.
+    if (inComment) {
+      if (line.includes("-->")) inComment = false;
+      continue;
+    }
     if (fenceLength) {
       const close = line.match(/^ {0,3}(`{3,})[ \t]*$/);
       if (close && close[1].length >= fenceLength) fenceLength = 0;
@@ -53,6 +60,10 @@ export function scanHeadings(markdown) {
       continue;
     }
     if (inToc) continue;
+    if (/^ {0,3}<!--/.test(line) && !line.includes("-->")) {
+      inComment = true;
+      continue;
+    }
     const fence = line.match(/^ {0,3}(`{3,})([^`]*)$/);
     if (fence) {
       fenceLength = fence[1].length;

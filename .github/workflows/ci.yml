@@ -53,6 +53,9 @@ jobs:
       - name: Verify generated plugin bundles match the generator
         run: npm run check:plugins
 
+      - name: Verify package READMEs match the root README
+        run: npm run check:readmes
+
       - name: Install standalone tarball and exercise native fetch assets
         run: npm run test:mcp:install
 

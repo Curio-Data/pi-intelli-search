@@ -34,12 +34,16 @@
     "check:toc": "node scripts/generate-toc.mjs --check",
     "generate:plugins": "node scripts/generate-plugin-bundles.mjs",
     "check:plugins": "node scripts/generate-plugin-bundles.mjs --check",
+    "generate:readmes": "node scripts/generate-package-readmes.mjs",
+    "check:readmes": "node scripts/generate-package-readmes.mjs --check",
+    "restore:readme": "node scripts/generate-package-readmes.mjs --restore-native",
     "build:all": "npm run build && npm run typecheck:mcp && npm run build:mcp",
     "test:all": "npm test && npm run test:mcp",
     "dev": "tsc --watch",
     "test": "node --import tsx --test test/*.test.ts",
     "test:smoke": "node --import tsx test/smoke.ts",
-    "chart": "node scripts/plot-downloads.mts"
+    "chart": "node scripts/plot-downloads.mts",
+    "prepublishOnly": "node scripts/generate-package-readmes.mjs --publish-native"
   },
   "dependencies": {
     "defuddle": "^0.16.0",

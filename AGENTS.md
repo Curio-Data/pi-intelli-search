@@ -163,6 +163,10 @@ Scalar key-value pairs (strings, numbers, booleans) can stay on one line. Object
 
 The "Customise (Optional)" and "Model Configuration" sections in README.md use this format. All documentation examples should follow it.
 
+### 12. One Hand-Edited README
+
+The root `README.md` is the only README to edit by hand. `scripts/generate-package-readmes.mjs` derives each package's README from it: `packages/mcp/README.md` is committed and drift-checked in CI (`npm run check:readmes`); the native package's README is derived at publish time by its `prepublishOnly` hook, because that package ships the root path itself. Never edit `packages/mcp/README.md` directly. Tag package-specific sections with `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, repository-only sections with `<!-- packages:none -->`, and content only a package shows (its title and badges) with a hidden `<!-- packages:mcp hidden` ... `-->` block. Untagged content goes to both packages. The root `README.md` section `Development` documents the syntax. After any README edit run `npm run generate:toc` and `npm run generate:readmes`.
+
 ---
 
 ## Git Commit Messages
@@ -248,7 +252,7 @@ packages/
     ├── src/                 # CLI, strict config, workspace, provider, runtime and protocol adapters
     ├── test/                # Config, CLI, console, provider, operation and protocol coverage
     ├── tsconfig.json        # Standalone source and test type check
-    └── README.md            # Exact configuration and runtime interface
+    └── README.md            # Generated from the root README; never edit by hand
 
 guidance/
 ├── research-guide.md        # Shared host-neutral guidance source (token template)
@@ -277,6 +281,7 @@ scripts/
 ├── plot-downloads.mts       # Download chart generation (npm run chart)
 ├── README.md                # Script usage guide
 ├── build-mcp.mjs            # Audited standalone bundles and legal-file copies
+├── generate-package-readmes.mjs # Package READMEs from the root README; --check is the drift gate
 ├── generate-toc.mjs         # README contents generator; --check is the drift gate
 ├── generate-plugin-bundles.mjs # Plugin/marketplace generator; --check is the drift gate
 ├── verify-mcp-install.mjs    # Production-only install and native-fetch verification
@@ -306,6 +311,7 @@ test/
 ├── tsconfig.native-contract.json # Type check for contract tests and generator
 ├── prompts.test.ts
 ├── plugin-bundles.test.ts    # Generated plugin/marketplace shape, pins and drift gate
+├── package-readmes.test.ts   # README block selection, link rewriting, drift gate and publish swap
 ├── providers.test.ts
 ├── research.test.ts
 ├── research-telemetry.test.ts
@@ -406,6 +412,9 @@ npm run generate:toc     # Regenerate README contents from headings
 npm run check:toc        # Fail if README contents drift from the generator
 npm run generate:plugins # Regenerate plugin bundles and marketplaces after a version change
 npm run check:plugins    # Fail if committed plugin files drift from the generator
+npm run generate:readmes # Regenerate packages/mcp/README.md from the root README
+npm run check:readmes    # Fail if package READMEs drift from the root README
+npm run restore:readme   # Restore the root README after a local publish or publish dry run
 npm run test:smoke       # Smoke test (structural validation)
 ./test/e2e/01_main.sh        # End-to-end test (live LLM calls, isolated env)
 scripts/benchmark-models.sh <model-id>...   # A/B benchmark extract/collate models (live quota, see docs/BENCHMARKS.md)
@@ -648,7 +657,7 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
    ```
 
    Both must match. If either is missing, fix before continuing.
-5. **Commit and push** the version bump and CHANGELOG together. Suggested commit subject: `Release pi-vX.Y.Z`.
+5. **Commit and push** the version bump and CHANGELOG together. Suggested commit subject: `Release pi-vX.Y.Z`. The native package's README is derived from the root `README.md` by the `prepublishOnly` hook during `npm stage publish`; confirm `npm run check:readmes` passes first. After any local `npm publish --dry-run`, run `npm run restore:readme`.
 6. **Request explicit user approval** before creating the GitHub Release. The agent must not stage a publish without it (see `Release Policy` above). In a coupled release cycle the native release also waits for the MCP post-publication gate (see `Versioning Scheme`).
 7. **On approval, create the GitHub Release** with tag `pi-vX.Y.Z`. The workflow then runs `npm stage publish`, which submits the tarball to the staging queue. The agent's responsibility ends here.
 8. **User approves the staged package** on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) via the Staged Packages tab, providing 2FA. The agent must never attempt to approve a staged publish, even if given credentials.
@@ -661,7 +670,7 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 1. **Verify CI is green** on `main` and confirm the owner has explicitly approved this release. Approval of one package is not approval of the other.
 2. **First release only: publish manually, do not tag.** npm cannot bind a trusted publisher to a package that does not exist, so the first `mcp-v*` version bypasses the CI staging flow: follow the bootstrap sequence under `npm Trusted Publisher` (manual `npm publish --access public --tag alpha`, then bind the trust). From the second release onward every step of this checklist applies, including the GitHub Release tag.
 3. **Bump `version` in `packages/mcp/package.json`** following [SemVer](https://semver.org/), then run `npm install --package-lock-only` so the lockfile workspace version matches.
-4. **Remove the not-published notices** from `packages/mcp/README.md` and the root `README.md` (the `Publication Status` paragraph in `Use With Other Hosts`) on the first public release only (the first dev-marked alpha keeps them).
+4. **Remove the not-published notices** from the root `README.md` (the `Publication Status` paragraph under `MCP Server`, the pending-publication sentence under `Two Packages, One Engine` and the pre-publication launchers) on the first public release only (the first dev-marked alpha keeps them), then run `npm run generate:readmes`. Never edit `packages/mcp/README.md` directly.
 5. **Regenerate the plugin bundles** so the catalogs pin the new version: `npm run generate:plugins`, then confirm `npm run check:plugins` passes. Commit the regenerated catalogs with the version bump; they are what users install from.
 6. **Run the full paced live suite** `./test/run-e2e-all.sh`, including `11_mcp_stdio.sh`, `12_plugin_bundles.sh`, `13_claude_code_plugin.sh` and `14_codex_plugin.sh`, before tagging.
 7. **Update `CHANGELOG.md`** with a `## [mcp-X.Y.Z] - YYYY-MM-DD` section and a matching `[mcp-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-vX.Y.Z` reference link. Core changes are not repeated: one pointer line to the native `[pi-X.Y.Z]` section covers them (see `Changelog Structure`). Verify both edits with the grep checks from step 4 of the native checklist (adjusted for the `mcp-` prefix).

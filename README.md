@@ -1,10 +1,18 @@
+<!-- packages:mcp hidden
+# mcp-intelli-search
+
+[![npm version](https://img.shields.io/npm/v/@curio-data/mcp-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/mcp-intelli-search)
+[![node](https://img.shields.io/badge/node-%E2%89%A522-blue)](https://nodejs.org/)
+-->
+<!-- packages:pi -->
 # pi-intelli-search
 
 [![npm version](https://img.shields.io/npm/v/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.81.1-blueviolet)](https://github.com/earendil-works/pi)
+<!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-510%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-530%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call. This repository provides two first-class packages from one research engine:
 
@@ -27,7 +35,7 @@ Choose the installation route for the host:
 
 The install branches: [`Pi` Native Extension](#pi-native-extension) and [MCP Server](#mcp-server), with host instructions for [Claude Code](#claude-code), [Codex](#codex) and any [Generic MCP Host](#generic-mcp-host).
 
-The native extension uses `Pi` settings and authentication. The MCP server requires explicit configuration, a per-folder workspace and an environment-supplied inference key; it does not read `Pi` settings or credentials. Its first registry publication is pending: use the [source-checkout launcher](packages/mcp/README.md#direct-registration) until publication. The registry and plugin launchers below are post-publication routes.
+The native extension uses `Pi` settings and authentication. The MCP server requires explicit configuration, a per-folder workspace and an environment-supplied inference key; it does not read `Pi` settings or credentials. Its first registry publication is pending: use the [source-checkout launcher](#claude-code) until publication. The registry and plugin launchers below are post-publication routes.
 
 ## Contents
 
@@ -75,6 +83,15 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
 - [Settings](#settings)
   - [Settings Reference](#settings-reference)
   - [Automatic llms-full.txt Discovery](#automatic-llms-fulltxt-discovery)
+- [MCP Server Reference](#mcp-server-reference)
+  - [Requirements](#requirements)
+  - [Verification](#verification)
+  - [Serving the Protocol](#serving-the-protocol)
+  - [Configuration](#configuration)
+    - [Tuning](#tuning)
+  - [Direct Engine Verification](#direct-engine-verification)
+  - [Filesystem and Privacy Boundaries](#filesystem-and-privacy-boundaries)
+  - [Timeouts and Troubleshooting](#timeouts-and-troubleshooting)
 - [Cache Structure](#cache-structure)
 - [Compatibility](#compatibility)
   - [`Pi` Extension Compatibility](#pi-extension-compatibility)
@@ -111,6 +128,7 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
 
 Choose a package by host: the [`Pi` native extension](#pi-native-extension) for `Pi`, or the [MCP server](#mcp-server) for MCP-compatible hosts.
 
+<!-- packages:pi -->
 ### `Pi` Native Extension
 
 #### Prerequisites
@@ -231,14 +249,16 @@ No configuration is required. Explicit tuning values are preserved on upgrade, b
 ```
 
 See [Model Configuration](#model-configuration) for all options, [Configuration Recipes](#configuration-recipes) for complete copy-paste examples, and [Settings](#settings) for the full reference.
+<!-- /packages -->
 
+<!-- packages:mcp -->
 ### MCP Server
 
 `@curio-data/mcp-intelli-search` serves the four research tools over stdio for MCP-compatible hosts. Choose direct registration or a host plugin from the [installation routes](#two-packages-one-engine).
 
-The standalone server shares one engine with the native extension: the same five-stage pipeline, the same cache formats and the same local-only telemetry. It requires [Node.js](https://nodejs.org/) 22 or later, an explicitly selected JavaScript Object Notation (JSON) configuration file, an explicitly selected absolute workspace directory, and an OpenRouter key supplied through an environment variable. Inference is billed separately to that OpenRouter account; no `Pi` subscription or credential store is involved. The server reads no host credential stores, no `Pi` settings and no discovered project configuration. The complete configuration, security and troubleshooting reference is the [standalone package guide](packages/mcp/README.md).
+The standalone server shares one engine with the native extension: the same five-stage pipeline, the same cache formats and the same local-only telemetry. It requires [Node.js](https://nodejs.org/) 22 or later, an explicitly selected JavaScript Object Notation (JSON) configuration file, an explicitly selected absolute workspace directory, and an OpenRouter key supplied through an environment variable. Inference is billed separately to that OpenRouter account; no `Pi` subscription or credential store is involved. The server reads no host credential stores, no `Pi` settings and no discovered project configuration. The complete configuration, security and troubleshooting reference is the [MCP Server Reference](#mcp-server-reference).
 
-**Publication Status:** the standalone package's first registry publication is pending. Until it lands, the `npx` and plugin launchers below are unavailable; use the pre-publication source-checkout launcher in [Direct Registration](packages/mcp/README.md#direct-registration). This notice is removed at first publication.
+**Publication Status:** the standalone package's first registry publication is pending. Until it lands, the `npx` and plugin launchers below are unavailable; use the pre-publication source-checkout launcher under [Claude Code](#claude-code). This notice is removed at first publication.
 
 <a id="route-b-claude-code-plugin"></a>
 #### Claude Code
@@ -256,7 +276,7 @@ One-time setup: set your OpenRouter key in the plugin's required option, and wri
 
 **Direct Registration:**
 
-Save the server's configuration (the `providers` and `models` example under [Generic MCP Host](#generic-mcp-host)) as `.intelli-search.json` in the target folder. Run registration from that folder. `local` is the default scope: private to the operator and active only in that folder. Add `--scope project` before `--` to write a shared `.mcp.json` into the folder; _Claude Code_ requires approval before connecting to project-scoped servers.
+Save the server's configuration (the `providers` and `models` example under [Generic MCP Host](#generic-mcp-host)) as `.intelli-search.json` in the target folder. Run registration from that folder. `local` is the default scope: private to the operator and active only in that folder. Add `--scope project` before `--` to write a shared `.mcp.json` into the folder; _Claude Code_ requires approval before connecting to project-scoped servers, and absolute paths in a shared file must be valid on each operator's machine.
 
 **Post-Publication Launcher:**
 
@@ -279,7 +299,7 @@ claude mcp add intelli_search \
 
 Replace the checkout path with its actual absolute path. The configuration file can live at any readable absolute path, either per-folder or shared; replace the `INTELLI_SEARCH_CONFIG` value accordingly. Keep `INTELLI_SEARCH_WORKSPACE` per-folder so each folder has its own research cache. `OPENROUTER_API_KEY` must reach the server process environment, including when _Claude Code_ starts it.
 
-Verify with `claude mcp list` from the target folder and confirm `intelli_search` is connected. Also run the chosen launcher with `--check-config` to validate configuration without credentials or inference; this does not test connectivity or model access. Both verification commands are shown in the canonical [Direct Registration](packages/mcp/README.md#direct-registration) reference.
+Verify with `claude mcp list` from the target folder and confirm `intelli_search` is connected. Also run the chosen launcher with `--check-config` to validate configuration without credentials or inference; this does not test connectivity or model access. Both verification commands are shown in [Verification](#verification).
 
 <a id="route-c-codex-plugin"></a>
 #### Codex
@@ -348,11 +368,12 @@ Any host that speaks MCP over stdio can register the server directly. The execut
 }
 ```
 
-These are explicit selections, not inherited defaults: the standalone package has no implicit provider or model choice. The research cache lands in `<workspace>/.search/`; the host reads cached pages with its own file-reading capability. Configuration and tuning details are canonical in the [standalone package guide](packages/mcp/README.md#configuration).
+These are explicit selections, not inherited defaults: the standalone package has no implicit provider or model choice. The research cache lands in `<workspace>/.search/`; the host reads cached pages with its own file-reading capability. Configuration and tuning details are canonical in [Configuration](#configuration).
 
-Run the chosen launcher with `--check-config` to validate configuration and workspace without credentials or inference, then confirm the host connects and lists the four research tools. Configuration validation does not test connectivity or model access; use the [canonical verification commands](packages/mcp/README.md#verification).
+Run the chosen launcher with `--check-config` to validate configuration and workspace without credentials or inference, then confirm the host connects and lists the four research tools. Configuration validation does not test connectivity or model access; use the [canonical verification commands](#verification).
 
 On both plugin hosts the tools appear under host-qualified names (for example `mcp__intelli_search__intelli_research` on Codex). The installed `intelli-search` skill shows the exact names for its host. The native `Pi` extension and the MCP server are independent installations; enabling both in one agent gives duplicate tool sets, which is not a supported configuration.
+<!-- /packages -->
 
 ## Tools
 
@@ -406,6 +427,7 @@ intelli_research(
 )
 ```
 
+<!-- packages:pi -->
 ## Launch Blog Post
 
 <p align="center">
@@ -438,7 +460,7 @@ For the detailed feature-by-feature comparison against six other `Pi` search ext
 
 ## Configuration Recipes
 
-These recipes configure the native `Pi` extension. For MCP configuration, select models under `models` and tuning under `tuning` in the [standalone configuration file](packages/mcp/README.md#configuration); do not copy the native settings wrapper.
+These recipes configure the native `Pi` extension. For MCP configuration, select models under `models` and tuning under `tuning` in the [standalone configuration file](#configuration); do not copy the native settings wrapper.
 
 Each recipe is a complete `~/.pi/agent/settings.json`. Copy it whole, or lift the `pi-intelli-search` block into your existing file. Project-level overrides go in `<project>/.pi/settings.json` (applies only after `Pi` approves the project; the global file always applies).
 
@@ -606,7 +628,7 @@ Use this to give a client project a dedicated cache directory and a stronger sea
 
 ## Model Configuration
 
-Both packages select models independently for search, extract and collate. The configuration below is for the native `Pi` extension; the MCP server requires explicit OpenRouter selections for all three roles in its [configuration file](packages/mcp/README.md#configuration), with no implicit model defaults.
+Both packages select models independently for search, extract and collate. The configuration below is for the native `Pi` extension; the MCP server requires explicit OpenRouter selections for all three roles in its [configuration file](#configuration), with no implicit model defaults.
 
 Native defaults are chosen for cost-efficiency, but **any model `Pi` can access works**. This includes built-in providers, [OpenRouter](https://openrouter.ai) models, or models from other extensions.
 
@@ -785,6 +807,7 @@ With default settings, you need one key in `~/.pi/agent/auth.json`:
 A single [OpenRouter](https://openrouter.ai) key is the minimum required. It covers the default search model (Sonar) plus MiniMax M3 for extraction and collation with the default models. The extract and collate stages can use any model `Pi` supports. Override `extractModel` or `collateModel` in settings to switch providers.
 
 Run `/login openrouter` in `Pi` to authorise via OAuth (`Pi` 0.82.0 and later), or edit the file directly with a key from [openrouter.ai/keys](https://openrouter.ai/keys).
+<!-- /packages -->
 
 ## Pipeline
 
@@ -802,7 +825,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 ## Cost
 
-The estimate below uses the native default models and tuning, also selected in the minimal MCP example above. It is a planning estimate based on the recorded September 2026 price basis, not a live tariff check. Both packages incur inference charges on the configured provider account; MCP does not use host subscriptions or credentials.
+The estimate below uses the native default models and tuning, also selected in the minimal MCP configuration example. It is a planning estimate based on the recorded September 2026 price basis, not a live tariff check. Both packages incur inference charges on the configured provider account; MCP does not use host subscriptions or credentials.
 
 Per research session with the default 10 pages: **≈$0.09**
 
@@ -816,9 +839,10 @@ Per research session with the default 10 pages: **≈$0.09**
 
 Since v0.13.0 the search stage contributes every source the model cited, not only the ones it wrote into the prose, so sessions reach the `defaultUrls` page count more often than before. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 extracts cost the same per token as M2.7 but write ≈2× the output tokens); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost (see [Choosing an Alternative Search Configuration](#choosing-an-alternative-search-configuration)); the extract and collate rows scale with your chosen models.
 
+<!-- packages:pi -->
 ## Settings
 
-This section describes native `Pi` settings. The MCP server reads only its explicitly selected file; its accepted keys, ranges and policy differences are documented in [Configuration](packages/mcp/README.md#configuration) and [Tuning](packages/mcp/README.md#tuning).
+This section describes native `Pi` settings. The MCP server reads only its explicitly selected file; its accepted keys, ranges and policy differences are documented in [Configuration](#configuration) and [Tuning](#tuning).
 
 Override defaults in `~/.pi/agent/settings.json` or, for a trusted project, `<project>/.pi/settings.json` under the `pi-intelli-search` namespace. `Pi` ignores project-local settings until you approve the project; the global file always applies:
 
@@ -901,10 +925,187 @@ A small built-in list handles sites with non-standard paths:
 | Vite | `/llms-full.txt` (root) |
 
 No configuration is needed. The probe and download are automatic.
+<!-- /packages -->
+
+<!-- packages:mcp -->
+## MCP Server Reference
+
+This reference applies to `@curio-data/mcp-intelli-search` only. Installation routes are under [MCP Server](#mcp-server).
+
+### Requirements
+
+- [_Node.js_](https://nodejs.org/) satisfying the `engines` range in the [standalone manifest](packages/mcp/package.json).
+- An existing, explicitly selected absolute workspace directory.
+- An explicitly selected JSON configuration file.
+- A separately billed OpenRouter API key supplied through a named environment variable before constructing the runtime. Restart the runtime after changing credentials; it snapshots the environment.
+- A platform supported by [_wreq-js_](https://github.com/sqdshguy/wreq-js), the browser-fingerprint fetch dependency. The installation gate exercises its native assets on the running platform; it does not establish support for other platforms.
+
+The package neither reads host credential stores nor loads project configuration automatically. Native `Pi` settings, authentication, providers and defaults remain independent.
+
+### Verification
+
+From the target folder, check the registered server:
+
+```bash
+claude mcp list
+```
+
+Confirm `intelli_search` shows as connected. If a project-scoped server shows pending approval, open _Claude Code_ in that folder and approve it before checking again.
+
+Validate the configuration separately without credentials or inference. After publication, use:
+
+```bash
+INTELLI_SEARCH_CONFIG="$PWD/.intelli-search.json" \
+INTELLI_SEARCH_WORKSPACE="$PWD" \
+npx -y --package @curio-data/mcp-intelli-search \
+  mcp-intelli-search --check-config
+```
+
+For the source-checkout launcher, use:
+
+```bash
+node /absolute/path/to/pi-intelli-search/packages/mcp/dist/cli.js \
+  --config "$PWD/.intelli-search.json" \
+  --workspace "$PWD" \
+  --check-config
+```
+
+Use the same configuration path as the registered server if it is shared or stored elsewhere. A successful check prints `Configuration is valid.` and exits with status `0`. It validates configuration and workspace, not host connectivity, credentials or model access. `claude mcp list` checks the host connection; successful inference requires the separate provider key.
+
+### Serving the Protocol
+
+An invocation without `--check-config` validates the explicit configuration and workspace, then serves the four canonical tools (`intelli_search`, `intelli_extract`, `intelli_collate`, `intelli_research`) over stdio until the input stream closes. Serving performs no inference at startup; credentials are only required when an operation runs.
+
+- **Registration and Schemas.** Tool names and JSON input schemas mirror the native `Pi` tools verbatim; descriptions adapt the native guidance for protocol clients (host-neutral cache wording, embedded `focusPrompt` and breadth guidance), because the protocol offers no separate guidance channel. Invalid tool arguments are reported as tool errors (`isError` results), matching the SDK (software development kit) distinction between malformed protocol requests and invalid arguments.
+- **Results.** Successful calls return the concise summary as text content plus structured content with `outcome` and `details`. Degraded research (`no-links`, `fetch-failed`, `extraction-failed`) remains a normal result. Execution failures return `isError` results tagged with the safe `StandaloneError` category rather than raw provider causes.
+- **Queueing.** One operation runs at a time and up to eight further requests queue; requests beyond the bound settle immediately with a busy tool error. A queued request whose client cancels settles without starting its operation.
+- **Progress and Cancellation.** When the client supplies a progress token, stage progress is forwarded as `notifications/progress` (percentage of one hundred). Client cancellation aborts the running operation through the shared model policy and stage boundaries.
+- **Shutdown.** Closing standard input aborts in-flight and queued work, closes the transport and exits. `SIGINT` and `SIGTERM` trigger the same drain with a bounded hard-exit backstop. No unanswered request or runaway child work remains.
+- **Framing.** Standard output carries protocol messages only. Before the server module loads, a guard diverts `process.stdout.write` (including console output, import-time writes and direct dependency writes) to standard error; the transport writes frames through the original stream, so the SDK's own output is never corrupted. Adapter diagnostics use standard error.
+- **Annotations.** `intelli_search` and `intelli_extract` are marked read-only; `intelli_collate` and `intelli_research` write cache files and are not read-only. No tool claims idempotence. Operations use external services; inference and search charges apply to the configured provider account. Invalid calls and startup validation do not perform inference.
+
+Startup diagnostics go to standard error. The SDK version range is declared in `package.json` (the lockfile pins the verified release); the protocol implementation is the official split server package verified in the repository handoff.
+
+### Configuration
+
+Select the configuration with `--config FILE` or `INTELLI_SEARCH_CONFIG`. Select the workspace with `--workspace ABSOLUTE_DIRECTORY` or `INTELLI_SEARCH_WORKSPACE`. Command-line values take precedence. Relative workspace paths are rejected; existing workspace symlinks are canonicalised.
+
+The minimal example under [Generic MCP Host](#generic-mcp-host) explicitly selects OpenRouter for every role; add an optional `tuning` object (for example `"cacheDir": ".search"`) beside `providers` and `models`. These are example selections, not standalone defaults.
+
+Only `providers`, `models` and optional `tuning` are accepted at the top level. All three model roles are required. The provider object accepts only `apiKeyEnv`, an environment-variable name rather than a key value. The initial provider scope is OpenRouter at its fixed `https://openrouter.ai/api/v1` endpoint; custom endpoints, proxy settings, provider fallback and dynamic router model identifiers are not accepted.
+
+Configuration loading does not require working credentials. Each operation validates its required model roles against OpenRouter's model catalogue before inference. Full research validates all three roles first. Validation checks exact identifiers, text input/output, advertised reasoning efforts when supplied, and tool support for an enabled search tool. Catalogue lookup is bounded and cancellable. It establishes advertised capabilities, not account credit, per-key model access or future provider availability; inference errors remain possible.
+
+Search requires either `perplexity/sonar`, `perplexity/sonar-pro`, `perplexity/sonar-pro-search`, or an explicitly enabled `searchWebSearch` block with a chat model. Enabling `searchWebSearch` also requires the selected model to advertise `tools` support. Combining that block with a Sonar model that does not advertise tool support fails preflight; the adapter does not silently drop the configured tool. Search tools are model-decided; a valid response can still contain no usable links.
+
+#### Tuning
+
+Unspecified tuning comes from the canonical [shared defaults](src/core/defaults.ts), also used by the native adapter. The table gives each default and its effect alongside standalone validation ranges. No provider or model selection is inherited from that module. Unknown keys, invalid types and out-of-range values are rejected rather than silently clamped.
+
+| Setting | Default and Effect | Accepted Values |
+|---|---|---|
+| `defaultUrls` | `10`: fallback page budget and one-shot search source-list cap | Integer from 1 to 100; must not exceed `maxUrls` |
+| `maxUrls` | `20`: hard cap on research pages | Integer from 1 to 100 |
+| `extractMaxChars` | `150000`: per-page extraction input character limit | Integer from 1 to 2,000,000 |
+| `fetchTimeoutMs` | `20000`: page-fetch timeout in milliseconds | Integer from 1 to 600,000 |
+| `llmTimeoutMs` | `90000`: application timeout per model call in milliseconds | Integer from 1 to 600,000 |
+| `fetchConcurrency` | `4`: simultaneous page fetches | Integer from 1 to 32 |
+| `extractionConcurrency` | `4`: simultaneous per-page extractions | Integer from 1 to 32 |
+| `extractionMaxTokens` | `3000`: per-page output-token limit | Integer from 16 to 128,000 |
+| `collationMaxTokens` | `4000`: synthesis output-token limit | Integer from 16 to 128,000 |
+| `llmRetryAttempts` | `3`: model-call attempts, including the first | Integer from 1 to 10 |
+| `searchRetryAttempts` | `2`: search attempts after a valid response with no usable links, including the first | Integer from 1 to 10 |
+| `retryBaseDelayMs` | `1500`: base exponential-backoff delay in milliseconds | Integer from 0 to 120,000; must not exceed `retryMaxDelayMs` |
+| `retryMaxDelayMs` | `20000`: maximum backoff and Retry-After delay in milliseconds | Integer from 0 to 120,000 |
+| `minRequestIntervalMs` | `0`: extraction-call spacing in milliseconds; zero disables pacing | Integer from 0 to 120,000 |
+| `cacheDir` | `.search`: workspace-relative cache directory | Nonempty relative directory, without absolute paths, backslashes or traversal components |
+| `browserFingerprint` | `chrome_145`: browser signature for fetching | `chrome_145`, the verified shared profile |
+| `disableTelemetry` | `false`: write the local `meta.json` sidecar; `true` suppresses it | Boolean |
+| `disableLlmsFullDiscovery` | `false`: probe for supplementary documentation; `true` skips probes and downloads | Boolean |
+| `searchWebSearch` | Disabled; engine `auto`, `maxResults: 8`, reasoning `minimal`. Enables the search server tool when configured | Validated block described below; replaces the entire shared default block |
+
+`searchWebSearch` requires a boolean `enabled`. Optional fields are `engine` (`auto`, `native`, `exa`, `parallel`, `perplexity`, `firecrawl`), `maxResults` (1 to 25, capped at 20 for `perplexity`), `searchContextSize` (`low`, `medium`, `high`), `allowedDomains`, `excludedDomains`, and `reasoning` (`minimal`, `low`, `medium`, `high`). Domain lists contain hostnames, not URLs (uniform resource locators), and have at most 100 entries. The `perplexity` and `firecrawl` engines cannot combine nonempty allowed and excluded lists. Per-call domains also guide search; they are not a network allowlist for fetched pages.
+
+**Retry Policy:** Every standalone model call, including one-shot search, extract and collate, receives configured retry and application-timeout defaults. The shared policy owns retries once; there is no underlying SDK retry loop. Retry-After delays are bounded by `retryMaxDelayMs`. Native one-shot policy remains unchanged.
+
+**Provider Errors:** HTTP (Hypertext Transfer Protocol) errors and error-bearing successful responses, including `choices[].error`, preserve retry classification without exposing provider bodies or headers. The adapter treats a `402` with a valid Retry-After header as transient in-flight budget pressure. Ordinary credit exhaustion and permanent credential errors do not retry.
+
+**Reasoning:** The adapter sends reasoning fields only when the catalogue advertises reasoning support; non-reasoning models receive neither effort nor exclusion fields.
+
+**Output Budget:** Empty output after token-budget exhaustion is an error, not a successful extraction. Increase the output-token limit or lower reasoning effort when this diagnostic occurs.
+
+### Direct Engine Verification
+
+From the repository root:
+
+```bash
+npm run build:all
+npm run test:all
+npm run test:mcp:install
+```
+
+The installation gate packs the artifact, installs production dependencies into an isolated directory and denies all ancestor dependency resolution in both module systems. It runs the installed executable's `--help` and `--version`, all four operations with synthetic inference, and actual page fetching against a loopback fixture through the installed native fetch assets. A raw protocol exchange against the installed server verifies initialization, tool listing, invalid-argument rejection without inference and clean shutdown, and asserts that standard output carries only protocol frames. The deterministic installation gate uses no provider credentials and does not establish live MCP interoperability.
+
+The recorded live scenario `test/e2e/11_mcp_stdio.sh` exercises a real research call through the MCP client of an isolated `Pi` profile. Its evidence is recorded separately in the [compatibility matrix](docs/COMPATIBILITY.md), not supplied by the installation gate.
+
+The experimental runtime entrypoint supports direct engine verification after installation:
+
+```javascript
+import {
+  createRuntime,
+  loadConfig,
+} from "@curio-data/mcp-intelli-search/runtime";
+
+const config = await loadConfig(
+  "/absolute/path/config.json",
+  "/absolute/path/workspace",
+);
+const runtime = await createRuntime(config);
+const result = await runtime.execute("intelli_research", {
+  query: "Research question",
+  focusPrompt: "Specific facts and signatures to retain",
+  maxUrls: 3,
+});
+console.log(result.text);
+```
+
+This example incurs inference and search charges when run with a real credential. `execute()` also accepts `intelli_search`, `intelli_extract` and `intelli_collate`, with the canonical tool parameters. Its optional third argument supplies `signal` and `onProgress`. Results contain `text`, `details` and `outcome`; execution failures throw. Degraded research remains a result. Standalone validation rejects unknown argument keys, empty queries, nonpositive or fractional `maxUrls`, arrays exceeding 100 entries, strings exceeding 2,000,000 characters and unsupported extraction statuses. Native schemas are unchanged. For manual extraction followed by collation, construct each collation item from the original `url` and `title`, `result.details.extraction` and `result.details.sourceType`, plus an explicit `status` such as `success`. Do not forward the entire extraction `details` object: its `currentness` field is not a collation input.
+
+`mcp-intelli-search --help` and `--version` need no configuration. `--check-config` validates explicit configuration and workspace syntax without credentials or inference, returning exit status 0 for valid configuration and 1 for invalid input. Neither starts a protocol connection. The runtime entrypoint is experimental and has no published TypeScript declaration contract. Execution failures expose a safe `StandaloneError.code`: `INVALID_ARGUMENTS`, `CONFIGURATION`, `WORKSPACE`, `PROVIDER`, `OPERATION` or `CANCELLED`. Cancellation uses the `AbortError` name. Raw provider causes are deliberately not retained. Some shared operations wrap provider exceptions, which become `OPERATION` errors; protocol mapping must not depend on exact diagnostic strings.
+
+### Filesystem and Privacy Boundaries
+
+All cache paths returned by the standalone adapter are absolute and anchored to the selected workspace. Cache and staging content stay beneath the configured cache directory. Existing symlinks, dangling links and hardlinked files in cache ancestors or artifact subtrees are rejected before an operation; checks repeat after model preflight. Special filesystem entries and an oversized safety scan are rejected. The full scan runs at runtime construction and twice per operation, so its cost grows with cache size; queued requests wait behind that scan. At 100,000 inspected entries, select a smaller cache directory or archive old entries after stopping all processes using that cache. Same-query runs on the same Coordinated Universal Time (UTC) date refresh one cache directory and do not promise separate histories; another UTC date produces a different directory.
+
+These checks prevent pre-existing path escapes, not malicious concurrent filesystem replacement by another process with write access. Use a workspace controlled by the same trusted local operator. No operating-system sandbox or protection against hostile same-user mutation is claimed. Fetched URLs are not constrained to public addresses; the runtime is not a hosted service or an unrestricted remote execution endpoint.
+
+The host must be able to read the returned paths. Summaries advise using the host's file-reading capability rather than requiring a tool named `read`. Cache formats and local telemetry retain the shared semantics; standalone telemetry adds package and adapter identity. Credentials are never inserted into prompts, cache metadata or generated launch configuration. Adapter diagnostics use standard error and omit raw provider errors, headers and transport exceptions. During operation execution, async-scoped interception replaces dependency stdout console output with a generic logger warning; a regression drives Defuddle's actual conversion-failure handler, which otherwise prints page content. While serving, the startup stdout guard also diverts import-time output and direct dependency writes to standard error; protocol tests assert clean framing with a deliberately noisy fixture.
+
+### Timeouts and Troubleshooting
+
+A full research call runs a search stage, up to `maxUrls` dual fetches, up to `maxUrls` extractions, a collation and an optional cache suggestion. Retries can add model calls. Progress notifications are not a guarantee against a host's total request deadline.
+
+**Host Deadline:** If the host aborts a long tool call, reduce work with a lower per-call `maxUrls` (or lower `defaultUrls` and the configured cap), or adjust the host's own request deadline where supported. Changing `llmTimeoutMs` does not extend a host deadline.
+
+**Model-Call Timeout:** Raise `llmTimeoutMs` only when the adapter's model-call timer expires and the host allows the longer duration. Client cancellation still aborts the running operation through the shared policy and stage boundaries; a cancelled queued request settles without starting.
+
+Every startup failure is diagnostic-only and lands on standard error; standard output carries protocol frames only. The frequent cases:
+
+| Symptom | Cause and Remedy |
+|---|---|
+| `Explicit --config and --workspace are required` | The server started without both selections. Supply `--config`/`--workspace` or the `INTELLI_SEARCH_CONFIG`/`INTELLI_SEARCH_WORKSPACE` environment variables, then restart the host. |
+| `workspace must be an explicit absolute directory` | The workspace selection is relative or a host placeholder was not expanded. Use a literal absolute path; on hosts with placeholder expansion, verify the expansion on your host version. |
+| `Cannot read configuration: provide an explicit readable JSON file` | The configuration path does not exist or is not readable. Create the file (the guides show a minimal valid document) and restart. |
+| Configuration rejected with an unknown-key or range error | The loader is strict: unknown keys, invalid types and out-of-range values fail validation. Remove or correct the named key; the [Tuning](#tuning) table lists every accepted key and range. |
+| Tools never appear in the host | The server exited during startup. Read the host's MCP server logs for the standard-error diagnostic; `mcp-intelli-search --check-config` reproduces configuration and workspace failures without a host. |
+| Operations fail with `CONFIGURATION` or `PROVIDER` | The named credential environment variable is missing or the key was rejected. The server snapshots the environment at startup: restart it after changing credentials. Catalogue preflight failures name the offending model role. |
+| Repeated 429 retries on a free-tier or shared key | Free-tier OpenRouter keys share a tight rate bucket. Set `minRequestIntervalMs` to approximately `3000`, lower `extractionConcurrency` to `2`, and raise `llmRetryAttempts`; raise `llmTimeoutMs` only when the model-call timer is expiring. |
+| Cache paths unreadable from the host | The host must share the server's filesystem. Sandboxed or remote hosts cannot read local cache paths; run the server where the host can read the workspace. |
+<!-- /packages -->
 
 ## Cache Structure
 
-Both packages write this format. The native extension resolves the cache against the active `Pi` workspace; MCP resolves it against `INTELLI_SEARCH_WORKSPACE` or `--workspace` and keeps it beneath that workspace. See the MCP [filesystem boundaries](packages/mcp/README.md#filesystem-and-privacy-boundaries).
+Both packages write this format. The native extension resolves the cache against the active `Pi` workspace; MCP resolves it against `INTELLI_SEARCH_WORKSPACE` or `--workspace` and keeps it beneath that workspace. See the MCP [filesystem boundaries](#filesystem-and-privacy-boundaries).
 
 ```text
 .search/
@@ -928,13 +1129,16 @@ Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<has
 
 ## Compatibility
 
+<!-- packages:pi -->
 ### `Pi` Extension Compatibility
 
 - **`Pi` >= 0.81.1:** Core functionality, trusted project settings, the configurable `CONFIG_DIR_NAME`, provider-based `pi-ai` calls, and sequential cache-writing tools. On `Pi` >= 0.86, LLM calls dispatch through the `ctx.modelRegistry.streamSimple()` facade so system prompts reach the model; `Pi` 0.81.1 through 0.85.x use the direct provider path. Compatibility audited and verified through `Pi` 1.0.0 (2026-10-02); the `fetch`/`onPayload` request hooks used by citation harvesting and the web search tool are verified against pi-ai 1.0.0.
 - UI notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, RPC).
 - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
 - Retry and timeout are owned by the shared model policy, invoked by native `callLlm()`, independently of `Pi`'s `retry.provider.maxRetries`. Native calls force SDK `maxRetries: 0`. Configured backoff and application timeout apply inside `intelli_research`; the three standalone tools retain their one-attempt, no-application-timeout behaviour.
+<!-- /packages -->
 
+<!-- packages:mcp -->
 ### MCP Server Compatibility
 
 - Direct stdio registration serves MCP-compatible hosts; repository plugin routes serve _Claude Code_ and _Codex_. `Pi` is the recorded live MCP research client.
@@ -943,7 +1147,9 @@ Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<has
 - Plugin installation and connection checks do not establish full research through either plugin. Registry-pin installation remains a separate post-publication gate.
 
 For the standalone MCP server and host plugins, including exact tested versions of _Claude Code_, _Codex_, Node.js and the MCP SDK, see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+<!-- /packages -->
 
+<!-- packages:none -->
 ## Development
 
 ```bash
@@ -962,6 +1168,11 @@ pi -e ./dist/index.js
 pi install /path/to/pi-intelli-search
 ```
 
+**Host Plugins:** thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/` at the repository root, with repository marketplace catalogs at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. The bundles are generated from the shared guidance source in `guidance/` and the version pinned in `packages/mcp/package.json`; run `npm run generate:plugins` after a version change and `npm run check:plugins` to detect drift. Launchers pin the exact package version through `npx`; until the package is published, `scripts/generate-plugin-bundles.mjs --mode tarball` generates equivalent local-tarball launchers for installation tests. Host setup, including each host's environment forwarding rules, is in the generated skills.
+
+**Package READMEs:** this file is the only hand-edited README. `npm run generate:readmes` derives `packages/mcp/README.md` from it and `npm run check:readmes` fails on drift; the native package's README is derived at publish time by its `prepublishOnly` hook. Untagged content goes to both packages. Wrap package-specific sections in `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, and repository-only sections in `<!-- packages:none -->`. Content that only a package shows, such as its title and badges, goes in a hidden block opened by `<!-- packages:mcp hidden` and closed by a `-->` line. Each derived README regenerates its contents list, redirects links to sections it omits to this file on _GitHub_, and makes relative paths absolute. See [`scripts/generate-package-readmes.mjs`](scripts/generate-package-readmes.mjs).
+<!-- /packages -->
+
 ## Documentation
 
 - [Comparison](docs/COMPARISON.md): How `intelli-search` compares to other `Pi` search extensions.
@@ -969,12 +1180,12 @@ pi install /path/to/pi-intelli-search
 - [Architecture](docs/ARCHITECTURE.md): Detailed design decisions and pipeline internals.
 - [Compatibility](docs/COMPATIBILITY.md): Tested host versions and artifacts for the native extension, MCP server and plugins.
 - [Components](docs/COMPONENTS.md): Third-party dependencies and licence attribution.
-- [Standalone package guide](packages/mcp/README.md): MCP server configuration, security boundaries and troubleshooting.
 - [Skill guide](skills/intelli-search/SKILL.md): Agent-facing usage instructions.
 - [Contributor guide](AGENTS.md): Coding conventions and project structure.
 
 ## Downloads
 
+<!-- packages:pi -->
 ### `Pi` Extension Downloads
 
 Weekly npm downloads across all published versions, refreshed every Monday by a scheduled GitHub Action. The chart is rendered with [rough.js](https://roughjs.com) from an append-only daily cache in `data/downloads.json` (see `scripts/plot-downloads.mts`).
@@ -985,14 +1196,19 @@ Weekly npm downloads across all published versions, refreshed every Monday by a 
     <img alt="Weekly npm downloads for @curio-data/pi-intelli-search" src="docs/images/downloads-light.svg" width="800" />
   </picture>
 </p>
+<!-- /packages -->
 
+<!-- packages:mcp -->
 ### MCP Server Downloads
 
 `@curio-data/mcp-intelli-search` is unpublished, so no public downloads chart exists. Missing metrics are not zero downloads.
+<!-- /packages -->
 
+<!-- packages:pi -->
 ## Provenance
 
 Git history was rewritten in `v0.9.0` to normalise commit author and committer metadata on the path to a stable `v1` release. The `gitHead` SHAs recorded in `npm` SLSA provenance attestations for versions 0.3.1 through 0.8.0 reference pre-rewrite commits that no longer resolve in this repository. Published tarballs and their tree-level contents are unchanged; only commit metadata was altered. From v0.9.0 onwards, attestations track the rewritten history. See the [Changelog](CHANGELOG.md) entry for v0.9.0 for the full account.
+<!-- /packages -->
 
 ## Sponsor
 
