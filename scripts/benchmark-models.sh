@@ -23,7 +23,9 @@
 #   BENCH_MAX_URLS       Page budget per run (default: 8)
 #   BENCH_GAP_SECONDS    Pause between runs (default: 20; keeps the
 #                        rate-limit bucket from degrading later runs)
-#   BENCH_BASE_DIR       Artifact root (default: /tmp/intelli-bench-<stamp>)
+#   BENCH_BASE_DIR       Artifact root (default: /tmp/intelli-bench-<stamp>).
+#                        Set to encrypted storage: each run writes an auth.json
+#                        containing provider credentials into its agent dir.
 #   BENCH_LOOP_MODEL     Agent-loop model override (default: kimi-coding/k3
 #                        when its key exists, else openrouter/google/
 #                        gemini-3.8-flash; see the loop-model note below)

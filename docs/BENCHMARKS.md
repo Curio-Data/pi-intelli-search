@@ -142,10 +142,10 @@ Queued-model findings:
 These findings describe runs 1A, 2A, 1B, 2B and 3C only, not the later series.
 
 1. **The head of the ranking is invariant.** shadcn-svelte at #1 and Skeleton UI at #2 in all five runs, across three models and five corpora. Flowbite Svelte held top-5 in all five runs.
-2. **Ranks 3 to 10 are corpus-driven.** The two runs with the most-converged corpora (2A and 2B: different models, adjacent in time, four shared sources) produced identical top-10 lists in identical order. Same-model runs with divergent corpora swapped up to three tail entries.
+2. **Ranks 3 to 10 show a corpus association.** The two runs with the most-converged corpora (2A and 2B: different models, adjacent in time, four shared sources) produced identical top-10 lists in identical order, while same-model runs with divergent corpora swapped up to three tail entries. Captured inputs were not matched across these runs, so this is an observed association rather than a controlled isolation of corpus effects.
 3. **Sonar returned a stable core of three URLs across all runs** (adminlte.io, a persistently 404ing annauniversityplus.com page, and an unrelated portfolio page that every run correctly identified and discarded). The remaining five slots churned run to run.
 4. **Evidence Handling Repeated in the Baseline:** minimax-m3 opened both of its reports by stating its ranking methodology and the absence of authoritative npm statistics (2/2), surfaced low-star libraries (Kampsy-ui at 260 stars) transparently, and flagged Svelte 5 compatibility warnings. gemini-3.8-flash (0/2) and minimax-m2.7 (0/1) stated no methodology and silently dropped or omitted low-data entries.
-5. **Verbosity is a model property and is repeatable.** Per-page extraction output: m2.7 ≈2.7K chars, gemini-3.8-flash ≈3.1K to 4.0K, m3 ≈4.7K to 5.3K. m3 writes ≈2× m2.7's extraction output at the same per-token price.
+5. **Verbosity repeats per model across the baseline.** Per-page extraction output: m2.7 ≈2.7K chars, gemini-3.8-flash ≈3.1K to 4.0K, m3 ≈4.7K to 5.3K, with m3 writing ≈2× m2.7's extraction output at the same per-token price. Five runs establish repeatability within this benchmark, not a controlled model property.
 
 ### Decision Recorded
 
@@ -168,4 +168,4 @@ Protocol:
 4. Append rows and findings to this file. Record the extension version and date; keep historical rows untouched.
 5. Match full source URLs across runs (for example the dev.to roundups and adminlte.io appear in most baseline runs). Verify identical captured input content before treating extraction differences as pure model effects; file numbers and hostnames alone do not establish a match.
 
-Artifacts land under `/tmp/intelli-bench-<stamp>/<label>/cwd/.search/<slug>/` with the full `report.md`, `meta.json`, per-page `extractions/`, and raw `sources/`. Copy anything worth keeping out of `/tmp` before it is reaped.
+Artifacts land under `<base>/<label>/cwd/.search/<slug>/` with the full `report.md`, `meta.json`, per-page `extractions/`, and raw `sources/`. The base defaults to `/tmp/intelli-bench-<stamp>`; set `BENCH_BASE_DIR` to a directory on encrypted storage before running, because the harness assembles an `auth.json` containing provider credentials into each run's agent directory. Copy anything worth keeping out of the base directory before it is reaped.
