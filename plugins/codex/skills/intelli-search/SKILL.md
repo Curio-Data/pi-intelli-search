@@ -65,6 +65,17 @@ If either path selection (`INTELLI_SEARCH_CONFIG` or `INTELLI_SEARCH_WORKSPACE`)
 
 A missing `OPENROUTER_API_KEY` is different: credentials are validated when an operation runs, not at server startup. Export the key and restart the host so the server receives the updated environment. Host forwarding behaviour is recorded for Codex CLI 0.144.5 in the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins).
 
+### Unattended Runs
+
+Interactive sessions ask before each research tool call. Non-interactive `codex exec` cannot ask, so it cancels the call and reports `user cancelled MCP tool call`. To run the tools unattended, pre-approve them in `~/.codex/config.toml`:
+
+```toml
+[plugins."intelli-search@curio-data-plugins".mcp_servers.intelli_search]
+default_tools_approval_mode = "approve"
+```
+
+Recorded on Codex CLI 0.144.5.
+
 
 ## When to Use Which Tool
 
