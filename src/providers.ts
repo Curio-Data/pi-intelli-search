@@ -12,7 +12,7 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { getAgentDir } from "./util.js";
+import { getAgentDir } from "./agent-dir.js";
 
 /**
  * Resolve models.json lazily inside each call: PI_CODING_AGENT_DIR may be

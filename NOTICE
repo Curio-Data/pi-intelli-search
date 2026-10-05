@@ -24,6 +24,10 @@ typebox (https://github.com/sinclairzx81/typebox)
 Copyright Sinclair
 License: MIT
 
+@modelcontextprotocol/server (https://github.com/modelcontextprotocol/typescript-sdk)
+Copyright Anthropic, PBC and contributors
+License: Apache-2.0
+
 @earendil-works/pi-ai (https://github.com/earendil-works/pi)
 Copyright Mario Zechner
 License: Apache-2.0

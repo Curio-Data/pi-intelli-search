@@ -1,0 +1,194 @@
+{
+  "tools": [
+    {
+      "name": "intelli_search",
+      "label": "Intelli Search",
+      "description": "Search the web and return a concise answer with source URLs. For multi-page deep research, use intelli_research instead.",
+      "promptSnippet": "intelli_search(query): search the web and return synthesised results with source URLs",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query"
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict to these domains"
+          }
+        }
+      },
+      "hasRenderResult": false
+    },
+    {
+      "name": "intelli_extract",
+      "label": "Intelli Extract",
+      "description": "Extract query-relevant content from a web page. Compresses full page content to the parts that matter for a given query, preserving code blocks, API signatures, and technical detail verbatim. Use this for individual pages you already have; for end-to-end research, use intelli_research.",
+      "promptSnippet": "intelli_extract(page, query, focusPrompt?): LLM extraction of query-relevant content from a web page",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "url",
+          "title",
+          "content",
+          "query"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "URL of the page to extract from"
+          },
+          "title": {
+            "type": "string",
+            "description": "Page title"
+          },
+          "content": {
+            "type": "string",
+            "description": "Full page content in markdown"
+          },
+          "query": {
+            "type": "string",
+            "description": "The original search query"
+          },
+          "focusPrompt": {
+            "type": "string",
+            "description": "Optional focus guidance for extraction"
+          }
+        }
+      },
+      "hasRenderResult": false
+    },
+    {
+      "name": "intelli_collate",
+      "label": "Intelli Collate",
+      "description": "Deduplicate and synthesise multiple per-page extractions into a single concise summary. Caches results to .search/ for follow-up. Use this after extracting multiple pages with intelli_extract; for end-to-end research, use intelli_research.",
+      "promptSnippet": "intelli_collate(extractions, query): deduplicate and synthesise extractions into concise summary",
+      "executionMode": "sequential",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "extractions",
+          "query"
+        ],
+        "properties": {
+          "extractions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "url",
+                "title",
+                "extraction",
+                "sourceType",
+                "status"
+              ],
+              "properties": {
+                "url": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "extraction": {
+                  "type": "string"
+                },
+                "sourceType": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Array of per-page extraction results from intelli_extract"
+          },
+          "query": {
+            "type": "string",
+            "description": "The original search query"
+          },
+          "searchSummary": {
+            "type": "string",
+            "description": "Summary from the initial search step"
+          },
+          "fullPages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "url",
+                "title",
+                "content"
+              ],
+              "properties": {
+                "url": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Full page content for caching (not sent to LLM)"
+          }
+        }
+      },
+      "hasRenderResult": false
+    },
+    {
+      "name": "intelli_research",
+      "label": "Intelli Research",
+      "description": "Search the web, fetch top results, extract relevant content from each page, and deduplicate into a concise summary. Caches all results under .search/ for follow-up. This is the primary research tool; for quick factual lookups, use intelli_search instead.",
+      "promptSnippet": "intelli_research(query): full search → fetch → extract → collate pipeline with caching",
+      "executionMode": "sequential",
+      "promptGuidelines": [
+        "Use intelli_research when the user needs current web information (docs, APIs, best practices, library updates). For quick factual questions, use intelli_search alone.",
+        "Use maxUrls to control breadth: 3 for targeted, 10 (default) for broad, 16 for exhaustive. The setting caps requests at maxUrls (default 20).",
+        "Always provide focusPrompt to guide extraction. Without it the LLM extracts generically. Translate the user's intent into a specific extraction focus.",
+        "The tool result contains a concise summary — use it directly. Only read .search/ cache files when the summary is insufficient.",
+        "Use domains to target specific sites (e.g., ['docs.python.org']) when the user references a specific documentation source."
+      ],
+      "parameters": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "What to research"
+          },
+          "maxUrls": {
+            "type": "number",
+            "description": "Max URLs to fetch (default: 8, capped by settings.maxUrls)"
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict search to these domains"
+          },
+          "focusPrompt": {
+            "type": "string",
+            "description": "Focus guidance for all extractions"
+          }
+        }
+      },
+      "hasRenderResult": true
+    }
+  ],
+  "events": [
+    "after_provider_response",
+    "session_start",
+    "session_shutdown"
+  ]
+}

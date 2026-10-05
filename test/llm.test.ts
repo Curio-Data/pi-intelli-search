@@ -85,103 +85,71 @@ function contextFor(auth: unknown, overrides: RegistryOverrides = {}): Extension
 
 const CFG = { provider: "openrouter", model: "perplexity/sonar" } as const;
 
-describe("callLlm retry notices (no console writes)", () => {
-  const original = __harness.streamSimple;
-
+describe("native retry notice delivery", () => {
+  const originalLegacy = __harness.streamSimple;
+  const originalFacade = __harness.registryStreamSimple;
   afterEach(() => {
-    __harness.streamSimple = original;
+    __harness.streamSimple = originalLegacy;
+    __harness.registryStreamSimple = originalFacade;
   });
 
-  it("routes retry notices to onRetryNotice and never to the console", async () => {
-    // Raw console writes from extensions bypass the Pi TUI layout and appear
-    // as stray lines in the window (reported against Pi 1.0), so retry
-    // activity must reach the caller through the injected channel only.
-    let calls = 0;
-    __harness.streamSimple = (async () => {
-      calls++;
-      if (calls === 1) {
-        return {
-          role: "assistant",
-          content: [],
-          stopReason: "error",
-          errorMessage: "429 rate limited",
-          timestamp: Date.now(),
-        } as AssistantMessage;
-      }
-      return successfulResponse();
-    }) as typeof __harness.streamSimple;
-
-    const notices: string[] = [];
-    const consoleCalls: string[] = [];
-    const realError = console.error;
-    const realWarn = console.warn;
-    const realLog = console.log;
-    console.error = (...args: unknown[]) => consoleCalls.push(String(args[0]));
-    console.warn = (...args: unknown[]) => consoleCalls.push(String(args[0]));
-    console.log = (...args: unknown[]) => consoleCalls.push(String(args[0]));
-    try {
-      const result = await callLlm(contextFor({ ok: true, apiKey: "secret" }), CFG, "system", "user", {
-        retry: { attempts: 2, baseDelayMs: 1, maxDelayMs: 5 },
-        timeoutMs: 5_000,
-        onRetryNotice: (message) => notices.push(message),
+  for (const withFacade of [false, true]) {
+    for (const withNotice of [false, true]) {
+      it(`${withFacade ? "facade" : "legacy"} retries stay console-free ${withNotice ? "with" : "without"} a notice callback`, async (t) => {
+        let attempts = 0;
+        const attempt = async () => {
+          attempts++;
+          return attempts === 1
+            ? { ...successfulResponse(), stopReason: "error", errorMessage: "429 rate limited" } as AssistantMessage
+            : successfulResponse();
+        };
+        __harness.streamSimple = attempt as typeof __harness.streamSimple;
+        __harness.registryStreamSimple = attempt as typeof __harness.registryStreamSimple;
+        const consoleCalls: unknown[][] = [];
+        for (const method of ["error", "warn", "log", "info"] as const) {
+          t.mock.method(console, method, (...args: unknown[]) => { consoleCalls.push(args); });
+        }
+        const notices: string[] = [];
+        const text = await callLlm(
+          contextFor({ ok: true, apiKey: "synthetic" }, { withFacade }),
+          CFG,
+          "system",
+          "user",
+          {
+            retry: { attempts: 2, baseDelayMs: 0, maxDelayMs: 0 },
+            ...(withNotice ? { onRetryNotice: (message: string) => { notices.push(message); } } : {}),
+          },
+        );
+        assert.equal(text, "ok");
+        assert.equal(attempts, 2);
+        assert.equal(notices.length, withNotice ? 1 : 0);
+        if (withNotice) assert.match(notices[0], /openrouter\/perplexity\/sonar: .*attempt 1, retrying in 0ms/);
+        assert.deepEqual(consoleCalls, []);
       });
-      assert.strictEqual(result, "ok");
-    } finally {
-      console.error = realError;
-      console.warn = realWarn;
-      console.log = realLog;
     }
-
-    assert.strictEqual(calls, 2);
-    assert.strictEqual(notices.length, 1);
-    assert.match(notices[0], /openrouter\/perplexity\/sonar/);
-    assert.match(notices[0], /retrying in \d+ms/);
-    assert.deepStrictEqual(consoleCalls, []);
-  });
-
-  it("drops retry notices silently when no onRetryNotice is provided", async () => {
-    let calls = 0;
-    __harness.streamSimple = (async () => {
-      calls++;
-      if (calls === 1) {
-        return {
-          role: "assistant",
-          content: [],
-          stopReason: "error",
-          errorMessage: "429 rate limited",
-          timestamp: Date.now(),
-        } as AssistantMessage;
-      }
-      return successfulResponse();
-    }) as typeof __harness.streamSimple;
-
-    const consoleCalls: string[] = [];
-    const realError = console.error;
-    console.error = (...args: unknown[]) => consoleCalls.push(String(args[0]));
-    try {
-      const result = await callLlm(contextFor({ ok: true, apiKey: "secret" }), CFG, "system", "user", {
-        retry: { attempts: 2, baseDelayMs: 1, maxDelayMs: 5 },
-        timeoutMs: 5_000,
-      });
-      assert.strictEqual(result, "ok");
-    } finally {
-      console.error = realError;
-    }
-    assert.strictEqual(calls, 2);
-    assert.deepStrictEqual(consoleCalls, []);
-  });
+  }
 });
 
-describe("console-write source audit", () => {
-  it("src/llm.ts and src/fetch.ts contain no direct console calls", async () => {
-    // Regression pin for the Pi 1.0 TUI pollution report: pipeline hot paths
-    // must not write to the console. Diagnostics flow through telemetry
-    // (meta.json) or injected callbacks instead.
+describe("console-write source audit (Pi TUI safety)", () => {
+  it("pipeline hot paths contain no direct console calls", async () => {
+    // Raw console writes from extensions bypass the Pi TUI layout and appear
+    // as stray lines in the window (reported against Pi 1.0). This audit
+    // covers direct calls in the listed modules, not transitive logger
+    // writes; the behavioural tests above cover native retry delivery.
     const { readFileSync } = await import("node:fs");
     const { join, dirname } = await import("node:path");
     const { fileURLToPath } = await import("node:url");
     const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-    for (const rel of ["src/llm.ts", "src/fetch.ts"]) {
+    const paths = [
+      "src/llm.ts",
+      "src/core/llm.ts",
+      "src/core/fetch.ts",
+      "src/core/operations/research.ts",
+      "src/core/operations/search.ts",
+      "src/core/operations/extract.ts",
+      "src/core/operations/collate.ts",
+    ];
+    for (const rel of paths) {
       const source = readFileSync(join(root, rel), "utf8");
       // Strip comments: fetch.ts documents Defuddle's own console calls in
       // its muzzle comments, which are not calls made by this package.
@@ -330,15 +298,24 @@ describe("callLlm provider dispatch (pi-ai root API)", () => {
 
   it("awaits the annotation side channel before returning text", async () => {
     let releaseRead: (() => void) | undefined;
-    const sink: AnnotationSink = {
-      citations: [],
-      reads: [
-        new Promise<void>((resolve) => {
-          releaseRead = resolve;
+    const sink: AnnotationSink = { citations: [] };
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            releaseRead = () => {
+              controller.enqueue(new TextEncoder().encode("{}"));
+              controller.close();
+              releaseRead = undefined;
+            };
+          },
         }),
-      ],
+      );
+    __harness.streamSimple = async (_provider, _model, _context, options) => {
+      await options!.fetch!("https://fixture.invalid");
+      return successfulResponse();
     };
-    __harness.streamSimple = (async () => successfulResponse()) as typeof __harness.streamSimple;
 
     let finished = false;
     const call = callLlm(contextFor({ ok: true, apiKey: "secret" }), CFG, "system", "user", {
@@ -348,11 +325,61 @@ describe("callLlm provider dispatch (pi-ai root API)", () => {
       finished = true;
       return text;
     });
-    await new Promise((r) => setTimeout(r, 25));
-    assert.strictEqual(finished, false, "callLlm must not resolve while a read is in flight");
-    releaseRead!();
-    assert.strictEqual(await call, "ok");
-    assert.strictEqual(finished, true);
+    try {
+      await new Promise((r) => setTimeout(r, 25));
+      assert.strictEqual(finished, false, "callLlm must not resolve while a read is in flight");
+      releaseRead!();
+      assert.strictEqual(await call, "ok");
+      assert.strictEqual(finished, true);
+    } finally {
+      releaseRead?.();
+      await call;
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does not merge late citations from a failed attempt into the successful attempt", async () => {
+    const savedFetch = globalThis.fetch;
+    const sink: AnnotationSink = { citations: [] };
+    const citation = (url: string) =>
+      JSON.stringify({
+        choices: [{ message: { annotations: [{ type: "url_citation", url_citation: { url } }] } }],
+      });
+    let releaseOld: (() => void) | undefined;
+    let fetches = 0;
+    globalThis.fetch = async () => {
+      if (++fetches > 1) return new Response(citation("https://successful.example"));
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            releaseOld = () => {
+              controller.enqueue(new TextEncoder().encode(citation("https://failed.example")));
+              controller.close();
+              releaseOld = undefined;
+            };
+          },
+        }),
+      );
+    };
+    let attempts = 0;
+    __harness.streamSimple = async (_provider, _model, _context, options) => {
+      await options!.fetch!("https://fixture.invalid");
+      if (++attempts === 1)
+        return { ...successfulResponse(), stopReason: "error", errorMessage: "429" };
+      releaseOld?.();
+      return successfulResponse();
+    };
+    try {
+      await callLlm(contextFor({ ok: true, apiKey: "secret" }), CFG, "system", "user", {
+        annotations: sink,
+        retry: { attempts: 2, baseDelayMs: 0, maxDelayMs: 0 },
+      });
+      assert.deepEqual(sink.citations, [{ url: "https://successful.example" }]);
+      assert.equal(attempts, 2);
+    } finally {
+      releaseOld?.();
+      globalThis.fetch = savedFetch;
+    }
   });
 
   it("applies the auth-resolved baseUrl onto the request model, mirroring ModelRuntime.prepareRequest", async () => {

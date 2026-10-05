@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, plan/mcp-intelli-search]
   pull_request:
     branches: [main]
 
@@ -19,6 +19,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
+          # Node 22 is the standalone package's engines floor; release.yml
+          # builds and stages on Node 24. The divergence is deliberate.
           node-version: 22
           cache: npm
 
@@ -36,11 +38,23 @@ jobs:
             exit 1
           fi
 
-      - name: Build
-        run: npm run build
+      - name: Build and type-check both artifacts
+        run: npm run build:all
 
-      - name: Test
-        run: npm test
+      - name: Test native and standalone operations
+        run: npm run test:all
+
+      - name: Type-check native compatibility tests
+        run: node_modules/.bin/tsc -p test/tsconfig.native-contract.json
+
+      - name: Verify generated README contents match the generator
+        run: npm run check:toc
+
+      - name: Verify generated plugin bundles match the generator
+        run: npm run check:plugins
+
+      - name: Install standalone tarball and exercise native fetch assets
+        run: npm run test:mcp:install
 
       - name: Verify package tarball
         run: npm pack --dry-run

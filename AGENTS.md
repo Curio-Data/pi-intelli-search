@@ -2,6 +2,8 @@
 
 This is a **`Pi` extension** that adds intelligent web research tools to the `Pi` coding agent. It provides a 5-stage research pipeline (search, fetch, extract, collate, and cache suggest) as a single tool call, plus individual tools for manual orchestration.
 
+For cross-host development, start at the [Model Context Protocol (MCP) implementation handoff](docs/plans/mcp-intelli-search/README.md). It records the current checkpoint, approved package boundaries, frozen compatibility contracts and next phase. Phase 4 supplies `packages/mcp/` with stdio protocol serving through the official split server package; Phase 5 supplies the generated host plugin bundles and repository marketplaces; Phase 6 supplies the three installation routes, compatibility matrix, extended CI and two-package release wiring. Publication remains on hold pending the owner's explicit approval. The [Post-Phase 6 Checkpoint](docs/plans/mcp-intelli-search/POST-PHASE-6.md) holds the open host plugin findings and their ordered fix list, which is the next work. Its strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
+
 ---
 
 ## Shell Tool Preferences
@@ -174,7 +176,7 @@ When creating commits:
 
 ## Project Overview
 
-- **Package name:** `pi-intelli-search`
+- **Package name:** `@curio-data/pi-intelli-search`
 - **Language:** TypeScript (ESM, strict mode).
 - **Runtime:** Node.js (runs inside `Pi`'s extension host).
 - **Build:** `tsc` to `dist/`.
@@ -200,22 +202,64 @@ All `Pi` SDK packages are **peer dependencies**. They are provided by the hostin
 ```
 src/
 ├── index.ts                  # Extension entry: registers tools, events, model setup
-├── annotations.ts            # Harvest url_citation annotations from provider response bodies
-├── llm.ts                    # callLlm() - pi native auth + retry/backoff + per-call timeout + payloadPatch/reasoning/fetch hooks
-├── fetch.ts                  # Page fetching: Defuddle vs Markdown comparison, llms-full.txt
-├── prompts.ts                # System prompts for search, extraction, collation, cache suggest
+├── core/                     # Host-neutral execution and shared helpers
+│   ├── operations/          # Search, extract, collate and five-stage research
+│   ├── contracts.ts         # Context, model, result, progress and identity interfaces
+│   ├── index.ts             # Host-neutral engine exports
+│   ├── defaults.ts          # Shared tuning; no provider/model selection
+│   ├── schemas.ts           # Canonical tool parameters
+│   ├── llm.ts               # Single model retry/timeout policy
+│   ├── paths.ts             # Physical roots and display policy
+│   ├── cache.ts             # Artifacts, locks and index
+│   ├── fetch.ts             # Dual page fetch and documentation downloads
+│   ├── console.ts           # Async-scoped dependency diagnostic suppression
+│   ├── annotations.ts       # Citation harvesting
+│   ├── messages.ts          # Message and appendix builders
+│   ├── prompts.ts           # System prompts
+│   ├── progress.ts          # Host-neutral stage progress
+│   ├── telemetry.ts         # Local sidecar with injected identity
+│   ├── types.ts             # Shared data types
+│   └── util.ts              # URL, concurrency and resilience helpers
+├── native-operation-context.ts # Trusted native settings, paths and result/progress mapping
+├── native-model-client.ts    # Per-operation model adapter delegating to callLlm()
+├── native-identity.ts        # Native package identity from the installed manifest
+├── agent-dir.ts              # Native agent-directory discovery, kept out of shared utilities
+├── host-types.ts             # Native update callback, tool result and theme types
+├── annotations.ts            # Forwarding export to core/annotations.ts
+├── llm.ts                    # Native auth, dispatch and hooks; invokes core model policy once
+├── fetch.ts                  # Forwarding export to core/fetch.ts
+├── prompts.ts                # Forwarding export to core/prompts.ts
 ├── providers.ts              # Custom model registration (Perplexity models) into models.json
 ├── settings.ts               # Settings loader with caching and invalidation
-├── cache.ts                  # .search/ cache read/write, index management, cache suggest helpers
-├── telemetry.ts             # Local-only meta.json sidecar: schema, builder, atomic write, version source
-├── types.ts                  # Shared TypeScript interfaces
-├── util.ts                   # URL extraction, source-section strip, inference, concurrency + retry/backoff/timeout/throttle helpers
+├── cache.ts                  # Forwarding export to core/cache.ts
+├── telemetry.ts             # Native compatibility facade; implementation in core/telemetry.ts
+├── types.ts                  # Forwarding export to core/types.ts
+├── util.ts                   # Core utility forwards plus native diagnostic prefix
 └── tools/
-    ├── intelli-research.ts   # Full pipeline orchestrator (5 stages)
-    ├── intelli-search.ts     # Standalone search via the configured search model
-    ├── intelli-extract.ts    # Standalone per-page LLM extraction
-    ├── intelli-collate.ts    # Standalone collation + cache write
-    └── shared.ts             # Shared builders: domain filter, web-search tool patch, extraction/collation messages, appendix
+    ├── intelli-research.ts   # Native research registration, progress mapping and renderer
+    ├── intelli-search.ts     # Native search registration and wrapper
+    ├── intelli-extract.ts    # Native extraction registration and wrapper
+    ├── intelli-collate.ts    # Native collation registration and wrapper
+    └── shared.ts             # Forwarding export to core/messages.ts
+
+packages/
+└── mcp/
+    ├── package.json         # Standalone artifact and explicit runtime dependencies
+    ├── src/                 # CLI, strict config, workspace, provider, runtime and protocol adapters
+    ├── test/                # Config, CLI, console, provider, operation and protocol coverage
+    ├── tsconfig.json        # Standalone source and test type check
+    └── README.md            # Exact configuration and runtime interface
+
+guidance/
+├── research-guide.md        # Shared host-neutral guidance source (token template)
+└── setup-*.md               # Per-host setup fragments rendered into plugin skills
+
+plugins/
+├── claude-code/             # Generated Claude Code bundle (manifest, .mcp.json, skill)
+└── codex/                   # Generated Codex bundle (compatibility manifest, .mcp.json, skill)
+
+.claude-plugin/marketplace.json   # Generated Claude Code repository marketplace
+.agents/plugins/marketplace.json  # Generated Codex repository marketplace
 
 skills/
 └── intelli-search/
@@ -224,21 +268,44 @@ skills/
 docs/
 ├── ARCHITECTURE.md           # Detailed pipeline and design decisions
 ├── BENCHMARKS.md             # Extract/collate model benchmark: methodology, harness, recorded results
-└── COMPONENTS.md             # Third-party dependency attribution
+├── COMPONENTS.md             # Third-party dependency attribution
+└── plans/mcp-intelli-search/ # Cross-host research, checkpoints and implementation handoff
 
 scripts/
 ├── analyze-sessions.sh       # Aggregate meta.json telemetry sidecars across sessions
-└── benchmark-models.sh       # A/B benchmark harness for extract/collate models (live quota)
+├── benchmark-models.sh       # A/B benchmark harness for extract/collate models (live quota)
+├── plot-downloads.mts       # Download chart generation (npm run chart)
+├── README.md                # Script usage guide
+├── build-mcp.mjs            # Audited standalone bundles and legal-file copies
+├── generate-toc.mjs         # README contents generator; --check is the drift gate
+├── generate-plugin-bundles.mjs # Plugin/marketplace generator; --check is the drift gate
+├── verify-mcp-install.mjs    # Production-only install and native-fetch verification
+└── capture-native-contract.mts # Explicit compatibility-fixture regeneration
 
 test/
 ├── annotations.test.ts
 ├── cache.test.ts
 ├── compat-guard.test.ts
+├── core-boundary.test.ts     # Source/declaration audit and isolated runtime
+├── core-cache.test.ts        # Independent-process cache writes and metadata
+├── core-console.test.ts      # Concurrent diagnostic scopes and restoration
+├── core-llm.test.ts          # Shared retry/timeout/cancellation policy
+├── core-operations.test.ts   # Injected engine outcomes, staging and cancellation
+├── native-model-client.test.ts # Native adapter state and policy delegation
+├── workspace-paths.test.ts   # Workspace/display path separation
 ├── telemetry.test.ts
 ├── fetch.test.ts
 ├── index.test.ts
 ├── llm.test.ts
+├── native-contract.test.ts
+├── fixtures/native-contract/ # Frozen tool, prompt, result, cache and telemetry contracts
+├── helpers/native-contract.ts # Isolated native contract capture
+├── helpers/core-context.ts   # Host-free deterministic operation context
+├── probes/mcp-sdk.mjs         # Optional isolated SDK interface probe
+├── probes/mcp-install.mjs     # Installed standalone operations and native fetch assets
+├── tsconfig.native-contract.json # Type check for contract tests and generator
 ├── prompts.test.ts
+├── plugin-bundles.test.ts    # Generated plugin/marketplace shape, pins and drift gate
 ├── providers.test.ts
 ├── research.test.ts
 ├── research-telemetry.test.ts
@@ -252,7 +319,14 @@ test/
 │   ├── 06_extract_limits.sh
 │   ├── 07_llms_full.sh
 │   ├── 08_websearch_tool.sh
-│   └── 09_sonar_pro_search.sh
+│   ├── 09_sonar_pro_search.sh
+│   ├── 10_config_recipes.sh
+│   ├── 11_mcp_stdio.sh
+│   ├── 12_plugin_bundles.sh
+│   ├── 13_claude_code_plugin.sh
+│   ├── 14_codex_plugin.sh
+│   ├── env.sh
+│   └── lib.sh
 ├── run-e2e-all.sh
 ├── run-e2e-publish.sh
 ├── run-e2e-publish-local.sh
@@ -273,16 +347,19 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline descripti
 4. **Collate:** Configurable model (default: MiniMax M3) deduplicates across extractions, produces summary and cache.
 5. **Cache suggest:** LLM judge (extract model) compares current query against `.search/.index.json` and appends related previous searches to the output. This is purely additive and never blocks or gates the main result.
 
-The pipeline is self-contained. `Pi` extensions cannot call other tools from `execute()`, so all stages are inlined in `intelli-research.ts`.
+The pipeline is self-contained in `src/core/operations/research.ts`. Former shared module paths (`fetch.ts`, `cache.ts`, `annotations.ts`, `prompts.ts`, `types.ts`, `util.ts`) forward to implementations under `src/core/`. Current `Pi` hosts expose `ctx.executeTool()` for nested tool calls, but this pipeline does not depend on that newer capability. Direct stage execution preserves the supported native baseline and the planned host-independent engine boundary.
 
 ### LLM Integration
 
+- All four native tools construct a context through `src/native-operation-context.ts` and invoke shared operations from `src/core/operations/`. `createNativeModelClient()` delegates to `callLlm()` without adding retries or provider fallback. `callLlm()` invokes `runModelWithPolicy()` in `src/core/llm.ts` exactly once. The core owns no host context, settings discovery or credentials. Run `test/core-*.test.ts` for dependency boundaries, engine operations, policy and cache tests, plus `node_modules/.bin/tsc -p test/tsconfig.native-contract.json` for their type check.
 - Dispatches by feature detection. On `Pi` >= 0.86 it calls `ctx.modelRegistry.streamSimple()` (the registry facade added in `Pi` 0.86.0), which normalises the context, resolves auth, and applies the `baseUrl` override internally. On `Pi` 0.81.1-0.85.x it calls `ctx.modelRegistry.getProvider(provider).streamSimple()` (root `@earendil-works/pi-ai` API) with auth resolved by `Pi` (`getApiKeyAndHeaders`) and the `baseUrl` override mirrored from `ModelRuntime.prepareRequest`. Critical contract: on `Pi` >= 0.86 a raw context passed straight to a provider silently drops `systemPrompt` (providers read the prompt from the transcript's system messages); never call `provider.streamSimple()` directly on those versions. Neither path uses the deprecated `pi-ai/compat` `completeSimple()` shim nor `ModelRegistry.complete()` (which drops the provider-neutral reasoning parameter). Both send `reasoning: "low"`, which MiniMax M3 and other reasoning models require; the search stage overrides it per call (`minimal` when the web search tool is enabled). `test/compat-guard.test.ts` enforces that no file imports `pi-ai/compat`. Models registered outside `Pi`'s registry (for example `pi-ai`'s `registerFauxProvider`) are not consulted.
 - **Per-call payload patching and reasoning.** `callLlm()` accepts `payloadPatch` (forwarded as pi-ai's `onPayload`) and `reasoning` (default `"low"`). The search stage uses both to attach `openrouter:web_search`. A patch must return the payload untouched when it does not apply and never overwrite an existing `tools` array.
-- **Annotation side channel.** When `annotations` is passed, `callLlm()` injects a wrapped `fetch` through `ProviderRequestOptions.fetch` that tees each response body and parses `url_citation` entries into the sink. The sink is cleared at the start of every retry attempt, and `callLlm()` awaits the background reads (bounded at 2s) before returning. Every failure in this path is swallowed by design. **Both hooks fail silently if upstream pi-ai changes them**: re-check `ProviderRequestOptions.fetch` and `onPayload` on every peer-dependency bump; `test/annotations.test.ts` covers the parser, not the injection point.
+- **Annotation side channel.** When `annotations` is passed, `callLlm()` injects a wrapped `fetch` through `ProviderRequestOptions.fetch` that tees each response body and parses `url_citation` entries into the sink. Every attempt has a separate sink, preventing late reads from failed attempts from contaminating successful citations. `callLlm()` awaits successful background reads (bounded at 2s) before copying citations to the caller. Every failure in this path is swallowed by design. **Both hooks fail silently if upstream pi-ai changes them**: re-check `ProviderRequestOptions.fetch`, `onPayload` and the structural compatibility of the local `FetchFunction` alias in `src/annotations.ts` with the host fetch hook on every peer-dependency bump; `test/annotations.test.ts` covers the parser, not the injection point.
 - Auth flows through `Pi`'s native system (`auth.json`, env vars, OAuth). No API key management happens in this code.
-- **Retry and timeout are owned by `callLlm()`, not the SDK.** It passes `maxRetries: 0` to the provider stream so the SDK's own retries do not compound with ours, then wraps the call in `withRetry()` (full-jitter exponential backoff, honours Retry-After, bounded by `llmRetryAttempts`/`retryBaseDelayMs`/`retryMaxDelayMs`). On the OpenRouter path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and the stream resolves with `stopReason: "error"` and the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header); it must never throw, because a throw propagates out of the stream and bypasses retry.
-- **Per-call timeout via `callWithAbortTimeout()` (`util.ts`).** The SDK request timeout does not cover a stalled streaming body, so `callLlm()` aborts the whole call with an `AbortController` after `llmTimeoutMs`, combined with the tool's signal so Esc still cancels. A timeout surfaces as a retryable condition; if it survives all attempts, `callLlm()` throws a clear timeout error.
+- **Retry and timeout are owned by `src/core/llm.ts`, not the SDK.** Native `callLlm()` passes `maxRetries: 0` to the provider stream and invokes the shared policy, which wraps each call in `withRetry()` (full-jitter exponential backoff, honours Retry-After, bounded by `llmRetryAttempts`/`retryBaseDelayMs`/`retryMaxDelayMs`). On the OpenRouter path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and the stream resolves with `stopReason: "error"` and the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header); it must never throw, because a throw propagates out of the stream and bypasses retry.
+- **Per-call timeout via `callWithAbortTimeout()` (`src/core/util.ts`).** The SDK request timeout does not cover a stalled streaming body, so the shared model policy aborts the whole call with an `AbortController` after `llmTimeoutMs`, combined with the tool's signal so Esc still cancels. Actual timer expiry is retryable; permanent provider exceptions are not classified as timeouts. Cancellation also propagates through stage boundaries and cache-lock waits.
+- **Routine fetch and retry notices must not write directly to the console.** Raw terminal writes bypass the `Pi` TUI renderer. The branch removes routine fetch-comparison output and routes native retries through `ModelRequest.onRetryNotice` into stage progress; when no callback is supplied, the native model client provides a no-op and native `callLlm()` uses a silent policy logger. The shared policy retains its logger fallback for other adapters; MCP research can send retry progress while catalogue preflight and one-shot calls use stderr. Telemetry records aggregate variant winners (`fetch.winners`), not per-page scores. Native operation error logging remains outside this targeted fix. The source audit covers direct console calls, not transitive logger calls. The native patch preparation on `main` is unreleased; see [the current handoff](docs/plans/mcp-intelli-search/POST-PHASE-5.md) for the owner's release hold.
+- **Policy Scope.** Configured model retries and application timeouts apply inside `intelli_research`. The native standalone search, extract and collate operations retain one attempt and no application-level timeout for compatibility. The standalone MCP adapter must apply explicit policy defaults for all its model calls before exposing tools.
 - **Application-level search retry.** Stage 1 retries up to `searchRetryAttempts` times when the search model returns a valid response with zero usable links (a degraded 200 that transport retry cannot catch).
 - **Optional extract throttle.** `minRequestIntervalMs` (default 0, off) spaces concurrent extract calls via a per-run rate limiter for keys with tight rate limits.
 - Provider-response monitoring via `after_provider_response` event surfaces a rate-limit status in the `Pi` footer even outside tool calls.
@@ -307,9 +384,11 @@ Loaded from `~/.pi/agent/settings.json` and, only for trusted projects, `<projec
 
 ### Cache
 
-Written to `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. The collation model sees cache paths so it can reference them in output.
+Written to `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. Physical paths, including indexes and locks, resolve against `ctx.cwd` rather than the process directory. Prompts, report headers and results use a separate configured display path. `makeCachePath()` returns an absolute physical path; use `displayCachePath()` for native text. Absolute and parent-relative native cache settings remain supported.
 
-**Telemetry sidecar** (v0.11.0+). Each `intelli_research` run also writes a local-only `meta.json` into its cache directory, recording per-stage outcomes (pages fetched/failed, fetch-variant winners, links returned and annotations harvested, search-retry, cache-suggest hits, latency). The schema is owned by `src/telemetry.ts`, is additive-only, and carries an independent `schemaVersion` decoupled from `extensionVersion`. The write is atomic (temp file then `rename`) and fail-safe: failures are caught and logged, never surfacing to the pipeline result. Suppressed entirely when `disableTelemetry` is true. No network call is added; the word "telemetry" refers to local runtime signals, not remote reporting. The bundled `scripts/analyze-sessions.sh` aggregates these sidecars.
+Documentation downloads use unique directories below the configured cache root's `.staging/`. No download runs under a cache lock. Writers settle before cleanup in `finally`, including cancellation and cache-write failure. Optional staging setup and cleanup errors are logged without discarding the research result. Native absolute and parent-relative cache settings remain valid, so staging can lie outside the workspace; standalone containment checks are a separate adapter responsibility.
+
+**Telemetry sidecar** (v0.11.0+). Each `intelli_research` run also writes a local-only `meta.json` into its cache directory, recording per-stage outcomes (pages fetched/failed, fetch-variant winners, links returned and annotations harvested, search-retry, cache-suggest hits, latency). The schema is owned by `src/core/telemetry.ts`, is additive-only, and carries an independent `schemaVersion` decoupled from `extensionVersion`. The write is atomic (temp file then `rename`) and fail-safe: failures are caught and logged, never surfacing to the pipeline result. Suppressed entirely when `disableTelemetry` is true. No network call is added; the word "telemetry" refers to local runtime signals, not remote reporting. The adapter injects package identity; the core never discovers its own package version. Native records retain their legacy shape, while non-native records add optional `packageName` and `adapter` fields. The bundled `scripts/analyze-sessions.sh` aggregates both record forms.
 
 **Cache suggest** (Stage 5) reads `.index.json` back after each research call. It feeds up to 20 recent entries to an LLM judge (using the extract model for cost efficiency) which returns semantically related previous searches. Results are formatted as a `📚 Related cached searches` table appended to the tool output. This is purely supplementary. The live search always runs, and the cache suggestions give the agent (and user) a pointer to prior research if live results are insufficient.
 
@@ -319,7 +398,14 @@ Written to `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `meta.
 npm install              # Install deps
 npm run build            # TypeScript -> dist/ (tsc)
 npm run dev              # Watch mode (tsc --watch)
-npm test                 # Run all unit tests
+npm test                 # Run native unit tests
+npm run build:all        # Native build, standalone type check and bundles
+npm run test:all         # Native and standalone deterministic tests
+npm run test:mcp:install # Independent production install and native fetch probe
+npm run generate:toc     # Regenerate README contents from headings
+npm run check:toc        # Fail if README contents drift from the generator
+npm run generate:plugins # Regenerate plugin bundles and marketplaces after a version change
+npm run check:plugins    # Fail if committed plugin files drift from the generator
 npm run test:smoke       # Smoke test (structural validation)
 ./test/e2e/01_main.sh        # End-to-end test (live LLM calls, isolated env)
 scripts/benchmark-models.sh <model-id>...   # A/B benchmark extract/collate models (live quota, see docs/BENCHMARKS.md)
@@ -346,7 +432,8 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 - **Tool definition pattern:** Each tool exports an object with `name`, `label`, `description`, `promptSnippet`, `promptGuidelines`, `parameters` (TypeBox schema), and `execute()`.
 - **Error handling:** Extraction failures are caught per-page (do not fail the whole pipeline). Transient failures (429, 5xx, timeouts) are retried with full-jitter backoff honouring Retry-After; a failure that survives all attempts throws an actionable error.
 - **`Pi` 0.81.1 baseline:** The extension uses the supported settings trust APIs, `CONFIG_DIR_NAME`, async model-registry refresh semantics, and `modelRegistry.getProvider()` from this version; it feature-detects the `Pi` >= 0.86 registry facade for LLM dispatch.
-- **No cross-tool calls:** `Pi` extensions cannot invoke other tools from `execute()`. Therefore `intelli_research` inlines all stages.
+- **Standalone Boundary:** `packages/mcp/` bundles only the shared core and adapter source; every external runtime dependency belongs in its manifest. Keep `Pi` libraries out of the standalone runtime and MCP protocol libraries out of the native extension runtime. The protocol SDK (`@modelcontextprotocol/server`) belongs only to the standalone package. Shared tuning lives in `src/core/defaults.ts`; native model defaults remain in `src/settings.ts`. Preserve both tarball-install gates. The standalone cache link checks reject existing escapes but are not a sandbox against concurrent hostile filesystem mutation.
+- **Self-Contained Pipeline:** `intelli_research` executes its stages directly rather than invoking registered host tools. Keep that design for baseline compatibility and host-independent reuse, even on hosts that provide `ctx.executeTool()`.
 - **SPDX headers:** Source files include `// SPDX-License-Identifier: Apache-2.0` and copyright notices.
 
 ## Testing Conventions
@@ -362,9 +449,10 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | Category | Purpose | Files | Network |
 |---|---|---|---|
 | **Structural/smoke** | Extension loads, tools register, events bind | `smoke.ts` | No |
+| **Shared Engine** | Host boundary, injected operations, policy, concurrent cache writes and console scopes | `core-*.test.ts`, `native-model-client.test.ts`, `workspace-paths.test.ts` | No |
 | **Unit (pure logic)** | Functions without filesystem or network deps | `annotations.test.ts`, `cache.test.ts`, `telemetry.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
 | **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts` | No |
-| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `e2e/01_main.sh`, `e2e/02_cap.sh`, `e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`, `e2e/07_llms_full.sh`, `e2e/04_migration.sh`, `e2e/03_model_override.sh`, `e2e/08_websearch_tool.sh`, `e2e/09_sonar_pro_search.sh`, `e2e/10_config_recipes.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
+| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `e2e/01_main.sh`, `e2e/02_cap.sh`, `e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`, `e2e/07_llms_full.sh`, `e2e/04_migration.sh`, `e2e/03_model_override.sh`, `e2e/08_websearch_tool.sh`, `e2e/09_sonar_pro_search.sh`, `e2e/10_config_recipes.sh`, `e2e/11_mcp_stdio.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
 | **Publish** | Validates the published npm package structure | `run-e2e-publish.sh` (registry install), `run-e2e-publish-local.sh` (local tarball install; CI gate for peer-dep drift) | Yes (npm only) |
 
 ### Principle 1: Tests Must Be Deterministic
@@ -437,6 +525,10 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `e2e/08_websearch_tool.sh` | Exercises the configured server-tool path with a chat model: verifies the selected model, non-empty links, completed pipeline, and cached sources. Annotation count is diagnostic, not a pass condition |
 | `e2e/09_sonar_pro_search.sh` | Verifies registration and settings-based selection of `perplexity/sonar-pro-search` in a vanilla agent dir, then checks non-empty links, completed pipeline, and cached sources. Reports the annotation count |
 | `e2e/10_config_recipes.sh` | Runs each README Configuration Recipe's settings block in a fresh isolated agent dir + cwd and asserts the effective behaviour from telemetry: zero-config defaults, partial blocks preserving unspecified defaults, extract/collate overrides, free-tier pacing keys, and per-project settings via pre-seeded trust.json (the only project-level-settings coverage) |
+| `e2e/11_mcp_stdio.sh` | Builds the standalone package, registers it in an isolated profile's `mcp.json` (direct exposure, no native extension) and drives a real research through `Pi`'s native MCP client, asserting connection, workspace cache, `mcp` telemetry identity and completed outcome. Establishes that `--no-extensions` disconnects MCP servers and that `codemode` exposure hides direct tool calls |
+| `e2e/12_plugin_bundles.sh` | Packs the standalone artifact, generates local-tarball plugin bundles (pre-publication evidence class), vendors the tarball, then exercises real host installation credential-free: Claude Code strict validation, marketplace add, install, `claude mcp list` connection and skill discovery; Codex marketplace add, catalog-path assertion, install, installed-cache layout and prompt-input skill discovery. Skips with a notice when a host CLI is absent. Also asserts Claude Code key delivery with dummy values: the required sensitive key option withholds the server while unset and reaches the server process once set. Credentialed sessions live in `13_claude_code_plugin.sh` and `14_codex_plugin.sh` |
+| `e2e/13_claude_code_plugin.sh` | Installs the local-tarball Claude Code plugin into an isolated `CLAUDE_CONFIG_DIR`, sets the key through the plugin option only, and drives one real research through `claude -p`: asserts the session reports the server connected, the model calls `intelli_research` without a tool error, and the project cache carries a completed `mcp` sidecar. Authenticates with `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` (static, never stored or refreshed), never a copied credential file, and asserts the operator's credential file is untouched |
+| `e2e/14_codex_plugin.sh` | Installs the local-tarball Codex plugin into a dedicated test profile (`.e2e-auth/codex`, reset to its `auth.json` on every run because Codex caches plugins by version), pre-approves the plugin's tools, exports the forwarded variables and drives one real research through `codex exec --json`: asserts a completed `intelli_research` `mcp_tool_call` and a completed `mcp` cache sidecar. Uses a separate ChatGPT login refreshed in place by one consumer at a time (exclusive lock), never a copy of `~/.codex`, and asserts the operator's `auth.json` is untouched |
 | `run-e2e-all.sh` | Runs every scenario script one at a time with a spacing gap (`E2E_GAP_SECONDS`, default 20). Use this instead of launching scripts in parallel or back-to-back: bursting many calls at one key depletes the rate-limit bucket and produces degraded or hung runs. |
 
 The scenarios write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
@@ -449,7 +541,7 @@ No E2E script may be committed without being executed at least once to completio
 
 - **Before committing a new E2E script**, run it with a real API key and confirm it exits 0 with the expected verification checks passing.
 - **`shellcheck` is mandatory.** Every shell script must pass `shellcheck` with zero findings. This catches unbound variables, quoting bugs, and syntax errors that `set -euo pipefail` alone will not catch until runtime.
-- **`set -euo pipefail` is mandatory** at the top of every E2E script. The `-u` flag turns any reference to an undefined variable into a hard error. If a script references `$E2E_EXTENSION_PATH` or any other variable, it must define that variable before first use. No E2E script may depend on variables from the caller's environment (except `OPENROUTER_API_KEY`, which is documented).
+- **`set -euo pipefail` is mandatory** at the top of every E2E script. The `-u` flag turns any reference to an undefined variable into a hard error. If a script references `$E2E_EXTENSION_PATH` or any other variable, it must define that variable before first use. No E2E script may depend on variables from the caller's environment (except `OPENROUTER_API_KEY` and, for host-session scenarios, `CLAUDE_CODE_OAUTH_TOKEN`, which are documented).
 
 CI does not run E2E scripts (they require API keys and a live `pi` binary). The only gate is the developer running the script. If it is not run, it is not tested. If it is not tested, it rots.
 
@@ -468,6 +560,8 @@ The E2E tests auto-detect `OPENROUTER_API_KEY` from `~/.pi/agent/auth.json`. Onl
 ```bash
 OPENROUTER_API_KEY=sk-or-v1-... ./test/e2e/01_main.sh
 ```
+
+`13_claude_code_plugin.sh` also needs `CLAUDE_CODE_OAUTH_TOKEN` in the gitignored `.env` (mode 600). Each value must be `NAME=VALUE` on one line: scenarios 13 and 14 parse `.env` with `test/e2e/env.sh` (never `source`), read only the keys they need before any output reaches `.e2e-logs/`, and refuse a malformed line or a group- or world-readable file. Create it once with `claude setup-token` in a separate terminal, never through an agent session, because the command prints the token. The token is static for a year and is never written to the isolated profile. `14_codex_plugin.sh` needs a dedicated Codex login, created once in a separate terminal with `CODEX_HOME="$PWD/.e2e-auth/codex" codex login --device-auth` (gitignored, mode 700). Never copy `~/.claude/.credentials.json` or `~/.codex/auth.json` into a test profile: a copied refresh-token chain invalidates the operator's login.
 
 ### E2E Publish Test
 
@@ -489,7 +583,7 @@ No API keys are needed.
 5. **`focusPrompt` is critical:** Without it the extraction LLM works generically. The `promptGuidelines` instruct the agent to always provide it.
 6. **Cache suggest is additive, not a gate:** Stage 5 never blocks or replaces the live pipeline. It uses the cheap extract model as an LLM judge (≈500 input tokens, ≈$0.0002) to find related previous searches. Failures are caught and silently ignored.
 7. **Default migration is match-based, not tracked:** When defaults change between versions, users whose model configs match the OLD default exactly get auto-migrated to the NEW default in-memory. Users who customized their config are left alone. Migration never writes to the user's `settings.json`. A notification explains what changed and how to make it permanent. This is tested in `test/settings.test.ts` under `migrateDefaults`.
-8. **Rate-limit resilience is owned at the application layer:** `callLlm()` disables the SDK's retries (`maxRetries: 0`) and runs its own full-jitter backoff plus a hard `AbortController` timeout, because the SDK retries do not honour Retry-After, do not abort cleanly on Esc, and (critically) the SDK request timeout does not cover a stalled streaming body. Stage 1 additionally retries a degraded-200 search (valid response, zero links) that no transport-level check can catch. An opt-in `minRequestIntervalMs` throttle spaces the extract fan-out for tight-limit keys. The pure helpers (`withRetry`, `callWithAbortTimeout`, `isRetryableMessage`, `parseRetryAfterMs`, `createRateLimiter`) live in `util.ts` and are unit-tested in `test/util.test.ts`.
+8. **Rate-limit resilience is owned at the application layer:** `callLlm()` disables the SDK's retries (`maxRetries: 0`) and invokes the shared model policy's full-jitter backoff plus a hard `AbortController` timeout, because the SDK retries do not honour Retry-After, do not abort cleanly on Esc, and (critically) the SDK request timeout does not cover a stalled streaming body. Stage 1 additionally retries a degraded-200 search (valid response, zero links) that no transport-level check can catch. An opt-in `minRequestIntervalMs` throttle spaces the extract fan-out for tight-limit keys. The pure helpers (`withRetry`, `callWithAbortTimeout`, `isRetryableMessage`, `parseRetryAfterMs`, `createRateLimiter`) live in `util.ts` and are unit-tested in `test/util.test.ts`.
 
 ## Tool Naming
 
@@ -507,8 +601,26 @@ All tools use the `intelli_` prefix to avoid collisions with other `Pi` extensio
 **The agent must never create a _GitHub_ Release or trigger `npm` publication without the user's explicit permission.**
 
 Publishing is gated through `npm` staged publishing. CI submits the tarball; the user approves it on `npmjs.com` with 2FA before it goes live:
-- **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
-- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. Builds, tests, and runs `npm stage publish` against the `@curio-data` scope. Authentication is via OIDC trusted publishing (no stored token); provenance is signed automatically. The package is then **held in the staging queue** until a maintainer approves it on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) with 2FA. Until approval, the version does not appear on the public registry.
+- **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, generated-plugin drift, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
+- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. The tag selects exactly one package: `pi-vX.Y.Z` stages the native `@curio-data/pi-intelli-search` package and `mcp-vX.Y.Z` stages `@curio-data/mcp-intelli-search`; any other tag fails. The workflow verifies the tag version against the selected package's manifest, builds and tests both artifacts, and runs `npm stage publish` against the `@curio-data` scope. The dist-tag is derived from the version: stable releases stage to `latest`, while a prerelease such as `0.2.0-alpha.0` stages to its first prerelease identifier (`alpha`), because `npm stage publish` inherits `npm publish`'s guard that throws on a prerelease version without an explicit `--tag`. Authentication is via OIDC trusted publishing (no stored token); provenance is signed automatically (possible exception: the very first staged version of a brand-new package, where npm's visibility check has no package to inspect). The package is then **held in the staging queue** until a maintainer approves it on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) with 2FA. Until approval, the version does not appear on the public registry.
+
+### Versioning Scheme (Two Packages, One Core)
+
+Agreed with the owner on 2026-10-05. Both packages are pre-1.0 and version in lockstep on the minor number:
+
+- **Minor (0.x.0) is the shared core generation.** Any change under `src/core/` bumps the minor version of **both** manifests, even if only one package ships immediately. Letting the minors drift destroys the signal that `pi-intelli-search@0.15.1` and `mcp-intelli-search@0.15.2` run the same core generation, which matters because the MCP package must honour the frozen native contracts.
+- **Patch (0.0.x) is package-specific.** Changes outside `src/core/` (native adapter under `src/`, MCP adapter under `packages/mcp/`, plugins, docs) bump only the affected package's patch. Patches are independent between packages and reset to 0 on every core bump.
+- **Prerelease is an orthogonal maturity marker.** A package carries `-alpha.N` while dev-marked and stages to the derived `alpha` dist-tag, off `latest` (the native package started this way at 0.3.1-alpha.1). Dropping the suffix is the promotion to normal; it is not a version change.
+- **Native minor bumps still need a `DEFAULT_HISTORY` entry** in `src/settings.ts`, including bumps caused by core changes, and both workspaces need `npm install --package-lock-only`. The MCP package has no `DEFAULT_HISTORY`; its version changes never trigger native model migration.
+- **Tags and changelog sections are prefixed per package:** `pi-vX.Y.Z` / `[pi-X.Y.Z]` for the native extension, `mcp-vX.Y.Z` / `[mcp-X.Y.Z]` for the MCP server. Native releases 0.14.0 and older use the unprefixed `vX.Y.Z` form; those tags and releases are historical and never re-released.
+- **Release order within a coupled cycle: MCP first, native held.** The native package is not staged or released until the MCP package of the same core generation is confirmed installable from npmjs (the post-publication gate in the MCP checklist). Owner directive, 2026-10-05.
+
+### Changelog Structure
+
+One canonical `CHANGELOG.md` at the repository root covers both packages. The audiences overlap and core changes appear in both histories, so splitting the file would duplicate entries or force readers to open two files.
+
+- Native sections are `## [pi-X.Y.Z]`, MCP sections `## [mcp-X.Y.Z]`; a horizontal rule and note below the newest entries separate the prefixed era from the historical unprefixed native entries.
+- **Write core changes once, under the native section.** The matching MCP section carries a one-line pointer ("Core behaviour is shared with [pi-X.Y.Z] and recorded there") plus only its adapter-specific entries.
 
 ### Changelog Principles
 
@@ -526,40 +638,59 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 1. **Verify CI is green.** Confirm all changes are merged to `main` and the latest run is passing.
 2. **Bump `version` in `package.json`** following [SemVer](https://semver.org/), then sync derived state before anything else: run `npm install --package-lock-only` so the `package-lock.json` root version matches, and add a `DEFAULT_HISTORY` entry for the new version in `src/settings.ts` (defaults unchanged is fine). Both drifts are silent: the lockfile drift was missed in v0.12.1, and a missing history entry disables default migration for upgrading users. Run `npm test` after the bump; the migration guard reads the live package version.
 3. **Update `CHANGELOG.md` in two places.** Both are required:
-   - **Top of file:** Add a new `## [X.Y.Z] - YYYY-MM-DD` section above the previous entry. Use the standard sub-headings (`### Added`, `### Changed`, `### Fixed`, `### Compatibility`, `### Removed`, `### Security`) as needed. List user-visible changes only; internal refactors do not need entries unless they affect compatibility.
-   - **Bottom of file:** Add a corresponding reference link `[X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/vX.Y.Z` below the existing reference block. Without this entry the version heading at the top will not link to the GitHub release.
+   - **Top of file:** Add a new `## [pi-X.Y.Z] - YYYY-MM-DD` section above the previous entry. Use the standard sub-headings (`### Added`, `### Changed`, `### Fixed`, `### Compatibility`, `### Removed`, `### Security`) as needed. List user-visible changes only; internal refactors do not need entries unless they affect compatibility.
+   - **Bottom of file:** Add a corresponding reference link `[pi-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-vX.Y.Z` below the existing reference block. Without this entry the version heading at the top will not link to the GitHub release.
 4. **Verify both CHANGELOG edits exist before committing.** Run:
 
    ```bash
-   grep -n "^## \[X.Y.Z\]" CHANGELOG.md   # must return one match
-   grep -n "^\[X.Y.Z\]:"  CHANGELOG.md   # must return one match
+   grep -n "^## \[pi-X.Y.Z\]" CHANGELOG.md   # must return one match
+   grep -n "^\[pi-X.Y.Z\]:"  CHANGELOG.md   # must return one match
    ```
 
    Both must match. If either is missing, fix before continuing.
-5. **Commit and push** the version bump and CHANGELOG together. Suggested commit subject: `Release vX.Y.Z`.
-6. **Request explicit user approval** before creating the GitHub Release. The agent must not stage a publish without it (see `Release Policy` above).
-7. **On approval, create the GitHub Release** with tag `vX.Y.Z`. The workflow then runs `npm stage publish`, which submits the tarball to the staging queue. The agent's responsibility ends here.
+5. **Commit and push** the version bump and CHANGELOG together. Suggested commit subject: `Release pi-vX.Y.Z`.
+6. **Request explicit user approval** before creating the GitHub Release. The agent must not stage a publish without it (see `Release Policy` above). In a coupled release cycle the native release also waits for the MCP post-publication gate (see `Versioning Scheme`).
+7. **On approval, create the GitHub Release** with tag `pi-vX.Y.Z`. The workflow then runs `npm stage publish`, which submits the tarball to the staging queue. The agent's responsibility ends here.
 8. **User approves the staged package** on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) via the Staged Packages tab, providing 2FA. The agent must never attempt to approve a staged publish, even if given credentials.
 9. **Verify publication.** After approval, check `https://www.npmjs.com/package/@curio-data/pi-intelli-search` shows the new version.
+
+### Releasing the MCP Package
+
+`@curio-data/mcp-intelli-search` has its own version, release tag prefix and staging queue. The native checklist above does not apply except where noted; in particular the MCP package has no `DEFAULT_HISTORY` and its version changes must never trigger native model migration.
+
+1. **Verify CI is green** on `main` and confirm the owner has explicitly approved this release. Approval of one package is not approval of the other.
+2. **Bump `version` in `packages/mcp/package.json`** following [SemVer](https://semver.org/), then run `npm install --package-lock-only` so the lockfile workspace version matches.
+3. **Remove the not-published notices** from `packages/mcp/README.md` and the root `README.md` (the `Publication Status` paragraph in `Use With Other Hosts`) on the first public release only.
+4. **Regenerate the plugin bundles** so the catalogs pin the new version: `npm run generate:plugins`, then confirm `npm run check:plugins` passes. Commit the regenerated catalogs with the version bump; they are what users install from.
+5. **Run the full paced live suite** `./test/run-e2e-all.sh`, including `11_mcp_stdio.sh`, `12_plugin_bundles.sh`, `13_claude_code_plugin.sh` and `14_codex_plugin.sh`, before tagging.
+6. **Update `CHANGELOG.md`** with a `## [mcp-X.Y.Z] - YYYY-MM-DD` section and a matching `[mcp-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-vX.Y.Z` reference link. Core changes are not repeated: one pointer line to the native `[pi-X.Y.Z]` section covers them (see `Changelog Structure`). Verify both edits with the grep checks from step 4 of the native checklist (adjusted for the `mcp-` prefix).
+7. **Commit and push**, then create the _GitHub_ Release with tag `mcp-vX.Y.Z` only after explicit approval. The workflow stages the package; the user approves it on `npmjs.com` with 2FA.
+8. **Post-publication gate:** verify the registry-pin installation route that pre-publication tests could not exercise: install the Claude Code and Codex plugins from the committed catalogs into clean profiles and confirm the `npx` launcher downloads and starts the published version. Record this evidence separately from the local-tarball class in [the compatibility matrix](docs/COMPATIBILITY.md). Only after this gate passes is the native package of the same core generation released.
 
 ### Testing the Publish Pipeline
 
 Before the first real release, validate the pipeline with a pre-release:
 1. Bump version to a pre-release identifier (for example, `0.3.1-alpha.1`).
 2. Create a _GitHub_ Release with the **Pre-release** checkbox checked.
-3. The `published` event triggers the workflow, exercising the full publish path.
-4. `npm` will **not** set pre-release versions as `latest`. Early adopters will not get it by default.
+3. The `published` event triggers the workflow (it fires for pre-releases too), exercising the full publish path. The workflow derives the dist-tag from the prerelease identifier (`alpha`), which is what allows a prerelease version past `npm stage publish`'s inherited guard.
+4. `npm` will **not** set pre-release versions as `latest`, and the derived dist-tag keeps them off it doubly. Early adopters will not get it by default.
 5. Verify the package appears on `npm`, then delete the pre-release tag if not needed.
+
+A staged dist-tag is immutable once staged; changing it means rejecting the staged version and re-staging. Whether a staging-only trusted publisher may set a non-`latest` dist-tag at stage time is unverified until the first live run; watch the first `mcp-v*-alpha*` release for it.
 
 ### npm Trusted Publisher
 
-The workflow authenticates to `npm` via OIDC; no stored token is used. The trusted publisher is configured on the `@curio-data/pi-intelli-search` package page on `npmjs.com` under **Settings → Trusted Publishers** with the following bindings:
+The workflow authenticates to `npm` via OIDC; no stored token is used. Each package needs its own binding. The trusted publisher is configured on the `@curio-data/pi-intelli-search` package page on `npmjs.com` under **Settings → Trusted Publishers** with the following bindings:
 
 - Organization: `Curio-Data`
 - Repository: `pi-intelli-search`
 - Workflow filename: `release.yml`
 - Environment: (none)
 - Allowed actions: `npm stage publish` only
+
+`@curio-data/mcp-intelli-search` requires the same binding on its own package page before its first release; the native package's binding does not cover it. Creating that binding is a maintainer action on `npmjs.com`, not something the agent can perform or verify from the repository.
+
+**Bootstrap caveat (peer-review finding, 2026-10-04).** npm's trusted-publisher documentation lists _package must exist_ as a prerequisite for configuring a trust relationship, and a never-published package has no package page. The staged-publish endpoint can create a brand-new package's first version, and trust configurations carry a `createStagedPackage` permission, so a bootstrap exists in principle, but the exact flow for binding a not-yet-existing package (pending-package UI, org-scope configuration, or a one-time token publish) is unverified. The maintainer must resolve this on `npmjs.com` before the first `mcp-v*` release; discovering it during the release is the expensive outcome.
 
 `npm publish` is intentionally **not** in the allowed actions list, so even a workflow compromise cannot push directly to the public registry; every release passes through the staged-publish approval gate.
 

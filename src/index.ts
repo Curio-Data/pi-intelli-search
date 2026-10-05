@@ -18,7 +18,8 @@ import {
   loadSettings,
   setMigrationContext,
 } from "./settings.js";
-import { getAgentDir, errMsg, logErr } from "./util.js";
+import { getAgentDir } from "./agent-dir.js";
+import { errMsg, logErr } from "./util.js";
 import { getExtensionVersion } from "./telemetry.js";
 
 /** Narrow injectable seam for deterministic model-registry refresh tests. */

@@ -64,7 +64,7 @@ describe("makeCachePath", () => {
     Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
     try {
       const result = makeCachePath("How do Svelte 5 runes work?", "/project", ".search");
-      assert.ok(result.startsWith(".search/2026-04-20-how-do-svelte-5-runes-"), result);
+      assert.ok(result.startsWith("/project/.search/2026-04-20-how-do-svelte-5-runes-"), result);
       assert.match(result, HASH);
     } finally {
       Date.prototype.toISOString = original;
@@ -80,7 +80,7 @@ describe("makeCachePath", () => {
         "/project",
         ".search",
       );
-      assert.ok(result.startsWith(".search/2026-04-20-this-is-a-very-long-"), result);
+      assert.ok(result.startsWith("/project/.search/2026-04-20-this-is-a-very-long-"), result);
       assert.match(result, HASH);
     } finally {
       Date.prototype.toISOString = original;
@@ -92,7 +92,7 @@ describe("makeCachePath", () => {
     Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
     try {
       const result = makeCachePath("C++ vs Rust: which is faster?", "/project", ".search");
-      assert.ok(result.startsWith(".search/2026-04-20-c-vs-rust-which-is-"), result);
+      assert.ok(result.startsWith("/project/.search/2026-04-20-c-vs-rust-which-is-"), result);
       assert.match(result, HASH);
     } finally {
       Date.prototype.toISOString = original;
@@ -104,7 +104,7 @@ describe("makeCachePath", () => {
     Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
     try {
       const result = makeCachePath("test query", "/project", ".cache/research");
-      assert.ok(result.startsWith(".cache/research/2026-04-20-test-query-"), result);
+      assert.ok(result.startsWith("/project/.cache/research/2026-04-20-test-query-"), result);
       assert.match(result, HASH);
     } finally {
       Date.prototype.toISOString = original;
@@ -116,7 +116,7 @@ describe("makeCachePath", () => {
     Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
     try {
       const result = makeCachePath("docker", "/project", ".search");
-      assert.ok(result.startsWith(".search/2026-04-20-docker-"), result);
+      assert.ok(result.startsWith("/project/.search/2026-04-20-docker-"), result);
       assert.match(result, HASH);
     } finally {
       Date.prototype.toISOString = original;
@@ -471,6 +471,21 @@ describe("formatCacheSuggestions", () => {
     const result = formatCacheSuggestions(matches, ".search");
     assert.ok(result.includes("..."), "should contain truncation marker");
     assert.ok(!result.includes("by a wide margin"), "should not contain the full long query");
+  });
+
+  it("uses the configured display root for report instructions and the directory label", () => {
+    const matches = [
+      {
+        entry: { slug: "prior", query: "test", timestamp: "2026-01-01T00:00:00.000Z" },
+        relevance: "Related topic",
+      },
+    ];
+    for (const cacheDir of [".cache/research", "/cache/shared", "../shared"]) {
+      const result = formatCacheSuggestions(matches, cacheDir);
+      assert.ok(result.includes(`read ${cacheDir}/<slug>/report.md`), result);
+      assert.ok(result.includes(`Cache directory: \`${cacheDir}/\``), result);
+      assert.ok(!result.includes("read .search/"), result);
+    }
   });
 
   it("includes instruction to read report.md", () => {

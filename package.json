@@ -1,6 +1,6 @@
 {
   "name": "@curio-data/pi-intelli-search",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "Intelligent web research for Pi: search, extract, collate, and cache grounded web context in one tool call.",
   "license": "Apache-2.0",
   "repository": {
@@ -21,8 +21,21 @@
     ],
     "image": "https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/06.png"
   },
+  "workspaces": [
+    "packages/mcp"
+  ],
   "scripts": {
     "build": "tsc",
+    "build:mcp": "npm run build --workspace @curio-data/mcp-intelli-search",
+    "typecheck:mcp": "npm run typecheck --workspace @curio-data/mcp-intelli-search",
+    "test:mcp": "npm run test --workspace @curio-data/mcp-intelli-search",
+    "test:mcp:install": "node scripts/verify-mcp-install.mjs",
+    "generate:toc": "node scripts/generate-toc.mjs",
+    "check:toc": "node scripts/generate-toc.mjs --check",
+    "generate:plugins": "node scripts/generate-plugin-bundles.mjs",
+    "check:plugins": "node scripts/generate-plugin-bundles.mjs --check",
+    "build:all": "npm run build && npm run typecheck:mcp && npm run build:mcp",
+    "test:all": "npm test && npm run test:mcp",
     "dev": "tsc --watch",
     "test": "node --import tsx --test test/*.test.ts",
     "test:smoke": "node --import tsx test/smoke.ts",
@@ -37,6 +50,7 @@
     "@earendil-works/pi-ai": "^0.84.4",
     "@earendil-works/pi-coding-agent": "^0.84.4",
     "@earendil-works/pi-tui": "^0.84.4",
+    "esbuild": "0.28.2",
     "prettier": "^3.9.6",
     "roughjs": "^4.6.6",
     "tsx": "^4.19.0",
@@ -53,6 +67,7 @@
     "src/",
     "skills/",
     "dist/",
+    "!dist/.tmp",
     "CHANGELOG.md",
     "NOTICE",
     "LICENSE",

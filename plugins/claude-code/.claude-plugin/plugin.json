@@ -1,0 +1,28 @@
+{
+  "name": "intelli-search",
+  "displayName": "Intelli Search",
+  "version": "0.15.0-alpha.0",
+  "description": "Research the web with a five-stage pipeline (search, fetch, extract, collate, cache suggest) served over MCP by @curio-data/mcp-intelli-search.",
+  "author": {
+    "name": "Curio Data Pro Ltd",
+    "url": "https://github.com/Curio-Data"
+  },
+  "homepage": "https://github.com/Curio-Data/pi-intelli-search",
+  "repository": "https://github.com/Curio-Data/pi-intelli-search",
+  "license": "Apache-2.0",
+  "keywords": [
+    "research",
+    "web-search",
+    "documentation",
+    "mcp"
+  ],
+  "userConfig": {
+    "openrouter_api_key": {
+      "type": "string",
+      "title": "OpenRouter API key",
+      "description": "OpenRouter key for the search, extract and collate stages. Stored in the Claude Code credential store and passed to the server as OPENROUTER_API_KEY.",
+      "sensitive": true,
+      "required": true
+    }
+  }
+}

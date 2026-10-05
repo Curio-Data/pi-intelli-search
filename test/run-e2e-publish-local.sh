@@ -63,6 +63,16 @@ echo "── Smoke import (plain node, no pi host aliasing) ──────�
 SMOKE_FILE="$TEST_DIR/_smoke.mjs"
 cat > "$SMOKE_FILE" <<SMOKE_EOF
 import mod from '$INSTALLED_INDEX';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { getNativeIdentity } from '$PKG_ROOT/dist/native-identity.js';
+import { TelemetryBuilder } from '$PKG_ROOT/dist/core/telemetry.js';
+
+const identity = await getNativeIdentity();
+const manifest = JSON.parse(await readFile('$PKG_ROOT/package.json', 'utf8'));
+assert.deepEqual(identity, { name: manifest.name, version: manifest.version, adapter: 'pi' });
+const metadata = (await TelemetryBuilder.create('packed identity', identity)).finalize();
+assert.equal(metadata.extensionVersion, manifest.version);
 
 const factory = typeof mod === 'function' ? mod : mod.default;
 const recordedTools = [];
@@ -88,6 +98,7 @@ if (errors.length > 0) {
 console.log('✅ Default export is a function');
 console.log('✅ All 4 tools registered: ' + expectedTools.join(', '));
 console.log('✅ session_start subscribed');
+console.log('✅ Packed adapter supplies canonical telemetry identity');
 console.log('✅ Module loads under plain node with peer-dep drift (pi-ai@$RESOLVED_PI_AI)');
 SMOKE_EOF
 

@@ -83,3 +83,31 @@ PI_SESSIONS_DIR=/path scripts/analyze-sessions.sh
 The headline numbers were produced with an early version of this script.
 Re-running it reproduces those numbers (within the limits of session-log
 inference, since live sessions keep appending).
+
+## generate-plugin-bundles.mjs
+
+Generates the Claude Code and Codex plugin bundles (`plugins/`) and both
+repository marketplace catalogs (`.claude-plugin/marketplace.json`,
+`.agents/plugins/marketplace.json`) from the shared guidance source in
+`guidance/` and the version pinned in `packages/mcp/package.json`. Run it
+after any MCP package version change or guidance edit; never hand-edit the
+generated files.
+
+```bash
+npm run generate:plugins   # rewrite the committed tree (registry launchers)
+npm run check:plugins      # drift gate: committed tree must match generation
+```
+
+Pre-publication install tests use tarball mode, which emits launchers that
+run a vendored `npm install --prefix <plugin>/vendor` copy of the packed
+tarball instead of the registry pin:
+
+```bash
+node scripts/generate-plugin-bundles.mjs --mode tarball \
+  --output /path/to/scratch --codex-vendor-dir /path/to/scratch/plugins/codex/vendor
+```
+
+Codex performs no path expansion in plugin MCP configuration, so tarball
+mode needs the absolute vendor directory at generation time. Claude Code
+resolves `${CLAUDE_PLUGIN_ROOT}` at launch. `test/e2e/12_plugin_bundles.sh`
+drives the full flow.

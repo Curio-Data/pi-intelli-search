@@ -1,0 +1,41 @@
+{
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "### Extraction: Page A\n\nOfficial docs, current 2026.\n\nUse `fixture()` for the example."
+      }
+    ],
+    "details": {
+      "url": "https://example.com/a",
+      "extraction": "Official docs, current 2026.\n\nUse `fixture()` for the example.",
+      "sourceType": "official docs",
+      "currentness": "current"
+    }
+  },
+  "calls": [
+    {
+      "prompt": "EXTRACTION_SYSTEM_PROMPT",
+      "model": "fixture-extract",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Web page content:\n---\nPage 1 fixture content with a deliberate\n\n[TRUNCATED]\n---\n\nExtract information relevant to: Fixture research\n\nFocus: Preserve fixture details.\n"
+            }
+          ],
+          "timestamp": 1767312000000
+        }
+      ],
+      "maxTokens": 123,
+      "reasoning": "low",
+      "maxRetries": 0
+    }
+  ],
+  "updates": [],
+  "indicators": [],
+  "diagnostics": [],
+  "files": {}
+}
