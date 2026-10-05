@@ -4,7 +4,7 @@ This document compares `intelli-search` against other web search and fetch exten
 
 ## Scope
 
-This comparison covers May 2026. It examines the seven extensions listed on `pi.dev/packages` or installed from _GitHub_ that provide web search, web fetch, or content extraction tools for the `Pi` coding agent. Monthly download counts (where available) are sourced from `pi.dev/packages` and indicate community adoption at the time of comparison.
+Competitor capabilities and adoption figures are a May 2026 snapshot of seven extensions listed on `pi.dev/packages` or installed from _GitHub_. This is not a current ecosystem census. Monthly download counts (where available) are sourced from `pi.dev/packages` at that snapshot date. The `intelli-search` descriptions include repository features checked on 2026-10-05; token-price figures retain their recorded September 2026 basis. The [README Cost](../README.md#cost) section is canonical for the current default estimate.
 
 Download counts do not reflect quality or suitability for any specific task. They are included only to show why these particular extensions were chosen for comparison: the six with the most community adoption, plus `intelli-search`.
 
@@ -22,35 +22,28 @@ Monthly downloads from `pi.dev/packages` as of May 2026. GitHub-only packages sh
 | **pi-smart-fetch** | `pi-smart-fetch` | 6,822 | Thinkscape |
 | **pi-web-providers** | `pi-web-providers` | n/a (GitHub) | mavam |
 | **pi-amplike** | `pi-amplike` | n/a (GitHub) | pasky |
-| **intelli-search** | `@curio-data/pi-intelli-search` | n/a (new) | Curio Data Pro |
+| `intelli-search` | `@curio-data/pi-intelli-search` | n/a (new) | Curio Data Pro |
 
 ## Architecture Summary
 
-```text
-                   intelli-search     pi-web-       pi-web-      pi-smart-    ollama-      rpiv-        pi-
-                                      providers     access       fetch        web-search   web-tools    amplike
-                   ───────────────    ──────────    ────────     ─────────    ────────     ────────     ──────
-Search             Sonar (1 key)      15+ providers  Fallback     None         Ollama       Brave        Jina
-Fetch              Dual + compare     Provider-dep   Readability  TLS+Defuddle Ollama       Brave        Jina
-LLM Extraction     ✓ per page         ✗              Partial      ✗            ✗            ✗            ✗
-LLM Collation      ✓ dedupe+flag      ✗              ✗            ✗            ✗            ✗            ✗
-Persistent Cache   ✓ .search/         In-memory      Per-session  ✗            ✗            ✗            ✗
-Cache Suggest      ✓ LLM judge        ✗              ✗            ✗            ✗            ✗            ✗
-Total API Keys     1 (OpenRouter)     1 per used     1+ per used  None         Ollama       Brave        0-1 (Jina)
-Cost per session   ≈$0.05             Varies         FREE          FREE         FREE        FREE         FREE
-```
+| Capability | Snapshot Summary | Detail |
+|---|---|---|
+| Search | Provider choice, fallback chains and search-native models differ | [Search](#search) |
+| Fetch | `intelli-search` compares cleaned HyperText Markup Language (HTML) and Markdown variants | [Fetch](#fetch) |
+| Per-Page Extraction | `intelli-search` uses a focused large language model (LLM); `pi-web-access` has partial model processing | [Extraction](#extraction) |
+| Cross-Source Collation | Only `intelli-search` has a dedicated collation stage among those compared | [Collation](#collation) |
+| Persistent Research Cache | `intelli-search` stores reports, extractions and sources; other recorded caches are transient | [Caching](#caching) |
+| Cost | Extension fees, provider charges and agent inference are distinct | [Cost](#cost) |
 
-`intelli-search` is purpose-built for deep, cached, LLM-processed research. The other extensions are general-purpose web fetch and search tools. Choose based on workload, not download count.
-
-The remaining sections expand each row of this table.
+The old summary recorded ≈$0.05 per session as a historical estimate. It is not the current default estimate; use [README Cost](../README.md#cost). Choose based on workload, not download count.
 
 ## Search
 
-How each extension discovers which URLs to fetch.
+How each extension discovers which URLs (uniform resource locators) to fetch. Provider access uses API (application programming interface) keys.
 
 | Extension | Search Backend | Multiple Sources | API Keys Required |
 | --- | --- | :---: | :---: |
-| **intelli-search** | Perplexity Sonar via OpenRouter (default; any OpenRouter model via the `searchWebSearch` server tool) | Every cited source via annotation harvesting | 1 (OpenRouter) |
+| `intelli-search` | Perplexity Sonar via OpenRouter (default; any OpenRouter model via the `searchWebSearch` server tool) | Every cited source via annotation harvesting | 1 (OpenRouter) |
 | **pi-web-providers** | 15+ providers (Exa, Perplexity, Gemini, Brave, Firecrawl, Linkup, etc.) | Configurable per-tool | 1 per provider used |
 | **pi-web-access** | Exa → Perplexity → Gemini → Gemini Web (sequential fallback) | Tried in order | 1 per provider used |
 | **ollama-web-search** | Ollama native web search | Single source | Ollama API key |
@@ -66,11 +59,11 @@ Perplexity Sonar is the default search model, and since v0.13.0 the `searchWebSe
 
 ## Fetch
 
-How each extension retrieves and processes page content.
+How each extension retrieves and processes HTML and other page content. TLS means Transport Layer Security, HTTP means Hypertext Transfer Protocol, and DOM means Document Object Model.
 
 | Extension | Fetch Method | Content Cleaning | Dual-Fetch Comparison | Fallback |
 | --- | --- | :---: | :---: | --- |
-| **intelli-search** | wreq-js browser TLS + Defuddle + Markdown endpoint (parallel) | Defuddle (HTML) + sanitize (Markdown) | **Yes**: scores both, picks best | Defuddle-fallback (basic DOM text extraction) |
+| `intelli-search` | wreq-js browser TLS + Defuddle + Markdown endpoint (parallel) | Defuddle (HTML) + sanitize (Markdown) | **Yes**: scores both, picks best | Defuddle-fallback (basic DOM text extraction) |
 | **pi-web-providers** | Provider-dependent (Firecrawl, Linkup, etc.) | Provider-dependent | No | Provider-dependent |
 | **pi-web-access** | HTTP fetch → Readability → Jina Reader → Gemini (fallback chain) | Readability + Jina + Gemini | No | Sequential fallback through chain |
 | **pi-smart-fetch** | Browser TLS fingerprinting (chrome_145) + Defuddle | Defuddle | No | Alternate `<link>` discovery for thin content |
@@ -82,7 +75,7 @@ How each extension retrieves and processes page content.
 
 `intelli-search` and `pi-smart-fetch` both use browser-grade TLS fingerprinting (via [_wreq-js_](https://github.com/sqdshguy/wreq-js)) and [_Defuddle_](https://github.com/kepano/defuddle) for HTML cleaning. `intelli-search` goes further by also fetching the Markdown variant (when available) and **comparing both for quality**.
 
-**Why compare?** Server-rendered Markdown is not guaranteed to be clean. For example, fetching `https://developers.cloudflare.com/d1/` with `Accept: text/markdown` returns 3,696 chars of content that includes JSON-LD BreadcrumbList schema data, extra Schema.org markup, and community promotion links. Defuddle extraction of the same page strips these artifacts, producing 3,047 chars of cleaner content. The quality comparison catches this and picks the better version automatically.
+**Why compare?** Server-rendered Markdown is not guaranteed to be clean. For example, fetching `https://developers.cloudflare.com/d1/` with `Accept: text/markdown` returns 3,696 chars of content that includes JavaScript Object Notation for Linked Data (JSON-LD) BreadcrumbList schema data, extra Schema.org markup, and community promotion links. Defuddle extraction of the same page strips these artifacts, producing 3,047 chars of cleaner content. The quality comparison catches this and picks the better version automatically.
 
 ## Extraction
 
@@ -90,7 +83,7 @@ What happens to page content after fetching, before it reaches the agent.
 
 | Extension | Per-Page LLM Extraction | Targets Query Relevance | Handles Code Blocks |
 | --- | :---: | :---: | :---: |
-| **intelli-search** | **Yes**: configurable model, default MiniMax M3 via OpenRouter | **Yes**: guided by `focusPrompt` | **Yes**: preserved verbatim |
+| `intelli-search` | **Yes**: configurable model, default MiniMax M3 via OpenRouter | **Yes**: guided by `focusPrompt` | **Yes**: preserved verbatim |
 | **pi-web-providers** | No | No | No |
 | **pi-web-access** | Partial (Gemini for blocked pages, video descriptions) | No | No |
 | **pi-smart-fetch** | No | No | No |
@@ -104,7 +97,7 @@ What happens to page content after fetching, before it reaches the agent.
 
 [_MiniMax_](https://minimax.io) M3 (via [OpenRouter](https://openrouter.ai)) is the default extraction model. A single OpenRouter key covers all three pipeline stages. Any model `Pi` supports can be swapped in via `extractModel` in the `pi-intelli-search` settings namespace. Extraction quality scales independently from cost, from cheap flash models to full reasoning models.
 
-**Trade-off:** This approach is vulnerable to the extraction LLM's ability to identify relevant content. A weak extraction model may miss key details or introduce errors. The other extensions deliver full page content to the agent, which can be advantageous when the main LLM is better equipped to filter noise than a smaller, cheaper extraction model. If the main LLM is confused by non-relevant material, however, pre-extraction keeps the context clean and focused.
+**Trade-Off:** A weak extraction model may miss key details or introduce errors. The other extensions deliver full page content to the agent, which can be advantageous when the main LLM is better equipped to filter noise than a smaller, cheaper extraction model. If the main LLM is confused by non-relevant material, however, pre-extraction keeps the context clean and focused.
 
 ## Collation
 
@@ -112,7 +105,7 @@ What happens after individual pages are processed, to synthesise findings.
 
 | Extension | Cross-Source Deduplication | Inconsistency Detection | Source Attribution |
 | --- | :---: | :---: | :---: |
-| **intelli-search** | **Yes**: LLM-powered | **Yes**: conflicting claims flagged | **Yes**: sources cited with type and currentness |
+| `intelli-search` | **Yes**: LLM-powered | **Yes**: conflicting claims flagged | **Yes**: sources cited with type and currentness |
 | **pi-web-providers** | No | No | No |
 | **pi-web-access** | No | No | No |
 | **pi-smart-fetch** | No | No | No |
@@ -132,7 +125,7 @@ What happens to results after the session ends.
 
 | Extension | Persistent Cache | Cache Format | Offline Reuse | Cache Suggest |
 | --- | :---: | --- | :---: | :---: |
-| **intelli-search** | **Yes** | `.search/<date>-<slug>/` with `report.md`, `query.txt`, `extractions/`, `sources/`, `.index.json` | **Yes**: full pages and extractions preserved | **Yes**: LLM judge finds related previous searches |
+| `intelli-search` | **Yes** | `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `extractions/`, `sources/`, `.index.json` | **Yes**: full pages and extractions preserved | **Yes**: LLM judge finds related previous searches |
 | **pi-web-providers** | In-memory only | N/A | No | No |
 | **pi-web-access** | Per-session (GitHub repos, search results) | Filesystem + response IDs | No | No |
 | **pi-smart-fetch** | No | N/A | No | No |
@@ -142,13 +135,13 @@ What happens to results after the session ends.
 
 ### Caching: Key Difference
 
-`intelli-search` is the only extension among those compared with a persistent, structured cache. Full pages and extractions are stored in `.search/` and indexed in `.index.json`. The cache suggest stage (Stage 5) automatically surfaces related previous searches, reducing redundant API calls over time. Because previous search data is preserved, new searches can be compared against cached results to identify changes, updates, or conflicting information across time. This makes follow-up research both faster and cheaper.
+`intelli-search` is the only extension among those compared with a persistent, structured cache. Full pages and extractions are stored in `.search/` and indexed in `.index.json`. The cache suggest stage (Stage 5) surfaces related previous searches after the current live pipeline; it never skips that search. Manually reusing a cached report can avoid a subsequent API call. Preserved source data also allows comparisons across dates, subject to differences in fetched sources and content.
 
 ## Cost
 
-Approximate cost per research session with 10 pages. Token rates sourced from provider pricing pages as of September 2026.
+The figures below retain the recorded September 2026 price basis for 10-page research runs. They are historical estimates, not refreshed provider quotes. Current default planning costs are single-sourced in [README Cost](../README.md#cost).
 
-**`intelli-search` token rates used:**
+**Recorded `intelli-search` Token Rates:**
 
 | Stage | Model | Input (per 1M tokens) | Output (per 1M tokens) | Search fee |
 | --- | --- | --- | --- | --- |
@@ -157,20 +150,20 @@ Approximate cost per research session with 10 pages. Token rates sourced from pr
 | Collate | MiniMax M3 (via OpenRouter) | $0.30 | $1.20 | |
 | Cache suggest | MiniMax M3 (via OpenRouter) | $0.30 | $1.20 | |
 
-**Per-session breakdown:**
+**Recorded Provider-Cost Breakdown:**
 
-| Extension | Search | Fetch | Extract + Collate | Cache Suggest | **Total** |
-| --- | --- | --- | --- | --- | --- |
-| **intelli-search** | ≈$0.007 (Sonar) | FREE | ≈$0.08 (M3 × 11 calls) | ≈$0.0002 | **≈$0.09** |
-| **pi-web-providers** | Provider-dependent | Provider-dependent | Free (no LLM) | Free | **Varies** |
-| **pi-web-access** | Free (fallback chain) | Free (Readability/Jina) | Free (no LLM extraction) | Free | **FREE** |
-| **pi-smart-fetch** | N/A | Free | Free (no LLM) | Free | **FREE** |
-| **ollama-web-search** | Free (local Ollama) | Free (local Ollama) | Free (no LLM) | Free | **FREE** |
-| **rpiv-web-tools** | Free (Brave Search) | Free (Brave) | Free (no LLM) | Free | **FREE** |
-| **pi-amplike** | Free tier / paid Jina | Free tier / paid Jina | Free (no LLM) | Free | **FREE: varies** |
+The original `intelli-search` row records ≈$0.007 for Sonar search, ≈$0.08 for M3 extract and collate (M3 × 11 calls), ≈$0.0002 for cache suggest, and a total of ≈$0.09. These figures exclude agent-loop inference and remain historical, not a second current estimate.
+
+| Extension | Extension Charge | Provider Usage | Agent Inference | Research Total |
+|---|---|---|---|---|
+| `intelli-search` | No separate extension fee | Recorded pipeline estimate above | Excluded from pipeline estimate | Current estimate: [README Cost](../README.md#cost) |
+| `pi-web-providers` | Not measured here | Depends on selected provider and tariff | Not measured here | Unknown |
+| `pi-web-access` | Not measured here | Fallback-chain provider tariffs not established here | Not measured here | Unknown |
+| `pi-smart-fetch` | Not measured here | Local fetch; no provider inference stage recorded | Not measured here | Unknown |
+| `ollama-web-search` | Not measured here | Ollama service usage; tariff not established here | Not measured here | Unknown |
+| `rpiv-web-tools` | Not measured here | Brave usage depends on account allowance and tariff | Not measured here | Unknown |
+| `pi-amplike` | Not measured here | Recorded Jina free-tier or paid usage | Not measured here | Unknown |
 
 ### Cost: Key Difference
 
-`intelli-search` has a cost because it does more work: LLM extraction, LLM collation, and LLM cache suggest. The ≈$0.09 per session is intentional. It buys targeted, deduplicated, cached results. Extensions without LLM processing are free but deliver raw content to the agent, which then spends its own reasoning tokens (and context) sorting through it. The persistent cache reduces costs over time through reuse.
-
-Costs scale with the chosen models. The figures above use the defaults (Sonar for search, MiniMax M3 via OpenRouter for extraction and collation; M3 writes ≈2× the extraction output of M2.7 at the same per-token price). Swapping to cheaper or more expensive models changes the per-session cost proportionally.
+The pipeline estimate includes search, extraction, collation and cache suggestion, but excludes the host agent's inference and local compute. Absence of a dedicated extraction or collation stage does not establish a free research total. Provider tariffs, account allowances, output volume and model choices determine charges; manual reuse of cached reports can avoid a later research call.

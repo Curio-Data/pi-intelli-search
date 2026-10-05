@@ -1,18 +1,24 @@
 # Architecture
 
-This document describes the internal architecture of `pi-intelli-search`. It explains how the 5-stage pipeline works, why key decisions were made, and how each component fits together.
+This document describes the shared `intelli-search` engine and its two adapters. It explains how the 5-stage pipeline works, why key decisions were made, and how each component fits together.
+
+## Engine and Adapters
+
+- **Shared Engine:** `src/core/` owns the operations, cache formats, prompts and single model retry/timeout policy. Adapters supply resolved settings, model calls, workspace paths, identity, progress, cancellation and diagnostics.
+- **Native `Pi` Adapter:** `src/index.ts`, `src/tools/` and the native context/model modules register tools through `Pi`'s application programming interface (API), discover trusted settings, and use its authentication and model registry.
+- **Standalone MCP Adapter:** `packages/mcp/` supplies explicit configuration, environment-referenced credentials, an [_OpenRouter_](https://openrouter.ai) transport and Model Context Protocol (MCP) serving over standard input/output (stdio). It imports no `Pi` runtime libraries. Generated host plugins launch this adapter; they contain no pipeline code.
 
 ## Pipeline Overview
 
 <p align="center">
-  <img src="images/07B.png" alt="Vintage engraving-style infographic titled &quot;INTELLI_RESEARCH: The Five-Stage Pipeline,&quot; showing five sequentially linked numbered stages triggered by intelli_research(query): (1) Search: web discovery via Perplexity Sonar, OpenRouter/pi-native auth; (2) Fetch: dual fetch and quality comparison using wreq-js + Defuddle against raw markdown; (3) Extract: per-page parallel LLM extraction, default model MiniMax M2.7, configurable; (4) Collate: deduplication and persistent cache via MiniMax M2.7 (default, configurable), flags conflicts; (5) Cache Suggest: additive stage, LLM judge surfaces related prior searches. Stages are connected by bold arrows; each is illustrated with a period-appropriate vignette (armillary sphere, scrolls, alchemical still, filing cabinet, owl with documents)." width="800" />
+  <img src="images/07B.png" alt="Vintage engraving-style infographic titled &quot;INTELLI_RESEARCH: The Five-Stage Pipeline,&quot; showing five sequentially linked numbered stages triggered by intelli_research(query): (1) Search: web discovery via Perplexity Sonar, OpenRouter/pi-native auth; (2) Fetch: dual fetch and quality comparison using wreq-js + Defuddle against raw markdown; (3) Extract: per-page parallel LLM extraction, MiniMax M2.7, the native model configuration at the illustration's creation; (4) Collate: deduplication and persistent cache via MiniMax M2.7 (the native configuration at creation), flags conflicts; (5) Cache Suggest: additive stage, LLM judge surfaces related prior searches. Stages are connected by bold arrows; each is illustrated with a period-appropriate vignette (armillary sphere, scrolls, alchemical still, filing cabinet, owl with documents)." width="800" />
 </p>
 
-No cross-tool invocation is used. `intelli_research` is self-contained, with the orchestrator executing its stages directly. Current `Pi` hosts support nested calls through `ctx.executeTool()`, but the pipeline does not depend on that newer capability. Direct stage execution preserves the supported native baseline and allows host-independent reuse. *The illustration above shows the default configuration; alternative search configurations use the same five-stage pipeline.*
+No cross-tool invocation is used. `intelli_research` is self-contained, with the orchestrator executing its stages directly. Current `Pi` hosts support nested calls through `ctx.executeTool()`, but the pipeline does not depend on that newer capability. Direct stage execution preserves the supported native baseline and allows host-independent reuse. *The illustration shows the native pipeline with the model configuration at its creation, including [_MiniMax_](https://minimax.io) M2.7 and `Pi` authentication. It does not show the current defaults or standalone authentication; alternative search configurations use the same five-stage pipeline.*
 
 ### Why Per-Page Extraction Before Collation?
 
-This is the key design decision. [Defuddle](https://github.com/kepano/defuddle) cleans HTML into clean Markdown, but a cleaned documentation page is still ≈50K characters. For 10 pages, that is ≈500K chars, far beyond what a collation call should carry. Per-page extraction reduces the material sent to collation, keeping context use and cost bounded across model choices.
+This is the key design decision. [_Defuddle_](https://github.com/kepano/defuddle) cleans Hypertext Markup Language (HTML) into clean Markdown, but a cleaned documentation page is still ≈50K characters. For 10 pages, that is ≈500K chars, far beyond what a collation call should carry. Per-page extraction reduces the material sent to collation, keeping context use and cost bounded across model choices.
 
 Per-page extraction compresses each page independently to ≈3-5K of query-relevant content. The collation model then sees ≈40K total. This is comfortable for synthesis and deduplication. The optional `focusPrompt` parameter is most effective at this stage. "Extract only form validation patterns" applied to each page individually is far more targeted than asking a collation model to find those needles across 500K chars.
 
@@ -20,42 +26,47 @@ Per-page extraction compresses each page independently to ≈3-5K of query-relev
 
 Each page is fetched two ways in parallel:
 
-1. **HTML to Defuddle:** Browser-grade TLS fingerprint plus Defuddle content extraction.
+1. **HTML to Defuddle:** Browser-grade Transport Layer Security (TLS) fingerprint plus Defuddle content extraction.
 2. **Markdown endpoint:** `Accept: text/Markdown` header, `<link rel="alternate">`, or `.md` suffix.
 3. **Compare quality:** Score on code blocks, headings, tables versus nav chrome noise. Pick the better one.
 
-For sites that provide `llms-full.txt` ([Cloudflare](https://developers.cloudflare.com), [Next.js](https://nextjs.org), [Vite](https://vite.dev), and others), the raw file is downloaded to `sources/` alongside individual pages. No LLM processing is applied. The agent can grep or search it for offline lookup.
+For sites that provide `llms-full.txt` ([Cloudflare](https://developers.cloudflare.com), [Next.js](https://nextjs.org), [Vite](https://vite.dev), and others), the raw file is downloaded to `sources/` alongside individual pages. No large language model (LLM) processing is applied. The agent can grep or search it for offline lookup.
 
 Dependency-specific console suppression uses async-local scopes and a single reference-counted dispatcher in `src/core/console.ts`. Console methods are patched only while a suppression region is active, then restored after the last region exits. Overlapping fetches cannot capture one another's diagnostic flags, and unrelated async work passes through. The fetch comparison emits no direct debug line; operation diagnostics use the injected logger. Native prefix formatting remains outside the core.
 
-### Provider and Model Choices
+<a id="provider-and-model-choices"></a>
+### Native Models and Authentication
 
-All three pipeline stages (search, extract, collate) use independently configurable models. The defaults are:
+All three model stages (search, extract, collate) use independently configurable models. The following defaults and authentication paths belong to the native `Pi` adapter:
 
-- **Extract and Collate:** MiniMax M3 via [OpenRouter](https://openrouter.ai). MiniMax M3 is a reasoning model and requires a `reasoning` parameter. Every stage sends `reasoning: "low"` through `Pi`'s auth system: on `Pi` >= 0.86 via the `ctx.modelRegistry.streamSimple()` facade (which normalises the context so the system prompt reaches the model), on older versions via the provider's `streamSimple()`. Override `extractModel` or `collateModel` in the `pi-intelli-search` settings namespace to use any model `Pi` supports.
-- **Search:** a search-grounded model. The default is [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai), which returns a synthesised answer with inline citations. This is better than a bare URL list because the agent gets immediate context plus source URLs for follow-up. Two alternatives use the same account: `perplexity/sonar-pro-search` (a settings-only model swap), and the `searchWebSearch` setting, which attaches OpenRouter's `openrouter:web_search` server tool to any OpenRouter chat model through the provider's `onPayload` hook (distinct from the deprecated `:online` suffix and `plugins` configuration). Override `searchModel` in the `pi-intelli-search` settings namespace.
+- **Extract and Collate:** [_MiniMax_](https://minimax.io) M3 via [_OpenRouter_](https://openrouter.ai). Native model calls default to `reasoning: "low"`, with the configured `searchWebSearch.reasoning` override on search-tool calls. Authentication and dispatch use `Pi`'s system: on `Pi` >= 0.86 via the `ctx.modelRegistry.streamSimple()` facade (which normalises the context so the system prompt reaches the model), on older supported versions via the provider's `streamSimple()`. Override `extractModel` or `collateModel` in the `pi-intelli-search` settings namespace to use any model `Pi` supports.
+- **Search:** a search-grounded model. The default is [_Perplexity Sonar_](https://docs.perplexity.ai) via [OpenRouter](https://openrouter.ai), which returns a synthesised answer with inline citations. This is better than a bare URL (uniform resource locator) list because the agent gets immediate context plus source URLs for follow-up. Two alternatives use the same account: `perplexity/sonar-pro-search` (a settings-only model swap), and the `searchWebSearch` setting, which attaches OpenRouter's `openrouter:web_search` server tool to any OpenRouter chat model through the provider's `onPayload` hook (distinct from the deprecated `:online` suffix and `plugins` configuration). Override `searchModel` in the `pi-intelli-search` settings namespace.
 
-### Harvesting Citations from the Response Body
+<a id="harvesting-citations-from-the-response-body"></a>
+### Native Citation Harvesting
 
 Search-grounded models attach machine-readable `url_citation` annotations to the assistant message, naming every source consulted. `Pi`'s chat-completions adapter reassembles only text, thinking, and tool-call blocks, so those annotations are dropped before extension code sees the response.
 
-Rather than fork the adapter, the extension passes a wrapped `fetch` through `ProviderRequestOptions.fetch`. The wrapper tees each response body: the SDK consumes the original stream unchanged, while a clone is read in the background and parsed for citations (both SSE chunks and plain JSON). `response.clone()` is called synchronously before the SDK can touch the body. Every failure path in this side channel is swallowed by design: the pipeline must never depend on it. Each retry attempt owns a separate sink, so late citations from a failed attempt cannot contaminate a successful response. `callLlm()` awaits successful background reads (bounded at 2 seconds) before copying citations to the caller.
+Rather than fork the adapter, the extension passes a wrapped `fetch` through `ProviderRequestOptions.fetch`. The wrapper tees each response body: the software development kit (SDK) consumes the original stream unchanged, while a clone is read in the background and parsed for citations (both server-sent event (SSE) chunks and plain JavaScript Object Notation (JSON)). `response.clone()` is called synchronously before the SDK can touch the body. Every failure path in this side channel is swallowed by design: the pipeline must never depend on it. Each retry attempt owns a separate sink, so late citations from a failed attempt cannot contaminate a successful response. `callLlm()` awaits successful background reads (bounded at 2 seconds) before copying citations to the caller.
 
-Merging is text-first: prose links (with their markdown titles) come before annotation-only URLs, and exact URL duplicates are removed. The search prompt asks the model to end with a Sources section so links reliably land in the text; the pipeline extracts URLs from the full text, then strips that rendered section before the summary flows downstream (collation input, `intelli_search` output), which renders its own canonical source list instead. This is not a new pipeline stage: harvesting belongs to search. See `src/core/annotations.ts`.
+Merging is text-first: prose links (with their markdown titles) come before annotation-only URLs, and exact URL duplicates are removed. The search prompt asks the model to end with a Sources section. The shared search operation extracts URLs from the full response, then removes the model-rendered Sources section before passing the summary downstream. The `intelli_search` result builder renders a canonical source list; research collation receives the stripped search summary and selected extractions. This is not a new pipeline stage: harvesting belongs to search. See `src/core/annotations.ts`.
 
-### Custom Model Registration
+<a id="custom-model-registration"></a>
+### Native Model Registration
 
 [_Perplexity Sonar_](https://docs.perplexity.ai) and its siblings are not in `Pi`'s built-in model list for [OpenRouter](https://openrouter.ai). The extension writes `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search` to `~/.pi/agent/models.json` on first load (merging by id, non-destructive, adding only what is missing) and refreshes the model registry. This operation is idempotent.
 
-### Rate-Limit Resilience
+<a id="rate-limit-resilience"></a>
+### Native Rate-Limit Resilience
 
-The extension monitors `after_provider_response` events to detect HTTP 429 (rate-limiting) and 5xx (server errors) from [OpenRouter](https://openrouter.ai). Rate-limit status appears in the `Pi` footer via `ctx.ui.setStatus()`, debounced to avoid flooding.
+The extension monitors `after_provider_response` events to detect Hypertext Transfer Protocol (HTTP) `429` (rate-limiting) and 5xx (server errors) from [OpenRouter](https://openrouter.ai). Rate-limit status appears in the `Pi` footer via `ctx.ui.setStatus()`, debounced to avoid flooding.
 
-Recovery is owned by `runModelWithPolicy()` in `src/core/llm.ts`, which `callLlm()` invokes once around native dispatch. Native streams receive `maxRetries: 0` so software development kit (SDK) retries do not compound with the shared policy. The policy retries transient failures (429, 5xx, timeouts) with full-jitter exponential backoff that honours any Retry-After hint, bounded by `llmRetryAttempts`, `retryBaseDelayMs`, and `retryMaxDelayMs`. On the [OpenRouter](https://openrouter.ai) path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and the stream resolves with `stopReason: "error"` carrying the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header) and never throws, because a throw would propagate out of the stream and bypass the retry loop.
+Recovery is owned by `runModelWithPolicy()` in `src/core/llm.ts`, which `callLlm()` invokes once around native dispatch. Native streams receive `maxRetries: 0` so SDK retries do not compound with the shared policy. The policy retries transient failures (429, 5xx, timeouts) with full-jitter exponential backoff that honours any Retry-After hint, bounded by `llmRetryAttempts`, `retryBaseDelayMs`, and `retryMaxDelayMs`. On the [OpenRouter](https://openrouter.ai) path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and the stream resolves with `stopReason: "error"` carrying the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header) and never throws, because a throw would propagate out of the stream and bypass the retry loop.
 
 A hard per-call timeout (`llmTimeoutMs`) is applied with an `AbortController` via `callWithAbortTimeout()`, combined with the tool signal so Esc still cancels. This is necessary because the SDK request timeout does not cover a stalled streaming body, which a provider can hold open after a 200 under load. Stage 1 additionally retries a degraded-200 search (a valid response with zero links) up to `searchRetryAttempts` times, and `minRequestIntervalMs` optionally spaces the concurrent extract calls for keys with tight rate limits. These configured retries and application timeouts apply inside `intelli_research`. Native standalone search, extract and collate retain one attempt without an application-level timeout. The pure helpers live in `src/core/util.ts` and are unit-tested. Only actual application timer expiry is classified as an application timeout; permanent provider exceptions are not retried as timeouts.
 
-### Working Indicator and Progress Bar
+<a id="working-indicator-and-progress-bar"></a>
+### Native Working Indicator and Progress Bar
 
 During `intelli_research` execution, the extension sets a custom animated spinner (🔍 🌐 📄 ✨) via `ctx.ui.setWorkingIndicator()` (requires `Pi` 0.69.0+). This is restored to the default on completion or error.
 
@@ -77,13 +88,13 @@ Research dependencies are injected per operation rather than changed through a s
 
 ### Standalone Adapter
 
-`packages/mcp/` supplies the separate `@curio-data/mcp-intelli-search` runtime. It uses the shared operations with explicit configuration, a canonical workspace, strict argument validation and a non-streaming OpenRouter transport. Shared tuning lives in `src/core/defaults.ts`; standalone model selections and environment-referenced credentials are mandatory. Catalogue preflight precedes paid work, and the shared retry policy applies once to every standalone model call.
+`packages/mcp/` supplies the separate `@curio-data/mcp-intelli-search` runtime. It uses the shared operations with explicit configuration, a canonical workspace, strict argument validation and a non-streaming OpenRouter transport. Shared tuning lives in `src/core/defaults.ts`; standalone model selections and environment-referenced credentials are mandatory. Catalogue preflight precedes paid work, and the shared retry policy applies once to every standalone model call. The standalone adapter sends reasoning effort and exclusion fields only when the catalogue advertises reasoning support; non-reasoning models receive neither.
 
 The standalone bundle externalises its declared third-party dependencies and imports no `Pi` library. Its installation gate denies ancestor dependency resolution and exercises both native fetch paths. Existing cache links and traversal are rejected; these checks do not sandbox hostile concurrent filesystem mutation. Results use absolute workspace cache paths and host-neutral file-reading guidance. [Phase 3 Results](plans/mcp-intelli-search/PHASE-3.md) and the [package guide](../packages/mcp/README.md) record exact interfaces and limits.
 
 ### Protocol Serving
 
-The standalone package serves the four canonical tools as a Model Context Protocol (MCP) server over standard input/output (stdio) through the official split server package (`@modelcontextprotocol/server`, lockfile-pinned). Tool names and input schemas mirror the native tools; descriptions embed the guidance the protocol has no separate channel for. One operation runs at a time with a bounded queue; stage progress maps to `notifications/progress` when the client supplies a token, and client cancellation aborts through the shared model policy. A startup guard diverts every non-protocol write away from standard output, so the stream carries protocol frames only; diagnostics use standard error. Closing standard input or receiving `SIGINT`/`SIGTERM` drains and aborts in-flight and queued work. [Phase 4 Results](plans/mcp-intelli-search/PHASE-4.md) records the protocol verification.
+The standalone package serves the four canonical tools as an MCP server over stdio through the official split server package (`@modelcontextprotocol/server`, lockfile-pinned). Tool names and input schemas mirror the native tools; descriptions embed the guidance the protocol has no separate channel for. One operation runs at a time with a bounded queue; stage progress maps to `notifications/progress` when the client supplies a token, and client cancellation aborts through the shared model policy. A startup guard diverts every non-protocol write away from standard output, so the stream carries protocol frames only; diagnostics use standard error. Closing standard input or receiving `SIGINT`/`SIGTERM` drains and aborts in-flight and queued work. [Phase 4 Results](plans/mcp-intelli-search/PHASE-4.md) records the protocol verification.
 
 ### Host Plugins
 
@@ -149,7 +160,7 @@ plugins/                    # Generated Claude Code and Codex bundles (manifests
 └── .index.json                                # Index of all cached searches
 ```
 
-Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short SHA-1 of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. The same query always produces the same hash, so re-running it refreshes the same directory instead of accumulating duplicates.
+Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short Secure Hash Algorithm 1 (SHA-1) hash of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. The same query produces the same hash. Runs of that query on the same Coordinated Universal Time (UTC) date refresh the same directory; a different UTC date produces a different directory.
 
 ### Physical and Display Paths
 
@@ -178,10 +189,33 @@ Every `intelli_research` run writes a `meta.json` sidecar into its cache directo
       "degraded": false,
       "annotationsHarvested": 20
     },
-    "fetch": { "requested": 10, "succeeded": 8, "failed": 2, "winners": { "defuddle": 6, "markdown": 2 } },
-    "extract": { "model": "...", "succeeded": 8, "failed": 0, "totalInputCharsApprox": 200000, "totalOutputChars": 16000 },
-    "collate": { "model": "...", "summaryChars": 4000 },
-    "cacheSuggest": { "ran": true, "surfaced": 2, "slugs": ["..."] }
+    "fetch": {
+      "requested": 10,
+      "succeeded": 8,
+      "failed": 2,
+      "winners": {
+        "defuddle": 6,
+        "markdown": 2
+      }
+    },
+    "extract": {
+      "model": "...",
+      "succeeded": 8,
+      "failed": 0,
+      "totalInputCharsApprox": 200000,
+      "totalOutputChars": 16000
+    },
+    "collate": {
+      "model": "...",
+      "summaryChars": 4000
+    },
+    "cacheSuggest": {
+      "ran": true,
+      "surfaced": 2,
+      "slugs": [
+        "..."
+      ]
+    }
   }
 }
 ```
