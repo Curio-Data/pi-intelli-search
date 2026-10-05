@@ -35,6 +35,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# The credential probes and cleanup below rely on /proc, GNU stat and the
+# Linux credential-file layout; elsewhere they would pass vacuously.
+if [[ "$(uname -s)" != "Linux" ]]; then
+  echo "⚠️  SKIP: scenario 13 is recorded for Linux hosts only."
+  exit 0
+fi
+
+# Parse .env BEFORE any output reaches the log: only the two named keys are
+# read, and the file is never executed (see test/e2e/env.sh).
+# shellcheck source=test/e2e/env.sh
+source "$SCRIPT_DIR/env.sh"
+e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY CLAUDE_CODE_OAUTH_TOKEN
+
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 LOG_FILE="$LOG_DIR/e2e-claude-code-plugin-${TIMESTAMP}.log"
@@ -42,15 +55,9 @@ mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "📝 Log: $LOG_FILE"
 
-# Load .env if it exists (gitignored)
-if [ -f "$PROJECT_DIR/.env" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$PROJECT_DIR/.env"
-  set +a
-fi
-
-E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
+# Two attempts plus build and pacing must fit the paced runner's per-script
+# timeout (E2E_SCRIPT_TIMEOUT_SECONDS, default 1200).
+E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-540}"
 E2E_CLAUDE_MODEL="${E2E_CLAUDE_MODEL:-sonnet}"
 
 if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -f "$HOME/.pi/agent/auth.json" ]; then
@@ -64,6 +71,12 @@ fi
 if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
   echo "❌ CLAUDE_CODE_OAUTH_TOKEN is not set."
   echo "   Run 'claude setup-token' once and add CLAUDE_CODE_OAUTH_TOKEN=<token> to $PROJECT_DIR/.env"
+  exit 1
+fi
+# The option JSON is built with the printf builtin (no process argv), which
+# is only safe for a key without JSON metacharacters.
+if [[ ! "$OPENROUTER_API_KEY" =~ ^[A-Za-z0-9_-]+$ ]]; then
+  echo "❌ OPENROUTER_API_KEY contains unexpected characters."
   exit 1
 fi
 for tool in claude node npm jq rg; do
@@ -98,6 +111,8 @@ cleanup() {
   exit "$rc"
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 ERRORS=0
 ok()  { echo "✅ $1"; }
@@ -136,8 +151,17 @@ if ! claude plugin install intelli-search@curio-data-plugins >/dev/null 2>&1; th
 fi
 ok "plugin installed from $(basename "$TARBALL")"
 
-jq -cn --arg k "$OPTION_KEY" '{openrouter_api_key: $k}' \
-  | claude plugin configure intelli-search@curio-data-plugins --values-stdin >/dev/null 2>&1
+# printf is a shell builtin: the key never appears in a process argv.
+if ! printf '{"openrouter_api_key":"%s"}' "$OPTION_KEY" \
+    | claude plugin configure intelli-search@curio-data-plugins --values-stdin >/dev/null 2>&1; then
+  echo "❌ claude plugin configure failed; the key option is not set"
+  exit 1
+fi
+if ! jq -e '.pluginSecrets["intelli-search@curio-data-plugins"].openrouter_api_key | length > 0' \
+    "$CLAUDE_HOME_DIR/.credentials.json" >/dev/null 2>&1; then
+  echo "❌ the key option did not reach the isolated credential store"
+  exit 1
+fi
 PLUGIN_DATA="$CLAUDE_HOME_DIR/plugins/data/intelli-search-curio-data-plugins"
 mkdir -p "$PLUGIN_DATA"
 cat > "$PLUGIN_DATA/config.json" <<'EOF'
@@ -174,6 +198,12 @@ echo
 echo "── claude -p (model: $E2E_CLAUDE_MODEL)"
 STREAM="$E2E_ROOT/stream.jsonl"
 RAN=0
+# completed_sidecar: true once this run has a completed research, so a retry
+# never spends a second live research after the first one finished.
+completed_sidecar() {
+  find "$WORKSPACE/.search" -maxdepth 2 -name meta.json \
+    -exec jq -c 'select(.outcome == "completed")' {} + 2>/dev/null | rg -q .
+}
 for ATTEMPT in 1 2; do
   (cd "$WORKSPACE" && timeout --foreground "${E2E_TIMEOUT_SECONDS}s" claude -p "$PROMPT" \
       --model "$E2E_CLAUDE_MODEL" \
@@ -185,6 +215,7 @@ for ATTEMPT in 1 2; do
     RAN=1
     break
   fi
+  if completed_sidecar || [[ "$ATTEMPT" -eq 2 ]]; then break; fi
   echo "   ⚠️  attempt ${ATTEMPT}/2 produced no result event; retrying after 30s"
   sleep 30
 done
@@ -229,10 +260,12 @@ if [ -n "$CACHE_DIR" ] && [ -f "$CACHE_DIR/report.md" ] && [ -f "$CACHE_DIR/meta
 else
   bad "missing cache artifacts under the project's .search/"
 fi
-if [ -n "$CACHE_DIR" ] && jq -e '.adapter == "mcp" and .outcome == "completed"' "$CACHE_DIR/meta.json" >/dev/null 2>&1; then
-  ok "telemetry records the mcp adapter and a completed outcome"
-else
-  bad "telemetry lacks the mcp adapter or a completed outcome"
+if [ -n "$CACHE_DIR" ] && [ -f "$CACHE_DIR/meta.json" ]; then
+  if jq -e '.adapter == "mcp" and .outcome == "completed"' "$CACHE_DIR/meta.json" >/dev/null 2>&1; then
+    ok "telemetry records the mcp adapter and a completed outcome"
+  else
+    bad "telemetry lacks the mcp adapter or a completed outcome"
+  fi
 fi
 if jq -e 'select(.type == "result") | select(.is_error | not)' "$STREAM" >/dev/null 2>&1; then
   ok "session ended without error"
@@ -241,6 +274,8 @@ else
 fi
 
 # ── Credential hygiene ─────────────────────────────────────────────
+# The file is known to exist: the configure step above asserted the plugin
+# secret in it, so this check cannot pass on a missing file.
 if jq -e 'has("claudeAiOauth")' "$CLAUDE_HOME_DIR/.credentials.json" >/dev/null 2>&1; then
   bad "isolated profile received a login credential"
 else

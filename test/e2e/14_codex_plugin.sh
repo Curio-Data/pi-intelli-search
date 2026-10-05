@@ -18,8 +18,8 @@
 #   E2E_CODEX_HOME       Dedicated profile (default: .e2e-auth/codex, gitignored).
 #   E2E_TIMEOUT_SECONDS  Per-attempt timeout (default: 600).
 #
-# Credential safety. Codex has no refresh-free token for personal ChatGPT
-# plans, so the scenario follows OpenAI's documented CI pattern: one
+# Credential safety. Codex has no long-lived refresh-free token for personal
+# ChatGPT plans, so the scenario follows OpenAI's documented CI pattern: one
 # dedicated login whose auth.json is used by exactly one consumer at a time
 # and refreshed in place. It is a separate login, not a copy of ~/.codex, so
 # it shares no refresh-token chain with the operator's own sessions (the
@@ -37,6 +37,20 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# The profile guards and hygiene checks rely on GNU stat, flock and the
+# Linux layout; elsewhere they would pass vacuously.
+if [[ "$(uname -s)" != "Linux" ]]; then
+  echo "⚠️  SKIP: scenario 14 is recorded for Linux hosts only."
+  exit 0
+fi
+
+# Parse .env BEFORE any output reaches the log, reading only the key this
+# scenario needs: other credentials kept there never reach the Codex agent.
+# shellcheck source=test/e2e/env.sh
+source "$SCRIPT_DIR/env.sh"
+e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY
+unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
+
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 LOG_FILE="$LOG_DIR/e2e-codex-plugin-${TIMESTAMP}.log"
@@ -44,15 +58,9 @@ mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "📝 Log: $LOG_FILE"
 
-# Load .env if it exists (gitignored)
-if [ -f "$PROJECT_DIR/.env" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$PROJECT_DIR/.env"
-  set +a
-fi
-
-E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
+# Two attempts plus build and pacing must fit the paced runner's per-script
+# timeout (E2E_SCRIPT_TIMEOUT_SECONDS, default 1200).
+E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-540}"
 E2E_CODEX_HOME="${E2E_CODEX_HOME:-$PROJECT_DIR/.e2e-auth/codex}"
 
 if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -f "$HOME/.pi/agent/auth.json" ]; then
@@ -70,18 +78,24 @@ for tool in codex node npm jq rg flock; do
   fi
 done
 
-# The dedicated profile must exist, hold a login, and never be the
-# operator's own profile.
-E2E_CODEX_HOME="$(cd "$E2E_CODEX_HOME" 2>/dev/null && pwd || true)"
+# The dedicated profile must exist, hold a login, resolve (symlinks
+# included) to a directory inside this repository, and never be the
+# operator's own profile: each run deletes everything in it but auth.json.
+E2E_CODEX_HOME="$(cd "$E2E_CODEX_HOME" 2>/dev/null && pwd -P || true)"
 if [[ -z "$E2E_CODEX_HOME" || ! -f "$E2E_CODEX_HOME/auth.json" ]]; then
   echo "❌ No dedicated Codex test login found."
   echo "   Create it once: CODEX_HOME=\"$PROJECT_DIR/.e2e-auth/codex\" codex login --device-auth"
   exit 1
 fi
-if [[ "$E2E_CODEX_HOME" == "$(cd "$HOME/.codex" 2>/dev/null && pwd || echo none)" ]]; then
-  echo "❌ E2E_CODEX_HOME points at the operator's own ~/.codex; refusing."
+if [[ "$E2E_CODEX_HOME" == "$(cd "$HOME/.codex" 2>/dev/null && pwd -P || echo none)" ]]; then
+  echo "❌ E2E_CODEX_HOME resolves to the operator's own ~/.codex; refusing."
   exit 1
 fi
+if [[ "$E2E_CODEX_HOME" != "$(cd "$PROJECT_DIR" && pwd -P)/"* ]]; then
+  echo "❌ E2E_CODEX_HOME must resolve inside $PROJECT_DIR; refusing to reset $E2E_CODEX_HOME."
+  exit 1
+fi
+chmod 700 "$E2E_CODEX_HOME"
 
 # One consumer at a time: concurrent use of one auth.json is unsupported.
 exec 9> "$E2E_CODEX_HOME/.e2e.lock"
@@ -194,9 +208,15 @@ echo
 echo "── codex exec"
 EVENTS="$E2E_ROOT/events.jsonl"
 RAN=0
+# completed_sidecar: true once this run has a completed research, so a retry
+# never spends a second live research after the first one finished.
+completed_sidecar() {
+  find "$WORKSPACE/.search" -maxdepth 2 -name meta.json \
+    -exec jq -c 'select(.outcome == "completed")' {} + 2>/dev/null | rg -q .
+}
 for ATTEMPT in 1 2; do
   (cd "$WORKSPACE" && timeout --foreground "${E2E_TIMEOUT_SECONDS}s" codex exec \
-      --json --ephemeral --skip-git-repo-check \
+      --json --ephemeral --skip-git-repo-check --strict-config \
       --sandbox read-only \
       -c approval_policy='"never"' \
       "$PROMPT" < /dev/null > "$EVENTS" 2> "$E2E_ROOT/stderr.txt") || true
@@ -204,6 +224,7 @@ for ATTEMPT in 1 2; do
     RAN=1
     break
   fi
+  if completed_sidecar || [[ "$ATTEMPT" -eq 2 ]]; then break; fi
   echo "   ⚠️  attempt ${ATTEMPT}/2 did not complete a turn; retrying after 30s"
   sleep 30
 done
@@ -232,10 +253,12 @@ if [ -n "$CACHE_DIR" ] && [ -f "$CACHE_DIR/report.md" ] && [ -f "$CACHE_DIR/meta
 else
   bad "missing cache artifacts under the workspace's .search/"
 fi
-if [ -n "$CACHE_DIR" ] && jq -e '.adapter == "mcp" and .outcome == "completed"' "$CACHE_DIR/meta.json" >/dev/null 2>&1; then
-  ok "telemetry records the mcp adapter and a completed outcome"
-else
-  bad "telemetry lacks the mcp adapter or a completed outcome"
+if [ -n "$CACHE_DIR" ] && [ -f "$CACHE_DIR/meta.json" ]; then
+  if jq -e '.adapter == "mcp" and .outcome == "completed"' "$CACHE_DIR/meta.json" >/dev/null 2>&1; then
+    ok "telemetry records the mcp adapter and a completed outcome"
+  else
+    bad "telemetry lacks the mcp adapter or a completed outcome"
+  fi
 fi
 
 # ── Credential hygiene ─────────────────────────────────────────────

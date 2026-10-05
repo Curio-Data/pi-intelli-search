@@ -12,14 +12,19 @@ The plugin data directory resolves to `~/.claude/plugins/data/intelli-search-cur
 
 Steps:
 
-1. Enter your [OpenRouter](https://openrouter.ai) key when _Claude Code_ asks for the plugin's options, or later through `/plugin` → `intelli-search` → configure. One key covers all three pipeline stages. The server does not start until the option is set. An exported `OPENROUTER_API_KEY` is not used: the plugin option always supplies the variable. To set the key from a shell without placing it on a command line, pipe it in:
+1. Set your [OpenRouter](https://openrouter.ai) key in the plugin's required `openrouter_api_key` option. Installing does not ask for it: _Claude Code_ reports that the server needs configuration and does not start it until the option is set. One key covers all three pipeline stages. An exported `OPENROUTER_API_KEY` is not used: the plugin option always supplies the variable. Set the option either way:
 
-   ```bash
-   printf '{"openrouter_api_key":"%s"}' "$KEY" \
-     | claude plugin configure intelli-search@curio-data-plugins --values-stdin
-   ```
+   - **In a session:** run `/plugin`, select `intelli-search` in the Installed tab and choose Configure.
+   - **From a shell:** pipe the value in, so the key never appears in a process list:
 
-   A value saved this way reaches only sessions started afterwards: running sessions keep their loaded options, and `/mcp` reconnect does not reload them. Restart open sessions, or set the key through `/plugin` → `intelli-search` → configure, which applies it to the running session.
+     ```bash
+     printf '{"openrouter_api_key":"%s"}' "$KEY" \
+       | claude plugin configure intelli-search@curio-data-plugins --values-stdin
+     ```
+
+     `printf` here is the shell builtin, which starts no process; keep it rather than `jq --arg` or `echo` through another program. Do not use `claude plugin install --config openrouter_api_key=...`: it places the key on the command line. The command reports `Restart Claude Code to apply it`: sessions already open keep the options they loaded, so restart them.
+
+   The shell route needs `claude plugin configure --values-stdin`, which the _Claude Code_ documentation lists from 2.1.285; the plugin is verified on 2.1.289.
 2. Create the plugin data directory and write the configuration file:
 
    ```bash
@@ -53,13 +58,13 @@ Steps:
    ```
 
    These are explicit selections, not defaults you must keep. Any chat model on OpenRouter works for `extract` and `collate`; `search` needs `perplexity/sonar`, `perplexity/sonar-pro` or `perplexity/sonar-pro-search` (or an explicitly configured `searchWebSearch` block; see [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#tuning) in the standalone guide).
-3. Restart Claude Code and verify with `claude mcp list`: the server `plugin:intelli-search:intelli_search` must show as connected. If it is absent from the list, the key option is not set.
+3. Restart _Claude Code_ and verify with `claude mcp list`: the server `plugin:intelli-search:intelli_search` must show as connected. If it is absent from the list, the key option is not set.
 
-Uninstalling the plugin deletes its data directory, including `config.json`. Keep a copy if you plan to reinstall.
+Uninstalling the plugin removes the contents of its data directory, including `config.json`; keep a copy if you plan to reinstall. If _Claude Code_ reports that it could not clear the plugin's stored options, remove the `pluginSecrets` entry for `intelli-search@curio-data-plugins` from its credential store yourself, and rotate the key if you uninstalled to retire it.
 
 ### Authentication Failure
 
-A `401` from an operation means the server received a key OpenRouter rejects. Replace the stored option through `/plugin` → `intelli-search` → configure, then reconnect the server with `/mcp`. Exporting a different `OPENROUTER_API_KEY` has no effect on this plugin.
+A `401` from an operation means the server received a key OpenRouter rejects. Replace the stored option in a session through `/plugin` → Installed → `intelli-search` → Configure, then reconnect the server with `/mcp`. If you replace it from a shell instead, restart the session: an open session keeps the options it loaded. Exporting a different `OPENROUTER_API_KEY` has no effect on this plugin.
 
 ### Workspace Expansion Failure
 

@@ -325,6 +325,7 @@ test/
 │   ├── 12_plugin_bundles.sh
 │   ├── 13_claude_code_plugin.sh
 │   ├── 14_codex_plugin.sh
+│   ├── env.sh
 │   └── lib.sh
 ├── run-e2e-all.sh
 ├── run-e2e-publish.sh
@@ -560,7 +561,7 @@ The E2E tests auto-detect `OPENROUTER_API_KEY` from `~/.pi/agent/auth.json`. Onl
 OPENROUTER_API_KEY=sk-or-v1-... ./test/e2e/01_main.sh
 ```
 
-`13_claude_code_plugin.sh` also needs `CLAUDE_CODE_OAUTH_TOKEN` in the gitignored `.env` (mode 600). Create it once with `claude setup-token` in a separate terminal, never through an agent session, because the command prints the token. The token is static for a year and is never written to the isolated profile. `14_codex_plugin.sh` needs a dedicated Codex login, created once in a separate terminal with `CODEX_HOME="$PWD/.e2e-auth/codex" codex login --device-auth` (gitignored, mode 700). Never copy `~/.claude/.credentials.json` or `~/.codex/auth.json` into a test profile: a copied refresh-token chain invalidates the operator's login.
+`13_claude_code_plugin.sh` also needs `CLAUDE_CODE_OAUTH_TOKEN` in the gitignored `.env` (mode 600). Each value must be `NAME=VALUE` on one line: scenarios 13 and 14 parse `.env` with `test/e2e/env.sh` (never `source`), read only the keys they need before any output reaches `.e2e-logs/`, and refuse a malformed line or a group- or world-readable file. Create it once with `claude setup-token` in a separate terminal, never through an agent session, because the command prints the token. The token is static for a year and is never written to the isolated profile. `14_codex_plugin.sh` needs a dedicated Codex login, created once in a separate terminal with `CODEX_HOME="$PWD/.e2e-auth/codex" codex login --device-auth` (gitignored, mode 700). Never copy `~/.claude/.credentials.json` or `~/.codex/auth.json` into a test profile: a copied refresh-token chain invalidates the operator's login.
 
 ### E2E Publish Test
 

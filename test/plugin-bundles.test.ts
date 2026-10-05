@@ -130,9 +130,10 @@ describe("plugin bundle generation", () => {
     assert.strictEqual(option.default, undefined);
   });
 
-  it("keeps credentials out of committed manifests and launchers", () => {
-    for (const path of ALL_PATHS.filter((p) => p.endsWith(".json"))) {
-      assert.ok(!/sk-or-/.test(files[path]), `${path} carries a key value`);
+  it("keeps credential values out of every generated file", () => {
+    // The drift check below makes generated output equal the committed tree.
+    for (const path of ALL_PATHS) {
+      assert.ok(!/sk-(or-v1-[0-9a-f]{16,}|ant-[A-Za-z0-9_-]{20,})/.test(files[path]), `${path} carries a key value`);
     }
     const codex = parse(files, "plugins/codex/.codex-plugin/plugin.json");
     assert.strictEqual(codex.userConfig, undefined);

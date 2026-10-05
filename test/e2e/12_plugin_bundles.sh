@@ -194,11 +194,17 @@ EXPORTED_KEY="sk-or-v1-e2e-exported-dummy"
 # server_env_key: run `claude mcp list` with EXPORTED_KEY in the environment
 # while sampling the plugin server's /proc environ; prints the received
 # OPENROUTER_API_KEY value(s), <unset> when the variable was absent, or
-# <no-server> when no server process for this workspace appeared.
+# <no-server> when no server process for this workspace appeared. Sampling
+# lasts until `claude mcp list` exits plus a grace period, so a slow server
+# start cannot be mistaken for a withheld one. The list output is kept in
+# $E2E_ROOT/mcp-list.txt for a second, independent check.
 server_env_key() {
-  local out="$E2E_ROOT/envprobe.txt"
+  local out="$E2E_ROOT/envprobe.txt" done_flag="$E2E_ROOT/list.done"
   : > "$out"
-  ( for _ in $(seq 1 200); do
+  rm -f "$done_flag"
+  ( grace=0
+    while [[ "$grace" -lt 60 ]]; do
+      if [[ -e "$done_flag" ]]; then grace=$((grace + 1)); fi
       # Match by this scenario's workspace: a directory marketplace runs the
       # server from its source path, and other sessions may run their own.
       for pid in $(pgrep -f "[m]cp-intelli-search/dist/cli.js" || true); do
@@ -212,7 +218,8 @@ server_env_key() {
       sleep 0.05
     done ) &
   local sampler=$!
-  (cd "$E2E_ROOT/claude-workspace" && OPENROUTER_API_KEY="$EXPORTED_KEY" claude mcp list >/dev/null 2>&1 || true)
+  (cd "$E2E_ROOT/claude-workspace" && OPENROUTER_API_KEY="$EXPORTED_KEY" claude mcp list > "$E2E_ROOT/mcp-list.txt" 2>&1 || true)
+  touch "$done_flag"
   wait "$sampler"
   if ! rg -q '^SERVER_SEEN$' "$out"; then
     echo "<no-server>"
@@ -233,7 +240,7 @@ else
     bad "key option state after install"
   fi
   WITHHELD="$(server_env_key)"
-  if [[ "$WITHHELD" == "<no-server>" ]]; then
+  if [[ "$WITHHELD" == "<no-server>" ]] && ! rg -q "plugin:intelli-search:intelli_search" "$E2E_ROOT/mcp-list.txt"; then
     ok "host withholds the server while the required key option is unset"
   else
     bad "server started without the required key option (received '$WITHHELD')"

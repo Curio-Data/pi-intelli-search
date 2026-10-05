@@ -30,13 +30,12 @@ mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "📝 Log: $LOG_FILE"
 
-# Load .env if it exists (gitignored)
-if [ -f "$PROJECT_DIR/.env" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$PROJECT_DIR/.env"
-  set +a
-fi
+# Read .env if it exists (gitignored): parsed, never executed, and only the
+# documented keys (see test/e2e/env.sh). Other credentials kept there stay out.
+# shellcheck source=test/e2e/env.sh
+source "$SCRIPT_DIR/env.sh"
+e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
+  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
 
 # ── Check prerequisites ────────────────────────────────────────────
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
