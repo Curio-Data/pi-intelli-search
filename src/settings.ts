@@ -148,7 +148,16 @@ const DEFAULT_HISTORY: Record<
   },
   "0.14.1": {
     // Defaults unchanged from 0.14.0. Diagnostics-only release (TUI-safe
-    // fetch/retry output); no model changes.
+    // fetch/retry output); no model changes. 0.14.1 was never tagged or
+    // published: it folded into 0.15.0, so this entry exists only so
+    // upgrades from a build that reported 0.14.1 still migrate.
+    extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+    collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  },
+  "0.15.0": {
+    // Defaults unchanged from 0.14.1. First release under the two-package
+    // versioning scheme (shared minor = core generation); no model changes.
     extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },

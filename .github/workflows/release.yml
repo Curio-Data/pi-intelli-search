@@ -35,13 +35,13 @@ jobs:
             echo "package=@curio-data/mcp-intelli-search" >> "$GITHUB_OUTPUT"
             echo "directory=packages/mcp" >> "$GITHUB_OUTPUT"
             echo "version=${version}" >> "$GITHUB_OUTPUT"
-          elif [[ "$tag" =~ ^v(.+)$ ]]; then
+          elif [[ "$tag" =~ ^pi-v(.+)$ ]]; then
             version="${BASH_REMATCH[1]}"
             echo "package=@curio-data/pi-intelli-search" >> "$GITHUB_OUTPUT"
             echo "directory=." >> "$GITHUB_OUTPUT"
             echo "version=${version}" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::Unrecognised release tag '${tag}'. Use 'vX.Y.Z' for the native package or 'mcp-vX.Y.Z' for the MCP package."
+            echo "::error::Unrecognised release tag '${tag}'. Use 'pi-vX.Y.Z' for the native package or 'mcp-vX.Y.Z' for the MCP package. Historical native tags used the unprefixed 'vX.Y.Z' form (0.14.0 and older) and are not re-released."
             exit 1
           fi
           # npm stage publish inherits publish's guard: a prerelease version

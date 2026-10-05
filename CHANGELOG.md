@@ -7,9 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **The research engine also ships as a standalone MCP server (unpublished).** `@curio-data/mcp-intelli-search` serves the same four `intelli_*` tools over Model Context Protocol stdio without a `Pi` installation, with explicit JSON configuration, workspace ownership and an OpenRouter adapter, plus generated [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin bundles installable from this repository's marketplaces. The _Claude Code_ plugin takes the OpenRouter key from a required sensitive plugin option held in _Claude Code_'s credential store. The README documents the three installation routes and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) records the tested host versions. The package is not yet on the registry; the plugin launchers become installable at publication.
+## [pi-0.15.0] - 2026-10-05
 
 ### Fixed
 
@@ -23,11 +21,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The pipeline core moved to `src/core/`**, shared with the new standalone MCP package. Tool contracts, prompts, results, cache formats and telemetry are unchanged (frozen-contract fixtures verify this); the extraction is what the two-package versioning scheme builds on.
 - **Removed the Sonar retirement advisory.** OpenRouter continues to serve `perplexity/sonar` past Perplexity's direct-API sunset date, so the README advisory, the sunset framing in the alternative-search-configuration docs, and stale references in code comments and tests are gone. The default search model is unchanged.
 
 ### Compatibility
 
 - **Audited and verified through `Pi` 1.0.0** (0.87.1, 0.99.0-0.99.2, and 1.0.0 reviewed; no code changes required). The model-registry facade, the `fetch`/`onPayload` request hooks, the settings trust APIs, and the event surface are intact; pi-ai 1.0.0 formalises the 0.86 `TranscriptContext` contract in its types, which the dual-path dispatch already handles. Full unit suite and the live E2E pipeline pass on `Pi` 1.0.0. The minimum supported version stays `Pi` 0.81.1, with real load checks of both dispatch paths on 0.81.1 (legacy provider) and 0.86.0 (registry facade) on 2026-10-04.
+- **Native release tags now carry the `pi-` prefix** (`pi-vX.Y.Z`), matching the MCP package's `mcp-vX.Y.Z`. Historical `vX.Y.Z` tags and releases are unchanged and keep pointing at the native package. This entry covers the unreleased 0.14.1 fixes, which folded into 0.15.0.
+
+## [mcp-0.15.0-alpha.0] - 2026-10-05
+
+### Added
+
+- **First dev-marked release of the standalone MCP server.** `@curio-data/mcp-intelli-search` serves the same four `intelli_*` tools over Model Context Protocol stdio without a `Pi` installation, with explicit JSON configuration, workspace ownership and an OpenRouter adapter, plus generated [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin bundles installable from this repository's marketplaces. The _Claude Code_ plugin takes the OpenRouter key from a required sensitive plugin option held in _Claude Code_'s credential store. The README documents the three installation routes and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) records the tested host versions. Staged under the `alpha` dist-tag, off `latest`, mirroring how the native package started (0.3.1-alpha.1). Core behaviour is shared with [pi-0.15.0] and recorded there; this section carries only adapter-specific entries.
+
+---
+
+**Two packages from 0.15.0.** This repository now versions two packages that share the core engine in `src/core/`: `@curio-data/pi-intelli-search` (the native `Pi` extension) and `@curio-data/mcp-intelli-search` (the standalone MCP server). A change under `src/core/` bumps the minor version of both packages; a package-specific change bumps only that package's patch version. Release tags and changelog sections carry a package prefix: `pi-vX.Y.Z` and `[pi-X.Y.Z]` for the native extension, `mcp-vX.Y.Z` and `[mcp-X.Y.Z]` for the MCP server. Entries below this line are the native package alone, released under unprefixed `vX.Y.Z` tags.
 
 ## [0.14.0] - 2026-09-07
 
@@ -395,6 +405,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[pi-0.15.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.15.0
+[mcp-0.15.0-alpha.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.15.0-alpha.0
 [0.14.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.14.0
 [0.13.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.13.0
 [0.12.6]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.6

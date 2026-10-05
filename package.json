@@ -1,6 +1,6 @@
 {
   "name": "@curio-data/pi-intelli-search",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "Intelligent web research for Pi: search, extract, collate, and cache grounded web context in one tool call.",
   "license": "Apache-2.0",
   "repository": {
@@ -21,7 +21,9 @@
     ],
     "image": "https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/06.png"
   },
-  "workspaces": ["packages/mcp"],
+  "workspaces": [
+    "packages/mcp"
+  ],
   "scripts": {
     "build": "tsc",
     "build:mcp": "npm run build --workspace @curio-data/mcp-intelli-search",
@@ -64,7 +66,8 @@
   "files": [
     "src/",
     "skills/",
-    "dist/","!dist/.tmp",
+    "dist/",
+    "!dist/.tmp",
     "CHANGELOG.md",
     "NOTICE",
     "LICENSE",

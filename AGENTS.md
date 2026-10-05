@@ -602,7 +602,25 @@ All tools use the `intelli_` prefix to avoid collisions with other `Pi` extensio
 
 Publishing is gated through `npm` staged publishing. CI submits the tarball; the user approves it on `npmjs.com` with 2FA before it goes live:
 - **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, generated-plugin drift, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
-- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. The tag selects exactly one package: `vX.Y.Z` stages the native `@curio-data/pi-intelli-search` package and `mcp-vX.Y.Z` stages `@curio-data/mcp-intelli-search`; any other tag fails. The workflow verifies the tag version against the selected package's manifest, builds and tests both artifacts, and runs `npm stage publish` against the `@curio-data` scope. The dist-tag is derived from the version: stable releases stage to `latest`, while a prerelease such as `0.2.0-alpha.0` stages to its first prerelease identifier (`alpha`), because `npm stage publish` inherits `npm publish`'s guard that throws on a prerelease version without an explicit `--tag`. Authentication is via OIDC trusted publishing (no stored token); provenance is signed automatically (possible exception: the very first staged version of a brand-new package, where npm's visibility check has no package to inspect). The package is then **held in the staging queue** until a maintainer approves it on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) with 2FA. Until approval, the version does not appear on the public registry.
+- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. The tag selects exactly one package: `pi-vX.Y.Z` stages the native `@curio-data/pi-intelli-search` package and `mcp-vX.Y.Z` stages `@curio-data/mcp-intelli-search`; any other tag fails. The workflow verifies the tag version against the selected package's manifest, builds and tests both artifacts, and runs `npm stage publish` against the `@curio-data` scope. The dist-tag is derived from the version: stable releases stage to `latest`, while a prerelease such as `0.2.0-alpha.0` stages to its first prerelease identifier (`alpha`), because `npm stage publish` inherits `npm publish`'s guard that throws on a prerelease version without an explicit `--tag`. Authentication is via OIDC trusted publishing (no stored token); provenance is signed automatically (possible exception: the very first staged version of a brand-new package, where npm's visibility check has no package to inspect). The package is then **held in the staging queue** until a maintainer approves it on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) with 2FA. Until approval, the version does not appear on the public registry.
+
+### Versioning Scheme (Two Packages, One Core)
+
+Agreed with the owner on 2026-10-05. Both packages are pre-1.0 and version in lockstep on the minor number:
+
+- **Minor (0.x.0) is the shared core generation.** Any change under `src/core/` bumps the minor version of **both** manifests, even if only one package ships immediately. Letting the minors drift destroys the signal that `pi-intelli-search@0.15.1` and `mcp-intelli-search@0.15.2` run the same core generation, which matters because the MCP package must honour the frozen native contracts.
+- **Patch (0.0.x) is package-specific.** Changes outside `src/core/` (native adapter under `src/`, MCP adapter under `packages/mcp/`, plugins, docs) bump only the affected package's patch. Patches are independent between packages and reset to 0 on every core bump.
+- **Prerelease is an orthogonal maturity marker.** A package carries `-alpha.N` while dev-marked and stages to the derived `alpha` dist-tag, off `latest` (the native package started this way at 0.3.1-alpha.1). Dropping the suffix is the promotion to normal; it is not a version change.
+- **Native minor bumps still need a `DEFAULT_HISTORY` entry** in `src/settings.ts`, including bumps caused by core changes, and both workspaces need `npm install --package-lock-only`. The MCP package has no `DEFAULT_HISTORY`; its version changes never trigger native model migration.
+- **Tags and changelog sections are prefixed per package:** `pi-vX.Y.Z` / `[pi-X.Y.Z]` for the native extension, `mcp-vX.Y.Z` / `[mcp-X.Y.Z]` for the MCP server. Native releases 0.14.0 and older use the unprefixed `vX.Y.Z` form; those tags and releases are historical and never re-released.
+- **Release order within a coupled cycle: MCP first, native held.** The native package is not staged or released until the MCP package of the same core generation is confirmed installable from npmjs (the post-publication gate in the MCP checklist). Owner directive, 2026-10-05.
+
+### Changelog Structure
+
+One canonical `CHANGELOG.md` at the repository root covers both packages. The audiences overlap and core changes appear in both histories, so splitting the file would duplicate entries or force readers to open two files.
+
+- Native sections are `## [pi-X.Y.Z]`, MCP sections `## [mcp-X.Y.Z]`; a horizontal rule and note below the newest entries separate the prefixed era from the historical unprefixed native entries.
+- **Write core changes once, under the native section.** The matching MCP section carries a one-line pointer ("Core behaviour is shared with [pi-X.Y.Z] and recorded there") plus only its adapter-specific entries.
 
 ### Changelog Principles
 
@@ -620,19 +638,19 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 1. **Verify CI is green.** Confirm all changes are merged to `main` and the latest run is passing.
 2. **Bump `version` in `package.json`** following [SemVer](https://semver.org/), then sync derived state before anything else: run `npm install --package-lock-only` so the `package-lock.json` root version matches, and add a `DEFAULT_HISTORY` entry for the new version in `src/settings.ts` (defaults unchanged is fine). Both drifts are silent: the lockfile drift was missed in v0.12.1, and a missing history entry disables default migration for upgrading users. Run `npm test` after the bump; the migration guard reads the live package version.
 3. **Update `CHANGELOG.md` in two places.** Both are required:
-   - **Top of file:** Add a new `## [X.Y.Z] - YYYY-MM-DD` section above the previous entry. Use the standard sub-headings (`### Added`, `### Changed`, `### Fixed`, `### Compatibility`, `### Removed`, `### Security`) as needed. List user-visible changes only; internal refactors do not need entries unless they affect compatibility.
-   - **Bottom of file:** Add a corresponding reference link `[X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/vX.Y.Z` below the existing reference block. Without this entry the version heading at the top will not link to the GitHub release.
+   - **Top of file:** Add a new `## [pi-X.Y.Z] - YYYY-MM-DD` section above the previous entry. Use the standard sub-headings (`### Added`, `### Changed`, `### Fixed`, `### Compatibility`, `### Removed`, `### Security`) as needed. List user-visible changes only; internal refactors do not need entries unless they affect compatibility.
+   - **Bottom of file:** Add a corresponding reference link `[pi-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-vX.Y.Z` below the existing reference block. Without this entry the version heading at the top will not link to the GitHub release.
 4. **Verify both CHANGELOG edits exist before committing.** Run:
 
    ```bash
-   grep -n "^## \[X.Y.Z\]" CHANGELOG.md   # must return one match
-   grep -n "^\[X.Y.Z\]:"  CHANGELOG.md   # must return one match
+   grep -n "^## \[pi-X.Y.Z\]" CHANGELOG.md   # must return one match
+   grep -n "^\[pi-X.Y.Z\]:"  CHANGELOG.md   # must return one match
    ```
 
    Both must match. If either is missing, fix before continuing.
-5. **Commit and push** the version bump and CHANGELOG together. Suggested commit subject: `Release vX.Y.Z`.
-6. **Request explicit user approval** before creating the GitHub Release. The agent must not stage a publish without it (see `Release Policy` above).
-7. **On approval, create the GitHub Release** with tag `vX.Y.Z`. The workflow then runs `npm stage publish`, which submits the tarball to the staging queue. The agent's responsibility ends here.
+5. **Commit and push** the version bump and CHANGELOG together. Suggested commit subject: `Release pi-vX.Y.Z`.
+6. **Request explicit user approval** before creating the GitHub Release. The agent must not stage a publish without it (see `Release Policy` above). In a coupled release cycle the native release also waits for the MCP post-publication gate (see `Versioning Scheme`).
+7. **On approval, create the GitHub Release** with tag `pi-vX.Y.Z`. The workflow then runs `npm stage publish`, which submits the tarball to the staging queue. The agent's responsibility ends here.
 8. **User approves the staged package** on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) via the Staged Packages tab, providing 2FA. The agent must never attempt to approve a staged publish, even if given credentials.
 9. **Verify publication.** After approval, check `https://www.npmjs.com/package/@curio-data/pi-intelli-search` shows the new version.
 
@@ -645,9 +663,9 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 3. **Remove the not-published notices** from `packages/mcp/README.md` and the root `README.md` (the `Publication Status` paragraph in `Use With Other Hosts`) on the first public release only.
 4. **Regenerate the plugin bundles** so the catalogs pin the new version: `npm run generate:plugins`, then confirm `npm run check:plugins` passes. Commit the regenerated catalogs with the version bump; they are what users install from.
 5. **Run the full paced live suite** `./test/run-e2e-all.sh`, including `11_mcp_stdio.sh`, `12_plugin_bundles.sh`, `13_claude_code_plugin.sh` and `14_codex_plugin.sh`, before tagging.
-6. **Update `CHANGELOG.md`** with a `## [mcp-X.Y.Z] - YYYY-MM-DD` section and a matching `[mcp-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-vX.Y.Z` reference link. Verify both with the grep checks from step 4 of the native checklist (adjusted for the `mcp-` prefix).
+6. **Update `CHANGELOG.md`** with a `## [mcp-X.Y.Z] - YYYY-MM-DD` section and a matching `[mcp-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-vX.Y.Z` reference link. Core changes are not repeated: one pointer line to the native `[pi-X.Y.Z]` section covers them (see `Changelog Structure`). Verify both edits with the grep checks from step 4 of the native checklist (adjusted for the `mcp-` prefix).
 7. **Commit and push**, then create the _GitHub_ Release with tag `mcp-vX.Y.Z` only after explicit approval. The workflow stages the package; the user approves it on `npmjs.com` with 2FA.
-8. **Post-publication gate:** verify the registry-pin installation route that pre-publication tests could not exercise: install the Claude Code and Codex plugins from the committed catalogs into clean profiles and confirm the `npx` launcher downloads and starts the published version. Record this evidence separately from the local-tarball class in [the compatibility matrix](docs/COMPATIBILITY.md).
+8. **Post-publication gate:** verify the registry-pin installation route that pre-publication tests could not exercise: install the Claude Code and Codex plugins from the committed catalogs into clean profiles and confirm the `npx` launcher downloads and starts the published version. Record this evidence separately from the local-tarball class in [the compatibility matrix](docs/COMPATIBILITY.md). Only after this gate passes is the native package of the same core generation released.
 
 ### Testing the Publish Pipeline
 
