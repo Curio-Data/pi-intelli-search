@@ -61,7 +61,7 @@ export function scanHeadings(markdown) {
     const match = line.match(/^ {0,3}(#{1,6})[ \t]+(.+?)\s*$/);
     if (!match) continue;
     const title = match[2].replace(/[ \t]+#+[ \t]*$/, "");
-    // All heading levels reserve anchors, even though only levels 2 and 3
+    // All heading levels reserve anchors, even though only levels 2, 3 and 4
     // appear in the TOC. This preserves document-wide duplicate numbering.
     headings.push({ depth: match[1].length, title, anchor: slug(title) });
   }
@@ -78,8 +78,8 @@ export function generateToc(markdown) {
   const end = ends[0].index;
   const newline = markdown.includes("\r\n") ? "\r\n" : "\n";
   const entries = scanHeadings(markdown)
-    .filter(({ depth, title }) => (depth === 2 || depth === 3) && !(depth === 2 && headingText(title) === "Contents"))
-    .map(({ depth, title, anchor }) => `${depth === 3 ? "  " : ""}- [${title}](#${anchor})`);
+    .filter(({ depth, title }) => (depth === 2 || depth === 3 || depth === 4) && !(depth === 2 && headingText(title) === "Contents"))
+    .map(({ depth, title, anchor }) => `${"  ".repeat(depth - 2)}- [${title}](#${anchor})`);
   const block = `${newline}${newline}${entries.join(newline)}${newline}${newline}`;
   return markdown.slice(0, start) + block + markdown.slice(end);
 }
