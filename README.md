@@ -6,9 +6,26 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
 ![tests](https://img.shields.io/badge/test%3Aall-508%20passing-brightgreen)
 
-Intelligent web research for [`Pi`](https://github.com/earendil-works/pi): search, extract, collate, and cache grounded web context in one tool call. The same engine also ships as a standalone Model Context Protocol (MCP) server for other agent hosts; see [Use With Other Hosts](#use-with-other-hosts).
+Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call. This repository provides two first-class packages from one research engine:
 
-A `Pi` extension for deep web research. It searches via a search-grounded model ([_Perplexity Sonar_](https://docs.perplexity.ai) by default), merges every source the model cited, fetches pages through a dual-fetch comparison ([_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), extracts query-relevant content per page with a dedicated LLM guided by a _focused prompt_, then collates findings: deduplicating, flagging inconsistencies, and synthesising a concise summary. Everything is cached in `.search/` for offline reuse. Cache suggest surfaces related previous searches on each query.
+- `@curio-data/pi-intelli-search`: a [`Pi`](https://github.com/earendil-works/pi) extension that registers the four research tools natively, using `Pi` settings, authentication and the model registry.
+- `@curio-data/mcp-intelli-search`: a standalone Model Context Protocol (MCP) server over standard input/output (stdio) for MCP-compatible hosts, including [_Claude Code_](https://code.claude.com/docs/en/mcp) and [_Codex_](https://developers.openai.com/codex/mcp).
+
+Both packages run the same five-stage pipeline with the same cache format. [Install](#install) covers the `Pi` extension; [Use With Other Hosts](#use-with-other-hosts) covers direct MCP registration and host plugins.
+
+The shared pipeline searches via a search-grounded model ([_Perplexity Sonar_](https://docs.perplexity.ai), the native default), merges every source the model cited, fetches pages through a dual-fetch comparison ([_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), extracts query-relevant content per page with a dedicated large language model (LLM) guided by a _focused prompt_, then collates findings: deduplicating, flagging inconsistencies, and synthesising a concise summary. Everything is cached in `.search/` for offline reuse. Cache suggest surfaces related previous searches on each query.
+
+## Two Packages, One Engine
+
+Choose the installation route for the host:
+
+| Route | Host | What to Install |
+|---|---|---|
+| Native `Pi` Extension | `Pi` | `@curio-data/pi-intelli-search`: [Install](#install) |
+| Direct MCP Registration | Any MCP-compatible host | `@curio-data/mcp-intelli-search`: [Route A](#route-a-direct-mcp-configuration) |
+| Host Plugin | Claude Code or Codex | Repository marketplace launching the pinned MCP package: [Route B](#route-b-claude-code-plugin) or [Route C](#route-c-codex-plugin) |
+
+The native extension uses `Pi` settings and authentication. The MCP server requires explicit configuration, a per-folder workspace and an environment-supplied inference key; it does not read `Pi` settings or credentials. Its first registry publication is pending: use the [source-checkout launcher](packages/mcp/README.md#direct-registration) until publication. The registry and plugin launchers below are post-publication routes.
 
 <p align="center">
   <img src="docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
@@ -22,7 +39,7 @@ A `Pi` extension for deep web research. It searches via a search-grounded model 
 - 📄 **Extract:** Per-page LLM extraction guided by a _focused prompt_. Compresses ≈50K to ≈3-5K chars of query-relevant content.
 - 🔗 **Collate:** Cross-source deduplication, inconsistency detection, and synthesis into a focused ≈5K summary.
 - 💾 **Cache:** Persistent `.search/` cache with automatic cache suggest. Related previous searches surfaced on each query.
-- 🎯 **Configurable:** Swap any pipeline stage (search, extract, collate) to any model `Pi` supports.
+- 🎯 **Configurable:** Select models independently for search, extract and collate. The native extension uses any model `Pi` supports; the MCP server uses explicitly selected OpenRouter models.
 - 💰 **Low cost:** ≈$0.09 per research session with default settings.
 
 ## Launch Blog Post
@@ -56,6 +73,8 @@ For the detailed feature-by-feature comparison against six other `Pi` search ext
 
 
 ## Install
+
+This section installs the native `Pi` extension. For the standalone MCP server, use [direct registration or a host plugin](#use-with-other-hosts).
 
 ### Prerequisites
 
@@ -178,21 +197,15 @@ See [Model Configuration](#model-configuration) for all options, [Configuration 
 
 ## Use With Other Hosts
 
-The same research engine runs outside `Pi` as `@curio-data/mcp-intelli-search`, a standalone MCP server over standard input/output (stdio). Three installation routes exist:
-
-| Route | Audience | What You Install |
-|---|---|---|
-| Native `Pi` extension | `Pi` users | `@curio-data/pi-intelli-search` ([Install](#install) above) |
-| Direct MCP configuration | Any MCP-compatible host | `@curio-data/mcp-intelli-search` |
-| Host plugin | Claude Code or Codex users | This repository's plugin marketplace (launches the pinned MCP package) |
+`@curio-data/mcp-intelli-search` serves the four research tools over stdio for MCP-compatible hosts. Choose direct registration or a host plugin from the [installation routes](#two-packages-one-engine).
 
 The standalone server shares one engine with the native extension: the same five-stage pipeline, the same cache formats and the same local-only telemetry. It requires [Node.js](https://nodejs.org/) 22 or later, an explicitly selected JSON configuration file, an explicitly selected absolute workspace directory, and an OpenRouter key supplied through an environment variable. Inference is billed separately to that OpenRouter account; no `Pi` subscription or credential store is involved. The server reads no host credential stores, no `Pi` settings and no discovered project configuration. The complete configuration, security and troubleshooting reference is the [standalone package guide](packages/mcp/README.md).
 
-**Publication Status:** the standalone package's first registry publication is pending. Until it lands, the `npx` and plugin routes below cannot resolve the pinned version, and the local-tarball development path in the [standalone package guide](packages/mcp/README.md) is the working one. This notice is removed at first publication.
+**Publication Status:** the standalone package's first registry publication is pending. Until it lands, the `npx` and plugin launchers below are unavailable; use the pre-publication source-checkout launcher in [Direct Registration](packages/mcp/README.md#direct-registration). This notice is removed at first publication.
 
 ### Route A: Direct MCP Configuration
 
-Any host that speaks MCP over stdio can register the server directly. The executable is `mcp-intelli-search`; an `npx` launch needs no separate install step (append `@<version>` to the package name to pin an exact release; the plugin routes below pin for you):
+Any host that speaks MCP over stdio can register the server directly. The executable is `mcp-intelli-search`; after publication, an `npx` launch needs no separate install step (append `@<version>` to the package name to pin an exact release; the plugin routes below pin for you):
 
 ```json
 {
@@ -206,8 +219,8 @@ Any host that speaks MCP over stdio can register the server directly. The execut
         "mcp-intelli-search"
       ],
       "env": {
-        "INTELLI_SEARCH_CONFIG": "/absolute/path/config.json",
-        "INTELLI_SEARCH_WORKSPACE": "/absolute/path/workspace"
+        "INTELLI_SEARCH_CONFIG": "/absolute/config.json",
+        "INTELLI_SEARCH_WORKSPACE": "/absolute/workspace"
       }
     }
   }
@@ -240,7 +253,34 @@ Any host that speaks MCP over stdio can register the server directly. The execut
 }
 ```
 
-These are explicit selections, not inherited defaults: the standalone package has no implicit provider or model choice. The research cache lands in `<workspace>/.search/`; the host reads cached pages with its own file-reading capability. `mcp-intelli-search --help`, `--version` and `--check-config` validate the installation without credentials or inference.
+These are explicit selections, not inherited defaults: the standalone package has no implicit provider or model choice. The research cache lands in `<workspace>/.search/`; the host reads cached pages with its own file-reading capability. Configuration and tuning details are canonical in the [standalone package guide](packages/mcp/README.md#configuration).
+
+#### Claude Code Registration
+
+Save the configuration above as `.intelli-search.json` in the target folder. Run registration from that folder. `local` is the default scope: private to the operator and active only in that folder. Add `--scope project` before `--` to write a shared `.mcp.json` into the folder; _Claude Code_ requires approval before connecting to project-scoped servers.
+
+**Post-Publication Launcher:**
+
+```bash
+claude mcp add intelli_search \
+  -e "INTELLI_SEARCH_CONFIG=$PWD/.intelli-search.json" \
+  -e "INTELLI_SEARCH_WORKSPACE=$PWD" \
+  -- npx -y --package @curio-data/mcp-intelli-search \
+  mcp-intelli-search
+```
+
+**Pre-Publication Source-Checkout Launcher:** run `npm run build:all` from this repository's root, then switch to the target folder and register the built server:
+
+```bash
+claude mcp add intelli_search \
+  -e "INTELLI_SEARCH_CONFIG=$PWD/.intelli-search.json" \
+  -e "INTELLI_SEARCH_WORKSPACE=$PWD" \
+  -- node /absolute/path/to/pi-intelli-search/packages/mcp/dist/cli.js
+```
+
+Replace the checkout path with its actual absolute path. The configuration file can live at any readable absolute path, either per-folder or shared; replace the `INTELLI_SEARCH_CONFIG` value accordingly. Keep `INTELLI_SEARCH_WORKSPACE` per-folder so each folder has its own research cache. `OPENROUTER_API_KEY` must reach the server process environment, including when _Claude Code_ starts it.
+
+Verify with `claude mcp list` from the target folder and confirm `intelli_search` is connected. Also run the chosen launcher with `--check-config` to validate configuration without credentials or inference; this does not test connectivity or model access. Both verification commands are shown in the canonical [Direct Registration](packages/mcp/README.md#direct-registration) reference.
 
 ### Route B: Claude Code Plugin
 
@@ -267,6 +307,8 @@ Codex starts plugin servers with a filtered environment and no placeholder expan
 On both plugin hosts the tools appear under host-qualified names (for example `mcp__intelli_search__intelli_research` on Codex). The installed `intelli-search` skill shows the exact names for its host. The native `Pi` extension and the MCP server are independent installations; enabling both in one agent gives duplicate tool sets, which is not a supported configuration.
 
 ## Configuration Recipes
+
+These recipes configure the native `Pi` extension. For MCP configuration, select models under `models` and tuning under `tuning` in the [standalone configuration file](packages/mcp/README.md#configuration); do not copy the native settings wrapper.
 
 Each recipe is a complete `~/.pi/agent/settings.json`. Copy it whole, or lift the `pi-intelli-search` block into your existing file. Project-level overrides go in `<project>/.pi/settings.json` (applies only after `Pi` approves the project; the global file always applies).
 
@@ -434,6 +476,8 @@ Use this to give a client project a dedicated cache directory and a stronger sea
 
 ## Tools
 
+Both packages expose these four operations. The names below are native `Pi` tool names and MCP server tool names; MCP hosts add their own callable-name prefixes. Use the names exposed by the host.
+
 | Tool               | Description                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
 | `intelli_search`   | Search the web and return a concise answer with a source list (top `defaultUrls`).                   |
@@ -484,7 +528,9 @@ intelli_research(
 
 ## Model Configuration
 
-All three pipeline stages use independently configurable models. Defaults are chosen for cost-efficiency, but **any model `Pi` can access works**. This includes built-in providers, [OpenRouter](https://openrouter.ai) models, or models from other extensions.
+Both packages select models independently for search, extract and collate. The configuration below is for the native `Pi` extension; the MCP server requires explicit OpenRouter selections for all three roles in its [configuration file](packages/mcp/README.md#configuration), with no implicit model defaults.
+
+Native defaults are chosen for cost-efficiency, but **any model `Pi` can access works**. This includes built-in providers, [OpenRouter](https://openrouter.ai) models, or models from other extensions.
 
 | Stage   | Default                       | Config key              |
 | ------- | ----------------------------- | ----------------------- |
@@ -499,8 +545,6 @@ All three pipeline stages use independently configurable models. Defaults are ch
 - **Avoids the Perplexity API $50 minimum.** Routing through `OpenRouter` consolidates spend on a single account already used across the open-source coding-agent ecosystem, including `Pi`. No separate _Perplexity_ subscription is required.
 - **One account, many models.** The same OpenRouter key covers _Sonar_ and any other models you might want for extract or collate.
 - **Is non-destructive.** The patch merges new models by ID. It never replaces existing OpenRouter models.
-- **Is idempotent.** It is safe across extension reloads and updates.
-
 - **Is idempotent.** It is safe across extension reloads and updates.
 
 The same single-key argument covers the alternative search configurations: the [web search server tool](#openrouter-web-search-server-tool) and [`perplexity/sonar-pro-search`](#choosing-an-alternative-search-configuration) both route through the same OpenRouter account.
@@ -641,7 +685,7 @@ The only requirement is that the model is registered in `Pi`'s model registry an
 
 For extraction and collation, the ideal model has:
 
-- **Low cost per token:** 8 extractions, 1 collation, and 1 cache suggest per default session.
+- **Low cost per token:** 10 extractions, 1 collation, and 1 cache suggest per default session.
 - **Good instruction following:** Must adhere to extraction prompts precisely.
 - **Sufficient context:** Cleaned pages can be ≈50K chars (truncated to `extractMaxChars`).
 
@@ -680,6 +724,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 ## Cost
 
+The estimate below uses the native default models and tuning, also selected in the minimal MCP example above. Both packages incur inference charges on the configured provider account; MCP does not use host subscriptions or credentials.
+
 Per research session with the default 10 pages: **≈$0.09**
 
 | Step                           | Calls            | Cost     |
@@ -693,6 +739,8 @@ Per research session with the default 10 pages: **≈$0.09**
 Since v0.13.0 the search stage contributes every source the model cited, not only the ones it wrote into the prose, so sessions reach the `defaultUrls` page count more often than before. The ≈$0.09 figure is the typical cost of a full 10-page session with the v0.14.0 default models (M3 extracts cost the same per token as M2.7 but write ≈2× the output tokens); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost (see [Choosing an Alternative Search Configuration](#choosing-an-alternative-search-configuration)); the extract and collate rows scale with your chosen models.
 
 ## Settings
+
+This section describes native `Pi` settings. The MCP server reads only its explicitly selected file; its accepted keys, ranges and policy differences are documented in [Configuration](packages/mcp/README.md#configuration) and [Tuning](packages/mcp/README.md#tuning).
 
 Override defaults in `~/.pi/agent/settings.json` or, for a trusted project, `<project>/.pi/settings.json` under the `pi-intelli-search` namespace. `Pi` ignores project-local settings until you approve the project; the global file always applies:
 
@@ -774,6 +822,8 @@ A small built-in list handles sites with non-standard paths:
 No configuration is needed. The probe and download are automatic.
 
 ## Cache Structure
+
+Both packages write this format. The native extension resolves the cache against the active `Pi` workspace; MCP resolves it against `INTELLI_SEARCH_WORKSPACE` or `--workspace` and keeps it beneath that workspace. See the MCP [filesystem boundaries](packages/mcp/README.md#filesystem-and-privacy-boundaries).
 
 ```text
 .search/

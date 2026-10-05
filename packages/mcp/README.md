@@ -149,6 +149,77 @@ Every startup failure is diagnostic-only and lands on standard error; standard o
 | Repeated 429 retries on a free-tier or shared key | Free-tier OpenRouter keys share a tight rate bucket. Set `minRequestIntervalMs` to approximately `3000`, lower `extractionConcurrency` to `2`, and raise `llmRetryAttempts` and `llmTimeoutMs`. |
 | Cache paths unreadable from the host | The host must share the server's filesystem. Sandboxed or remote hosts cannot read local cache paths; run the server where the host can read the workspace. |
 
+## Direct Registration
+
+Register the server directly with any MCP-compatible host that launches stdio processes. The executable is `mcp-intelli-search`. The following folder-scoped commands use [_Claude Code_](https://code.claude.com/docs/en/mcp).
+
+Save the example in [Configuration](#configuration) as `.intelli-search.json` in the target folder. The file can instead live at any readable absolute path, either per-folder or shared; replace `INTELLI_SEARCH_CONFIG` in the commands accordingly. Keep `INTELLI_SEARCH_WORKSPACE` per-folder and point it to an existing absolute directory so each folder has its own research cache. The server does not discover either path automatically.
+
+Supply `OPENROUTER_API_KEY` through the server process environment before using the tools. For _Claude Code_, export it in the environment that launches the host, rather than putting the key in a committed file. The configuration names the variable, not the credential; restart the host after changing credentials.
+
+Run registration from the target folder. `local` is the default scope: private to the operator and active only in that folder. Add `--scope project` before `--` to write a shared `.mcp.json` into the folder. Project-scoped servers require approval in _Claude Code_ before connection; absolute paths in a shared file must also be valid on each operator's machine.
+
+### Post-Publication Launcher
+
+The package's first registry publication is pending. Use this launcher only after publication; `npx` downloads the package without a separate install step:
+
+```bash
+claude mcp add intelli_search \
+  -e "INTELLI_SEARCH_CONFIG=$PWD/.intelli-search.json" \
+  -e "INTELLI_SEARCH_WORKSPACE=$PWD" \
+  -- npx -y --package @curio-data/mcp-intelli-search \
+  mcp-intelli-search
+```
+
+Append `@<version>` to the package name to pin a release.
+
+### Pre-Publication Source-Checkout Launcher
+
+From the repository root, install dependencies if needed with `npm install`, then build:
+
+```bash
+npm run build:all
+```
+
+Switch to the target folder and register the built server. Replace the checkout path with its actual absolute path:
+
+```bash
+claude mcp add intelli_search \
+  -e "INTELLI_SEARCH_CONFIG=$PWD/.intelli-search.json" \
+  -e "INTELLI_SEARCH_WORKSPACE=$PWD" \
+  -- node /absolute/path/to/pi-intelli-search/packages/mcp/dist/cli.js
+```
+
+### Verification
+
+From the target folder, check the registered server:
+
+```bash
+claude mcp list
+```
+
+Confirm `intelli_search` shows as connected. If a project-scoped server shows pending approval, open _Claude Code_ in that folder and approve it before checking again.
+
+Validate the configuration separately without credentials or inference. After publication, use:
+
+```bash
+INTELLI_SEARCH_CONFIG="$PWD/.intelli-search.json" \
+INTELLI_SEARCH_WORKSPACE="$PWD" \
+npx -y --package @curio-data/mcp-intelli-search \
+  mcp-intelli-search --check-config
+```
+
+For the source-checkout launcher, use:
+
+```bash
+node /absolute/path/to/pi-intelli-search/packages/mcp/dist/cli.js \
+  --config "$PWD/.intelli-search.json" \
+  --workspace "$PWD" \
+  --check-config
+```
+
+Use the same configuration path as the registered server if it is shared or stored elsewhere. A successful check prints `Configuration is valid.` and exits with status `0`. It validates configuration and workspace, not host connectivity, credentials or model access. `claude mcp list` checks the host connection; successful inference requires the separate provider key.
+
 ## Host Plugins
 
 Thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/` at the repository root, with repository marketplace catalogs at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. The bundles are generated from the shared guidance source in `guidance/` and the version pinned in this package's manifest; run `npm run generate:plugins` after a version change and `npm run check:plugins` to detect drift. Launchers pin the exact package version through `npx`; until the package is published, `scripts/generate-plugin-bundles.mjs --mode tarball` generates equivalent local-tarball launchers for installation tests. Host setup, including each host's environment forwarding rules, is in the generated skills.
