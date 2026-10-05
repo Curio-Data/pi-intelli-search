@@ -9,6 +9,7 @@
         "mcp-intelli-search"
       ],
       "env": {
+        "OPENROUTER_API_KEY": "${user_config.openrouter_api_key}",
         "INTELLI_SEARCH_CONFIG": "${CLAUDE_PLUGIN_DATA}/config.json",
         "INTELLI_SEARCH_WORKSPACE": "${CLAUDE_PROJECT_DIR}"
       }

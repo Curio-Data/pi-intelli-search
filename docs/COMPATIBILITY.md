@@ -37,7 +37,7 @@ The software development kit (SDK) and native fetch assets are verified separate
 
 | Host | Tested Version | Evidence |
 |---|---|---|
-| Claude Code | 2.1.289 | `claude plugin validate --strict` on plugin and marketplace; marketplace add, install, `claude mcp list` connection, `claude plugin details` skill discovery (credential-free, local-tarball class). Qualified tool names observed in one credentialed session (one-time recorded). `${CLAUDE_PROJECT_DIR}` MCP `env` expansion is verified on this version only |
+| Claude Code | 2.1.289 | `claude plugin validate --strict` on plugin and marketplace; marketplace add, install, `claude mcp list` connection, `claude plugin details` skill discovery, and key delivery: the required sensitive `openrouter_api_key` option withholds the server while unset, reaches the server process as `OPENROUTER_API_KEY` over a different exported value, and is stored under `pluginSecrets` in `.credentials.json` on Linux (credential-free dummy values, local-tarball class). Qualified tool names observed in one credentialed session (one-time recorded). `${CLAUDE_PROJECT_DIR}` MCP `env` expansion is verified on this version only |
 | Codex CLI | 0.144.5 | Repeatable credential-free installation checks, plus separate one-time session observations and exclusions listed below |
 
 ### Codex Evidence and Limits

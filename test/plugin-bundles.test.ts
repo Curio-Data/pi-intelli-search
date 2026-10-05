@@ -112,9 +112,30 @@ describe("plugin bundle generation", () => {
         "intelli_search"
     ] as Record<string, unknown>;
     assert.deepStrictEqual(server.env, {
+      OPENROUTER_API_KEY: "${user_config.openrouter_api_key}",
       INTELLI_SEARCH_CONFIG: "${CLAUDE_PLUGIN_DATA}/config.json",
       INTELLI_SEARCH_WORKSPACE: "${CLAUDE_PROJECT_DIR}",
     });
+  });
+
+  it("declares the Claude Code key as a required sensitive option", () => {
+    // An unset optional option substitutes an empty string that overrides
+    // an inherited key, so the option must stay required.
+    const manifest = parse(files, "plugins/claude-code/.claude-plugin/plugin.json");
+    const option = (manifest.userConfig as Record<string, Record<string, unknown>>)
+      .openrouter_api_key;
+    assert.strictEqual(option.type, "string");
+    assert.strictEqual(option.sensitive, true);
+    assert.strictEqual(option.required, true);
+    assert.strictEqual(option.default, undefined);
+  });
+
+  it("keeps credentials out of committed manifests and launchers", () => {
+    for (const path of ALL_PATHS.filter((p) => p.endsWith(".json"))) {
+      assert.ok(!/sk-or-/.test(files[path]), `${path} carries a key value`);
+    }
+    const codex = parse(files, "plugins/codex/.codex-plugin/plugin.json");
+    assert.strictEqual(codex.userConfig, undefined);
   });
 
   it("declares Codex interface capabilities that include writes", () => {

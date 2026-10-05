@@ -53,6 +53,8 @@ Both hosts declare the server as `intelli_search`, giving Codex `mcp__intelli_se
 
 Both committed launchers pin the exact package version: `npx -y --package @curio-data/mcp-intelli-search@<version> mcp-intelli-search`. Cold start needs network access and [Node.js](https://nodejs.org/) >= 22; later starts reuse the `npx` cache. Credentials never appear in manifests: Claude Code inherits `OPENROUTER_API_KEY` from the parent environment, Codex forwards it by name through `env_vars`.
 
+**Update (2026-10-05):** the Claude Code bundle now supplies `OPENROUTER_API_KEY` from a required sensitive `userConfig` option (`${user_config.openrouter_api_key}`) kept in the host credential store. An unset optional option substitutes an empty string that overrides the inherited variable, and the reference has no fallback form, so the option is required and the inherited route no longer applies to this host. Scenario 12 verifies delivery with dummy values; see the [compatibility matrix](../../COMPATIBILITY.md#host-plugins).
+
 - Claude Code: `INTELLI_SEARCH_CONFIG=${CLAUDE_PLUGIN_DATA}/config.json`, `INTELLI_SEARCH_WORKSPACE=${CLAUDE_PROJECT_DIR}` (per-project `.search/` caches).
 - Codex: configuration and workspace come from user-exported `INTELLI_SEARCH_CONFIG`/`INTELLI_SEARCH_WORKSPACE` (no expansion exists); the setup section documents fixed and per-project (`direnv`) patterns.
 

@@ -27,6 +27,13 @@
 //     ${CLAUDE_PLUGIN_DATA}, ${CLAUDE_PROJECT_DIR} and arbitrary ${VAR}
 //     expand in plugin MCP env values; tools are named
 //     mcp__plugin_<plugin>_<server>__<tool>.
+//   Claude Code v2.1.289 userConfig: a sensitive option is stored under
+//     pluginSecrets in ~/.claude/.credentials.json on Linux (the host's
+//     credential store elsewhere) and substituted by
+//     ${user_config.<key>}. An unset optional option substitutes an empty
+//     string that overrides any inherited variable, and the reference has no
+//     ${...:-fallback} form, so the key option is required: the host does not
+//     start the server until it is set.
 //   Codex CLI 0.144.5: only the compatibility layout (.codex-plugin/plugin.json
 //     plus legacy .mcp.json) loads; the portable mcp.json is ignored; no
 //     placeholder expansion and no parent-environment inheritance except an
@@ -60,6 +67,10 @@ const VENDOR_CLI_SUFFIX =
 const DESCRIPTION =
   "Research the web with a five-stage pipeline (search, fetch, extract, " +
   "collate, cache suggest) served over MCP by @curio-data/mcp-intelli-search.";
+
+// Claude Code supplies the provider key through a required sensitive
+// userConfig option; the configuration file names OPENROUTER_API_KEY.
+const API_KEY_OPTION = "openrouter_api_key";
 
 const SKILL_DESCRIPTION =
   "Research the web for current information. Use when you need docs, APIs, " +
@@ -160,6 +171,18 @@ export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT)
     repository: "https://github.com/Curio-Data/pi-intelli-search",
     license: "Apache-2.0",
     keywords: ["research", "web-search", "documentation", "mcp"],
+    userConfig: {
+      [API_KEY_OPTION]: {
+        type: "string",
+        title: "OpenRouter API key",
+        description:
+          "OpenRouter key for the search, extract and collate stages. " +
+          "Stored in the Claude Code credential store and passed to the " +
+          "server as OPENROUTER_API_KEY.",
+        sensitive: true,
+        required: true,
+      },
+    },
   };
 
   const claudeMcp = {
@@ -168,6 +191,7 @@ export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT)
         command: claudeLauncher.command,
         args: claudeLauncher.args,
         env: {
+          OPENROUTER_API_KEY: `\${user_config.${API_KEY_OPTION}}`,
           INTELLI_SEARCH_CONFIG: "${CLAUDE_PLUGIN_DATA}/config.json",
           INTELLI_SEARCH_WORKSPACE: "${CLAUDE_PROJECT_DIR}",
         },

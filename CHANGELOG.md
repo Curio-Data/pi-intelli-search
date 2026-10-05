@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **The research engine also ships as a standalone MCP server (unpublished).** `@curio-data/mcp-intelli-search` serves the same four `intelli_*` tools over Model Context Protocol stdio without a `Pi` installation, with explicit JSON configuration, workspace ownership and an OpenRouter adapter, plus generated [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin bundles installable from this repository's marketplaces. The README documents the three installation routes and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) records the tested host versions. The package is not yet on the registry; the plugin launchers become installable at publication.
+- **The research engine also ships as a standalone MCP server (unpublished).** `@curio-data/mcp-intelli-search` serves the same four `intelli_*` tools over Model Context Protocol stdio without a `Pi` installation, with explicit JSON configuration, workspace ownership and an OpenRouter adapter, plus generated [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin bundles installable from this repository's marketplaces. The _Claude Code_ plugin asks for the OpenRouter key as a sensitive plugin option held in _Claude Code_'s credential store. The README documents the three installation routes and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) records the tested host versions. The package is not yet on the registry; the plugin launchers become installable at publication.
 
 ### Fixed
 

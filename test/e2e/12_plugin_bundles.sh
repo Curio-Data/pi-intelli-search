@@ -180,6 +180,89 @@ PLUGIN_DATA="$CLAUDE_HOME_DIR/plugins/data/intelli-search-curio-data-plugins"
 mkdir -p "$PLUGIN_DATA" "$E2E_ROOT/claude-workspace"
 cp "$CONFIG_JSON" "$PLUGIN_DATA/config.json"
 
+# Key delivery. A connection alone proves nothing about the key (the server
+# starts without one), so these checks assert what the server process
+# actually receives, using dummy values only: no inference is performed.
+#   1. The required openrouter_api_key option starts unset after a
+#      non-interactive install, and the host withholds the server until set.
+#   2. Once set, the option reaches the server as OPENROUTER_API_KEY and
+#      takes precedence over a different exported OPENROUTER_API_KEY.
+#   3. The sensitive value lands in the credential store, not settings.json.
+OPTION_KEY="sk-or-v1-e2e-option-dummy"
+EXPORTED_KEY="sk-or-v1-e2e-exported-dummy"
+
+# server_env_key: run `claude mcp list` with EXPORTED_KEY in the environment
+# while sampling the plugin server's /proc environ; prints the received
+# OPENROUTER_API_KEY value(s), <unset> when the variable was absent, or
+# <no-server> when no server process for this workspace appeared.
+server_env_key() {
+  local out="$E2E_ROOT/envprobe.txt"
+  : > "$out"
+  ( for _ in $(seq 1 200); do
+      # Match by this scenario's workspace: a directory marketplace runs the
+      # server from its source path, and other sessions may run their own.
+      for pid in $(pgrep -f "[m]cp-intelli-search/dist/cli.js" || true); do
+        local env_lines
+        env_lines="$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null || true)"
+        if rg -q --fixed-strings -x "INTELLI_SEARCH_WORKSPACE=$E2E_ROOT/claude-workspace" <<<"$env_lines"; then
+          rg '^OPENROUTER_API_KEY=' <<<"$env_lines" >> "$out" || true
+          echo "SERVER_SEEN" >> "$out"
+        fi
+      done
+      sleep 0.05
+    done ) &
+  local sampler=$!
+  (cd "$E2E_ROOT/claude-workspace" && OPENROUTER_API_KEY="$EXPORTED_KEY" claude mcp list >/dev/null 2>&1 || true)
+  wait "$sampler"
+  if ! rg -q '^SERVER_SEEN$' "$out"; then
+    echo "<no-server>"
+  elif rg -q '^OPENROUTER_API_KEY=' "$out"; then
+    rg '^OPENROUTER_API_KEY=' "$out" | sort -u | sed 's/^OPENROUTER_API_KEY=//'
+  else
+    echo "<unset>"
+  fi
+  rm -f "$out"
+}
+
+if [[ ! -r /proc/self/environ ]]; then
+  skip "key delivery checks need /proc (Linux only)"
+else
+  if claude plugin configure intelli-search@curio-data-plugins 2>&1 | rg -q "openrouter_api_key.*required, sensitive, not set"; then
+    ok "key option is required, sensitive and unset after install"
+  else
+    bad "key option state after install"
+  fi
+  WITHHELD="$(server_env_key)"
+  if [[ "$WITHHELD" == "<no-server>" ]]; then
+    ok "host withholds the server while the required key option is unset"
+  else
+    bad "server started without the required key option (received '$WITHHELD')"
+  fi
+
+  printf '{"openrouter_api_key":"%s"}' "$OPTION_KEY" \
+    | claude plugin configure intelli-search@curio-data-plugins --values-stdin >/dev/null 2>&1
+  RECEIVED="$(server_env_key)"
+  if [[ "$RECEIVED" == "$OPTION_KEY" ]]; then
+    ok "option reaches the server as OPENROUTER_API_KEY, over the exported value"
+  else
+    bad "server received '$RECEIVED' instead of the option value"
+  fi
+  # Linux stores plugin secrets in the config directory's credentials file
+  # (recorded on Claude Code 2.1.289); other platforms use a system store.
+  if jq -e --arg k "$OPTION_KEY" \
+      '.pluginSecrets["intelli-search@curio-data-plugins"].openrouter_api_key == $k' \
+      "$CLAUDE_HOME_DIR/.credentials.json" >/dev/null 2>&1; then
+    ok "sensitive option stored under pluginSecrets in .credentials.json"
+  else
+    bad "sensitive option not found in the credential store"
+  fi
+  if rg -q --fixed-strings "$OPTION_KEY" "$CLAUDE_HOME_DIR" --hidden -g '*settings*.json'; then
+    bad "sensitive option written to a settings file"
+  else
+    ok "sensitive option kept out of settings files"
+  fi
+fi
+
 MCP_LIST="$(cd "$E2E_ROOT/claude-workspace" && claude mcp list 2>&1)"
 if echo "$MCP_LIST" | rg -q "plugin:intelli-search:intelli_search.*Connected"; then
   ok "claude mcp list: plugin:intelli-search:intelli_search connected"
