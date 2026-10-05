@@ -89,17 +89,21 @@ Fix direction: carry the summary inside `structuredContent` (for example a `summ
 
 A session opened before `config.json` exists starts the server, which exits. Claude Code records the failure in `mcp-needs-auth-cache.json` inside the config directory, and later sessions report the server `failed` without launching it, while `claude mcp list` reports it connected. The cache cleared after about 15 minutes (Observed at 15.7 minutes). The README invites the mistake by sending users to the skill for setup after installation.
 
-Fix direction: make the server start without a readable configuration and return a configuration error on the first tool call, so an incomplete setup never produces a cached startup failure; and document the setup order and the `/mcp` reconnect recovery.
+Fix direction: make the server start when the configuration **file** is missing or unreadable and return a configuration error on the first tool call, so an incomplete setup never produces a cached startup failure; and document the setup order and the `/mcp` reconnect recovery.
+
+**Decision needed before implementing:** whether the same applies when `--config` or `--workspace` is absent altogether. The guidance documents that case as a deliberate fail-fast startup exit (`guidance/research-guide.md` Failure Modes, `guidance/setup-codex.md`); changing it could hide a misconfigured launcher. The F3 symptom needs only the missing-file case. Ask the owner, or keep the absent-argument exit and change only the file case.
+
+**Coupled change:** whatever F3 changes, update the failure model in `guidance/research-guide.md`, `guidance/setup-codex.md` and `guidance/setup-claude-code.md` in the same change, then `npm run generate:plugins`; otherwise both skills describe the old startup exit.
 
 ### F4: Claude Code Setup Is Unreachable From the README (High)
 
-`README.md` does not state the `config.json` path or the `--values-stdin` payload shape. Asking Claude "what else do I need to finish setup?" did not load the skill. Read by a person, the skill's `mkdir -p "${CLAUDE_PLUGIN_DATA}"` fails in a shell, because the variable is substituted only when Claude loads the skill (Observed with `/intelli-search:intelli-search`).
+`README.md` names the `claude plugin configure … --values-stdin` command but not its JSON payload shape or the `config.json` path. Asking Claude "what else do I need to finish setup?" did not load the skill. Read by a person, the skill's `mkdir -p "${CLAUDE_PLUGIN_DATA}"` fails in a shell, because the variable is substituted only when Claude loads the skill (Observed with `/intelli-search:intelli-search`).
 
 Fix direction: put both concrete steps in the README (the `printf … | claude plugin configure … --values-stdin` line and the data-directory path, under `$CLAUDE_CONFIG_DIR` when set), and point to `/intelli-search:intelli-search` for the substituted view.
 
-### F1: README Marketplace Commands Fail Until Merge (Blocker Until Merge)
+### F1: README Marketplace Commands Fail Until Merge (High; Resolves at Merge)
 
-`claude plugin marketplace add Curio-Data/pi-intelli-search` and the Codex equivalent fail because `main` has no catalogs. Both hosts accept the branch: `'Curio-Data/pi-intelli-search#plan/mcp-intelli-search'` (Claude Code) and `--ref plan/mcp-intelli-search` (Codex). This resolves on merge, which is itself held until the MCP package is published.
+`claude plugin marketplace add Curio-Data/pi-intelli-search` and the Codex equivalent fail because `main` has no catalogs. Both hosts accept the branch: `'Curio-Data/pi-intelli-search#plan/mcp-intelli-search'` (Claude Code) and `--ref plan/mcp-intelli-search` (Codex). This resolves on merge, which is itself held until the MCP package is published: do not merge to fix it. The only action now is documenting the branch reference if the branch is shared for testing.
 
 ### Medium and Low Findings
 
@@ -123,10 +127,12 @@ Fix direction: put both concrete steps in the README (the `printf … | claude p
 In order. Each change follows the `AGENTS.md` gates (build, `npm run test:all`, `npm run check:plugins`, `npm run check:toc`, and the live scenarios through `./test/run-e2e-all.sh` or singly with gaps).
 
 1. **F2:** summary in `structuredContent`, protocol tests, package README, and a scenario 13 assertion on the model-visible result. This changes the unpublished MCP package's result contract; record it in `CHANGELOG.md` under `Unreleased`.
-2. **F3:** server startup without a readable configuration, with the error reported on the first tool call; tests for both outcomes.
+2. **F3:** after the scope decision above, server startup with a missing configuration file, the error reported on the first tool call, tests for both outcomes, and the coupled guidance update.
 3. **F4, F12, F16, F1:** README setup text for the Claude Code plugin, and the branch reference while unmerged if the branch is shared for testing.
-4. **F5 to F15:** skill guidance (`guidance/`, then `npm run generate:plugins`), documentation and small fixes.
+4. **F5 to F16:** mixed layers. Guidance (`guidance/`, then `npm run generate:plugins`): F5, F6, F7, F8, F9, F13. Documentation: F10, F12, F16 and the documentation half of F11. Code: F11 (`--help` in `scripts/generate-plugin-bundles.mjs`), F15 (`packages/mcp/src/config.ts`, separate missing and malformed messages) and F14 (`src/core/cache.ts` related-searches table). F14 is shared engine code: it changes native `Pi` output too, so run the native contract tests and check the frozen fixtures under `test/fixtures/native-contract/`; do not regenerate them to hide a difference.
 5. A second fresh-agent pass, as below, to confirm the routes.
+
+A cold-start successor (`deepseek/deepseek-flash`) read only the tracked handoff on 2026-10-05 and identified F2 in `packages/mcp/src/server.ts` `successResult()` as the first change, with no owner question needed to start it. Its corrections (stale next-work statements, the F3 scope and coupling, the F4 and F1 wording, and the layer split above) are applied here.
 
 ## Repeating the Fresh-Agent Pass
 
