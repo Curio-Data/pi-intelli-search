@@ -277,6 +277,7 @@ scripts/
 ├── plot-downloads.mts       # Download chart generation (npm run chart)
 ├── README.md                # Script usage guide
 ├── build-mcp.mjs            # Audited standalone bundles and legal-file copies
+├── generate-toc.mjs         # README contents generator; --check is the drift gate
 ├── generate-plugin-bundles.mjs # Plugin/marketplace generator; --check is the drift gate
 ├── verify-mcp-install.mjs    # Production-only install and native-fetch verification
 └── capture-native-contract.mts # Explicit compatibility-fixture regeneration
@@ -398,6 +399,8 @@ npm test                 # Run native unit tests
 npm run build:all        # Native build, standalone type check and bundles
 npm run test:all         # Native and standalone deterministic tests
 npm run test:mcp:install # Independent production install and native fetch probe
+npm run generate:toc     # Regenerate README contents from headings
+npm run check:toc        # Fail if README contents drift from the generator
 npm run generate:plugins # Regenerate plugin bundles and marketplaces after a version change
 npm run check:plugins    # Fail if committed plugin files drift from the generator
 npm run test:smoke       # Smoke test (structural validation)

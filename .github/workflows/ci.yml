@@ -47,6 +47,9 @@ jobs:
       - name: Type-check native compatibility tests
         run: node_modules/.bin/tsc -p test/tsconfig.native-contract.json
 
+      - name: Verify generated README contents match the generator
+        run: npm run check:toc
+
       - name: Verify generated plugin bundles match the generator
         run: npm run check:plugins
 

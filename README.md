@@ -27,6 +27,62 @@ Choose the installation route for the host:
 
 The native extension uses `Pi` settings and authentication. The MCP server requires explicit configuration, a per-folder workspace and an environment-supplied inference key; it does not read `Pi` settings or credentials. Its first registry publication is pending: use the [source-checkout launcher](packages/mcp/README.md#direct-registration) until publication. The registry and plugin launchers below are post-publication routes.
 
+## Contents
+
+<!-- TOC:START -->
+
+- [Two Packages, One Engine](#two-packages-one-engine)
+- [Launch Blog Post](#launch-blog-post)
+- [What It Adds Over Other Extensions](#what-it-adds-over-other-extensions)
+- [Install](#install)
+  - [Prerequisites](#prerequisites)
+  - [Install the Extension](#install-the-extension)
+  - [Verify Installation](#verify-installation)
+  - [Customise (Optional)](#customise-optional)
+- [Use With Other Hosts](#use-with-other-hosts)
+  - [Route A: Direct MCP Configuration](#route-a-direct-mcp-configuration)
+  - [Route B: Claude Code Plugin](#route-b-claude-code-plugin)
+  - [Route C: Codex Plugin](#route-c-codex-plugin)
+- [Configuration Recipes](#configuration-recipes)
+  - [Recipe 1: Zero Configuration](#recipe-1-zero-configuration)
+  - [Recipe 2: Web Search Tool + Nano](#recipe-2-web-search-tool--nano)
+  - [Recipe 3: Sonar Pro Search](#recipe-3-sonar-pro-search)
+  - [Recipe 4: Pin Eight Pages](#recipe-4-pin-eight-pages)
+  - [Recipe 5: Economy Extract and Collate](#recipe-5-economy-extract-and-collate)
+  - [Recipe 6: Stronger Collation](#recipe-6-stronger-collation)
+  - [Recipe 7: Free-Tier Resilience](#recipe-7-free-tier-resilience)
+  - [Recipe 8: Per-Project Override](#recipe-8-per-project-override)
+- [Tools](#tools)
+- [Quick Start](#quick-start)
+  - [Quick Search](#quick-search)
+  - [Deep Research](#deep-research)
+  - [Targeted Research With Domain Guidance](#targeted-research-with-domain-guidance)
+  - [Comparing Options](#comparing-options)
+- [Model Configuration](#model-configuration)
+  - [Why OpenRouter for _Sonar_?](#why-openrouter-for-sonar)
+  - [Source Harvesting from Citations](#source-harvesting-from-citations)
+  - [OpenRouter Web Search Server Tool](#openrouter-web-search-server-tool)
+  - [Choosing an Alternative Search Configuration](#choosing-an-alternative-search-configuration)
+  - [Swapping the Extract and Collate Model](#swapping-the-extract-and-collate-model)
+  - [Model Selection Guidance](#model-selection-guidance)
+  - [Required API Keys](#required-api-keys)
+- [Pipeline](#pipeline)
+- [Cost](#cost)
+- [Settings](#settings)
+  - [Settings Reference](#settings-reference)
+  - [Automatic llms-full.txt Discovery](#automatic-llms-fulltxt-discovery)
+- [Cache Structure](#cache-structure)
+- [Compatibility](#compatibility)
+- [Development](#development)
+- [Documentation](#documentation)
+- [Downloads](#downloads)
+- [Provenance](#provenance)
+- [Sponsor](#sponsor)
+- [License](#license)
+- [Use of Large Language Models](#use-of-large-language-models)
+
+<!-- TOC:END -->
+
 <p align="center">
   <img src="docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
 </p>
