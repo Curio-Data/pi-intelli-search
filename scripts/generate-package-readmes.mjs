@@ -23,7 +23,8 @@
 // relative paths made absolute so they resolve on npmjs.com.
 //
 // Modes:
-//   (default)          Write the committed derived READMEs (packages/mcp).
+//   (default)          Write the committed derived READMEs: packages/mcp and
+//                      the native preview in docs/readmes/.
 //   --check            Validate the source and fail on committed drift.
 //   --print PKG        Print one derived README (pi or mcp) to stdout.
 //   --publish-native   prepublishOnly hook: back up the root README to
@@ -48,9 +49,10 @@ const GENERATED_HEADER =
   "<!-- Generated from the repository README.md by scripts/generate-package-readmes.mjs. " +
   "Edit the root README.md, then run npm run generate:readmes. -->";
 
-// Package key -> committed output path (null: produced only at publish time,
-// because the native package ships the root README.md path itself).
-export const PACKAGES = { pi: null, mcp: "packages/mcp/README.md" };
+// Package key -> committed output path. The native package ships the root
+// README.md path itself, so its committed copy is a reviewable preview that
+// --publish-native reproduces at publish time.
+export const PACKAGES = { pi: "docs/readmes/pi-intelli-search.md", mcp: "packages/mcp/README.md" };
 
 const OPEN = /^<!-- packages:([a-z,]+) -->$/;
 const OPEN_HIDDEN = /^<!-- packages:([a-z,]+) hidden$/;
@@ -223,16 +225,44 @@ function readSource(root) {
   return source;
 }
 
+// Every link a derived README carries must resolve: its own anchors, files
+// in this repository behind the GitHub URLs, and anchors in the root README.
+// Targets are checked against the working tree, so a file must exist here
+// (and be pushed to main) before the published page can show it.
+export function validateDerived(text, pkg, rootAnchors, root = REPO_ROOT) {
+  const anchors = anchorsOf(text);
+  const problems = [];
+  mapLinks(text, (url) => {
+    for (const base of [BLOB_BASE, RAW_BASE]) {
+      if (!url.startsWith(base)) continue;
+      const [file, anchor] = url.slice(base.length).split("#");
+      if (!existsSync(join(root, file))) problems.push(`missing file ${file}`);
+      else if (file === SOURCE && anchor && !rootAnchors.has(anchor)) problems.push(`missing root anchor #${anchor}`);
+    }
+    if (url.startsWith("#") && !anchors.has(url.slice(1))) problems.push(`missing anchor ${url}`);
+    if (!isExternal(url) && !url.startsWith("#")) problems.push(`relative link ${url}`);
+    return url;
+  });
+  if (problems.length) throw new Error(`${pkg} README: ${[...new Set(problems)].join("; ")}`);
+}
+
 export function generateAll(root = REPO_ROOT) {
   const source = readSource(root);
-  return Object.fromEntries(Object.keys(PACKAGES).map((pkg) => [pkg, derive(source, pkg)]));
+  const rootAnchors = anchorsOf(selectLines(source, "root").join("\n"));
+  return Object.fromEntries(
+    Object.keys(PACKAGES).map((pkg) => {
+      const text = derive(source, pkg);
+      validateDerived(text, pkg, rootAnchors, root);
+      return [pkg, text];
+    }),
+  );
 }
 
 // Returns the committed outputs that differ from a fresh derivation.
 export function checkAgainstRepo(root = REPO_ROOT) {
   const generated = generateAll(root);
   return Object.entries(PACKAGES)
-    .filter(([pkg, out]) => out && (!existsSync(join(root, out)) || readFileSync(join(root, out), "utf8") !== generated[pkg]))
+    .filter(([pkg, out]) => (!existsSync(join(root, out)) || readFileSync(join(root, out), "utf8") !== generated[pkg]))
     .map(([, out]) => out);
 }
 
@@ -271,7 +301,7 @@ function main(argv) {
   if (mode === undefined) {
     const generated = generateAll();
     for (const [pkg, out] of Object.entries(PACKAGES)) {
-      if (!out) continue;
+      mkdirSync(dirname(join(REPO_ROOT, out)), { recursive: true });
       writeFileSync(join(REPO_ROOT, out), generated[pkg]);
       console.log(`Generated ${out}`);
     }

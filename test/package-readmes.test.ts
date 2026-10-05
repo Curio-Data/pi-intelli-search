@@ -18,6 +18,7 @@ import {
   publishNative,
   restoreNative,
   selectLines,
+  validateDerived,
   validateRoot,
 } from "../scripts/generate-package-readmes.mjs";
 // @ts-expect-error plain Node module without declarations
@@ -161,10 +162,29 @@ describe("root README validation", () => {
   });
 });
 
+describe("derived README link validation", () => {
+  it("accepts only links that resolve in the repository and the root README", () => {
+    const dir = scratchDir("readme-derived-");
+    try {
+      writeFileSync(join(dir, "README.md"), "");
+      mkdirSync(join(dir, "docs/images"), { recursive: true });
+      writeFileSync(join(dir, "docs/images/a.png"), "");
+      const root = new Set(["kept"]);
+      validateDerived(`## Own\n[a](#own) [b](${BLOB}README.md#kept) ![c](${RAW}docs/images/a.png)\n`, "pi", root, dir);
+      assert.throws(
+        () => validateDerived(`[a](#gone) [b](${BLOB}README.md#lost) ![c](${RAW}docs/images/b.png) [d](docs/x.md)\n`, "pi", root, dir),
+        /missing anchor #gone; missing root anchor #lost; missing file docs\/images\/b\.png; relative link docs\/x\.md/,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("repository package READMEs", () => {
   const generated = generateAll() as Record<string, string>;
 
-  it("commits an MCP README identical to a fresh derivation", () => {
+  it("commits package READMEs identical to a fresh derivation", () => {
     assert.deepStrictEqual(checkAgainstRepo(), []);
   });
 

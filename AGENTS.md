@@ -165,7 +165,7 @@ The "Customise (Optional)" and "Model Configuration" sections in README.md use t
 
 ### 12. One Hand-Edited README
 
-The root `README.md` is the only README to edit by hand. `scripts/generate-package-readmes.mjs` derives each package's README from it: `packages/mcp/README.md` is committed and drift-checked in CI (`npm run check:readmes`); the native package's README is derived at publish time by its `prepublishOnly` hook, because that package ships the root path itself. Never edit `packages/mcp/README.md` directly. Tag package-specific sections with `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, repository-only sections with `<!-- packages:none -->`, and content only a package shows (its title and badges) with a hidden `<!-- packages:mcp hidden` ... `-->` block. Untagged content goes to both packages. The root `README.md` section `Development` documents the syntax. After any README edit run `npm run generate:toc` and `npm run generate:readmes`.
+The root `README.md` is the only README to edit by hand. `scripts/generate-package-readmes.mjs` derives each package's README from it: `packages/mcp/README.md` and the native preview `docs/readmes/pi-intelli-search.md` are committed and drift-checked in CI (`npm run check:readmes`), which also fails when a derived link does not resolve. The native package ships the root path itself, so its `prepublishOnly` hook writes the same derivation over the root README at publish time. Never edit `packages/mcp/README.md` directly. Tag package-specific sections with `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, repository-only sections with `<!-- packages:none -->`, and content only a package shows (its title and badges) with a hidden `<!-- packages:mcp hidden` ... `-->` block. Untagged content goes to both packages. The root `README.md` section `Development` documents the syntax. After any README edit run `npm run generate:toc` and `npm run generate:readmes`.
 
 ---
 
@@ -273,6 +273,7 @@ docs/
 ├── ARCHITECTURE.md           # Detailed pipeline and design decisions
 ├── BENCHMARKS.md             # Extract/collate model benchmark: methodology, harness, recorded results
 ├── COMPONENTS.md             # Third-party dependency attribution
+├── readmes/pi-intelli-search.md # Generated native package README preview; never edit by hand
 └── plans/mcp-intelli-search/ # Cross-host research, checkpoints and implementation handoff
 
 scripts/
@@ -412,7 +413,7 @@ npm run generate:toc     # Regenerate README contents from headings
 npm run check:toc        # Fail if README contents drift from the generator
 npm run generate:plugins # Regenerate plugin bundles and marketplaces after a version change
 npm run check:plugins    # Fail if committed plugin files drift from the generator
-npm run generate:readmes # Regenerate packages/mcp/README.md from the root README
+npm run generate:readmes # Regenerate packages/mcp/README.md and docs/readmes/ from the root README
 npm run check:readmes    # Fail if package READMEs drift from the root README
 npm run restore:readme   # Restore the root README after a local publish or publish dry run
 npm run test:smoke       # Smoke test (structural validation)
