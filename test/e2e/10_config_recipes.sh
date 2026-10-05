@@ -104,7 +104,7 @@ run_pi() {
 # meta_value <cache_dir> <jq_path>
 meta_value() {
   local latest
-  latest="$(find "$1" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' 2>/dev/null | sort -r | head -1)"
+  latest="$(find "$1" -maxdepth 1 -mindepth 1 -type d -not -name '.*' 2>/dev/null | sort -r | head -1)"
   [ -n "$latest" ] || { echo ""; return 1; }
   [ -f "$latest/meta.json" ] || { echo ""; return 1; }
   jq -r "$2 // empty" "$latest/meta.json" 2>/dev/null

@@ -158,7 +158,7 @@ fi
 
 # Verify at most 3 extractions (cap enforcement)
 if [ -d "$CACHE_DIR1" ]; then
-  LATEST1=$(find "$CACHE_DIR1" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' | sort -r | head -1)
+  LATEST1=$(find "$CACHE_DIR1" -maxdepth 1 -mindepth 1 -type d -not -name '.*' | sort -r | head -1)
   if [ -n "$LATEST1" ] && [ -d "$LATEST1/extractions" ]; then
     COUNT1=$(find "$LATEST1/extractions" -type f | wc -l)
     if [ "$COUNT1" -le 3 ]; then
@@ -278,7 +278,7 @@ fi
 
 # Verify extractions exist (pipeline ran)
 if [ -d "$CACHE_DIR2" ]; then
-  LATEST2=$(find "$CACHE_DIR2" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' | sort -r | head -1)
+  LATEST2=$(find "$CACHE_DIR2" -maxdepth 1 -mindepth 1 -type d -not -name '.*' | sort -r | head -1)
   if [ -n "$LATEST2" ] && [ -d "$LATEST2/extractions" ]; then
     COUNT2=$(find "$LATEST2/extractions" -type f | wc -l)
     if [ "$COUNT2" -le 6 ]; then

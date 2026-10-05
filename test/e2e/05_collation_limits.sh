@@ -207,8 +207,8 @@ echo "══ Comparison ══════════════════�
 
 ERRORS=0
 
-ENTRY_DEFAULT=$(find "$CACHE_DEFAULT" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' 2>/dev/null | sort -r | head -1)
-ENTRY_TIGHT=$(find "$CACHE_TIGHT" -maxdepth 1 -mindepth 1 -type d -not -name '.index.json' 2>/dev/null | sort -r | head -1)
+ENTRY_DEFAULT=$(find "$CACHE_DEFAULT" -maxdepth 1 -mindepth 1 -type d -not -name '.*' 2>/dev/null | sort -r | head -1)
+ENTRY_TIGHT=$(find "$CACHE_TIGHT" -maxdepth 1 -mindepth 1 -type d -not -name '.*' 2>/dev/null | sort -r | head -1)
 
 # A missing cache entry usually means the search stage returned a degraded 200
 # (a valid reply with no markdown links), so the pipeline returned early without
