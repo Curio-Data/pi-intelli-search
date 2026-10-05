@@ -29,6 +29,8 @@ Steps:
    printf '{"openrouter_api_key":"%s"}' "$KEY" \
      | claude plugin configure intelli-search@curio-data-plugins --values-stdin
    ```
+
+   A value saved this way reaches only sessions started afterwards: running sessions keep their loaded options, and `/mcp` reconnect does not reload them. Restart open sessions, or set the key through `/plugin` → `intelli-search` → configure, which applies it to the running session.
 2. Create the plugin data directory and write the configuration file:
 
    ```bash

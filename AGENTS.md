@@ -323,6 +323,7 @@ test/
 │   ├── 10_config_recipes.sh
 │   ├── 11_mcp_stdio.sh
 │   ├── 12_plugin_bundles.sh
+│   ├── 13_claude_code_plugin.sh
 │   └── lib.sh
 ├── run-e2e-all.sh
 ├── run-e2e-publish.sh
@@ -523,7 +524,8 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `e2e/09_sonar_pro_search.sh` | Verifies registration and settings-based selection of `perplexity/sonar-pro-search` in a vanilla agent dir, then checks non-empty links, completed pipeline, and cached sources. Reports the annotation count |
 | `e2e/10_config_recipes.sh` | Runs each README Configuration Recipe's settings block in a fresh isolated agent dir + cwd and asserts the effective behaviour from telemetry: zero-config defaults, partial blocks preserving unspecified defaults, extract/collate overrides, free-tier pacing keys, and per-project settings via pre-seeded trust.json (the only project-level-settings coverage) |
 | `e2e/11_mcp_stdio.sh` | Builds the standalone package, registers it in an isolated profile's `mcp.json` (direct exposure, no native extension) and drives a real research through `Pi`'s native MCP client, asserting connection, workspace cache, `mcp` telemetry identity and completed outcome. Establishes that `--no-extensions` disconnects MCP servers and that `codemode` exposure hides direct tool calls |
-| `e2e/12_plugin_bundles.sh` | Packs the standalone artifact, generates local-tarball plugin bundles (pre-publication evidence class), vendors the tarball, then exercises real host installation credential-free: Claude Code strict validation, marketplace add, install, `claude mcp list` connection and skill discovery; Codex marketplace add, catalog-path assertion, install, installed-cache layout and prompt-input skill discovery. Skips with a notice when a host CLI is absent. Credentialed session checks are deliberately excluded (OAuth refresh-token rotation hazard; see PHASE-5.md) |
+| `e2e/12_plugin_bundles.sh` | Packs the standalone artifact, generates local-tarball plugin bundles (pre-publication evidence class), vendors the tarball, then exercises real host installation credential-free: Claude Code strict validation, marketplace add, install, `claude mcp list` connection and skill discovery; Codex marketplace add, catalog-path assertion, install, installed-cache layout and prompt-input skill discovery. Skips with a notice when a host CLI is absent. Also asserts Claude Code key delivery with dummy values: the required sensitive key option withholds the server while unset and reaches the server process once set. Credentialed sessions live in `13_claude_code_plugin.sh` |
+| `e2e/13_claude_code_plugin.sh` | Installs the local-tarball Claude Code plugin into an isolated `CLAUDE_CONFIG_DIR`, sets the key through the plugin option only, and drives one real research through `claude -p`: asserts the session reports the server connected, the model calls `intelli_research` without a tool error, and the project cache carries a completed `mcp` sidecar. Authenticates with `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` (static, never stored or refreshed), never a copied credential file, and asserts the operator's credential file is untouched |
 | `run-e2e-all.sh` | Runs every scenario script one at a time with a spacing gap (`E2E_GAP_SECONDS`, default 20). Use this instead of launching scripts in parallel or back-to-back: bursting many calls at one key depletes the rate-limit bucket and produces degraded or hung runs. |
 
 The scenarios write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
@@ -536,7 +538,7 @@ No E2E script may be committed without being executed at least once to completio
 
 - **Before committing a new E2E script**, run it with a real API key and confirm it exits 0 with the expected verification checks passing.
 - **`shellcheck` is mandatory.** Every shell script must pass `shellcheck` with zero findings. This catches unbound variables, quoting bugs, and syntax errors that `set -euo pipefail` alone will not catch until runtime.
-- **`set -euo pipefail` is mandatory** at the top of every E2E script. The `-u` flag turns any reference to an undefined variable into a hard error. If a script references `$E2E_EXTENSION_PATH` or any other variable, it must define that variable before first use. No E2E script may depend on variables from the caller's environment (except `OPENROUTER_API_KEY`, which is documented).
+- **`set -euo pipefail` is mandatory** at the top of every E2E script. The `-u` flag turns any reference to an undefined variable into a hard error. If a script references `$E2E_EXTENSION_PATH` or any other variable, it must define that variable before first use. No E2E script may depend on variables from the caller's environment (except `OPENROUTER_API_KEY` and, for host-session scenarios, `CLAUDE_CODE_OAUTH_TOKEN`, which are documented).
 
 CI does not run E2E scripts (they require API keys and a live `pi` binary). The only gate is the developer running the script. If it is not run, it is not tested. If it is not tested, it rots.
 
@@ -555,6 +557,8 @@ The E2E tests auto-detect `OPENROUTER_API_KEY` from `~/.pi/agent/auth.json`. Onl
 ```bash
 OPENROUTER_API_KEY=sk-or-v1-... ./test/e2e/01_main.sh
 ```
+
+`13_claude_code_plugin.sh` also needs `CLAUDE_CODE_OAUTH_TOKEN` in the gitignored `.env` (mode 600). Create it once with `claude setup-token` in a separate terminal, never through an agent session, because the command prints the token. The token is static for a year and is never written to the isolated profile. Never copy `~/.claude/.credentials.json` or `~/.codex/auth.json` into a test profile: a copied refresh-token chain invalidates the operator's login.
 
 ### E2E Publish Test
 
@@ -637,7 +641,7 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 2. **Bump `version` in `packages/mcp/package.json`** following [SemVer](https://semver.org/), then run `npm install --package-lock-only` so the lockfile workspace version matches.
 3. **Remove the not-published notices** from `packages/mcp/README.md` and the root `README.md` (the `Publication Status` paragraph in `Use With Other Hosts`) on the first public release only.
 4. **Regenerate the plugin bundles** so the catalogs pin the new version: `npm run generate:plugins`, then confirm `npm run check:plugins` passes. Commit the regenerated catalogs with the version bump; they are what users install from.
-5. **Run the full paced live suite** `./test/run-e2e-all.sh`, including `11_mcp_stdio.sh` and `12_plugin_bundles.sh`, before tagging.
+5. **Run the full paced live suite** `./test/run-e2e-all.sh`, including `11_mcp_stdio.sh`, `12_plugin_bundles.sh` and `13_claude_code_plugin.sh`, before tagging.
 6. **Update `CHANGELOG.md`** with a `## [mcp-X.Y.Z] - YYYY-MM-DD` section and a matching `[mcp-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-vX.Y.Z` reference link. Verify both with the grep checks from step 4 of the native checklist (adjusted for the `mcp-` prefix).
 7. **Commit and push**, then create the _GitHub_ Release with tag `mcp-vX.Y.Z` only after explicit approval. The workflow stages the package; the user approves it on `npmjs.com` with 2FA.
 8. **Post-publication gate:** verify the registry-pin installation route that pre-publication tests could not exercise: install the Claude Code and Codex plugins from the committed catalogs into clean profiles and confirm the `npx` launcher downloads and starts the published version. Record this evidence separately from the local-tarball class in [the compatibility matrix](docs/COMPATIBILITY.md).

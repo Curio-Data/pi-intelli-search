@@ -41,3 +41,6 @@ npm-debug.log*
 # Standalone package legal files are copied from the canonical root at build time.
 /packages/mcp/LICENSE
 /packages/mcp/NOTICE
+
+# Dedicated credentialed E2E host logins (never copies of operator profiles)
+.e2e-auth/
