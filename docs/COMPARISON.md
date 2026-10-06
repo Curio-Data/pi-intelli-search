@@ -1,8 +1,10 @@
-# Comparison With Other `Pi` Search Extensions
+# Comparison With Other Search Tools
 
-This document compares `intelli-search` against other web search and fetch extensions in the `Pi` ecosystem. Each tool takes a different approach to search, fetch, extraction, and persistence.
+This document compares `intelli-search` against other web search and fetch extensions in the `Pi` ecosystem, and against the built-in web tools of a host agent. Each tool takes a different approach to search, fetch, extraction, and persistence.
 
 ## Scope
+
+This section covers the extension comparison. The [Host-Native Web Search](#host-native-web-search) section records its own scope.
 
 Competitor capabilities and adoption figures are a May 2026 snapshot of seven extensions listed on `pi.dev/packages` or installed from _GitHub_. This is not a current ecosystem census. Monthly download counts (where available) are sourced from `pi.dev/packages` at that snapshot date. The `intelli-search` descriptions include repository features checked on 2026-10-05; token-price figures retain their recorded September 2026 basis. The [README Cost](../README.md#cost) section is canonical for the current default estimate.
 
@@ -167,3 +169,32 @@ The original `intelli-search` row records ≈$0.007 for Sonar search, ≈$0.08 f
 ### Cost: Key Difference
 
 The pipeline estimate includes search, extraction, collation and cache suggestion, but excludes the host agent's inference and local compute. Absence of a dedicated extraction or collation stage does not establish a free research total. Provider tariffs, account allowances, output volume and model choices determine charges; manual reuse of cached reports can avoid a later research call.
+
+## Host-Native Web Search
+
+A host agent's built-in web tools are the main alternative for a user outside `Pi`. One recorded session compared `intelli_research` with the [_Claude Code_](https://code.claude.com/docs) WebSearch and WebFetch tools on the same research task.
+
+### Session Recorded
+
+The record is a single qualitative observation from 2026-10-06, not a benchmark. The same model ran both routes and judged the results, the task was not repeated, and no route was blinded.
+
+| Item | Recorded Value |
+|---|---|
+| Host session | Claude Code 2.1.291, model `claude-opus-5-5` |
+| `intelli-search` route | Native `Pi` extension 0.14.0 from npm, run with `pi -p` from the Claude Code session. The MCP plugin route was not exercised |
+| Pipeline models | Defaults through OpenRouter: Perplexity Sonar search, MiniMax M3 extraction and collation |
+| Task | The requirements for listing a plugin that runs a local MCP server in Anthropic's plugin directory and in OpenAI's plugin directory |
+| Calls | `intelli_research`: two calls (one per directory) with `maxUrls` 6. Native: 4 WebSearch and 6 WebFetch calls |
+
+### Observations
+
+| Aspect | `intelli_research` | Native WebSearch and WebFetch |
+|---|---|---|
+| Source selection | Official claude.com and developers.openai.com pages; 12 of 12 fetched | Search results led with blogs and aggregators; official pages reached through follow-up fetches |
+| Depth | One structured synthesis per directory: eligibility, folder layout, blocking and reviewer-hold rules, manifest field limits, update flow, a source assessment table and a related cached search | One small-model summary per fetched page, answered against a targeted question |
+| Unique findings | OpenAI's migration guide for Claude Code plugins, including the stdio restriction and the partner-review triggers | The plugin surface-support table (chat ignores local MCP servers) and the current statement that `claude-plugins-official` takes no portal submissions |
+| Errors | One stale claim: a submission form for `claude-plugins-official` that the current Claude Code documentation contradicts | One unverified secondary claim in search results (a marketplace launch date) |
+
+### Host-Native Web Search: Key Difference
+
+`intelli_research` returned more structured, source-grounded context per call and reached official documentation without follow-up requests. The native tools added value as a cross-check: they caught the one stale claim and surfaced a table the pipeline did not select. The session used the native `Pi` route. Through the _Claude Code_ plugin, the model currently receives only the structured tool result ([finding F2](plans/mcp-intelli-search/POST-PHASE-6.md#f2-claude-code-drops-the-text-summary-high-confirmed)), so that route delivers less than this record shows until F2 is fixed.

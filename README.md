@@ -1182,7 +1182,7 @@ pi install /path/to/pi-intelli-search
 
 ## Documentation
 
-- [Comparison](docs/COMPARISON.md): How `intelli-search` compares to other `Pi` search extensions.
+- [Comparison](docs/COMPARISON.md): How `intelli-search` compares to other `Pi` search extensions and to host-native web search.
 - [Changelog](CHANGELOG.md): Release history.
 - [Architecture](docs/ARCHITECTURE.md): Detailed design decisions and pipeline internals.
 - [Compatibility](docs/COMPATIBILITY.md): Tested host versions and artifacts for the native extension, MCP server and plugins.
