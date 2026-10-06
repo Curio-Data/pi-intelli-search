@@ -1,9 +1,8 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+This changelog records notable changes to the native `Pi` extension and the standalone Model Context Protocol (MCP) server.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the repository's [two-package versioning scheme](https://github.com/Curio-Data/pi-intelli-search/blob/main/AGENTS.md#versioning-scheme-two-packages-one-core).
 
 ## [Unreleased]
 
@@ -17,39 +16,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation downloads stage under the configured cache root instead of the operating-system temporary directory, with cleanup after cancellation or cache-write failure.
 - Permanent provider exceptions no longer retry as application timeouts. Late citations from failed attempts cannot contaminate successful search results.
 - Cancellation propagates through research stages and cache-lock waits instead of returning a degraded success.
-- Optional documentation staging failures no longer discard completed research. Concurrent dependency diagnostic suppression restores console methods and keeps each fetch's error flags isolated.
+- Optional documentation staging failures no longer discard completed research.
+- Concurrent page fetches keep their error handling separate and restore dependency diagnostics after suppression ends.
 
 ### Changed
 
-- **The pipeline core moved to `src/core/`**, shared with the new standalone MCP package. Tool contracts, prompts, results, cache formats and telemetry are unchanged (frozen-contract fixtures verify this); the extraction is what the two-package versioning scheme builds on.
-- **Removed the Sonar retirement advisory.** OpenRouter continues to serve `perplexity/sonar` past Perplexity's direct-API sunset date, so the README advisory, the sunset framing in the alternative-search-configuration docs, and stale references in code comments and tests are gone. The default search model is unchanged.
+- The native extension and standalone MCP server now share the research engine. The native tool interfaces and cache formats are preserved.
+- The Sonar retirement advisory is removed. [_OpenRouter_](https://openrouter.ai) continues to serve `perplexity/sonar` after [_Perplexity_](https://docs.perplexity.ai)'s direct application programming interface (API) sunset date. The default search model is unchanged.
 
 ### Compatibility
 
-- **Audited and verified through `Pi` 1.0.0** (0.87.1, 0.99.0-0.99.2, and 1.0.0 reviewed; no code changes required). The model-registry facade, the `fetch`/`onPayload` request hooks, the settings trust APIs, and the event surface are intact; pi-ai 1.0.0 formalises the 0.86 `TranscriptContext` contract in its types, which the dual-path dispatch already handles. Full unit suite and the live E2E pipeline pass on `Pi` 1.0.0. The minimum supported version stays `Pi` 0.81.1, with real load checks of both dispatch paths on 0.81.1 (legacy provider) and 0.86.0 (registry facade) on 2026-10-04.
-- **Native release tags now carry the `pi-` prefix** (`pi-vX.Y.Z`), matching the MCP package's `mcp-vX.Y.Z`. Historical `vX.Y.Z` tags and releases are unchanged and keep pointing at the native package. This entry covers the unreleased 0.14.1 fixes, which folded into 0.15.0.
+- Compatibility verified through `Pi` 1.0.0, with 0.87.1, 0.99.0-0.99.2 and 1.0.0 reviewed. The unit suite and live end-to-end (E2E) pipeline pass on `Pi` 1.0.0 without compatibility changes.
+- The minimum supported version remains `Pi` 0.81.1. Live load checks on 2026-10-04 exercised both model-call paths: the legacy provider on 0.81.1 and the registry facade on 0.86.0. See the [compatibility matrix](docs/COMPATIBILITY.md#native-pi-extension-curio-datapi-intelli-search) for evidence.
+- Native release tags now use `pi-vX.Y.Z`; MCP tags use `mcp-vX.Y.Z`. Historical `vX.Y.Z` tags still identify native releases. The fixes prepared for the unreleased native 0.14.1 are included in this release.
 
 ## [mcp-0.15.0-alpha.0] - 2026-10-05
 
+Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha is published on `npm`; both the `alpha` and `latest` dist-tags resolve to this version.
+
 ### Added
 
-- **First dev-marked release of the standalone MCP server.** `@curio-data/mcp-intelli-search` serves the same four `intelli_*` tools over Model Context Protocol stdio without a `Pi` installation, with explicit JSON configuration, workspace ownership and an OpenRouter adapter, plus generated [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin bundles installable from this repository's marketplaces. The _Claude Code_ plugin takes the OpenRouter key from a required sensitive plugin option held in _Claude Code_'s credential store. The README documents the three installation routes and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) records the tested host versions. Staged under the `alpha` dist-tag, off `latest`, mirroring how the native package started (0.3.1-alpha.1). Core behaviour is shared with [pi-0.15.0] and recorded there; this section carries only adapter-specific entries.
+- **Standalone Server:** `@curio-data/mcp-intelli-search` exposes the four `intelli_*` tools over standard input/output (`stdio`) without a `Pi` installation. It uses explicit JavaScript Object Notation (JSON) configuration, an assigned workspace and an OpenRouter adapter.
+- **Host Plugins:** [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) bundles install from this repository's marketplaces. The Claude Code plugin receives the OpenRouter key through a required sensitive option stored in the host's credential store.
+- **Installation Guidance:** the [README](README.md#install) documents the three installation routes. The [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) records tested host versions and verification limits; [finding F2](docs/plans/mcp-intelli-search/POST-PHASE-6.md#f2-claude-code-drops-the-text-summary-high-confirmed) records the missing model-visible summary on Claude Code 2.1.289.
 
 ---
 
-**Two packages from 0.15.0.** This repository now versions two packages that share the core engine in `src/core/`: `@curio-data/pi-intelli-search` (the native `Pi` extension) and `@curio-data/mcp-intelli-search` (the standalone MCP server). A change under `src/core/` bumps the minor version of both packages; a package-specific change bumps only that package's patch version. Release tags and changelog sections carry a package prefix: `pi-vX.Y.Z` and `[pi-X.Y.Z]` for the native extension, `mcp-vX.Y.Z` and `[mcp-X.Y.Z]` for the MCP server. Entries below this line are the native package alone, released under unprefixed `vX.Y.Z` tags.
+**Two-Package Versioning:** From 0.15.0, this repository versions two packages that share the core engine in `src/core/`: `@curio-data/pi-intelli-search` (the native `Pi` extension) and `@curio-data/mcp-intelli-search` (the standalone MCP server). A change under `src/core/` bumps the minor version of both packages; a package-specific change bumps only that package's patch version. Release tags and changelog sections carry a package prefix: `pi-vX.Y.Z` and `[pi-X.Y.Z]` for the native extension, `mcp-vX.Y.Z` and `[mcp-X.Y.Z]` for the MCP server. Entries below this line cover the native package alone. Published releases use unprefixed `vX.Y.Z` tags; unpublished preparations are identified separately.
 
-## [0.14.0] - 2026-09-07
+## [0.14.0] - 2026-09-22
 
 ### Added
 
-- **Model benchmark harness.** `scripts/benchmark-models.sh` replays the identical research request through competing extract/collate models in isolated `Pi` environments and prints per-run telemetry. `docs/BENCHMARKS.md` records the methodology and the five-run baseline (`gemini-3.8-flash`, `minimax-m3`, `minimax-m2.7`) behind this release's default change. Any model `Pi` supports can be benchmarked the same way.
+- **Model benchmark harness.** `scripts/benchmark-models.sh` replays the identical research request through competing extract/collate models in isolated `Pi` environments and prints per-run telemetry. [Model Benchmarks](docs/BENCHMARKS.md) records the methodology and the five-run baseline (`gemini-3.8-flash`, `minimax-m3`, `minimax-m2.7`) behind this release's default change. Any model `Pi` supports can be benchmarked the same way.
 
 ### Changed
 
-- **Default extract and collate model moved from `openrouter/minimax/minimax-m2.7` to `openrouter/minimax/minimax-m3`.** Identical per-token pricing on OpenRouter, an ≈1M context window, and the strongest collation epistemics measured.
-- **MiniMax M3 reports state their evidence base.** In the benchmark series M3 opened every report by naming its ranking methodology and caveating the absence of authoritative npm statistics, surfaced low-evidence entries instead of dropping them, and flagged Svelte 5 compatibility warnings; M2.7 and Gemini 3.8 Flash did none of these (2 for 2 against 0 for 3).
-- **Extraction output runs ≈2× M2.7's.** A default 10-page session costs ≈$0.09 instead of ≈$0.06. Pin `minimax/minimax-m2.7` explicitly to keep the leaner extractions.
+- **Default Models:** extract and collate now use `minimax/minimax-m3` instead of `minimax/minimax-m2.7` through provider `openrouter`. The change follows the [five-run baseline](docs/BENCHMARKS.md#findings): identical per-token pricing, an ≈1M context window and stronger collation evidence handling in that series.
+- **Baseline Evidence Handling:** [_MiniMax_](https://minimax.io) M3 stated its ranking methodology and the absence of authoritative `npm` statistics in both reports (2/2), surfaced low-evidence entries and flagged [_Svelte_](https://svelte.dev) 5 compatibility warnings. The M2.7 report (0/1) and the two `gemini-3.8-flash` reports (0/2) did not state a methodology. The runs used one query with differing source corpora, so they do not isolate model effects.
+- **Extraction Volume and Cost:** M3 produced ≈2× M2.7's per-page extraction characters in the baseline. The recorded default 10-page cost estimate rose from ≈$0.06 to ≈$0.09. Set `extractModel` and `collateModel` to `minimax/minimax-m2.7` through provider `openrouter` to retain the previous model.
 
 ### Fixed
 
@@ -57,14 +62,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Compatibility
 
-- Users whose model settings still match the 0.13.0 default are migrated to the new default automatically; customized configurations are untouched. Migration is in-memory and never writes to `settings.json`.
-- No other defaults change: `searchModel` remains `openrouter/perplexity-sonar`, and no action is required beyond updating.
+- Users whose model settings still match the 0.13.0 default are migrated to the new default automatically; configurations that differ from the old defaults are untouched. Migration is in-memory and never writes to `settings.json`.
+- No other defaults change: `searchModel` retains provider `openrouter` and model `perplexity/sonar`. No settings change is required.
 
 ## [0.13.0] - 2026-09-07
 
 ### Added
 
-- **Citation annotation harvesting.** Search-grounded models return a machine-readable `url_citation` list naming every source they consulted, a larger set than the links they write into the prose (probe: 20 annotations against 3 prose links from Sonar). `intelli_research` and `intelli_search` merge those citations with the prose links before the URL limit, so the fetch stage sees sources the model consulted but did not link. The harvest reads a tee of the HTTP response body, is awaited (bounded at 2 seconds) so it cannot race the caller, and never blocks or fails the pipeline. No configuration required.
+- **Citation Annotation Harvesting:** `intelli_research` and `intelli_search` merge provider-supplied `url_citation` annotations with prose links before applying the source limit. A Sonar probe returned 20 annotations against 3 prose links; annotations can therefore expose additional sources, but do not establish a complete list of sources consulted. The caller waits up to two seconds for annotation parsing from a copy of the Hypertext Transfer Protocol (HTTP) response stream. Parsing failures do not fail the search. No configuration is required.
 - **`searchWebSearch` setting (default: off).** Attaches OpenRouter's `openrouter:web_search` server tool to the search-stage call, giving any OpenRouter chat model access to live search without a search-native model. Requires `searchModel.provider` to be `openrouter`. Probe-validated pairing: `openai/gpt-5-nano` with `engine: "exa"` and `reasoning: "minimal"` at ≈$0.008 per search. See the README `searchWebSearch` reference for keys and engine restrictions.
 - **`perplexity/sonar-pro-search` registered as a selectable search model.** OpenRouter-exclusive agentic model, usable as `searchModel` today via a settings-only change. Bills $18 per 1,000 requests on top of $3/$15 per 1M tokens (≈$0.05 per search).
 - Telemetry records `stages.search.annotationsHarvested` (additive, optional field).
@@ -79,14 +84,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Compatibility
 
-- Model defaults are unchanged: `searchModel` remains `openrouter/perplexity-sonar`, `searchWebSearch` remains off, and no settings migration is required. Annotation harvesting is automatic on every search call.
-- Perplexity retires its Sonar Chat Completions API on 2026-09-27. Whether the `openrouter/perplexity/sonar` route survives that date is up to OpenRouter, which has published no statement; both supported alternatives (web search tool, `sonar-pro-search`) are settings-only changes documented in the README.
+- Model defaults are unchanged: `searchModel` retains provider `openrouter` and model `perplexity/sonar`, `searchWebSearch` remains off, and no settings migration is required. Annotation harvesting runs automatically when the provider supplies citations.
+- At release, Perplexity had announced retirement of its Sonar Chat Completions API for 2026-09-27, with no OpenRouter statement on continued availability. Both supported alternatives (the web search tool and `sonar-pro-search`) are settings-only changes documented in the README. The later [pi-0.15.0] entry records removal of this advisory.
 
-## [0.12.6] - 2026-09-01
+## [0.12.6] - Prepared 2026-09-01, Not Published
 
 ### Changed
 
-- Maintenance release keeping up with current `Pi` releases (verified on `Pi` 0.84.4). No user-visible behaviour change; no action required.
+- Maintenance update verified on `Pi` 0.84.4. This version was prepared but not published to `npm`; the version link points to its preparation commit. No user-visible behaviour change.
 
 ## [0.12.5] - 2026-08-24
 
@@ -99,7 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Pages with repeated schema.org `url` values and no `og:url` (for example, sites shipping both `Organization` and `WebSite` JSON-LD blocks) no longer print a full `TypeError: Invalid URL` stack trace to the terminal during fetch. [Defuddle](https://github.com/kepano/defuddle) joins the duplicate values into an invalid composite URL, catches the throw, and logs a benign `console.warn`; the console muzzle now covers that warning channel in addition to the existing error channel. Extraction results were and remain unaffected. The upstream root fix is tracked in [#5](https://github.com/Curio-Data/pi-intelli-search/issues/5).
+- Pages with repeated schema.org `url` values and no `og:url` (for example, sites shipping both `Organization` and `WebSite` JSON-LD blocks) no longer print a full `TypeError: Invalid URL` stack trace to the terminal during fetch. [_Defuddle_](https://github.com/kepano/defuddle) joins the duplicate values into an invalid composite URL, catches the exception and logs a benign `console.warn`. Diagnostic suppression now covers that warning channel as well as the existing error channel. Extraction results were and remain unaffected. The upstream root fix is tracked in [#5](https://github.com/Curio-Data/pi-intelli-search/issues/5).
 
 ## [0.12.3] - 2026-08-14
 
@@ -107,7 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Maintenance release keeping up with current `Pi` releases (verified on `Pi` 0.84.2). No user-visible behaviour change; no action required.
 
-## [0.12.2] - 2026-08-07
+## [0.12.2] - 2026-08-08
 
 ### Changed
 
@@ -125,7 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`Pi` 0.80.8 is now the minimum supported version.** The extension uses the supported `pi-ai` compatibility entrypoint, `CONFIG_DIR_NAME`, trusted project settings, registry authentication environment values, and async model-registry refresh semantics from this baseline.
 - **Project settings now respect `Pi` trust.** Global settings always load. A project-local settings file is considered only after that project is trusted, and the settings cache is isolated by agent directory, project directory, trust state, and configuration-directory name.
-- **Cache-writing tools execute sequentially in one `Pi` host.** Cross-process cache commits use staging directories and short locks so concurrent research runs cannot interleave artifacts or lose index entries.
+- **Cache-writing tools execute sequentially in one `Pi` host.** Cross-process cache commits use staging directories and short locks so concurrent research runs cannot interleave artefacts or lose index entries.
 - **`README` setup instructions updated for `Pi` 0.82.0.** Prerequisites now lead with `/login openrouter` (OAuth PKCE, no manual key) as the recommended path, with the `auth.json` edit kept as a fallback. The Verify Installation step notes that `/model` re-reads `models.json` on open before suggesting a restart.
 
 ### Fixed
@@ -148,7 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Defuddle's internal error log no longer pollutes the terminal.** Pages with malformed CSS selectors (for example an unterminated attribute selector) made [_Defuddle_](https://github.com/kepano/defuddle) throw inside its own parsing loop. Defuddle caught the error, logged the full stack to `console.error` (`Defuddle Error processing document: ...`), and returned a degraded result instead of throwing, so the research pipeline kept working but the raw stack trace reached the user's terminal on every affected page. The fetch layer now muzzles just that `Defuddle`-tagged log for the duration of the call and, when it fires, routes to the clean DOM text fallback, so the failure is handled internally with no terminal noise.
+- **Defuddle's internal error log no longer pollutes the terminal.** Pages with malformed CSS selectors (for example an unterminated attribute selector) made [_Defuddle_](https://github.com/kepano/defuddle) throw inside its own parsing loop. Defuddle caught the error, logged the full stack to `console.error` (`Defuddle Error processing document: ...`), and returned a degraded result instead of throwing, so the research pipeline kept working but the raw stack trace reached the user's terminal on every affected page. The fetch layer now suppresses that Defuddle-tagged diagnostic for the duration of the call and uses the DOM text fallback when it occurs. This handles the parsing failure without printing the dependency's stack trace.
 
 ## [0.11.1] - 2026-06-25
 
@@ -193,7 +198,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Stage-based progress bar in `intelli_research` tool output.** A visual progress bar renders during streaming: overall completion bar, stage pills with ✓/●/○ markers, current stage message, and a per-page sub-progress bar during extraction. The LLM sees structured `⚙️ Stage X/5:` prefixed text via `onUpdate`.
 - **`extractionConcurrency` setting (default 4).** Per-page extractions now run through a bounded worker pool so a wide result set no longer fires a burst of simultaneous extract-model calls that trip provider rate limits.
-- **Rate-limit resilience for every LLM call.** Search, extract, collate, and cache-suggest calls retry transient failures (HTTP 429, 5xx, timeouts) with full-jitter exponential backoff that honours `Retry-After`, and enforce a hard per-call timeout so a stalled provider connection cannot hang the pipeline. New settings tune this: `llmTimeoutMs` (default 90000), `llmRetryAttempts` (default 3), `retryBaseDelayMs` (default 1500), `retryMaxDelayMs` (default 20000), `searchRetryAttempts` (default 2), and an opt-in `minRequestIntervalMs` throttle (default 0, off) that spaces concurrent extract calls for keys with tight rate limits.
+- **Research Retry and Timeout Policy:** large language model (LLM) calls within `intelli_research` retry transient failures (HTTP `429`, `5xx` and timeouts) with full-jitter exponential backoff that honours `Retry-After`. Each attempt has an application-level timeout. Standalone `intelli_search`, `intelli_extract` and `intelli_collate` calls retain one attempt and no application-level timeout. The research policy settings are: `llmTimeoutMs` (default 90000), `llmRetryAttempts` (default 3), `retryBaseDelayMs` (default 1500), `retryMaxDelayMs` (default 20000), `searchRetryAttempts` (default 2), and an opt-in `minRequestIntervalMs` throttle (default 0, off) that spaces concurrent extract calls for keys with tight rate limits.
 - `@earendil-works/pi-tui` added to peer dependencies (required by `renderResult` for progress bar rendering).
 
 ### Changed
@@ -203,7 +208,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Pipeline no longer hangs or hard-fails under provider rate limiting.** Previously a 429 on the search or collate stage aborted the run, a rate-limited extraction was silently dropped, and a stalled connection could hang for minutes with no output (the SDK request timeout does not cover a stalled response stream). Calls now back off and retry, a degraded search that returns no usable links is retried, and an unrecoverable call fails fast with a clear timeout or rate-limit message.
+- **Research Failure Handling:** rate-limited search and collation calls now retry before failing; rate-limited extractions retry before being discarded. Application timeouts also cover stalled response streams, which the software development kit (SDK) request timeout did not cover. Search responses with no usable links are retried separately. Calls that exhaust their attempts still fail with a timeout or provider error.
 - **Source URLs containing parentheses no longer truncated.** Wikipedia disambiguation links (`Foo_(disambiguation)`) and MSDN API references with version suffixes kept only the text up to the first `)`, producing malformed URLs that failed to fetch.
 - **Extraction sub-progress bar advances per completion** instead of jumping to N/N at launch, so progress reflects real work done.
 - **`llms-full.txt` discovery honours cancellation and has a tight timeout.** Probes now respond to Esc and use a 10s per-host budget so a slow documentation host cannot stall the research result.
@@ -257,7 +262,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **npm scope migrated** from `@mariozechner` to `@earendil-works`: `pi-ai` and `pi-coding-agent` peer dependencies updated to 0.74.x. The `Pi` project moved from Mario Zechner's personal scope to an organization scope. No API changes.
+- **npm scope migrated** from `@mariozechner` to `@earendil-works`: `pi-ai` and `pi-coding-agent` peer dependencies updated to 0.74.x. The `Pi` project moved from Mario Zechner's personal scope to an organisation scope. No API changes.
 
 ### Fixed
 
@@ -284,7 +289,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Extension comparison guide** (`docs/COMPARISON.md`): feature-by-feature breakdown of `intelli-search` against 7 other `Pi` search extensions across search, fetch, extraction, collation, caching, and cost.
+- **Extension comparison guide** (`docs/COMPARISON.md`): feature-by-feature breakdown of `intelli-search` against six other `Pi` search extensions across search, fetch, extraction, collation, caching, and cost.
 
 ### Changed
 
@@ -377,7 +382,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed `ERR_INVALID_URL` crash when [Defuddle](https://github.com/kepano/defuddle) encounters pages with relative metadata URLs (for example, _GitHub_ `<link rel="canonical" href="/owner/repo/releases">`). Relative `href` and `content` attributes in `<meta>`, `<link>`, and `<a>` tags are now resolved to absolute URLs against the page URL before Defuddle processes the DOM.
-- Fixed E2E test output verification. Grep check no longer fails when the model does not echo the tool name in its response. Cache artifact checks are the authoritative pass or fail.
+- Fixed E2E test output verification. Grep check no longer fails when the model does not echo the tool name in its response. Cache artefact checks are the authoritative pass or fail.
 
 ### Added
 
@@ -406,10 +411,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
 [pi-0.15.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.15.0
-[mcp-0.15.0-alpha.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.15.0-alpha.0
+[mcp-0.15.0-alpha.0]: https://www.npmjs.com/package/@curio-data/mcp-intelli-search/v/0.15.0-alpha.0
 [0.14.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.14.0
 [0.13.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.13.0
-[0.12.6]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.6
+[0.12.6]: https://github.com/Curio-Data/pi-intelli-search/commit/992df7a2ed930abb562919257ba58b94f16c3aa2
 [0.12.5]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.5
 [0.12.4]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.4
 [0.12.3]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.12.3

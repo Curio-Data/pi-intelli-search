@@ -172,29 +172,33 @@ The pipeline estimate includes search, extraction, collation and cache suggestio
 
 ## Host-Native Web Search
 
-A host agent's built-in web tools are the main alternative for a user outside `Pi`. One recorded session compared `intelli_research` with the [_Claude Code_](https://code.claude.com/docs) WebSearch and WebFetch tools on the same research task.
+A host agent's built-in web tools are an alternative to `intelli-search`. One session compared `intelli_research` with the [_Claude Code_](https://code.claude.com/docs) `WebSearch` and `WebFetch` tools on a task about publishing plugins that run local Model Context Protocol (MCP) servers.
 
-### Session Recorded
+### Session Scope
 
-The record is a single qualitative observation from 2026-10-06, not a benchmark. The same model ran both routes and judged the results, the task was not repeated, and no route was blinded.
+The record is a single qualitative observation from 2026-10-06, not a benchmark. The same Claude Code model requested both routes and assessed their outputs; the `Pi` subprocess and research pipeline used their own model calls. The task was not repeated, and the assessment was not blinded. The [session evidence](evidence/2026-10-06-host-native-search.md) identifies the transcript, cached reports, call counts and source passages.
 
 | Item | Recorded Value |
 |---|---|
-| Host session | Claude Code 2.1.291, model `claude-opus-5-5` |
-| `intelli-search` route | Native `Pi` extension 0.14.0 from npm, run with `pi -p` from the Claude Code session. The MCP plugin route was not exercised |
-| Pipeline models | Defaults through OpenRouter: Perplexity Sonar search, MiniMax M3 extraction and collation |
-| Task | The requirements for listing a plugin that runs a local MCP server in Anthropic's plugin directory and in OpenAI's plugin directory |
-| Calls | `intelli_research`: two calls (one per directory) with `maxUrls` 6. Native: 4 WebSearch and 6 WebFetch calls |
+| Host Session | Claude Code session metadata: 2.1.290; installed command check: 2.1.291. Model: `claude-opus-5-5` |
+| Research Route | Native `Pi` extension 0.14.0 from `npm`, run with `pi -p` from the Claude Code session. The MCP plugin route was not exercised |
+| Pipeline Models | Defaults through OpenRouter: Perplexity Sonar search, MiniMax M3 extraction and collation |
+| Task | Listing requirements for a plugin with a local MCP server in Anthropic's and OpenAI's directories |
+| Calls | Two `intelli_research` calls, one per directory, each with `maxUrls` set to 6; three `WebSearch` and seven `WebFetch` calls |
+
+These are tool-call counts, not equivalent units of work. Each `intelli_research` call includes search, page fetching, extraction and collation. The session does not establish a cost or latency advantage.
 
 ### Observations
 
-| Aspect | `intelli_research` | Native WebSearch and WebFetch |
+| Aspect | `intelli_research` | Native `WebSearch` and `WebFetch` |
 |---|---|---|
-| Source selection | Official claude.com and developers.openai.com pages; 12 of 12 fetched | Search results led with blogs and aggregators; official pages reached through follow-up fetches |
-| Depth | One structured synthesis per directory: eligibility, folder layout, blocking and reviewer-hold rules, manifest field limits, update flow, a source assessment table and a related cached search | One small-model summary per fetched page, answered against a targeted question |
-| Unique findings | OpenAI's migration guide for Claude Code plugins, including the stdio restriction and the partner-review triggers | The plugin surface-support table (chat ignores local MCP servers) and the current statement that `claude-plugins-official` takes no portal submissions |
-| Errors | One stale claim: a submission form for `claude-plugins-official` that the current Claude Code documentation contradicts | One unverified secondary claim in search results (a marketplace launch date) |
+| Source Selection | Vendor documentation, a vendor blog and the official marketplace README; all 12 requested URLs fetched, including two variants of one submission page | Initial search results included blogs and aggregators; subsequent fetches targeted official documentation |
+| Output | One synthesis per directory covering eligibility, folder layout, review rules and update procedures. The OpenAI result also included manifest field limits, a source assessment table and a suggestion to read the earlier cached search | Page-level results from targeted requests, including full documentation pages rather than only summaries |
+| Additional Sources | OpenAI's migration guide, including local-server guidance and conditions requiring partner contact | The platform-support table and the publishing guide's distinction between the directory portal and `claude-plugins-official`; neither page was fetched by the pipeline |
+| Unresolved Claims | The report cited a marketplace submission form from the captured official README. The publishing guide gave different guidance; the session did not establish whether the form remained valid | A secondary search result's marketplace launch date was not verified. That uncertainty is not evidence that the claim was false |
 
-### Host-Native Web Search: Key Difference
+### Findings and Limits
 
-`intelli_research` returned more structured, source-grounded context per call and reached official documentation without follow-up requests. The native tools added value as a cross-check: they caught the one stale claim and surfaced a table the pipeline did not select. The session used the native `Pi` route. Through the _Claude Code_ plugin, the model currently receives only the structured tool result ([finding F2](plans/mcp-intelli-search/POST-PHASE-6.md#f2-claude-code-drops-the-text-summary-high-confirmed)), so that route delivers less than this record shows until F2 is fixed.
+In this session, `intelli_research` returned cross-source syntheses without further page-fetch requests from the host model. The built-in tools supplied additional official pages for checking the result, including the platform-support table and different marketplace submission guidance. The [captured passages](evidence/2026-10-06-host-native-search.md#submission-guidance) establish a discrepancy to investigate, not a confirmed stale-form error.
+
+These observations apply to the native `Pi` route. In the separate Claude Code 2.1.289 verification, the MCP plugin delivered only the structured result to the model and omitted the summary text ([finding F2](plans/mcp-intelli-search/POST-PHASE-6.md#f2-claude-code-drops-the-text-summary-high-confirmed)). This session did not retest the plugin route on either of the newer recorded host versions.

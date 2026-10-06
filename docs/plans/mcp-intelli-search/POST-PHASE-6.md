@@ -109,7 +109,7 @@ Fix direction: put both concrete steps in the README (the `printf … | claude p
 
 | ID | Severity | Finding | Fix Direction |
 |---|---|---|---|
-| F5 | Medium | Claude Code did not load the skill for natural research questions (3 of 3 sessions); the model reached for built-in web tools first and found the deferred MCP tools through tool search | Sharpen the skill description; whether that helps is unknown. [One recorded session](../../COMPARISON.md#host-native-web-search) compares the two routes |
+| F5 | Medium | Claude Code did not load the skill for natural research questions (3 of 3 sessions); the model reached for built-in web tools first and found the deferred MCP tools through tool search | Sharpen the skill description; whether that helps is unknown. [One recorded session](../../COMPARISON.md#host-native-web-search) compares native `Pi` research with Claude Code's built-in web tools, not the MCP plugin route |
 | F6 | Medium | Codex with the forwarded variables unset gives no visible error; the model claimed to use the skill while answering from built-in web search | Skill instruction to report an unavailable server instead of substituting another tool; a documented Codex check |
 | F7 | Medium | `claude mcp list` prints `Failed to connect` with no reason; server standard error is under `~/.cache/claude-cli-nodejs/<project>/mcp-logs-plugin-intelli-search-intelli-search/` (Observed, Linux, 2.1.289) | Name the log location in the skill's verification step |
 | F8 | Medium | Codex skill suggests exporting the key in a shell profile in plain text | Recommend loading it at launch from a mode-600 file or secret store |
