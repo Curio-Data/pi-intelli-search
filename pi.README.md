@@ -8,12 +8,11 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
 ![tests](https://img.shields.io/badge/test%3Aall-531%20passing-brightgreen)
 
-Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call. This repository provides two first-class packages from one research engine:
+Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
-- `@curio-data/pi-intelli-search`: a [`Pi`](https://github.com/earendil-works/pi) extension that registers the four research tools natively, using `Pi` settings, authentication and the model registry.
-- `@curio-data/mcp-intelli-search`: a standalone Model Context Protocol (MCP) server over standard input/output (stdio) for MCP-compatible hosts, including [_Claude Code_](https://code.claude.com/docs/en/mcp) and [_Codex_](https://developers.openai.com/codex/mcp).
+`@curio-data/pi-intelli-search` registers four research tools natively in [`Pi`](https://github.com/earendil-works/pi), using its settings, authentication and model registry. [Install the extension](#pi-native-extension) to get started.
 
-Both packages run the same five-stage pipeline with the same cache format. [Install](#install) covers both the [`Pi` native extension](#pi-native-extension) and the [MCP server](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#mcp-server), including direct MCP registration and host plugins.
+For other coding agents, the sibling `@curio-data/mcp-intelli-search` package serves the same engine and cache format through the Model Context Protocol (MCP). See [MCP installation](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#mcp-server).
 
 The shared pipeline searches via a search-grounded model ([_Perplexity Sonar_](https://docs.perplexity.ai), the native default) and merges prose links with harvested citations before selecting pages. It fetches pages through a dual-fetch comparison ([_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), then extracts query-relevant content per page with a dedicated large language model (LLM) guided by a _focused prompt_. Collation deduplicates findings, flags inconsistencies, and synthesises a concise summary. Everything is cached in `.search/` for offline reuse. Cache suggest surfaces related previous searches on each query.
 
@@ -29,7 +28,7 @@ Choose the installation route for the host:
 
 The install branches: [`Pi` Native Extension](#pi-native-extension) and [MCP Server](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#mcp-server), with host instructions for [Claude Code](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#claude-code), [Codex](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#codex) and any [Generic MCP Host](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#generic-mcp-host).
 
-The native extension uses `Pi` settings and authentication. The MCP server requires explicit configuration, a per-folder workspace and an environment-supplied inference key; it does not read `Pi` settings or credentials. Its first registry publication is pending: use the [source-checkout launcher](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#claude-code) until publication. The registry and plugin launchers below are post-publication routes.
+The native extension uses `Pi` settings and authentication. The MCP server requires explicit configuration, a per-folder workspace and an environment-supplied inference key; it does not read `Pi` settings or credentials.
 
 ## Contents
 
@@ -43,7 +42,7 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
     - [Verify Installation](#verify-installation)
     - [Customise (Optional)](#customise-optional)
 - [Tools](#tools)
-- [Quick Start](#quick-start)
+- [Usage Examples](#usage-examples)
   - [Quick Search](#quick-search)
   - [Deep Research](#deep-research)
   - [Targeted Research With Domain Guidance](#targeted-research-with-domain-guidance)
@@ -92,7 +91,7 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
 
 **Features:**
 
-- 🔍 **Search:** a search-grounded model, [_Perplexity Sonar_](https://docs.perplexity.ai) via [_OpenRouter_](https://openrouter.ai) by default. One application programming interface (API) key, no $50 minimum. Any OpenRouter chat model works too via the [web search server tool](#openrouter-web-search-server-tool).
+- 🔍 **Search:** a search-grounded model, [_Perplexity Sonar_](https://docs.perplexity.ai) via [_OpenRouter_](https://openrouter.ai) by default. One application programming interface (API) key, no $50 minimum. Chat models with tool support also work through the web search server tool; see [native search settings](#openrouter-web-search-server-tool) or [MCP tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#tuning).
 - 🔗 **Harvest:** every source the search model cited, not only the links it wrote into the answer. Machine-readable `url_citation` annotations are merged with text links before pages are selected.
 - 🌐 **Fetch:** Dual-fetch each page (Hypertext Markup Language (HTML) → Defuddle versus Markdown endpoint), compare quality, pick the cleaner version.
 - 📄 **Extract:** Per-page LLM extraction guided by a _focused prompt_. Compresses ≈50K to ≈3-5K chars of query-relevant content.
@@ -104,13 +103,11 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
 <a id="use-with-other-hosts"></a>
 ## Install
 
-Choose a package by host: the [`Pi` native extension](#pi-native-extension) for `Pi`, or the [MCP server](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#mcp-server) for MCP-compatible hosts.
-
 ### `Pi` Native Extension
 
 #### Prerequisites
 
-You need at minimum an [OpenRouter](https://openrouter.ai) account: one key covers the default search model ([_Perplexity Sonar_](https://docs.perplexity.ai)) plus extraction and collation with the default models, and every [alternative search configuration](#choosing-an-alternative-search-configuration) uses the same account. For the extract and collate stages, any model or provider `Pi` supports can be used. See [Model Configuration](#model-configuration) for how to swap them.
+Install `Pi` and obtain an [OpenRouter](https://openrouter.ai) account. One key covers search, extraction and collation with the default models. Other providers are supported for extraction and collation; see [Model Configuration](#model-configuration).
 
 1. **Sign In With Open Authorization (OAuth) (Recommended):** run `/login openrouter` in `Pi`. On `Pi` 0.82.0 and later this performs OpenRouter OAuth Proof Key for Code Exchange (PKCE) sign-in and stores a user-controlled key automatically. No manual key paste is required.
 2. **Or add a key manually:** create one at [openrouter.ai/keys](https://openrouter.ai/keys), then edit `~/.pi/agent/auth.json`:
@@ -144,88 +141,26 @@ Local development:
 pi install /path/to/pi-intelli-search
 ```
 
-On first load, `Pi` will show `Added models:` followed by whatever was missing: on a fresh install that is `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search`; an upgrade from an earlier version lists only the models you did not already have. If your OpenRouter key is missing, you will see a warning notification.
+On first load, `Pi` shows `Added models:` followed by any missing models: on a fresh install these are `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search`. An upgrade lists only models not already registered. A missing OpenRouter key produces a warning notification.
 
 #### Verify Installation
 
-Start `Pi` and type `/model`. You should see `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search` in the model list. If they are missing after a manual edit, reopen `/model`: since `Pi` 0.82.0 the picker reloads `models.json` on open. Restart `Pi` only if they are still absent. Registration does not select a pipeline model; `searchModel` in settings does that.
+Start `Pi` and type `/model`. Confirm that `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search` appear in the model list. If they are missing after a manual edit, reopen `/model`: since `Pi` 0.82.0 the picker reloads `models.json` on open. Restart `Pi` only if they are still absent. Registration does not select a pipeline model; `searchModel` in settings does that.
 
 #### Customise (Optional)
 
-No configuration is needed to get started. The defaults use OpenRouter for all stages. If you want to change models, add a `pi-intelli-search` block to `~/.pi/agent/settings.json` or, for a trusted project, `<project>/.pi/settings.json`:
+No configuration is needed to get started. The defaults use OpenRouter for all stages. To limit research to six pages, add this block to `~/.pi/agent/settings.json` or, for a trusted project, `<project>/.pi/settings.json`:
 
-**Defaults (What You Get Without Any Config):**
-
-No configuration is required. Explicit tuning values are preserved on upgrade, but explicitly selected models remain eligible for match-based migration when their provider and model match the upgrading version's historical default. Migration changes effective settings in memory, not the file (see `migrateDefaults()` in `src/settings.ts`). The table in [Settings Reference](#settings-reference) lists every accepted namespace key.
-
-```jsonc
+```json
 {
   "pi-intelli-search": {
-    "searchModel": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "searchWebSearch": {
-      "enabled": false,
-      "engine": "auto",
-      "maxResults": 8,
-      "reasoning": "minimal"
-    },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m3"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m3"
-    },
-
-    "defaultUrls": 10,
-    "maxUrls": 20,
-    "cacheDir": ".search",
-    "extractMaxChars": 150000,
-    "extractionConcurrency": 4,
-    "extractionMaxTokens": 3000,
-    "collationMaxTokens": 4000,
-    "fetchTimeoutMs": 20000,
-    "fetchConcurrency": 4,
-    "browserFingerprint": "chrome_145"
-  }
-}
-```
-
-**Customised Example (Different Provider, Tuned Pipeline):**
-
-```jsonc
-{
-  "pi-intelli-search": {
-    "searchModel": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "extractModel": {
-      "provider": "openai",
-      "model": "gpt-4o-mini"
-    },
-    "collateModel": {
-      "provider": "openai",
-      "model": "gpt-4o-mini"
-    },
-
     "defaultUrls": 6,
-    "maxUrls": 6,
-    "cacheDir": ".my-research-cache",
-    "extractMaxChars": 80000,
-    "extractionMaxTokens": 8000,
-    "collationMaxTokens": 16000,
-    "fetchTimeoutMs": 30000,
-    "fetchConcurrency": 2,
-    "browserFingerprint": "chrome_145"
+    "maxUrls": 6
   }
 }
 ```
 
-See [Model Configuration](#model-configuration) for all options, [Configuration Recipes](#configuration-recipes) for complete copy-paste examples, and [Settings](#settings) for the full reference.
+See [Model Configuration](#model-configuration) for model selection, [Configuration Recipes](#configuration-recipes) for complete examples, and [Settings](#settings) for defaults and the full reference.
 
 ## Tools
 
@@ -238,7 +173,10 @@ Both packages expose these four operations. The names below are native `Pi` tool
 | `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
 | `intelli_research` | Search, fetch, extract, collate, cache. The primary research tool. One call.                        |
 
-## Quick Start
+<a id="quick-start"></a>
+## Usage Examples
+
+These examples describe tool calls for the agent, not shell commands. MCP hosts add their own tool-name prefixes.
 
 ### Quick Search
 
@@ -268,7 +206,7 @@ intelli_research(
 )
 ```
 
-`domains` guides source selection, it is not a security boundary: the query gains a `site:` expression, and with the web search tool enabled the same domains are also combined with `searchWebSearch.allowedDomains` and sent as an engine filter. The lists are combined, not intersected, and returned URLs are not checked against a local hostname allowlist before fetching. Engine support for allow and exclude lists differs (see [searchWebSearch Keys](#searchwebsearch-keys)).
+`domains` guides source selection, it is not a security boundary: the query gains a `site:` expression, and with the web search tool enabled the same domains are also combined with `searchWebSearch.allowedDomains` and sent as an engine filter. The lists are combined, not intersected, and returned URLs are not checked against a local hostname allowlist before fetching. Engine support for allow and exclude lists differs; see [native searchWebSearch keys](#searchwebsearch-keys) or [MCP tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#tuning).
 
 ### Comparing Options
 
@@ -664,11 +602,11 @@ Run `/login openrouter` in `Pi` to authorise via OAuth (`Pi` 0.82.0 and later), 
   <img src="https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/07B.png" alt="Vintage engraving-style infographic titled &quot;INTELLI_RESEARCH: The Five-Stage Pipeline,&quot; showing five sequentially linked numbered stages triggered by intelli_research(query): (1) Search: web discovery via Perplexity Sonar, OpenRouter/pi-native auth; (2) Fetch: dual fetch and quality comparison using wreq-js + Defuddle against raw markdown; (3) Extract: per-page parallel LLM extraction, MiniMax M2.7, the native model configuration at the illustration's creation; (4) Collate: deduplication and persistent cache via MiniMax M2.7 (the native configuration at creation), flags conflicts; (5) Cache Suggest: additive stage, LLM judge surfaces related prior searches. Stages are connected by bold arrows; each is illustrated with a period-appropriate vignette (armillary sphere, scrolls, alchemical still, filing cabinet, owl with documents)." width="800" />
 </p>
 
-The illustration shows the native pipeline with the model configuration at its creation, including MiniMax M2.7 and `Pi` authentication; it does not show the current defaults or standalone authentication. All model assignments are configurable (see [Model Configuration](#model-configuration)); alternative search configurations use the same five-stage pipeline.
+The illustration shows the native pipeline with the model configuration at its creation, including MiniMax M2.7 and `Pi` authentication; it does not show the current defaults or standalone authentication. All model assignments are configurable through [native model settings](#model-configuration) or [MCP configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#configuration); alternative search configurations use the same five-stage pipeline.
 
 The search stage merges text links with harvested citation annotations before selecting pages (see [Source Harvesting from Citations](#source-harvesting-from-citations)). Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈30-50K for 10 pages).
 
-At the end of each run the pipeline writes a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `disableTelemetry: true` to suppress it.
+At the end of each run the pipeline writes a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it.
 
 See [docs/ARCHITECTURE.md](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md) for detailed design decisions.
 
@@ -686,13 +624,17 @@ Per research session with the default 10 pages: **≈$0.09**
 | Collate (M3 via OpenRouter)         | 1                | ≈$0.01   |
 | Cache suggest (M3 via OpenRouter)   | 1                | ≈$0.0002 |
 
-Since v0.13.0 the search stage contributes every source the model cited, not only the ones it wrote into the prose, so sessions reach the `defaultUrls` page count more often than before. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 extracts cost the same per token as M2.7 but write ≈2× the output tokens); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost (see [Choosing an Alternative Search Configuration](#choosing-an-alternative-search-configuration)); the extract and collate rows scale with your chosen models.
+Since v0.13.0 the search stage contributes every source the model cited, not only the ones it wrote into the prose, so sessions reach the `defaultUrls` page count more often than before. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 extracts cost the same per token as M2.7 but write ≈2× the output tokens); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](#choosing-an-alternative-search-configuration) or [MCP configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#configuration). The extract and collate rows scale with the selected models.
 
 ## Settings
 
 This section describes native `Pi` settings. The MCP server reads only its explicitly selected file; its accepted keys, ranges and policy differences are documented in [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#tuning).
 
-Override defaults in `~/.pi/agent/settings.json` or, for a trusted project, `<project>/.pi/settings.json` under the `pi-intelli-search` namespace. `Pi` ignores project-local settings until you approve the project; the global file always applies:
+No configuration is required. To override defaults, use `~/.pi/agent/settings.json` or, for a trusted project, `<project>/.pi/settings.json` under the `pi-intelli-search` namespace. `Pi` ignores project-local settings until the project is approved; the global file always applies.
+
+Explicit tuning values are preserved on upgrade. Explicit model selections remain eligible for match-based migration when their provider and model match the upgrading version's historical default. Migration changes effective settings in memory, not the file (see `migrateDefaults()` in `src/settings.ts`).
+
+The example below shows the default models and common tuning settings. The [Settings Reference](#settings-reference) lists every accepted namespace key:
 
 ```jsonc
 {
@@ -701,6 +643,12 @@ Override defaults in `~/.pi/agent/settings.json` or, for a trusted project, `<pr
     "searchModel": {
       "provider": "openrouter",
       "model": "perplexity/sonar"
+    },
+    "searchWebSearch": {
+      "enabled": false,
+      "engine": "auto",
+      "maxResults": 8,
+      "reasoning": "minimal"
     },
     "extractModel": {
       "provider": "openrouter",
@@ -716,6 +664,7 @@ Override defaults in `~/.pi/agent/settings.json` or, for a trusted project, `<pr
     "maxUrls": 20,
     "cacheDir": ".search",
     "extractMaxChars": 150000,
+    "extractionConcurrency": 4,
     "extractionMaxTokens": 3000,
     "collationMaxTokens": 4000,
 
@@ -796,7 +745,9 @@ Both packages write this format. The native extension resolves the cache against
 
 Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short Secure Hash Algorithm 1 (SHA-1) hash of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. Concurrent runs stage their output before a short cache commit, so source files and the shared index remain intact.
 
-**`meta.json` (local-only telemetry).** Each `intelli_research` run writes a `meta.json` sidecar recording per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), whether search-retry fired, cache-suggest hits, and per-stage latency. `stages.search.annotationsHarvested` counts `url_citation` entries recovered from the response body; it is absent on runs against models that emit none, and it is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. It is strictly local: no network call is added, no data leaves the host, and no account or identity is recorded. Set `disableTelemetry: true` in [Settings](#settings) to suppress it. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+**`meta.json` (local-only telemetry).** Each `intelli_research` run writes a `meta.json` sidecar recording per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), whether search-retry fired, cache-suggest hits, and per-stage latency. `stages.search.annotationsHarvested` counts `url_citation` entries recovered from the response body; it is absent on runs against models that emit none, and it is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. It is strictly local: no network call is added, no data leaves the host, and no account or identity is recorded. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+
+To suppress the sidecar in the native extension, set `disableTelemetry: true` inside the `pi-intelli-search` namespace in [Settings](#settings).
 
 ## Compatibility
 
@@ -814,7 +765,7 @@ Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<has
 - [Architecture](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md): Detailed design decisions and pipeline internals.
 - [Compatibility](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md): Tested host versions and artifacts for the native extension, MCP server and plugins.
 - [Components](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPONENTS.md): Third-party dependencies and licence attribution.
-- [Skill guide](https://github.com/Curio-Data/pi-intelli-search/blob/main/skills/intelli-search/SKILL.md): Agent-facing usage instructions.
+- [Native skill guide](https://github.com/Curio-Data/pi-intelli-search/blob/main/skills/intelli-search/SKILL.md): Agent-facing usage instructions for `Pi`.
 - [Contributor guide](https://github.com/Curio-Data/pi-intelli-search/blob/main/AGENTS.md): Coding conventions and project structure.
 
 ## Downloads

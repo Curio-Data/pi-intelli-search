@@ -2,6 +2,7 @@
 # mcp-intelli-search
 
 [![npm version](https://img.shields.io/npm/v/@curio-data/mcp-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/mcp-intelli-search)
+[![npm downloads](https://img.shields.io/npm/dt/@curio-data/mcp-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/mcp-intelli-search)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-blue)](https://nodejs.org/)
 -->
 <!-- packages:pi -->
@@ -14,12 +15,26 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
 ![tests](https://img.shields.io/badge/test%3Aall-531%20passing-brightgreen)
 
-Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call. This repository provides two first-class packages from one research engine:
+Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
+
+<!-- packages:none -->
+This repository provides two first-class packages from one research engine:
 
 - `@curio-data/pi-intelli-search`: a [`Pi`](https://github.com/earendil-works/pi) extension that registers the four research tools natively, using `Pi` settings, authentication and the model registry.
 - `@curio-data/mcp-intelli-search`: a standalone Model Context Protocol (MCP) server over standard input/output (stdio) for MCP-compatible hosts, including [_Claude Code_](https://code.claude.com/docs/en/mcp) and [_Codex_](https://developers.openai.com/codex/mcp).
 
 Both packages run the same five-stage pipeline with the same cache format. [Install](#install) covers both the [`Pi` native extension](#pi-native-extension) and the [MCP server](#mcp-server), including direct MCP registration and host plugins.
+<!-- /packages -->
+<!-- packages:pi hidden
+`@curio-data/pi-intelli-search` registers four research tools natively in [`Pi`](https://github.com/earendil-works/pi), using its settings, authentication and model registry. [Install the extension](#pi-native-extension) to get started.
+
+For other coding agents, the sibling `@curio-data/mcp-intelli-search` package serves the same engine and cache format through the Model Context Protocol (MCP). See [MCP installation](#mcp-server).
+-->
+<!-- packages:mcp hidden
+`@curio-data/mcp-intelli-search` serves four research tools over the Model Context Protocol (MCP), using standard input/output (stdio). [Install with Claude Code](#claude-code) using the complete example below, or use [_Codex_](https://developers.openai.com/codex/mcp) or another MCP-compatible host.
+
+For [`Pi`](https://github.com/earendil-works/pi), the sibling `@curio-data/pi-intelli-search` package registers the same engine natively through `Pi` settings and authentication. See [native installation](#pi-native-extension).
+-->
 
 The shared pipeline searches via a search-grounded model ([_Perplexity Sonar_](https://docs.perplexity.ai), the native default) and merges prose links with harvested citations before selecting pages. It fetches pages through a dual-fetch comparison ([_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), then extracts query-relevant content per page with a dedicated large language model (LLM) guided by a _focused prompt_. Collation deduplicates findings, flags inconsistencies, and synthesises a concise summary. Everything is cached in `.search/` for offline reuse. Cache suggest surfaces related previous searches on each query.
 
@@ -35,7 +50,7 @@ Choose the installation route for the host:
 
 The install branches: [`Pi` Native Extension](#pi-native-extension) and [MCP Server](#mcp-server), with host instructions for [Claude Code](#claude-code), [Codex](#codex) and any [Generic MCP Host](#generic-mcp-host).
 
-The native extension uses `Pi` settings and authentication. The MCP server requires explicit configuration, a per-folder workspace and an environment-supplied inference key; it does not read `Pi` settings or credentials. Its first registry publication is pending: use the [source-checkout launcher](#claude-code) until publication. The registry and plugin launchers below are post-publication routes.
+The native extension uses `Pi` settings and authentication. The MCP server requires explicit configuration, a per-folder workspace and an environment-supplied inference key; it does not read `Pi` settings or credentials.
 
 ## Contents
 
@@ -49,11 +64,13 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
     - [Verify Installation](#verify-installation)
     - [Customise (Optional)](#customise-optional)
   - [MCP Server](#mcp-server)
+    - [MCP Prerequisites](#mcp-prerequisites)
     - [Claude Code](#claude-code)
+    - [Claude Code Plugin](#claude-code-plugin)
     - [Codex](#codex)
     - [Generic MCP Host](#generic-mcp-host)
 - [Tools](#tools)
-- [Quick Start](#quick-start)
+- [Usage Examples](#usage-examples)
   - [Quick Search](#quick-search)
   - [Deep Research](#deep-research)
   - [Targeted Research With Domain Guidance](#targeted-research-with-domain-guidance)
@@ -114,7 +131,7 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
 
 **Features:**
 
-- 🔍 **Search:** a search-grounded model, [_Perplexity Sonar_](https://docs.perplexity.ai) via [_OpenRouter_](https://openrouter.ai) by default. One application programming interface (API) key, no $50 minimum. Any OpenRouter chat model works too via the [web search server tool](#openrouter-web-search-server-tool).
+- 🔍 **Search:** a search-grounded model, [_Perplexity Sonar_](https://docs.perplexity.ai) via [_OpenRouter_](https://openrouter.ai) by default. One application programming interface (API) key, no $50 minimum. Chat models with tool support also work through the web search server tool; see [native search settings](#openrouter-web-search-server-tool) or [MCP tuning](#tuning).
 - 🔗 **Harvest:** every source the search model cited, not only the links it wrote into the answer. Machine-readable `url_citation` annotations are merged with text links before pages are selected.
 - 🌐 **Fetch:** Dual-fetch each page (Hypertext Markup Language (HTML) → Defuddle versus Markdown endpoint), compare quality, pick the cleaner version.
 - 📄 **Extract:** Per-page LLM extraction guided by a _focused prompt_. Compresses ≈50K to ≈3-5K chars of query-relevant content.
@@ -126,14 +143,16 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
 <a id="use-with-other-hosts"></a>
 ## Install
 
+<!-- packages:none -->
 Choose a package by host: the [`Pi` native extension](#pi-native-extension) for `Pi`, or the [MCP server](#mcp-server) for MCP-compatible hosts.
+<!-- /packages -->
 
 <!-- packages:pi -->
 ### `Pi` Native Extension
 
 #### Prerequisites
 
-You need at minimum an [OpenRouter](https://openrouter.ai) account: one key covers the default search model ([_Perplexity Sonar_](https://docs.perplexity.ai)) plus extraction and collation with the default models, and every [alternative search configuration](#choosing-an-alternative-search-configuration) uses the same account. For the extract and collate stages, any model or provider `Pi` supports can be used. See [Model Configuration](#model-configuration) for how to swap them.
+Install `Pi` and obtain an [OpenRouter](https://openrouter.ai) account. One key covers search, extraction and collation with the default models. Other providers are supported for extraction and collation; see [Model Configuration](#model-configuration).
 
 1. **Sign In With Open Authorization (OAuth) (Recommended):** run `/login openrouter` in `Pi`. On `Pi` 0.82.0 and later this performs OpenRouter OAuth Proof Key for Code Exchange (PKCE) sign-in and stores a user-controlled key automatically. No manual key paste is required.
 2. **Or add a key manually:** create one at [openrouter.ai/keys](https://openrouter.ai/keys), then edit `~/.pi/agent/auth.json`:
@@ -167,182 +186,49 @@ Local development:
 pi install /path/to/pi-intelli-search
 ```
 
-On first load, `Pi` will show `Added models:` followed by whatever was missing: on a fresh install that is `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search`; an upgrade from an earlier version lists only the models you did not already have. If your OpenRouter key is missing, you will see a warning notification.
+On first load, `Pi` shows `Added models:` followed by any missing models: on a fresh install these are `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search`. An upgrade lists only models not already registered. A missing OpenRouter key produces a warning notification.
 
 #### Verify Installation
 
-Start `Pi` and type `/model`. You should see `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search` in the model list. If they are missing after a manual edit, reopen `/model`: since `Pi` 0.82.0 the picker reloads `models.json` on open. Restart `Pi` only if they are still absent. Registration does not select a pipeline model; `searchModel` in settings does that.
+Start `Pi` and type `/model`. Confirm that `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search` appear in the model list. If they are missing after a manual edit, reopen `/model`: since `Pi` 0.82.0 the picker reloads `models.json` on open. Restart `Pi` only if they are still absent. Registration does not select a pipeline model; `searchModel` in settings does that.
 
 #### Customise (Optional)
 
-No configuration is needed to get started. The defaults use OpenRouter for all stages. If you want to change models, add a `pi-intelli-search` block to `~/.pi/agent/settings.json` or, for a trusted project, `<project>/.pi/settings.json`:
+No configuration is needed to get started. The defaults use OpenRouter for all stages. To limit research to six pages, add this block to `~/.pi/agent/settings.json` or, for a trusted project, `<project>/.pi/settings.json`:
 
-**Defaults (What You Get Without Any Config):**
-
-No configuration is required. Explicit tuning values are preserved on upgrade, but explicitly selected models remain eligible for match-based migration when their provider and model match the upgrading version's historical default. Migration changes effective settings in memory, not the file (see `migrateDefaults()` in `src/settings.ts`). The table in [Settings Reference](#settings-reference) lists every accepted namespace key.
-
-```jsonc
+```json
 {
   "pi-intelli-search": {
-    "searchModel": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "searchWebSearch": {
-      "enabled": false,
-      "engine": "auto",
-      "maxResults": 8,
-      "reasoning": "minimal"
-    },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m3"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m3"
-    },
-
-    "defaultUrls": 10,
-    "maxUrls": 20,
-    "cacheDir": ".search",
-    "extractMaxChars": 150000,
-    "extractionConcurrency": 4,
-    "extractionMaxTokens": 3000,
-    "collationMaxTokens": 4000,
-    "fetchTimeoutMs": 20000,
-    "fetchConcurrency": 4,
-    "browserFingerprint": "chrome_145"
-  }
-}
-```
-
-**Customised Example (Different Provider, Tuned Pipeline):**
-
-```jsonc
-{
-  "pi-intelli-search": {
-    "searchModel": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "extractModel": {
-      "provider": "openai",
-      "model": "gpt-4o-mini"
-    },
-    "collateModel": {
-      "provider": "openai",
-      "model": "gpt-4o-mini"
-    },
-
     "defaultUrls": 6,
-    "maxUrls": 6,
-    "cacheDir": ".my-research-cache",
-    "extractMaxChars": 80000,
-    "extractionMaxTokens": 8000,
-    "collationMaxTokens": 16000,
-    "fetchTimeoutMs": 30000,
-    "fetchConcurrency": 2,
-    "browserFingerprint": "chrome_145"
+    "maxUrls": 6
   }
 }
 ```
 
-See [Model Configuration](#model-configuration) for all options, [Configuration Recipes](#configuration-recipes) for complete copy-paste examples, and [Settings](#settings) for the full reference.
+See [Model Configuration](#model-configuration) for model selection, [Configuration Recipes](#configuration-recipes) for complete examples, and [Settings](#settings) for defaults and the full reference.
 <!-- /packages -->
 
 <!-- packages:mcp -->
 ### MCP Server
 
-`@curio-data/mcp-intelli-search` serves the four research tools over stdio for MCP-compatible hosts. Choose direct registration or a host plugin from the [installation routes](#two-packages-one-engine).
+`@curio-data/mcp-intelli-search` serves the four research tools over stdio. The Claude Code example below covers configuration, credentials, registration and verification in one sequence. Host plugins and generic registration follow as alternatives; install only one route in a host to avoid duplicate tool sets.
 
-The standalone server shares one engine with the native extension: the same five-stage pipeline, the same cache formats and the same local-only telemetry. It requires [Node.js](https://nodejs.org/) 22 or later, an explicitly selected JavaScript Object Notation (JSON) configuration file, an explicitly selected absolute workspace directory, and an OpenRouter key supplied through an environment variable. Inference is billed separately to that OpenRouter account; no `Pi` subscription or credential store is involved. The server reads no host credential stores, no `Pi` settings and no discovered project configuration. The complete configuration, security and troubleshooting reference is the [MCP Server Reference](#mcp-server-reference).
+#### MCP Prerequisites
 
-**Publication Status:** the standalone package's first registry publication is pending. Until it lands, the `npx` and plugin launchers below are unavailable; use the pre-publication source-checkout launcher under [Claude Code](#claude-code). This notice is removed at first publication.
+- [_Node.js_](https://nodejs.org/) 22 or later, with `node` and `npx` on `PATH`.
+- [_Claude Code_](https://code.claude.com/docs/en/overview) installed for the example below.
+- An [OpenRouter API key](https://openrouter.ai/keys) with credit for inference. One key covers all three model roles; charges are separate from the host subscription.
+- An existing project folder for the research cache. The server and host must be able to read the same filesystem.
 
-<a id="route-b-claude-code-plugin"></a>
+The server requires an explicit JavaScript Object Notation (JSON) configuration and absolute workspace path. It reads no host credential stores, `Pi` settings or discovered project configuration. Native fetch assets are verified on _Linux_ x86-64; _macOS_ and _Windows_ are not verified. See [Compatibility](#mcp-server-compatibility) for the recorded scope.
+
 #### Claude Code
 
-**Plugin (Post-Publication):**
+Run the following steps from the project folder in a [_Bash_](https://www.gnu.org/software/bash/) shell. Direct registration is private to the operator and active only in that folder.
 
-[_Claude Code_](https://code.claude.com/docs/en/plugins) installs the plugin from this repository's marketplace; the launcher runs the pinned MCP package through `npx`:
+##### Create the Configuration
 
-```bash
-claude plugin marketplace add Curio-Data/pi-intelli-search
-claude plugin install intelli-search@curio-data-plugins
-```
-
-One-time setup: set your OpenRouter key in the plugin's required option, and write the plugin's `config.json`. Installing does not ask for the key; _Claude Code_ withholds the server until it is set. Set it in a session through `/plugin` → Installed → `intelli-search` → Configure, or from a shell with `claude plugin configure intelli-search@curio-data-plugins --values-stdin`. The key is kept in _Claude Code_'s credential store, not your shell profile. The plugin's `intelli-search` skill shows both steps in full after installation. The plugin places the research cache in the opened project's `.search/`. Verify with `claude mcp list`: `plugin:intelli-search:intelli_search` must show as connected. The first server start downloads the pinned package, so it needs network access and can take half a minute; later starts reuse the `npx` cache. Verified on Claude Code 2.1.289; the shell key route needs 2.1.285 or later. See the [compatibility matrix](docs/COMPATIBILITY.md).
-
-**Direct Registration:**
-
-Save the server's configuration (the `providers` and `models` example under [Generic MCP Host](#generic-mcp-host)) as `.intelli-search.json` in the target folder. Run registration from that folder. `local` is the default scope: private to the operator and active only in that folder. Add `--scope project` before `--` to write a shared `.mcp.json` into the folder; _Claude Code_ requires approval before connecting to project-scoped servers, and absolute paths in a shared file must be valid on each operator's machine.
-
-**Post-Publication Launcher:**
-
-```bash
-claude mcp add intelli_search \
-  -e "INTELLI_SEARCH_CONFIG=$PWD/.intelli-search.json" \
-  -e "INTELLI_SEARCH_WORKSPACE=$PWD" \
-  -- npx -y --package @curio-data/mcp-intelli-search \
-  mcp-intelli-search
-```
-
-**Pre-Publication Source-Checkout Launcher:** run `npm run build:all` from this repository's root, then switch to the target folder and register the built server:
-
-```bash
-claude mcp add intelli_search \
-  -e "INTELLI_SEARCH_CONFIG=$PWD/.intelli-search.json" \
-  -e "INTELLI_SEARCH_WORKSPACE=$PWD" \
-  -- node /absolute/path/to/pi-intelli-search/packages/mcp/dist/cli.js
-```
-
-Replace the checkout path with its actual absolute path. The configuration file can live at any readable absolute path, either per-folder or shared; replace the `INTELLI_SEARCH_CONFIG` value accordingly. Keep `INTELLI_SEARCH_WORKSPACE` per-folder so each folder has its own research cache. `OPENROUTER_API_KEY` must reach the server process environment, including when _Claude Code_ starts it.
-
-Verify with `claude mcp list` from the target folder and confirm `intelli_search` is connected. Also run the chosen launcher with `--check-config` to validate configuration without credentials or inference; this does not test connectivity or model access. Both verification commands are shown in [Verification](#verification).
-
-<a id="route-c-codex-plugin"></a>
-#### Codex
-
-**Plugin (Post-Publication):**
-
-[_Codex_](https://developers.openai.com/codex/plugins) installs the same server from the same repository marketplace:
-
-```bash
-codex plugin marketplace add Curio-Data/pi-intelli-search
-codex plugin add intelli-search --marketplace curio-data-plugins
-```
-
-Codex starts plugin servers with a filtered environment and no placeholder expansion, so export `OPENROUTER_API_KEY`, `INTELLI_SEARCH_CONFIG` and `INTELLI_SEARCH_WORKSPACE` before each `codex` launch; the plugin's `intelli-search` skill documents the fixed and per-project (`direnv`) patterns. Verified on Codex CLI 0.144.5; see the [compatibility matrix](docs/COMPATIBILITY.md).
-
-<a id="route-a-direct-mcp-configuration"></a>
-#### Generic MCP Host
-
-This route covers any stdio host, including [_Open Code_](https://opencode.ai/docs/mcp-servers/). Adapt the registration JSON to the host's configuration format.
-
-Any host that speaks MCP over stdio can register the server directly. The executable is `mcp-intelli-search`; after publication, an `npx` launch needs no separate install step (append `@<version>` to the package name to pin an exact release; the plugin routes pin for you):
-
-```json
-{
-  "mcpServers": {
-    "intelli_search": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "--package",
-        "@curio-data/mcp-intelli-search",
-        "mcp-intelli-search"
-      ],
-      "env": {
-        "INTELLI_SEARCH_CONFIG": "/absolute/config.json",
-        "INTELLI_SEARCH_WORKSPACE": "/absolute/workspace"
-      }
-    }
-  }
-}
-```
-
-`OPENROUTER_API_KEY` must reach the server process environment (the server snapshots it at startup); use your host's secret mechanism or shell environment rather than committing it to a configuration file. A minimal explicit configuration selects OpenRouter for all three roles:
+Save this as `.intelli-search.json` in the project folder:
 
 ```json
 {
@@ -368,11 +254,129 @@ Any host that speaks MCP over stdio can register the server directly. The execut
 }
 ```
 
-These are explicit selections, not inherited defaults: the standalone package has no implicit provider or model choice. The research cache lands in `<workspace>/.search/`; the host reads cached pages with its own file-reading capability. Configuration and tuning details are canonical in [Configuration](#configuration).
+These are explicit model selections, not inherited defaults. The configuration contains the credential variable's name, not the key itself. The cache lands in the project folder's `.search/` directory.
 
-Run the chosen launcher with `--check-config` to validate configuration and workspace without credentials or inference, then confirm the host connects and lists the four research tools. Configuration validation does not test connectivity or model access; use the [canonical verification commands](#verification).
+##### Supply the API Key
 
-On both plugin hosts the tools appear under host-qualified names (for example `mcp__intelli_search__intelli_research` on Codex). The installed `intelli-search` skill shows the exact names for its host. The native `Pi` extension and the MCP server are independent installations; enabling both in one agent gives duplicate tool sets, which is not a supported configuration.
+Enter the key at the hidden prompt, rather than writing it into shell history or a configuration file:
+
+```bash
+read -r -s -p 'OpenRouter API key: ' OPENROUTER_API_KEY
+printf '\n'
+export OPENROUTER_API_KEY
+```
+
+The export lasts for this shell session. Launch Claude Code from this shell so its server inherits the key. Repeat this step in a new shell, or use a secret manager to supply the variable. Restart Claude Code after changing the key; the server snapshots credentials at startup.
+
+##### Register the Server
+
+```bash
+claude mcp add intelli_search --scope local \
+  -e "INTELLI_SEARCH_CONFIG=$PWD/.intelli-search.json" \
+  -e "INTELLI_SEARCH_WORKSPACE=$PWD" \
+  -- npx -y --package @curio-data/mcp-intelli-search \
+  mcp-intelli-search
+```
+
+`npx` downloads the package on first use; no separate package installation is required. Append `@<version>` to the package name to pin a release. The command records absolute paths for this folder. Replace `--scope local` with `--scope project` only to share registration through `.mcp.json`; project-scoped servers require approval, and those paths must exist on each operator's machine. Never put the API key in that file.
+
+##### Verify the Connection
+
+Validate the configuration and workspace:
+
+```bash
+npx -y --package @curio-data/mcp-intelli-search \
+  mcp-intelli-search \
+  --config "$PWD/.intelli-search.json" \
+  --workspace "$PWD" \
+  --check-config
+```
+
+A successful check prints `Configuration is valid.` and exits with status `0`. This check requires no credentials and performs no inference; it does not test model access.
+
+Check the registered server, then start a session from the same shell:
+
+```bash
+claude mcp list
+claude
+```
+
+Confirm `intelli_search` shows as connected. In the session, run `/mcp` to inspect its four tools: `intelli_search`, `intelli_extract`, `intelli_collate` and `intelli_research`. To test inference, ask: “Use intelli_search to find the current TypeScript release and cite the official source.” This call incurs OpenRouter charges. A successful answer with sources verifies inference separately from the connection check.
+
+##### Customise the Server
+
+Change the model selections in `.intelli-search.json`, or add an optional `tuning` object alongside `providers` and `models`. For example, `"tuning": { "defaultUrls": 6, "maxUrls": 6 }` limits research to six pages. Restart the host after changes. See [Configuration](#configuration) and [Tuning](#tuning) for the full reference.
+
+<a id="route-b-claude-code-plugin"></a>
+#### Claude Code Plugin
+
+The [Claude Code plugin](https://code.claude.com/docs/en/plugins) bundles the server registration and an agent-facing research skill. Use it instead of direct registration:
+
+```bash
+claude plugin marketplace add Curio-Data/pi-intelli-search
+claude plugin install intelli-search@curio-data-plugins
+```
+
+Set the required `openrouter_api_key` option through `/plugin` → Installed → `intelli-search` → Configure. Claude Code stores it in its credential store and withholds the server until it is set. Unlike direct registration, this plugin ignores an exported `OPENROUTER_API_KEY`: the plugin option supplies that variable.
+
+Create the plugin data directory:
+
+```bash
+mkdir -p "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/intelli-search-curio-data-plugins"
+```
+
+Save the same [minimal configuration](#create-the-configuration) as `config.json` in that directory. It persists across plugin updates but is removed on uninstall. The launcher uses the opened project as its workspace, so each project's cache stays in its own `.search/` directory.
+
+Restart Claude Code, then run `claude mcp list` and confirm `plugin:intelli-search:intelli_search` shows as connected. The launcher downloads a pinned package through `npx` on first start. The installed `intelli-search` skill includes shell-based credential setup and troubleshooting; the [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) records tested host versions.
+
+<a id="route-c-codex-plugin"></a>
+#### Codex
+
+The [Codex plugin](https://developers.openai.com/codex/plugins) installs from the same repository marketplace:
+
+```bash
+codex plugin marketplace add Curio-Data/pi-intelli-search
+codex plugin add intelli-search --marketplace curio-data-plugins
+```
+
+Save the [minimal configuration](#create-the-configuration) as `.intelli-search.json` in the project folder and [supply the API key](#supply-the-api-key). From that folder, export the paths before launching Codex:
+
+```bash
+export INTELLI_SEARCH_CONFIG="$PWD/.intelli-search.json"
+export INTELLI_SEARCH_WORKSPACE="$PWD"
+codex
+```
+
+Codex filters the server environment; the plugin forwards `OPENROUTER_API_KEY`, `INTELLI_SEARCH_CONFIG` and `INTELLI_SEARCH_WORKSPACE` explicitly. Set all three before each launch. The installed `intelli-search` skill covers persistent configuration and unattended tool approval; see the [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) for verified host behaviour.
+
+<a id="route-a-direct-mcp-configuration"></a>
+#### Generic MCP Host
+
+Any stdio host, including [_Open Code_](https://opencode.ai/docs/mcp-servers/), can register the server directly. Save the [minimal configuration](#create-the-configuration) to a readable file and adapt this registration JSON to the host's format:
+
+```json
+{
+  "mcpServers": {
+    "intelli_search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "--package",
+        "@curio-data/mcp-intelli-search",
+        "mcp-intelli-search"
+      ],
+      "env": {
+        "INTELLI_SEARCH_CONFIG": "/absolute/config.json",
+        "INTELLI_SEARCH_WORKSPACE": "/absolute/workspace"
+      }
+    }
+  }
+}
+```
+
+Replace both paths with existing absolute paths. Supply `OPENROUTER_API_KEY` through the host's secret mechanism or inherited environment, not committed configuration. Run the [configuration check](#verify-the-connection) with those paths, then confirm the host connects and lists the four tools. The host reads cached pages with its own file-reading capability.
+
+MCP hosts qualify tool names; use the names exposed by the host. The native `Pi` extension and the MCP server are independent installations; enabling both in one agent gives duplicate tool sets, which is not a supported configuration.
 <!-- /packages -->
 
 ## Tools
@@ -386,7 +390,10 @@ Both packages expose these four operations. The names below are native `Pi` tool
 | `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
 | `intelli_research` | Search, fetch, extract, collate, cache. The primary research tool. One call.                        |
 
-## Quick Start
+<a id="quick-start"></a>
+## Usage Examples
+
+These examples describe tool calls for the agent, not shell commands. MCP hosts add their own tool-name prefixes.
 
 ### Quick Search
 
@@ -416,7 +423,7 @@ intelli_research(
 )
 ```
 
-`domains` guides source selection, it is not a security boundary: the query gains a `site:` expression, and with the web search tool enabled the same domains are also combined with `searchWebSearch.allowedDomains` and sent as an engine filter. The lists are combined, not intersected, and returned URLs are not checked against a local hostname allowlist before fetching. Engine support for allow and exclude lists differs (see [searchWebSearch Keys](#searchwebsearch-keys)).
+`domains` guides source selection, it is not a security boundary: the query gains a `site:` expression, and with the web search tool enabled the same domains are also combined with `searchWebSearch.allowedDomains` and sent as an engine filter. The lists are combined, not intersected, and returned URLs are not checked against a local hostname allowlist before fetching. Engine support for allow and exclude lists differs; see [native searchWebSearch keys](#searchwebsearch-keys) or [MCP tuning](#tuning).
 
 ### Comparing Options
 
@@ -815,11 +822,11 @@ Run `/login openrouter` in `Pi` to authorise via OAuth (`Pi` 0.82.0 and later), 
   <img src="docs/images/07B.png" alt="Vintage engraving-style infographic titled &quot;INTELLI_RESEARCH: The Five-Stage Pipeline,&quot; showing five sequentially linked numbered stages triggered by intelli_research(query): (1) Search: web discovery via Perplexity Sonar, OpenRouter/pi-native auth; (2) Fetch: dual fetch and quality comparison using wreq-js + Defuddle against raw markdown; (3) Extract: per-page parallel LLM extraction, MiniMax M2.7, the native model configuration at the illustration's creation; (4) Collate: deduplication and persistent cache via MiniMax M2.7 (the native configuration at creation), flags conflicts; (5) Cache Suggest: additive stage, LLM judge surfaces related prior searches. Stages are connected by bold arrows; each is illustrated with a period-appropriate vignette (armillary sphere, scrolls, alchemical still, filing cabinet, owl with documents)." width="800" />
 </p>
 
-The illustration shows the native pipeline with the model configuration at its creation, including MiniMax M2.7 and `Pi` authentication; it does not show the current defaults or standalone authentication. All model assignments are configurable (see [Model Configuration](#model-configuration)); alternative search configurations use the same five-stage pipeline.
+The illustration shows the native pipeline with the model configuration at its creation, including MiniMax M2.7 and `Pi` authentication; it does not show the current defaults or standalone authentication. All model assignments are configurable through [native model settings](#model-configuration) or [MCP configuration](#configuration); alternative search configurations use the same five-stage pipeline.
 
 The search stage merges text links with harvested citation annotations before selecting pages (see [Source Harvesting from Citations](#source-harvesting-from-citations)). Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈30-50K for 10 pages).
 
-At the end of each run the pipeline writes a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `disableTelemetry: true` to suppress it.
+At the end of each run the pipeline writes a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
@@ -837,14 +844,18 @@ Per research session with the default 10 pages: **≈$0.09**
 | Collate (M3 via OpenRouter)         | 1                | ≈$0.01   |
 | Cache suggest (M3 via OpenRouter)   | 1                | ≈$0.0002 |
 
-Since v0.13.0 the search stage contributes every source the model cited, not only the ones it wrote into the prose, so sessions reach the `defaultUrls` page count more often than before. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 extracts cost the same per token as M2.7 but write ≈2× the output tokens); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost (see [Choosing an Alternative Search Configuration](#choosing-an-alternative-search-configuration)); the extract and collate rows scale with your chosen models.
+Since v0.13.0 the search stage contributes every source the model cited, not only the ones it wrote into the prose, so sessions reach the `defaultUrls` page count more often than before. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 extracts cost the same per token as M2.7 but write ≈2× the output tokens); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](#choosing-an-alternative-search-configuration) or [MCP configuration](#configuration). The extract and collate rows scale with the selected models.
 
 <!-- packages:pi -->
 ## Settings
 
 This section describes native `Pi` settings. The MCP server reads only its explicitly selected file; its accepted keys, ranges and policy differences are documented in [Configuration](#configuration) and [Tuning](#tuning).
 
-Override defaults in `~/.pi/agent/settings.json` or, for a trusted project, `<project>/.pi/settings.json` under the `pi-intelli-search` namespace. `Pi` ignores project-local settings until you approve the project; the global file always applies:
+No configuration is required. To override defaults, use `~/.pi/agent/settings.json` or, for a trusted project, `<project>/.pi/settings.json` under the `pi-intelli-search` namespace. `Pi` ignores project-local settings until the project is approved; the global file always applies.
+
+Explicit tuning values are preserved on upgrade. Explicit model selections remain eligible for match-based migration when their provider and model match the upgrading version's historical default. Migration changes effective settings in memory, not the file (see `migrateDefaults()` in `src/settings.ts`).
+
+The example below shows the default models and common tuning settings. The [Settings Reference](#settings-reference) lists every accepted namespace key:
 
 ```jsonc
 {
@@ -853,6 +864,12 @@ Override defaults in `~/.pi/agent/settings.json` or, for a trusted project, `<pr
     "searchModel": {
       "provider": "openrouter",
       "model": "perplexity/sonar"
+    },
+    "searchWebSearch": {
+      "enabled": false,
+      "engine": "auto",
+      "maxResults": 8,
+      "reasoning": "minimal"
     },
     "extractModel": {
       "provider": "openrouter",
@@ -868,6 +885,7 @@ Override defaults in `~/.pi/agent/settings.json` or, for a trusted project, `<pr
     "maxUrls": 20,
     "cacheDir": ".search",
     "extractMaxChars": 150000,
+    "extractionConcurrency": 4,
     "extractionMaxTokens": 3000,
     "collationMaxTokens": 4000,
 
@@ -944,33 +962,15 @@ The package neither reads host credential stores nor loads project configuration
 
 ### Verification
 
-From the target folder, check the registered server:
+The [installation example](#verify-the-connection) shows the configuration check, host connection check and first inference call in sequence. These establish different things:
 
-```bash
-claude mcp list
-```
+| Check | What It Establishes |
+|---|---|
+| `mcp-intelli-search --check-config` with explicit configuration and workspace | Configuration and workspace are valid. Requires no credentials and performs no inference. |
+| Host connection and tool listing | The server starts and completes the MCP connection. Does not establish provider access. |
+| A successful `intelli_search` call with sources | Search inference works with the selected model and credential. Incurs provider charges; does not exercise the full research pipeline. |
 
-Confirm `intelli_search` shows as connected. If a project-scoped server shows pending approval, open _Claude Code_ in that folder and approve it before checking again.
-
-Validate the configuration separately without credentials or inference. After publication, use:
-
-```bash
-INTELLI_SEARCH_CONFIG="$PWD/.intelli-search.json" \
-INTELLI_SEARCH_WORKSPACE="$PWD" \
-npx -y --package @curio-data/mcp-intelli-search \
-  mcp-intelli-search --check-config
-```
-
-For the source-checkout launcher, use:
-
-```bash
-node /absolute/path/to/pi-intelli-search/packages/mcp/dist/cli.js \
-  --config "$PWD/.intelli-search.json" \
-  --workspace "$PWD" \
-  --check-config
-```
-
-Use the same configuration path as the registered server if it is shared or stored elsewhere. A successful check prints `Configuration is valid.` and exits with status `0`. It validates configuration and workspace, not host connectivity, credentials or model access. `claude mcp list` checks the host connection; successful inference requires the separate provider key.
+Use the same configuration and workspace as the registered server. If a project-scoped Claude Code server shows pending approval, open the host in that folder and approve it before checking again.
 
 ### Serving the Protocol
 
@@ -990,7 +990,7 @@ Startup diagnostics go to standard error. The SDK version range is declared in `
 
 Select the configuration with `--config FILE` or `INTELLI_SEARCH_CONFIG`. Select the workspace with `--workspace ABSOLUTE_DIRECTORY` or `INTELLI_SEARCH_WORKSPACE`. Command-line values take precedence. Relative workspace paths are rejected; existing workspace symlinks are canonicalised.
 
-The minimal example under [Generic MCP Host](#generic-mcp-host) explicitly selects OpenRouter for every role; add an optional `tuning` object (for example `"cacheDir": ".search"`) beside `providers` and `models`. These are example selections, not standalone defaults.
+The [minimal configuration](#create-the-configuration) explicitly selects OpenRouter for every role; add an optional `tuning` object (for example `"cacheDir": ".search"`) beside `providers` and `models`. These are example selections, not standalone defaults.
 
 Only `providers`, `models` and optional `tuning` are accepted at the top level. All three model roles are required. The provider object accepts only `apiKeyEnv`, an environment-variable name rather than a key value. The initial provider scope is OpenRouter at its fixed `https://openrouter.ai/api/v1` endpoint; custom endpoints, proxy settings, provider fallback and dynamic router model identifiers are not accepted.
 
@@ -1125,7 +1125,14 @@ Both packages write this format. The native extension resolves the cache against
 
 Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short Secure Hash Algorithm 1 (SHA-1) hash of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. Concurrent runs stage their output before a short cache commit, so source files and the shared index remain intact.
 
-**`meta.json` (local-only telemetry).** Each `intelli_research` run writes a `meta.json` sidecar recording per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), whether search-retry fired, cache-suggest hits, and per-stage latency. `stages.search.annotationsHarvested` counts `url_citation` entries recovered from the response body; it is absent on runs against models that emit none, and it is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. It is strictly local: no network call is added, no data leaves the host, and no account or identity is recorded. Set `disableTelemetry: true` in [Settings](#settings) to suppress it. The bundled [`scripts/analyze-sessions.sh`](scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+**`meta.json` (local-only telemetry).** Each `intelli_research` run writes a `meta.json` sidecar recording per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), whether search-retry fired, cache-suggest hits, and per-stage latency. `stages.search.annotationsHarvested` counts `url_citation` entries recovered from the response body; it is absent on runs against models that emit none, and it is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. It is strictly local: no network call is added, no data leaves the host, and no account or identity is recorded. The bundled [`scripts/analyze-sessions.sh`](scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+
+<!-- packages:pi -->
+To suppress the sidecar in the native extension, set `disableTelemetry: true` inside the `pi-intelli-search` namespace in [Settings](#settings).
+<!-- /packages -->
+<!-- packages:mcp -->
+To suppress the sidecar in the MCP server, set `"disableTelemetry": true` inside the configuration's [`tuning` object](#tuning).
+<!-- /packages -->
 
 ## Compatibility
 
@@ -1141,10 +1148,10 @@ Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<has
 <!-- packages:mcp -->
 ### MCP Server Compatibility
 
-- Direct stdio registration serves MCP-compatible hosts; repository plugin routes serve _Claude Code_ and _Codex_. `Pi` is the recorded live MCP research client.
+- Direct stdio registration serves MCP-compatible hosts; repository plugin routes serve Claude Code and Codex. Recorded live research clients include `Pi` and both plugin hosts.
 - The runtime must satisfy the Node.js `engines` range in the [standalone manifest](packages/mcp/package.json). The server uses the [`@modelcontextprotocol/server` SDK](https://github.com/modelcontextprotocol/typescript-sdk), with its dependency range declared in that manifest and the verified release pinned in [package-lock.json](package-lock.json).
 - Standalone fetch assets are verified on _Linux_ x86-64 only; _macOS_ and _Windows_ are not verified.
-- Plugin installation and connection checks do not establish full research through either plugin. Registry-pin installation remains a separate post-publication gate.
+- Full research through local-tarball plugins and registry-pin installation checks are separate evidence classes. The compatibility matrix records which checks have run for each artefact; publication alone does not establish host compatibility.
 
 For the standalone MCP server and host plugins, including exact tested versions of _Claude Code_, _Codex_, Node.js and the MCP SDK, see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 <!-- /packages -->
@@ -1168,7 +1175,7 @@ pi -e ./dist/index.js
 pi install /path/to/pi-intelli-search
 ```
 
-**Host Plugins:** thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/` at the repository root, with repository marketplace catalogs at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. The bundles are generated from the shared guidance source in `guidance/` and the version pinned in `packages/mcp/package.json`; run `npm run generate:plugins` after a version change and `npm run check:plugins` to detect drift. Launchers pin the exact package version through `npx`; until the package is published, `scripts/generate-plugin-bundles.mjs --mode tarball` generates equivalent local-tarball launchers for installation tests. Host setup, including each host's environment forwarding rules, is in the generated skills.
+**Host Plugins:** thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/` at the repository root, with repository marketplace catalogs at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. The bundles are generated from the shared guidance source in `guidance/` and the version pinned in `packages/mcp/package.json`; run `npm run generate:plugins` after a version change and `npm run check:plugins` to detect drift. Launchers pin the exact package version through `npx`; `scripts/generate-plugin-bundles.mjs --mode tarball` generates equivalent local-tarball launchers for testing unreleased changes. Host setup, including each host's environment forwarding rules, is in the generated skills.
 
 **Package READMEs:** this file is the only hand-edited README. `npm run generate:readmes` derives `packages/mcp/README.md` plus the root previews [`pi.README.md`](pi.README.md) and [`mcp.README.md`](mcp.README.md), and `npm run check:readmes` fails on drift or on any derived link that does not resolve. The native package ships the same derivation, written over this file by its `prepublishOnly` hook. Untagged content goes to both packages. Wrap package-specific sections in `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, and repository-only sections in `<!-- packages:none -->`. Content that only a package shows, such as its title and badges, goes in a hidden block opened by `<!-- packages:mcp hidden` and closed by a `-->` line. Each derived README regenerates its contents list, redirects links to sections it omits to this file on _GitHub_, and makes relative paths absolute. See [`scripts/generate-package-readmes.mjs`](scripts/generate-package-readmes.mjs).
 <!-- /packages -->
@@ -1180,7 +1187,12 @@ pi install /path/to/pi-intelli-search
 - [Architecture](docs/ARCHITECTURE.md): Detailed design decisions and pipeline internals.
 - [Compatibility](docs/COMPATIBILITY.md): Tested host versions and artifacts for the native extension, MCP server and plugins.
 - [Components](docs/COMPONENTS.md): Third-party dependencies and licence attribution.
-- [Skill guide](skills/intelli-search/SKILL.md): Agent-facing usage instructions.
+<!-- packages:pi -->
+- [Native skill guide](skills/intelli-search/SKILL.md): Agent-facing usage instructions for `Pi`.
+<!-- /packages -->
+<!-- packages:mcp -->
+- [Claude Code skill](plugins/claude-code/skills/intelli-search/SKILL.md) and [Codex skill](plugins/codex/skills/intelli-search/SKILL.md): Host-specific setup and agent-facing usage instructions.
+<!-- /packages -->
 - [Contributor guide](AGENTS.md): Coding conventions and project structure.
 
 ## Downloads
@@ -1201,7 +1213,7 @@ Weekly npm downloads across all published versions, refreshed every Monday by a 
 <!-- packages:mcp -->
 ### MCP Server Downloads
 
-`@curio-data/mcp-intelli-search` is unpublished, so no public downloads chart exists. Missing metrics are not zero downloads.
+View download statistics on the [`@curio-data/mcp-intelli-search` package page](https://www.npmjs.com/package/@curio-data/mcp-intelli-search).
 <!-- /packages -->
 
 <!-- packages:pi -->

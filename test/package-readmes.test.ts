@@ -188,11 +188,39 @@ describe("repository package READMEs", () => {
     assert.deepStrictEqual(checkAgainstRepo(), []);
   });
 
-  it("gives each package only its own install and reference sections", () => {
+  it("gives each package its own self-contained published install and reference sections", () => {
     assert.match(generated.pi, /^# pi-intelli-search$/m);
     assert.doesNotMatch(generated.pi, /^#{2,4} (MCP Server|MCP Server Reference|Development)$/m);
     assert.match(generated.mcp, /^# mcp-intelli-search$/m);
     assert.doesNotMatch(generated.mcp, /^#{2,4} (`Pi` Native Extension|Settings Reference|Configuration Recipes|Development)$/m);
+
+    for (const text of Object.values(generated)) {
+      assert.match(text, /^## Usage Examples$/m);
+      assert.doesNotMatch(text, /publication is pending|post-publication|pre-publication|is unpublished/i);
+      // Preserve existing inbound usage links after renaming the heading.
+      assert.ok((anchorsOf(text) as Set<string>).has("quick-start"));
+    }
+    const nativeInstall = generated.pi.split("### `Pi` Native Extension\n")[1].split("\n## Tools")[0];
+    assert.match(nativeInstall, /pi install npm:@curio-data\/pi-intelli-search/);
+    assert.match(nativeInstall, /#### Prerequisites[\s\S]*#### Install the Extension[\s\S]*#### Verify Installation/);
+    assert.doesNotMatch(nativeInstall, /"extractMaxChars"/);
+
+    const claudeInstall = generated.mcp.split("#### Claude Code\n")[1].split("\n#### Claude Code Plugin")[0];
+    const configBlock = claudeInstall.match(/```json\n([\s\S]*?)\n```/);
+    assert.ok(configBlock, "the introductory route includes the complete server configuration");
+    const config = JSON.parse(configBlock[1]);
+    assert.deepStrictEqual(Object.keys(config).sort(), ["models", "providers"]);
+    assert.deepStrictEqual(config.providers, { openrouter: { apiKeyEnv: "OPENROUTER_API_KEY" } });
+    assert.deepStrictEqual(Object.keys(config.models).sort(), ["collate", "extract", "search"]);
+    assert.match(claudeInstall, /read -r -s[^\n]*OPENROUTER_API_KEY[\s\S]*export OPENROUTER_API_KEY/);
+    assert.match(claudeInstall, /claude mcp add intelli_search --scope local/);
+    assert.match(claudeInstall, /INTELLI_SEARCH_CONFIG=\$PWD\/\.intelli-search\.json/);
+    assert.match(claudeInstall, /INTELLI_SEARCH_WORKSPACE=\$PWD/);
+    assert.match(claudeInstall, /npx -y --package @curio-data\/mcp-intelli-search/);
+    assert.match(claudeInstall, /--check-config[\s\S]*Configuration is valid\.[\s\S]*claude mcp list/);
+    assert.doesNotMatch(claudeInstall, /packages\/mcp\/dist|#generic-mcp-host|\]\(#verification\)/);
+    assert.match(generated.mcp, /configuration's \[`tuning` object\]\(#tuning\)/);
+    assert.doesNotMatch(generated.mcp, /README\.md#settings\)/);
   });
 
   it("keeps the MCP anchors the generated plugin skills link to", () => {
