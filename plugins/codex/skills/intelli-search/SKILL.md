@@ -194,7 +194,7 @@ When constructing a collation item from an extraction result, use the original `
 
 **The `mcp__intelli_search__intelli_research` result already contains a concise deduplicated summary. Use it directly. Do not read cache files unless the summary is insufficient for the task.**
 
-Repeating the same query on the same UTC date replaces its cached artefacts; a degraded repeat clears the earlier report. Copy any report that must be retained before repeating the query. The cache is not a versioned archive.
+Repeating the same query on the same UTC date archives its cached artefacts to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing fresh results, and a degraded repeat preserves the earlier report, recording only the failed attempt in telemetry. The numbered siblings are a same-day safety net, not a versioned archive; copy a report elsewhere if it must be retained long-term.
 
 The result also includes a **📚 Related cached searches** section when semantically similar previous searches exist in the workspace cache. These are discovered by a model judge that compares the current query against the cache index. The related searches are:
 

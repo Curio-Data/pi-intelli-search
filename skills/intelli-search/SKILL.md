@@ -126,7 +126,7 @@ Only reach into the cache when:
 
 ## Follow Up from Cache
 
-The cache lives at `.search/<date>-<slug>-<hash>/`. The tool output includes the path.
+The cache lives at `.search/<date>-<slug>-<hash>/`. The tool output includes the path. A successful same-day repeat archives the previous run to a numbered sibling (`.search/<date>-<slug>-<hash>.1/`, then `.2` and so on); a degraded repeat leaves the previous report untouched.
 
 | Need | Command |
 |------|---------|

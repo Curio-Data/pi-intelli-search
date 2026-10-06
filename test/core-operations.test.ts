@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { search, extract, collate, research, MissingModelsError } from "../src/core/index.js";
 import { cacheLockDir, makeCachePath, readIndex } from "../src/core/cache.js";
@@ -116,7 +116,7 @@ for (const outcome of ["no-links", "fetch-failed", "extraction-failed"] as const
   });
 }
 
-it("clears a previous successful run's artefacts on a degraded refresh of the same query", async (t) => {
+it("preserves a previous successful run's artefacts on a degraded refresh of the same query", async (t) => {
   const root = await workspace(t);
   const { context, dependencies } = coreContext(root);
   // Freeze the date so both runs resolve to the same cache path.
@@ -126,7 +126,7 @@ it("clears a previous successful run's artefacts on a degraded refresh of the sa
     const completed = await research({ query: "refresh" }, context, dependencies);
     assert.equal(completed.outcome, "completed");
     const cachePath = join(root, completed.details.cachePath as string);
-    await readFile(join(cachePath, "report.md"), "utf8");
+    const report = await readFile(join(cachePath, "report.md"), "utf8");
     // Supplementary documentation download from the successful run.
     await writeFile(join(cachePath, "sources", "llms-full-one.example.md"), "docs");
     const slug = cachePath.split("/").pop() as string;
@@ -143,17 +143,21 @@ it("clears a previous successful run's artefacts on a degraded refresh of the sa
     const degraded = await research({ query: "refresh" }, context, dependencies);
     assert.equal(degraded.outcome, "no-links");
 
-    // The older report/extraction set must not survive next to the newer
-    // degraded telemetry; the documentation download is preserved.
-    assert.deepEqual((await readdir(cachePath)).sort(), ["meta.json", "sources"]);
-    assert.deepEqual(await readdir(join(cachePath, "sources")), ["llms-full-one.example.md"]);
+    // A degraded repeat never displaces a good report: the previous run's
+    // report, extractions, numbered sources and documentation download all
+    // survive untouched, and no archive folder is created.
+    assert.equal(await readFile(join(cachePath, "report.md"), "utf8"), report);
+    assert.ok((await readdir(join(cachePath, "extractions"))).length > 0);
+    assert.ok((await readdir(join(cachePath, "sources"))).length > 1);
+    assert.ok((await readdir(join(cachePath, "sources"))).includes("llms-full-one.example.md"));
+    await assert.rejects(stat(`${cachePath}.1`), /ENOENT/);
+    // The failed attempt is recorded in meta.json only.
     assert.equal(
       JSON.parse(await readFile(join(cachePath, "meta.json"), "utf8")).outcome,
       "no-links",
     );
-    // The index entry is dropped too, so cache suggest cannot surface a
-    // search whose report was just cleared.
-    assert.deepEqual((await readIndex(context.paths.cacheRoot)).searches, []);
+    // The index entry is retained: the report it points at still exists.
+    assert.ok((await readIndex(context.paths.cacheRoot)).searches.some((e) => e.slug === slug));
   } finally {
     Date.prototype.toISOString = originalIso;
   }
@@ -176,7 +180,7 @@ it("writes no cache directory for a fresh degraded query when telemetry is disab
   await assert.rejects(readFile(context.paths.cacheRoot), /ENOENT/);
 });
 
-it("clears artefacts and drops the index entry on a degraded refresh even with telemetry disabled", async (t) => {
+it("preserves a previous run on a degraded refresh even with telemetry disabled", async (t) => {
   const root = await workspace(t);
   const { context, dependencies } = coreContext(root, { disableTelemetry: true });
   const originalIso = Date.prototype.toISOString;
@@ -197,13 +201,109 @@ it("clears artefacts and drops the index entry on a degraded refresh even with t
     const degraded = await research({ query: "silent refresh" }, context, dependencies);
     assert.equal(degraded.outcome, "no-links");
 
-    await assert.rejects(readFile(join(cachePath, "report.md")), /ENOENT/);
+    await readFile(join(cachePath, "report.md"), "utf8");
     await assert.rejects(
       readFile(join(cachePath, "meta.json")),
       /ENOENT/,
       "telemetry stays disabled: no sidecar may appear",
     );
-    assert.deepEqual((await readIndex(context.paths.cacheRoot)).searches, []);
+    assert.ok((await readIndex(context.paths.cacheRoot)).searches.some((e) => e.slug === slug));
+  } finally {
+    Date.prototype.toISOString = originalIso;
+  }
+});
+
+it("archives a previous successful run to numbered siblings on same-day repeats", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const originalIso = Date.prototype.toISOString;
+  Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
+  try {
+    const first = await research({ query: "archive" }, context, dependencies);
+    assert.equal(first.outcome, "completed");
+    const cachePath = join(root, first.details.cachePath as string);
+    const firstReport = await readFile(join(cachePath, "report.md"), "utf8");
+    assert.match(firstReport, /Summary\./);
+    // Supplementary documentation download from the first run.
+    await writeFile(join(cachePath, "sources", "llms-full-one.example.md"), "docs");
+    const slug = cachePath.split("/").pop() as string;
+
+    // Distinguish the second run's collation output.
+    const original = context.models.complete;
+    context.models.complete = async (request) => {
+      if (request.model.model === "collate") return { text: "Summary v2.", citations: [] };
+      return original(request);
+    };
+    const second = await research({ query: "archive" }, context, dependencies);
+    assert.equal(second.outcome, "completed");
+
+    // The canonical folder holds the new run; the previous run sits intact
+    // in the .1 sibling, report beside exactly its own files.
+    const secondReport = await readFile(join(cachePath, "report.md"), "utf8");
+    assert.match(secondReport, /Summary v2\./);
+    const archived = `${cachePath}.1`;
+    assert.equal(await readFile(join(archived, "report.md"), "utf8"), firstReport);
+    assert.equal(await readFile(join(archived, "query.txt"), "utf8"), "archive");
+    assert.ok((await readdir(join(archived, "extractions"))).length > 0);
+    assert.ok(
+      (await readdir(join(archived, "sources"))).every((name) => !name.startsWith("llms-full-")),
+      "documentation downloads stay with the live folder, not the archive",
+    );
+    assert.equal(
+      JSON.parse(await readFile(join(archived, "meta.json"), "utf8")).outcome,
+      "completed",
+    );
+    assert.ok((await readdir(join(cachePath, "sources"))).includes("llms-full-one.example.md"));
+    assert.equal(
+      JSON.parse(await readFile(join(cachePath, "meta.json"), "utf8")).outcome,
+      "completed",
+    );
+    // One index entry, refreshed in place; the archive is not indexed.
+    const entries = (await readIndex(context.paths.cacheRoot)).searches.filter(
+      (e) => e.slug === slug,
+    );
+    assert.equal(entries.length, 1);
+
+    // A third same-day run archives the second to .2, leaving .1 untouched.
+    const third = await research({ query: "archive" }, context, dependencies);
+    assert.equal(third.outcome, "completed");
+    assert.equal(await readFile(join(`${cachePath}.2`, "report.md"), "utf8"), secondReport);
+    assert.equal(await readFile(join(archived, "report.md"), "utf8"), firstReport);
+    assert.match(await readFile(join(cachePath, "report.md"), "utf8"), /Summary v2\./);
+  } finally {
+    Date.prototype.toISOString = originalIso;
+  }
+});
+
+it("archives a degraded-only folder when a later run succeeds", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const originalIso = Date.prototype.toISOString;
+  Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
+  try {
+    const original = context.models.complete;
+    context.models.complete = async (request) => {
+      if (request.model.model === "search") return { text: "No sources", citations: [] };
+      return original(request);
+    };
+    const degraded = await research({ query: "degraded then success" }, context, dependencies);
+    assert.equal(degraded.outcome, "no-links");
+    const cachePath = makeCachePath("degraded then success", root, context.paths.cacheRoot);
+    assert.deepEqual(await readdir(cachePath), ["meta.json"]);
+
+    context.models.complete = original;
+    const completed = await research(
+      { query: "degraded then success" },
+      context,
+      dependencies,
+    );
+    assert.equal(completed.outcome, "completed");
+    await readFile(join(cachePath, "report.md"), "utf8");
+    // The degraded attempt's sidecar is retained in the .1 archive.
+    assert.equal(
+      JSON.parse(await readFile(join(`${cachePath}.1`, "meta.json"), "utf8")).outcome,
+      "no-links",
+    );
   } finally {
     Date.prototype.toISOString = originalIso;
   }
@@ -267,7 +367,15 @@ for (const failure of ["cancel", "cache-write"] as const) {
     const { context, dependencies } = coreContext(root, { disableLlmsFullDiscovery: false });
     const controller = new AbortController();
     const cachePath = makeCachePath(failure, root, context.paths.cacheRoot);
-    if (failure === "cache-write") await mkdir(join(cachePath, "report.md"), { recursive: true });
+    if (failure === "cache-write") {
+      // Force the commit to fail at the index update: a same-day refresh
+      // archives any pre-existing artefacts at the cache path itself, so an
+      // obstacle there would be moved aside instead of failing the write.
+      // Renaming onto a .index.json directory is a cache-write failure that
+      // archiving cannot clear.
+      await mkdir(context.paths.cacheRoot, { recursive: true });
+      await mkdir(join(context.paths.cacheRoot, ".index.json"));
+    }
     let start!: () => void;
     const started = new Promise<void>((r) => {
       start = r;

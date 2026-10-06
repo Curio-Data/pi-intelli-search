@@ -13,8 +13,9 @@ export const intelliCollateTool = {
   label: "Intelli Collate",
   description:
     "Deduplicate and synthesise multiple per-page extractions into a single " +
-    "concise summary. Caches results to .search/ for follow-up; repeating a " +
-    "query on the same UTC date replaces its cached files. Use this " +
+    "concise summary. Caches results to .search/ for follow-up; a successful " +
+    "repeat on the same UTC date archives the previous cached files to a " +
+    "numbered .1 sibling folder first. Use this " +
     "after extracting multiple pages with intelli_extract; for end-to-end " +
     "research, use intelli_research.",
   promptSnippet:

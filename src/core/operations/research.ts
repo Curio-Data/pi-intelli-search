@@ -32,6 +32,7 @@ import {
   removeIndexEntry,
   allocateSourceIdentity,
   clearCacheArtefacts,
+  rotateCacheArtefacts,
   type SourceIdentity,
 } from "../cache.js";
 import {
@@ -608,8 +609,9 @@ async function startLlmsFullDownloads(
  * Write cache artifacts under the per-cache-path lock (only local file I/O
  * happens under the lock; it serialises two concurrent same-query runs),
  * then commit any remaining llms-full downloads under a second short lock.
- * `writeCacheFiles` replaces the previous run's artefact set for this cache
- * path, preserving supplementary llms-full downloads.
+ * A previous run's artefact set is archived to a numbered sibling folder
+ * before `writeCacheFiles` commits this run's set, preserving supplementary
+ * llms-full downloads.
  */
 async function writeCacheArtifacts(
   p: PipelineCtx,
@@ -623,6 +625,16 @@ async function writeCacheArtifacts(
   await withLock(
     cacheLockDir(p.physicalCachePath),
     async () => {
+      // Archive a previous run's artefact set to a numbered sibling folder
+      // (<cachePath>.1, .2, ...) before this run commits. Rotation happens
+      // only here, on the success path with the new results already in
+      // hand; degraded exits preserve the previous run in place instead.
+      // Archiving is best-effort: a failure falls back to in-place
+      // replacement rather than discarding the completed run.
+      await rotateCacheArtefacts(p.physicalCachePath).catch((error) => {
+        p.logger.error(`Cache archive failed: ${errMsg(error)}`);
+      });
+
       // Write cache files (staging-based per-file atomic replacement under
       // the lock; obsolete artefacts from a previous run are pruned)
       await writeCacheFiles(
@@ -736,13 +748,17 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
 }
 
 /**
- * Shared degraded-exit path: stamp the outcome, remove artefacts left by a
- * previous successful run of the same query (a degraded refresh must not
- * leave an older report and extraction set alongside newer degraded
- * telemetry), drop the matching index entry so cache suggest cannot surface a
- * search whose report was just cleared, write the sidecar, and return the
- * fallback result. Every early return in executePipeline() goes through here
- * so the three degraded outcomes stay structurally uniform.
+ * Shared degraded-exit path: stamp the outcome, write the sidecar, and return
+ * the fallback result. Every early return in executePipeline() goes through
+ * here so the three degraded outcomes stay structurally uniform.
+ *
+ * A previous successful run of the same query is preserved untouched (report,
+ * extractions, numbered sources and index entry): a degraded refresh never
+ * displaces a good report, and the failed attempt is recorded in `meta.json`
+ * only, so degradation remains visible to scripts/analyze-sessions.sh. When
+ * no previous report exists, partial artefacts from an interrupted write are
+ * cleared and any dangling index entry removed, so a fresh degraded query
+ * leaves only its telemetry sidecar.
  *
  * With telemetry disabled and no previous cache directory, nothing is written
  * at all: acquiring the cache lock would create the directory, and a fresh
@@ -763,21 +779,26 @@ async function degradedReturn(
     await withLock(
       cacheLockDir(p.physicalCachePath),
       async () => {
-        await clearCacheArtefacts(p.physicalCachePath).catch((error) => {
-          p.logger.error(`Cache artefact cleanup failed: ${errMsg(error)}`);
-        });
+        const hasReport = await stat(join(p.physicalCachePath, "report.md"))
+          .then(() => true)
+          .catch(() => false);
+        if (!hasReport) {
+          await clearCacheArtefacts(p.physicalCachePath).catch((error) => {
+            p.logger.error(`Cache artefact cleanup failed: ${errMsg(error)}`);
+          });
+          // Index removal follows the lock-ordering invariant: the index
+          // lock is only ever taken while already holding the cache lock,
+          // mirroring the successful path's updateIndex placement.
+          await withLock(
+            indexLockDir(p.paths.cacheRoot),
+            async () => {
+              const slug = p.physicalCachePath.split("/").pop() ?? p.physicalCachePath;
+              await removeIndexEntry(p.paths.cacheRoot, slug);
+            },
+            p.signal,
+          );
+        }
         await writeTelemetrySidecar(p.logger, p.tel, p.physicalCachePath, outcome);
-        // Index removal follows the lock-ordering invariant: the index lock
-        // is only ever taken while already holding the cache lock, mirroring
-        // the successful path's updateIndex placement.
-        await withLock(
-          indexLockDir(p.paths.cacheRoot),
-          async () => {
-            const slug = p.physicalCachePath.split("/").pop() ?? p.physicalCachePath;
-            await removeIndexEntry(p.paths.cacheRoot, slug);
-          },
-          p.signal,
-        );
       },
       p.signal,
     );

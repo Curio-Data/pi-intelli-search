@@ -19,7 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Optional documentation staging failures no longer discard completed research.
 - Concurrent page fetches keep their error handling separate and restore dependency diagnostics after suppression ends.
 - Related-cache suggestions resolve against the same recent-history window shown to the judge and include exact report paths.
-- Cache references stay aligned when extraction fails or manual collation supplies reordered or optional full pages. Refreshes remove superseded source and extraction files instead of mixing runs; a degraded same-day repeat clears the previous report. Preserve a copy before repeating a query if its report must be retained.
+- Cache references stay aligned when extraction fails or manual collation supplies reordered or optional full pages. A successful same-day repeat now archives the previous run's artefacts to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set, and a degraded repeat preserves the earlier successful report, extractions, sources and index entry, recording only the failed attempt in `meta.json`; previously a degraded repeat cleared the earlier report. The numbered siblings are a same-day safety net, not a versioned archive.
 - Empty collation is rejected before writing a completed report, with an actionable output-budget diagnostic.
 - Native model registration preserves malformed or unreadable `models.json` files, retains operator overrides and symlinks, and serialises atomic updates.
 

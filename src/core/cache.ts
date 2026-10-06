@@ -282,6 +282,11 @@ export function allocateSourceIdentity(
  * Write cache files using a staging directory, replacing the previous
  * run's artefact set for the same cache path.
  *
+ * Success-path callers archive any previous run to a numbered sibling
+ * folder (`rotateCacheArtefacts`) before invoking this, so the replacement
+ * below normally starts from an empty directory; the prune remains as the
+ * consistency safety net.
+ *
  * All files (query.txt, extractions/, sources/) are written inside a unique
  * staging directory first, then committed with per-file `rename` under the
  * caller's per-cache-path lock (see `withLock(cacheLockDir(...))` in the
@@ -384,6 +389,80 @@ async function commitStagedArtefacts(
 }
 
 /**
+ * Archive a previous run's artefact set to a numbered sibling folder
+ * (`<cachePath>.1`, `.2`, ...: the lowest free suffix), clearing the way for a
+ * successful refresh to write a fresh set at the canonical path. Every
+ * archived folder keeps the one-report-describes-its-own-files contract: its
+ * `report.md`, `query.txt`, `extractions/`, numbered `sources/` files and
+ * `meta.json` move together, so each snapshot stays self-consistent.
+ *
+ * Supplementary documentation downloads (`llms-full-*.md` in sources/) stay
+ * in the canonical folder: they are preserved across refreshes and no report
+ * cites them, so the archive remains coherent without them. Operational
+ * entries (the held `.lock` directory, transient `.staging.*` directories)
+ * are never moved.
+ *
+ * Called only from success paths, after the new results have been received;
+ * degraded exits preserve the previous run in place instead. Returns the
+ * archive path, or null when there was nothing to archive (missing directory
+ * or only preserved/operational entries).
+ *
+ * The caller MUST hold the per-cache-path lock: suffix allocation and the
+ * per-entry renames are serialised by it.
+ */
+export async function rotateCacheArtefacts(cachePath: string): Promise<string | null> {
+  let entries: string[];
+  try {
+    entries = await readdir(cachePath);
+  } catch (err: any) {
+    if (err?.code === "ENOENT") return null;
+    throw err;
+  }
+  const movable = entries.filter((name) => name !== ".lock" && !name.startsWith(".staging."));
+  if (movable.length === 0) return null;
+
+  // Plan the moves before choosing a suffix so a folder holding only
+  // preserved documentation downloads creates no empty archive.
+  const moves: Array<{ from: string; to: string }> = [];
+  for (const name of movable) {
+    if (name !== "sources") {
+      moves.push({ from: join(cachePath, name), to: name });
+      continue;
+    }
+    let sourceEntries: string[];
+    try {
+      sourceEntries = await readdir(join(cachePath, "sources"));
+    } catch (err: any) {
+      if (err?.code === "ENOTDIR") {
+        // A plain file named "sources": move it wholesale.
+        moves.push({ from: join(cachePath, name), to: name });
+        continue;
+      }
+      if (err?.code === "ENOENT") continue; // Vanished between the two reads.
+      throw err;
+    }
+    for (const sourceName of sourceEntries) {
+      if (sourceName.startsWith(LLMS_FULL_PREFIX)) continue;
+      moves.push({
+        from: join(cachePath, "sources", sourceName),
+        to: join("sources", sourceName),
+      });
+    }
+  }
+  if (moves.length === 0) return null;
+
+  let suffix = 1;
+  while (await stat(`${cachePath}.${suffix}`).then(() => true, () => false)) suffix++;
+  const archive = `${cachePath}.${suffix}`;
+  await mkdir(archive, { recursive: true });
+  for (const move of moves) {
+    await mkdir(dirname(join(archive, move.to)), { recursive: true });
+    await rename(move.from, join(archive, move.to));
+  }
+  return archive;
+}
+
+/**
  * Remove entries of `dir` that are not in `keep`. Entries starting with
  * `preservePrefix` are never removed (supplementary documentation).
  */
@@ -409,9 +488,11 @@ async function pruneDirectory(
 /**
  * Remove a previous run's cache artefacts from `cachePath`, keeping only
  * supplementary documentation downloads (`llms-full-*.md` in sources/) and
- * operational files (`meta.json`, lock directories). Used by degraded exits:
- * a degraded refresh of an existing entry must not leave an older report
- * and extraction set alongside newer degraded telemetry.
+ * operational files (`meta.json`, lock directories). Used by degraded exits
+ * when no previous `report.md` exists: it clears partial artefacts from an
+ * interrupted write so a fresh degraded query leaves only its telemetry
+ * sidecar. A degraded refresh that finds a previous successful report
+ * preserves the whole run instead and never calls this.
  *
  * The caller MUST hold the per-cache-path lock.
  */
@@ -521,9 +602,9 @@ export async function readIndex(cacheDir: string): Promise<CacheIndex> {
 /**
  * Remove `slug` from the shared cache index, atomically.
  *
- * Used by degraded exits: a degraded refresh that clears a previous run's
- * artefacts must also drop the index entry, or cache suggest would surface a
- * search whose report no longer exists. The caller MUST hold the index lock
+ * Used by degraded exits when no previous report exists: a partial or
+ * inconsistent cache entry must not leave a dangling index suggestion
+ * behind. The caller MUST hold the index lock
  * (`acquireLock(indexLockDir(cacheDir))`), acquired while holding the
  * per-cache-path lock (the documented lock order).
  *

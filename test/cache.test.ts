@@ -19,6 +19,7 @@ import {
   formatCacheSuggestions,
   allocateSourceIdentity,
   clearCacheArtefacts,
+  rotateCacheArtefacts,
 } from "../src/cache.js";
 import type { CacheIndex, IndexEntry } from "../src/cache.js";
 import { join } from "node:path";
@@ -1187,6 +1188,116 @@ describe("cache artefact replacement", () => {
       assert.deepStrictEqual(await readdir(join(cachePath, "sources")), [
         "llms-full-a.example.md",
       ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ═══════════════════════════════════════════
+// rotateCacheArtefacts — success-path archive to numbered siblings
+// ═══════════════════════════════════════════
+
+describe("rotateCacheArtefacts", () => {
+  async function populatedRun(dir: string): Promise<string> {
+    const cachePath = join(dir, "2026-10-07-rotate-abc123");
+    await mkdir(join(cachePath, "extractions"), { recursive: true });
+    await mkdir(join(cachePath, "sources"), { recursive: true });
+    await writeFile(join(cachePath, "report.md"), "# report", "utf-8");
+    await writeFile(join(cachePath, "query.txt"), "rotate", "utf-8");
+    await writeFile(join(cachePath, "meta.json"), "{}", "utf-8");
+    await writeFile(join(cachePath, "extractions", "01-a-example.md"), "ext", "utf-8");
+    await writeFile(join(cachePath, "sources", "01-a-example.md"), "src", "utf-8");
+    await writeFile(join(cachePath, "sources", "llms-full-a.example.md"), "docs", "utf-8");
+    return cachePath;
+  }
+
+  it("archives the run to a .1 sibling, keeping llms-full downloads in place", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "cache-rotate-"));
+    try {
+      const cachePath = await populatedRun(dir);
+      // Operational entries are never archived.
+      await mkdir(join(cachePath, ".lock"));
+      await mkdir(join(cachePath, ".staging.1.deadbeef"));
+
+      const archive = await rotateCacheArtefacts(cachePath);
+      assert.strictEqual(archive, `${cachePath}.1`);
+
+      assert.deepStrictEqual(
+        (await readdir(`${cachePath}.1`)).sort(),
+        ["extractions", "meta.json", "query.txt", "report.md", "sources"],
+      );
+      assert.deepStrictEqual(await readdir(join(`${cachePath}.1`, "sources")), [
+        "01-a-example.md",
+      ]);
+      assert.strictEqual(
+        await readFile(join(`${cachePath}.1`, "report.md"), "utf-8"),
+        "# report",
+      );
+
+      // The canonical folder keeps only the preserved downloads and the
+      // operational entries.
+      assert.deepStrictEqual(
+        (await readdir(cachePath)).sort(),
+        [".lock", ".staging.1.deadbeef", "sources"],
+      );
+      assert.deepStrictEqual(await readdir(join(cachePath, "sources")), [
+        "llms-full-a.example.md",
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("picks the lowest free suffix when earlier archives exist", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "cache-rotate-"));
+    try {
+      const cachePath = await populatedRun(dir);
+      await mkdir(`${cachePath}.1`);
+      await mkdir(`${cachePath}.2`);
+      const archive = await rotateCacheArtefacts(cachePath);
+      assert.strictEqual(archive, `${cachePath}.3`);
+      assert.strictEqual(
+        await readFile(join(`${cachePath}.3`, "query.txt"), "utf-8"),
+        "rotate",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("archives a meta-only degraded remnant", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "cache-rotate-"));
+    try {
+      const cachePath = join(dir, "2026-10-07-meta-abc123");
+      await mkdir(cachePath, { recursive: true });
+      await writeFile(join(cachePath, "meta.json"), "{}", "utf-8");
+      const archive = await rotateCacheArtefacts(cachePath);
+      assert.strictEqual(archive, `${cachePath}.1`);
+      assert.deepStrictEqual(await readdir(`${cachePath}.1`), ["meta.json"]);
+      assert.deepStrictEqual(await readdir(cachePath), []);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns null without creating an archive when only preserved downloads exist", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "cache-rotate-"));
+    try {
+      const cachePath = join(dir, "2026-10-07-docs-abc123");
+      await mkdir(join(cachePath, "sources"), { recursive: true });
+      await writeFile(join(cachePath, "sources", "llms-full-a.example.md"), "docs", "utf-8");
+      assert.strictEqual(await rotateCacheArtefacts(cachePath), null);
+      assert.deepStrictEqual((await readdir(dir)).sort(), ["2026-10-07-docs-abc123"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns null for a missing cache directory", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "cache-rotate-"));
+    try {
+      assert.strictEqual(await rotateCacheArtefacts(join(dir, "absent")), null);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

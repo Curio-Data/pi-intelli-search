@@ -13,10 +13,11 @@ import {
   withLock,
   updateIndex,
   allocateSourceIdentity,
+  rotateCacheArtefacts,
 } from "../cache.js";
 import { buildCollationMessage, formatCacheAppendix } from "../messages.js";
 import type { ExtractResult } from "../types.js";
-import { throwIfAborted } from "../util.js";
+import { errMsg, throwIfAborted } from "../util.js";
 import type { OperationContext, OperationResult } from "../contracts.js";
 
 export async function collate(
@@ -80,12 +81,20 @@ export async function collate(
 
   // ═══════════════════════════════════════════════════════════════
   // Write cache artifacts under the per-cache-path lock so two
-  // concurrent same-query runs do not interleave file writes. The write
-  // replaces a previous run's artefact set for this cache path.
+  // concurrent same-query runs do not interleave file writes. A previous
+  // run's artefact set is archived to a numbered sibling folder before
+  // this run commits its own.
   // ═══════════════════════════════════════════════════════════════
   await withLock(
     cacheLockDir(physicalPath),
     async () => {
+      // Archive the previous run before committing this one (success path
+      // only: the new collation is already in hand). Best-effort: a failure
+      // falls back to in-place replacement.
+      await rotateCacheArtefacts(physicalPath).catch((error) => {
+        context.logger.error(`Cache archive failed: ${errMsg(error)}`);
+      });
+
       // Write cache files (staging-based per-file atomic replacement under
       // the lock; obsolete artefacts from a previous run are pruned)
       await writeCacheFiles(
