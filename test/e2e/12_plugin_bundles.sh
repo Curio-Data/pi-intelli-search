@@ -218,7 +218,7 @@ server_env_key() {
       sleep 0.05
     done ) &
   local sampler=$!
-  (cd "$E2E_ROOT/claude-workspace" && OPENROUTER_API_KEY="$EXPORTED_KEY" claude mcp list > "$E2E_ROOT/mcp-list.txt" 2>&1 || true)
+  ( cd "$E2E_ROOT/claude-workspace" && OPENROUTER_API_KEY="$EXPORTED_KEY" claude mcp list > "$E2E_ROOT/mcp-list.txt" 2>&1 ) || true
   touch "$done_flag"
   wait "$sampler"
   if ! rg -q '^SERVER_SEEN$' "$out"; then
