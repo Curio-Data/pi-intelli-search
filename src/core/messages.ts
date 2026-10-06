@@ -8,7 +8,7 @@
 //
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 // SPDX-License-Identifier: Apache-2.0
-import { sourceFilename } from "./cache.js";
+import { allocateSourceIdentity, type SourceIdentity } from "./cache.js";
 import { truncateContent } from "./util.js";
 import type { ExtractResult, ResearchSettings } from "./types.js";
 import type { DeepReadonly } from "./contracts.js";
@@ -94,25 +94,53 @@ export function buildExtractionMessage(
  * Build the user message for the collation call. Includes the search summary
  * when present and one block per succeeded extraction with cache file
  * references the collation model can cite.
+ *
+ * File references come from `identity`, so the prompt cites exactly the
+ * filenames `writeCacheFiles` writes with the same identity. Without an
+ * identity the fallback renumbers the succeeded list (the historical
+ * behaviour for fully successful runs); full-page references are only
+ * printed when the identity actually allocates one for the URL, so manual
+ * collation without optional full-page content advertises no missing file.
  */
 export function buildCollationMessage(
   query: string,
   cachePath: string,
   searchSummary: string | undefined,
   succeededExtractions: ExtractResult[],
+  identity?: SourceIdentity,
 ): string {
+  // Legacy fallback for callers without a run identity: renumber the
+  // succeeded list and assume a full page exists for each (the historical
+  // behaviour). Operations pass a real identity so mixed outcomes cite
+  // exactly the files written.
+  const id =
+    identity ??
+    allocateSourceIdentity(
+      succeededExtractions,
+      succeededExtractions.map((e) => ({
+        url: e.url,
+        title: e.title,
+        content: "",
+        status: "success" as const,
+      })),
+    );
   let msg = `Original query: ${query}\n`;
   msg += `Cache path: ${cachePath}/\n\n`;
   if (searchSummary) {
     msg += `Search summary (from the search model):\n${searchSummary}\n\n`;
   }
   for (const [i, ext] of succeededExtractions.entries()) {
-    const filename = sourceFilename(i, ext.url);
+    const extractionFile = id.extractionFileFor(ext.url);
+    const sourceFile = id.sourceFileFor(ext.url);
     msg += `--- Source ${i + 1}: ${ext.url} ---\n`;
     msg += `Title: ${ext.title}\n`;
     msg += `Type: ${ext.sourceType}\n`;
-    msg += `Extraction file: ${cachePath}/extractions/${filename}\n`;
-    msg += `Full page file: ${cachePath}/sources/${filename}\n`;
+    if (extractionFile) {
+      msg += `Extraction file: ${cachePath}/extractions/${extractionFile}\n`;
+    }
+    if (sourceFile) {
+      msg += `Full page file: ${cachePath}/sources/${sourceFile}\n`;
+    }
     msg += `\n${ext.extraction}\n\n`;
   }
   return msg;

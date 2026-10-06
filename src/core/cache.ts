@@ -22,6 +22,9 @@ export interface CacheIndex {
 /** Maximum number of index entries to feed to the LLM judge. */
 const MAX_JUDGE_ENTRIES = 20;
 
+/** Filename prefix of supplementary documentation downloads in sources/. */
+const LLMS_FULL_PREFIX = "llms-full-";
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Lock primitives — file-system locking via mkdir (atomic on POSIX)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -204,13 +207,93 @@ export function sourceFilename(index: number, url: string): string {
   return `${String(index + 1).padStart(2, "0")}-${domainSlug(url)}.md`;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Source identity — one filename allocation shared by every consumer
+// ═══════════════════════════════════════════════════════════════════════════
+
 /**
- * Write cache files using a staging directory for atomic visibility.
+ * File identity for one research run, allocated once and reused by physical
+ * cache writes, the collation prompt and the report so every advertised path
+ * matches a file that is actually written.
+ *
+ * Slots are keyed by URL and allocated in array order: extractions first,
+ * then full pages whose URL has no slot yet. A run whose extractions all
+ * succeed (pages in extraction order) keeps the historical 01-, 02-…
+ * numbering; mixed outcomes stop the report from citing files that were
+ * never written (a leading failed extraction no longer shifts the numbering
+ * between physical files and prompts/reports).
+ */
+export interface SourceIdentity {
+  /** Filename per extraction entry, or null when that entry writes no file. */
+  readonly extractionFiles: ReadonlyArray<string | null>;
+  /** Filename per page entry, or null when that entry writes no file. */
+  readonly sourceFiles: ReadonlyArray<string | null>;
+  /** Filename of the extraction file written for `url`, when this run writes one. */
+  extractionFileFor(url: string): string | null;
+  /** Filename of the full-page file written for `url`, when this run writes one. */
+  sourceFileFor(url: string): string | null;
+}
+
+export function allocateSourceIdentity(
+  extractions: readonly ExtractResult[],
+  pages: readonly FetchedPage[],
+): SourceIdentity {
+  const extractionFileByUrl = new Map<string, string>();
+  const sourceFileByUrl = new Map<string, string>();
+  const slotByUrl = new Map<string, number>();
+  let nextSlot = 0;
+  const slotOf = (url: string): number => {
+    let slot = slotByUrl.get(url);
+    if (slot === undefined) {
+      slot = nextSlot++;
+      slotByUrl.set(url, slot);
+    }
+    return slot;
+  };
+
+  // Extractions allocate first so fully successful runs keep today's numbering.
+  // Slots are positional: a failed or blocked entry still consumes its slot, so
+  // a mixed run keeps exactly the physical filenames the previous
+  // implementation wrote — only prompts and reports change to match them.
+  const extractionFiles = extractions.map((ext) => {
+    const slot = slotOf(ext.url);
+    if (ext.status !== "success" || !ext.extraction) return null;
+    const filename = sourceFilename(slot, ext.url);
+    extractionFileByUrl.set(ext.url, filename);
+    return filename;
+  });
+  const sourceFiles = pages.map((page) => {
+    const slot = slotOf(page.url);
+    if (page.status !== "success") return null;
+    const filename = sourceFilename(slot, page.url);
+    sourceFileByUrl.set(page.url, filename);
+    return filename;
+  });
+
+  return {
+    extractionFiles,
+    sourceFiles,
+    extractionFileFor: (url) => extractionFileByUrl.get(url) ?? null,
+    sourceFileFor: (url) => sourceFileByUrl.get(url) ?? null,
+  };
+}
+
+/**
+ * Write cache files using a staging directory, replacing the previous
+ * run's artefact set for the same cache path.
  *
  * All files (query.txt, extractions/, sources/) are written inside a unique
- * staging directory first, then atomically moved into `cachePath` with
- * `rename`. A reader sees either the complete previous state or the complete
- * new state — never a partial write.
+ * staging directory first, then committed with per-file `rename` under the
+ * caller's per-cache-path lock (see `withLock(cacheLockDir(...))` in the
+ * operations). The commit also prunes extraction/source files from a
+ * previous run that this run did not write, so a refresh cannot mix old
+ * and new artefact sets; supplementary documentation downloads
+ * (`llms-full-*.md` in sources/) are preserved across refreshes.
+ *
+ * Atomicity is per file: each `rename` replaces its target atomically, but a
+ * reader that does not hold the cache lock can observe a mix of old and new
+ * files during the commit. Callers that need a consistent view must hold
+ * the lock.
  *
  * The index update is NOT done here; callers must trigger it separately
  * under the index lock so multiple cache-dir writes do not race on the
@@ -222,6 +305,7 @@ export async function writeCacheFiles(
   pages: FetchedPage[],
   searchSummary: string,
   query: string,
+  identity: SourceIdentity = allocateSourceIdentity(extractions, pages),
 ): Promise<void> {
   // Ensure cachePath exists so staging can live inside it.
   await mkdir(cachePath, { recursive: true });
@@ -236,26 +320,34 @@ export async function writeCacheFiles(
     // query.txt
     await writeFile(join(staging, "query.txt"), query, "utf-8");
 
-    // Write extractions
-    for (const [i, ext] of extractions.entries()) {
+    // Write extractions using the shared identity so prompts and the report
+    // cite exactly the filenames that land on disk. Filenames resolve by URL,
+    // so the arrays passed here need not be the exact arrays the identity was
+    // allocated from (the research pipeline passes filtered success pages).
+    const writtenExtractions = new Set<string>();
+    for (const ext of extractions) {
       if (ext.status !== "success" || !ext.extraction) continue;
-      const filename = sourceFilename(i, ext.url);
+      const filename = identity.extractionFileFor(ext.url);
+      if (!filename) continue;
       const header = `# ${ext.title}\n\n> Source: ${ext.url}\n> Type: ${ext.sourceType}\n\n---\n\n`;
       await writeFile(join(stagingExtractions, filename), header + ext.extraction, "utf-8");
+      writtenExtractions.add(filename);
     }
 
-    // Write full pages (sources)
-    for (const [i, page] of pages.entries()) {
+    // Write full pages (sources) under the same identity: a page whose URL
+    // already holds an extraction slot keeps that slot, so the report's
+    // sources/<filename> reference always matches the physical file.
+    const writtenSources = new Set<string>();
+    for (const page of pages) {
       if (page.status !== "success") continue;
-      const filename = sourceFilename(i, page.url);
+      const filename = identity.sourceFileFor(page.url);
+      if (!filename) continue;
       const header = `# ${page.title}\n\n> Source: ${page.url}\n\n---\n\n`;
       await writeFile(join(stagingSources, filename), header + page.content, "utf-8");
+      writtenSources.add(filename);
     }
 
-    // Atomically move staged files into the final location.
-    // For each file in staging, rename it to its target. If the target
-    // already exists, unlink it first.
-    await moveStagedFiles(staging, cachePath);
+    await commitStagedArtefacts(staging, cachePath, writtenExtractions, writtenSources);
   } finally {
     // Clean up staging directory (best-effort, ignore errors).
     await rm(staging, { recursive: true, force: true }).catch(() => {});
@@ -263,31 +355,83 @@ export async function writeCacheFiles(
 }
 
 /**
- * Move all files from `staging` to `target`, preserving the directory
- * structure. Uses rename(2) which is atomic per-file on the same filesystem.
- * Existing files at the target are replaced.
+ * Commit staged artefacts: replace each file atomically (rename overwrites
+ * a regular target on POSIX), then prune files left by a previous run so the
+ * cache directory advertises exactly this run's artefact set. `llms-full-*`
+ * documentation downloads in sources/ are preserved.
  */
-async function moveStagedFiles(staging: string, target: string): Promise<void> {
-  const entries = await readdir(staging, { withFileTypes: true });
-  for (const entry of entries) {
-    const src = join(staging, entry.name);
-    const dst = join(target, entry.name);
-    if (entry.isDirectory()) {
-      await mkdir(dst, { recursive: true });
-      await moveStagedFiles(src, dst);
-    } else {
-      // Remove target if it exists, then rename.
-      await rm(dst, { force: true }).catch(() => {});
-      await rename(src, dst);
-    }
+async function commitStagedArtefacts(
+  staging: string,
+  cachePath: string,
+  writtenExtractions: ReadonlySet<string>,
+  writtenSources: ReadonlySet<string>,
+): Promise<void> {
+  const finalExtractions = join(cachePath, "extractions");
+  const finalSources = join(cachePath, "sources");
+  await mkdir(finalExtractions, { recursive: true });
+  await mkdir(finalSources, { recursive: true });
+
+  await rename(join(staging, "query.txt"), join(cachePath, "query.txt"));
+  for (const name of writtenExtractions) {
+    await rename(join(staging, "extractions", name), join(finalExtractions, name));
   }
+  for (const name of writtenSources) {
+    await rename(join(staging, "sources", name), join(finalSources, name));
+  }
+
+  await pruneDirectory(finalExtractions, writtenExtractions, null);
+  await pruneDirectory(finalSources, writtenSources, LLMS_FULL_PREFIX);
+}
+
+/**
+ * Remove entries of `dir` that are not in `keep`. Entries starting with
+ * `preservePrefix` are never removed (supplementary documentation).
+ */
+async function pruneDirectory(
+  dir: string,
+  keep: ReadonlySet<string>,
+  preservePrefix: string | null,
+): Promise<void> {
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch (err: any) {
+    if (err?.code === "ENOENT") return;
+    throw err;
+  }
+  for (const name of entries) {
+    if (keep.has(name)) continue;
+    if (preservePrefix && name.startsWith(preservePrefix)) continue;
+    await rm(join(dir, name), { force: true });
+  }
+}
+
+/**
+ * Remove a previous run's cache artefacts from `cachePath`, keeping only
+ * supplementary documentation downloads (`llms-full-*.md` in sources/) and
+ * operational files (`meta.json`, lock directories). Used by degraded exits:
+ * a degraded refresh of an existing entry must not leave an older report
+ * and extraction set alongside newer degraded telemetry.
+ *
+ * The caller MUST hold the per-cache-path lock.
+ */
+export async function clearCacheArtefacts(cachePath: string): Promise<void> {
+  await Promise.all([
+    rm(join(cachePath, "report.md"), { force: true }),
+    rm(join(cachePath, "query.txt"), { force: true }),
+    rm(join(cachePath, "extractions"), { recursive: true, force: true }),
+  ]);
+  await pruneDirectory(join(cachePath, "sources"), new Set(), LLMS_FULL_PREFIX);
 }
 
 /**
  * Write the research report atomically.
  *
  * Builds the report content, writes it to a temp file, then renames into
- * place so a reader never sees a partially-written report.
+ * place so a reader never sees a partially-written report. Source-file
+ * references come from `identity`, so every advertised path matches a file
+ * `writeCacheFiles` wrote with the same identity; absent optional full-page
+ * content renders as a Not cached cell instead of a broken path.
  */
 export async function writeReportFile(
   cachePath: string,
@@ -296,6 +440,7 @@ export async function writeReportFile(
   extractions: ExtractResult[],
   pages: FetchedPage[],
   displayPath: string = cachePath,
+  identity: SourceIdentity = allocateSourceIdentity(extractions, pages),
 ): Promise<void> {
   await mkdir(cachePath, { recursive: true });
   const now = new Date().toISOString();
@@ -313,8 +458,11 @@ export async function writeReportFile(
   report += `| # | Source | Type | Extraction | Full page |\n`;
   report += `|---|--------|------|------------|----------|\n`;
   for (const [i, ext] of succeeded.entries()) {
-    const filename = sourceFilename(i, ext.url);
-    report += `| ${i + 1} | ${ext.url} | ${ext.sourceType} | extractions/${filename} | sources/${filename} |\n`;
+    const extractionFile = identity.extractionFileFor(ext.url);
+    const sourceFile = identity.sourceFileFor(ext.url);
+    report += `| ${i + 1} | ${ext.url} | ${ext.sourceType} | ${
+      extractionFile ? `extractions/${extractionFile}` : "Not cached"
+    } | ${sourceFile ? `sources/${sourceFile}` : "Not cached"} |\n`;
   }
 
   if (blocked.length > 0) {
@@ -371,13 +519,50 @@ export async function readIndex(cacheDir: string): Promise<CacheIndex> {
 }
 
 /**
+ * Remove `slug` from the shared cache index, atomically.
+ *
+ * Used by degraded exits: a degraded refresh that clears a previous run's
+ * artefacts must also drop the index entry, or cache suggest would surface a
+ * search whose report no longer exists. The caller MUST hold the index lock
+ * (`acquireLock(indexLockDir(cacheDir))`), acquired while holding the
+ * per-cache-path lock (the documented lock order).
+ *
+ * A missing or malformed index file, or an entry that is not present, leaves
+ * the filesystem untouched: this never creates an empty index for a cache
+ * root that has no successful history.
+ */
+export async function removeIndexEntry(cacheDir: string, slug: string): Promise<void> {
+  const indexPath = join(cacheDir, ".index.json");
+  let index: CacheIndex;
+  try {
+    index = JSON.parse(await readFile(indexPath, "utf-8"));
+  } catch {
+    return; // No readable index: nothing to remove, and never create one.
+  }
+  if (!Array.isArray(index.searches) || !index.searches.some((e) => e.slug === slug)) return;
+  index.searches = index.searches.filter((e) => e.slug !== slug);
+  await atomicWriteFile(indexPath, JSON.stringify(index, null, 2) + "\n");
+}
+
+/**
+ * The candidate window shared by the judge prompt and its response parser:
+ * the most recent `MAX_JUDGE_ENTRIES` entries, excluding `excludeSlug`.
+ * Both consumers MUST resolve numbered items against this same window;
+ * otherwise a judge answer about item N resolves to a different entry once
+ * the eligible history exceeds the window.
+ */
+export function judgeCandidates(index: CacheIndex, excludeSlug?: string): IndexEntry[] {
+  return index.searches.filter((e) => e.slug !== excludeSlug).slice(-MAX_JUDGE_ENTRIES);
+}
+
+/**
  * Format the cache index for the LLM judge.
- * Returns the most recent MAX_JUDGE_ENTRIES entries as a numbered list.
- * Excludes the entry matching `excludeSlug` (the current search).
+ * Returns the `judgeCandidates` window as a numbered list.
  */
 export function formatIndexForJudge(index: CacheIndex, excludeSlug?: string): string {
-  // Take most recent entries, excluding the current search
-  const entries = index.searches.filter((e) => e.slug !== excludeSlug).slice(-MAX_JUDGE_ENTRIES);
+  // Take the shared candidate window (most recent entries, excluding the
+  // current search).
+  const entries = judgeCandidates(index, excludeSlug);
 
   if (entries.length === 0) return "No previous searches.";
 
@@ -388,15 +573,17 @@ export function formatIndexForJudge(index: CacheIndex, excludeSlug?: string): st
 
 /**
  * Parse the LLM judge response into matching index entries.
- * Expects a JSON array of { index, relevance } objects.
- * Returns the matched entries with their relevance notes.
+ * Expects a JSON array of { index, relevance } objects. Indexes are 1-based
+ * positions in the `judgeCandidates` window — the same window
+ * `formatIndexForJudge` rendered — so an answer about item N always resolves
+ * to the entry the model saw at position N.
  */
 export function parseJudgeResponse(
   response: string,
   index: CacheIndex,
   excludeSlug?: string,
 ): Array<{ entry: IndexEntry; relevance: string }> {
-  const eligible = index.searches.filter((e) => e.slug !== excludeSlug);
+  const candidates = judgeCandidates(index, excludeSlug);
 
   // Extract JSON array from the response — the LLM may wrap it in markdown
   const jsonMatch = response.match(/\[[\s\S]*\]/);
@@ -414,7 +601,7 @@ export function parseJudgeResponse(
   const results: Array<{ entry: IndexEntry; relevance: string }> = [];
   for (const item of parsed) {
     if (typeof item.index !== "number" || item.index < 1) continue;
-    const entry = eligible[item.index - 1]; // 1-based from the numbered list
+    const entry = candidates[item.index - 1]; // 1-based from the numbered list
     if (!entry) continue;
     results.push({ entry, relevance: item.relevance ?? "" });
   }
@@ -443,13 +630,14 @@ export function formatCacheSuggestions(
 
   let out = "\n---\n\n## 📚 Related cached searches\n\n";
   out += "The following previous searches may contain relevant supplementary information. ";
-  out += `Read a report with \`read ${cacheDir}/<slug>/report.md\` if the live results are insufficient.\n\n`;
-  out += "| # | Query | Age | Why related |\n";
-  out += "|---|-------|-----|-------------|\n";
+  out += "Read the report listed for a match if the live results are insufficient.\n\n";
+  out += "| # | Query | Age | Report | Why related |\n";
+  out += "|---|-------|-----|--------|-------------|\n";
   for (const [i, m] of matches.entries()) {
     const queryTrunc =
       m.entry.query.length > 60 ? m.entry.query.slice(0, 57) + "..." : m.entry.query;
-    out += `| ${i + 1} | \`${queryTrunc}\` | ${age(m.entry.timestamp)} | ${m.relevance} |\n`;
+    out += `| ${i + 1} | \`${queryTrunc}\` | ${age(m.entry.timestamp)} | `;
+    out += `\`${cacheDir}/${m.entry.slug}/report.md\` | ${m.relevance} |\n`;
   }
   out += `\nCache directory: \`${cacheDir}/\`\n`;
   return out;

@@ -194,6 +194,21 @@ describe("repository package READMEs", () => {
     assert.match(generated.mcp, /^# mcp-intelli-search$/m);
     assert.doesNotMatch(generated.mcp, /^#{2,4} (`Pi` Native Extension|Settings Reference|Configuration Recipes|Development)$/m);
 
+    const rootView = selectLines(readFileSync(join(REPO_ROOT, "README.md"), "utf8"), "root").join("\n");
+    for (const [text, introduction] of [
+      [rootView, "This repository provides two first-class packages"],
+      [generated.pi, "`@curio-data/pi-intelli-search` registers four research tools"],
+      [generated.mcp, "`@curio-data/mcp-intelli-search` serves four research tools"],
+    ]) {
+      assert.match(text, /Intelligent web research[^\n]+\n\n<p align="center">\n  <img src="[^"]*docs\/images\/01\.png"/);
+      const image = text.indexOf("docs/images/01.png");
+      const features = text.indexOf("**Features:**");
+      const intro = text.indexOf(introduction);
+      const contents = text.indexOf("## Contents");
+      assert.ok(image < features && features < intro && intro < contents,
+        "opening sentence, main image and features must precede package introductions and contents");
+      assert.equal(text.split("docs/images/01.png").length, 2, "main image occurs once");
+    }
     for (const text of Object.values(generated)) {
       assert.match(text, /^## Usage Examples$/m);
       assert.doesNotMatch(text, /publication is pending|post-publication|pre-publication|is unpublished/i);

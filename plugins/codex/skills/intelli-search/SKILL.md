@@ -1,11 +1,13 @@
 ---
 name: intelli-search
-description: "Research the web for current information. Use when you need docs, APIs, best practices, library updates, or any question requiring up-to-date web sources. Provides search, per-page extraction, collation, and a persistent .search/ cache for follow-up."
+description: "Use intelli-search for current web research, documentation lookup, API verification, library comparisons and release information. Prefer its search or multi-page research tools to built-in web search when this skill is selected. Includes installation, configuration and troubleshooting. Report unavailable tools explicitly; never claim another search used this server."
 ---
 
 # Intelli Search
 
 Intelligent web research through the `intelli-search` Model Context Protocol (MCP) server. Four tools: `mcp__intelli_search__intelli_search`, `mcp__intelli_search__intelli_extract`, `mcp__intelli_search__intelli_collate` and `mcp__intelli_search__intelli_research`. The examples below use the exact qualified names this host declares.
+
+Use these tools for current web research when this skill is selected, rather than silently substituting host-native search. If the server or tools are unavailable, report the setup failure explicitly; using another search tool does not establish that this server worked.
 
 Inference uses the configured provider account. The server runs one operation at a time with up to eight requests queued; excess submissions receive a busy error rather than waiting.
 
@@ -19,12 +21,14 @@ Codex starts plugin MCP servers with a filtered environment: arbitrary parent va
 - `INTELLI_SEARCH_CONFIG`: absolute path of the configuration file.
 - `INTELLI_SEARCH_WORKSPACE`: absolute path of the workspace; the research cache lands in its `.search/` subdirectory.
 
-Export them before starting Codex, for example in your shell profile:
+Supply the key at launch from a secret manager, or enter it at a hidden Bash prompt. Do not store a literal key in a shell profile or command history:
 
 ```bash
-export OPENROUTER_API_KEY=sk-or-v1-...
+read -r -s -p 'OpenRouter API key: ' OPENROUTER_API_KEY
+printf '\n'
+export OPENROUTER_API_KEY
 export INTELLI_SEARCH_CONFIG="$HOME/.config/mcp-intelli-search/config.json"
-export INTELLI_SEARCH_WORKSPACE="$HOME/.local/share/mcp-intelli-search/workspace"
+export INTELLI_SEARCH_WORKSPACE="$PWD"
 ```
 
 For per-project caches, set `INTELLI_SEARCH_WORKSPACE` to the project directory before each `codex` launch (for example with `direnv`) instead of exporting a fixed path.
@@ -61,13 +65,17 @@ mkdir -p "$(dirname "$INTELLI_SEARCH_CONFIG")" "$INTELLI_SEARCH_WORKSPACE"
 
 These are explicit selections, not defaults you must keep. Any chat model on OpenRouter works for `extract` and `collate`; `search` needs `perplexity/sonar`, `perplexity/sonar-pro` or `perplexity/sonar-pro-search` (or an explicitly configured `searchWebSearch` block; see [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#tuning) in the standalone guide).
 
-If either path selection (`INTELLI_SEARCH_CONFIG` or `INTELLI_SEARCH_WORKSPACE`) is missing, the server exits on startup with `Explicit --config and --workspace are required` on standard error and the tools never appear. Supply both paths and restart _Codex_. A configuration file that does not exist produces `Cannot read configuration: provide an explicit readable JSON file`.
+If either path selection (`INTELLI_SEARCH_CONFIG` or `INTELLI_SEARCH_WORKSPACE`) is missing, the server exits on startup with `Explicit --config and --workspace are required` on standard error and the tools never appear. Supply both paths and restart _Codex_. A missing or invalid selected configuration file does not stop connection. Each tool call reports a `CONFIGURATION` error naming the file; repair it and call again. The server rereads it until it loads successfully, then keeps it until restart.
 
 A missing `OPENROUTER_API_KEY` is different: credentials are validated when an operation runs, not at server startup. Export the key and restart the host so the server receives the updated environment. Host forwarding behaviour is recorded for Codex CLI 0.144.5 in the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins).
 
+### Verify Inference
+
+Start Codex from the configured shell and request a quick search with the exposed `intelli_search` tool. Confirm an actual MCP tool call and an answer with sources. `codex mcp list` only lists configuration and does not prove server startup or provider access. If these tools are unavailable, report that setup is incomplete; do not claim to have used this server while answering through built-in web search.
+
 ### Unattended Runs
 
-Interactive sessions ask before each research tool call. Non-interactive `codex exec` cannot ask, so it cancels the call and reports `user cancelled MCP tool call`. To run the tools unattended, pre-approve them in `~/.codex/config.toml`:
+Interactive sessions ask before each research tool call. Non-interactive `codex exec` cannot ask, so it cancels the call and reports `user cancelled MCP tool call`. To run the tools unattended, pre-approve them in `${CODEX_HOME:-$HOME/.codex}/config.toml`:
 
 ```toml
 [plugins."intelli-search@curio-data-plugins".mcp_servers.intelli_search]
@@ -186,6 +194,8 @@ When constructing a collation item from an extraction result, use the original `
 
 **The `mcp__intelli_search__intelli_research` result already contains a concise deduplicated summary. Use it directly. Do not read cache files unless the summary is insufficient for the task.**
 
+Repeating the same query on the same UTC date replaces its cached artefacts; a degraded repeat clears the earlier report. Copy any report that must be retained before repeating the query. The cache is not a versioned archive.
+
 The result also includes a **📚 Related cached searches** section when semantically similar previous searches exist in the workspace cache. These are discovered by a model judge that compares the current query against the cache index. The related searches are:
 
 - **Supplementary:** The live search always runs. Cached results are offered as additional context.
@@ -239,8 +249,8 @@ This is also why `focusPrompt` matters. It tells the extraction model what to ke
 
 ## Failure Modes
 
-- **Startup Failures:** Follow the setup section, correct the named path selection and restart the host. The server exits before serving, so the tools never appear and no inference runs. Standard error names the problem: `Explicit --config and --workspace are required` (missing path selections), `Cannot read configuration: provide an explicit readable JSON file`, or `workspace must be an explicit absolute directory` / `workspace must be an existing readable directory`.
-- **Configuration Errors** (`CONFIGURATION`, `WORKSPACE`): a tool call found the setup incomplete or invalid (for example a missing credential or an unusable cache path). Fix the configuration and retry; no inference was billed.
+- **Startup Failures:** Absent path selections and unusable workspaces still fail before serving. Cache safety is checked when valid configuration becomes available: at startup for a loadable file, or on a tool call after file recovery. Correct the diagnostic and restart the host. `--check-config` remains strict and exits 1 for invalid configuration or workspace selections.
+- **Configuration Errors** (`CONFIGURATION`, `WORKSPACE`): a tool call found incomplete setup. For a missing, unreadable or invalid selected file, repair the named file and call again; the server rereads it until it loads successfully. JSON diagnostics give a location without echoing the file. After a successful load, configuration changes need a restart. Missing credentials also require restart because the environment is captured at startup. These preflight errors incur no inference charges.
 - **Provider Errors** (`PROVIDER`): the provider rejected or broke the call. Check credentials or permissions for `401`/`403`, and account credits for ordinary `402` credit exhaustion. The adapter treats a `402` with a valid Retry-After header as transient budget pressure and retries it under the configured bounded policy, like rate limits (`429`) and server errors (`5xx`). If transient failures persist after those attempts, wait before a manual retry rather than changing credentials.
 - **Invalid Arguments** (`INVALID_ARGUMENTS`): the call parameters failed validation. Correct the arguments; do not retry unchanged.
 - **Operation Failures** (`OPERATION`): a stage of the pipeline failed after validation. The message names the stage; retry once, then report if it persists.

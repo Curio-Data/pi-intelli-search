@@ -2,6 +2,8 @@
 
 Intelligent web research through the `intelli-search` Model Context Protocol (MCP) server. Four tools: `{{TOOL_SEARCH}}`, `{{TOOL_EXTRACT}}`, `{{TOOL_COLLATE}}` and `{{TOOL_RESEARCH}}`. The examples below use the exact qualified names this host declares.
 
+Use these tools for current web research when this skill is selected, rather than silently substituting host-native search. If the server or tools are unavailable, report the setup failure explicitly; using another search tool does not establish that this server worked.
+
 Inference uses the configured provider account. The server runs one operation at a time with up to eight requests queued; excess submissions receive a busy error rather than waiting.
 
 {{SETUP}}
@@ -115,6 +117,8 @@ When constructing a collation item from an extraction result, use the original `
 
 **The `{{TOOL_RESEARCH}}` result already contains a concise deduplicated summary. Use it directly. Do not read cache files unless the summary is insufficient for the task.**
 
+Repeating the same query on the same UTC date replaces its cached artefacts; a degraded repeat clears the earlier report. Copy any report that must be retained before repeating the query. The cache is not a versioned archive.
+
 The result also includes a **📚 Related cached searches** section when semantically similar previous searches exist in the workspace cache. These are discovered by a model judge that compares the current query against the cache index. The related searches are:
 
 - **Supplementary:** The live search always runs. Cached results are offered as additional context.
@@ -168,8 +172,8 @@ This is also why `focusPrompt` matters. It tells the extraction model what to ke
 
 ## Failure Modes
 
-- **Startup Failures:** Follow the setup section, correct the named path selection and restart the host. The server exits before serving, so the tools never appear and no inference runs. Standard error names the problem: `Explicit --config and --workspace are required` (missing path selections), `Cannot read configuration: provide an explicit readable JSON file`, or `workspace must be an explicit absolute directory` / `workspace must be an existing readable directory`.
-- **Configuration Errors** (`CONFIGURATION`, `WORKSPACE`): a tool call found the setup incomplete or invalid (for example a missing credential or an unusable cache path). Fix the configuration and retry; no inference was billed.
+- **Startup Failures:** Absent path selections and unusable workspaces still fail before serving. Cache safety is checked when valid configuration becomes available: at startup for a loadable file, or on a tool call after file recovery. Correct the diagnostic and restart the host. `--check-config` remains strict and exits 1 for invalid configuration or workspace selections.
+- **Configuration Errors** (`CONFIGURATION`, `WORKSPACE`): a tool call found incomplete setup. For a missing, unreadable or invalid selected file, repair the named file and call again; the server rereads it until it loads successfully. JSON diagnostics give a location without echoing the file. After a successful load, configuration changes need a restart. Missing credentials also require restart because the environment is captured at startup. These preflight errors incur no inference charges.
 - **Provider Errors** (`PROVIDER`): the provider rejected or broke the call. Check credentials or permissions for `401`/`403`, and account credits for ordinary `402` credit exhaustion. The adapter treats a `402` with a valid Retry-After header as transient budget pressure and retries it under the configured bounded policy, like rate limits (`429`) and server errors (`5xx`). If transient failures persist after those attempts, wait before a manual retry rather than changing credentials.
 - **Invalid Arguments** (`INVALID_ARGUMENTS`): the call parameters failed validation. Correct the arguments; do not retry unchanged.
 - **Operation Failures** (`OPERATION`): a stage of the pipeline failed after validation. The message names the stage; retry once, then report if it persists.

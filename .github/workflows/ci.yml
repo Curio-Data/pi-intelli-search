@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, plan/mcp-intelli-search]
+    branches: [main, plan/mcp-intelli-search, 'release/**']
   pull_request:
     branches: [main]
 
@@ -26,6 +26,19 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Audit installed dependencies
+        run: npm audit --audit-level=low
+
+      - name: Require published catalog pins before merging to main
+        if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./packages/mcp/package.json').version")
+          test "$(npm view "@curio-data/mcp-intelli-search@$version" version)" = "$version"
+
+      - name: Check shell scripts
+        run: git ls-files -z '*.sh' | xargs -0 shellcheck
 
       - name: Lint markdown for em-dashes
         run: |

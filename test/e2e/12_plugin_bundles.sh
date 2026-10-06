@@ -63,7 +63,7 @@ done
 if ! command -v claude >/dev/null 2>&1 || ! command -v codex >/dev/null 2>&1; then
   echo "⚠️  SKIP: scenario 12 requires both the claude and codex CLIs; one is absent."
   echo "   This is an environment limitation, not a failure of the artifacts."
-  exit 0
+  exit 77
 fi
 
 CLAUDE_HOME_DIR="$E2E_ROOT/claude-home"
@@ -325,21 +325,22 @@ check "installed cache populated" test -f "$CODEX_HOME/plugins/cache/curio-data-
 
 # The plugin skill must be listed in the model-visible prompt input as
 # intelli-search:intelli-search (no credentials or model request needed).
-if codex debug prompt-input "test" 2>/dev/null | rg -q 'intelli-search:intelli-search: Research the web'; then
+SKILL_DESCRIPTION="$(awk '/^description: / { sub(/^description: /, ""); print; exit }' "$PROJECT_DIR/plugins/codex/skills/intelli-search/SKILL.md" | jq -r '.')"
+if codex debug prompt-input "test" > "$E2E_ROOT/codex-prompt.txt" 2>/dev/null \
+  && rg -Fq "intelli-search:intelli-search: $SKILL_DESCRIPTION" "$E2E_ROOT/codex-prompt.txt"; then
   ok "codex discovers the plugin skill (prompt input listing)"
 else
   bad "codex plugin skill discovery"
 fi
 
-# The credentialed Codex session handshake and qualified tool names
-# (mcp__intelli_search__<tool>, normalized from the server key) were verified
-# once on 2026-10-04; see PHASE-5.md. A repeatable session check would require
-# copying the host's OAuth credentials, which breaks refresh-token rotation.
+# Scenario 14 verifies real research using its dedicated separate login.
+# Never copy the operator's OAuth credentials into this disposable profile.
 
 # ── Summary ───────────────────────────────────────────────────────
 
 echo
 echo "═══════════════════════════════════════════"
 echo "  $PASS passed, $FAIL failed, $SKIP skipped"
+if [[ "$SKIP" -gt 0 ]]; then exit 77; fi
 echo "═══════════════════════════════════════════"
 [[ "$FAIL" -eq 0 ]]

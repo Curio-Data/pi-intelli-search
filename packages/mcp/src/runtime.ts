@@ -23,14 +23,20 @@ import type {
 } from "../../../src/core/contracts.js";
 import type { ResearchDependencies } from "../../../src/core/operations/research.js";
 import type { FetchFunction } from "../../../src/core/annotations.js";
-import { loadConfig, parseConfig, validateDomains, type StandaloneConfig } from "./config.js";
+import {
+  ConfigurationError,
+  loadConfig,
+  parseConfig,
+  validateDomains,
+  type StandaloneConfig,
+} from "./config.js";
 import { createOpenRouterClient } from "./providers/openrouter.js";
 import { assertWorkspaceSafe, workspacePaths } from "./workspace.js";
 import { identity } from "./identity.js";
 import { withStandaloneStdout } from "./console.js";
 import { StandaloneError, type StandaloneErrorCode } from "./errors.js";
 
-export { loadConfig, parseConfig, identity, StandaloneError };
+export { loadConfig, parseConfig, identity, StandaloneError, ConfigurationError };
 export type { StandaloneConfig };
 const schemas = {
   intelli_search: searchSchema,

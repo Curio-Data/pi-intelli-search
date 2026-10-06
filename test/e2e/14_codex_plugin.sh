@@ -41,7 +41,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Linux layout; elsewhere they would pass vacuously.
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "⚠️  SKIP: scenario 14 is recorded for Linux hosts only."
-  exit 0
+  exit 77
 fi
 
 # Parse .env BEFORE any output reaches the log, reading only the key this

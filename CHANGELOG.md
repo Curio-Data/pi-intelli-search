@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-## [pi-0.15.0] - 2026-10-05
+## [pi-0.15.0] - 2026-10-06
 
 ### Fixed
 
@@ -18,17 +18,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Cancellation propagates through research stages and cache-lock waits instead of returning a degraded success.
 - Optional documentation staging failures no longer discard completed research.
 - Concurrent page fetches keep their error handling separate and restore dependency diagnostics after suppression ends.
+- Related-cache suggestions resolve against the same recent-history window shown to the judge and include exact report paths.
+- Cache references stay aligned when extraction fails or manual collation supplies reordered or optional full pages. Refreshes remove superseded source and extraction files instead of mixing runs; a degraded same-day repeat clears the previous report. Preserve a copy before repeating a query if its report must be retained.
+- Empty collation is rejected before writing a completed report, with an actionable output-budget diagnostic.
+- Native model registration preserves malformed or unreadable `models.json` files, retains operator overrides and symlinks, and serialises atomic updates.
 
 ### Changed
 
 - The native extension and standalone MCP server now share the research engine. The native tool interfaces and cache formats are preserved.
 - The Sonar retirement advisory is removed. [_OpenRouter_](https://openrouter.ai) continues to serve `perplexity/sonar` after [_Perplexity_](https://docs.perplexity.ai)'s direct application programming interface (API) sunset date. The default search model is unchanged.
 
+### Security
+
+- Page extraction uses the patched Defuddle release and a MathML converter that loads the patched XML parser externally instead of embedding an older copy.
+
 ### Compatibility
 
 - Compatibility verified through `Pi` 1.0.0, with 0.87.1, 0.99.0-0.99.2 and 1.0.0 reviewed. The unit suite and live end-to-end (E2E) pipeline pass on `Pi` 1.0.0 without compatibility changes.
 - The minimum supported version remains `Pi` 0.81.1. Live load checks on 2026-10-04 exercised both model-call paths: the legacy provider on 0.81.1 and the registry facade on 0.86.0. See the [compatibility matrix](docs/COMPATIBILITY.md#native-pi-extension-curio-datapi-intelli-search) for evidence.
 - Native release tags now use `pi-vX.Y.Z`; MCP tags use `mcp-vX.Y.Z`. Historical `vX.Y.Z` tags still identify native releases. The fixes prepared for the unreleased native 0.14.1 are included in this release.
+- The supported native baseline remains `Pi` 0.81.1. Development SDK dependencies now use the current API; the legacy raw-context call is explicitly isolated behind the existing pre-0.86 feature check.
+
+## [mcp-0.15.0] - 2026-10-06
+
+Core behaviour is shared with [pi-0.15.0] and recorded there. This is the stable promotion of the published [mcp-0.15.0-alpha.0]; publication remains subject to the release checklist.
+
+### Fixed
+
+- Every successful or degraded result includes its complete answer in `structuredContent.text` as well as text content, so hosts that prefer structured results receive the summary and cache suggestions.
+- Cache-writing tools declare their destructive refresh behaviour to MCP hosts instead of claiming additive-only writes.
+- An explicitly selected missing, unreadable or invalid configuration file no longer prevents MCP connection. Tool calls report the defect and retry loading the repaired file; absent launcher arguments and invalid workspaces remain startup failures.
+- Configuration diagnostics distinguish file access and syntax errors, provide safe JSON locations, and never echo configuration contents. Direct callers can inspect `ConfigurationError.reason`.
+- Host setup documents configuration recovery, secure credential entry, custom profile directories and verification through actual tool calls rather than connection alone.
 
 ## [mcp-0.15.0-alpha.0] - 2026-10-05
 
@@ -410,6 +431,7 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[mcp-0.15.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.15.0
 [pi-0.15.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.15.0
 [mcp-0.15.0-alpha.0]: https://www.npmjs.com/package/@curio-data/mcp-intelli-search/v/0.15.0-alpha.0
 [0.14.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.14.0

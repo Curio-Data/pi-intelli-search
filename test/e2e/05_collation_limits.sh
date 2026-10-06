@@ -19,7 +19,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CACHE_DEFAULT="$PROJECT_DIR/.e2e-collate-default"
 CACHE_TIGHT="$PROJECT_DIR/.e2e-collate-tight"
-RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-30}"
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
@@ -35,6 +34,10 @@ echo "📝 Log: $LOG_FILE"
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-30}"
+# A non-reasoning collation model makes the 200-token comparison measure
+# visible output rather than a reasoning budget. Empty summaries remain failures.
+COLLATE_MODEL="openai/gpt-4.1-mini"
 
 # ── Check prerequisites ────────────────────────────────────────────
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
@@ -107,7 +110,7 @@ cat > "$ISO1/settings.json" <<EOF
     },
     "collateModel": {
       "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
+      "model": "$COLLATE_MODEL"
     },
     "defaultUrls": 1,
     "maxUrls": 1,
@@ -170,7 +173,7 @@ cat > "$ISO2/settings.json" <<EOF
     },
     "collateModel": {
       "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
+      "model": "$COLLATE_MODEL"
     },
     "defaultUrls": 1,
     "maxUrls": 1,
@@ -219,7 +222,8 @@ DEGRADED_RE="degraded|parseable links|no usable links|no markdown links|returned
 
 if [ -z "$ENTRY_DEFAULT" ]; then
   if echo "${OUTPUT1:-}" | grep -qiE "$DEGRADED_RE"; then
-    echo "⚠️  Default run: search returned 0 URLs (degraded LLM response), not a collation bug — rerun"
+    echo "❌ Default run degraded; verification is incomplete"
+    ERRORS=$((ERRORS + 1))
   else
     echo "❌ No cache entry found in .e2e-collate-default/"
     ERRORS=$((ERRORS + 1))
@@ -228,7 +232,8 @@ fi
 
 if [ -z "$ENTRY_TIGHT" ]; then
   if echo "${OUTPUT2:-}" | grep -qiE "$DEGRADED_RE"; then
-    echo "⚠️  Tight run: search returned 0 URLs (degraded LLM response), not a collation bug — rerun"
+    echo "❌ Tight run degraded; verification is incomplete"
+    ERRORS=$((ERRORS + 1))
   else
     echo "❌ No cache entry found in .e2e-collate-tight/"
     ERRORS=$((ERRORS + 1))
@@ -245,6 +250,9 @@ if [ -n "$ENTRY_DEFAULT" ] && [ -n "$ENTRY_TIGHT" ]; then
     CHARS_DEFAULT=$(wc -m < "$REPORT_DEFAULT" || echo "0")
     CHARS_TIGHT=$(wc -m < "$REPORT_TIGHT" || echo "0")
 
+    jq -e --arg m "openrouter/$COLLATE_MODEL" '.outcome == "completed" and .stages.collate.model == $m and .stages.collate.summaryChars > 0' "$ENTRY_DEFAULT/meta.json" >/dev/null
+    jq -e --arg m "openrouter/$COLLATE_MODEL" '.outcome == "completed" and .stages.collate.model == $m and .stages.collate.summaryChars > 0' "$ENTRY_TIGHT/meta.json" >/dev/null
+    echo "✅ Both runs used $COLLATE_MODEL and produced visible synthesis"
     echo "📄 Default report: ${SIZE_DEFAULT} bytes, ${CHARS_DEFAULT} chars (collationMaxTokens=4000)"
     echo "📄 Tight report:   ${SIZE_TIGHT} bytes, ${CHARS_TIGHT} chars (collationMaxTokens=200)"
 

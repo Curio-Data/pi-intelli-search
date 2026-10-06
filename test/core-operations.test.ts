@@ -78,6 +78,17 @@ it("runs all four operations with per-instance dependencies and no host context"
   assert.equal((await readIndex(context.paths.cacheRoot)).searches.length, 2);
 });
 
+it("rejects empty collation instead of reporting a completed cache", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const complete = context.models.complete;
+  context.models.complete = async (request) => request.model.model === "collate"
+    ? { text: " \n", citations: [] } : complete(request);
+  await assert.rejects(research({ query: "empty synthesis" }, context, dependencies), /no visible text.*collationMaxTokens/);
+  await assert.rejects(collate({ query: "empty manual", extractions: [] }, context), /no visible text.*collationMaxTokens/);
+  assert.deepEqual(await readdir(root), [], "empty synthesis must not create success artefacts");
+});
+
 for (const outcome of ["no-links", "fetch-failed", "extraction-failed"] as const) {
   it(`retains the ${outcome} degraded outcome without a report`, async (t) => {
     const root = await workspace(t);
@@ -104,6 +115,99 @@ for (const outcome of ["no-links", "fetch-failed", "extraction-failed"] as const
     if (outcome === "no-links") assert.equal(requests.length, 2);
   });
 }
+
+it("clears a previous successful run's artefacts on a degraded refresh of the same query", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  // Freeze the date so both runs resolve to the same cache path.
+  const originalIso = Date.prototype.toISOString;
+  Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
+  try {
+    const completed = await research({ query: "refresh" }, context, dependencies);
+    assert.equal(completed.outcome, "completed");
+    const cachePath = join(root, completed.details.cachePath as string);
+    await readFile(join(cachePath, "report.md"), "utf8");
+    // Supplementary documentation download from the successful run.
+    await writeFile(join(cachePath, "sources", "llms-full-one.example.md"), "docs");
+    const slug = cachePath.split("/").pop() as string;
+    assert.ok(
+      (await readIndex(context.paths.cacheRoot)).searches.some((e) => e.slug === slug),
+      "guard: the successful run must have indexed the slug first",
+    );
+
+    const original = context.models.complete;
+    context.models.complete = async (request) => {
+      if (request.model.model === "search") return { text: "No sources", citations: [] };
+      return original(request);
+    };
+    const degraded = await research({ query: "refresh" }, context, dependencies);
+    assert.equal(degraded.outcome, "no-links");
+
+    // The older report/extraction set must not survive next to the newer
+    // degraded telemetry; the documentation download is preserved.
+    assert.deepEqual((await readdir(cachePath)).sort(), ["meta.json", "sources"]);
+    assert.deepEqual(await readdir(join(cachePath, "sources")), ["llms-full-one.example.md"]);
+    assert.equal(
+      JSON.parse(await readFile(join(cachePath, "meta.json"), "utf8")).outcome,
+      "no-links",
+    );
+    // The index entry is dropped too, so cache suggest cannot surface a
+    // search whose report was just cleared.
+    assert.deepEqual((await readIndex(context.paths.cacheRoot)).searches, []);
+  } finally {
+    Date.prototype.toISOString = originalIso;
+  }
+});
+
+it("writes no cache directory for a fresh degraded query when telemetry is disabled", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { disableTelemetry: true });
+  const original = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model === "search") return { text: "No sources", citations: [] };
+    return original(request);
+  };
+  const result = await research({ query: "silent degraded" }, context, dependencies);
+  assert.equal(result.outcome, "no-links");
+  // Acquiring the cache lock would create the directory; a fresh degraded
+  // query with telemetry disabled must leave nothing behind.
+  const cachePath = makeCachePath("silent degraded", root, context.paths.cacheRoot);
+  await assert.rejects(readFile(cachePath), /ENOENT/);
+  await assert.rejects(readFile(context.paths.cacheRoot), /ENOENT/);
+});
+
+it("clears artefacts and drops the index entry on a degraded refresh even with telemetry disabled", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { disableTelemetry: true });
+  const originalIso = Date.prototype.toISOString;
+  Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
+  try {
+    const completed = await research({ query: "silent refresh" }, context, dependencies);
+    assert.equal(completed.outcome, "completed");
+    const cachePath = join(root, completed.details.cachePath as string);
+    await readFile(join(cachePath, "report.md"), "utf8");
+    const slug = cachePath.split("/").pop() as string;
+    assert.ok((await readIndex(context.paths.cacheRoot)).searches.some((e) => e.slug === slug));
+
+    const original = context.models.complete;
+    context.models.complete = async (request) => {
+      if (request.model.model === "search") return { text: "No sources", citations: [] };
+      return original(request);
+    };
+    const degraded = await research({ query: "silent refresh" }, context, dependencies);
+    assert.equal(degraded.outcome, "no-links");
+
+    await assert.rejects(readFile(join(cachePath, "report.md")), /ENOENT/);
+    await assert.rejects(
+      readFile(join(cachePath, "meta.json")),
+      /ENOENT/,
+      "telemetry stays disabled: no sidecar may appear",
+    );
+    assert.deepEqual((await readIndex(context.paths.cacheRoot)).searches, []);
+  } finally {
+    Date.prototype.toISOString = originalIso;
+  }
+});
 
 it("preflights before paid work and preserves explicit model selection", async (t) => {
   const { context, dependencies, requests } = coreContext(await workspace(t));

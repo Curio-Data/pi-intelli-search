@@ -4,7 +4,8 @@
 
 import { parseArgs } from "node:util";
 import { identity } from "./identity.js";
-import { loadConfig } from "./config.js";
+import { ConfigurationError, loadConfig, resolveWorkspace } from "./config.js";
+import type { StandaloneConfig } from "./config.js";
 import { installStdoutGuard } from "./stdout-guard.js";
 
 export function cliOptions(argv: string[], env: NodeJS.ProcessEnv = process.env) {
@@ -47,10 +48,27 @@ async function main(): Promise<void> {
     throw new Error(
       "Explicit --config and --workspace are required (or their INTELLI_SEARCH_* environment equivalents)",
     );
-  const config = await loadConfig(args.config, args.workspace);
+  const { config: file, workspace } = args;
   if (args["check-config"]) {
+    await loadConfig(file, workspace);
     process.stdout.write("Configuration is valid.\n");
     return;
+  }
+  // Launcher defects stay fatal: a server that starts without explicit paths
+  // or a usable workspace would hide a misconfigured host registration.
+  await resolveWorkspace(workspace);
+  // A defective configuration file is recoverable without a restart. Some
+  // hosts cache a startup failure (Claude Code observed for about 15 minutes),
+  // so serve the tools and report the defect on each call until it is repaired.
+  let config: StandaloneConfig | (() => Promise<StandaloneConfig>);
+  try {
+    config = await loadConfig(file, workspace);
+  } catch (error) {
+    if (!(error instanceof ConfigurationError)) throw error;
+    process.stderr.write(
+      `[mcp-intelli-search] ${error.message}. Serving anyway: each tool call reports this and rereads the file until it loads\n`,
+    );
+    config = () => loadConfig(file, workspace);
   }
   // The guard must precede loading the server module: dependency import-time
   // output would otherwise corrupt protocol framing on standard output.

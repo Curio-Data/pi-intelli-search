@@ -2,7 +2,7 @@
 
 This is a **`Pi` extension** that adds intelligent web research tools to the `Pi` coding agent. It provides a 5-stage research pipeline (search, fetch, extract, collate, and cache suggest) as a single tool call, plus individual tools for manual orchestration.
 
-For cross-host development, start at the [Model Context Protocol (MCP) implementation handoff](docs/plans/mcp-intelli-search/README.md). It records the current checkpoint, approved package boundaries, frozen compatibility contracts and next phase. Phase 4 supplies `packages/mcp/` with stdio protocol serving through the official split server package; Phase 5 supplies the generated host plugin bundles and repository marketplaces; Phase 6 supplies the three installation routes, compatibility matrix, extended CI and two-package release wiring. Publication remains on hold pending the owner's explicit approval. The [Post-Phase 6 Checkpoint](docs/plans/mcp-intelli-search/POST-PHASE-6.md) holds the open host plugin findings and their ordered fix list, which is the next work. Its strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
+For current cross-host release work, start at [Release Readiness](docs/RELEASE-READINESS.md). The MCP alpha is published and the implementation branch is merged; the [implementation handoff](docs/plans/mcp-intelli-search/README.md) and [Post-Phase 6 Checkpoint](docs/plans/mcp-intelli-search/POST-PHASE-6.md) are historical evidence, not branch-switch instructions. The corrected candidate still requires the owner's explicit publication approval. Its strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
 
 ---
 
@@ -184,7 +184,7 @@ When creating commits:
 - **Language:** TypeScript (ESM, strict mode).
 - **Runtime:** Node.js (runs inside `Pi`'s extension host).
 - **Build:** `tsc` to `dist/`.
-- **Test:** `node --import tsx --test test/*.test.ts`. Test count is shown by the badge in `README.md`.
+- **Test:** `npm test` uses `scripts/run-tests.mjs` to run Node's test runner with private home, agent and scratch directories. Test count is shown by the badge in `README.md`.
 - **Package manager:** `npm`.
 - **License:** Apache-2.0 (Copyright 2026 Ashraf Miah, Curio Data Pro Ltd).
 
@@ -454,6 +454,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 - Test files in `test/` mirror `src/` structure: `cache.test.ts`, `fetch.test.ts`, `settings.test.ts`, etc.
 - Run with `node --import tsx --test` (Node.js built-in test runner).
 - Test count is shown by the badge in `README.md`.
+- `scripts/run-tests.mjs` isolates `HOME`, `PI_CODING_AGENT_DIR` and `TMPDIR` for `npm test`, standalone tests and structural smoke. Filesystem tests must also isolate their own mutable state; never hard-code the operator's agent directory.
 
 ### Test Categories
 
@@ -560,9 +561,10 @@ CI does not run E2E scripts (they require API keys and a live `pi` binary). The 
 
 1. **Build:** `npm run build`
 2. **Unit tests:** `npm test`
-3. **End-to-end test:** `./test/e2e/01_main.sh`
+3. **End-to-end test:** `./test/e2e/01_main.sh` (set `TMPDIR` under the repository's `.tmp/` on encrypted hosts)
+4. **Dependency security:** `npm audit --audit-level=low`; inspect distributed dependency code as well as lockfile entries when a dependency embeds another package
 
-Do not consider a change complete until all three pass. Run all E2E scripts before any release via the sequential runner `./test/run-e2e-all.sh` (it paces calls so the rate-limit bucket does not deplete). Running them in parallel or back-to-back is the documented cause of degraded or hung runs.
+Do not consider a change complete until all required checks pass. Run all E2E scripts before any release via the sequential runner `./test/run-e2e-all.sh` (it paces calls so the rate-limit bucket does not deplete). Running them in parallel or back-to-back is the documented cause of degraded or hung runs.
 
 ### E2E Test Requirements
 
@@ -646,7 +648,7 @@ Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): the changelog i
 
 Releases are routinely missed because steps 3 and 4 below are skipped or done halfway. Follow every step. Do not assume.
 
-1. **Verify CI is green.** Confirm all changes are merged to `main` and the latest run is passing.
+1. **Verify CI is green.** Require a passing run for the exact release commit on `main` or a `release/` branch. Prepare an MCP candidate on a release branch so its unpublished catalog pin does not break installation from `main`; merge it after publication. The native release follows that merge and the MCP registry verification.
 2. **Bump `version` in `package.json`** following [SemVer](https://semver.org/), then sync derived state before anything else: run `npm install --package-lock-only` so the `package-lock.json` root version matches, and add a `DEFAULT_HISTORY` entry for the new version in `src/settings.ts` (defaults unchanged is fine). Both drifts are silent: the lockfile drift was missed in v0.12.1, and a missing history entry disables default migration for upgrading users. Run `npm test` after the bump; the migration guard reads the live package version.
 3. **Update `CHANGELOG.md` in two places.** Both are required:
    - **Top of file:** Add a new `## [pi-X.Y.Z] - YYYY-MM-DD` section above the previous entry. Use the standard sub-headings (`### Added`, `### Changed`, `### Fixed`, `### Compatibility`, `### Removed`, `### Security`) as needed. List user-visible changes only; internal refactors do not need entries unless they affect compatibility.
@@ -669,14 +671,14 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 
 `@curio-data/mcp-intelli-search` has its own version, release tag prefix and staging queue. The native checklist above does not apply except where noted; in particular the MCP package has no `DEFAULT_HISTORY` and its version changes must never trigger native model migration.
 
-1. **Verify CI is green** on `main` and confirm the owner has explicitly approved this release. Approval of one package is not approval of the other.
+1. **Verify CI is green** for the exact candidate on `main` or a `release/` branch and confirm the owner has explicitly approved this release. Keep unpublished catalog pins on a release branch until the corresponding MCP version is public. Approval of one package is not approval of the other.
 2. **First release only: publish manually, do not tag.** npm cannot bind a trusted publisher to a package that does not exist, so the first `mcp-v*` version bypasses the CI staging flow: follow the bootstrap sequence under `npm Trusted Publisher` (manual `npm publish --access public --tag alpha`, then bind the trust). From the second release onward every step of this checklist applies, including the GitHub Release tag.
 3. **Bump `version` in `packages/mcp/package.json`** following [SemVer](https://semver.org/), then run `npm install --package-lock-only` so the lockfile workspace version matches.
 4. **Remove the not-published notices** from the root `README.md` (the `Publication Status` paragraph under `MCP Server`, the pending-publication sentence under `Two Packages, One Engine` and the pre-publication launchers) on the first public release only (the first dev-marked alpha keeps them), then run `npm run generate:readmes`. Never edit `packages/mcp/README.md` or the root `*.README.md` previews directly.
 5. **Regenerate the plugin bundles** so the catalogs pin the new version: `npm run generate:plugins`, then confirm `npm run check:plugins` passes. Commit the regenerated catalogs with the version bump; they are what users install from.
 6. **Run the full paced live suite** `./test/run-e2e-all.sh`, including `11_mcp_stdio.sh`, `12_plugin_bundles.sh`, `13_claude_code_plugin.sh` and `14_codex_plugin.sh`, before tagging.
 7. **Update `CHANGELOG.md`** with a `## [mcp-X.Y.Z] - YYYY-MM-DD` section and a matching `[mcp-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-vX.Y.Z` reference link. Core changes are not repeated: one pointer line to the native `[pi-X.Y.Z]` section covers them (see `Changelog Structure`). Verify both edits with the grep checks from step 4 of the native checklist (adjusted for the `mcp-` prefix).
-8. **Commit and push**, then create the _GitHub_ Release with tag `mcp-vX.Y.Z` only after explicit approval. The workflow stages the package; the user approves it on `npmjs.com` with 2FA.
+8. **Commit and push the release branch**, then create the _GitHub_ Release with tag `mcp-vX.Y.Z` only after explicit approval. The workflow stages the package; the user approves it on `npmjs.com` with 2FA. Merge to `main` only once the pinned version resolves publicly.
 9. **Post-publication gate:** verify the registry-pin installation route that pre-publication tests could not exercise: install the Claude Code and Codex plugins from the committed catalogs into clean profiles and confirm the `npx` launcher downloads and starts the published version. Record this evidence separately from the local-tarball class in [the compatibility matrix](docs/COMPATIBILITY.md). Only after this gate passes is the native package of the same core generation released.
 
 ### Testing the Publish Pipeline

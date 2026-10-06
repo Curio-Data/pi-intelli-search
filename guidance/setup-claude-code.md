@@ -8,7 +8,7 @@ The launcher supplies:
 - `INTELLI_SEARCH_WORKSPACE=${CLAUDE_PROJECT_DIR}` (the project you opened, so the research cache lands in that project's `.search/`)
 - `OPENROUTER_API_KEY` from the plugin's required `openrouter_api_key` option, which _Claude Code_ keeps in its credential store
 
-The plugin data directory resolves to `~/.claude/plugins/data/intelli-search-curio-data-plugins/`; the skill body already shows you the substituted absolute path wherever `${CLAUDE_PLUGIN_DATA}` appears.
+The plugin data directory is `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/intelli-search-curio-data-plugins/`. The host substitutes `${CLAUDE_PLUGIN_DATA}` in the loaded skill; that variable is not automatically exported in an ordinary shell. Run `/intelli-search:intelli-search` for the substituted view.
 
 Steps:
 
@@ -28,7 +28,7 @@ Steps:
 2. Create the plugin data directory and write the configuration file:
 
    ```bash
-   mkdir -p "${CLAUDE_PLUGIN_DATA}"
+   mkdir -p "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/intelli-search-curio-data-plugins"
    ```
 
    Write `${CLAUDE_PLUGIN_DATA}/config.json`:
@@ -58,7 +58,11 @@ Steps:
    ```
 
    These are explicit selections, not defaults you must keep. Any chat model on OpenRouter works for `extract` and `collate`; `search` needs `perplexity/sonar`, `perplexity/sonar-pro` or `perplexity/sonar-pro-search` (or an explicitly configured `searchWebSearch` block; see [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#tuning) in the standalone guide).
-3. Restart _Claude Code_ and verify with `claude mcp list`: the server `plugin:intelli-search:intelli_search` must show as connected. If it is absent from the list, the key option is not set.
+3. Restart _Claude Code_ and verify with `claude mcp list`: the server `plugin:intelli-search:intelli_search` must show as connected. If it is absent, check the key option. Then request a quick search through the server and confirm a model-visible answer with sources; connection alone does not verify inference.
+
+An explicitly selected missing or invalid `config.json` no longer prevents the server from connecting. Tool calls name the file defect without billing inference; repair the file and call again. Configuration is reread until it loads successfully, then kept until restart. Credentials are always captured at startup, so changing the key still requires a restart.
+
+For a failed connection, inspect the host's MCP diagnostics. On Linux with Claude Code 2.1.289, logs were under `~/.cache/claude-cli-nodejs/<project>/mcp-logs-plugin-intelli-search-intelli-search/`. A cached startup failure from an older server may survive a repair: try `/mcp` reconnect and restart the session. The recorded failure cache expired after approximately 15 minutes; reconnect clearing that cache is not established.
 
 Uninstalling the plugin removes the contents of its data directory, including `config.json`; keep a copy if you plan to reinstall. If _Claude Code_ reports that it could not clear the plugin's stored options, remove the `pluginSecrets` entry for `intelli-search@curio-data-plugins` from its credential store yourself, and rotate the key if you uninstalled to retire it.
 

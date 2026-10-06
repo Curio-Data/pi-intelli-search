@@ -13,9 +13,24 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.81.1-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-531%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-573%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
+
+<p align="center">
+  <img src="docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
+</p>
+
+**Features:**
+
+- 🔍 **Search:** a search-grounded model, [_Perplexity Sonar_](https://docs.perplexity.ai) via [_OpenRouter_](https://openrouter.ai) by default. One application programming interface (API) key, no $50 minimum. Chat models with tool support also work through the web search server tool; see [native search settings](#openrouter-web-search-server-tool) or [MCP tuning](#tuning).
+- 🔗 **Harvest:** every source the search model cited, not only the links it wrote into the answer. Machine-readable `url_citation` annotations are merged with text links before pages are selected.
+- 🌐 **Fetch:** Dual-fetch each page (Hypertext Markup Language (HTML) → Defuddle versus Markdown endpoint), compare quality, pick the cleaner version.
+- 📄 **Extract:** Per-page LLM extraction guided by a _focused prompt_. Compresses ≈50K to ≈3-5K chars of query-relevant content.
+- 🔗 **Collate:** Cross-source deduplication, inconsistency detection, and synthesis into a focused ≈5K summary.
+- 💾 **Cache:** Persistent `.search/` cache with automatic cache suggest. Related previous searches surfaced on each query.
+- 🎯 **Configurable:** Select models independently for search, extract and collate. The native extension uses any model `Pi` supports; the MCP server uses explicitly selected OpenRouter models.
+- 💰 **Cost:** see the [default research-run estimate](#cost).
 
 <!-- packages:none -->
 This repository provides two first-class packages from one research engine:
@@ -124,21 +139,6 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
 - [Use of Large Language Models](#use-of-large-language-models)
 
 <!-- TOC:END -->
-
-<p align="center">
-  <img src="docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
-</p>
-
-**Features:**
-
-- 🔍 **Search:** a search-grounded model, [_Perplexity Sonar_](https://docs.perplexity.ai) via [_OpenRouter_](https://openrouter.ai) by default. One application programming interface (API) key, no $50 minimum. Chat models with tool support also work through the web search server tool; see [native search settings](#openrouter-web-search-server-tool) or [MCP tuning](#tuning).
-- 🔗 **Harvest:** every source the search model cited, not only the links it wrote into the answer. Machine-readable `url_citation` annotations are merged with text links before pages are selected.
-- 🌐 **Fetch:** Dual-fetch each page (Hypertext Markup Language (HTML) → Defuddle versus Markdown endpoint), compare quality, pick the cleaner version.
-- 📄 **Extract:** Per-page LLM extraction guided by a _focused prompt_. Compresses ≈50K to ≈3-5K chars of query-relevant content.
-- 🔗 **Collate:** Cross-source deduplication, inconsistency detection, and synthesis into a focused ≈5K summary.
-- 💾 **Cache:** Persistent `.search/` cache with automatic cache suggest. Related previous searches surfaced on each query.
-- 🎯 **Configurable:** Select models independently for search, extract and collate. The native extension uses any model `Pi` supports; the MCP server uses explicitly selected OpenRouter models.
-- 💰 **Cost:** see the [default research-run estimate](#cost).
 
 <a id="use-with-other-hosts"></a>
 ## Install
@@ -327,7 +327,7 @@ mkdir -p "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/intelli-search-curio-
 
 Save the same [minimal configuration](#create-the-configuration) as `config.json` in that directory. It persists across plugin updates but is removed on uninstall. The launcher uses the opened project as its workspace, so each project's cache stays in its own `.search/` directory.
 
-Restart Claude Code, then run `claude mcp list` and confirm `plugin:intelli-search:intelli_search` shows as connected. The launcher downloads a pinned package through `npx` on first start. The installed `intelli-search` skill includes shell-based credential setup and troubleshooting; the [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) records tested host versions.
+Restart Claude Code, then run `claude mcp list` and confirm `plugin:intelli-search:intelli_search` shows as connected. The launcher downloads a pinned package through `npx` on first start. Run `/intelli-search:intelli-search` for the host-expanded setup skill. Do not use `claude plugin install --config openrouter_api_key=...`: that exposes the key in process arguments. The installed `intelli-search` skill includes shell-based credential setup and troubleshooting; the [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) records tested host versions.
 
 <a id="route-c-codex-plugin"></a>
 #### Codex
@@ -346,6 +346,8 @@ export INTELLI_SEARCH_CONFIG="$PWD/.intelli-search.json"
 export INTELLI_SEARCH_WORKSPACE="$PWD"
 codex
 ```
+
+In the session, ask: “Use intelli_search to find the current TypeScript release and cite the official source.” Confirm a successful MCP tool call and an answer with sources. `codex mcp list` alone does not start the server or prove inference. If the tools are unavailable, report the setup failure rather than claim that built-in search used this server.
 
 Codex filters the server environment; the plugin forwards `OPENROUTER_API_KEY`, `INTELLI_SEARCH_CONFIG` and `INTELLI_SEARCH_WORKSPACE` explicitly. Set all three before each launch. The installed `intelli-search` skill covers persistent configuration and unattended tool approval; see the [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) for verified host behaviour.
 
@@ -974,15 +976,15 @@ Use the same configuration and workspace as the registered server. If a project-
 
 ### Serving the Protocol
 
-An invocation without `--check-config` validates the explicit configuration and workspace, then serves the four canonical tools (`intelli_search`, `intelli_extract`, `intelli_collate`, `intelli_research`) over stdio until the input stream closes. Serving performs no inference at startup; credentials are only required when an operation runs.
+An invocation without `--check-config` validates the explicit workspace, then serves the four canonical tools (`intelli_search`, `intelli_extract`, `intelli_collate`, `intelli_research`) over stdio until the input stream closes. An explicitly selected missing, unreadable or invalid configuration file does not prevent connection: each tool call returns an actionable `CONFIGURATION` error and rereads the file until it loads successfully. Repair the file and call again. Once loaded, configuration remains fixed until restart. Missing launcher arguments and invalid workspaces still fail at startup; `--check-config` remains strict. Serving performs no inference at startup; credentials are only required when an operation runs.
 
 - **Registration and Schemas.** Tool names and JSON input schemas mirror the native `Pi` tools verbatim; descriptions adapt the native guidance for protocol clients (host-neutral cache wording, embedded `focusPrompt` and breadth guidance), because the protocol offers no separate guidance channel. Invalid tool arguments are reported as tool errors (`isError` results), matching the SDK (software development kit) distinction between malformed protocol requests and invalid arguments.
-- **Results.** Successful calls return the concise summary as text content plus structured content with `outcome` and `details`. Degraded research (`no-links`, `fetch-failed`, `extraction-failed`) remains a normal result. Execution failures return `isError` results tagged with the safe `StandaloneError` category rather than raw provider causes.
+- **Results.** Successful calls return the complete operation text both as text content and as `structuredContent.text`, alongside `outcome` and `details`. Hosts that prefer the structured representation receive the same answer, sources and cache suggestions. The duplication is intentional for host compatibility; a host that forwards both representations can consume extra context. Degraded research (`no-links`, `fetch-failed`, `extraction-failed`) remains a normal result. Execution failures return `isError` results tagged with the safe `StandaloneError` category rather than raw provider causes.
 - **Queueing.** One operation runs at a time and up to eight further requests queue; requests beyond the bound settle immediately with a busy tool error. A queued request whose client cancels settles without starting its operation.
 - **Progress and Cancellation.** When the client supplies a progress token, stage progress is forwarded as `notifications/progress` (percentage of one hundred). Client cancellation aborts the running operation through the shared model policy and stage boundaries.
 - **Shutdown.** Closing standard input aborts in-flight and queued work, closes the transport and exits. `SIGINT` and `SIGTERM` trigger the same drain with a bounded hard-exit backstop. No unanswered request or runaway child work remains.
 - **Framing.** Standard output carries protocol messages only. Before the server module loads, a guard diverts `process.stdout.write` (including console output, import-time writes and direct dependency writes) to standard error; the transport writes frames through the original stream, so the SDK's own output is never corrupted. Adapter diagnostics use standard error.
-- **Annotations.** `intelli_search` and `intelli_extract` are marked read-only; `intelli_collate` and `intelli_research` write cache files and are not read-only. No tool claims idempotence. Operations use external services; inference and search charges apply to the configured provider account. Invalid calls and startup validation do not perform inference.
+- **Annotations.** `intelli_search` and `intelli_extract` are marked read-only; `intelli_collate` and `intelli_research` write cache files and carry `destructiveHint: true` because repeating a query can replace or clear earlier cached artefacts. No tool claims idempotence. Operations use external services; inference and search charges apply to the configured provider account. Invalid calls and startup validation do not perform inference.
 
 Startup diagnostics go to standard error. The SDK version range is declared in `package.json` (the lockfile pins the verified release); the protocol implementation is the official split server package verified in the repository handoff.
 
@@ -1032,7 +1034,7 @@ Unspecified tuning comes from the canonical [shared defaults](src/core/defaults.
 
 **Reasoning:** The adapter sends reasoning fields only when the catalogue advertises reasoning support; non-reasoning models receive neither effort nor exclusion fields.
 
-**Output Budget:** Empty output after token-budget exhaustion is an error, not a successful extraction. Increase the output-token limit or lower reasoning effort when this diagnostic occurs.
+**Output Budget:** Empty output after token-budget exhaustion is an error, not a successful extraction. Both adapters also reject empty collation before writing a completed report. Increase the output-token limit or lower reasoning effort when this diagnostic occurs.
 
 ### Direct Engine Verification
 
@@ -1071,7 +1073,7 @@ console.log(result.text);
 
 This example incurs inference and search charges when run with a real credential. `execute()` also accepts `intelli_search`, `intelli_extract` and `intelli_collate`, with the canonical tool parameters. Its optional third argument supplies `signal` and `onProgress`. Results contain `text`, `details` and `outcome`; execution failures throw. Degraded research remains a result. Standalone validation rejects unknown argument keys, empty queries, nonpositive or fractional `maxUrls`, arrays exceeding 100 entries, strings exceeding 2,000,000 characters and unsupported extraction statuses. Native schemas are unchanged. For manual extraction followed by collation, construct each collation item from the original `url` and `title`, `result.details.extraction` and `result.details.sourceType`, plus an explicit `status` such as `success`. Do not forward the entire extraction `details` object: its `currentness` field is not a collation input.
 
-`mcp-intelli-search --help` and `--version` need no configuration. `--check-config` validates explicit configuration and workspace syntax without credentials or inference, returning exit status 0 for valid configuration and 1 for invalid input. Neither starts a protocol connection. The runtime entrypoint is experimental and has no published TypeScript declaration contract. Execution failures expose a safe `StandaloneError.code`: `INVALID_ARGUMENTS`, `CONFIGURATION`, `WORKSPACE`, `PROVIDER`, `OPERATION` or `CANCELLED`. Cancellation uses the `AbortError` name. Raw provider causes are deliberately not retained. Some shared operations wrap provider exceptions, which become `OPERATION` errors; protocol mapping must not depend on exact diagnostic strings.
+`mcp-intelli-search --help` and `--version` need no configuration. `--check-config` validates explicit configuration and workspace syntax without credentials or inference, returning exit status 0 for valid configuration and 1 for invalid input. Neither starts a protocol connection. `loadConfig()` throws an exported `ConfigurationError` for file defects, with a `reason` of `missing`, `unreadable`, `invalid-json` or `invalid`; workspace failures remain separate. JSON syntax diagnostics include a location without echoing file contents. The runtime entrypoint is experimental and has no published TypeScript declaration contract. Execution failures expose a safe `StandaloneError.code`: `INVALID_ARGUMENTS`, `CONFIGURATION`, `WORKSPACE`, `PROVIDER`, `OPERATION` or `CANCELLED`. Cancellation uses the `AbortError` name. Raw provider causes are deliberately not retained. Some shared operations wrap provider exceptions, which become `OPERATION` errors; protocol mapping must not depend on exact diagnostic strings.
 
 ### Filesystem and Privacy Boundaries
 
@@ -1095,9 +1097,9 @@ Every startup failure is diagnostic-only and lands on standard error; standard o
 |---|---|
 | `Explicit --config and --workspace are required` | The server started without both selections. Supply `--config`/`--workspace` or the `INTELLI_SEARCH_CONFIG`/`INTELLI_SEARCH_WORKSPACE` environment variables, then restart the host. |
 | `workspace must be an explicit absolute directory` | The workspace selection is relative or a host placeholder was not expanded. Use a literal absolute path; on hosts with placeholder expansion, verify the expansion on your host version. |
-| `Cannot read configuration: provide an explicit readable JSON file` | The configuration path does not exist or is not readable. Create the file (the guides show a minimal valid document) and restart. |
-| Configuration rejected with an unknown-key or range error | The loader is strict: unknown keys, invalid types and out-of-range values fail validation. Remove or correct the named key; the [Tuning](#tuning) table lists every accepted key and range. |
-| Tools never appear in the host | The server exited during startup. Read the host's MCP server logs for the standard-error diagnostic; `mcp-intelli-search --check-config` reproduces configuration and workspace failures without a host. |
+| `Configuration file not found`, `not readable`, `empty` or `not valid JSON` | The selected file is missing or defective. The error names its absolute path; JSON syntax errors include a location without showing file contents. While serving, repair the file and call again. `--check-config` reports the error and exits 1. |
+| Configuration rejected with an unknown-key or range error | The loader is strict: unknown keys, invalid types and out-of-range values fail validation. Correct the configuration and call again if it has not yet loaded. The [Tuning](#tuning) table lists accepted keys and ranges. |
+| Tools never appear in the host | Check absent launcher arguments, an unusable workspace or an unsafe cache. Read the host's MCP server logs for the standard-error diagnostic. Claude Code can retain a failure from an older server: try `/mcp` reconnect, then restart; the recorded failure cache expired after approximately 15 minutes. A connected server still needs a successful tool call to verify inference. |
 | Operations fail with `CONFIGURATION` or `PROVIDER` | The named credential environment variable is missing or the key was rejected. The server snapshots the environment at startup: restart it after changing credentials. Catalogue preflight failures name the offending model role. |
 | Repeated 429 retries on a free-tier or shared key | Free-tier OpenRouter keys share a tight rate bucket. Set `minRequestIntervalMs` to approximately `3000`, lower `extractionConcurrency` to `2`, and raise `llmRetryAttempts`; raise `llmTimeoutMs` only when the model-call timer is expiring. |
 | Cache paths unreadable from the host | The host must share the server's filesystem. Sandboxed or remote hosts cannot read local cache paths; run the server where the host can read the workspace. |
@@ -1123,7 +1125,7 @@ Both packages write this format. The native extension resolves the cache against
 └── .index.json                 # Index of all cached searches
 ```
 
-Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short Secure Hash Algorithm 1 (SHA-1) hash of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. Concurrent runs stage their output before a short cache commit, so source files and the shared index remain intact.
+Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short Secure Hash Algorithm 1 (SHA-1) hash of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. Concurrent writers use short cache locks, and index updates are atomic. A same-day refresh replaces its source and extraction sets rather than retaining obsolete files. A degraded repeat clears the earlier successful report and its numbered source/extraction files; this cache is not an archive. Copy a report elsewhere before repeating a query if it must be retained. Cache readers do not take those locks: a multi-file refresh is not a whole-directory atomic snapshot.
 
 **`meta.json` (local-only telemetry).** Each `intelli_research` run writes a `meta.json` sidecar recording per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), whether search-retry fired, cache-suggest hits, and per-stage latency. `stages.search.annotationsHarvested` counts `url_citation` entries recovered from the response body; it is absent on runs against models that emit none, and it is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. It is strictly local: no network call is added, no data leaves the host, and no account or identity is recorded. The bundled [`scripts/analyze-sessions.sh`](scripts/README.md) can aggregate these sidecars to report per-stage success rates.
 
@@ -1175,7 +1177,7 @@ pi -e ./dist/index.js
 pi install /path/to/pi-intelli-search
 ```
 
-**Host Plugins:** thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/` at the repository root, with repository marketplace catalogs at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. The bundles are generated from the shared guidance source in `guidance/` and the version pinned in `packages/mcp/package.json`; run `npm run generate:plugins` after a version change and `npm run check:plugins` to detect drift. Launchers pin the exact package version through `npx`; `scripts/generate-plugin-bundles.mjs --mode tarball` generates equivalent local-tarball launchers for testing unreleased changes. Host setup, including each host's environment forwarding rules, is in the generated skills.
+**Host Plugins:** thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/` at the repository root, with repository marketplace catalogs at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. The bundles are generated from the shared guidance source in `guidance/` and the version pinned in `packages/mcp/package.json`; run `npm run generate:plugins` after a version change and `npm run check:plugins` to detect drift. Launchers pin the exact package version through `npx`. For unreleased changes, build and pack the MCP workspace, generate with `--mode tarball --output DIR --codex-vendor-dir ABS`, install the tarball into the vendor directories, then install the generated marketplaces. The complete procedure is in [the script guide](scripts/README.md); `node scripts/generate-plugin-bundles.mjs --help` lists the arguments. Host setup, including each host's environment forwarding rules, is in the generated skills.
 
 **Package READMEs:** this file is the only hand-edited README. `npm run generate:readmes` derives `packages/mcp/README.md` plus the root previews [`pi.README.md`](pi.README.md) and [`mcp.README.md`](mcp.README.md), and `npm run check:readmes` fails on drift or on any derived link that does not resolve. The native package ships the same derivation, written over this file by its `prepublishOnly` hook. Untagged content goes to both packages. Wrap package-specific sections in `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, and repository-only sections in `<!-- packages:none -->`. Content that only a package shows, such as its title and badges, goes in a hidden block opened by `<!-- packages:mcp hidden` and closed by a `-->` line. Each derived README regenerates its contents list, redirects links to sections it omits to this file on _GitHub_, and makes relative paths absolute. See [`scripts/generate-package-readmes.mjs`](scripts/generate-package-readmes.mjs).
 <!-- /packages -->
@@ -1247,3 +1249,4 @@ Large Language Models were used extensively during the development of this proje
 - **_Qwen_ 3.8 Max:** Review and deep research.
 - **_DeepSeek_ V4 Pro:** Research and data analysis.
 - **_Qwen_ 3.6 Plus:** Secondary model for review and documentation.
+- **_Claude_ Opus 5.0/5.5:** Primary model for MCP variant.

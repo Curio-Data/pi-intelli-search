@@ -23,8 +23,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-GAP="${E2E_GAP_SECONDS:-20}"
-SCRIPT_TIMEOUT="${E2E_SCRIPT_TIMEOUT_SECONDS:-1200}"
 
 # Load .env if present (gitignored)
 # Read .env if it exists (gitignored): parsed, never executed, and only the
@@ -33,6 +31,14 @@ SCRIPT_TIMEOUT="${E2E_SCRIPT_TIMEOUT_SECONDS:-1200}"
 source "$SCRIPT_DIR/e2e/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+GAP="${E2E_GAP_SECONDS:-20}"
+SCRIPT_TIMEOUT="${E2E_SCRIPT_TIMEOUT_SECONDS:-1200}"
+export TMPDIR="${TMPDIR:-$PROJECT_DIR/.tmp/e2e}"
+mkdir -p "$TMPDIR"
+[[ "$GAP" =~ ^[0-9]+$ && "$SCRIPT_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
+  echo "Invalid E2E gap or timeout" >&2
+  exit 1
+}
 
 # Auto-detect the key so failures are about rate limits, not setup.
 if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -f "$HOME/.pi/agent/auth.json" ]; then
@@ -67,6 +73,7 @@ echo ""
 
 PASSED=()
 FAILED=()
+SKIPPED=()
 
 for i in "${!SCRIPTS[@]}"; do
   script="${SCRIPTS[$i]}"
@@ -80,12 +87,15 @@ for i in "${!SCRIPTS[@]}"; do
     PASSED+=("$script")
   else
     status=$?
-    if [ "$status" -eq 124 ]; then
+    if [ "$status" -eq 77 ]; then
+      echo "⚠️ $script SKIPPED (required release evidence is missing)"
+      SKIPPED+=("$script")
+    elif [ "$status" -eq 124 ]; then
       echo "❌ $script TIMED OUT after ${SCRIPT_TIMEOUT}s"
     else
       echo "❌ $script FAILED (exit $status)"
     fi
-    FAILED+=("$script")
+    if [ "$status" -ne 77 ]; then FAILED+=("$script"); fi
   fi
 
   # Space out all but the last script to let the rate-limit bucket recover.
@@ -97,7 +107,11 @@ for i in "${!SCRIPTS[@]}"; do
 done
 
 echo "════════════════════════════════════════════════════════════════"
-echo "Summary: ${#PASSED[@]} passed, ${#FAILED[@]} failed"
+echo "Summary: ${#PASSED[@]} passed, ${#FAILED[@]} failed, ${#SKIPPED[@]} skipped"
+if [ "${#SKIPPED[@]}" -gt 0 ]; then
+  printf '   ⚠️ %s\n' "${SKIPPED[@]}"
+  exit 1
+fi
 if [ "${#FAILED[@]}" -gt 0 ]; then
   printf '   ❌ %s\n' "${FAILED[@]}"
   exit 1

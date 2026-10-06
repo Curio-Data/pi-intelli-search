@@ -40,9 +40,17 @@ describe("textContent", () => {
 });
 
 describe("getAgentDir", () => {
-  it("returns a path ending in .pi/agent", () => {
-    const result = getAgentDir();
-    assert.ok(result.endsWith(".pi/agent"), `Expected path ending in .pi/agent, got: ${result}`);
+  it("uses the selected agent directory rather than the operator default", () => {
+    const saved = process.env.PI_CODING_AGENT_DIR;
+    try {
+      process.env.PI_CODING_AGENT_DIR = "/fixture/private-agent";
+      assert.equal(getAgentDir(), "/fixture/private-agent");
+      delete process.env.PI_CODING_AGENT_DIR;
+      assert.ok(getAgentDir().endsWith(".pi/agent"));
+    } finally {
+      if (saved === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = saved;
+    }
   });
 });
 

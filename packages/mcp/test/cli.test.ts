@@ -64,3 +64,45 @@ test("CLI paths override environment equivalents and valid setup serves until in
     await f.cleanup();
   }
 });
+test("check-config stays strict and distinguishes file defects", async () => {
+  const f = await fixture();
+  try {
+    const file = join(f.dir, "config.json");
+    const missing = invoke(["--config", file, "--workspace", f.dir, "--check-config"]);
+    assert.equal(missing.status, 1);
+    assert.equal(missing.stdout, "");
+    assert.match(missing.stderr, /Configuration file not found: /);
+    await writeFile(file, '{\n  "providers": {\n    "openrouter": "sk-or-secret"\n  ,\n}');
+    const malformed = invoke(["--config", file, "--workspace", f.dir, "--check-config"]);
+    assert.equal(malformed.status, 1);
+    assert.equal(malformed.stdout, "");
+    assert.match(malformed.stderr, /not valid JSON at line 5, column 1/);
+    assert(!malformed.stderr.includes("sk-or-secret"));
+  } finally {
+    await f.cleanup();
+  }
+});
+test("a defective configuration file starts the server; launcher defects stay fatal", async () => {
+  const f = await fixture();
+  try {
+    const file = join(f.dir, "config.json");
+    // spawnSync closes standard input at once, so a server that started exits 0.
+    const served = invoke(["--config", file, "--workspace", f.dir]);
+    assert.equal(served.status, 0);
+    assert.equal(served.stdout, "");
+    assert.match(served.stderr, /Configuration file not found: .*Serving anyway/);
+    assert.match(served.stderr, /serving stdio/);
+    for (const args of [
+      ["--config", file],
+      ["--config", file, "--workspace", join(f.dir, "absent")],
+      ["--config", file, "--workspace", "relative"],
+    ]) {
+      const failed = invoke(args);
+      assert.equal(failed.status, 1, args.join(" "));
+      assert.equal(failed.stdout, "");
+      assert.doesNotMatch(failed.stderr, /serving stdio/);
+    }
+  } finally {
+    await f.cleanup();
+  }
+});

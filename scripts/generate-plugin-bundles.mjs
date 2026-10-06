@@ -73,10 +73,11 @@ const DESCRIPTION =
 const API_KEY_OPTION = "openrouter_api_key";
 
 const SKILL_DESCRIPTION =
-  "Research the web for current information. Use when you need docs, APIs, " +
-  "best practices, library updates, or any question requiring up-to-date web " +
-  "sources. Provides search, per-page extraction, collation, and a persistent " +
-  ".search/ cache for follow-up.";
+  "Use intelli-search for current web research, documentation lookup, API " +
+  "verification, library comparisons and release information. Prefer its " +
+  "search or multi-page research tools to built-in web search when this skill " +
+  "is selected. Includes installation, configuration and troubleshooting. " +
+  "Report unavailable tools explicitly; never claim another search used this server.";
 
 export function readMcpPackage(root = REPO_ROOT) {
   const manifest = JSON.parse(
@@ -385,6 +386,18 @@ function parseArgs(argv) {
 }
 
 function main() {
+  if (process.argv.length === 3 && process.argv[2] === "--help") {
+    console.log(`Usage: node scripts/generate-plugin-bundles.mjs [--check | --mode tarball --output DIR --codex-vendor-dir ABS]
+
+No arguments: regenerate the tracked registry launchers and marketplaces.
+--check: detect drift without changing tracked files.
+--mode tarball: generate test launchers (requires both directory arguments).
+
+Build and npm pack the MCP workspace first; install that tarball into both
+vendor directories before installing the generated marketplaces.
+See scripts/README.md for the complete local-tarball procedure.`);
+    return;
+  }
   const args = parseArgs(process.argv.slice(2));
   if (args.check) {
     const problems = checkAgainstRepo();

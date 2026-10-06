@@ -1,11 +1,13 @@
 ---
 name: intelli-search
-description: "Research the web for current information. Use when you need docs, APIs, best practices, library updates, or any question requiring up-to-date web sources. Provides search, per-page extraction, collation, and a persistent .search/ cache for follow-up."
+description: "Use intelli-search for current web research, documentation lookup, API verification, library comparisons and release information. Prefer its search or multi-page research tools to built-in web search when this skill is selected. Includes installation, configuration and troubleshooting. Report unavailable tools explicitly; never claim another search used this server."
 ---
 
 # Intelli Search
 
 Intelligent web research through the `intelli-search` Model Context Protocol (MCP) server. Four tools: `mcp__plugin_intelli-search_intelli_search__intelli_search`, `mcp__plugin_intelli-search_intelli_search__intelli_extract`, `mcp__plugin_intelli-search_intelli_search__intelli_collate` and `mcp__plugin_intelli-search_intelli_search__intelli_research`. The examples below use the exact qualified names this host declares.
+
+Use these tools for current web research when this skill is selected, rather than silently substituting host-native search. If the server or tools are unavailable, report the setup failure explicitly; using another search tool does not establish that this server worked.
 
 Inference uses the configured provider account. The server runs one operation at a time with up to eight requests queued; excess submissions receive a busy error rather than waiting.
 
@@ -19,7 +21,7 @@ The launcher supplies:
 - `INTELLI_SEARCH_WORKSPACE=${CLAUDE_PROJECT_DIR}` (the project you opened, so the research cache lands in that project's `.search/`)
 - `OPENROUTER_API_KEY` from the plugin's required `openrouter_api_key` option, which _Claude Code_ keeps in its credential store
 
-The plugin data directory resolves to `~/.claude/plugins/data/intelli-search-curio-data-plugins/`; the skill body already shows you the substituted absolute path wherever `${CLAUDE_PLUGIN_DATA}` appears.
+The plugin data directory is `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/intelli-search-curio-data-plugins/`. The host substitutes `${CLAUDE_PLUGIN_DATA}` in the loaded skill; that variable is not automatically exported in an ordinary shell. Run `/intelli-search:intelli-search` for the substituted view.
 
 Steps:
 
@@ -39,7 +41,7 @@ Steps:
 2. Create the plugin data directory and write the configuration file:
 
    ```bash
-   mkdir -p "${CLAUDE_PLUGIN_DATA}"
+   mkdir -p "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/intelli-search-curio-data-plugins"
    ```
 
    Write `${CLAUDE_PLUGIN_DATA}/config.json`:
@@ -69,7 +71,11 @@ Steps:
    ```
 
    These are explicit selections, not defaults you must keep. Any chat model on OpenRouter works for `extract` and `collate`; `search` needs `perplexity/sonar`, `perplexity/sonar-pro` or `perplexity/sonar-pro-search` (or an explicitly configured `searchWebSearch` block; see [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#tuning) in the standalone guide).
-3. Restart _Claude Code_ and verify with `claude mcp list`: the server `plugin:intelli-search:intelli_search` must show as connected. If it is absent from the list, the key option is not set.
+3. Restart _Claude Code_ and verify with `claude mcp list`: the server `plugin:intelli-search:intelli_search` must show as connected. If it is absent, check the key option. Then request a quick search through the server and confirm a model-visible answer with sources; connection alone does not verify inference.
+
+An explicitly selected missing or invalid `config.json` no longer prevents the server from connecting. Tool calls name the file defect without billing inference; repair the file and call again. Configuration is reread until it loads successfully, then kept until restart. Credentials are always captured at startup, so changing the key still requires a restart.
+
+For a failed connection, inspect the host's MCP diagnostics. On Linux with Claude Code 2.1.289, logs were under `~/.cache/claude-cli-nodejs/<project>/mcp-logs-plugin-intelli-search-intelli-search/`. A cached startup failure from an older server may survive a repair: try `/mcp` reconnect and restart the session. The recorded failure cache expired after approximately 15 minutes; reconnect clearing that cache is not established.
 
 Uninstalling the plugin removes the contents of its data directory, including `config.json`; keep a copy if you plan to reinstall. If _Claude Code_ reports that it could not clear the plugin's stored options, remove the `pluginSecrets` entry for `intelli-search@curio-data-plugins` from its credential store yourself, and rotate the key if you uninstalled to retire it.
 
@@ -193,6 +199,8 @@ When constructing a collation item from an extraction result, use the original `
 
 **The `mcp__plugin_intelli-search_intelli_search__intelli_research` result already contains a concise deduplicated summary. Use it directly. Do not read cache files unless the summary is insufficient for the task.**
 
+Repeating the same query on the same UTC date replaces its cached artefacts; a degraded repeat clears the earlier report. Copy any report that must be retained before repeating the query. The cache is not a versioned archive.
+
 The result also includes a **📚 Related cached searches** section when semantically similar previous searches exist in the workspace cache. These are discovered by a model judge that compares the current query against the cache index. The related searches are:
 
 - **Supplementary:** The live search always runs. Cached results are offered as additional context.
@@ -246,8 +254,8 @@ This is also why `focusPrompt` matters. It tells the extraction model what to ke
 
 ## Failure Modes
 
-- **Startup Failures:** Follow the setup section, correct the named path selection and restart the host. The server exits before serving, so the tools never appear and no inference runs. Standard error names the problem: `Explicit --config and --workspace are required` (missing path selections), `Cannot read configuration: provide an explicit readable JSON file`, or `workspace must be an explicit absolute directory` / `workspace must be an existing readable directory`.
-- **Configuration Errors** (`CONFIGURATION`, `WORKSPACE`): a tool call found the setup incomplete or invalid (for example a missing credential or an unusable cache path). Fix the configuration and retry; no inference was billed.
+- **Startup Failures:** Absent path selections and unusable workspaces still fail before serving. Cache safety is checked when valid configuration becomes available: at startup for a loadable file, or on a tool call after file recovery. Correct the diagnostic and restart the host. `--check-config` remains strict and exits 1 for invalid configuration or workspace selections.
+- **Configuration Errors** (`CONFIGURATION`, `WORKSPACE`): a tool call found incomplete setup. For a missing, unreadable or invalid selected file, repair the named file and call again; the server rereads it until it loads successfully. JSON diagnostics give a location without echoing the file. After a successful load, configuration changes need a restart. Missing credentials also require restart because the environment is captured at startup. These preflight errors incur no inference charges.
 - **Provider Errors** (`PROVIDER`): the provider rejected or broke the call. Check credentials or permissions for `401`/`403`, and account credits for ordinary `402` credit exhaustion. The adapter treats a `402` with a valid Retry-After header as transient budget pressure and retries it under the configured bounded policy, like rate limits (`429`) and server errors (`5xx`). If transient failures persist after those attempts, wait before a manual retry rather than changing credentials.
 - **Invalid Arguments** (`INVALID_ARGUMENTS`): the call parameters failed validation. Correct the arguments; do not retry unchanged.
 - **Operation Failures** (`OPERATION`): a stage of the pipeline failed after validation. The message names the stage; retry once, then report if it persists.

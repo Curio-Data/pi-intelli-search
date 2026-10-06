@@ -13,6 +13,7 @@ import {
   buildCollationMessage,
   formatCacheAppendix,
 } from "../src/tools/shared.js";
+import { allocateSourceIdentity } from "../src/core/cache.js";
 import { TRUNCATED_MARKER, truncateContent } from "../src/util.js";
 import type { ExtractResult } from "../src/types.js";
 
@@ -108,6 +109,38 @@ describe("buildCollationMessage", () => {
       makeExt("https://a.com/", "t"),
     ]);
     assert.ok(!msg.includes("Search summary"));
+  });
+
+  it("cites physical filenames for mixed outcomes when given a run identity", () => {
+    const extractions = [
+      { ...makeExt("https://a.example/", "a"), extraction: "", status: "failed" as const },
+      makeExt("https://b.example/", "b"),
+      makeExt("https://c.example/", "c"),
+    ];
+    const identity = allocateSourceIdentity(extractions, [
+      ...extractions.map((e) => ({ url: e.url, title: e.title, content: "page", status: "success" as const })),
+    ]);
+    const msg = buildCollationMessage(
+      "q",
+      ".search/x",
+      undefined,
+      extractions.filter((e) => e.status === "success"),
+      identity,
+    );
+    // The leading failure keeps its slot; successful extractions cite the
+    // files writeCacheFiles writes instead of renumbering.
+    assert.ok(msg.includes("Extraction file: .search/x/extractions/02-b-example.md\n"));
+    assert.ok(msg.includes("Full page file: .search/x/sources/02-b-example.md\n"));
+    assert.ok(msg.includes("Extraction file: .search/x/extractions/03-c-example.md\n"));
+    assert.ok(!msg.includes("01-b-example.md"), "must not cite a renumbered file");
+  });
+
+  it("omits the full-page line when the identity has no source file for a URL", () => {
+    const extraction = makeExt("https://a.example/", "a");
+    const identity = allocateSourceIdentity([extraction], []);
+    const msg = buildCollationMessage("q", ".search/x", undefined, [extraction], identity);
+    assert.ok(msg.includes("Extraction file: .search/x/extractions/01-a-example.md\n"));
+    assert.ok(!msg.includes("Full page file"), "no full page exists; none may be advertised");
   });
 });
 

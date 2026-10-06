@@ -33,7 +33,7 @@ The software development kit (SDK) and native fetch assets are verified separate
 | Node.js | v24.19.0 | Development and verification runtime for all standalone gates |
 | Node.js | 22 (floor) | `engines: >=22`; CI validates the aggregate build, test and install gates on Node 22 |
 | MCP SDK | `@modelcontextprotocol/server` 2.3.0 (lockfile-pinned) | Protocol suite: initialization, tool listing, schema rejection, all four operations, degraded outcomes, progress, cancellation, queued cancellation, shutdown and clean stdio framing (deterministic) |
-| Fetch assets | `wreq-js` 2.3.0, `defuddle` 0.16.0 | Independent tarball install gate exercises real page fetching through the installed native assets on Linux x86-64; other platforms are not verified |
+| Fetch assets | `wreq-js` 2.3.0, `defuddle` 0.19.4 | Independent tarball install gate exercises real page fetching through the installed native assets on Linux x86-64; other platforms are not verified. Earlier phases verified `defuddle` 0.16.0 |
 
 ## Host Plugins
 
@@ -49,9 +49,24 @@ The software development kit (SDK) and native fetch assets are verified separate
 - **One-Time Observations:** The recorded credentialed session completed the MCP handshake and exposed qualified tool names. The 0.144.5 inspection found that the command-line interface (CLI) ignored the portable Agent Plugins layout; the shipped bundle uses the compatibility layout. See [Phase 5](plans/mcp-intelli-search/PHASE-5.md#codex-cli-01445).
 - **Excluded Surfaces:** The terminal user interface (TUI) and integrated development environment (IDE) extension were not exercised. The Phase 5 record describes the IDE extension as lacking plugin support at that time; this is not a fresh compatibility check.
 
+## Release Candidate Verification
+
+The corrected candidate was verified on 2026-10-06, before publication:
+
+| Surface | Observed Evidence |
+|---|---|
+| Native host | `Pi` 1.0.4: primary live research and the native scenarios pass; fresh tarball loading also resolves pi-ai 1.0.4 |
+| Standalone package | Build, protocol/operation tests and independent production install pass on Node.js v24.19.0, Linux x86-64 |
+| Fetch dependencies | Defuddle 0.19.4 and mathml-to-latex 1.8.0 with externally loaded xmldom 0.9.12; full dependency audit reports no advisories |
+| Claude Code | 2.1.291: local-tarball installation and real research pass; the session's model-visible result contains the summary and cache appendix, closing F2's missing-answer observation |
+| Codex CLI | 0.144.5: local-tarball installation, generated skill discovery and credentialed research pass |
+| Paced live scenarios | Scenarios 1 to 4 and 6 to 9 passed before an interruption during scenario 10. Scenario 5 failed the non-empty-summary gate with a reasoning model at a 200-token cap; it was corrected to use the same non-reasoning collation model in both comparisons and passed on rerun with visible synthesis. Scenarios 10 to 14 completed in a paced continuation. One configuration recipe passed on retry after a timeout. The initial scenario 12 assertion still matched an old skill description; it was corrected to match the generated description and rerun successfully. No mandatory host check was skipped |
+
+The candidate's exact versions are in the manifests, and its release gates are in [Release Readiness](RELEASE-READINESS.md). These are local-tarball observations, not verification of an unpublished registry pin. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
+
 ## Shared Constraints
 
-- The committed plugin launchers pin the exact `@curio-data/mcp-intelli-search` version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. The pinned `0.15.0-alpha.0` is published on the registry under the `alpha` dist-tag; `latest` also resolves to it until the first stable `0.15.0` publishes.
+- The committed plugin launchers pin the exact `@curio-data/mcp-intelli-search` version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. The initial alpha is published under both `alpha` and `latest` as of the recorded registry check. The working candidate's regenerated pin is not published; keep it on a release branch until its MCP version resolves publicly. Publication and exact-pin host verification remain separate release gates.
 - Full research calls have been driven through both host plugins in the local-tarball class (`test/e2e/13_claude_code_plugin.sh`, `test/e2e/14_codex_plugin.sh`). A full research call through the registry-pin route remains open evidence; the registry-pin class currently covers installation, connection and tool listing, plus a direct `npx` pull that runs the published CLI.
 - Only [_OpenRouter_](https://openrouter.ai) is a verified standalone inference provider. Other OpenAI-compatible endpoints are not claimed: reasoning, search-tool and citation behaviour differs between compatible-looking endpoints.
 - _macOS_ and _Windows_ are not verified for any artefact; the fetch dependency's native assets are exercised on _Linux_ x86-64 only.

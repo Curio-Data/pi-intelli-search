@@ -54,7 +54,7 @@ Merging is text-first: prose links (with their markdown titles) come before anno
 <a id="custom-model-registration"></a>
 ### Native Model Registration
 
-[_Perplexity Sonar_](https://docs.perplexity.ai) and its siblings are not in `Pi`'s built-in model list for [OpenRouter](https://openrouter.ai). The extension writes `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search` to `~/.pi/agent/models.json` on first load (merging by id, non-destructive, adding only what is missing) and refreshes the model registry. This operation is idempotent.
+[_Perplexity Sonar_](https://docs.perplexity.ai) and its siblings are not in `Pi`'s built-in model list for [OpenRouter](https://openrouter.ai). The extension writes `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search` to `~/.pi/agent/models.json` on first load (merging by id, non-destructive, adding only what is missing) and refreshes the model registry. This operation is idempotent. Invalid or unreadable existing files are preserved and reported rather than replaced. Valid merges retain existing overrides, follow valid operator-managed symlinks, and use a short lock and atomic replacement.
 
 <a id="rate-limit-resilience"></a>
 ### Native Rate-Limit Resilience
@@ -74,7 +74,7 @@ In addition, the tool streams stage progress updates via `onUpdate()` and render
 
 ### Cache Suggest (Stage 5)
 
-After the main pipeline completes, a lightweight LLM judge (using the extract model for cost efficiency) compares the current query against up to 20 recent entries in `.search/.index.json`. It returns semantically related previous searches, which are formatted as a `📚 Related cached searches` table appended to the tool output.
+After the main pipeline completes, a lightweight LLM judge (using the extract model for cost efficiency) compares the current query against up to 20 recent entries in `.search/.index.json`. It returns semantically related previous searches, which are formatted as a `📚 Related cached searches` table with exact report paths appended to the tool output. Prompt generation and response parsing share the same recent-history window.
 
 This stage is purely additive. It never blocks or replaces the live pipeline. Failures are caught and silently ignored. Cost is minimal (≈500 input tokens, or ≈$0.0002).
 
@@ -93,6 +93,8 @@ Research dependencies are injected per operation rather than changed through a s
 The standalone bundle externalises its declared third-party dependencies and imports no `Pi` library. Its installation gate denies ancestor dependency resolution and exercises both native fetch paths. Existing cache links and traversal are rejected; these checks do not sandbox hostile concurrent filesystem mutation. Results use absolute workspace cache paths and host-neutral file-reading guidance. [Phase 3 Results](plans/mcp-intelli-search/PHASE-3.md) and the [package guide](../packages/mcp/README.md) record exact interfaces and limits.
 
 ### Protocol Serving
+
+Successful and degraded results carry the same complete operation text in `content` and `structuredContent.text`. An explicitly selected defective configuration file leaves the protocol available with actionable tool errors and is reread until it loads. Missing launcher arguments and invalid workspaces still fail before serving; loaded configuration and startup credentials remain fixed until restart.
 
 The standalone package serves the four canonical tools as an MCP server over stdio through the official split server package (`@modelcontextprotocol/server`, lockfile-pinned). Tool names and input schemas mirror the native tools; descriptions embed the guidance the protocol has no separate channel for. One operation runs at a time with a bounded queue; stage progress maps to `notifications/progress` when the client supplies a token, and client cancellation aborts through the shared model policy. A startup guard diverts every non-protocol write away from standard output, so the stream carries protocol frames only; diagnostics use standard error. Closing standard input or receiving `SIGINT`/`SIGTERM` drains and aborts in-flight and queued work. [Phase 4 Results](plans/mcp-intelli-search/PHASE-4.md) records the protocol verification.
 
@@ -160,7 +162,7 @@ plugins/                    # Generated Claude Code and Codex bundles (manifests
 └── .index.json                                # Index of all cached searches
 ```
 
-Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short Secure Hash Algorithm 1 (SHA-1) hash of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. The same query produces the same hash. Runs of that query on the same Coordinated Universal Time (UTC) date refresh the same directory; a different UTC date produces a different directory.
+Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short Secure Hash Algorithm 1 (SHA-1) hash of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. The same query produces the same hash. Runs of that query on the same Coordinated Universal Time (UTC) date refresh the same directory; a different UTC date produces a different directory. A refresh replaces numbered source and extraction files, preserving supplementary `llms-full-*` documentation. A degraded refresh clears a prior successful report rather than presenting it beside newer failure telemetry. Writers use a short cache lock and per-file atomic replacements; lockless readers are not promised whole-directory snapshot visibility.
 
 ### Physical and Display Paths
 

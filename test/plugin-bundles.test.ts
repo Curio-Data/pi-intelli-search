@@ -19,6 +19,14 @@ import {
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const GENERATOR = join(REPO_ROOT, "scripts", "generate-plugin-bundles.mjs");
 
+it("generator help describes tarball prerequisites without changing output", () => {
+  const before = readFileSync(join(REPO_ROOT, "plugins/codex/.mcp.json"), "utf8");
+  const help = execFileSync(process.execPath, [GENERATOR, "--help"], { encoding: "utf8" });
+  assert.match(help, /--output DIR --codex-vendor-dir ABS/);
+  assert.match(help, /npm pack/);
+  assert.equal(readFileSync(join(REPO_ROOT, "plugins/codex/.mcp.json"), "utf8"), before);
+});
+
 // Repo-derived scratch never goes to an unset-TMPDIR /tmp on this host.
 function scratchDir(prefix: string) {
   const base = process.env.TMPDIR ?? join(REPO_ROOT, ".tmp");

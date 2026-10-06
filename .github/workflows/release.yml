@@ -9,11 +9,29 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
       id-token: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Require an approved branch and successful CI for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          # MCP candidate catalogs pin an unpublished version. Stage from a
+          # release branch, then merge only after that pin resolves publicly.
+          runs=$(gh run list --workflow ci.yml --event push --commit "$sha" --limit 20 \
+            --json headBranch,status,conclusion)
+          branch=$(printf '%s' "$runs" | jq -r '[.[] | select(.headBranch == "main" or (.headBranch | startswith("release/")))][0] | if .status == "completed" and .conclusion == "success" then .headBranch else empty end')
+          test -n "$branch"
+          git fetch origin "$branch"
+          git merge-base --is-ancestor "$sha" "origin/$branch"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -70,15 +88,40 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit installed dependencies
+        run: npm audit --audit-level=low
+
+      - name: Require the matching MCP registry pin before native staging
+        if: steps.select.outputs.package == '@curio-data/pi-intelli-search'
+        run: |
+          set -euo pipefail
+          native=$(node -p "require('./package.json').version")
+          mcp=$(node -p "require('./packages/mcp/package.json').version")
+          native_core="${native%%-*}"
+          mcp_core="${mcp%%-*}"
+          test "${native_core%.*}" = "${mcp_core%.*}"
+          published=$(npm view "@curio-data/mcp-intelli-search@$mcp" version)
+          test "$published" = "$mcp"
+          # Registry existence is only a machine gate. The owner must also
+          # approve the separately recorded clean-profile plugin verification.
+
       - name: Build both artifacts
         run: npm run build:all
 
       - name: Test native and standalone operations
         run: npm run test:all
 
-      - name: Verify plugin catalogs pin the released MCP version
-        if: steps.select.outputs.package == '@curio-data/mcp-intelli-search'
-        run: npm run check:plugins
+      - name: Verify generated artifacts and compatibility types
+        run: |
+          npm run check:toc
+          npm run check:plugins
+          npm run check:readmes
+          node_modules/.bin/tsc -p test/tsconfig.native-contract.json
+
+      - name: Verify both independent tarball installs
+        run: |
+          npm run test:mcp:install
+          ./test/run-e2e-publish-local.sh
 
       - name: Stage publish
         working-directory: ${{ steps.select.outputs.directory }}

@@ -1,12 +1,14 @@
 # MCP Implementation Handoff
 
+This is the historical phased implementation record. The planning branch is merged into `main`, and the initial MCP alpha is published. Start current work at [Release Readiness](../../RELEASE-READINESS.md), which supersedes the branch, publication and next-work instructions below. Preserve these records as dated evidence; do not return to the old planning branch to continue the release.
+
 ## Direction
 
 Extend `intelli-search` from one repository and one shared research engine. Preserve the native `@curio-data/pi-intelli-search` package and add `@curio-data/mcp-intelli-search`, a standalone Model Context Protocol (MCP) server. Provide thin [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin bundles around that server.
 
 The owner approved the architecture and specified the MCP package name on 2026-10-03. The planning branch is `plan/mcp-intelli-search`. Phase 0 records dependency evidence and deterministic native compatibility fixtures. Phase 1 introduces host-neutral contracts, a native model adapter and explicit cache paths. Phase 2 moves operations, shared helpers and model policy into the core, with workspace-local documentation staging and injected telemetry identity. Phase 3 adds the standalone runtime and independently installable package, with strict configuration, explicit workspace ownership and an OpenRouter transport. Phase 4 adds protocol serving over standard input/output (stdio) through the official split server package, with bounded queueing, progress, cancellation, shutdown and clean framing. Phase 5 adds the generated host plugin bundles, repository marketplaces and shared guidance. Phase 6 adds the three installation routes, the compatibility matrix with real baseline load checks, extended CI and two-package release wiring, and reconciles the native version metadata with `main`'s unreleased 0.14.1. The host plugin verification of 2026-10-05 ([Post-Phase 6 Checkpoint](POST-PHASE-6.md)) left open defects that come first. Publication remains unimplemented and follows them: it is gated on explicit owner approval, a trusted-publisher binding for the MCP package, the full paced live suite and separate review of the release workflow.
 
-## Current Checkpoint
+## Historical Checkpoint
 
 Start with [Post-Phase 6 Checkpoint](POST-PHASE-6.md). It records the Claude Code plugin key option, the credentialed host scenarios and their safe authentication procedure, an independent two-reviewer pass with its fixes at `8d4d805`, and a fresh-agent pass that followed the README as a new user. That pass left open findings, led by Claude Code dropping the text summary from tool results; its ordered fix list is the next work.
 
@@ -62,7 +64,7 @@ A fresh native `zai/glm-5.3` session then verified the committed Phase 6 tree at
 
 ## Fresh-Agent Entry Checks
 
-Resume from `plan/mcp-intelli-search`, not `main`. Fetch `origin` and inspect the working tree before switching branches or pulling. Preserve unrelated changes; do not reset or overwrite them. With a clean checkout, use `git switch plan/mcp-intelli-search` and `git pull --ff-only origin plan/mcp-intelli-search`.
+The original implementation resumed from `plan/mcp-intelli-search`. That branch is now historical. Inspect current `main` and [Release Readiness](../../RELEASE-READINESS.md) before any work; preserve unrelated changes and do not switch back to the planning branch.
 
 Run `npm ci` if dependencies are absent, differ from the committed lockfile or their provenance is uncertain. `npm ls --depth=0` detects missing or invalid top-level dependencies but does not establish exact lockfile equivalence; use a clean install when in doubt. Then run these checks from the repository root:
 
@@ -80,7 +82,9 @@ node_modules/.bin/tsc -p test/tsconfig.native-contract.json
 
 Read the documents in the order above before editing. The entry checks are deterministic and require no provider credentials. The complete change gates, including isolated structural smoke and live verification, are in the [implementation plan](IMPLEMENTATION.md#verification-commands). Do not infer that optional local logs, cached research or prior conversation are needed to continue.
 
-## Next-Agent Brief
+## Historical Next-Agent Brief
+
+The following brief records the pre-publication checkpoint and is superseded by [Release Readiness](../../RELEASE-READINESS.md). It is not the current task list.
 
 > Start with the ordered fix list in [Post-Phase 6 Checkpoint](POST-PHASE-6.md#next-work): F2 (the Claude Code dropped summary) is first. Publication preparation follows the fix list and a confirming fresh-agent pass, as ordered in [Phase 6 Results](PHASE-6.md#continuation). Publication is explicitly on hold; every step requires its own owner approval. The release workflow (`fe74ca0`, amended by reviewed corrections at `96b463a`) awaits separate owner review, and `@curio-data/mcp-intelli-search` needs its own trusted-publisher binding on `npmjs.com` (`release.yml`, `npm stage publish` only) before any `mcp-v*` tag; the native binding does not cover it, the package-must-exist bootstrap prerequisite is recorded in root `AGENTS.md`, and the agent cannot create it. The Phase 6 peer review is closed with two FOLLOW-UP: PASS verdicts; a cold-start handover was recorded on 2026-10-05 against the Post-Phase 6 checkpoint. The full paced live suite `./test/run-e2e-all.sh` (including `11_mcp_stdio.sh`, `12_plugin_bundles.sh`, `13_claude_code_plugin.sh` and `14_codex_plugin.sh`) must pass immediately before any tag. Follow the MCP release checklist in root `AGENTS.md`: version decision in `packages/mcp/package.json`, lockfile sync, removal of the not-published notice, `npm run generate:plugins` plus `npm run check:plugins`, CHANGELOG entries with the `mcp-` prefix, and the post-publication registry-pin gate recorded separately from the local-tarball evidence class. Merge `plan/mcp-intelli-search` to `main` only after the MCP package resolves on the registry. Leave host credential handling to the operator and never copy OAuth credentials into disposable profiles. Do not publish, modify real host credentials or silently switch inference providers.
 

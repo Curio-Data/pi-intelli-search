@@ -29,6 +29,10 @@ import {
   indexLockDir,
   withLock,
   updateIndex,
+  removeIndexEntry,
+  allocateSourceIdentity,
+  clearCacheArtefacts,
+  type SourceIdentity,
 } from "../cache.js";
 import {
   extractSourceUrls,
@@ -42,7 +46,7 @@ import {
   throwIfAborted,
 } from "../util.js";
 import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "../telemetry.js";
-import { mkdir, writeFile, rm, readdir, readFile, mkdtemp } from "node:fs/promises";
+import { mkdir, writeFile, rm, readdir, readFile, mkdtemp, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { FetchedPage, ExtractResult, ModelConfig } from "../types.js";
 import {
@@ -187,6 +191,10 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
 
   const allExtractions = [...extracted.extractions, ...extracted.blockedExtractions];
   const succeededExtractions = allExtractions.filter((e) => e.status === "success");
+  // Allocate source file identity once: physical cache files, the collation
+  // prompt and the report all cite these exact filenames, so mixed outcomes
+  // cannot cite files this run never wrote.
+  const identity = allocateSourceIdentity(allExtractions, fetched.pages);
 
   // If no extractions produced useful content (all fetches failed or all
   // extraction LLM calls errored), return the search summary without
@@ -211,14 +219,14 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
     );
   }
 
-  const collation = await runCollateStage(p, search.searchResult, succeededExtractions);
+  const collation = await runCollateStage(p, search.searchResult, succeededExtractions, identity);
 
   // Start llms-full downloads BEFORE acquiring any lock, then write cache
   // artifacts under the per-cache-path lock (only local file I/O there).
   throwIfAborted(p.signal);
   const llms = await startLlmsFullDownloads(p, fetched.successPages);
   try {
-    await writeCacheArtifacts(p, allExtractions, fetched, search.searchResult, collation, llms);
+    await writeCacheArtifacts(p, allExtractions, fetched, search.searchResult, collation, llms, identity);
   } finally {
     // Settle writers before removing their directory, even on cache failure or cancellation.
     llms.abort.abort();
@@ -504,15 +512,17 @@ async function runCollateStage(
   p: PipelineCtx,
   searchResult: string,
   succeededExtractions: ExtractResult[],
+  identity: SourceIdentity,
 ): Promise<string> {
   // Build collation prompt (no files written yet — lock is never held
-  // across the LLM call). Path references in the prompt are resolved
-  // later when cache files are written.
+  // across the LLM call). File references use the shared run identity and
+  // are resolved when cache files are written.
   const collationUserMsg = buildCollationMessage(
     p.params.query,
     p.cachePath,
     searchResult,
     succeededExtractions,
+    identity,
   );
 
   throwIfAborted(p.signal);
@@ -526,6 +536,9 @@ async function runCollateStage(
     timeoutMs: p.settings.llmTimeoutMs,
     onRetryNotice: (msg) => p.onProgress?.(progress("collate", msg)),
   });
+
+  if (!collation.trim())
+    throw new Error("Collation returned no visible text; increase collationMaxTokens or choose a model with a smaller reasoning budget");
 
   p.tel?.recordCollate({
     model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
@@ -595,6 +608,8 @@ async function startLlmsFullDownloads(
  * Write cache artifacts under the per-cache-path lock (only local file I/O
  * happens under the lock; it serialises two concurrent same-query runs),
  * then commit any remaining llms-full downloads under a second short lock.
+ * `writeCacheFiles` replaces the previous run's artefact set for this cache
+ * path, preserving supplementary llms-full downloads.
  */
 async function writeCacheArtifacts(
   p: PipelineCtx,
@@ -603,17 +618,20 @@ async function writeCacheArtifacts(
   searchResult: string,
   collation: string,
   llms: LlmsDownloads,
+  identity: SourceIdentity,
 ): Promise<void> {
   await withLock(
     cacheLockDir(p.physicalCachePath),
     async () => {
-      // Write cache files (staging-based atomic, no partial visibility)
+      // Write cache files (staging-based per-file atomic replacement under
+      // the lock; obsolete artefacts from a previous run are pruned)
       await writeCacheFiles(
         p.physicalCachePath,
         allExtractions,
         fetched.successPages,
         searchResult,
         p.params.query,
+        identity,
       );
 
       // Write report (atomic via temp-file + rename)
@@ -624,6 +642,7 @@ async function writeCacheArtifacts(
         allExtractions,
         fetched.pages,
         p.cachePath,
+        identity,
       );
 
       // Write telemetry sidecar (atomic via temp-file + rename)
@@ -717,9 +736,17 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
 }
 
 /**
- * Shared degraded-exit path: stamp the outcome, write the sidecar, and
- * return the fallback result. Every early return in executePipeline() goes
- * through here so the three degraded outcomes stay structurally uniform.
+ * Shared degraded-exit path: stamp the outcome, remove artefacts left by a
+ * previous successful run of the same query (a degraded refresh must not
+ * leave an older report and extraction set alongside newer degraded
+ * telemetry), drop the matching index entry so cache suggest cannot surface a
+ * search whose report was just cleared, write the sidecar, and return the
+ * fallback result. Every early return in executePipeline() goes through here
+ * so the three degraded outcomes stay structurally uniform.
+ *
+ * With telemetry disabled and no previous cache directory, nothing is written
+ * at all: acquiring the cache lock would create the directory, and a fresh
+ * degraded query must leave no artefacts.
  */
 async function degradedReturn(
   p: PipelineCtx,
@@ -728,7 +755,36 @@ async function degradedReturn(
   details: Record<string, unknown>,
 ): Promise<OperationResult> {
   throwIfAborted(p.signal);
-  await writeLockedTelemetry(p, outcome);
+  const dirExists = await stat(p.physicalCachePath)
+    .then(() => true)
+    .catch(() => false);
+  if (!p.tel && !dirExists) return { text: message, details, outcome };
+  try {
+    await withLock(
+      cacheLockDir(p.physicalCachePath),
+      async () => {
+        await clearCacheArtefacts(p.physicalCachePath).catch((error) => {
+          p.logger.error(`Cache artefact cleanup failed: ${errMsg(error)}`);
+        });
+        await writeTelemetrySidecar(p.logger, p.tel, p.physicalCachePath, outcome);
+        // Index removal follows the lock-ordering invariant: the index lock
+        // is only ever taken while already holding the cache lock, mirroring
+        // the successful path's updateIndex placement.
+        await withLock(
+          indexLockDir(p.paths.cacheRoot),
+          async () => {
+            const slug = p.physicalCachePath.split("/").pop() ?? p.physicalCachePath;
+            await removeIndexEntry(p.paths.cacheRoot, slug);
+          },
+          p.signal,
+        );
+      },
+      p.signal,
+    );
+  } catch (error) {
+    throwIfAborted(p.signal);
+    p.logger.error(`Telemetry write failed: ${errMsg(error)}`);
+  }
   return { text: message, details, outcome };
 }
 

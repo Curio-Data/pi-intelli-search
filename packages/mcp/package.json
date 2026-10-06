@@ -1,6 +1,6 @@
 {
   "name": "@curio-data/mcp-intelli-search",
-  "version": "0.15.0-alpha.0",
+  "version": "0.15.0",
   "description": "Standalone intelligent web research engine and Model Context Protocol stdio server.",
   "license": "Apache-2.0",
   "type": "module",
@@ -28,12 +28,12 @@
   "scripts": {
     "build": "node ../../scripts/build-mcp.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --import tsx --test test/*.test.ts",
+    "test": "node ../../scripts/run-tests.mjs mcp",
     "prepack": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.3.0",
-    "defuddle": "^0.16.0",
+    "defuddle": "^0.19.4",
     "linkedom": "^0.18.12",
     "typebox": "^1.3.7",
     "wreq-js": "^2.3.0"

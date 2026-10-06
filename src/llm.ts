@@ -85,8 +85,12 @@ export const __harness: {
     options?: SimpleStreamOptions,
   ) => Promise<AssistantMessage>;
 } = {
+  // Only reached on 0.81.1-0.85.x, whose provider accepts the raw Context.
+  // Current SDK typings require TranscriptContext; do not weaken the modern
+  // path or normalize legacy messages using an API absent at the peer floor.
   streamSimple: (provider, model, context, options) =>
-    provider.streamSimple(model, context, options).result(),
+    (provider as unknown as Pick<ModelRegistryFacade, "streamSimple">)
+      .streamSimple(model, context, options).result(),
   registryStreamSimple: (registry, model, context, options) =>
     registry.streamSimple(model, context, options).result(),
 };

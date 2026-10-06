@@ -37,7 +37,8 @@ export const intelliResearchTool = {
   description:
     "Search the web, fetch top results, extract relevant content from each " +
     "page, and deduplicate into a concise summary. Caches all results under " +
-    ".search/ for follow-up. This is the primary research tool; for quick " +
+    ".search/ for follow-up; repeating a query on the same UTC date replaces " +
+    "its cached files. This is the primary research tool; for quick " +
     "factual lookups, use intelli_search instead.",
   promptSnippet:
     "intelli_research(query): full search → fetch → extract → collate pipeline with caching",
