@@ -19,6 +19,7 @@ export function verifyClaudeRouting(events, operation, skillMode) {
   for (const name of ["intelli_search", "intelli_research"]) {
     assert.ok(init.tools?.includes(prefix + name), `both routing options must be exposed: ${name}`);
   }
+  assert.ok(!init.tools?.includes("Bash"), "no shell tool exposed in a routing evaluation");
   const discovered = (init.slash_commands ?? []).includes(skillName);
   assert.equal(discovered, skillMode === "required", "skill discovery must match the scenario");
 
@@ -26,6 +27,7 @@ export function verifyClaudeRouting(events, operation, skillMode) {
     ["assistant", "user"].includes(event.type) && Array.isArray(event.message?.content)
       ? event.message.content.map((block) => ({ ...block, index })) : []);
   const calls = blocks.filter((block) => block.type === "tool_use");
+  assert.ok(!calls.some((call) => call.name === "Bash"), "no shell substitution in a routing evaluation");
   assert.ok(!calls.some((call) => ["WebSearch", "WebFetch"].includes(call.name)),
     "no built-in web substitution in an intelli-search evaluation");
   const operations = calls.filter((call) => call.name.startsWith(prefix));

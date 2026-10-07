@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Changed
+
+- The MCP server sends search-first routing and optional skill-loading guidance through its `instructions` field and tool descriptions. Factual questions, latest versions and release dates are directed to `intelli_search`; comparisons, detailed analysis and multi-page evidence gaps are directed to `intelli_research`. These instructions guide host models rather than enforce tool choice.
+- The _Claude Code_ and _Codex_ plugin skills place tool selection before setup and give every research example an explicit `maxUrls` page budget. Native tool descriptions, configuration and the shared engine are unchanged.
+
 ## [pi-0.15.0] - 2026-10-07
 
 ### Fixed

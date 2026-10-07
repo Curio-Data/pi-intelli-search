@@ -6,7 +6,8 @@
 # Installs the local-tarball plugin into an isolated profile, supplies its
 # sensitive key option, and runs four fresh sessions. Scenario 12 separately
 # covers credential-free installation. No prompt names the desired operation;
-# both search and research remain available in every session.
+# both search and research remain available in every session. Bash is removed
+# from the model's tool set; local cache reads use Read, Glob and Grep.
 #
 # Usage: ./test/e2e/13_claude_code_plugin.sh
 # Environment:
@@ -164,8 +165,11 @@ EOF
 ok "key option and bounded research configuration set"
 
 # Each case gets an empty workspace and fresh session. Disabling skills in
-# the first case exercises server instructions and descriptions on their own.
-# Pre-allow every plugin tool (and Skill), not only the expected winner.
+# the first case exercises server guidance without a skill. Under tool search,
+# names and instructions load first; descriptions load on demand.
+# Pre-allow every plugin tool, Skill and local file-reading tools, not only
+# the expected winner. Remove Bash to avoid shell permissions and shell-based
+# web substitution; do not relax the zero-denial transcript assertion.
 PREFIX="mcp__plugin_intelli-search_intelli_search__"
 for CASE in descriptions-only factual-auto factual-explicit comparison-auto; do
   EXPECTED=intelli_search
@@ -174,18 +178,18 @@ for CASE in descriptions-only factual-auto factual-explicit comparison-auto; do
   FLAGS=()
   case "$CASE" in
     descriptions-only)
-      PROMPT='Using intelli search, what is the latest Nano Banana model release?'
+      PROMPT='Using the installed web research plugin, what is the latest Nano Banana model release?'
       SKILL_MODE=disabled
       FLAGS+=(--disable-slash-commands)
       ;;
     factual-auto)
-      PROMPT='Using intelli search, what is the latest Nano Banana model release?'
+      PROMPT='Using the installed web research plugin, what is the latest Nano Banana model release?'
       ;;
     factual-explicit)
-      PROMPT='First load the intelli-search:intelli-search skill. Using intelli search, what is the latest stable TypeScript release?'
+      PROMPT='First load the intelli-search:intelli-search skill. Using the installed web research plugin, what is the latest stable TypeScript release?'
       ;;
     comparison-auto)
-      PROMPT='Using intelli search, compare SQLite WAL and rollback journal modes for a small multi-user application. Analyse reader/writer concurrency, checkpointing and filesystem constraints using multiple official documentation pages, and explain the tradeoffs.'
+      PROMPT='Using the installed web research plugin, compare SQLite WAL and rollback journal modes for a small multi-user application. Analyse reader/writer concurrency, checkpointing and filesystem constraints using multiple official documentation pages, and explain the tradeoffs.'
       EXPECTED=intelli_research
       CASE_TIMEOUT="$E2E_RESEARCH_TIMEOUT_SECONDS"
       ;;
@@ -198,7 +202,8 @@ for CASE in descriptions-only factual-auto factual-explicit comparison-auto; do
   if ! (cd "$CASE_WORKSPACE" && timeout --foreground "${CASE_TIMEOUT}s" \
       claude -p "$PROMPT" --model "$E2E_CLAUDE_MODEL" \
       --output-format stream-json --verbose --no-session-persistence \
-      --allowedTools "Skill,${PREFIX}intelli_search,${PREFIX}intelli_research,${PREFIX}intelli_extract,${PREFIX}intelli_collate" \
+      --allowedTools "Skill,Read,Glob,Grep,${PREFIX}intelli_search,${PREFIX}intelli_research,${PREFIX}intelli_extract,${PREFIX}intelli_collate" \
+      --disallowedTools Bash \
       "${FLAGS[@]}" > "$STREAM" 2> "$E2E_ROOT/$CASE.stderr"); then
     bad "$CASE: session process failed or timed out"
   fi

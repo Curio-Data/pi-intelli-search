@@ -67,6 +67,15 @@ it("the live telemetry filter rejects missing, nonnumeric and out-of-budget coun
 });
 
 it("routing checks distinguish discovery, invocation and actual tool choice", () => {
+  const script = readFileSync(new URL("./e2e/13_claude_code_plugin.sh", import.meta.url), "utf8");
+  const prompts = [...script.matchAll(/^\s+PROMPT='([^']+)'/gm)].map((match) => match[1]);
+  assert.equal(prompts.length, 4);
+  assert.match(script, /--disallowedTools Bash/);
+  assert.match(script, /--allowedTools "Skill,Read,Glob,Grep,/);
+  for (const prompt of prompts) {
+    assert.match(prompt, /Using the installed web research plugin/);
+    assert.doesNotMatch(prompt, /intelli_search|intelli_research|Using intelli search/i);
+  }
   assert.deepEqual(verifyClaudeRouting(fixture(), "intelli_search", "required"), {
     operation: "intelli_search", operationCalls: 1, skillDiscovered: true, skillInvoked: true,
     toolSearchUsed: false, models: ["fixture"], durationMs: 20,
@@ -114,6 +123,8 @@ it("rejects hidden routing options, errors, missing answers and speculative esca
   const cases: Array<[string, (events: ReturnType<typeof fixture>) => void]> = [
     ["both routing options", (events) => { events[0].tools = [prefix + "intelli_search"]; }],
     ["connected", (events) => { events[0].mcp_servers![0].status = "failed"; }],
+    ["no shell tool", (events) => { events[0].tools!.push("Bash"); }],
+    ["no shell substitution", (events) => { events.splice(3, 0, { type: "assistant", message: { model: "fixture", content: [{ type: "tool_use", id: "shell", name: "Bash", input: { command: "curl https://example.com" } }] } }); }],
     ["skill discovery", (events) => { events[0].slash_commands = []; }],
     ["at most one", (events) => { events.splice(3, 0, events[3], events[3]); }],
     ["model-visible answer", (events) => { events[4].message!.content = [{ type: "tool_result", tool_use_id: "operation", content: "{}" }]; }],

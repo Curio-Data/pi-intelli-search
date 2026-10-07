@@ -163,14 +163,14 @@ See [Model Configuration](#model-configuration) for model selection, [Configurat
 
 ## Tools
 
-Both packages expose these four operations. The names below are native `Pi` tool names and MCP server tool names; MCP hosts add their own callable-name prefixes. Use the names exposed by the host.
+Both packages expose these four operations. Start with `intelli_search` for factual questions, latest versions and release dates; use `intelli_research` for multi-page comparisons, detailed analysis or an evidence gap that search leaves unresolved. The names below are native `Pi` tool names and MCP server tool names; MCP hosts add their own callable-name prefixes. Use the names exposed by the host.
 
 | Tool               | Description                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
 | `intelli_search`   | Search the web and return a concise answer with a source list (top `defaultUrls`).                   |
 | `intelli_extract`  | Extract query-relevant content from a web page, preserving code and technical detail verbatim.      |
 | `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
-| `intelli_research` | Search, fetch, extract, collate, cache. The primary research tool. One call.                        |
+| `intelli_research` | Search, fetch, extract, collate and cache multi-page research in one call.                        |
 
 <a id="quick-start"></a>
 ## Usage Examples
