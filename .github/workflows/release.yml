@@ -41,7 +41,11 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Upgrade npm
-        run: npm install -g npm@latest
+        # Pin to npm 11: the last verified staged publish (v0.14.0) ran on
+        # npm 11, and npm's trusted-publishing docs recommend 11.5.1+.
+        # npm 12.2 failed the OIDC stage exchange with E401 (2026-10-07);
+        # do not track @latest here without a verified staged publish on it.
+        run: npm install -g npm@11
 
       - name: Select package from release tag
         id: select
