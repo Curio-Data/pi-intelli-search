@@ -31,6 +31,6 @@ jobs:
         run: |
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add data/downloads.json docs/images/downloads-*.svg
+          git add data/downloads.json data/downloads-mcp.json docs/images/downloads-*.svg
           git diff --staged --quiet || git commit -m 'chore: refresh download chart'
           git push

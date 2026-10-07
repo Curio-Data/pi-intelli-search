@@ -131,8 +131,6 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
 - [Development](#development)
 - [Documentation](#documentation)
 - [Downloads](#downloads)
-  - [`Pi` Extension Downloads](#pi-extension-downloads)
-  - [MCP Server Downloads](#mcp-server-downloads)
 - [Provenance](#provenance)
 - [Sponsor](#sponsor)
 - [Licence](#licence)
@@ -1203,24 +1201,14 @@ pi install /path/to/pi-intelli-search
 
 ## Downloads
 
-<!-- packages:pi -->
-### `Pi` Extension Downloads
-
-Weekly npm downloads across all published versions, refreshed every Monday by a scheduled GitHub Action. The chart is rendered with [rough.js](https://roughjs.com) from an append-only daily cache in `data/downloads.json` (see `scripts/plot-downloads.mts`).
+Weekly npm downloads for both packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment. The chart is rendered with [rough.js](https://roughjs.com) from append-only daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see `scripts/plot-downloads.mts`).
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/downloads-dark.svg">
-    <img alt="Weekly npm downloads for @curio-data/pi-intelli-search" src="docs/images/downloads-light.svg" width="800" />
+    <img alt="Stacked weekly npm downloads for @curio-data/pi-intelli-search and @curio-data/mcp-intelli-search" src="docs/images/downloads-light.svg" width="800" />
   </picture>
 </p>
-<!-- /packages -->
-
-<!-- packages:mcp -->
-### MCP Server Downloads
-
-View download statistics on the [`@curio-data/mcp-intelli-search` package page](https://www.npmjs.com/package/@curio-data/mcp-intelli-search).
-<!-- /packages -->
 
 <!-- packages:pi -->
 ## Provenance

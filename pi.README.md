@@ -92,7 +92,6 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
   - [`Pi` Extension Compatibility](#pi-extension-compatibility)
 - [Documentation](#documentation)
 - [Downloads](#downloads)
-  - [`Pi` Extension Downloads](#pi-extension-downloads)
 - [Provenance](#provenance)
 - [Sponsor](#sponsor)
 - [Licence](#licence)
@@ -771,14 +770,12 @@ To suppress the sidecar in the native extension, set `disableTelemetry: true` in
 
 ## Downloads
 
-### `Pi` Extension Downloads
-
-Weekly npm downloads across all published versions, refreshed every Monday by a scheduled GitHub Action. The chart is rendered with [rough.js](https://roughjs.com) from an append-only daily cache in `data/downloads.json` (see `scripts/plot-downloads.mts`).
+Weekly npm downloads for both packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment. The chart is rendered with [rough.js](https://roughjs.com) from append-only daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see `scripts/plot-downloads.mts`).
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/downloads-dark.svg">
-    <img alt="Weekly npm downloads for @curio-data/pi-intelli-search" src="https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/downloads-light.svg" width="800" />
+    <img alt="Stacked weekly npm downloads for @curio-data/pi-intelli-search and @curio-data/mcp-intelli-search" src="https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/downloads-light.svg" width="800" />
   </picture>
 </p>
 
