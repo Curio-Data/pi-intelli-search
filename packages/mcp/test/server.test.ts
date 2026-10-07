@@ -201,6 +201,16 @@ test.after(() => {
 test("lists the four canonical tools with truthful annotations", { timeout: 60_000 }, async () => {
   const fixture = await connect();
   try {
+    const instructions = fixture.client.getInstructions();
+    assert.ok(instructions, "initialize response carries server instructions");
+    assert.match(instructions, /Before the first intelli-search call/);
+    assert.match(instructions, /intelli-search:intelli-search/);
+    assert.match(instructions, /If the host has no such skill/);
+    assert.match(instructions, /Start with intelli_search for factual questions/);
+    assert.match(instructions, /Do not expand a simple lookup/);
+    // Claude truncates instructions/descriptions at 2048 characters by default:
+    // https://code.claude.com/docs/en/mcp#scale-with-mcp-tool-search (checked 2026-10-07).
+    assert.ok(instructions.length < 2048, "instructions fit Claude's default description limit");
     const { tools } = await fixture.client.listTools();
     assert.deepEqual(
       tools.map((tool) => tool.name),
@@ -229,7 +239,12 @@ test("lists the four canonical tools with truthful annotations", { timeout: 60_0
     assert.equal(byName.intelli_collate.annotations?.destructiveHint, true);
     assert.equal(byName.intelli_research.annotations?.destructiveHint, true);
     assert.match(byName.intelli_research.description ?? "", /degraded repeat preserves/);
+    assert.match(byName.intelli_search.description ?? "", /Start here for quick factual questions/);
+    assert.match(byName.intelli_research.description ?? "", /call intelli_search first, not this tool/);
+    assert.doesNotMatch(byName.intelli_research.description ?? "", /primary research tool/);
     for (const tool of tools) {
+      assert.match(tool.description ?? "", /load the intelli-search skill if available/);
+      assert.ok((tool.description?.length ?? 0) < 2048, `${tool.name}: no default host truncation`);
       assert.equal(tool.annotations?.idempotentHint, false);
       assert.equal(tool.annotations?.openWorldHint, true);
       assert.match(tool.description ?? "", /intelli_/);

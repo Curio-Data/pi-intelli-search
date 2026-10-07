@@ -206,7 +206,7 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
           text: redact(
             result.text
               .replace(
-                /(^- Read (?:the extraction|the full page): )`read ([^`]+)`/gm,
+                /(^- Read (?:the extraction|the full page|the report): )`read ([^`]+)`/gm,
                 "$1`$2` (use the host's file-reading capability)",
               )
               .replace(

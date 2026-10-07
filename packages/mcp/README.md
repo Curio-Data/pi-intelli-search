@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/mcp-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/mcp-intelli-search)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-blue)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-580%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-594%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -58,6 +58,7 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
     - [Codex](#codex)
     - [Generic MCP Host](#generic-mcp-host)
 - [Tools](#tools)
+  - [Evidence and Provenance](#evidence-and-provenance)
 - [Usage Examples](#usage-examples)
   - [Quick Search](#quick-search)
   - [Deep Research](#deep-research)
@@ -261,14 +262,20 @@ MCP hosts qualify tool names; use the names exposed by the host. The native `Pi`
 
 ## Tools
 
-Both packages expose these four operations. The names below are native `Pi` tool names and MCP server tool names; MCP hosts add their own callable-name prefixes. Use the names exposed by the host.
+Both packages expose these four operations. Start with `intelli_search` for factual questions, latest versions and release dates; use `intelli_research` for multi-page comparisons, detailed analysis or an evidence gap that search leaves unresolved. The names below are native `Pi` tool names and MCP server tool names; MCP hosts add their own callable-name prefixes. Use the names exposed by the host.
 
 | Tool               | Description                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
 | `intelli_search`   | Search the web and return a concise answer with a source list (top `defaultUrls`).                   |
 | `intelli_extract`  | Extract query-relevant content from a web page, preserving code and technical detail verbatim.      |
 | `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
-| `intelli_research` | Search, fetch, extract, collate, cache. The primary research tool. One call.                        |
+| `intelli_research` | Search, fetch, extract, collate and cache multi-page research in one call.                        |
+
+### Evidence and Provenance
+
+Research collation receives only successful, non-empty page extractions, not the search model's summary. Code generates the Source Assessment inventory and cache-file references from the run's evidence manifest. Synthesis uses source IDs such as `[S1]`; unknown IDs, prose URLs absent from the supplied extractions and model-generated numbered cache references fail validation before a report is committed. Cross-links present in extracted text remain content, not additional fetched pages. Fenced, indented and inline code examples remain code, not evidence declarations. These checks establish reference consistency, not factual accuracy.
+
+Manual `intelli_collate` labels its evidence as caller-supplied extractions; it does not claim the server fetched those pages. Empty or duplicate source evidence is rejected. The optional `searchSummary` input remains accepted for compatibility but does not supply synthesis evidence. Per-source relevance and contribution ratings are no longer model-generated. Read exact cache paths from the inventory; `Not cached` means no full-page file was supplied.
 
 <a id="quick-start"></a>
 ## Usage Examples
@@ -510,7 +517,7 @@ Both packages write this format. The native extension resolves the cache against
 ```text
 .search/
 ├── 2026-04-19-d1-worker-api-3f7a2c/
-│   ├── report.md               # Collated summary + source index
+│   ├── report.md               # Synthesis + authoritative source inventory
 │   ├── query.txt               # Original search query
 │   ├── meta.json               # Local-only telemetry sidecar (v0.11.0+)
 │   ├── extractions/            # Per-page LLM extractions (≈3-5K each)

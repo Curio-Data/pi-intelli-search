@@ -1,7 +1,7 @@
 {
   "name": "intelli-search",
   "displayName": "Intelli Search",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Research the web with a five-stage pipeline (search, fetch, extract, collate, cache suggest) served over MCP by @curio-data/mcp-intelli-search.",
   "author": {
     "name": "Curio Data Pro Ltd",

@@ -73,10 +73,12 @@ const DESCRIPTION =
 const API_KEY_OPTION = "openrouter_api_key";
 
 const SKILL_DESCRIPTION =
-  "Use intelli-search for current web research, documentation lookup, API " +
-  "verification, library comparisons and release information. Prefer its " +
-  "search or multi-page research tools to built-in web search when this skill " +
-  "is selected. Includes installation, configuration and troubleshooting. " +
+  "Load before calling any intelli_search, intelli_research, intelli_extract " +
+  "or intelli_collate tool, including requests to use intelli search. " +
+  "Use for current web information, documentation and API verification. " +
+  "Start with intelli_search for quick facts, latest versions and release " +
+  "dates; reserve intelli_research for multi-page analysis and comparisons. " +
+  "Includes tool selection, focused extraction, cache use and setup. " +
   "Report unavailable tools explicitly; never claim another search used this server.";
 
 export function readMcpPackage(root = REPO_ROOT) {

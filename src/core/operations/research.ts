@@ -58,6 +58,7 @@ import {
   formatCacheAppendix,
 } from "../messages.js";
 import { progress } from "../progress.js";
+import { finalizeCollation } from "../provenance.js";
 
 /** Per-run I/O injection; no mutable global engine harness. */
 export interface ResearchDependencies {
@@ -261,7 +262,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   const failedCount = fetched.pages.length - fetched.successPages.length;
   const result =
     collation +
-    formatCacheAppendix(p.cachePath, fetched.successPages.length, failedCount) +
+    formatCacheAppendix(p.cachePath, succeededExtractions.length, allExtractions.length - succeededExtractions.length) +
     suggestionsAppendix;
 
   return {
@@ -527,7 +528,7 @@ async function runCollateStage(
   );
 
   throwIfAborted(p.signal);
-  const { text: collation } = await p.models.complete({
+  const { text } = await p.models.complete({
     model: p.collateConfig,
     systemPrompt: COLLATION_SYSTEM_PROMPT,
     userMessage: collationUserMsg,
@@ -538,12 +539,11 @@ async function runCollateStage(
     onRetryNotice: (msg) => p.onProgress?.(progress("collate", msg)),
   });
 
-  if (!collation.trim())
-    throw new Error("Collation returned no visible text; increase collationMaxTokens or choose a model with a smaller reasoning budget");
+  const collation = finalizeCollation(text, p.cachePath, succeededExtractions, identity, "fetched");
 
   p.tel?.recordCollate({
     model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
-    summaryChars: collation.length,
+    summaryChars: text.trim().length,
   });
 
   return collation;
@@ -655,6 +655,7 @@ async function writeCacheArtifacts(
         fetched.pages,
         p.cachePath,
         identity,
+        true,
       );
 
       // Write telemetry sidecar (atomic via temp-file + rename)
@@ -898,6 +899,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       onRetryNotice: (msg) => p.onProgress?.(progress("extract", msg)),
     });
 
+    if (!extraction.trim()) throw new Error("Extraction returned no visible evidence");
     const firstLine = extraction.split("\n")[0] ?? "";
     return {
       url: page.url,

@@ -114,7 +114,7 @@
           },
           "searchSummary": {
             "type": "string",
-            "description": "Summary from the initial search step"
+            "description": "Summary from the initial search step; accepted for compatibility, not used as synthesis evidence"
           },
           "fullPages": {
             "type": "array",

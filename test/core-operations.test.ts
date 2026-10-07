@@ -85,7 +85,9 @@ it("rejects empty collation instead of reporting a completed cache", async (t) =
   context.models.complete = async (request) => request.model.model === "collate"
     ? { text: " \n", citations: [] } : complete(request);
   await assert.rejects(research({ query: "empty synthesis" }, context, dependencies), /no visible text.*collationMaxTokens/);
-  await assert.rejects(collate({ query: "empty manual", extractions: [] }, context), /no visible text.*collationMaxTokens/);
+  await assert.rejects(collate({ query: "empty manual", extractions: [{
+    url: "https://one.example", title: "One", extraction: "body", sourceType: "docs", status: "success",
+  }] }, context), /no visible text.*collationMaxTokens/);
   assert.deepEqual(await readdir(root), [], "empty synthesis must not create success artefacts");
 });
 
@@ -534,6 +536,64 @@ it("suppresses telemetry independently of documentation discovery", async (t) =>
     readFile(join(root, result.details.cachePath as string, "meta.json")),
     /ENOENT/,
   );
+});
+
+for (const operation of ["research", "collate"] as const) {
+  it(`${operation} excludes search-only claims and preserves prior output on provenance failure`, async (t) => {
+    const root = await workspace(t);
+    const { context, dependencies, requests } = coreContext(root);
+    const query = `provenance ${operation}`;
+    const params = { query, searchSummary: "UNFETCHED CLAIM https://unfetched.example/", extractions: [{
+      url: "https://one.example/page", title: "One", extraction: "Evidence", sourceType: "docs", status: "success",
+    }] };
+    const run = () => operation === "research" ? research({ query, maxUrls: 1 }, context, dependencies) : collate(params, context);
+    const complete = context.models.complete;
+    context.models.complete = async (request) => {
+      if (request.model.model === "search") return { text: "UNFETCHED CLAIM. [One](https://one.example/page) [Other](https://unfetched.example/)", citations: [] };
+      return complete(request);
+    };
+    const successful = await run();
+    const path = join(root, successful.details.cachePath as string);
+    const report = await readFile(join(path, "report.md"), "utf8");
+    const index = await readFile(join(context.paths.cacheRoot, ".index.json"), "utf8");
+    const input = requests.find((request) => request.model.model === "collate")!;
+    assert.doesNotMatch(input.userMessage, /UNFETCHED CLAIM|unfetched|\.search|Source assessment/);
+    const sourceCount = JSON.parse(input.userMessage).sources.length;
+    assert.equal(report.match(/\| S\d+ \|/g)?.length, sourceCount);
+    assert.equal(report.match(/## Source assessment/g)?.length, 1);
+    assert.doesNotMatch(report, /## Source index/);
+    if (operation === "research") {
+      const meta = JSON.parse(await readFile(join(path, "meta.json"), "utf8"));
+      assert.equal(meta.stages.collate.summaryChars, "Summary.".length);
+    }
+    context.models.complete = async (request) => request.model.model === "collate"
+      ? { text: "Read `sources/17-fiction.md`. [S17]", citations: [] } : complete(request);
+    await assert.rejects(run(), /provenance validation failed/);
+    assert.equal(await readFile(join(path, "report.md"), "utf8"), report);
+    assert.equal(await readFile(join(context.paths.cacheRoot, ".index.json"), "utf8"), index);
+    await assert.rejects(stat(`${path}.1`), /ENOENT/);
+    await assert.rejects(readdir(context.paths.stagingRoot), /ENOENT/);
+  });
+}
+
+it("does not collate empty or failed caller evidence, and treats empty research extractions as failed", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies, requests } = coreContext(root);
+  await assert.rejects(collate({ query: "empty", extractions: [{
+    url: "https://one.example", title: "Empty", extraction: " \n", sourceType: "docs", status: "success",
+  }] }, context), /successful, non-empty extraction/);
+  assert.equal(requests.length, 0, "invalid caller evidence must fail before cost");
+  const complete = context.models.complete;
+  context.models.complete = async (request) => request.model.model === "extract"
+    ? { text: " \n", citations: [] } : complete(request);
+  const result = await research({ query: "no extracted evidence" }, context, dependencies);
+  assert.equal(result.outcome, "extraction-failed");
+  assert.equal(requests.filter((request) => request.model.model === "collate").length, 0);
+  const metaPath = makeCachePath("no extracted evidence", root, context.paths.cacheRoot);
+  const meta = JSON.parse(await readFile(join(metaPath, "meta.json"), "utf8"));
+  assert.equal(meta.stages.extract.succeeded, 0);
+  assert.equal(meta.stages.extract.failed, 2);
+  await assert.rejects(readFile(join(metaPath, "report.md")), /ENOENT/);
 });
 
 it("does not write metadata or staging when both features are disabled", async (t) => {

@@ -42,8 +42,7 @@ const QUERY = "Fixture research";
 const URLS = ["https://example.com/a", "https://example.org/b", "https://example.net/c"];
 const SEARCH = `Fixture answer.\n\n## Sources\n[A](${URLS[0]})\n[B](${URLS[1]})`;
 const EXTRACTION = "Official docs, current 2026.\n\nUse `fixture()` for the example.";
-const COLLATION =
-  "## Summary\n\nFixture synthesis.\n\n## Source assessment\n\nTwo relevant sources.";
+const COLLATION = "Fixture synthesis. [S1]";
 const PRIOR_SLUG = "2026-01-01-prior-fixture-abcdef";
 
 function plain<T>(value: T): T {

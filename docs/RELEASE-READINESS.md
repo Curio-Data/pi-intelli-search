@@ -1,82 +1,93 @@
 # Release Readiness
 
-The current working candidate fixes the release-review findings across the native extension, shared engine and Model Context Protocol (MCP) server. Package versions are defined by the two manifests; their release notes are in [CHANGELOG.md](../CHANGELOG.md). This page records release gates, not authorisation to publish.
+The prepared candidate combines shared-engine provenance corrections with search-first Model Context Protocol (MCP) routing. Package versions are defined by [the native manifest](../package.json) and [the MCP manifest](../packages/mcp/package.json); prepared notes are in [CHANGELOG.md](../CHANGELOG.md). Neither candidate package is published. This page is the handoff for a fresh release agent working from `main`, not authorisation to publish.
 
-## Publication State
+## Current Candidate
 
-The `0.15.0` stable generation is fully published (2026-10-07). The MCP package was staged through CI, approved by the maintainer with two-factor authentication at 15:47 UTC and moved `latest` off the alpha; the native package was staged as `pi-v0.15.0` (staging id `a8f0a25d`, provenance signed) and the maintainer's approval moved `latest` from `0.14.0` to `0.15.0` the same evening. Registry verification: clean installs of both published packages succeed, the native payload carries the derived README written by its publish hook, and the registry-pin installation gate against the published MCP version is recorded in [Compatibility](COMPATIBILITY.md#release-candidate-verification). The full paced live suite passed on the merged `main` tree before staging (14 scenarios, 0 failed, 2026-10-07). The old [phased handoff](plans/mcp-intelli-search/README.md) is historical, not a branch-switch instruction.
+The shared engine gives collation successful, non-empty extraction evidence only. Code renders one authoritative Source Assessment using the run's file identity, and validates references before report writes or rotation. Manual evidence is labelled caller-supplied; code examples and cross-links in extracted content remain content rather than additional fetched pages. Model-generated relevance and contribution ratings are removed. Reference consistency does not establish factual accuracy. The [provenance correction evidence](evidence/2026-10-07-provenance-correction.md) records implementation, review dispositions and limitations.
 
-Bootstrap history: the registry published the initial alpha on 2026-10-05 (both `alpha` and `latest` pointed to it at the 2026-10-06 check); the stable promotions on 2026-10-07 moved `latest` to `0.15.0` on both packages. The trusted-runner binding was created with the npm CLI `npm trust` command on 2026-10-07 after a UI-created entry failed the staged publish twice with `E401`; the two-command bootstrap sequence is documented in `AGENTS.md` under npm Trusted Publisher.
+MCP server instructions, descriptions and generated host skills guide factual lookups to search and multi-page analysis to research. These instructions guide models rather than enforce their actions. The [routing review](evidence/2026-10-07-mcp-routing-review.md) records neutral-prompt evaluations, skill-loading checks and the controlled no-`Bash` evaluation boundary. Native tool descriptions are unchanged; the shared collation prompt, report prose and `searchSummary` description change intentionally.
 
-## Finding Dispositions
+Both manifests, the lockfile, native default history and plugin pins advance together. The root README generates package READMEs, and shared guidance generates plugin skills. Do not hand-edit those derived files or bump the packages again unless the candidate changes scope.
+
+## Verification State
+
+| Gate | State | Evidence |
+|---|---|---|
+| Implementation Review | Passed | Opus 5.5 and native DeepSeek Flash confirmed no implementation blocker after corrections; dispositions in the provenance evidence |
+| Builds and Deterministic Tests | Passed on the implementation commit | Both builds, isolated native and MCP tests, native-contract types and generated-file gates; test total appears only in the root README badge |
+| Packaging and Security | Passed on the implementation commit | Both independent fresh-tarball installation gates, ShellCheck and full dependency audit |
+| Implementation CI | Passed | Commit `fd0c26d`, [run 37679997280](https://github.com/Curio-Data/pi-intelli-search/actions/runs/37679997280); require exact-commit CI again for later edits |
+| Targeted Live Checks | Passed | Paced scenarios `01_main`, `05_collation_limits`, `11_mcp_stdio` and `13_claude_code_plugin`; native research and all Opus cases rerun after the final source corrections |
+| Full Paced Live Suite | Pending for this generation | Run the complete suite on the final candidate; the previous stable release's suite is not current evidence |
+| Candidate Registry Pins | Not published | The prepared MCP version returned no registry match on 2026-10-07; both published `latest` tags still identify the previous stable generation |
+| Publication Approval | Not granted by this handoff | Merge permission is not permission to create a GitHub Release or trigger staged publication |
+| Post-Publication Host Installation | Pending | Verify both clean-profile plugins against the exact published pin before native staging |
+
+Local gate logs and reviewer reports are under gitignored `.tmp/agents/provenance-fix/`; tracked evidence pages contain the conclusions so the handoff does not depend on that scratch surviving. [Compatibility](COMPATIBILITY.md#current-candidate-verification) distinguishes current local-tarball checks from historical registry-pin checks.
+
+## Release from Main
+
+The owner directed: update documentation, commit and push, merge to `main`, then hand release work to a fresh agent (2026-10-07). This is an explicit exception to the default policy of holding unpublished catalogue pins off `main`. It changes merge timing only; MCP-first publication, exact-commit CI and separate approval gates remain mandatory.
+
+Until MCP publication, fresh plugin installation from the default repository marketplaces cannot resolve the prepared server pin. Main's `Require published catalog pins before merging to main` CI step fails for that reason. Do not remove or bypass the guard, treat that failure as a full validation pass, or claim published-install evidence from the local tarball checks.
+
+The merged `main` commit is also validated through retained branch `release/0.16.0`. After pushing the merge to `main`, fast-forward and push that release branch to the same commit. Its CI push run validates the exact merged tree without the pre-publication availability check. Keep the branch until the release cycle closes. This permits the release agent to work from `main` and tag its exact validated commit.
+
+The release workflow selects the newest eligible push CI run for the target commit, not any historical successful run. A newer failed main run can shadow an older green release run at the same commit. Push the matching release branch after the main push, and confirm that the newest eligible run is completed successfully. The target must still belong to the matching remote branch. If release-preparation edits change the commit before MCP publication, repeat this exact-commit validation rather than borrowing an earlier green run.
+
+### Fresh-Agent Checklist
+
+1. Start from a clean, current `main`. Read this page, the package-prefixed changelog entries and both evidence records. Confirm both manifests, lockfile entries, native default history and generated plugin pins agree; verify the actual registry state rather than assuming publication.
+2. Run the full paced live suite on the final candidate. [_Kimi_](https://www.kimi.com) agent-loop quota failures were retained as failures during implementation. Native [_DeepSeek_](https://www.deepseek.com) Flash was used successfully instead; scenarios 1 and 11 consume `TEST_MODEL`, while other scenarios use `E2E_LOOP_MODEL_ID`. The pipeline models remain scenario-configured. Use the existing credential workflow in `AGENTS.md`; never copy operator OAuth credentials.
+3. Set each prepared changelog date when that package's release is approved. If this or another edit changes the commit, commit and push it, then validate that exact commit through `release/0.16.0` while the MCP registry pin remains unpublished. Require the newest eligible push CI run to pass. Confirm both changelog headings and reference links exist; never tag a commit that only passed an earlier ancestor's checks.
+4. Obtain explicit approval for the MCP release. Create the approved [_GitHub_ Release](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases) with the `mcp-v` tag matching its manifest; use the full target commit SHA. Publishing that release triggers the existing trusted-publishing workflow, which submits the package to npm staging. The maintainer approves the staged package on npm with two-factor authentication; the agent never approves it.
+5. Verify MCP registry publication and the expected dist-tag. Install both plugins from the committed catalogues into clean profiles and confirm the pinned launcher downloads and starts the published server. Record this as registry-pin evidence in the compatibility matrix. Rerun main CI after the pin becomes public.
+6. Only after that gate passes, obtain separate native release approval and stage the `pi-v` tag matching its manifest. Require exact-commit CI and retain the native derived-README publish hook. The maintainer approves this staged package separately. Verify its registry publication and installed README.
+7. Update publication state, compatibility evidence and changelog dates from observed results. Remove the repository-only pending-publication notice in the root README after both packages and the plugin pins are verified, then regenerate the package READMEs. No bootstrap publish or trusted-publisher reconfiguration is required for these existing packages.
+
+The tested loop-model selection for the pending full suite is:
+
+```bash
+TEST_MODEL=deepseek/deepseek-flash \
+E2E_LOOP_MODEL_ID=deepseek/deepseek-flash \
+TMPDIR="$PWD/.tmp" \
+  ./test/run-e2e-all.sh
+```
+
+This is a pending release check, not a recorded full-suite pass. It consumes live quota. Scenarios 13 and 14 require the existing private token and dedicated login described in `AGENTS.md`; a skipped mandatory scenario is missing evidence, not a pass.
+
+## Previous Publication
+
+The previous stable `0.15.0` generation is fully published (2026-10-07). MCP was staged through CI and approved at 15:47 Coordinated Universal Time (UTC); native followed after registry-pin verification, with signed provenance. The full paced live suite completed on the merged tree before those releases. [The compatibility record](COMPATIBILITY.md#published-0150-registry-pin-verification-2026-10-07) records clean-profile installation of the published MCP pin. Those results establish the previous generation only.
+
+The first MCP alpha required a manual bootstrap because npm cannot bind a trusted publisher to a package that does not exist. The working package-specific bindings were then established with the npm CLI. A prior UI-created binding failed with `E401`; the verified CLI setup and npm-major pin are recorded in `AGENTS.md`. Neither bootstrap nor a trust change should be repeated as part of this release.
+
+## Historical Finding Dispositions
+
+The following corrections shipped in the previous stable generation; they are not new candidate changes or evidence of current release approval.
 
 | Finding | Correction | Evidence |
 |---|---|---|
-| R1 / F2: MCP answer lost on structured-content hosts | Return the same full operation text in text content and `structuredContent.text` | Protocol equality assertions; scenario 13 checks model-visible answer text |
-| R2: damaged native model configuration overwritten | Preserve invalid/unreadable files and symlinks; validate, lock and atomically merge valid configuration | Isolated malformed-file, override, concurrent-start and symlink tests |
-| R3: extraction dependency advisories | Upgrade extraction and Mathematical Markup Language (MathML) conversion dependencies; the converter now loads patched xmldom externally | Dependency-source regression and full dependency audit |
+| R1 / F2: MCP answer lost on structured-content hosts | Return complete text in both result representations | Protocol equality assertions and model-visible host checks |
+| R2: damaged native model configuration overwritten | Preserve invalid files and overrides; lock and atomically merge valid files | Malformed-file, concurrent-start and symlink tests |
+| R3: extraction dependency advisories | Patched extraction dependencies and external XML parser | Executable dependency-source regressions and audit |
 | R4: incorrect related-history selection | Share the last-20 candidate window between prompt and parser | Large-history regression |
-| R5: broken partial-result cache paths | Allocate source identity once for physical files, prompts and reports | Mixed-result, optional-page and reordered-page regressions |
-| R6: obsolete refresh artefacts | Attempt to archive prior artefacts on completed refresh, with logged in-place fallback on archive failure; preserve supplementary documentation and prior successful output on degraded refresh | Repeated-query and concurrent-writer regressions |
-| R7 / F3 / F15: configuration startup failure and ambiguous errors | Serve actionable file errors until a selected file loads; preserve strict launcher/workspace checks and safe syntax diagnostics | CLI and protocol repair-in-place tests |
-| R8: incomplete acceptance checks | Isolate host state; inspect actual tool arguments and page budgets; fail on degraded or absent artefacts; distinguish skipped live scenarios | Provider isolation and E2E-helper regressions, paced live suite |
-| F1, F4, F10, F16: installation and evidence gaps | Main has catalogues; root README supplies setup and distinguishes connection from inference | Generated README drift checks and compatibility matrix |
+| R5: partial-result cache paths | Allocate source identity once for physical files and references | Mixed, optional-page and reordered-page tests |
+| R6: obsolete refresh artefacts | Archive completed refreshes; preserve prior output on degraded refresh | Repeated-query and concurrent-writer tests |
+| R7 / F3 / F15: configuration failure and ambiguous errors | Serve repairable file errors; retain strict workspace checks | CLI and protocol repair-in-place tests |
+| R8: incomplete acceptance checks | Isolate host state and reject degraded or absent artefacts | E2E-helper regressions and the previous paced suite |
+| F1, F4, F10, F16: installation and evidence gaps | Catalogues, setup guidance and explicit evidence classes | Generated checks and compatibility matrix |
+| F5, F6, F7, F8, F9, F12, F13: host guidance | Selection, diagnostics, secrets and actual invocation checks | Generated guidance and host scenarios |
+| F11: generator discoverability | Non-mutating help and a linked generator reference | Generator tests |
+| F14: unresolvable related report | Return each exact report path | Cache and native-fixture regressions |
 
-The `F` series resolves in [the Phase 6 checkpoint](plans/mcp-intelli-search/POST-PHASE-6.md). The `R` series refers to the 2026-10-06 whole-release review reports kept under untracked `.tmp/` scratch; each row above is self-contained and names its defect, so the table does not depend on those reports surviving.
-| F5, F6, F7, F8, F9, F12, F13: host guidance | Explicit research selection and unavailable-tool reporting, diagnostics, secret entry, profile paths and real tool-call verification | Generated plugin drift tests and host scenarios |
-| F11: generator discoverability | Non-mutating help plus a generator reference linked to the tested tarball install flow | Generator tests |
-| F14: unresolvable suggested report | Include each exact report path | Cache-format and native-fixture regression |
+The `F` series is recorded in [the historical Phase 6 checkpoint](plans/mcp-intelli-search/POST-PHASE-6.md). The `R` series comes from the 2026-10-06 release review. Its initial suite was interrupted and failed scenario 5; later correction and the completed pre-publication suite closed that evidence gap. Do not reuse the initial interrupted-run claims or the old branch instructions for the current candidate.
 
-The Claude Code startup-failure cache and skill auto-selection observations were recorded on the host versions in [Compatibility](COMPATIBILITY.md), not established for every later version. Clear guidance is not a guarantee that an agent selects a skill automatically.
+## Shared Safety Constraints
 
-## Dependency Evidence
+A completed same-day repeat attempts to archive prior artefacts to numbered siblings before replacing the canonical cache. Rotation is best-effort and can leave a partial archive or fall back to in-place replacement. A degraded refresh preserves prior successful output; important reports still require a separate retained copy. [Architecture](ARCHITECTURE.md) documents the implementation and lock boundaries.
 
-The production extraction path uses [_Defuddle_](https://github.com/kepano/defuddle) and [_mathml-to-latex_](https://github.com/asnunes/mathml-to-latex). The updated converter's CommonJS entry imports `@xmldom/xmldom` rather than embedding a private parser. `test/dependency-security.test.ts` verifies that executable path and a conversion result. Inspecting only a transitive lockfile entry would not establish this.
+Page extraction uses patched [_Defuddle_](https://github.com/kepano/defuddle) and a Mathematical Markup Language (MathML) converter that loads its Extensible Markup Language (XML) parser externally. [Dependency-source tests](../test/dependency-security.test.ts) verify executable imports and conversion, not just lockfile entries. Run the full audit again for the release candidate.
 
-The security review checked [the Defuddle advisory](https://github.com/advisories/GHSA-jg4p-g6xj-4qmf) and [xmldom's parser advisory](https://github.com/advisories/GHSA-8344-3jmq-59r6). The Defuddle cross-site scripting advisory concerns downstream Hypertext Markup Language (HTML) rendering, which is not proof of executable script exposure in a Markdown-only server. The upgrade removes the vulnerable dependency rather than relying on that distinction. Development software development kit (SDK) dependencies also move to current releases so their pinned transitive dependencies do not retain audit findings; native peer floors are unchanged.
-
-## Independent Review
-
-Two independent whole-release reviewers examined the combined candidate after the fixes, and both re-examined the corrected tree after adjudication (reports under `.tmp/agents/release-016/reports/`, not tracked). Their verdicts agree: **no shipping-code or verification blocker remains**.
-
-- The first review round caught a release-verification blocker: scenario 5 had failed in the interrupted suite and the initial evidence summary overstated completion. The correction (non-reasoning comparison model, retained strict assertions, honest evidence) was confirmed resolved in the follow-up pass.
-- Residual, resolved after the follow-up: the native `Pi` tool descriptions initially did not carry the cache-replacement disclosure. The owner approved it on 2026-10-06; both descriptions now carry it and the frozen tool-description fixture was regenerated as an intentional contract change.
-- Other non-blocking observations recorded by the reviewers: empty collation is not retried (the actionable error remains re-runnable), and scenario 5's character threshold is advisory while the decisive size comparison stays enforced.
-
-## Verification
-
-The combined candidate passes both builds, isolated native and standalone test suites, native-contract type checking, generated-file checks, ShellCheck, both fresh-tarball installation gates and the full dependency audit. The test total is maintained only in the root README badge.
-
-No single invocation of the full paced suite has completed on the final release candidate: the initial live run failed scenario 5 and was interrupted during scenario 10. Every scenario has a successful recorded run across the paced runs and continuation, and scenarios 1, 5, 11, 12, 13 and 14 were re-run on the corrected tree. The first evidence summary incorrectly treated earlier scenarios as all passing; independent review caught this. Scenario 5 now uses a non-reasoning collation model for its 200-token visible-output comparison, retains the non-empty-result assertion, and passed on rerun. Re-run the full paced suite on the final committed release candidate before tagging. The [compatibility matrix](COMPATIBILITY.md#release-candidate-verification) records host versions, retries and the corrected skill-discovery assertion. The completed follow-up reviews are summarised in [Independent Review](#independent-review). Evidence produced by builder agents covers only their own worktrees and focused checks, not the shared release gates.
-
-A completed same-day repeat attempts to archive prior output to a numbered sibling folder; archive failure is logged and can lead to in-place replacement or a partial archive. A degraded repeat preserves prior successful output in place. The README and tool descriptions disclose this archive behaviour, and MCP cache-writing tools carry `destructiveHint: true`. The numbered siblings are a same-day safety net, not an archive; copy reports that must be retained long-term. Empty collation now fails before a successful report is written, rather than letting a header-only report satisfy a size comparison.
-
-A passing unit test or a completed sidecar is not sufficient proof that a host model received the answer. Scenario 13 inspects the model-visible result. Registry-pin verification is distinct from the local-tarball class and must use the exact version subsequently published.
-
-## Landed: Cache Refresh Semantics
-
-The owner approved a change to degraded-refresh behaviour on 2026-10-06 and deferred implementation; the owner then amended the success-path preference: keep the old results under a numbered sibling folder (`.1`, `.2`, ...) only when new results have been successfully received. The amended design landed on `release/0.15.0` as follow-up commit `632fa66` (2026-10-06).
-
-**Landed Behaviour:** repeating a query on the same Coordinated Universal Time (UTC) date attempts to archive the previous report, extractions, numbered sources and telemetry sidecar to the lowest free numbered sibling folder (`<slug>.1`, then `.2` and so on) before the new set commits. Successful rotation keeps each report with its own files; failed or interrupted rotation can leave a partial archive and the completed run can replace canonical files in place. Supplementary `llms-full-*` downloads stay with the live folder. A degraded repeat preserves the previous successful report, extractions, numbered sources and index entry untouched, and records the failed attempt in `meta.json` only, so degradation remains visible to `scripts/analyze-sessions.sh`. A degraded query with no prior artefacts keeps the meta-only behaviour.
-
-**Single-Folder Accumulation:** filenames are positionally numbered and collide across runs; `report.md` is a single fixed-path contract; a new collation covers only its own pages, so retained files would become orphans the report does not vouch for; covering the union would require re-collating prior extractions on every repeat. Selective rotation of the report, extractions, numbered sources and sidecar to a sibling folder avoids each collision while preserving each run's snapshot together; supplementary `llms-full-*` downloads stay with the live folder.
-
-**Implementation Record:**
-
-- `rotateCacheArtefacts()` in `src/core/cache.ts` performs the sibling rotation; both success paths (`writeCacheArtifacts()` in `src/core/operations/research.ts` and the collate operation) invoke it under the cache lock before committing. Rotation is best-effort: a failure is logged and falls back to in-place replacement rather than discarding a completed run.
-- `degradedReturn()` branches on whether a successful `report.md` exists at the cache path: preserve when it does, clear partials and any dangling index entry when it does not. `clearCacheArtefacts()` and `removeIndexEntry()` are retained deliberately for the no-report branch.
-- `test/core-operations.test.ts` asserts degraded preservation (with and without telemetry), numbered-sibling archiving across three same-day runs, and archiving of a degraded-only remnant; `test/cache.test.ts` covers the rotation unit directly. The `cache-write` failure-injection fixture now blocks the index update (a directory at `.index.json`), because rotation legitimately clears obstacles at the cache path.
-- Disclosure wording was updated everywhere it named the clearing behaviour: the README cache section; `guidance/research-guide.md` with regenerated plugin bundles; the native tool descriptions in `src/tools/intelli-research.ts` and `src/tools/intelli-collate.ts`; the MCP descriptions in `packages/mcp/src/server.ts` and their assertions in `packages/mcp/test/server.test.ts`; `docs/ARCHITECTURE.md`; `skills/intelli-search/SKILL.md`; the CHANGELOG entries under `[pi-0.15.0]`. `test/fixtures/native-contract/tools.json` was regenerated and reviewed (intentional, owner-approved contract change).
-- `destructiveHint: true` stays on the cache-writing MCP tools: a successful repeat still replaces the canonical folder's contents.
-
-The corrected candidate is committed and pushed on `release/0.15.0` with this change as a follow-up commit. Require green CI on the resulting commit, run the full paced live suite on that tree, and only then proceed to the owner publication gates below.
-
-## Remaining Owner Gates
-
-1. Confirm rotation of the test token previously recorded as exposed in [the historical checkpoint](plans/mcp-intelli-search/POST-PHASE-6.md). Do not copy, read or refresh operator credential files as a test workaround.
-2. Done 2026-10-07: green CI on the final commits (`44a2bde`, `c832406`, `1a6ef1a` on `release/0.15.0`; merge commits `42c7854` and `e1611ca` on `main`), the merged candidate is on `main`, and the catalogue pin resolves publicly after MCP publication.
-3. Done 2026-10-07: the MCP package's own trusted-publisher binding was created with `npm trust github @curio-data/mcp-intelli-search --file release.yml --repo Curio-Data/pi-intelli-search --allow-stage-publish` (CLI-verified; a preceding UI-created entry was deleted). No first-publish bootstrap repeats.
-4. Done 2026-10-07: the owner approved MCP staging explicitly; the staged package was approved with two-factor authentication, registry dist-tags verified (`latest` at `0.15.0`), and both host plugins installed into clean profiles against the published pin (recorded in [Compatibility](COMPATIBILITY.md#release-candidate-verification)).
-5. Done 2026-10-07: the owner approved the native release; `pi-v0.15.0` staged with signed provenance, was approved with two-factor authentication, and the registry shows `latest` at `0.15.0` with a clean install carrying the derived README. The 0.15.0 generation is fully published.
-
-CI also checks registry-pin availability on `main` and pull requests targeting it, while `release/` pushes can validate unpublished candidates. The release workflow requires its commit to belong to `main` or a `release/` branch with successful CI, checks both generated artefacts and tarball installations, audits dependencies, and verifies the exact MCP registry pin before native staging. Registry existence does not replace the owner's clean-profile host verification gate.
+A completed sidecar or passing unit test does not establish that a host model received the answer. The credentialed Claude scenario checks model-visible text. Local-tarball research, registry installation and full registry-pin research are distinct evidence classes; retain those distinctions in publication notes.

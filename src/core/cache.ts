@@ -522,6 +522,7 @@ export async function writeReportFile(
   pages: FetchedPage[],
   displayPath: string = cachePath,
   identity: SourceIdentity = allocateSourceIdentity(extractions, pages),
+  sourceInventoryIncluded = false,
 ): Promise<void> {
   await mkdir(cachePath, { recursive: true });
   const now = new Date().toISOString();
@@ -531,25 +532,29 @@ export async function writeReportFile(
   let report = `# ${query}\n\n`;
   report += `> Searched: ${now}\n`;
   report += `> Cache: ${displayPath}/\n`;
-  report += `> Sources: ${succeeded.length} succeeded, ${blocked.length} blocked\n\n`;
+  report += `> Sources: ${succeeded.length} succeeded, ${blocked.length} failed\n\n`;
   report += collation + "\n\n";
 
-  // Source index table
-  report += `## Source index\n\n`;
-  report += `| # | Source | Type | Extraction | Full page |\n`;
-  report += `|---|--------|------|------------|----------|\n`;
-  for (const [i, ext] of succeeded.entries()) {
-    const extractionFile = identity.extractionFileFor(ext.url);
-    const sourceFile = identity.sourceFileFor(ext.url);
-    report += `| ${i + 1} | ${ext.url} | ${ext.sourceType} | ${
-      extractionFile ? `extractions/${extractionFile}` : "Not cached"
-    } | ${sourceFile ? `sources/${sourceFile}` : "Not cached"} |\n`;
+  // Operations already rendered one authoritative inventory. Retain the
+  // historical index only for low-level callers that supply raw collation.
+  if (!sourceInventoryIncluded) {
+    report += `## Source index\n\n`;
+    report += `| # | Source | Type | Extraction | Full page |\n`;
+    report += `|---|--------|------|------------|----------|\n`;
+    for (const [i, ext] of succeeded.entries()) {
+      const extractionFile = identity.extractionFileFor(ext.url);
+      const sourceFile = identity.sourceFileFor(ext.url);
+      report += `| ${i + 1} | ${ext.url} | ${ext.sourceType} | ${
+        extractionFile ? `extractions/${extractionFile}` : "Not cached"
+      } | ${sourceFile ? `sources/${sourceFile}` : "Not cached"} |\n`;
+    }
   }
 
   if (blocked.length > 0) {
     report += `\n## Blocked/Failed URLs\n\n`;
-    for (const page of pages.filter((p) => p.status !== "success")) {
-      report += `- ${page.url}${page.error ? ` — ${page.error}` : ""}\n`;
+    for (const entry of blocked) {
+      const error = pages.find((page) => page.url === entry.url)?.error;
+      report += `- ${entry.url}: ${error ?? (entry.status === "blocked" ? "Source marked blocked" : "Extraction failed")}\n`;
     }
   }
 

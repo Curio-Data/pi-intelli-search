@@ -24,8 +24,10 @@ jobs:
         run: |
           set -euo pipefail
           sha=$(git rev-parse HEAD)
-          # MCP candidate catalogs pin an unpublished version. Stage from a
-          # release branch, then merge only after that pin resolves publicly.
+          # Default: validate MCP's unpublished pin on a release branch and
+          # merge after publication. An owner-directed pre-publication merge
+          # may mirror main's exact commit to that branch for CI validation.
+          # The main registry-pin guard and native publication gate still apply.
           runs=$(gh run list --workflow ci.yml --event push --commit "$sha" --limit 20 \
             --json headBranch,status,conclusion)
           branch=$(printf '%s' "$runs" | jq -r '[.[] | select(.headBranch == "main" or (.headBranch | startswith("release/")))][0] | if .status == "completed" and .conclusion == "success" then .headBranch else empty end')

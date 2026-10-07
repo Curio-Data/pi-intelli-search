@@ -16,6 +16,7 @@ import {
   rotateCacheArtefacts,
 } from "../cache.js";
 import { buildCollationMessage, formatCacheAppendix } from "../messages.js";
+import { evidenceExtractions, finalizeCollation } from "../provenance.js";
 import type { ExtractResult } from "../types.js";
 import { errMsg, throwIfAborted } from "../util.js";
 import type { OperationContext, OperationResult } from "../contracts.js";
@@ -31,9 +32,6 @@ export async function collate(
   const paths = context.paths;
   const physicalPath = makeCachePath(params.query, paths.workspaceRoot, paths.cacheRoot);
   const cachePath = displayCachePath(paths, physicalPath);
-  const succeeded = params.extractions.filter((e) => e.status === "success");
-  const blocked = params.extractions.filter((e) => e.status !== "success");
-
   // Build extract results for cache
   const extractResults: ExtractResult[] = params.extractions.map((e) => ({
     url: e.url,
@@ -41,8 +39,12 @@ export async function collate(
     extraction: e.extraction,
     sourceType: e.sourceType,
     currentness: "undated",
-    status: e.status as ExtractResult["status"],
+    status: e.status === "success" && !e.extraction.trim()
+      ? "failed" : e.status as ExtractResult["status"],
   }));
+  const succeeded = evidenceExtractions(extractResults);
+  const blocked = extractResults.filter((e) => e.status !== "success");
+  if (succeeded.length === 0) throw new Error("Collation requires at least one successful, non-empty extraction");
 
   const fetchedPages = (params.fullPages ?? []).map((p) => ({
     url: p.url,
@@ -63,12 +65,12 @@ export async function collate(
     params.query,
     cachePath,
     params.searchSummary,
-    extractResults.filter((e) => e.status === "success"),
+    succeeded,
     identity,
   );
 
   // Call LLM for collation (no lock — never hold locks across LLM calls)
-  const { text: collation } = await models.complete({
+  const { text } = await models.complete({
     model: collateConfig,
     systemPrompt: COLLATION_SYSTEM_PROMPT,
     userMessage,
@@ -76,8 +78,7 @@ export async function collate(
     signal,
   });
 
-  if (!collation.trim())
-    throw new Error("Collation returned no visible text; increase collationMaxTokens or choose a model with a smaller reasoning budget");
+  const collation = finalizeCollation(text, cachePath, succeeded, identity, "supplied");
 
   // ═══════════════════════════════════════════════════════════════
   // Write cache artefacts under the per-cache-path lock so two
@@ -115,6 +116,7 @@ export async function collate(
         fetchedPages,
         cachePath,
         identity,
+        true,
       );
 
       // Atomic index update under the shared cache-dir index lock.

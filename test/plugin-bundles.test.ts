@@ -205,6 +205,26 @@ describe("plugin bundle generation", () => {
     }
   });
 
+  it("makes skill loading and search-first routing visible before setup", () => {
+    for (const host of ["claude-code", "codex"]) {
+      const skill = files[`plugins/${host}/skills/intelli-search/SKILL.md`];
+      const description = skill.split("\n").find((line) => line.startsWith("description:")) ?? "";
+      assert.match(description, /Load before calling any intelli_search, intelli_research, intelli_extract or intelli_collate tool/);
+      assert.match(description, /Start with intelli_search for quick facts, latest versions and release dates/);
+      const routing = skill.indexOf("## When to Use Which Tool");
+      const setup = skill.indexOf("## Setup");
+      assert.ok(routing >= 0 && setup > routing, `${host}: routing precedes setup`);
+      assert.match(skill.slice(routing, setup), /do not add comparisons, pricing or release history unless requested/);
+      assert.match(skill.slice(routing, setup), /specific evidence gap requiring multiple pages/);
+      const examples = [...skill.matchAll(/```[^\n]*\n([\s\S]*?)```/g)]
+        .filter(([, block]) => /mcp__\S+__intelli_research\(/.test(block));
+      assert.ok(examples.length > 0, `${host}: research examples exist`);
+      for (const [, example] of examples) {
+        assert.match(example, /maxUrls=\d+/, `${host}: research example chooses a page budget`);
+      }
+    }
+  });
+
   it("does not propagate the stale native maxUrls schema default", () => {
     // The frozen native schema description says "default: 8" while the
     // shared default is 10; generated guidance must describe 10/20 only.

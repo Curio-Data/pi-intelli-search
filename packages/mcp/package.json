@@ -1,6 +1,6 @@
 {
   "name": "@curio-data/mcp-intelli-search",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Standalone intelligent web research engine and Model Context Protocol stdio server.",
   "license": "Apache-2.0",
   "type": "module",

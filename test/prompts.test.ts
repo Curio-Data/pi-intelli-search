@@ -64,9 +64,11 @@ describe("COLLATION_SYSTEM_PROMPT", () => {
     assert.ok(p.includes("contradiction"), "should mention contradiction handling");
   });
 
-  it("requires Summary and Source assessment sections", () => {
-    assert.ok(COLLATION_SYSTEM_PROMPT.includes("## Summary"));
-    assert.ok(COLLATION_SYSTEM_PROMPT.includes("## Source assessment"));
+  it("restricts synthesis to evidence and leaves provenance rendering to the application", () => {
+    assert.ok(COLLATION_SYSTEM_PROMPT.includes("ONLY the supplied source extractions"));
+    assert.ok(COLLATION_SYSTEM_PROMPT.includes("Never invent IDs"));
+    assert.ok(COLLATION_SYSTEM_PROMPT.includes("application appends the authoritative inventory"));
+    assert.ok(COLLATION_SYSTEM_PROMPT.includes("without a\nSource assessment or Sources section"));
   });
 });
 
@@ -91,8 +93,8 @@ describe("prompt snapshots (length)", () => {
 
   it("COLLATION_SYSTEM_PROMPT length is stable", () => {
     assert.ok(
-      COLLATION_SYSTEM_PROMPT.length > 800 && COLLATION_SYSTEM_PROMPT.length < 1800,
-      `Collation prompt length ${COLLATION_SYSTEM_PROMPT.length} outside expected range 800-1800`,
+      COLLATION_SYSTEM_PROMPT.length > 800 && COLLATION_SYSTEM_PROMPT.length < 2400,
+      `Collation prompt length ${COLLATION_SYSTEM_PROMPT.length} outside expected range 800-2400`,
     );
   });
 });

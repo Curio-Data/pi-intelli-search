@@ -51,7 +51,7 @@ Search-grounded models attach machine-readable `url_citation` annotations to the
 
 Rather than fork the adapter, the extension passes a wrapped `fetch` through `ProviderRequestOptions.fetch`. The wrapper tees each response body: the software development kit (SDK) consumes the original stream unchanged, while a clone is read in the background and parsed for citations (both server-sent event (SSE) chunks and plain JavaScript Object Notation (JSON)). `response.clone()` is called synchronously before the SDK can touch the body. Every failure path in this side channel is swallowed by design: the pipeline must never depend on it. Each retry attempt owns a separate sink, so late citations from a failed attempt cannot contaminate a successful response. `callLlm()` awaits successful background reads (bounded at 2 seconds) before copying citations to the caller.
 
-Merging is text-first: prose links (with their Markdown titles) come before annotation-only URLs, and exact URL duplicates are removed. The search prompt asks the model to end with a Sources section. The shared search operation extracts URLs from the full response, then removes the model-rendered Sources section before passing the summary downstream. The `intelli_search` result builder renders a canonical source list; research collation receives the stripped search summary and selected extractions. This is not a new pipeline stage: harvesting belongs to search. See `src/core/annotations.ts`.
+Merging is text-first: prose links (with their Markdown titles) come before annotation-only URLs, and exact URL duplicates are removed. The search prompt asks the model to end with a Sources section. The shared search operation extracts URLs from the full response, then removes the model-rendered Sources section before passing the summary downstream. The `intelli_search` result builder renders a canonical source list. Research uses the stripped search summary for degraded results, but completed collation receives only successful, non-empty extractions. Search-only claims and cache paths are excluded from the collation input. This is not a new pipeline stage: harvesting belongs to search. See `src/core/annotations.ts`.
 
 <a id="custom-model-registration"></a>
 ### Native Model Registration
@@ -73,6 +73,12 @@ A hard per-call timeout (`llmTimeoutMs`) is applied with an `AbortController` vi
 During `intelli_research` execution, the extension sets a custom animated spinner (🔍 🌐 📄 ✨) via `ctx.ui.setWorkingIndicator()` (requires `Pi` 0.69.0+). This is restored to the default on completion or error.
 
 In addition, the tool streams stage progress updates via `onUpdate()` and renders a progress bar in the tool output via `renderResult`. The progress bar shows overall completion, stage pills (✓/●/○), the current stage message, and a per-page sub-progress bar during extraction. The LLM receives structured `Stage X/5` prefixed text through `onUpdate` content. The `renderResult` function is a standard `Pi` tool API feature and requires no minimum version beyond what the extension already needs.
+
+### Collation Evidence
+
+`src/core/provenance.ts` builds the Source Assessment inventory from the successful extraction set and the same `SourceIdentity` used for cache writes. The model receives source IDs, page metadata and extracted content as JavaScript Object Notation (JSON), and returns synthesis only. It does not generate source inventories, relevance ratings or cache-file paths. Source IDs in prose, including grouped references, must resolve to evidence entries. Prose URLs must occur in the supplied extraction content or identify an evidence page; fragments and trailing-slash differences are accepted, but different hosts, schemes or query parameters are not merged. Cross-links remain content, not additional fetched sources. Model-generated numbered cache references and source inventories are rejected. Fenced, indented and inline code examples are preserved as data; ordinary project filenames such as `report.md` are not treated as cache declarations. These are reference checks, not proof that every factual claim is correct or grounded.
+
+Validation runs before rotation, downloads or cache writes. A failed collation preserves any prior report and index and raises an actionable error. Empty research extractions count as failures. Manual collation rejects an empty evidence set and duplicate extraction URLs, labels successful evidence as caller-supplied and marks absent full pages `Not cached`. Its optional `searchSummary` field remains accepted but does not enter synthesis. Native and MCP tools retain their input parameters; the `searchSummary` description now discloses that it is not synthesis evidence. The internal collation prompt and generated report prose intentionally change. Operation reports contain one Source Assessment inventory; the low-level report writer retains its legacy index only for callers that do not supply an inventory. `collate.summaryChars` continues to measure model synthesis, excluding the deterministic inventory.
 
 ### Cache Suggest (Stage 5)
 
@@ -96,7 +102,7 @@ The standalone bundle externalises its declared third-party dependencies and imp
 
 ### Protocol Serving
 
-The standalone package serves the four canonical tools as an MCP server over stdio through the official split server package (`@modelcontextprotocol/server`, lockfile-pinned). Tool names and input schemas mirror the native tools; descriptions embed the guidance the protocol has no separate channel for. One operation runs at a time with a bounded queue; stage progress maps to `notifications/progress` when the client supplies a token, and client cancellation aborts through the shared model policy. A startup guard diverts every non-protocol write away from standard output, so the stream carries protocol frames only; diagnostics use standard error. Closing standard input or receiving `SIGINT`/`SIGTERM` drains and aborts in-flight and queued work. [Phase 4 Results](plans/mcp-intelli-search/PHASE-4.md) records the protocol verification.
+The standalone package serves the four canonical tools as an MCP server over stdio through the official split server package (`@modelcontextprotocol/server`, lockfile-pinned). Tool names and input parameters mirror the native tools. The initialize response carries server `instructions` for routing and optional skill loading, and the tool descriptions carry the same guidance. Hosts that defer tool definitions receive server instructions before loading those definitions; the guidance does not enforce model choice. One operation runs at a time with a bounded queue; stage progress maps to `notifications/progress` when the client supplies a token, and client cancellation aborts through the shared model policy. A startup guard diverts every non-protocol write away from standard output, so the stream carries protocol frames only; diagnostics use standard error. Closing standard input or receiving `SIGINT`/`SIGTERM` drains and aborts in-flight and queued work. [Phase 4 Results](plans/mcp-intelli-search/PHASE-4.md) records the protocol verification.
 
 Successful and degraded results carry the same complete operation text in `content` and `structuredContent.text`. An explicitly selected defective configuration file leaves the protocol available with actionable tool errors and is reread on each call until it loads. Missing launcher arguments and invalid workspaces still fail before serving; loaded configuration and startup credentials remain fixed until restart.
 
@@ -122,6 +128,7 @@ src/
 │   ├── telemetry.ts        # Injected identity and local sidecar
 │   ├── annotations.ts      # Citation harvesting
 │   ├── messages.ts         # Prompt messages and cache appendices
+│   ├── provenance.ts       # Evidence validation and deterministic source inventory
 │   ├── prompts.ts          # System prompts
 │   ├── progress.ts         # Host-neutral pipeline progress
 │   ├── types.ts            # Shared data types
@@ -151,7 +158,7 @@ plugins/                    # Generated Claude Code and Codex bundles (manifests
 ```
 .search/
 ├── 2026-04-19-d1-worker-api-3f7a2c/
-│   ├── report.md                              # Collated summary + source index
+│   ├── report.md                              # Synthesis + authoritative source inventory
 │   ├── query.txt                              # Original search query
 │   ├── meta.json                              # Local-only telemetry sidecar (v0.11.0+)
 │   ├── extractions/                           # Per-page LLM extractions (≈3-5K each)

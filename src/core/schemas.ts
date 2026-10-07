@@ -38,7 +38,7 @@ export const collateSchema = Type.Object({
   query: Type.String({ description: "The original search query" }),
   searchSummary: Type.Optional(
     Type.String({
-      description: "Summary from the initial search step",
+      description: "Summary from the initial search step; accepted for compatibility, not used as synthesis evidence",
     }),
   ),
   fullPages: Type.Optional(
