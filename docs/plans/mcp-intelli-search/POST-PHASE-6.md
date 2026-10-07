@@ -1,5 +1,7 @@
 # Post-Phase 6 Checkpoint: Host Plugin Verification
 
+This is the 2026-10-05 historical finding record. [Release Readiness](../../RELEASE-READINESS.md) records the current dispositions and verification gates. The implementation is merged and its alpha is published; do not treat the open/next-work wording below as a fresh status assessment. The pending credential-rotation item still requires operator confirmation.
+
 This checkpoint records the host plugin work of 2026-10-05: the [_Claude Code_](https://code.claude.com/docs/en/plugins) key option, the credentialed host scenarios, an independent two-reviewer pass, and a fresh-agent pass that followed the README as a new user. The fresh-agent pass found open defects; fixing them is the next work. The release hold in [Post-Phase 5 Checkpoint](POST-PHASE-5.md) remains in force, and nothing here authorises publication.
 
 ## Contents

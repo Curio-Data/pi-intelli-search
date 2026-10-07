@@ -16,7 +16,7 @@ Extensions not listed on `pi.dev/packages` or installed via `pi install git:` ar
 
 Monthly downloads from `pi.dev/packages` as of May 2026. GitHub-only packages show no download count.
 
-| Extension | Package | Downloads/mo | Maintainer |
+| Extension | Package | Downloads/Month | Maintainer |
 | --- | --- | ---: | --- |
 | **pi-web-access** | `pi-web-access` | 26,933 | nicopreme |
 | **ollama-web-search** | `@ollama/pi-web-search` | 25,845 | Ollama |
@@ -31,7 +31,7 @@ Monthly downloads from `pi.dev/packages` as of May 2026. GitHub-only packages sh
 | Capability | Snapshot Summary | Detail |
 |---|---|---|
 | Search | Provider choice, fallback chains and search-native models differ | [Search](#search) |
-| Fetch | `intelli-search` compares cleaned HyperText Markup Language (HTML) and Markdown variants | [Fetch](#fetch) |
+| Fetch | `intelli-search` compares cleaned Hypertext Markup Language (HTML) and Markdown variants | [Fetch](#fetch) |
 | Per-Page Extraction | `intelli-search` uses a focused large language model (LLM); `pi-web-access` has partial model processing | [Extraction](#extraction) |
 | Cross-Source Collation | Only `intelli-search` has a dedicated collation stage among those compared | [Collation](#collation) |
 | Persistent Research Cache | `intelli-search` stores reports, extractions and sources; other recorded caches are transient | [Caching](#caching) |
@@ -45,7 +45,7 @@ How each extension discovers which URLs (uniform resource locators) to fetch. Pr
 
 | Extension | Search Backend | Multiple Sources | API Keys Required |
 | --- | --- | :---: | :---: |
-| `intelli-search` | Perplexity Sonar via OpenRouter (default; any OpenRouter model via the `searchWebSearch` server tool) | Every cited source via annotation harvesting | 1 (OpenRouter) |
+| `intelli-search` | Perplexity Sonar via OpenRouter (default; an OpenRouter chat model with supported tools via `searchWebSearch`) | Prose links plus recovered provider citation URLs (best-effort) | 1 (OpenRouter) |
 | **pi-web-providers** | 15+ providers (Exa, Perplexity, Gemini, Brave, Firecrawl, Linkup, etc.) | Configurable per-tool | 1 per provider used |
 | **pi-web-access** | Exa → Perplexity → Gemini → Gemini Web (sequential fallback) | Tried in order | 1 per provider used |
 | **ollama-web-search** | Ollama native web search | Single source | Ollama API key |
@@ -57,7 +57,7 @@ How each extension discovers which URLs (uniform resource locators) to fetch. Pr
 
 `intelli-search` uses a single [_OpenRouter_](https://openrouter.ai) API key to access [_Perplexity Sonar_](https://docs.perplexity.ai) for search _and_ any model for extraction and collation. `pi-web-providers` and `pi-web-access` give more search backends, but each requires its own API key, account, and setup. `rpiv-web-tools` and `pi-amplike` also require separate provider accounts.
 
-Perplexity Sonar is the default search model, and since v0.13.0 the `searchWebSearch` setting attaches OpenRouter's `openrouter:web_search` server tool to the search stage, equipping any OpenRouter chat model with URL-cited results through Exa, Parallel, Firecrawl, Perplexity, or the base model's native engine. The search stage is therefore not tied to any one model's continued availability: swapping it is a settings change that leaves the rest of the pipeline untouched. Search stages also merge every source the model cited (machine-readable `url_citation` annotations), not only the links written into the prose.
+Perplexity Sonar is the default search model, and since v0.13.0 the `searchWebSearch` setting attaches OpenRouter's `openrouter:web_search` server tool to the search stage, equipping an OpenRouter chat model with the required tool support to request URL-cited results through Exa, Parallel, Firecrawl, Perplexity, or the base model's native engine. The search stage is therefore not tied to any one model's continued availability: swapping it is a settings change that leaves the rest of the pipeline untouched. Search stages also merge recovered provider-supplied `url_citation` annotations with prose links before page selection. Collection is best-effort and does not establish every source consulted; the page cap applies after merging.
 
 ## Fetch
 
@@ -65,7 +65,7 @@ How each extension retrieves and processes HTML and other page content. TLS mean
 
 | Extension | Fetch Method | Content Cleaning | Dual-Fetch Comparison | Fallback |
 | --- | --- | :---: | :---: | --- |
-| `intelli-search` | wreq-js browser TLS + Defuddle + Markdown endpoint (parallel) | Defuddle (HTML) + sanitize (Markdown) | **Yes**: scores both, picks best | Defuddle-fallback (basic DOM text extraction) |
+| `intelli-search` | wreq-js browser TLS + Defuddle + Markdown endpoint (parallel) | Defuddle (HTML) + sanitise (Markdown) | **Yes**: scores both, picks best | Defuddle-fallback (basic DOM text extraction) |
 | **pi-web-providers** | Provider-dependent (Firecrawl, Linkup, etc.) | Provider-dependent | No | Provider-dependent |
 | **pi-web-access** | HTTP fetch → Readability → Jina Reader → Gemini (fallback chain) | Readability + Jina + Gemini | No | Sequential fallback through chain |
 | **pi-smart-fetch** | Browser TLS fingerprinting (chrome_145) + Defuddle | Defuddle | No | Alternate `<link>` discovery for thin content |
@@ -75,9 +75,9 @@ How each extension retrieves and processes HTML and other page content. TLS mean
 
 ### Fetch: Key Difference
 
-`intelli-search` and `pi-smart-fetch` both use browser-grade TLS fingerprinting (via [_wreq-js_](https://github.com/sqdshguy/wreq-js)) and [_Defuddle_](https://github.com/kepano/defuddle) for HTML cleaning. `intelli-search` goes further by also fetching the Markdown variant (when available) and **comparing both for quality**.
+`intelli-search` and `pi-smart-fetch` both use browser-grade TLS fingerprinting (via [_wreq-js_](https://github.com/sqdshguy/wreq-js)) and [_Defuddle_](https://github.com/kepano/defuddle) for HTML cleaning. `intelli-search` goes further by also fetching the Markdown variant (when available) and comparing both for quality.
 
-**Why compare?** Server-rendered Markdown is not guaranteed to be clean. For example, fetching `https://developers.cloudflare.com/d1/` with `Accept: text/markdown` returns 3,696 chars of content that includes JavaScript Object Notation for Linked Data (JSON-LD) BreadcrumbList schema data, extra Schema.org markup, and community promotion links. Defuddle extraction of the same page strips these artifacts, producing 3,047 chars of cleaner content. The quality comparison catches this and picks the better version automatically.
+Server-rendered Markdown is not guaranteed to be clean. For example, fetching `https://developers.cloudflare.com/d1/` with `Accept: text/markdown` returns 3,696 chars of content that includes JavaScript Object Notation for Linked Data (JSON-LD) BreadcrumbList schema data, extra Schema.org markup, and community promotion links. Defuddle extraction of the same page strips these artefacts, producing 3,047 chars of cleaner content. The quality comparison catches this and picks the better version automatically.
 
 ## Extraction
 
@@ -119,7 +119,7 @@ What happens after individual pages are processed, to synthesise findings.
 
 `intelli-search` is the only extension among those compared with a collation stage. The collation LLM sees all per-page extractions and produces a single synthesised summary. It deduplicates overlapping information, flags conflicting claims from different sources, and preserves URLs for attribution. Without this, the agent has to do this work itself, consuming context and reasoning tokens for mechanical synthesis.
 
-Like extraction, the collation model is configurable. Swap it via `collateModel` in the `pi-intelli-search` settings namespace to use any model `Pi` supports.
+Like extraction, the collation model is configurable. Swap it via `collateModel` in the `pi-intelli-search` settings namespace to use another registered, authenticated text model with suitable context and capabilities.
 
 ## Caching
 
@@ -145,12 +145,12 @@ The figures below retain the recorded September 2026 price basis for 10-page res
 
 **Recorded `intelli-search` Token Rates:**
 
-| Stage | Model | Input (per 1M tokens) | Output (per 1M tokens) | Search fee |
+| Stage | Model | Input (per 1M Tokens) | Output (per 1M Tokens) | Search Fee |
 | --- | --- | --- | --- | --- |
 | Search | Perplexity Sonar | $1.00 | $1.00 | $5.00 per 1K calls |
 | Extract | MiniMax M3 (via OpenRouter) | $0.30 | $1.20 | |
 | Collate | MiniMax M3 (via OpenRouter) | $0.30 | $1.20 | |
-| Cache suggest | MiniMax M3 (via OpenRouter) | $0.30 | $1.20 | |
+| Cache Suggest | MiniMax M3 (via OpenRouter) | $0.30 | $1.20 | |
 
 **Recorded Provider-Cost Breakdown:**
 
@@ -201,4 +201,4 @@ These are tool-call counts, not equivalent units of work. Each `intelli_research
 
 In this session, `intelli_research` returned cross-source syntheses without further page-fetch requests from the host model. The built-in tools supplied additional official pages for checking the result, including the platform-support table and different marketplace submission guidance. The [captured passages](evidence/2026-10-06-host-native-search.md#submission-guidance) establish a discrepancy to investigate, not a confirmed stale-form error.
 
-These observations apply to the native `Pi` route. In the separate Claude Code 2.1.289 verification, the MCP plugin delivered only the structured result to the model and omitted the summary text ([finding F2](plans/mcp-intelli-search/POST-PHASE-6.md#f2-claude-code-drops-the-text-summary-high-confirmed)). This session did not retest the plugin route on either of the newer recorded host versions.
+These observations apply to the native `Pi` route. In the separate Claude Code 2.1.289 verification, the MCP plugin delivered only the structured result to the model and omitted the summary text ([finding F2](plans/mcp-intelli-search/POST-PHASE-6.md#f2-claude-code-drops-the-text-summary-high-confirmed)). This comparison session did not retest the plugin route on either newer recorded host version. Separate candidate verification on Claude Code 2.1.291 confirmed the model-visible summary and cache appendix; see [Release Candidate Verification](COMPATIBILITY.md#release-candidate-verification). That later evidence does not change the scope of this comparison.

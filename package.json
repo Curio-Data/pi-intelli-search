@@ -40,20 +40,20 @@
     "build:all": "npm run build && npm run typecheck:mcp && npm run build:mcp",
     "test:all": "npm test && npm run test:mcp",
     "dev": "tsc --watch",
-    "test": "node --import tsx --test test/*.test.ts",
-    "test:smoke": "node --import tsx test/smoke.ts",
+    "test": "node scripts/run-tests.mjs native",
+    "test:smoke": "node scripts/run-tests.mjs smoke",
     "chart": "node scripts/plot-downloads.mts",
     "prepublishOnly": "node scripts/generate-package-readmes.mjs --publish-native"
   },
   "dependencies": {
-    "defuddle": "^0.16.0",
+    "defuddle": "^0.19.4",
     "linkedom": "^0.18.12",
     "wreq-js": "^2.3.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.84.4",
-    "@earendil-works/pi-coding-agent": "^0.84.4",
-    "@earendil-works/pi-tui": "^0.84.4",
+    "@earendil-works/pi-ai": "^1.0.4",
+    "@earendil-works/pi-coding-agent": "^1.0.4",
+    "@earendil-works/pi-tui": "^1.0.4",
     "esbuild": "0.28.2",
     "prettier": "^3.9.6",
     "roughjs": "^4.6.6",

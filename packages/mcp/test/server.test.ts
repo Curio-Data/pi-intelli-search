@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { once } from "node:events";
-import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/client";
@@ -42,8 +42,12 @@ interface FixtureClient {
   close: () => Promise<void>;
 }
 
-async function connect(extraEnv: Record<string, string> = {}): Promise<FixtureClient> {
+async function connect(
+  extraEnv: Record<string, string> = {},
+  { configured = true } = {},
+): Promise<FixtureClient & { config: string }> {
   const { dir, config } = workspace();
+  if (!configured) rmSync(config);
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: ["--import", "tsx", childPath, "--config", config, "--workspace", dir],
@@ -60,11 +64,31 @@ async function connect(extraEnv: Record<string, string> = {}): Promise<FixtureCl
   return {
     client,
     transport,
+    config,
     stderr: () => diagnostics,
     close: async () => {
       await client.close();
     },
   };
+}
+
+type ToolResult = Awaited<ReturnType<Client["callTool"]>>;
+
+/** The complete operation text must reach hosts that read either representation. */
+function textInBoth(result: ToolResult): string {
+  const content = result.content as Array<{ type: string; text: string }>;
+  assert.equal(content.length, 1);
+  assert.equal(content[0].type, "text");
+  const structured = result.structuredContent as { text: unknown };
+  assert.equal(structured.text, content[0].text, "structuredContent carries the full text");
+  assert.ok(content[0].text.trim().length > 0);
+  return content[0].text;
+}
+
+function errorText(result: ToolResult): string {
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent, undefined);
+  return (result.content as Array<{ text: string }>)[0].text;
 }
 
 async function waitFor(check: () => boolean, ms = 15_000): Promise<void> {
@@ -202,6 +226,9 @@ test("lists the four canonical tools with truthful annotations", { timeout: 60_0
     assert.equal(byName.intelli_extract.annotations?.readOnlyHint, true);
     assert.equal(byName.intelli_collate.annotations?.readOnlyHint, false);
     assert.equal(byName.intelli_research.annotations?.readOnlyHint, false);
+    assert.equal(byName.intelli_collate.annotations?.destructiveHint, true);
+    assert.equal(byName.intelli_research.annotations?.destructiveHint, true);
+    assert.match(byName.intelli_research.description ?? "", /degraded repeat preserves/);
     for (const tool of tools) {
       assert.equal(tool.annotations?.idempotentHint, false);
       assert.equal(tool.annotations?.openWorldHint, true);
@@ -223,7 +250,7 @@ test(
         { timeout: 30_000 },
       );
       assert.equal(search.isError, undefined);
-      assert.match((search.content as Array<{ text: string }>)[0].text, /### Sources/);
+      assert.match(textInBoth(search), /### Sources/);
       assert.equal(
         (search.structuredContent as { outcome: string }).outcome,
         "completed",
@@ -245,6 +272,7 @@ test(
         (extract.structuredContent as { outcome: string }).outcome,
         "completed",
       );
+      assert.match(textInBoth(extract), /Fixture extraction facts/);
       const collate = await fixture.client.callTool(
         {
           name: "intelli_collate",
@@ -268,7 +296,8 @@ test(
         details: { cachePath: string };
       };
       assert.equal(collated.outcome, "completed");
-      assert.match((collate.content as Array<{ text: string }>)[0].text, /file-reading capability/);
+      assert.match(textInBoth(collate), /file-reading capability/);
+      assert.match(textInBoth(collate), /Fixture collated summary/);
       assert.ok(collated.details.cachePath.includes(`.search${sep}`));
     } finally {
       await fixture.close();
@@ -296,6 +325,13 @@ test(
         details: { cachePath: string };
       };
       assert.equal(structured.outcome, "completed");
+      // The summary reaches a host that shows the model structuredContent only.
+      const text = textInBoth(result);
+      assert.match(text, /Fixture collated summary/);
+      assert.equal(
+        Object.keys(result.structuredContent ?? {}).join(","),
+        "outcome,text,details",
+      );
       assert.ok(progress > 0, "progress notifications reach the client");
       assert.ok(structured.details.cachePath.includes(`.search${sep}`));
       const cacheEntries = readdirSync(structured.details.cachePath);
@@ -320,10 +356,84 @@ test("keeps a degraded no-links research as a tool result", { timeout: 90_000 },
     );
     assert.equal(result.isError, undefined);
     assert.equal((result.structuredContent as { outcome: string }).outcome, "no-links");
+    // A degraded result keeps its explanatory text in both representations.
+    assert.match(textInBoth(result), /\S/);
   } finally {
     await fixture.close();
   }
 });
+
+test(
+  "serves tools with a defective configuration file and recovers once it is repaired",
+  { timeout: 120_000 },
+  async () => {
+    const fixture = await connect(
+      { FIXTURE_PROCESS_ENV: "1", FIXTURE_KEY: "synthetic-protocol-credential" },
+      { configured: false },
+    );
+    const call = () =>
+      fixture.client.callTool(
+        { name: "intelli_search", arguments: { query: "fixture recovery" } },
+        { timeout: 30_000 },
+      );
+    try {
+      assert.match(fixture.stderr(), /FIXTURE_LAZY_CONFIG missing/);
+      const { tools } = await fixture.client.listTools();
+      assert.equal(tools.length, 4, "tools are listed before configuration exists");
+      assert.match(
+        errorText(await call()),
+        /^intelli_search failed \(CONFIGURATION\): Configuration file not found: .*config\.json\. Create or repair the file, then call the tool again/,
+      );
+      writeFileSync(fixture.config, '{\n  "providers": {\n    "openrouter": "sk-or-x"\n');
+      const truncated = errorText(await call());
+      assert.match(truncated, /CONFIGURATION\): Configuration file is not valid JSON at end of input/);
+      assert.doesNotMatch(truncated, /sk-or-x/);
+      writeFileSync(fixture.config, '{\n  "providers": {},\n}');
+      assert.match(errorText(await call()), /not valid JSON at line 3, column 1/);
+      writeFileSync(fixture.config, JSON.stringify({ ...document(), unknown: true }));
+      assert.match(errorText(await call()), /Invalid configuration in .*unknown key/);
+      assert.doesNotMatch(fixture.stderr(), /FIXTURE_COMPLETION_STARTED/, "no provider access");
+      // The repaired file loads on the next call, using the credential
+      // snapshotted at startup (the child removed it from its environment).
+      writeFileSync(fixture.config, JSON.stringify(document()));
+      const repaired = await call();
+      assert.equal(repaired.isError, undefined);
+      assert.match(textInBoth(repaired), /### Sources/);
+      assert.match(fixture.stderr(), /Configuration loaded/);
+      // A loaded configuration is kept for the life of the process.
+      writeFileSync(fixture.config, "{");
+      assert.equal((await call()).isError, undefined);
+    } finally {
+      await fixture.close();
+    }
+  },
+);
+
+test(
+  "a defective configuration file keeps stdout to protocol messages",
+  { timeout: 60_000 },
+  async () => {
+    const { dir, config } = workspace();
+    rmSync(config);
+    const raw = spawnRaw(["--import", "tsx", childPath, "--config", config, "--workspace", dir]);
+    raw.send(initialize);
+    raw.send({ jsonrpc: "2.0", method: "notifications/initialized" });
+    raw.send({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: "intelli_research", arguments: { query: "fixture missing" } },
+    });
+    await waitFor(() => raw.lines().length >= 2);
+    const messages = raw.lines().map((line) => JSON.parse(line));
+    for (const message of messages) assert.equal(message.jsonrpc, "2.0");
+    const result = messages.find((message) => message.id === 2).result;
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /CONFIGURATION\): Configuration file not found/);
+    raw.child.stdin?.end();
+    assert.equal(await exitWithin(raw.child, 15_000), 0);
+  },
+);
 
 test("reports invalid arguments as tool errors, not protocol errors", { timeout: 60_000 }, async () => {
   const fixture = await connect();

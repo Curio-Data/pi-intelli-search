@@ -6,23 +6,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-## [pi-0.15.0] - 2026-10-05
+## [pi-0.15.0] - 2026-10-06
 
 ### Fixed
 
 - Routine fetch-comparison diagnostics no longer write over the `Pi` terminal interface. Native retry notices now use the research tool's stage progress instead of console output; aggregate fetch-variant winners remain in local telemetry. Native operation-error diagnostics still use the existing logger; this change does not intercept all extension console output.
 - Cache files, locks, indexes and telemetry now resolve against the `Pi` session workspace when it differs from the process working directory. Paths shown in prompts, reports and results retain their configured form.
 - Related-cache suggestions now use the configured cache directory in their report-reading instruction instead of always pointing to `.search/`.
-- Documentation downloads stage under the configured cache root instead of the operating-system temporary directory, with cleanup after cancellation or cache-write failure.
-- Permanent provider exceptions no longer retry as application timeouts. Late citations from failed attempts cannot contaminate successful search results.
-- Cancellation propagates through research stages and cache-lock waits instead of returning a degraded success.
-- Optional documentation staging failures no longer discard completed research.
+- Documentation downloads stage under the configured cache root instead of the operating-system temporary directory, with cleanup after cancellation or cache-write failure. Optional staging failures no longer discard completed research.
+- Permanent provider exceptions no longer retry as application timeouts. Late citations from failed attempts cannot contaminate successful search results. Cancellation propagates through research stages and cache-lock waits instead of returning a degraded success.
 - Concurrent page fetches keep their error handling separate and restore dependency diagnostics after suppression ends.
+- Related-cache suggestions resolve against the same recent-history window shown to the judge and include exact report paths.
+- Cache references stay aligned when extraction fails or manual collation supplies reordered or optional full pages. A completed same-day repeat now attempts to archive prior artefacts to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set. Archive failure is logged and falls back to in-place replacement; interrupted rotation can leave a partial archive. A degraded repeat preserves the earlier successful report, extractions, sources and index entry, recording only the failed attempt in `meta.json`. The numbered siblings are a same-day safety net, not a versioned archive.
+- Empty collation is rejected before writing a completed report, with an actionable output-budget diagnostic.
+- Native model registration preserves malformed or unreadable `models.json` files, retains operator overrides and symlinks, and serialises atomic updates.
 
 ### Changed
 
 - The native extension and standalone MCP server now share the research engine. The native tool interfaces and cache formats are preserved.
 - The Sonar retirement advisory is removed. [_OpenRouter_](https://openrouter.ai) continues to serve `perplexity/sonar` after [_Perplexity_](https://docs.perplexity.ai)'s direct application programming interface (API) sunset date. The default search model is unchanged.
+
+### Security
+
+- Page extraction uses the patched [_Defuddle_](https://github.com/kepano/defuddle) release and a Mathematical Markup Language (MathML) converter that loads the patched Extensible Markup Language (XML) parser externally instead of embedding an older copy.
 
 ### Compatibility
 
@@ -30,13 +36,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - The minimum supported version remains `Pi` 0.81.1. Live load checks on 2026-10-04 exercised both model-call paths: the legacy provider on 0.81.1 and the registry facade on 0.86.0. See the [compatibility matrix](docs/COMPATIBILITY.md#native-pi-extension-curio-datapi-intelli-search) for evidence.
 - Native release tags now use `pi-vX.Y.Z`; MCP tags use `mcp-vX.Y.Z`. Historical `vX.Y.Z` tags still identify native releases. The fixes prepared for the unreleased native 0.14.1 are included in this release.
 
+## [mcp-0.15.0] - 2026-10-06
+
+Core behaviour is shared with [pi-0.15.0] and recorded there. This is the stable promotion of the published [mcp-0.15.0-alpha.0]; publication remains subject to the release checklist.
+
+### Fixed
+
+- Every successful or degraded result includes its complete answer in `structuredContent.text` as well as text content, so hosts that prefer structured results receive the summary and cache suggestions.
+- Cache-writing tools declare their destructive refresh behaviour to MCP hosts instead of claiming additive-only writes.
+- An explicitly selected missing, unreadable or invalid configuration file no longer prevents MCP connection. Tool calls report the defect and retry loading the repaired file; absent launcher arguments and invalid workspaces remain startup failures.
+- Configuration diagnostics distinguish file access and syntax errors, provide safe JavaScript Object Notation (JSON) locations, and never echo configuration contents. Direct callers can inspect `ConfigurationError.reason`.
+- Host setup documents configuration recovery, secure credential entry, custom profile directories and verification through actual tool calls rather than connection alone.
+
 ## [mcp-0.15.0-alpha.0] - 2026-10-05
 
 Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha is published on `npm`; both the `alpha` and `latest` dist-tags resolve to this version.
 
 ### Added
 
-- **Standalone Server:** `@curio-data/mcp-intelli-search` exposes the four `intelli_*` tools over standard input/output (`stdio`) without a `Pi` installation. It uses explicit JavaScript Object Notation (JSON) configuration, an assigned workspace and an OpenRouter adapter.
+- **Standalone Server:** `@curio-data/mcp-intelli-search` exposes the four `intelli_*` tools over standard input/output (`stdio`) without a `Pi` installation. It uses explicit JSON configuration, an assigned workspace and an OpenRouter adapter.
 - **Host Plugins:** [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) bundles install from this repository's marketplaces. The Claude Code plugin receives the OpenRouter key through a required sensitive option stored in the host's credential store.
 - **Installation Guidance:** the [README](README.md#install) documents the three installation routes. The [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) records tested host versions and verification limits; [finding F2](docs/plans/mcp-intelli-search/POST-PHASE-6.md#f2-claude-code-drops-the-text-summary-high-confirmed) records the missing model-visible summary on Claude Code 2.1.289.
 
@@ -48,7 +66,7 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 
 ### Added
 
-- **Model benchmark harness.** `scripts/benchmark-models.sh` replays the identical research request through competing extract/collate models in isolated `Pi` environments and prints per-run telemetry. [Model Benchmarks](docs/BENCHMARKS.md) records the methodology and the five-run baseline (`gemini-3.8-flash`, `minimax-m3`, `minimax-m2.7`) behind this release's default change. Any model `Pi` supports can be benchmarked the same way.
+- **Model Benchmark Harness:** `scripts/benchmark-models.sh` replays the identical research request through competing extract/collate models in isolated `Pi` environments and prints per-run telemetry. [Model Benchmarks](docs/BENCHMARKS.md) records the methodology and the five-run baseline (`gemini-3.8-flash`, `minimax-m3`, `minimax-m2.7`) behind this release's default change. Any model `Pi` supports can be benchmarked the same way.
 
 ### Changed
 
@@ -58,7 +76,7 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 
 ### Fixed
 
-- **System prompts now reach the model on `Pi` 0.86 and newer.** `Pi` 0.86 changed the `pi-ai` provider stream contract: a context passed directly to a provider no longer folds its `systemPrompt` field into the request, so on `Pi` 0.86 and 0.87 every stage (search, extract, collate, cache suggest) ran without its system prompt. Output quality degraded with no error. The LLM transport now detects the `Pi` >= 0.86 model-registry facade and dispatches through it, which normalises the context before the provider sees it. `Pi` 0.81.1 through 0.85.x keep the previous direct-provider path unchanged. No settings change is required on either range.
+- **System prompts now reach the model on `Pi` 0.86 and newer.** `Pi` 0.86 changed the `pi-ai` provider stream contract: a context passed directly to a provider no longer folds its `systemPrompt` field into the request, so on `Pi` 0.86 and 0.87 every stage (search, extract, collate, cache suggest) ran without its system prompt. Output quality degraded with no error. The large language model (LLM) transport now detects the `Pi` >= 0.86 model-registry facade and dispatches through it, which normalises the context before the provider sees it. `Pi` 0.81.1 through 0.85.x keep the previous direct-provider path unchanged. No settings change is required on either range.
 
 ### Compatibility
 
@@ -70,17 +88,17 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 ### Added
 
 - **Citation Annotation Harvesting:** `intelli_research` and `intelli_search` merge provider-supplied `url_citation` annotations with prose links before applying the source limit. A Sonar probe returned 20 annotations against 3 prose links; annotations can therefore expose additional sources, but do not establish a complete list of sources consulted. The caller waits up to two seconds for annotation parsing from a copy of the Hypertext Transfer Protocol (HTTP) response stream. Parsing failures do not fail the search. No configuration is required.
-- **`searchWebSearch` setting (default: off).** Attaches OpenRouter's `openrouter:web_search` server tool to the search-stage call, giving any OpenRouter chat model access to live search without a search-native model. Requires `searchModel.provider` to be `openrouter`. Probe-validated pairing: `openai/gpt-5-nano` with `engine: "exa"` and `reasoning: "minimal"` at ≈$0.008 per search. See the README `searchWebSearch` reference for keys and engine restrictions.
+- **`searchWebSearch` setting (default: off).** Attaches OpenRouter's `openrouter:web_search` server tool to the search-stage call, giving an OpenRouter chat model with the required tool support access to live search without a search-native model. Requires `searchModel.provider` to be `openrouter`. Probe-validated pairing: `openai/gpt-5-nano` with `engine: "exa"` and `reasoning: "minimal"` at ≈$0.008 per search. See the README `searchWebSearch` reference for keys and engine restrictions.
 - **`perplexity/sonar-pro-search` registered as a selectable search model.** OpenRouter-exclusive agentic model, usable as `searchModel` today via a settings-only change. Bills $18 per 1,000 requests on top of $3/$15 per 1M tokens (≈$0.05 per search).
 - Telemetry records `stages.search.annotationsHarvested` (additive, optional field).
 
 ### Changed
 
 - **Search prompt requires a trailing Sources section** and asks for six or more sources, raising the number of parseable links from models that answer in prose.
-- **`defaultUrls` raised from 8 to 10 and `maxUrls` from 16 to 20.** Annotation harvesting fills the URL list with every cited source, so the defaults now acknowledge the wider source pool. Users who pinned either value keep theirs.
+- **`defaultUrls` raised from 8 to 10 and `maxUrls` from 16 to 20.** Annotation harvesting adds recovered provider citation uniform resource locators (URLs) to the candidate list, so the defaults now acknowledge the wider source pool. Users who pinned either value keep theirs.
 - **`intelli_search` caps its rendered source list at the top `defaultUrls` entries** (10 by default) instead of printing every cited source into the agent context.
 - **The search model's own rendered Sources section no longer flows downstream.** The pipeline extracts URLs itself and renders its own canonical source list; the duplicated upstream section is stripped from the `intelli_search` summary and the collation input.
-- **Sessions fetch closer to the URL cap than before**, so typical per-session cost moves from ≈$0.05 toward ≈$0.06 (10 pages). Fewer degraded zero-link runs. Lower `defaultUrls` to hold earlier spend.
+- **Recorded Page Count and Cost:** Research runs fetched closer to the URL cap in the recorded probes, moving the per-run estimate from ≈$0.05 toward ≈$0.06 (10 pages). Fewer degraded zero-link runs. Lower `defaultUrls` to hold earlier spend.
 
 ### Compatibility
 
@@ -169,7 +187,7 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 
 ### Added
 
-- **Local-only telemetry sidecar.** Each `intelli_research` run now writes a `meta.json` file into its `.search/<slug>/` cache directory recording per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), whether search-retry fired, cache-suggest hits, and per-stage latency. Degraded runs that exit early (no links, all fetches failed, all extractions failed) also write a sidecar, with an `outcome` field recording which path produced it, so degradation rates can be measured. Nothing leaves the host; no network call is added, no data leaves the machine, and no account or identity is recorded. The schema is additive-only with an independent `schemaVersion`. Set `disableTelemetry: true` to suppress the sidecar entirely.
+- **Local-Only Telemetry Sidecar:** Each `intelli_research` run attempts a best-effort `meta.json` write into its `.search/<slug>/` cache directory recording per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), whether search-retry fired, cache-suggest hits, and per-stage latency. Degraded runs that exit early (no links, all fetches failed, all extractions failed) also attempt a sidecar, with an `outcome` field recording which path produced it, so degradation rates can be measured. The sidecar adds no network transmission or credential/account-identifier fields, but stores the full query and local result metadata, which can contain personal or confidential information. Ordinary research requests still go to external services. Writing is best-effort; cancellation and thrown failures do not all produce a sidecar. The schema is additive-only with an independent `schemaVersion`. Set `disableTelemetry: true` to suppress the sidecar entirely.
 - **Session analysis script** at `scripts/analyze-sessions.sh` reproduces the effectiveness evaluation (tool-call counts, adoption over time, follow-up research, cache re-reads, cache sizes) from session logs, and aggregates `meta.json` sidecars into per-stage success rates and summed fetch-variant winner tallies.
 
 ## [0.10.2] - 2026-06-17
@@ -184,7 +202,7 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 ### Changed
 
 - **UI notifications and status indicators are now guarded with `ctx.hasUI`.** Previously the `session_start` and `after_provider_response` handlers called `ctx.ui.notify`/`setStatus` unconditionally, which is a no-op in non-interactive modes but produced unnecessary work in `pi -p` and `--mode json` runs. These calls now skip cleanly when no UI is attached. No behavioural change in interactive (`tui`/`rpc`) modes.
-- **Internal retry documentation refreshed.** `callLlm()` continues to force `maxRetries: 0` and own its own full-jitter backoff. Since `Pi` 0.76.0 the SDK default is also `0`, so the forced zero is now defensive rather than a divergence; comments and the `README` compatibility section reflect this. No runtime change.
+- **Internal retry documentation refreshed.** `callLlm()` continues to force `maxRetries: 0` and own its own full-jitter backoff. Since `Pi` 0.76.0 the software development kit (SDK) default is also `0`, so the forced zero is now defensive rather than a divergence; comments and the `README` compatibility section reflect this. No runtime change.
 
 ## [0.10.1] - 2026-06-04
 
@@ -198,7 +216,7 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 
 - **Stage-based progress bar in `intelli_research` tool output.** A visual progress bar renders during streaming: overall completion bar, stage pills with ✓/●/○ markers, current stage message, and a per-page sub-progress bar during extraction. The LLM sees structured `⚙️ Stage X/5:` prefixed text via `onUpdate`.
 - **`extractionConcurrency` setting (default 4).** Per-page extractions now run through a bounded worker pool so a wide result set no longer fires a burst of simultaneous extract-model calls that trip provider rate limits.
-- **Research Retry and Timeout Policy:** large language model (LLM) calls within `intelli_research` retry transient failures (HTTP `429`, `5xx` and timeouts) with full-jitter exponential backoff that honours `Retry-After`. Each attempt has an application-level timeout. Standalone `intelli_search`, `intelli_extract` and `intelli_collate` calls retain one attempt and no application-level timeout. The research policy settings are: `llmTimeoutMs` (default 90000), `llmRetryAttempts` (default 3), `retryBaseDelayMs` (default 1500), `retryMaxDelayMs` (default 20000), `searchRetryAttempts` (default 2), and an opt-in `minRequestIntervalMs` throttle (default 0, off) that spaces concurrent extract calls for keys with tight rate limits.
+- **Research Retry and Timeout Policy:** large language model (LLM) calls within `intelli_research` retry transient failures (HTTP `429`, `5xx` and timeouts) with full-jitter exponential backoff that honours `Retry-After`. Each attempt has an application-level timeout. Standalone `intelli_search`, `intelli_extract` and `intelli_collate` calls retain one attempt and no application-level timeout. The research policy settings are: `llmTimeoutMs` (default `90000`), `llmRetryAttempts` (default `3`), `retryBaseDelayMs` (default `1500`), `retryMaxDelayMs` (default `20000`), `searchRetryAttempts` (default `2`), and an opt-in `minRequestIntervalMs` throttle (default `0`, off) that spaces concurrent extract calls for keys with tight rate limits.
 - `@earendil-works/pi-tui` added to peer dependencies (required by `renderResult` for progress bar rendering).
 
 ### Changed
@@ -211,8 +229,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - **Research Failure Handling:** rate-limited search and collation calls now retry before failing; rate-limited extractions retry before being discarded. Application timeouts also cover stalled response streams, which the software development kit (SDK) request timeout did not cover. Search responses with no usable links are retried separately. Calls that exhaust their attempts still fail with a timeout or provider error.
 - **Source URLs containing parentheses no longer truncated.** Wikipedia disambiguation links (`Foo_(disambiguation)`) and MSDN API references with version suffixes kept only the text up to the first `)`, producing malformed URLs that failed to fetch.
 - **Extraction sub-progress bar advances per completion** instead of jumping to N/N at launch, so progress reflects real work done.
-- **`llms-full.txt` discovery honours cancellation and has a tight timeout.** Probes now respond to Esc and use a 10s per-host budget so a slow documentation host cannot stall the research result.
-- **Cache directories no longer collide between different queries.** Two queries that reduced to the same five-word slug on the same day silently overwrote each other. Directory names now include a hash of the full query. The index also deduplicates by slug so re-running the same query refreshes its entry without accumulating duplicates.
+- **`llms-full.txt` discovery honours cancellation and has a tight timeout.** Probes now respond to Esc and use a 10s per-host budget to bound waiting on a slow documentation host; the pipeline still awaits supplementary download completion.
+- **Reduced Cache-Name Collision Risk:** Two queries that reduced to the same five-word slug on the same day silently overwrote each other. Directory names now include a hash of the full query. The index also deduplicates by slug so re-running the same query refreshes its entry without accumulating duplicates.
 - Search progress message no longer hardcodes "Perplexity Sonar"; uses the configured search model so the message is correct with a different search provider.
 
 ## [0.9.0] - 2026-05-25
@@ -410,6 +428,7 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[mcp-0.15.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.15.0
 [pi-0.15.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.15.0
 [mcp-0.15.0-alpha.0]: https://www.npmjs.com/package/@curio-data/mcp-intelli-search/v/0.15.0-alpha.0
 [0.14.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.14.0

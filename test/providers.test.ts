@@ -1,5 +1,21 @@
 // test/providers.test.ts — Unit tests for model registration logic
-import { describe, it } from "node:test";
+import { describe, it, beforeEach, afterEach } from "node:test";
+import { mkdtemp, mkdir, readFile, writeFile, readdir, rm, symlink, lstat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+let agentDir: string;
+let savedAgentDir: string | undefined;
+beforeEach(async () => {
+  savedAgentDir = process.env.PI_CODING_AGENT_DIR;
+  agentDir = await mkdtemp(join(tmpdir(), "intelli-providers-"));
+  process.env.PI_CODING_AGENT_DIR = agentDir;
+});
+afterEach(async () => {
+  if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+  await rm(agentDir, { recursive: true, force: true });
+});
 import assert from "node:assert/strict";
 import { ensureCustomModels, REQUIRED_MODELS } from "../src/providers.js";
 
@@ -20,6 +36,64 @@ describe("ensureCustomModels", () => {
     await ensureCustomModels(); // Ensure models exist
     const result = await ensureCustomModels();
     assert.deepStrictEqual(result, []);
+  });
+});
+
+describe("configuration preservation", () => {
+  for (const contents of [
+    '{"providers":{"private":{"apiKey":"SECRET"}},',
+    "null",
+    "[]",
+    '{"providers":[]}',
+    '{"providers":{"openrouter":{"models":{}}}}',
+    '{"providers":{"custom":null}}',
+  ]) {
+    it(`preserves invalid input (${contents.length} characters)`, async () => {
+      const path = join(agentDir, "models.json");
+      await writeFile(path, contents);
+      await assert.rejects(ensureCustomModels(), (error: Error) => {
+        assert.match(error.message, /Invalid models.json/);
+        assert.doesNotMatch(error.message, /SECRET/);
+        return true;
+      });
+      assert.equal(await readFile(path, "utf8"), contents);
+      assert.deepEqual(await readdir(agentDir), ["models.json"]);
+    });
+  }
+  it("preserves unrelated providers and custom model definitions across concurrent starts", async () => {
+    const path = join(agentDir, "models.json");
+    const custom = { id: "perplexity/sonar", name: "My override" };
+    await writeFile(
+      path,
+      JSON.stringify({
+        extra: true,
+        providers: { custom: { apiKey: "fixture" }, openrouter: { models: [custom] } },
+      }),
+    );
+    const added = await Promise.all([ensureCustomModels(), ensureCustomModels()]);
+    assert.equal(added.flat().length, 2);
+    const result = JSON.parse(await readFile(path, "utf8"));
+    assert.equal(result.extra, true);
+    assert.deepEqual(result.providers.custom, { apiKey: "fixture" });
+    assert.deepEqual(result.providers.openrouter.models[0], custom);
+    assert.equal(result.providers.openrouter.models.length, 3);
+    assert.deepEqual(await readdir(agentDir), ["models.json"]);
+  });
+  it("does not replace an unreadable directory with a file", async () => {
+    await mkdir(join(agentDir, "models.json"));
+    await assert.rejects(ensureCustomModels(), /Cannot read models.json/);
+    assert.ok((await lstat(join(agentDir, "models.json"))).isDirectory());
+  });
+  it("preserves valid symlinks and rejects dangling symlinks", async () => {
+    const target = join(agentDir, "target.json");
+    const path = join(agentDir, "models.json");
+    await symlink(target, path);
+    await assert.rejects(ensureCustomModels(), /dangling symlink/);
+    assert.ok((await lstat(path)).isSymbolicLink());
+    await writeFile(target, "{}");
+    await ensureCustomModels();
+    assert.ok((await lstat(path)).isSymbolicLink());
+    assert.equal(JSON.parse(await readFile(target, "utf8")).providers.openrouter.models.length, 3);
   });
 });
 
@@ -53,11 +127,7 @@ describe("REQUIRED_MODELS structure", () => {
   it("models.json has the expected perplexity models after ensureCustomModels", async () => {
     await ensureCustomModels();
 
-    const { homedir } = await import("node:os");
-    const { join } = await import("node:path");
-    const { readFile } = await import("node:fs/promises");
-
-    const modelsPath = join(homedir(), ".pi", "agent", "models.json");
+    const modelsPath = join(agentDir, "models.json");
     const raw = await readFile(modelsPath, "utf-8");
     const config = JSON.parse(raw);
 

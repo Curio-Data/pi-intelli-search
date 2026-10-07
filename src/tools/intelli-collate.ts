@@ -13,7 +13,12 @@ export const intelliCollateTool = {
   label: "Intelli Collate",
   description:
     "Deduplicate and synthesise multiple per-page extractions into a single " +
-    "concise summary. Caches results to .search/ for follow-up. Use this " +
+    "concise summary. Caches results to .search/ for follow-up; a successful " +
+    "repeat on the same UTC date attempts to archive the previous cached " +
+    "files to the lowest free numbered sibling folder (.1, then .2 and so on) " +
+    "first. Archiving is best-effort: a failure lets the completed run " +
+    "replace files in place, so copy a report elsewhere if it must be " +
+    "retained. Use this " +
     "after extracting multiple pages with intelli_extract; for end-to-end " +
     "research, use intelli_research.",
   promptSnippet:

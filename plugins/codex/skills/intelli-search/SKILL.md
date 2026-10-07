@@ -1,11 +1,13 @@
 ---
 name: intelli-search
-description: "Research the web for current information. Use when you need docs, APIs, best practices, library updates, or any question requiring up-to-date web sources. Provides search, per-page extraction, collation, and a persistent .search/ cache for follow-up."
+description: "Use intelli-search for current web research, documentation lookup, API verification, library comparisons and release information. Prefer its search or multi-page research tools to built-in web search when this skill is selected. Includes installation, configuration and troubleshooting. Report unavailable tools explicitly; never claim another search used this server."
 ---
 
 # Intelli Search
 
 Intelligent web research through the `intelli-search` Model Context Protocol (MCP) server. Four tools: `mcp__intelli_search__intelli_search`, `mcp__intelli_search__intelli_extract`, `mcp__intelli_search__intelli_collate` and `mcp__intelli_search__intelli_research`. The examples below use the exact qualified names this host declares.
+
+Use these tools for current web research when this skill is selected, rather than silently substituting host-native search. If the server or tools are unavailable, report the setup failure explicitly; using another search tool does not establish that this server worked.
 
 Inference uses the configured provider account. The server runs one operation at a time with up to eight requests queued; excess submissions receive a busy error rather than waiting.
 
@@ -13,21 +15,23 @@ Inference uses the configured provider account. The server runs one operation at
 
 The plugin launches the pinned `@curio-data/mcp-intelli-search` package through `npx`. The first start downloads the package, so it needs network access and can take half a minute; later starts reuse the `npx` cache. [Node.js](https://nodejs.org/) 22 or later must be on `PATH`.
 
-Codex starts plugin MCP servers with a filtered environment: arbitrary parent variables are not inherited and plugin MCP configuration performs no placeholder expansion (verified on Codex CLI 0.144.5). The plugin therefore declares `env_vars` so Codex forwards three named variables from the environment you start `codex` with:
+[_Codex_](https://developers.openai.com/codex/plugins) starts plugin MCP servers with a filtered environment: arbitrary parent variables are not inherited and plugin MCP configuration performs no placeholder expansion (verified on the command-line interface (CLI) version 0.144.5). The plugin therefore declares `env_vars` so Codex forwards three named variables from the shell that launches `codex`:
 
-- `OPENROUTER_API_KEY`: your [OpenRouter](https://openrouter.ai) key. One key covers all three pipeline stages.
+- `OPENROUTER_API_KEY`: the [OpenRouter](https://openrouter.ai) application programming interface (API) key. One key covers all three pipeline stages.
 - `INTELLI_SEARCH_CONFIG`: absolute path of the configuration file.
-- `INTELLI_SEARCH_WORKSPACE`: absolute path of the workspace; the research cache lands in its `.search/` subdirectory.
+- `INTELLI_SEARCH_WORKSPACE`: absolute path of the workspace; the default research cache is its `.search/` subdirectory.
 
-Export them before starting Codex, for example in your shell profile:
+Supply the key at launch from a secret manager, or enter it at a hidden [_Bash_](https://www.gnu.org/software/bash/) prompt. Do not store a literal key in a shell profile or command history:
 
 ```bash
-export OPENROUTER_API_KEY=sk-or-v1-...
+read -r -s -p 'OpenRouter API key: ' OPENROUTER_API_KEY
+printf '\n'
+export OPENROUTER_API_KEY
 export INTELLI_SEARCH_CONFIG="$HOME/.config/mcp-intelli-search/config.json"
-export INTELLI_SEARCH_WORKSPACE="$HOME/.local/share/mcp-intelli-search/workspace"
+export INTELLI_SEARCH_WORKSPACE="$PWD"
 ```
 
-For per-project caches, set `INTELLI_SEARCH_WORKSPACE` to the project directory before each `codex` launch (for example with `direnv`) instead of exporting a fixed path.
+The snippet exports the launch directory as the workspace. For a stable per-project cache regardless of launch directory, set `INTELLI_SEARCH_WORKSPACE` to the project directory through `direnv` or another per-directory mechanism.
 
 Create the parent directory and workspace, then save the following JavaScript Object Notation (JSON) configuration to `$INTELLI_SEARCH_CONFIG`:
 
@@ -59,15 +63,19 @@ mkdir -p "$(dirname "$INTELLI_SEARCH_CONFIG")" "$INTELLI_SEARCH_WORKSPACE"
 }
 ```
 
-These are explicit selections, not defaults you must keep. Any chat model on OpenRouter works for `extract` and `collate`; `search` needs `perplexity/sonar`, `perplexity/sonar-pro` or `perplexity/sonar-pro-search` (or an explicitly configured `searchWebSearch` block; see [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#tuning) in the standalone guide).
+These are explicit selections, not inherited defaults. Select OpenRouter models that pass catalogue validation for the required roles and are accessible to the configured account. Search requires `perplexity/sonar`, `perplexity/sonar-pro` or `perplexity/sonar-pro-search`, or a chat model with advertised tool support and an enabled `searchWebSearch` block. See [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#tuning) in the standalone guide.
 
-If either path selection (`INTELLI_SEARCH_CONFIG` or `INTELLI_SEARCH_WORKSPACE`) is missing, the server exits on startup with `Explicit --config and --workspace are required` on standard error and the tools never appear. Supply both paths and restart _Codex_. A configuration file that does not exist produces `Cannot read configuration: provide an explicit readable JSON file`.
+If either path selection (`INTELLI_SEARCH_CONFIG` or `INTELLI_SEARCH_WORKSPACE`) is missing, the server exits on startup with `Explicit --config and --workspace are required` on standard error and the tools never appear. Supply both paths and restart _Codex_. A missing or invalid selected configuration file does not stop connection. Each tool call reports a `CONFIGURATION` error naming the file; repair it and call again. The server rereads it until it loads successfully, then keeps it until restart.
 
 A missing `OPENROUTER_API_KEY` is different: credentials are validated when an operation runs, not at server startup. Export the key and restart the host so the server receives the updated environment. Host forwarding behaviour is recorded for Codex CLI 0.144.5 in the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins).
 
+### Verify Inference
+
+Start Codex from the configured shell and request a quick search with the exposed `intelli_search` tool. Confirm an actual MCP tool call and an answer with sources. `codex mcp list` only lists configuration and does not prove server startup or provider access. If these tools are unavailable, report that setup is incomplete; do not claim to have used this server while answering through built-in web search.
+
 ### Unattended Runs
 
-Interactive sessions ask before each research tool call. Non-interactive `codex exec` cannot ask, so it cancels the call and reports `user cancelled MCP tool call`. To run the tools unattended, pre-approve them in `~/.codex/config.toml`:
+Interactive sessions ask before each research tool call. Non-interactive `codex exec` cannot ask, so it cancels the call and reports `user cancelled MCP tool call`. To run the tools unattended, pre-approve them in `${CODEX_HOME:-$HOME/.codex}/config.toml`:
 
 ```toml
 [plugins."intelli-search@curio-data-plugins".mcp_servers.intelli_search]
@@ -81,7 +89,7 @@ Recorded on Codex CLI 0.144.5.
 
 ### Quick Factual Question
 
-Use `mcp__intelli_search__intelli_search` when you need a fast answer with sources but no deep analysis. The source list is capped at the top `defaultUrls` (default 10) entries; a search-grounded model can cite twenty or more. Read the summary; treat the source list as an index to follow up from, not as reading.
+Use `mcp__intelli_search__intelli_search` for a quick factual answer with sources but no deep analysis. The source list is capped at the top `defaultUrls` (default 10) entries; a search-grounded model can cite twenty or more. Read the summary; treat the source list as an index to follow up from, not as reading.
 
 ```
 mcp__intelli_search__intelli_search(query="TypeScript 5.8 release date")
@@ -89,7 +97,7 @@ mcp__intelli_search__intelli_search(query="TypeScript 5.8 release date")
 
 ### Deep Research for a Coding Task
 
-Use `mcp__intelli_search__intelli_research` for the full pipeline. **Always provide a `focusPrompt`.** The extraction model needs to know what to extract. Without it, you get generic summaries. Translate the user's intent into a specific extraction focus.
+Use `mcp__intelli_search__intelli_research` for the full pipeline. Always provide a `focusPrompt` to specify the content to retain. Without that guidance, the extraction model produces generic summaries. Translate the user's intent into a specific extraction focus.
 
 #### Example: Learning a New Feature
 
@@ -137,6 +145,8 @@ mcp__intelli_search__intelli_research(
 
 #### Example: API Reference
 
+An application programming interface (API) reference task needs exact signatures and options.
+
 ```
 User: "How do I use the Defuddle npm package?"
 
@@ -155,7 +165,7 @@ mcp__intelli_search__intelli_research(
 
 The pipeline automatically adapts extraction to source type:
 
-- **Official Docs or API (Application Programming Interface) Reference:** Preserves exact signatures, types, version annotations.
+- **Official Docs or API Reference:** Preserves exact signatures, types and version annotations.
 - **Blog Posts or Tutorials:** Captures practical patterns, gotchas, real-world examples.
 - **Forums (Reddit, Discourse, StackOverflow):** Captures the problem, accepted solution, caveats. Discards tangents.
 
@@ -171,7 +181,7 @@ The instruction also retains useful practical examples and forum fixes; source p
 
 ### Complex Multi-Angle Research
 
-When you need **different focus per URL** (for example, comparing alternatives side by side), orchestrate step by step instead of using `mcp__intelli_search__intelli_research`:
+For a different focus per URL (for example, comparing alternatives side by side), orchestrate step by step instead of using `mcp__intelli_search__intelli_research`:
 
 1. `mcp__intelli_search__intelli_search(query)` to discover URLs.
 2. Fetch the pages with a web-fetch tool if one is installed (the server does not provide one), or with available shell or Hypertext Transfer Protocol (HTTP) tools. Pass the actual page content to the next step; a URL alone is insufficient.
@@ -184,48 +194,51 @@ When constructing a collation item from an extraction result, use the original `
 
 ## Using the Result
 
-**The `mcp__intelli_search__intelli_research` result already contains a concise deduplicated summary. Use it directly. Do not read cache files unless the summary is insufficient for the task.**
+The `mcp__intelli_search__intelli_research` result already contains a concise deduplicated summary. Use it directly. Do not read cache files unless the summary is insufficient for the task.
 
-The result also includes a **📚 Related cached searches** section when semantically similar previous searches exist in the workspace cache. These are discovered by a model judge that compares the current query against the cache index. The related searches are:
+Before repeating a query whose report must be retained, copy the report elsewhere. A successful repeat on the same Coordinated Universal Time (UTC) date attempts to archive the previous run's artefacts to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing fresh results. Archiving is best-effort: a failure is logged and the new run can replace the canonical files in place, leaving an incomplete archive. A degraded repeat preserves an earlier successful report and records the failed attempt in telemetry when enabled. The numbered siblings are a same-day safety measure, not a retention guarantee.
+
+The result also includes a `📚 Related cached searches` section when semantically similar previous searches exist in the workspace cache. These are discovered by a model judge that compares the current query against the cache index. The related searches are:
 
 - **Supplementary:** The live search always runs. Cached results are offered as additional context.
-- **Useful when live results are incomplete:** You can read a previous `report.md` to cross-reference.
-- **Helpful for the user:** If the live results seem wrong, you can point the user to previous research on the same topic.
+- **Cross-Reference:** Read a previous `report.md` when live results are incomplete.
+- **Prior Evidence:** Point to earlier research on the same topic when the live result needs checking.
 
 Only reach into the cache when:
 
-- The user asks about a specific source you need to re-examine.
-- You need a complete code example that was truncated in the summary.
-- Something in the summary seems contradictory and you need the original.
+- The user asks about a specific source that needs re-examination.
+- A required code example was truncated in the summary.
+- A claim in the summary needs checking against the original source.
 - The live results are insufficient and a related cached search may help.
 
 ## Follow Up from Cache
 
-The cache lives at `.search/<date>-<slug>-<hash>/` below the configured workspace. The tool result includes the absolute path. Read those files with your shell or file-reading tools.
+The tool result's `details.cachePath` identifies the cache entry's absolute path. The default is `.search/<date>-<slug>-<hash>/` below the selected workspace; `tuning.cacheDir` can change the cache root. Read those files with available shell or file-reading tools. List the directory and select an exact filename; the examples below are paths, not commands.
 
 | Need | File |
 |------|------|
-| Quick refresher on one source | `extractions/01-*.md` |
-| Full original page content | `sources/01-*.md` |
+| Quick refresher on one source | `extractions/<exact-file>.md` |
+| Full original page content | `sources/<exact-file>.md` |
 | Collated overview | `report.md` |
 | Per-stage outcomes | `meta.json` |
 | Re-fetch a single URL fresh | Use an installed web-fetch tool or shell/HTTP tools; the server provides no standalone fetch tool |
 
 ## How It Works
 
-Reference material for the curious. The decision logic above is what matters in practice.
+The following stages execute inside the research tool.
 
 `mcp__intelli_search__intelli_research` runs a 5-stage pipeline inside a single tool call:
 
-1. **Search:** a search-grounded model returns a synthesised answer plus every source it cited: prose links are merged with machine-readable `url_citation` annotations harvested from the response body. Harvested citations join the candidate URL list before page selection and the `maxUrls` cap; not every discovered source is fetched.
+1. **Search:** a search-grounded model returns a synthesised answer. Prose links are merged with provider-supplied citation URLs recovered from recognised `url_citation` annotations. Harvesting is best-effort, not a complete record of sources consulted. The merged candidates are selected under the `maxUrls` cap; not every discovered source is fetched.
 2. **Fetch:** Each page is fetched and cleaned to Markdown (navigation, ads and sidebars stripped). A Markdown variant is fetched in parallel and the better version wins by quality score.
 3. **Extract:** A configurable model pulls out only the content relevant to the query. A ≈50K-char page becomes ≈3-5K chars of focused extraction.
 4. **Collate:** Another model call deduplicates across extractions and produces one concise summary. The model is instructed to flag conflicts and use the source order above.
-5. **Cache suggest:** A model judge finds semantically related previous searches in `.search/` and surfaces them as a supplementary table.
+5. **Cache Suggest:** A model judge looks for related previous searches in the configured cache index. The pipeline awaits the judge under the model-call timeout and retry policy; judge failure is logged without discarding completed research. Cancellation still propagates.
 
-You receive only the final summary plus brief stage progress. The full pipeline is hidden inside the tool so your context stays clean.
+The agent receives the final summary, source/cache references and brief stage progress rather than the full fetched pages. Summary length depends on `collationMaxTokens` and model output; appendices add further text.
 
-### Why Extract Before Collate?
+<a id="why-extract-before-collate"></a>
+### Extraction Before Collation
 
 Per-page extraction bounds collation input and keeps context use and cost manageable across model choices. As an illustration, eight fetched pages multiplied by ≈50K chars each equals ≈400K chars; compressing each independently gives the collation model ≈32K chars total. Eight pages illustrates the design, not the ten-page default.
 
@@ -234,13 +247,13 @@ This is also why `focusPrompt` matters. It tells the extraction model what to ke
 ## When Not to Search
 
 - Writing or editing code already in the project.
-- General programming concepts you are confident about.
+- General programming concepts that need no current external evidence.
 - Refactoring or debugging with full context available.
 
 ## Failure Modes
 
-- **Startup Failures:** Follow the setup section, correct the named path selection and restart the host. The server exits before serving, so the tools never appear and no inference runs. Standard error names the problem: `Explicit --config and --workspace are required` (missing path selections), `Cannot read configuration: provide an explicit readable JSON file`, or `workspace must be an explicit absolute directory` / `workspace must be an existing readable directory`.
-- **Configuration Errors** (`CONFIGURATION`, `WORKSPACE`): a tool call found the setup incomplete or invalid (for example a missing credential or an unusable cache path). Fix the configuration and retry; no inference was billed.
+- **Startup Failures:** Absent path selections and unusable workspaces still fail before serving. Cache safety is checked when valid configuration becomes available: at startup for a loadable file, or on a tool call after file recovery. Correct the diagnostic and restart the host. `--check-config` remains strict and exits with status `1` for invalid configuration or workspace selections.
+- **Configuration Errors** (`CONFIGURATION`, `WORKSPACE`): a tool call found incomplete setup. For a missing, unreadable or invalid selected file, repair the named file and call again; the server rereads it on each call until it loads. JSON syntax diagnostics give a location without echoing the file. After a successful load, configuration changes need a restart. Missing credentials also require restart because the environment is captured at startup. These preflight errors incur no inference charges.
 - **Provider Errors** (`PROVIDER`): the provider rejected or broke the call. Check credentials or permissions for `401`/`403`, and account credits for ordinary `402` credit exhaustion. The adapter treats a `402` with a valid Retry-After header as transient budget pressure and retries it under the configured bounded policy, like rate limits (`429`) and server errors (`5xx`). If transient failures persist after those attempts, wait before a manual retry rather than changing credentials.
 - **Invalid Arguments** (`INVALID_ARGUMENTS`): the call parameters failed validation. Correct the arguments; do not retry unchanged.
 - **Operation Failures** (`OPERATION`): a stage of the pipeline failed after validation. The message names the stage; retry once, then report if it persists.

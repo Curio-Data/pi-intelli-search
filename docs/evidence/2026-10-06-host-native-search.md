@@ -20,7 +20,7 @@ The original comparison reported the installed command's version as the session 
 
 The session launched two sequential `pi -p` processes, each instructed to call `intelli_research` once with `maxUrls` set to 6. The command also supplied a different query and extraction focus for each directory.
 
-The first query was:
+The queries refer to the Model Context Protocol (MCP) and a command-line interface (CLI). The first query was:
 
 > How to publish a Claude Code plugin with an MCP server to the official Anthropic plugin marketplace/directory in 2026: submission process, requirements, review, claude-plugins-official, community marketplaces
 
@@ -28,7 +28,7 @@ The second query was:
 
 > How to publish an OpenAI Codex CLI plugin with an MCP server to the official Codex plugin directory in 2026: submission process, requirements, review, marketplace.json, .codex-plugin/plugin.json
 
-Here MCP means Model Context Protocol and CLI means command-line interface. The first focus requested submission steps, eligibility, review, manifests, versioning and updates, preferring official documentation. The second requested submission steps, eligibility, review, manifest fields and repository-marketplace installation compared with official-directory installation, also preferring official documentation.
+The first focus requested submission steps, eligibility, review, manifests, versioning and updates, preferring official documentation. The second requested submission steps, eligibility, review, manifest fields and repository-marketplace installation compared with official-directory installation, also preferring official documentation.
 
 ### Cache Records
 
@@ -48,7 +48,7 @@ The two cache directory names identify the original `report.md`, `query.txt`, `m
 | `stages.cacheSuggest.ran` | `false` | `true` |
 | `stages.cacheSuggest.surfaced` | 0 | 1 |
 
-The second run's cache suggestion named the first run. It was not independent prior research. The fetch counts describe requested source URLs, not twelve distinct documents: the OpenAI run included both the Markdown and HTML forms of the submission page.
+The second run's cache suggestion named the first run. It was not independent prior research. The fetch counts describe requested source uniform resource locators (URLs), not twelve distinct documents: the OpenAI run included both the Markdown and Hypertext Markup Language (HTML) forms of the submission page.
 
 ### Source Selection
 
@@ -89,7 +89,7 @@ The transcript contains three `WebSearch` and seven `WebFetch` calls. The origin
 | `08:09:00.684Z` | `WebFetch` | `https://claude.com/docs/plugins/platform-support` |
 | `08:09:09.083Z` | `WebFetch` | `https://claude.com/docs/plugins/submit` |
 
-The first search returned secondary sources led by an AI Weekly article. The second included official OpenAI help pages as well as secondary sources. The publishing-guide and platform-support fetches returned full documentation text, so the original description of every fetch as a small-model summary was unsupported.
+The first search returned secondary sources led by an _AI Weekly_ article. The second included official OpenAI help pages as well as secondary sources. The publishing-guide and platform-support fetches returned full documentation text, so the original description of every fetch as a small-model summary was unsupported.
 
 ## Submission Guidance
 
@@ -107,11 +107,11 @@ The passages give different guidance, but the second excludes the directory port
 
 ### Local-Server Guidance
 
-The captured [OpenAI migration guide](https://developers.openai.com/plugins/guides/submit-claude-plugin), in `sources/05-developers-openai-com.md` of the OpenAI cache, advised for a local MCP server:
+The captured [OpenAI migration guide](https://developers.openai.com/plugins/guides/submit-claude-plugin), in `sources/05-developers-openai-com.md` of the OpenAI cache, advised for a local MCP server, referring to Hypertext Transfer Protocol Secure (HTTPS):
 
 > Deploy it to a public HTTPS URL. If you can't, reach out to your OpenAI contact for local MCP support.
 
-HTTPS means Hypertext Transfer Protocol Secure. The same capture, Section Complete the Submission Requirements, stated:
+The same capture, Section Complete the Submission Requirements, stated:
 
 > Contact your OpenAI partner before submitting if the plugin's core value requires local execution, arbitrary access to files on the user's computer, hardware or application access, offline operation, or inbound channel messages. These cases may need product-specific review.
 

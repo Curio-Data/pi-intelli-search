@@ -1,16 +1,18 @@
 # Model Benchmarks
 
-This document records the extract/collate model benchmark for `intelli-search`: the methodology, the harness, the measured results, and the decisions taken from them. It exists so that future model comparisons are reproducible and comparable with the numbers already recorded here. The harness measures the native `Pi` adapter through a live agent loop, not MCP (Model Context Protocol) transport latency. Baseline run 1A was a direct native tool call rather than a headless loop run.
+This document records the extract/collate model benchmark for `intelli-search`: the methodology, the harness, the measured results, and the decisions taken from them. It exists so that future model comparisons are reproducible and comparable with the numbers already recorded here. The harness measures the native `Pi` adapter through a live agent loop, not Model Context Protocol (MCP) transport latency. Baseline run 1A was a direct native tool call rather than a headless loop run.
 
 Benchmark numbers are canonical to this file. When a new model is benchmarked, append its runs here rather than editing historical rows.
 
 ## Purpose
 
-The extract and collate stages dominate per-session cost and determine report quality. Choosing a model trades off extraction verbosity, collation evidence handling (stated ranking methodology, caveats for low-evidence claims and compatibility warnings), latency, and price. The benchmark runs the identical research request through competing models and records what changes.
+The extract and collate stages dominate per-run cost and determine report quality. Choosing a model trades off extraction verbosity, collation evidence handling (stated ranking methodology, caveats for low-evidence claims and compatibility warnings), latency, and price. The benchmark runs the identical research request through competing models and records what changes.
 
 ## Methodology
 
 ### Harness
+
+Before running, set `BENCH_BASE_DIR` to a directory on encrypted storage: the harness writes an `auth.json` containing provider credentials into each run's agent directory. Its default base is `/tmp/intelli-bench-<stamp>`, which is not suitable for confidential scratch.
 
 Run [`scripts/benchmark-models.sh`](../scripts/benchmark-models.sh) from the repo root:
 
@@ -30,25 +32,25 @@ The agent-loop model is pinned per benchmark series (default: `kimi-coding/k3` w
 
 ### Fixed Stimulus
 
-The default query, focusPrompt, and `maxUrls` equal the 2026-09-07 baseline, pinned in the script. Changing them (via `BENCH_QUERY`, `BENCH_FOCUS`, `BENCH_MAX_URLS`) starts a new comparison series; note that in the results table when you do.
+The default query, `focusPrompt`, and `maxUrls` equal the 2026-09-07 baseline, pinned in the script. Changing them (via `BENCH_QUERY`, `BENCH_FOCUS`, `BENCH_MAX_URLS`) starts a new comparison series; record that change in the results table.
 
 ### Parameter Fidelity
 
 The headless agent, not the harness, composes the tool call. Two checks verify fidelity:
 
 - **Query:** the cache directory slug is derived from the query hash. An identical query string produces an identical slug; all baseline runs share the slug `2026-09-07-top-10-most-popular-svelte-42d696`, and `query.txt` must equal the pinned query.
-- **focusPrompt:** not cryptographically verifiable from artifacts. The prompt pins it verbatim and every extraction's content should reflect its terms (popularity metrics, star counts, Svelte 5 relevance). Treat focus fidelity as strong-but-inferred.
+- **`focusPrompt`:** not cryptographically verifiable from artefacts. The prompt pins it verbatim and every extraction's content should reflect its terms (popularity metrics, star counts, Svelte 5 relevance). Treat focus fidelity as strong-but-inferred.
 
 ### Confounds and Limitations
 
-- **Search nondeterminism dominates.** The search stage is a live Sonar call; identical queries return different link sets run to run. Corpus quality differences are entangled with model differences. Match the full source URL (uniform resource locator) in the captured headers before comparing extractions, then verify identical captured input content before attributing differences solely to the model. Numbered files encode position and hostname, not the full URL (`src/core/cache.ts`). A shared URL alone supports a same-source comparison with remaining content confounds.
+- **Search Nondeterminism:** The search stage is a live Sonar call; identical queries return different link sets run to run. Corpus quality differences are entangled with model differences. Match the full source URL (uniform resource locator) in the captured headers before comparing extractions, then verify identical captured input content before attributing differences solely to the model. Numbered files encode position and hostname, not the full URL (`src/core/cache.ts`). A shared URL alone supports a same-source comparison with remaining content confounds.
 - **Agent-Loop Fidelity:** Verify query fidelity through the cache slug and `query.txt`, not the loop's self-report or exit status. During the 2026-09-07 series (extension builds 0.13.0 and 0.14.0), print-mode runs emitted `functions.intelli_research:0{...}` as prose instead of a native tool-call block, exited 0 and never ran the pipeline. The exact `Pi` version for that incident is not recorded here; this is a historical diagnosis, not a claim about current hosts.
   - **Recorded Streaming Diagnosis:** The incident record attributes the leak to loss of the `zaiToolStream` compatibility flag for zai glm models on catalogue restore and `models.json` round-trip paths. It records a 4-hour remote-catalogue refresh interval and extension-triggered refreshes, and a reproduction with a catalogue-cache restore (257K bytes) without the extension loaded. `kimi-coding/k3` avoided that observed flag-loss failure; this does not establish immunity to other loop failures.
   - **Recorded Startup Diagnosis:** A `models.json` providers block caused slash-form `defaultModel` resolution to select an OpenRouter fallback. The harness uses split `defaultProvider` and `defaultModel` settings, prefers `kimi-coding/k3` when its key exists, and retries exit-0 runs without a cache entry. The configuration-recipes runner also applies the retry guard.
-- **Adjacency converges.** Back-to-back runs share more links than runs hours apart; Sonar's index drifts on an hours scale. Interleave models (A, B, A, B) rather than blocking them when comparing more than two.
-- **One query, one sitting.** Results are for the Svelte UI libraries query; other domains may rank differently.
-- **Cache suggest only runs when the working directory has a populated `.search` index.** Fresh benchmark cwds have none, so that stage stays cold in all benchmark runs.
-- **Live quota:** each run costs real OpenRouter credit (see the cost table in [README](../README.md)).
+- **Run Adjacency:** Back-to-back runs share more links than runs hours apart; Sonar's index drifts on an hours scale. Interleave models (A, B, A, B) rather than blocking them when comparing more than two.
+- **Task Scope:** Results are for the Svelte user interface (UI) libraries query; other domains may rank differently.
+- **Cache Suggest:** The judge runs only with a populated cache index. Fresh benchmark working directories have no prior entries, so the stage makes no judge call in these runs.
+- **Live Quota:** Each run costs real OpenRouter credit (see the cost table in [README](../README.md)).
 
 ## Recorded Results
 
@@ -68,7 +70,7 @@ OpenRouter pricing on 2026-09-07: minimax-m2.7 and minimax-m3 are identically pr
 
 ### Harness Verification Series
 
-2026-09-07 evening, extension build 0.14.0, after the print-mode tool-call leak was root-caused and the harness fixed (see Confounds And Limitations). Loop model: `kimi-coding/k3`.
+2026-09-07 evening, extension build 0.14.0, after the print-mode tool-call leak was root-caused and the harness fixed (see [Confounds and Limitations](#confounds-and-limitations)). Loop model: `kimi-coding/k3`.
 
 | Run | Extract/Collate Model | Duration | Fetch Ok/Fail | Extract In | Extract Out | Per Page | Collate Out |
 |-----|-----------------------|----------|---------------|------------|-------------|----------|-------------|
@@ -90,9 +92,9 @@ Run 4B's cache slug matched the baseline series exactly, and the report opened b
 Late-series findings:
 
 1. **Verbosity and Evidence Handling on Shared Sources:** Runs 5B, 3A and 6B fetched the same seven sources (139.3K to 139.6K input). On that same-URL corpus, whose captured-content identity is not established here, m3 wrote 5.7K and 4.9K per page against gemini's 3.3K, and only the m3 reports opened by stating their evidence base ("across five independent sources..."). The same-URL extraction of dev.to records an output difference, not an isolated model effect without content verification: 6.7K (m3) versus 4.2K (gemini).
-2. **Latency tracks extract verbosity.** gemini completed in 41.2s and 34.8s against m3's 63.4s and 49.1s, consistent with m3 writing 1.5 to 1.7 times gemini's extract output.
-3. **The head of the ranking stays invariant; the number one slot moves only on the small corpus.** shadcn-svelte ranked first in 5B, 3A and 6B (the converged corpus) and second in 4A, whose 55.2K input matched the prior evening's 4B fetch exactly. 4A alone promoted daisyUI (framework-agnostic, 40,000+ stars) to first. Skeleton UI held the top three in all four runs.
-4. **The recorded decision holds.** Two more runs per model reproduce every property that motivated the v0.14.0 default switch to m3 (methodology-first collation, transparent low-evidence handling, ≈1M context) and its accepted cost (1.5 to 1.7 times gemini's extract tokens and correspondingly longer runs).
+2. **Latency and Output Association:** gemini completed in 41.2s and 34.8s against m3's 63.4s and 49.1s, alongside m3 writing 1.5 to 1.7 times gemini's extraction characters. This series does not isolate verbosity as the cause of the latency difference.
+3. **Leading Ranks:** shadcn-svelte ranked first in 5B, 3A and 6B (the converged corpus) and second in 4A, whose 55.2K input matched the prior evening's 4B fetch exactly. 4A alone promoted daisyUI (framework-agnostic, 40,000+ stars) to first. Skeleton UI held the top three in all four runs.
+4. **Recorded Decision:** Two more runs per model support the v0.14.0 preference for m3's methodology-first collation and transparent low-evidence handling within this task. m3 wrote 1.5 to 1.7 times gemini's extraction characters and took longer in this series. The ≈1M-token window is an advertised figure; this series did not measure it.
 
 ### New-Model Series
 
@@ -110,12 +112,12 @@ Late-series findings:
 
 New-model findings:
 
-1. **Per-page verbosity lands in gemini's band for all three** (2.6K to 3.6K), well under m3's 4.5K to 5.7K. Pricing is also far below m3's $0.30/M input and $1.20/M output: glm-5.3-flash $0.10/M input and $0.25/M output, deepseek-v4-flash ≈$0.09/M and $0.18/M, qwen3.6-35b-a3b $0.10/M and $0.90/M.
-2. **Collation consistency splits the field.** glm-5.3-flash is tight (7.4K and 5.8K); deepseek-v4-flash is steady but thin (5.6K and 5.8K); qwen3.6-35b-a3b produced two different lengths: 5.8K in run 1Q, then 0.9K in 2Q with the fifth entry truncated mid-sentence (the Melt UI entry ends at its heading). Unreliable summary length is a disqualifying property for a default collate model.
+1. **Extraction Volume:** All three models returned per-page character counts in gemini's band (2.6K to 3.6K), below m3's 4.5K to 5.7K. Pricing is also far below m3's $0.30/M input and $1.20/M output: glm-5.3-flash $0.10/M input and $0.25/M output, deepseek-v4-flash ≈$0.09/M and $0.18/M, qwen3.6-35b-a3b $0.10/M and $0.90/M.
+2. **Collation Length and Completeness:** glm-5.3-flash returned 7.4K and 5.8K characters; deepseek-v4-flash returned 5.6K and 5.8K with less detail in the recorded assessment; qwen3.6-35b-a3b produced two different lengths: 5.8K in run 1Q, then 0.9K in 2Q with the fifth entry truncated mid-sentence (the Melt UI entry ends at its heading). Unreliable summary length is a disqualifying property for a default collate model.
 3. **Evidence Handling:** glm-5.3-flash stated its evidence base and cited the cache path (the m3 signature, and the only new model to do so); qwen stated its popularity criteria both runs; deepseek produced a sources-cited ranking table but no stated methodology.
-4. **Latency.** qwen completed in 83.6s to 89.6s and glm-5.3-flash in 78.1s to 103.8s; deepseek-v4-flash took 147.1s to 284.3s in this series. The m3 anchor itself ran 195.5s, ≈3× its late-series durations, so within-sitting comparisons only; provider routing variance dominates absolute latency.
-5. **Run later the same night** in the Queued-Model Series below (`openai/gpt-oss-120b`, `openai/gpt-5.6-luna-pro`); no `:nitro` variants are published, so base ids are used throughout.
-6. **No default change recommended.** glm-5.3-flash is the strongest budget candidate (m3-style evidence handling at ≈ a quarter of the per-token price with a 1.3M context), but m3 keeps the depth advantage and the recorded default.
+4. **Latency:** qwen completed in 83.6s to 89.6s and glm-5.3-flash in 78.1s to 103.8s; deepseek-v4-flash took 147.1s to 284.3s in this series. The m3 anchor itself ran 195.5s, ≈3× its late-series durations, so within-sitting comparisons only; provider routing variance dominates absolute latency.
+5. **Later Runs:** The Queued-Model Series below ran later the same night (`openai/gpt-oss-120b`, `openai/gpt-5.6-luna-pro`); no `:nitro` variants are published, so base ids are used throughout.
+6. **Default Recommendation:** glm-5.3-flash is the strongest budget candidate (m3-style evidence handling at ≈ a quarter of the per-token price with a 1.3M context), but m3 keeps the depth advantage and the recorded default.
 
 ### Queued-Model Series
 
@@ -131,25 +133,25 @@ New-model findings:
 
 Queued-model findings:
 
-1. **Context window was not the binding constraint for gpt-oss-120b (131K).** The per-page extract architecture keeps stage inputs small: the largest single page was 32K chars (≈8K tokens) and collation input stayed near 8K tokens, far below the 131K window. This series therefore provides no direct evidence for requiring more than 512K context under default settings; that preference rests on headroom (user-raised `extractMaxChars`, `maxUrls` toward 20 with verbose extractors, llms-full.txt-scale pages). A dedicated stress run is the honest way to demonstrate the ceiling if one is needed.
-2. **gpt-oss-120b: m3-grade methodology framing, unreliable content.** Both reports opened by naming sources and a conflict-resolution policy, but the ranking table carried figures no source reports (13k stars and 150k weekly downloads for shadcn-svelte against the sourced ≈8.4k), and both runs produced near-empty extractions for at least one page (629, 951, and 1186 chars). Latency was second slowest measured (118.0s and 237.7s). Rejected on reliability and precision.
-3. **gpt-5.6-luna-pro: the strongest premium alternative measured.** Runs took 63.7s and 67.4s, with substantial and consistent per-page extraction (5.3K and 5.4K), tight collation (7.3K and 7.4K), priced at m3's level ($0.20/M input, $1.20/M output, 1.05M context). It opened with a cache-path source listing rather than a methodology statement, so m3 keeps the recorded evidence-handling advantage.
-4. **No default change.** m3 remains extract/collate default.
+1. **Context Headroom:** The context window was not the binding constraint for gpt-oss-120b (131K). The per-page extract architecture keeps stage inputs small: the largest single page was 32K chars (≈8K tokens) and collation input stayed near 8K tokens, far below the 131K window. This series therefore provides no direct evidence for requiring more than 512K context under default settings; that preference rests on headroom (user-raised `extractMaxChars`, `maxUrls` toward 20 with verbose extractors, llms-full.txt-scale pages). Demonstrating a context ceiling requires a dedicated stress run.
+2. **`gpt-oss-120b` Reliability:** Both reports opened by naming sources and a conflict-resolution policy, but the ranking table carried figures no source reports (13k stars and 150k weekly downloads for shadcn-svelte against the sourced ≈8.4k), and both runs produced near-empty extractions for at least one page (629, 951, and 1186 chars). Latency was second slowest measured (118.0s and 237.7s). Rejected on reliability and precision.
+3. **`gpt-5.6-luna-pro` Assessment:** This was the strongest premium alternative in the recorded assessment of output consistency and evidence handling. Runs took 63.7s and 67.4s, with substantial and consistent per-page extraction (5.3K and 5.4K), consistent collation length (7.3K and 7.4K), priced at m3's level ($0.20/M input, $1.20/M output, 1.05M context). It opened with a cache-path source listing rather than a methodology statement, so m3 keeps the recorded evidence-handling advantage.
+4. **Default Decision:** m3 remains extract/collate default.
 
 <a id="findings"></a>
 ### Baseline Findings
 
 These findings describe runs 1A, 2A, 1B, 2B and 3C only, not the later series.
 
-1. **The head of the ranking is invariant.** shadcn-svelte at #1 and Skeleton UI at #2 in all five runs, across three models and five corpora. Flowbite Svelte held top-5 in all five runs.
-2. **Ranks 3 to 10 show a corpus association.** The two runs with the most-converged corpora (2A and 2B: different models, adjacent in time, four shared sources) produced identical top-10 lists in identical order, while same-model runs with divergent corpora swapped up to three tail entries. Captured inputs were not matched across these runs, so this is an observed association rather than a controlled isolation of corpus effects.
-3. **Sonar returned a stable core of three URLs across all runs** (adminlte.io, a persistently 404ing annauniversityplus.com page, and an unrelated portfolio page that every run correctly identified and discarded). The remaining five slots churned run to run.
+1. **Leading Ranks:** shadcn-svelte at #1 and Skeleton UI at #2 in all five runs, across three models and five corpora. Flowbite Svelte held top-5 in all five runs.
+2. **Corpus Association for Ranks 3 to 10:** The two runs with the most-converged corpora (2A and 2B: different models, adjacent in time, four shared sources) produced identical top-10 lists in identical order, while same-model runs with divergent corpora swapped up to three tail entries. Captured inputs were not matched across these runs, so this is an observed association rather than a controlled isolation of corpus effects.
+3. **Shared Sources:** Sonar returned the same three URLs in every baseline run (`adminlte.io`, a persistently `404`-returning `annauniversityplus.com` page, and an unrelated portfolio page that every run correctly identified and discarded). The remaining five slots churned run to run.
 4. **Evidence Handling Repeated in the Baseline:** minimax-m3 opened both of its reports by stating its ranking methodology and the absence of authoritative npm statistics (2/2), surfaced low-star libraries (Kampsy-ui at 260 stars) transparently, and flagged Svelte 5 compatibility warnings. gemini-3.8-flash (0/2) and minimax-m2.7 (0/1) stated no methodology and silently dropped or omitted low-data entries.
-5. **Verbosity repeats per model across the baseline.** Per-page extraction output: m2.7 ≈2.7K chars, gemini-3.8-flash ≈3.1K to 4.0K, m3 ≈4.7K to 5.3K, with m3 writing ≈2× m2.7's extraction output at the same per-token price. Five runs establish repeatability within this benchmark, not a controlled model property.
+5. **Within-Benchmark Verbosity:** Per-page extraction output: m2.7 ≈2.7K chars, gemini-3.8-flash ≈3.1K to 4.0K, m3 ≈4.7K to 5.3K, with m3 writing ≈2× m2.7's extraction output at the same per-token price. Five runs establish repeatability within this benchmark, not a controlled model property.
 
 ### Decision Recorded
 
-v0.14.0 changed the default extract/collate model from `openrouter/minimax/minimax-m2.7` to `openrouter/minimax/minimax-m3`. Rationale: identical per-token pricing, an ≈1M context window, and the strongest collation evidence handling measured in the baseline (stated methodology, caveated claims, compatibility flags). Accepted cost: ≈2× the extract-stage output tokens, lifting a 10-page session from ≈$0.06 to ≈$0.09. Users who prefer the leaner extractions can pin `minimax/minimax-m2.7` explicitly; upgrading users on the old default are migrated automatically (see the `DEFAULT_HISTORY` mechanism in `src/settings.ts`).
+v0.14.0 changed the default extract/collate model from `openrouter/minimax/minimax-m2.7` to `openrouter/minimax/minimax-m3`. Rationale: identical per-token pricing, an ≈1M context window, and the strongest collation evidence handling measured in the baseline (stated methodology, caveated claims, compatibility flags). Recorded cost estimate: doubled extract-stage output-token usage, lifting a 10-page research run from ≈$0.06 to ≈$0.09. The tables measure ≈2× extraction characters, not tokens; they do not independently verify that token multiplier. Selecting `minimax/minimax-m2.7` requests leaner extractions, but an explicit selection matching the upgrading version's historical default remains eligible for match-based migration. Explicit selection is not a migration opt-out (see `DEFAULT_HISTORY` and `migrateDefaults()` in `src/settings.ts`).
 
 ## Running and Extending
 
@@ -168,4 +170,4 @@ Protocol:
 4. Append rows and findings to this file. Record the extension version and date; keep historical rows untouched.
 5. Match full source URLs across runs (for example the dev.to roundups and adminlte.io appear in most baseline runs). Verify identical captured input content before treating extraction differences as pure model effects; file numbers and hostnames alone do not establish a match.
 
-Artifacts land under `<base>/<label>/cwd/.search/<slug>/` with the full `report.md`, `meta.json`, per-page `extractions/`, and raw `sources/`. The base defaults to `/tmp/intelli-bench-<stamp>`; set `BENCH_BASE_DIR` to a directory on encrypted storage before running, because the harness assembles an `auth.json` containing provider credentials into each run's agent directory. Copy anything worth keeping out of the base directory before it is reaped.
+Artefacts land under `<base>/<label>/cwd/.search/<slug>/` with the full `report.md`, `meta.json`, per-page `extractions/`, and raw `sources/`. Use the encrypted `BENCH_BASE_DIR` selected before running. Copy anything worth keeping out of the base directory before it is reaped.

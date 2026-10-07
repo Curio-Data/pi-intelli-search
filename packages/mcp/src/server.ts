@@ -13,7 +13,7 @@ import {
 import type { JsonSchemaType } from "@modelcontextprotocol/server";
 import type { OperationInputs, OperationResult } from "../../../src/core/contracts.js";
 import { createRuntime, type RuntimeOptions } from "./runtime.js";
-import type { StandaloneConfig } from "./config.js";
+import { ConfigurationError, type StandaloneConfig } from "./config.js";
 import { StandaloneError, type StandaloneErrorCode } from "./errors.js";
 import { identity } from "./identity.js";
 import { OperationQueue, defaultQueueLimits, type QueueLimits } from "./queue.js";
@@ -67,12 +67,17 @@ const toolDefinitions: Array<{
       "Deduplicate and synthesise multiple per-page extractions into a single " +
       "concise summary. Writes results to the workspace cache for follow-up. " +
       "Use this after extracting multiple pages with intelli_extract; for " +
-      "end-to-end research, use intelli_research.",
+      "end-to-end research, use intelli_research. Repeating a query on the " +
+      "same UTC date attempts to archive its earlier cached report, " +
+      "extractions and numbered sources to the lowest free numbered sibling " +
+      "folder (.1, then .2 and so on); archiving is best-effort and a " +
+      "failure lets the completed run replace files in place, so copy a " +
+      "report elsewhere if it must be retained.",
     schema: collateSchema,
     annotations: {
       title: "Intelli Collate",
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: true,
     },
@@ -89,12 +94,17 @@ const toolDefinitions: Array<{
       "instead. Use maxUrls to control breadth: 3 for targeted, 10 (default) " +
       "for broad, 16 for exhaustive. Always provide focusPrompt to guide " +
       "extraction. All operations call external services and incur provider " +
-      "charges.",
+      "charges. Repeating a query on the same UTC date attempts to archive " +
+      "its cached report, extractions and numbered sources to the lowest " +
+      "free numbered sibling folder (.1, then .2 and so on); archiving is " +
+      "best-effort and a failure lets the completed run replace files in " +
+      "place, so copy a report elsewhere if it must be retained. A degraded " +
+      "repeat preserves the earlier successful report.",
     schema: researchSchema,
     annotations: {
       title: "Intelli Research",
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: true,
     },
@@ -108,10 +118,56 @@ function errorResult(name: string, code: StandaloneErrorCode, message: string): 
   };
 }
 
-function successResult(result: OperationResult): CallToolResult {
+/**
+ * The complete operation text travels in both representations. Some hosts
+ * (Claude Code 2.1.289 observed) give the model only `structuredContent` when
+ * it is present, so omitting the text there would hide the answer, summary
+ * and related-cache appendix; other hosts read `content`.
+ */
+export function successResult(result: OperationResult): CallToolResult {
   return {
     content: [{ type: "text", text: result.text }],
-    structuredContent: { outcome: result.outcome, details: result.details },
+    structuredContent: { outcome: result.outcome, text: result.text, details: result.details },
+  };
+}
+
+/** Rereads an unusable configuration file on each call until it loads. */
+export type ConfigLoader = () => Promise<StandaloneConfig>;
+
+const recoveryHint =
+  "Create or repair the file, then call the tool again; the server rereads it on each call until it loads";
+
+/**
+ * Defers configuration to the first tool call that can load it. A failed
+ * load is not cached, so a repaired file takes effect on the next call; a
+ * successful load is kept for the life of the process, as at startup.
+ */
+export function lazyRuntime(load: ConfigLoader, options: RuntimeOptions): () => Promise<Runtime> {
+  let ready: Promise<Runtime> | undefined;
+  return () => {
+    if (!ready) {
+      const attempt = load()
+        .then((config) => createRuntime(config, options))
+        .then(
+          (runtime) => {
+            process.stderr.write("[mcp-intelli-search] Configuration loaded\n");
+            return runtime;
+          },
+          (error: unknown) => {
+            if (error instanceof ConfigurationError)
+              throw new StandaloneError("CONFIGURATION", `${error.message}. ${recoveryHint}`);
+            throw new StandaloneError(
+              "WORKSPACE",
+              error instanceof Error ? error.message : "Workspace unavailable",
+            );
+          },
+        );
+      ready = attempt;
+      attempt.catch(() => {
+        if (ready === attempt) ready = undefined;
+      });
+    }
+    return ready;
   };
 }
 
@@ -127,7 +183,7 @@ export interface ProtocolServer {
  * deliberately separate from CLI startup and transport wiring for testing.
  */
 export function createProtocolServer(
-  runtime: Runtime,
+  runtime: Runtime | (() => Promise<Runtime>),
   limits: QueueLimits = defaultQueueLimits,
   onEnqueue?: () => void,
 ): ProtocolServer {
@@ -145,6 +201,7 @@ export function createProtocolServer(
     },
     onEnqueue,
   );
+  const resolveRuntime = typeof runtime === "function" ? runtime : () => Promise.resolve(runtime);
   const server = new McpServer({ name: identity.name, version: identity.version });
   for (const tool of toolDefinitions) {
     server.registerTool(
@@ -169,26 +226,28 @@ export function createProtocolServer(
         };
         return queue.submit(
           () =>
-            runtime
-              .execute(tool.name, args as OperationInputs[OperationName], {
-                signal,
-                onProgress:
-                  token === undefined
-                    ? undefined
-                    : (progress) => {
-                        void ctx.mcpReq
-                          .notify({
-                            method: "notifications/progress",
-                            params: {
-                              progressToken: token,
-                              progress: progress.pct,
-                              total: 100,
-                              message: progress.message,
-                            },
-                          })
-                          .catch(() => {});
-                      },
-              })
+            resolveRuntime()
+              .then((ready) =>
+                ready.execute(tool.name, args as OperationInputs[OperationName], {
+                  signal,
+                  onProgress:
+                    token === undefined
+                      ? undefined
+                      : (progress) => {
+                          void ctx.mcpReq
+                            .notify({
+                              method: "notifications/progress",
+                              params: {
+                                progressToken: token,
+                                progress: progress.pct,
+                                total: 100,
+                                message: progress.message,
+                              },
+                            })
+                            .catch(() => {});
+                        },
+                }),
+              )
               .then(
                 (result) => successResult(result),
                 (error: unknown) => {
@@ -232,11 +291,17 @@ export interface ServeHandle {
  * import-time dependency output is also diverted to standard error.
  */
 export async function startServer(
-  config: StandaloneConfig,
+  config: StandaloneConfig | ConfigLoader,
   options: ServeOptions = {},
 ): Promise<ServeHandle> {
   const protocol = installStdoutGuard();
-  const runtime = await createRuntime(config, options);
+  // Credentials are snapshotted at startup in both modes; a lazily loaded
+  // configuration selects its key variable from this snapshot.
+  const runtimeOptions: RuntimeOptions = { ...options, env: { ...(options.env ?? process.env) } };
+  const runtime =
+    typeof config === "function"
+      ? lazyRuntime(config, runtimeOptions)
+      : await createRuntime(config, runtimeOptions);
   const { server, queue, shutdown } = createProtocolServer(
     runtime,
     {

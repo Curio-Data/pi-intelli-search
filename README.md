@@ -13,9 +13,24 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.81.1-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-531%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-580%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
+
+<p align="center">
+  <img src="docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
+</p>
+
+**Features:**
+
+- 🔍 **Search:** a search-grounded model, [_Perplexity Sonar_](https://docs.perplexity.ai) via [_OpenRouter_](https://openrouter.ai) by default. One application programming interface (API) key, no $50 minimum. Chat models with tool support also work through the web search server tool; see [native search settings](#openrouter-web-search-server-tool) or [Model Context Protocol (MCP) tuning](#tuning).
+- 🔗 **Harvest:** provider-supplied citation links recovered from the response, alongside links in the answer. Recognised `url_citation` annotations are merged with text links before pages are selected; recovery is best-effort, not a complete record of sources consulted.
+- 🌐 **Fetch:** Dual-fetch each page (Hypertext Markup Language (HTML) → [_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), compare quality, pick the cleaner version.
+- 📄 **Extract:** Per-page large language model (LLM) extraction guided by a _focused prompt_. Compresses ≈50K to ≈3-5K chars of query-relevant content.
+- 🔗 **Collate:** Cross-source deduplication, inconsistency detection, and synthesis into a focused ≈5K-character summary.
+- 💾 **Cache:** Persistent `.search/` cache with automatic cache suggest. Related previous searches surfaced on each query.
+- 🎯 **Configurable:** Select models independently for search, extract and collate. The native extension uses registered, authenticated `Pi` models (capability and context limits apply); the MCP server uses explicitly selected OpenRouter models.
+- 💰 **Cost:** see the [default research-run estimate](#cost).
 
 <!-- packages:none -->
 This repository provides two first-class packages from one research engine:
@@ -36,7 +51,7 @@ For other coding agents, the sibling `@curio-data/mcp-intelli-search` package se
 For [`Pi`](https://github.com/earendil-works/pi), the sibling `@curio-data/pi-intelli-search` package registers the same engine natively through `Pi` settings and authentication. See [native installation](#pi-native-extension).
 -->
 
-The shared pipeline searches via a search-grounded model ([_Perplexity Sonar_](https://docs.perplexity.ai), the native default) and merges prose links with harvested citations before selecting pages. It fetches pages through a dual-fetch comparison ([_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), then extracts query-relevant content per page with a dedicated large language model (LLM) guided by a _focused prompt_. Collation deduplicates findings, flags inconsistencies, and synthesises a concise summary. Everything is cached in `.search/` for offline reuse. Cache suggest surfaces related previous searches on each query.
+The shared pipeline searches via a search-grounded model ([_Perplexity Sonar_](https://docs.perplexity.ai), the native default) and merges prose links with harvested citations before selecting pages. It fetches pages through a dual-fetch comparison ([_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), then extracts query-relevant content per page with a dedicated large language model (LLM) guided by a _focused prompt_. Collation deduplicates findings, flags inconsistencies, and synthesises a concise summary. Reports, extractions and fetched content are cached for offline reuse in `.search/` by default. Cache suggest surfaces related previous searches on each query.
 
 ## Two Packages, One Engine
 
@@ -87,7 +102,7 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
   - [Recipe 7: Free-Tier Resilience](#recipe-7-free-tier-resilience)
   - [Recipe 8: Per-Project Override](#recipe-8-per-project-override)
 - [Model Configuration](#model-configuration)
-  - [Why OpenRouter for Sonar?](#why-openrouter-for-sonar)
+  - [OpenRouter Routing for Sonar](#openrouter-routing-for-sonar)
   - [Source Harvesting from Citations](#source-harvesting-from-citations)
   - [OpenRouter Web Search Server Tool](#openrouter-web-search-server-tool)
     - [searchWebSearch Keys](#searchwebsearch-keys)
@@ -120,25 +135,10 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
   - [MCP Server Downloads](#mcp-server-downloads)
 - [Provenance](#provenance)
 - [Sponsor](#sponsor)
-- [License](#license)
+- [Licence](#licence)
 - [Use of Large Language Models](#use-of-large-language-models)
 
 <!-- TOC:END -->
-
-<p align="center">
-  <img src="docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
-</p>
-
-**Features:**
-
-- 🔍 **Search:** a search-grounded model, [_Perplexity Sonar_](https://docs.perplexity.ai) via [_OpenRouter_](https://openrouter.ai) by default. One application programming interface (API) key, no $50 minimum. Chat models with tool support also work through the web search server tool; see [native search settings](#openrouter-web-search-server-tool) or [MCP tuning](#tuning).
-- 🔗 **Harvest:** every source the search model cited, not only the links it wrote into the answer. Machine-readable `url_citation` annotations are merged with text links before pages are selected.
-- 🌐 **Fetch:** Dual-fetch each page (Hypertext Markup Language (HTML) → Defuddle versus Markdown endpoint), compare quality, pick the cleaner version.
-- 📄 **Extract:** Per-page LLM extraction guided by a _focused prompt_. Compresses ≈50K to ≈3-5K chars of query-relevant content.
-- 🔗 **Collate:** Cross-source deduplication, inconsistency detection, and synthesis into a focused ≈5K summary.
-- 💾 **Cache:** Persistent `.search/` cache with automatic cache suggest. Related previous searches surfaced on each query.
-- 🎯 **Configurable:** Select models independently for search, extract and collate. The native extension uses any model `Pi` supports; the MCP server uses explicitly selected OpenRouter models.
-- 💰 **Cost:** see the [default research-run estimate](#cost).
 
 <a id="use-with-other-hosts"></a>
 ## Install
@@ -327,7 +327,7 @@ mkdir -p "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/intelli-search-curio-
 
 Save the same [minimal configuration](#create-the-configuration) as `config.json` in that directory. It persists across plugin updates but is removed on uninstall. The launcher uses the opened project as its workspace, so each project's cache stays in its own `.search/` directory.
 
-Restart Claude Code, then run `claude mcp list` and confirm `plugin:intelli-search:intelli_search` shows as connected. The launcher downloads a pinned package through `npx` on first start. The installed `intelli-search` skill includes shell-based credential setup and troubleshooting; the [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) records tested host versions.
+Restart Claude Code, then run `claude mcp list` and confirm `plugin:intelli-search:intelli_search` shows as connected. The launcher downloads a pinned package through `npx` on first start. Run `/intelli-search:intelli-search` for the skill with this host's paths substituted. Do not use `claude plugin install --config openrouter_api_key=...`: that exposes the key in process arguments. Then request a quick search through the server and confirm a model-visible answer with sources; connection alone does not verify inference. The installed `intelli-search` skill includes shell-based credential setup and troubleshooting; the [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) records tested host versions.
 
 <a id="route-c-codex-plugin"></a>
 #### Codex
@@ -346,6 +346,8 @@ export INTELLI_SEARCH_CONFIG="$PWD/.intelli-search.json"
 export INTELLI_SEARCH_WORKSPACE="$PWD"
 codex
 ```
+
+In the session, ask: “Use intelli_search to find the current TypeScript release and cite the official source.” Confirm a successful MCP tool call and an answer with sources. `codex mcp list` alone does not start the server or prove inference. If the tools are unavailable, the setup is incomplete: an answer from the host's own web search does not show that this server ran.
 
 Codex filters the server environment; the plugin forwards `OPENROUTER_API_KEY`, `INTELLI_SEARCH_CONFIG` and `INTELLI_SEARCH_WORKSPACE` explicitly. Set all three before each launch. The installed `intelli-search` skill covers persistent configuration and unattended tool approval; see the [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) for verified host behaviour.
 
@@ -403,7 +405,7 @@ intelli_search(query="TypeScript 5.8 release date")
 
 ### Deep Research
 
-**Always provide a `focusPrompt`.** The extraction LLM works best with specific guidance.
+Always provide a `focusPrompt`. The extraction LLM works best with specific guidance.
 
 ```text
 intelli_research(
@@ -423,7 +425,7 @@ intelli_research(
 )
 ```
 
-`domains` guides source selection, it is not a security boundary: the query gains a `site:` expression, and with the web search tool enabled the same domains are also combined with `searchWebSearch.allowedDomains` and sent as an engine filter. The lists are combined, not intersected, and returned URLs are not checked against a local hostname allowlist before fetching. Engine support for allow and exclude lists differs; see [native searchWebSearch keys](#searchwebsearch-keys) or [MCP tuning](#tuning).
+`domains` guides source selection, it is not a security boundary: the query gains a `site:` expression, and with the web search tool enabled the same domains are also combined with `searchWebSearch.allowedDomains` and sent as an engine filter. The lists are combined, not intersected, and returned uniform resource locators (URLs) are not checked against a local hostname allowlist before fetching. Engine support for allow and exclude lists differs; see [native searchWebSearch keys](#searchwebsearch-keys) or [MCP tuning](#tuning).
 
 ### Comparing Options
 
@@ -443,7 +445,7 @@ intelli_research(
   </a>
 </p>
 
-Read the launch post, [_pi-intelli-search: LLM-Native Web Research for the Pi Coding Agent_](https://blog.curiodata.pro/posts/22-pi-intelli-search/), for the design story behind the pipeline: why per-page LLM extraction beats raw page dumps, how collation keeps the agent context clean, and the launch-era estimate of ≈$0.05 per session. The [Cost](#cost) section holds the current default estimate.
+Read the launch post, [_pi-intelli-search: LLM-Native Web Research for the Pi Coding Agent_](https://blog.curiodata.pro/posts/22-pi-intelli-search/), for the design story behind the pipeline: why the pipeline extracts query-relevant content before collation, how collation keeps the agent context clean, and the launch-era estimate of ≈$0.05 per session. The [Cost](#cost) section holds the current default estimate.
 
 ## What It Adds Over Other Extensions
 
@@ -460,7 +462,7 @@ Four capabilities distinguish `intelli-search` within the seven-extension [May 2
 3. **LLM collation with deduplication.** A collation model synthesises across sources, flags conflicting claims, and preserves source attribution. The agent does not spend reasoning tokens on mechanical synthesis.
 4. **Persistent cache with cache suggest.** Full pages and extractions are kept in `.search/` and indexed. An LLM judge surfaces related previous searches after each live query. Manually reusing a cached report can avoid a subsequent research call; cache suggest does not skip the current search.
 
-The agent receives a concise ≈5K summary by default. The full page content stays in the cache, accessible via native `Pi` tools like `read` or `grep` for deeper inspection. Among the seven extensions in the May 2026 comparison, only `intelli-search` combines per-page extraction and a persistent structured cache.
+The collation prompt targets a concise ≈5K-character summary; actual length depends on the selected model and output budget. The full page content stays in the cache, accessible via native `Pi` tools like `read` or `grep` for deeper inspection. Among the seven extensions in the May 2026 comparison, only `intelli-search` combines per-page extraction and a persistent structured cache.
 
 For the detailed feature-by-feature comparison against six other `Pi` search extensions, see [docs/COMPARISON.md](docs/COMPARISON.md).
 
@@ -469,14 +471,14 @@ For the detailed feature-by-feature comparison against six other `Pi` search ext
 
 These recipes configure the native `Pi` extension. For MCP configuration, select models under `models` and tuning under `tuning` in the [standalone configuration file](#configuration); do not copy the native settings wrapper.
 
-Each recipe is a complete `~/.pi/agent/settings.json`. Copy it whole, or lift the `pi-intelli-search` block into your existing file. Project-level overrides go in `<project>/.pi/settings.json` (applies only after `Pi` approves the project; the global file always applies).
+Each recipe is a complete `~/.pi/agent/settings.json`. Copy it whole, or merge the `pi-intelli-search` block into an existing file. Project-level overrides go in `<project>/.pi/settings.json` (applies only after `Pi` approves the project; the global file always applies).
 
 Two loader rules to keep in mind:
 
-- An object you set replaces its default wholesale. The `searchWebSearch` block and the model blocks have no per-key merge: set every key you care about.
+- A configured object replaces its default wholesale. The `searchWebSearch` block and the model blocks have no per-key merge: supply every required key.
 - Nested `pi-intelli-search` keys always win over the deprecated flat `intelli*` keys.
 
-| You want | Recipe |
+| Purpose | Recipe |
 |---|---|
 | Works immediately, nothing to write | [Zero Configuration](#recipe-1-zero-configuration) |
 | A chat model plus the web search server tool | [Web Search Tool + Nano](#recipe-2-web-search-tool--nano) |
@@ -491,11 +493,11 @@ Every recipe is exercised end-to-end in its own isolated environment by [`test/e
 
 ### Recipe 1: Zero Configuration
 
-Write nothing. You get Sonar search with citation harvesting, MiniMax M3 extraction and collation, 10 pages per session, and the `.search/` cache. Every other recipe below changes exactly one concern from this baseline.
+Write nothing. The defaults provide Sonar search with citation harvesting, MiniMax M3 extraction and collation, up to 10 pages per research run, and the `.search/` cache. Every other recipe below changes exactly one concern from this baseline.
 
 ### Recipe 2: Web Search Tool + Nano
 
-Any OpenRouter chat model gains live search through the `openrouter:web_search` server tool, so nothing depends on a search-native model family. The September 2026 probe estimate for this pairing is ≈$0.008 per search, not a lowest-cost ranking. The `reasoning: "minimal"` pin matters: GPT-5 family models burn their completion budget on reasoning when left unconstrained.
+An OpenRouter chat model with server-tool support can use live search through `openrouter:web_search`; search does not require a search-native model family. The September 2026 probe estimate for this pairing is ≈$0.008 per search, not a lowest-cost ranking. In that configuration, `reasoning: "minimal"` leaves more of the completion budget available for answer text; unconstrained reasoning can consume it.
 
 ```jsonc
 {
@@ -524,7 +526,7 @@ Any OpenRouter chat model gains live search through the `openrouter:web_search` 
 
 ### Recipe 3: Sonar Pro Search
 
-Agentic multi-step search on the Perplexity stack, reached through a settings-only model swap. The recorded estimate is ≈$0.05 per search ($18 per 1,000 requests plus tokens); it is not a comparative quality measurement. `searchWebSearch` is disabled explicitly so this recipe stays correct even if you previously enabled the tool.
+Agentic multi-step search on the Perplexity stack, reached through a settings-only model swap. The recorded estimate is ≈$0.05 per search ($18 per 1,000 requests plus tokens); it is not a comparative quality measurement. `searchWebSearch` is disabled explicitly so this recipe also applies after previously enabling the tool.
 
 ```jsonc
 {
@@ -563,7 +565,7 @@ v0.13.0 raised `defaultUrls` to 10 and `maxUrls` to 20 because citation harvesti
 
 ### Recipe 5: Economy Extract and Collate
 
-Extraction and collation run 10+1 times per session, so token rates dominate cost. Swap both stages to a cheaper OpenRouter model; search is untouched. Any model `Pi` supports works for these stages.
+A full 10-page research run makes 10 extraction calls and one collation call, so token rates dominate cost. Swap both stages to a cheaper OpenRouter model; search is untouched. Select a registered, authenticated model with sufficient text-processing capability and context for these stages.
 
 ```jsonc
 {
@@ -599,7 +601,7 @@ Keep extraction cheap and spend on the final synthesis, where cross-source reaso
 
 ### Recipe 7: Free-Tier Resilience
 
-Free-tier OpenRouter keys share a ≈0.33 requests/second bucket. The extract stage fires up to 4 concurrent calls, which trips it. Space the calls, lengthen the retries, and shrink the page count.
+For an observed account limit of approximately 0.33 requests per second, the default fan-out of up to 4 concurrent extractions can exceed the limit. Space the calls, lengthen the retries, and shrink the page count. This recipe is a response to observed limits, not a provider-wide quota claim about free-tier keys.
 
 ```jsonc
 {
@@ -637,36 +639,37 @@ Use this to give a client project a dedicated cache directory and a stronger sea
 
 Both packages select models independently for search, extract and collate. The configuration below is for the native `Pi` extension; the MCP server requires explicit OpenRouter selections for all three roles in its [configuration file](#configuration), with no implicit model defaults.
 
-Native defaults are chosen for cost-efficiency, but **any model `Pi` can access works**. This includes built-in providers, [OpenRouter](https://openrouter.ai) models, or models from other extensions.
+Native defaults are chosen for cost-efficiency. Registered, authenticated models from built-in providers, [OpenRouter](https://openrouter.ai) or other extensions can replace them, subject to role suitability and context limits. Search needs grounding or supported web-search tools; registry access alone does not establish that capability.
 
-| Stage   | Default                       | Config key              |
+| Stage   | Default                       | Config Key              |
 | ------- | ----------------------------- | ----------------------- |
 | Search  | `openrouter/perplexity/sonar` | `searchModel`           |
 | Extract | `openrouter/minimax/minimax-m3` | `extractModel`      |
 | Collate | `openrouter/minimax/minimax-m3` | `collateModel`      |
 
-### Why OpenRouter for Sonar?
+<a id="why-openrouter-for-sonar"></a>
+### OpenRouter Routing for Sonar
 
-[_Perplexity Sonar_](https://docs.perplexity.ai) is an excellent search-grounded model, but it is not in `Pi`'s built-in model list. Rather than requiring a separate Perplexity API account (which requires a **$50 minimum credit top-up**), the extension routes _Sonar_ through [OpenRouter](https://openrouter.ai). _OpenRouter_ is a unified pay-as-you-go API with a lower minimum spend. One API key gives you _Sonar_ alongside thousands of other models. On first load, the extension patches `~/.pi/agent/models.json` to add _Sonar_ under the `openrouter` provider so `Pi` can discover it. This approach has several benefits:
+[_Perplexity Sonar_](https://docs.perplexity.ai) is a search-grounded model, but it is not in `Pi`'s built-in model list. Rather than requiring a separate Perplexity API account (which requires a $50 minimum credit top-up), the extension routes _Sonar_ through [OpenRouter](https://openrouter.ai). _OpenRouter_ is a unified pay-as-you-go API with a lower minimum spend. One API key provides access to Sonar and other catalogue models, subject to account permissions. On first load, the extension patches `~/.pi/agent/models.json` to add _Sonar_ under the `openrouter` provider so `Pi` can discover it. This approach has several benefits:
 
 - **Avoids the Perplexity API $50 minimum.** Routing through `OpenRouter` consolidates spend on a single account already used across the open-source coding-agent ecosystem, including `Pi`. No separate _Perplexity_ subscription is required.
-- **One account, many models.** The same OpenRouter key covers _Sonar_ and any other models you might want for extract or collate.
-- **Is non-destructive.** The patch merges new models by ID. It never replaces existing OpenRouter models.
-- **Is idempotent.** It is safe across extension reloads and updates.
+- **One account, many models.** The same OpenRouter key covers Sonar and other accessible models selected for extraction or collation.
+- **Non-Destructive Registration:** The patch merges new models by ID. It never replaces existing OpenRouter models.
+- **Idempotence:** It is safe across extension reloads and updates.
 
 The same single-key argument covers the alternative search configurations: the [web search server tool](#openrouter-web-search-server-tool) and [`perplexity/sonar-pro-search`](#choosing-an-alternative-search-configuration) both route through the same OpenRouter account.
 
 ### Source Harvesting from Citations
 
-Search-grounded models return machine-readable `url_citation` annotations naming the sources they consulted, a larger set than the links they write into the prose (probe: 20 annotations against 3 prose links from _Sonar_). `Pi`'s chat-completions adapter reassembles only text, thinking, and tool-call blocks, so those annotations never reach extension code on their own. The pipeline reads a tee of the raw response body, parses the citations out, and merges them with the text-scraped links before pages are selected for fetching.
+Search-grounded models can return machine-readable `url_citation` annotations identifying cited sources. The recovered set can exceed the prose links (recorded Sonar probe: 20 annotations against 3 prose links), but it does not establish every source consulted. `Pi`'s chat-completions adapter reassembles only text, thinking, and tool-call blocks, so those annotations never reach extension code on their own. The pipeline reads a tee of the raw response body, parses the citations out, and merges them with the text-scraped links before pages are selected for fetching.
 
-This runs on every search call regardless of model, needs no configuration, and never blocks or fails the pipeline. Text links come first; annotation-only links follow; exact URL duplicates are removed. `intelli_research` applies its URL limit after merging, so not every discovered source is fetched. Harvesting is best-effort: a model that emits no annotations, or annotations the parser does not recognise, leaves the text-link path intact. `intelli_search` caps its rendered source list at `defaultUrls` (top 10 by default). The count is recorded in `meta.json` as `stages.search.annotationsHarvested`.
+Collection is attempted on every search call regardless of model and needs no configuration. Native calls await background citation reads for up to two seconds; collection failure leaves the text-link path intact without failing the search. Text links come first; annotation-only links follow; exact URL duplicates are removed. `intelli_research` applies its URL limit after merging, so not every discovered source is fetched. Harvesting is best-effort: a model that emits no annotations, or annotations the parser does not recognise, leaves the text-link path intact. `intelli_search` caps its rendered source list at `defaultUrls` (top 10 by default). The count is recorded in `meta.json` as `stages.search.annotationsHarvested`.
 
 ### OpenRouter Web Search Server Tool
 
 The search stage normally relies on a search-native model (default: _Sonar_). The `searchWebSearch` setting decouples it: [OpenRouter](https://openrouter.ai)'s `openrouter:web_search` server tool gives the configured chat model access to live web search, so the pipeline is not tied to any search-native model family. The tool is beta upstream; the model decides whether and how many times to search, and search charges depend on the engine, the number of server-side searches, and token usage. `maxResults` limits results per search and `maxUrls` limits pages fetched; neither caps total search spend.
 
-**`searchWebSearch` requires `searchModel.provider` to be `openrouter`.** The tool id is OpenRouter-specific; on any other provider the setting is ignored without warning.
+`searchWebSearch` requires `searchModel.provider` to be `openrouter`. The tool ID is OpenRouter-specific; on any other provider the setting is ignored without warning.
 
 A probe-validated pairing (2026-09): `openai/gpt-5-nano` with engine `exa` and `reasoning: "minimal"`, at ≈$0.008 per search with 5-17 cited sources:
 
@@ -695,19 +698,19 @@ A supplied object replaces the entire default object; there is no per-key merge.
 |---|---|---|
 | `enabled` | `true`, `false` | Off by default. Requires `searchModel.provider` to be `openrouter`. |
 | `engine` | `auto`, `native`, `exa`, `parallel`, `perplexity`, `firecrawl` | `auto` (and unrecognised values) are omitted from the payload, leaving OpenRouter's default. |
-| `maxResults` | 1-25 (1-20 on `perplexity`) | Rounded and clamped by the extension. Per engine search, not per session. |
+| `maxResults` | 1-25 (1-20 on `perplexity`) | Rounded and clamped by the extension. Per engine search, not per research run. |
 | `searchContextSize` | `low` (≈5K chars), `medium` (≈15K), `high` (≈30K) | Engine-specific budgets; some engines ignore it. |
 | `allowedDomains` | array of domains | Combined (not intersected) with the per-call `domains` tool parameter. Cannot be combined with `excludedDomains` except on `exa`. |
 | `excludedDomains` | array of domains | As above. |
-| `reasoning` | `minimal`, `low`, `medium`, `high` | Falls back to `low` when omitted. Use `minimal` explicitly with GPT-5 family models, which otherwise burn reasoning budget when paired with the tool. |
+| `reasoning` | `minimal`, `low`, `medium`, `high` | Falls back to `low` when omitted. Use `minimal` explicitly with GPT-5 family models to limit reasoning expenditure under the recorded tool configuration. |
 
-The extension exposes a subset of the server tool's parameters. Upstream `mode`, `max_uses`, `max_total_results`, `max_characters`, and `user_location` are not settable through this block. The `firecrawl` engine additionally requires your own Firecrawl account configured with OpenRouter (BYOK); the other engines bill through OpenRouter credits.
+The extension exposes a subset of the server tool's parameters. Upstream `mode`, `max_uses`, `max_total_results`, `max_characters`, and `user_location` are not settable through this block. The `firecrawl` engine additionally requires a separate [_Firecrawl_](https://www.firecrawl.dev/) account configured with OpenRouter (bring your own key, or BYOK); the other engines bill through OpenRouter credits.
 
 ### Choosing an Alternative Search Configuration
 
 The default search model is `perplexity/sonar` (≈$0.007 per search). Two configurable alternatives use the same OpenRouter account:
 
-| Option | Model | Setting | Cost per search |
+| Option | Model | Setting | Cost per Search |
 |---|---|---|---|
 | Server tool | `openai/gpt-5-nano` + `engine: "exa"` | `searchWebSearch.enabled: true` | ≈$0.008 |
 | Model swap | `perplexity/sonar-pro-search` | `searchModel` only | ≈$0.05 |
@@ -733,7 +736,7 @@ The model swap is settings-only:
 
 ### Swapping the Extract and Collate Model
 
-[_MiniMax_](https://minimax.io) M3 (via OpenRouter) is the native default. In [baseline runs 1A, 2A, 1B, 2B and 3C](docs/BENCHMARKS.md#baseline-findings), its collations stated their ranking methodology, caveated low-evidence claims and flagged compatibility warnings. M3's recorded ≈1M-token window provides input headroom at the default character limit. M3 and M2.7 had equal per-token pricing in that benchmark, while M3 wrote ≈2× the extraction output. The recorded default-switch estimate therefore doubled extract-stage output-token cost, not whole-session cost (see [Decision Recorded](docs/BENCHMARKS.md#decision-recorded)). Selecting `minimax/minimax-m2.7` requests leaner extractions, but values matching an upgrading version's historical default remain eligible for model migration. You can also use any model `Pi` supports. Override in `~/.pi/agent/settings.json` or `.pi/settings.json`:
+[_MiniMax_](https://minimax.io) M3 (via OpenRouter) is the native default. In [baseline runs 1A, 2A, 1B, 2B and 3C](docs/BENCHMARKS.md#baseline-findings), its collations stated their ranking methodology, caveated low-evidence claims and flagged compatibility warnings. M3's recorded ≈1M-token window provides input headroom at the default character limit. M3 and M2.7 had equal per-token pricing in that benchmark, while M3 wrote ≈2× the extraction characters. The recorded default-switch estimate projected doubled extract-stage output-token cost, not whole-session cost; the character measurements alone do not establish a token ratio (see [Decision Recorded](docs/BENCHMARKS.md#decision-recorded)). Selecting `minimax/minimax-m2.7` requests leaner extractions, but values matching an upgrading version's historical default remain eligible for model migration; the migration is match-based, not intent-based, so an explicit selection equal to a previous default is still migrated (see [Decision Recorded](docs/BENCHMARKS.md#decision-recorded)). Other registered, authenticated text models can also be selected, subject to capability and context limits. Override in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 
 **Option A: Use a `Pi` Built-In Provider** (auth via `/login`):
 
@@ -786,21 +789,21 @@ The model swap is settings-only:
 }
 ```
 
-The only requirement is that the model is registered in `Pi`'s model registry and has auth configured. Run `/login` to set up built-in providers, or follow the extension's own setup for extension-provided models.
+The model must be registered in `Pi`'s model registry, have authentication configured and support the required text operation within its context and output limits. Run `/login` to set up built-in providers, or follow the extension's own setup for extension-provided models.
 
 ### Model Selection Guidance
 
 For extraction and collation, the ideal model has:
 
-- **Low cost per token:** 10 extractions, 1 collation, and 1 cache suggest per default session.
-- **Good instruction following:** Must adhere to extraction prompts precisely.
-- **Sufficient context:** Cleaned pages can be ≈50K chars (truncated to `extractMaxChars`).
+- **Low Cost per Token:** Up to 10 extractions, 1 collation and 1 cache suggestion per default research run, before retries.
+- **Good Instruction Following:** Must adhere to extraction prompts precisely.
+- **Sufficient Context:** Cleaned pages can be ≈50K chars (truncated to `extractMaxChars`).
 
-Models known to work well for extraction and collation: _MiniMax_ M3 (default, ≈1M context, via OpenRouter), _MiniMax_ M2.7 (leaner extractions, half the output tokens, via OpenRouter), _Qwen_ 3.5-Flash (≈1M context, ≈$0.26/M output), _DeepSeek_ V4 Flash (≈1M context, ≈$0.28/M output), _Gemini_ 2.0 Flash Lite (≈1M context, ≈$0.30/M output), _GPT-4.1_ Nano (≈1M context, ≈$0.40/M output).
+Models known to work well for extraction and collation: _MiniMax_ M3 (default, ≈1M context, via OpenRouter), MiniMax M2.7 (leaner extractions in the recorded benchmark, via OpenRouter), _Qwen_ 3.5-Flash (≈1M context, ≈$0.26/M output), _DeepSeek_ V4 Flash (≈1M context, ≈$0.28/M output), _Gemini_ 2.0 Flash Lite (≈1M context, ≈$0.30/M output), _GPT-4.1_ Nano (≈1M context, ≈$0.40/M output).
 
 ### Required API Keys
 
-With default settings, you need one key in `~/.pi/agent/auth.json`:
+With default settings, one key is required in `~/.pi/agent/auth.json`:
 
 ```json
 {
@@ -811,7 +814,7 @@ With default settings, you need one key in `~/.pi/agent/auth.json`:
 }
 ```
 
-A single [OpenRouter](https://openrouter.ai) key is the minimum required. It covers the default search model (Sonar) plus MiniMax M3 for extraction and collation with the default models. The extract and collate stages can use any model `Pi` supports. Override `extractModel` or `collateModel` in settings to switch providers.
+A single [OpenRouter](https://openrouter.ai) key is the minimum required. It covers the default search model (Sonar) plus MiniMax M3 for extraction and collation with the default models. The extract and collate stages can use other registered, authenticated text models with suitable capabilities and context limits. Override `extractModel` or `collateModel` in settings to switch providers.
 
 Run `/login openrouter` in `Pi` to authorise via OAuth (`Pi` 0.82.0 and later), or edit the file directly with a key from [openrouter.ai/keys](https://openrouter.ai/keys).
 <!-- /packages -->
@@ -826,7 +829,7 @@ The illustration shows the native pipeline with the model configuration at its c
 
 The search stage merges text links with harvested citation annotations before selecting pages (see [Source Harvesting from Citations](#source-harvesting-from-citations)). Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈30-50K for 10 pages).
 
-At the end of each run the pipeline writes a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it.
+Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
@@ -834,17 +837,17 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 The estimate below uses the native default models and tuning, also selected in the minimal MCP configuration example. It is a planning estimate based on the recorded September 2026 price basis, not a live tariff check. Both packages incur inference charges on the configured provider account; MCP does not use host subscriptions or credentials.
 
-Per research session with the default 10 pages: **≈$0.09**
+Per research run with the default 10 pages: ≈$0.09
 
-| Step                           | Calls            | Cost     |
-| ------------------------------ | ---------------- | -------- |
-| Search (_Sonar_)               | 1                | ≈$0.007  |
-| Fetch (Defuddle + Markdown)    | 10 (≤4 concurrent) pairs | $0.00    |
-| Extract (M3 via OpenRouter)         | 10 (≤4 concurrent) | ≈$0.07   |
-| Collate (M3 via OpenRouter)         | 1                | ≈$0.01   |
-| Cache suggest (M3 via OpenRouter)   | 1                | ≈$0.0002 |
+| Step                                | Calls                 | Cost      |
+| ---------------------------------- | --------------------- | --------- |
+| Search (Sonar)                      | 1                     | ≈$0.007   |
+| Fetch (Defuddle + Markdown)         | 10 (≤4 concurrent) pairs | $0.00  |
+| Extract (M3 via OpenRouter)         | 10 (≤4 concurrent)    | ≈$0.07    |
+| Collate (M3 via OpenRouter)         | 1                     | ≈$0.01    |
+| Cache Suggest (M3 via OpenRouter)   | 1                     | ≈$0.0002  |
 
-Since v0.13.0 the search stage contributes every source the model cited, not only the ones it wrote into the prose, so sessions reach the `defaultUrls` page count more often than before. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 extracts cost the same per token as M2.7 but write ≈2× the output tokens); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](#choosing-an-alternative-search-configuration) or [MCP configuration](#configuration). The extract and collate rows scale with the selected models.
+Since v0.13.0 the search stage adds recovered provider citation URLs to prose links, increasing the candidate source set; `maxUrls` still caps page selection. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 and M2.7 had equal per-token prices in the recorded benchmark; M3 wrote ≈2× the extraction characters, with the cost estimate separately projecting greater token usage); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](#choosing-an-alternative-search-configuration) or [MCP configuration](#configuration). The extract and collate rows scale with the selected models.
 
 <!-- packages:pi -->
 ## Settings
@@ -903,26 +906,26 @@ The example below shows the default models and common tuning settings. The [Sett
 |---|---|---|---|
 | `searchModel` | 1. Search | `openrouter/perplexity/sonar` | Model for the initial web search. Swap to a stronger model for deeper search results, or to a cheaper one to reduce the ≈$0.007 search cost. See [Model Configuration](#model-configuration). |
 | `searchWebSearch` | 1. Search | see [reference](#openrouter-web-search-server-tool) | Attach OpenRouter's `openrouter:web_search` server tool to the search-stage call so a plain OpenRouter chat model gains access to live search. Off by default; requires `searchModel.provider` to be `openrouter`. Full key reference in [OpenRouter Web Search Server Tool](#openrouter-web-search-server-tool). |
-| `extractModel` | 3. Extract | `openrouter/minimax/minimax-m3` | Model for per-page content extraction. Runs 10 times per session so low cost per token matters. Estimate tokens from `extractMaxChars`, add system and user prompt tokens, and reserve `extractionMaxTokens` for output. Compare that total with the model's token window and lower the character limit if needed. See [Model Configuration](#model-configuration). |
+| `extractModel` | 3. Extract | `openrouter/minimax/minimax-m3` | Model for per-page content extraction. Runs up to 10 times per default research run so low cost per token matters. Estimate tokens from `extractMaxChars`, add system and user prompt tokens, and reserve `extractionMaxTokens` for output. Compare that total with the model's token window and lower the character limit if needed. See [Model Configuration](#model-configuration). |
 | `collateModel` | 4. Collate | `openrouter/minimax/minimax-m3` | Model for cross-source synthesis and deduplication. Sees all extractions at once so it needs enough context and instruction-following to flag contradictions. A model with ≥128K context handles 8 full extractions comfortably. See [Model Configuration](#model-configuration). |
 | `defaultUrls` | 1 → 2 | `10` | Fallback when the agent does not pass `maxUrls` per call; also caps `intelli_search`'s rendered source list. Lower values reduce cost and latency but give less thorough results. The agent's [skill guide](skills/intelli-search/SKILL.md) recommends 3 (targeted), 10 (broad), or 16 (exhaustive). Raised from 8 in v0.13.0: citation harvesting fills the URL list, so the pipeline can use more sources than prose links alone provided. |
 | `maxUrls` | 1 → 2 | `20` | Hard cap on URLs fetched. Lower caps mean faster responses and lower cost; higher caps allow more thorough research. Each extra successfully extracted page adds ≈$0.007 under the M3 output-volume estimate in [Cost](#cost). Requests above the cap are silently clamped. Raised from 16 in v0.13.0. |
-| `cacheDir` | 4, 5 | `.search` | Directory where research sessions are cached. Change this to keep project-specific research separate. Example: `".my-research-cache"`. |
+| `cacheDir` | 4, 5 | `.search` | Directory where research runs are cached. Change this to keep project-specific research separate. Example: `".my-research-cache"`. |
 | `extractMaxChars` | 3. Extract | `150000` | Maximum characters of page content fed to the extract LLM per page. Each 50K chars consumes ≈12K input tokens as a planning approximation; the model's tokenizer determines the actual count. Add prompt tokens and reserved output (`extractionMaxTokens`) before comparing with the token window. Lower this limit if that budget does not fit; raise it only with sufficient headroom. |
 | `extractionConcurrency` | 3. Extract | `4` | Number of per-page extractions sent to the extract model simultaneously. Bounded so a wide result set does not fire many concurrent LLM calls and trigger rate limiting. Raise it (6-8) on generous rate limits for faster extraction; lower it (1-2) on tight limits. |
-| `extractionMaxTokens` | 3. Extract | `3000` | Maximum output tokens for each per-page extraction. Higher values preserve more detail at higher cost. **Lower this when using a model with a small context window** so the output does not crowd out the input. The extract prompt targets 3,000-5,000 characters; 3,000 tokens covers this comfortably. |
-| `collationMaxTokens` | 4. Collate | `4000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. **Lower this when using a collation model with a small context window** (the output must fit alongside all extraction inputs). The summary you see in the agent context is bounded by this setting. |
-| `fetchTimeoutMs` | 2. Fetch | `20000` | Per-page fetch timeout in milliseconds. Increase if you research sites known to be slow. Fetches run in parallel so this does not multiply by page count. |
+| `extractionMaxTokens` | 3. Extract | `3000` | Maximum output tokens for each per-page extraction. Higher values preserve more detail at higher cost. Lower this when using a model with a small context window so the output does not crowd out the input. The extract prompt targets 3,000-5,000 characters; 3,000 tokens covers this comfortably. |
+| `collationMaxTokens` | 4. Collate | `4000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. Lower this when using a collation model with a small context window (the output must fit alongside all extraction inputs). This bounds synthesis output, not the source and cache appendices added afterwards. |
+| `fetchTimeoutMs` | 2. Fetch | `20000` | Per-page fetch timeout in milliseconds. Increase for sites known to be slow. Fetches run in parallel so this does not multiply by page count. |
 | `fetchConcurrency` | 2. Fetch | `4` | Number of pages fetched simultaneously. Higher values (6-8) complete the fetch stage faster but may trigger rate limiting. Lower values (2) are gentler on target servers. |
 | `browserFingerprint` | 2. Fetch | `chrome_145` | Transport Layer Security (TLS) fingerprint used by [_wreq-js_](https://github.com/sqdshguy/wreq-js) to impersonate a browser. Determines which Hypertext Transfer Protocol (HTTP) client signature the site sees. Available profiles include `chrome_*`, `firefox_*`, `safari_*`, `edge_*`, and `opera_*` across many versions. Change this if a site blocks the default fingerprint. |
-| `llmTimeoutMs` | Research LLM | `90000` | Hard per-call timeout in milliseconds for each model request inside `intelli_research`. Bounds a stalled provider connection (common under rate limiting) so it becomes a retryable timeout instead of hanging on the SDK's long default. Raise it for slow reasoning models on large inputs; lower it to fail faster. |
+| `llmTimeoutMs` | Research LLM | `90000` | Hard per-call timeout in milliseconds for each model request inside `intelli_research`. Bounds a stalled provider connection (common under rate limiting) so it becomes a retryable timeout instead of hanging on the software development kit (SDK)'s long default. Raise it for slow reasoning models on large inputs; lower it to fail faster. |
 | `llmRetryAttempts` | Research LLM | `3` | Total attempts per LLM call including the first. Transient failures (HTTP 429, 5xx, timeouts) are retried with full-jitter exponential backoff that honours any Retry-After hint. Set to `1` to disable retry. |
 | `retryBaseDelayMs` | Research LLM | `1500` | Base delay for retry backoff. Attempt N waits a random duration up to `min(retryMaxDelayMs, retryBaseDelayMs * 2^(N-1))`. |
 | `retryMaxDelayMs` | Research LLM | `20000` | Upper bound on any single retry backoff, and the clamp applied to a Retry-After hint so a large hint cannot stall the pipeline. |
 | `searchRetryAttempts` | 1. Search | `2` | Total attempts for the search stage when it returns a valid response with zero usable links (a degraded result), including the first. Independent of `llmRetryAttempts`, which covers transport errors. |
 | `minRequestIntervalMs` | 3. Extract | `0` | Minimum gap in milliseconds between concurrent extract LLM calls. `0` disables the throttle. For an observed account limit of approximately 0.33 requests per second, use approximately `3000`. Adjust to observed limits rather than payment status. |
 | `disableLlmsFullDiscovery` | Supplementary Fetch | `false` | Set `true` to skip automatic `llms-full.txt` probes and downloads. This does not disable page fetching or extraction. See [Automatic llms-full.txt Discovery](#automatic-llms-fulltxt-discovery). |
-| `disableTelemetry` | All | `false` | When `false`, each `intelli_research` run writes a local-only `meta.json` sidecar into its `.search/<slug>/` cache directory recording per-stage outcomes (pages fetched/failed, fetch-variant winners, links and harvested annotations, search-retry, cache-suggest hits, latency). Strictly local: no network call, no data leaves the host. Set `true` to suppress the sidecar. |
+| `disableTelemetry` | All | `false` | When `false`, completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local `meta.json` sidecar into the configured cache. It contains the full query and per-stage outcomes, which can include confidential information. The sidecar adds no network transmission or credential fields; ordinary research still sends requests to configured services. Set `true` to suppress it. |
 
 `httpProxy` is a separate top-level `Pi` setting, not a `pi-intelli-search` namespace key; page fetching honours it too. Its default is unset.
 
@@ -932,7 +935,7 @@ The model retry and timeout settings apply inside `intelli_research`. The native
 
 Sites that follow the [`llms-full.txt` convention](https://llmstxt.org) publish a single Markdown file containing their complete documentation. During the fetch stage, every domain in the search results is probed at `https://domain/llms-full.txt`. If the file exists (HTTP 200), it is downloaded raw to `sources/llms-full-*.md` for offline search with `grep` or `read`.
 
-These probes are supplementary and never gate the research result. Each runs under a tight timeout and honours cancellation, so a slow or unresponsive documentation host cannot stall the summary, and pressing Esc cancels them along with the rest of the pipeline. Set `disableLlmsFullDiscovery: true` to skip the probes entirely.
+These probes are supplementary: failures do not invalidate completed research. Each runs under a bounded timeout and honours cancellation. The pipeline awaits download completion and cleanup before returning, so this work can add latency; pressing Esc cancels it with the rest of the pipeline. Set `disableLlmsFullDiscovery: true` to skip the probes entirely.
 
 A small built-in list handles sites with non-standard paths:
 
@@ -974,15 +977,15 @@ Use the same configuration and workspace as the registered server. If a project-
 
 ### Serving the Protocol
 
-An invocation without `--check-config` validates the explicit configuration and workspace, then serves the four canonical tools (`intelli_search`, `intelli_extract`, `intelli_collate`, `intelli_research`) over stdio until the input stream closes. Serving performs no inference at startup; credentials are only required when an operation runs.
+An invocation without `--check-config` validates the explicit workspace, then serves the four canonical tools (`intelli_search`, `intelli_extract`, `intelli_collate`, `intelli_research`) over stdio until the input stream closes. An explicitly selected missing, unreadable or invalid configuration file does not prevent connection: each tool call returns an actionable `CONFIGURATION` error, and the server rereads the file on each call until it loads. Repair the file and call again. Once loaded, configuration remains fixed until restart. Missing launcher arguments and invalid workspaces still fail at startup; `--check-config` remains strict. Serving performs no inference at startup; credentials are only required when an operation runs.
 
-- **Registration and Schemas.** Tool names and JSON input schemas mirror the native `Pi` tools verbatim; descriptions adapt the native guidance for protocol clients (host-neutral cache wording, embedded `focusPrompt` and breadth guidance), because the protocol offers no separate guidance channel. Invalid tool arguments are reported as tool errors (`isError` results), matching the SDK (software development kit) distinction between malformed protocol requests and invalid arguments.
-- **Results.** Successful calls return the concise summary as text content plus structured content with `outcome` and `details`. Degraded research (`no-links`, `fetch-failed`, `extraction-failed`) remains a normal result. Execution failures return `isError` results tagged with the safe `StandaloneError` category rather than raw provider causes.
+- **Registration and Schemas.** Tool names and JSON input schemas mirror the native `Pi` tools verbatim; descriptions adapt the native guidance for protocol clients (host-neutral cache wording, embedded `focusPrompt` and breadth guidance), because the protocol offers no separate guidance channel. Invalid tool arguments are reported as tool errors (`isError` results), matching the software development kit (SDK) distinction between malformed protocol requests and invalid arguments.
+- **Results.** Successful calls return the complete operation text both as text content and as `structuredContent.text`, alongside `outcome` and `details`. Hosts that prefer the structured representation receive the same answer, sources and cache suggestions. The duplication is intentional for host compatibility; a host that forwards both representations can consume extra context. Degraded research (`no-links`, `fetch-failed`, `extraction-failed`) remains a normal result. Execution failures return `isError` results tagged with the safe `StandaloneError` category rather than raw provider causes.
 - **Queueing.** One operation runs at a time and up to eight further requests queue; requests beyond the bound settle immediately with a busy tool error. A queued request whose client cancels settles without starting its operation.
 - **Progress and Cancellation.** When the client supplies a progress token, stage progress is forwarded as `notifications/progress` (percentage of one hundred). Client cancellation aborts the running operation through the shared model policy and stage boundaries.
 - **Shutdown.** Closing standard input aborts in-flight and queued work, closes the transport and exits. `SIGINT` and `SIGTERM` trigger the same drain with a bounded hard-exit backstop. No unanswered request or runaway child work remains.
 - **Framing.** Standard output carries protocol messages only. Before the server module loads, a guard diverts `process.stdout.write` (including console output, import-time writes and direct dependency writes) to standard error; the transport writes frames through the original stream, so the SDK's own output is never corrupted. Adapter diagnostics use standard error.
-- **Annotations.** `intelli_search` and `intelli_extract` are marked read-only; `intelli_collate` and `intelli_research` write cache files and are not read-only. No tool claims idempotence. Operations use external services; inference and search charges apply to the configured provider account. Invalid calls and startup validation do not perform inference.
+- **Annotations.** `intelli_search` and `intelli_extract` are marked read-only; `intelli_collate` and `intelli_research` write cache files and carry `destructiveHint: true` because repeating a query replaces the canonical cache folder's contents (attempting to archive the previous set to a numbered sibling; archive failure falls back to in-place replacement). No tool claims idempotence. Operations use external services; inference and search charges apply to the configured provider account. Invalid calls and startup validation do not perform inference.
 
 Startup diagnostics go to standard error. The SDK version range is declared in `package.json` (the lockfile pins the verified release); the protocol implementation is the official split server package verified in the repository handoff.
 
@@ -1032,7 +1035,7 @@ Unspecified tuning comes from the canonical [shared defaults](src/core/defaults.
 
 **Reasoning:** The adapter sends reasoning fields only when the catalogue advertises reasoning support; non-reasoning models receive neither effort nor exclusion fields.
 
-**Output Budget:** Empty output after token-budget exhaustion is an error, not a successful extraction. Increase the output-token limit or lower reasoning effort when this diagnostic occurs.
+**Output Budget:** Empty output after token-budget exhaustion is an error, not a successful extraction. Empty collation is likewise rejected before a completed report is written. When these diagnostics occur, increase `collationMaxTokens`, lower reasoning effort, or choose a model with a smaller reasoning budget.
 
 ### Direct Engine Verification
 
@@ -1044,7 +1047,7 @@ npm run test:all
 npm run test:mcp:install
 ```
 
-The installation gate packs the artifact, installs production dependencies into an isolated directory and denies all ancestor dependency resolution in both module systems. It runs the installed executable's `--help` and `--version`, all four operations with synthetic inference, and actual page fetching against a loopback fixture through the installed native fetch assets. A raw protocol exchange against the installed server verifies initialization, tool listing, invalid-argument rejection without inference and clean shutdown, and asserts that standard output carries only protocol frames. The deterministic installation gate uses no provider credentials and does not establish live MCP interoperability.
+The installation gate packs the artefact, installs production dependencies into an isolated directory and denies all ancestor dependency resolution in both module systems. It runs the installed executable's `--help` and `--version`, all four operations with synthetic inference, and actual page fetching against a loopback fixture through the installed native fetch assets. A raw protocol exchange against the installed server verifies initialisation, tool listing, invalid-argument rejection without inference and clean shutdown, and asserts that standard output carries only protocol frames. The deterministic installation gate uses no provider credentials and does not establish live MCP interoperability.
 
 The recorded live scenario `test/e2e/11_mcp_stdio.sh` exercises a real research call through the MCP client of an isolated `Pi` profile. Its evidence is recorded separately in the [compatibility matrix](docs/COMPATIBILITY.md), not supplied by the installation gate.
 
@@ -1071,11 +1074,11 @@ console.log(result.text);
 
 This example incurs inference and search charges when run with a real credential. `execute()` also accepts `intelli_search`, `intelli_extract` and `intelli_collate`, with the canonical tool parameters. Its optional third argument supplies `signal` and `onProgress`. Results contain `text`, `details` and `outcome`; execution failures throw. Degraded research remains a result. Standalone validation rejects unknown argument keys, empty queries, nonpositive or fractional `maxUrls`, arrays exceeding 100 entries, strings exceeding 2,000,000 characters and unsupported extraction statuses. Native schemas are unchanged. For manual extraction followed by collation, construct each collation item from the original `url` and `title`, `result.details.extraction` and `result.details.sourceType`, plus an explicit `status` such as `success`. Do not forward the entire extraction `details` object: its `currentness` field is not a collation input.
 
-`mcp-intelli-search --help` and `--version` need no configuration. `--check-config` validates explicit configuration and workspace syntax without credentials or inference, returning exit status 0 for valid configuration and 1 for invalid input. Neither starts a protocol connection. The runtime entrypoint is experimental and has no published TypeScript declaration contract. Execution failures expose a safe `StandaloneError.code`: `INVALID_ARGUMENTS`, `CONFIGURATION`, `WORKSPACE`, `PROVIDER`, `OPERATION` or `CANCELLED`. Cancellation uses the `AbortError` name. Raw provider causes are deliberately not retained. Some shared operations wrap provider exceptions, which become `OPERATION` errors; protocol mapping must not depend on exact diagnostic strings.
+`mcp-intelli-search --help` and `--version` need no configuration. `--check-config` validates explicit configuration and workspace syntax without credentials or inference, returning exit status 0 for valid configuration and 1 for invalid input. Neither starts a protocol connection. `loadConfig()` throws an exported `ConfigurationError` for file defects, with a `reason` of `missing`, `unreadable`, `invalid-json` or `invalid`; workspace failures remain separate. JSON syntax diagnostics include a location without echoing file contents. The runtime entrypoint is experimental and has no published TypeScript declaration contract. Execution failures expose a safe `StandaloneError.code`: `INVALID_ARGUMENTS`, `CONFIGURATION`, `WORKSPACE`, `PROVIDER`, `OPERATION` or `CANCELLED`. Cancellation uses the `AbortError` name. Raw provider causes are deliberately not retained. Some shared operations wrap provider exceptions, which become `OPERATION` errors; protocol mapping must not depend on exact diagnostic strings.
 
 ### Filesystem and Privacy Boundaries
 
-All cache paths returned by the standalone adapter are absolute and anchored to the selected workspace. Cache and staging content stay beneath the configured cache directory. Existing symlinks, dangling links and hardlinked files in cache ancestors or artifact subtrees are rejected before an operation; checks repeat after model preflight. Special filesystem entries and an oversized safety scan are rejected. The full scan runs at runtime construction and twice per operation, so its cost grows with cache size; queued requests wait behind that scan. At 100,000 inspected entries, select a smaller cache directory or archive old entries after stopping all processes using that cache. Same-query runs on the same Coordinated Universal Time (UTC) date refresh one cache directory and do not promise separate histories; another UTC date produces a different directory.
+All cache paths returned by the standalone adapter are absolute and anchored to the selected workspace. Cache and staging content stay beneath the configured cache directory. Existing symlinks, dangling links and hardlinked files in cache ancestors or artefact subtrees are rejected before an operation; checks repeat after model preflight. Special filesystem entries and an oversized safety scan are rejected. The full scan runs at runtime construction and twice per operation, so its cost grows with cache size; queued requests wait behind that scan. At 100,000 inspected entries, select a smaller cache directory or archive old entries after stopping all processes using that cache. Same-query runs on the same Coordinated Universal Time (UTC) date refresh one cache directory. A completed refresh attempts to archive the prior artefacts to a numbered sibling; archive failure is logged and can lead to in-place replacement. A degraded repeat preserves prior successful output. Another UTC date produces a different directory.
 
 These checks prevent pre-existing path escapes, not malicious concurrent filesystem replacement by another process with write access. Use a workspace controlled by the same trusted local operator. No operating-system sandbox or protection against hostile same-user mutation is claimed. Fetched URLs are not constrained to public addresses; the runtime is not a hosted service or an unrestricted remote execution endpoint.
 
@@ -1094,12 +1097,15 @@ Every startup failure is diagnostic-only and lands on standard error; standard o
 | Symptom | Cause and Remedy |
 |---|---|
 | `Explicit --config and --workspace are required` | The server started without both selections. Supply `--config`/`--workspace` or the `INTELLI_SEARCH_CONFIG`/`INTELLI_SEARCH_WORKSPACE` environment variables, then restart the host. |
-| `workspace must be an explicit absolute directory` | The workspace selection is relative or a host placeholder was not expanded. Use a literal absolute path; on hosts with placeholder expansion, verify the expansion on your host version. |
-| `Cannot read configuration: provide an explicit readable JSON file` | The configuration path does not exist or is not readable. Create the file (the guides show a minimal valid document) and restart. |
-| Configuration rejected with an unknown-key or range error | The loader is strict: unknown keys, invalid types and out-of-range values fail validation. Remove or correct the named key; the [Tuning](#tuning) table lists every accepted key and range. |
-| Tools never appear in the host | The server exited during startup. Read the host's MCP server logs for the standard-error diagnostic; `mcp-intelli-search --check-config` reproduces configuration and workspace failures without a host. |
-| Operations fail with `CONFIGURATION` or `PROVIDER` | The named credential environment variable is missing or the key was rejected. The server snapshots the environment at startup: restart it after changing credentials. Catalogue preflight failures name the offending model role. |
-| Repeated 429 retries on a free-tier or shared key | Free-tier OpenRouter keys share a tight rate bucket. Set `minRequestIntervalMs` to approximately `3000`, lower `extractionConcurrency` to `2`, and raise `llmRetryAttempts`; raise `llmTimeoutMs` only when the model-call timer is expiring. |
+| `workspace must be an explicit absolute directory` | The workspace selection is relative or a host placeholder was not expanded. Use a literal absolute path; on hosts with placeholder expansion, verify the expansion on the installed host version. |
+| `Configuration file not found`, `not readable`, `empty` or `not valid JSON` | The selected file is missing or defective. The error names its absolute path; JSON syntax errors include a location without showing file contents. `--check-config` reports the error and exits 1. While serving, repair the file and call again. |
+| Configuration rejected with an unknown-key or range error | The loader is strict: unknown keys, invalid types and out-of-range values fail validation. Correct the configuration and call again if it has not yet loaded. The [Tuning](#tuning) table lists accepted keys and ranges. |
+| Tools never appear in the host | Check absent launcher arguments, an unusable workspace or an unsafe cache. Read the host's MCP server logs for the standard-error diagnostic. Claude Code can cache a startup failure from an older server: try `/mcp` reconnect, then restart ([evidence and limits](docs/COMPATIBILITY.md#claude-code-evidence-and-limits)). A connected server still needs a successful tool call to verify inference. |
+| `CONFIGURATION` persists after the file is repaired | A file that has not yet loaded is reread on the next call; once loaded, configuration changes require a restart. |
+| Diagnostic names a missing credential environment variable | Supply the named variable through the host's supported credential mechanism and restart. The server snapshots credentials at startup. |
+| Catalogue preflight names a model role or capability | Correct the model identifier or required capabilities using [Configuration](#configuration). Read the diagnostic; catalogue lookup failures are not proof of invalid credentials. Restart after changing loaded model selections. |
+| `PROVIDER` reports authentication, access, credit or transport failure | Follow the specific diagnostic: check credentials, model access, account credit or connectivity. Restart after changing credentials. The category alone does not identify a rejected key. |
+| Repeated `429` retries | Tune pacing to observed account/provider limits. For an observed limit of approximately 0.33 requests per second, try `minRequestIntervalMs: 3000` and `extractionConcurrency: 2`; adjust retry attempts as needed. Raise `llmTimeoutMs` only when its model-call timer expires. |
 | Cache paths unreadable from the host | The host must share the server's filesystem. Sandboxed or remote hosts cannot read local cache paths; run the server where the host can read the workspace. |
 <!-- /packages -->
 
@@ -1123,9 +1129,17 @@ Both packages write this format. The native extension resolves the cache against
 └── .index.json                 # Index of all cached searches
 ```
 
-Each cached session lives in a directory named `<date>-<slug>-<hash>`. The `<hash>` is a short Secure Hash Algorithm 1 (SHA-1) hash of the full query, appended so that distinct queries issued on the same day do not collide and overwrite each other. Concurrent runs stage their output before a short cache commit, so source files and the shared index remain intact.
+Each research run writes a cache entry named `<date>-<slug>-<hash>`. The `<hash>` is six hexadecimal characters from a Secure Hash Algorithm 1 (SHA-1) hash of the full query. It distinguishes queries sharing a readable stem and reduces collision risk; it does not guarantee unique names. Concurrent writers use short cache locks, and index updates are atomic. Cache readers do not take those locks: a multi-file refresh is not a whole-directory atomic snapshot.
 
-**`meta.json` (local-only telemetry).** Each `intelli_research` run writes a `meta.json` sidecar recording per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), whether search-retry fired, cache-suggest hits, and per-stage latency. `stages.search.annotationsHarvested` counts `url_citation` entries recovered from the response body; it is absent on runs against models that emit none, and it is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. It is strictly local: no network call is added, no data leaves the host, and no account or identity is recorded. The bundled [`scripts/analyze-sessions.sh`](scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+Refresh behaviour:
+
+- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and telemetry sidecar to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set.
+- Archive failure is logged and the completed run can replace canonical files in place; interrupted rotation can leave a partial archive.
+- Supplementary `llms-full-*` documentation downloads stay with the live folder and are not archived.
+- A degraded repeat preserves the earlier successful report, extractions, sources and index entry untouched and records only the failed attempt in `meta.json`.
+- The numbered siblings are a same-day safety net, not a versioned archive: copy a report elsewhere if it must be retained long-term.
+
+**Local Telemetry (`meta.json`):** Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](scripts/README.md) can aggregate these sidecars to report per-stage success rates.
 
 <!-- packages:pi -->
 To suppress the sidecar in the native extension, set `disableTelemetry: true` inside the `pi-intelli-search` namespace in [Settings](#settings).
@@ -1140,7 +1154,7 @@ To suppress the sidecar in the MCP server, set `"disableTelemetry": true` inside
 ### `Pi` Extension Compatibility
 
 - **`Pi` >= 0.81.1:** Core functionality, trusted project settings, the configurable `CONFIG_DIR_NAME`, provider-based `pi-ai` calls, and sequential cache-writing tools. On `Pi` >= 0.86, LLM calls dispatch through the `ctx.modelRegistry.streamSimple()` facade so system prompts reach the model; `Pi` 0.81.1 through 0.85.x use the direct provider path. Compatibility audited and verified through `Pi` 1.0.0 (2026-10-02); the `fetch`/`onPayload` request hooks used by citation harvesting and the web search tool are verified against pi-ai 1.0.0.
-- UI notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, RPC).
+- User interface (UI) notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, remote procedure call (RPC)).
 - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
 - Retry and timeout are owned by the shared model policy, invoked by native `callLlm()`, independently of `Pi`'s `retry.provider.maxRetries`. Native calls force SDK `maxRetries: 0`. Configured backoff and application timeout apply inside `intelli_research`; the three standalone tools retain their one-attempt, no-application-timeout behaviour.
 <!-- /packages -->
@@ -1175,7 +1189,7 @@ pi -e ./dist/index.js
 pi install /path/to/pi-intelli-search
 ```
 
-**Host Plugins:** thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/` at the repository root, with repository marketplace catalogs at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. The bundles are generated from the shared guidance source in `guidance/` and the version pinned in `packages/mcp/package.json`; run `npm run generate:plugins` after a version change and `npm run check:plugins` to detect drift. Launchers pin the exact package version through `npx`; `scripts/generate-plugin-bundles.mjs --mode tarball` generates equivalent local-tarball launchers for testing unreleased changes. Host setup, including each host's environment forwarding rules, is in the generated skills.
+**Host Plugins:** thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/` at the repository root, with repository marketplace catalogues at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. The bundles are generated from the shared guidance source in `guidance/` and the version pinned in `packages/mcp/package.json`; run `npm run generate:plugins` after a version change and `npm run check:plugins` to detect drift. Launchers pin the exact package version through `npx`. For unreleased changes, follow the tarball flow in the [script guide](scripts/README.md) and the tested full install flow in `test/e2e/12_plugin_bundles.sh`; `node scripts/generate-plugin-bundles.mjs --help` lists the arguments. Host setup, including each host's environment forwarding rules, is in the generated skills.
 
 **Package READMEs:** this file is the only hand-edited README. `npm run generate:readmes` derives `packages/mcp/README.md` plus the root previews [`pi.README.md`](pi.README.md) and [`mcp.README.md`](mcp.README.md), and `npm run check:readmes` fails on drift or on any derived link that does not resolve. The native package ships the same derivation, written over this file by its `prepublishOnly` hook. Untagged content goes to both packages. Wrap package-specific sections in `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, and repository-only sections in `<!-- packages:none -->`. Content that only a package shows, such as its title and badges, goes in a hidden block opened by `<!-- packages:mcp hidden` and closed by a `-->` line. Each derived README regenerates its contents list, redirects links to sections it omits to this file on _GitHub_, and makes relative paths absolute. See [`scripts/generate-package-readmes.mjs`](scripts/generate-package-readmes.mjs).
 <!-- /packages -->
@@ -1185,7 +1199,7 @@ pi install /path/to/pi-intelli-search
 - [Comparison](docs/COMPARISON.md): How `intelli-search` compares to other `Pi` search extensions and to host-native web search.
 - [Changelog](CHANGELOG.md): Release history.
 - [Architecture](docs/ARCHITECTURE.md): Detailed design decisions and pipeline internals.
-- [Compatibility](docs/COMPATIBILITY.md): Tested host versions and artifacts for the native extension, MCP server and plugins.
+- [Compatibility](docs/COMPATIBILITY.md): Tested host versions and artefacts for the native extension, MCP server and plugins.
 - [Components](docs/COMPONENTS.md): Third-party dependencies and licence attribution.
 <!-- packages:pi -->
 - [Native skill guide](skills/intelli-search/SKILL.md): Agent-facing usage instructions for `Pi`.
@@ -1219,7 +1233,7 @@ View download statistics on the [`@curio-data/mcp-intelli-search` package page](
 <!-- packages:pi -->
 ## Provenance
 
-Git history was rewritten in `v0.9.0` to normalise commit author and committer metadata on the path to a stable `v1` release. The `gitHead` SHAs recorded in `npm` SLSA provenance attestations for versions 0.3.1 through 0.8.0 reference pre-rewrite commits that no longer resolve in this repository. Published tarballs and their tree-level contents are unchanged; only commit metadata was altered. From v0.9.0 onwards, attestations track the rewritten history. See the [Changelog](CHANGELOG.md) entry for v0.9.0 for the full account.
+Git history was rewritten in `v0.9.0` to normalise commit author and committer metadata on the path to a stable `v1` release. The `gitHead` commit identifiers recorded in `npm` Supply-chain Levels for Software Artifacts (SLSA) provenance attestations for versions 0.3.1 through 0.8.0 reference pre-rewrite commits that no longer resolve in this repository. Published tarballs and their tree-level contents are unchanged; only commit metadata was altered. From v0.9.0 onwards, attestations track the rewritten history. See the [Changelog](CHANGELOG.md) entry for v0.9.0 for the full account.
 <!-- /packages -->
 
 ## Sponsor
@@ -1230,7 +1244,8 @@ Git history was rewritten in `v0.9.0` to normalise commit author and committer m
 
 [Blog](https://blog.curiodata.pro/) | [LinkedIn](https://www.linkedin.com/company/curio-data-pro-ltd/)
 
-## License
+<a id="license"></a>
+## Licence
 
 Copyright 2026 Ashraf Miah, Curio Data Pro Ltd.
 
@@ -1247,3 +1262,4 @@ Large Language Models were used extensively during the development of this proje
 - **_Qwen_ 3.8 Max:** Review and deep research.
 - **_DeepSeek_ V4 Pro:** Research and data analysis.
 - **_Qwen_ 3.6 Plus:** Secondary model for review and documentation.
+- **_Claude_ Opus 5.0/5.5:** Primary model for MCP variant.

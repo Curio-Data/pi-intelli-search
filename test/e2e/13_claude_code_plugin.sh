@@ -39,7 +39,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Linux credential-file layout; elsewhere they would pass vacuously.
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "⚠️  SKIP: scenario 13 is recorded for Linux hosts only."
-  exit 0
+  exit 77
 fi
 
 # Parse .env BEFORE any output reaches the log: only the two named keys are
@@ -246,6 +246,23 @@ if [[ -n "$TOOL_USE_ID" ]]; then
   ok "model called $TOOL"
   if jq -e --arg id "$TOOL_USE_ID" 'select(.type == "user") | .message.content[]? | select(.type == "tool_result" and .tool_use_id == $id and (.is_error | not))' "$STREAM" >/dev/null 2>&1; then
     ok "tool result returned without error"
+    # Claude Code may expose structuredContent instead of the text block.
+    # Assert the model-visible payload contains the summary and cache appendix.
+    if jq -se --arg id "$TOOL_USE_ID" '
+      [ .[] | select(.type == "user") | .message.content[]?
+        | select(.type == "tool_result" and .tool_use_id == $id)
+        | .content
+        | if type == "array" then map(select(.type == "text") | .text) | join("\n") else . end
+        | . as $raw | (try fromjson catch $raw)
+        | if type == "object" then (.text // "") else . end
+        | select(type == "string")
+        | contains("**Cache**:") and contains("**Report**:") and
+          (split("\n\n---\n")[0] | length > 100) ] | any
+    ' "$STREAM" >/dev/null 2>&1; then
+      ok "model-visible tool result contains the research summary and cache appendix"
+    else
+      bad "model-visible tool result lacks research text (metadata alone is insufficient)"
+    fi
   else
     bad "tool result is an error or missing"
     jq -c --arg id "$TOOL_USE_ID" 'select(.type == "user") | .message.content[]? | select(.tool_use_id == $id)' "$STREAM" | cut -c1-400

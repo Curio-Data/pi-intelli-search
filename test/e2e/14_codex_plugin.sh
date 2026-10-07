@@ -41,7 +41,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Linux layout; elsewhere they would pass vacuously.
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "⚠️  SKIP: scenario 14 is recorded for Linux hosts only."
-  exit 0
+  exit 77
 fi
 
 # Parse .env BEFORE any output reaches the log, reading only the key this
@@ -81,13 +81,14 @@ done
 # The dedicated profile must exist, hold a login, resolve (symlinks
 # included) to a directory inside this repository, and never be the
 # operator's own profile: each run deletes everything in it but auth.json.
-E2E_CODEX_HOME="$(cd "$E2E_CODEX_HOME" 2>/dev/null && pwd -P || true)"
+E2E_CODEX_HOME="$(cd "$E2E_CODEX_HOME" 2>/dev/null && pwd -P)" || true
 if [[ -z "$E2E_CODEX_HOME" || ! -f "$E2E_CODEX_HOME/auth.json" ]]; then
   echo "❌ No dedicated Codex test login found."
   echo "   Create it once: CODEX_HOME=\"$PROJECT_DIR/.e2e-auth/codex\" codex login --device-auth"
   exit 1
 fi
-if [[ "$E2E_CODEX_HOME" == "$(cd "$HOME/.codex" 2>/dev/null && pwd -P || echo none)" ]]; then
+operator_home="$(cd "$HOME/.codex" 2>/dev/null && pwd -P)" || operator_home=none
+if [[ "$E2E_CODEX_HOME" == "$operator_home" ]]; then
   echo "❌ E2E_CODEX_HOME resolves to the operator's own ~/.codex; refusing."
   exit 1
 fi

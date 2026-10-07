@@ -9,9 +9,10 @@
 // models — that's destructive. The models.json merge approach is the
 // correct way to *add* models to an existing built-in provider.
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { readFile, writeFile, mkdir, rename, rm, realpath, stat, lstat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join, dirname } from "node:path";
+import { withLock } from "./core/cache.js";
 import { getAgentDir } from "./agent-dir.js";
 
 /**
@@ -79,41 +80,76 @@ interface ModelsJson {
  * Returns the list of models that were added.
  */
 export async function ensureCustomModels(): Promise<string[]> {
-  const modelsJsonPath_ = modelsJsonPath();
-  let config: ModelsJson = {};
-
-  // Read existing models.json if it exists
-  if (existsSync(modelsJsonPath_)) {
+  let path = modelsJsonPath();
+  try {
+    // Preserve operator-managed symlinks by replacing the physical target.
+    path = await realpath(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    const entry = await lstat(path).catch((cause: NodeJS.ErrnoException) => {
+      if (cause.code !== "ENOENT") throw cause;
+      return undefined;
+    });
+    if (entry?.isSymbolicLink())
+      throw new Error("models.json is a dangling symlink; existing configuration was not changed");
+  }
+  await mkdir(dirname(path), { recursive: true });
+  return withLock(`${path}.intelli-lock`, async () => {
+    let config: ModelsJson = {};
+    let mode = 0o600;
+    let raw: string | undefined;
     try {
-      const raw = await readFile(modelsJsonPath_, "utf-8");
-      config = JSON.parse(raw);
-    } catch {
-      // Invalid JSON — start fresh (don't overwrite yet)
-      config = {};
+      raw = await readFile(path, "utf8");
+      mode = (await stat(path)).mode & 0o777;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+        throw new Error("Cannot read models.json; existing configuration was not changed");
     }
-  }
-
-  // Ensure providers.openrouter exists
-  if (!config.providers) config.providers = {};
-  if (!config.providers.openrouter) config.providers.openrouter = {};
-  if (!config.providers.openrouter.models) config.providers.openrouter.models = [];
-
-  const models = config.providers.openrouter.models as Array<Record<string, unknown>>;
-  const added: string[] = [];
-
-  for (const modelDef of REQUIRED_MODELS) {
-    const exists = models.some((m) => m.id === modelDef.id);
-    if (!exists) {
-      models.push(modelDef);
-      added.push(modelDef.id);
+    if (raw !== undefined) {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        const isObject = (value: unknown): value is Record<string, unknown> =>
+          value !== null && typeof value === "object" && !Array.isArray(value);
+        if (!isObject(parsed)) throw new Error();
+        if (parsed.providers !== undefined) {
+          if (!isObject(parsed.providers)) throw new Error();
+          for (const provider of Object.values(parsed.providers)) {
+            if (!isObject(provider)) throw new Error();
+            if (
+              provider.models !== undefined &&
+              (!Array.isArray(provider.models) || !provider.models.every(isObject))
+            )
+              throw new Error();
+          }
+        }
+        config = parsed as ModelsJson;
+      } catch {
+        // Never include parser messages, which can contain credential-bearing JSON.
+        throw new Error(
+          "Invalid models.json; repair its JSON/object structure before registration. Existing configuration was not changed",
+        );
+      }
     }
-  }
-
-  // Only write if we added something
-  if (added.length > 0) {
-    await mkdir(dirname(modelsJsonPath_), { recursive: true });
-    await writeFile(modelsJsonPath_, JSON.stringify(config, null, 2) + "\n");
-  }
-
-  return added;
+    config.providers ??= {};
+    config.providers.openrouter ??= {};
+    config.providers.openrouter.models ??= [];
+    const models = config.providers.openrouter.models;
+    const added: string[] = [];
+    for (const modelDef of REQUIRED_MODELS) {
+      if (!models.some((model) => model.id === modelDef.id)) {
+        models.push(modelDef);
+        added.push(modelDef.id);
+      }
+    }
+    if (added.length) {
+      const temporary = `${path}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporary, JSON.stringify(config, null, 2) + "\n", { mode, flag: "wx" });
+        await rename(temporary, path);
+      } finally {
+        await rm(temporary, { force: true }).catch(() => {});
+      }
+    }
+    return added;
+  });
 }

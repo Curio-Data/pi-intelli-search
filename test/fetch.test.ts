@@ -384,7 +384,7 @@ describe("Defuddle benign metadata warning is muzzled (regression)", () => {
   <p>Body text for the duplicate schema url regression fixture.</p>
 </body></html>`;
 
-  it("the fixture genuinely triggers Defuddle's console.warn (sanity)", async () => {
+  it("the upgraded Defuddle handles duplicate schema URLs without warnings", async () => {
     const { parseHTML } = await import("linkedom");
     const { Defuddle } = await import("defuddle/node");
     const { document } = parseHTML(html);
@@ -393,18 +393,15 @@ describe("Defuddle benign metadata warning is muzzled (regression)", () => {
     const real = console.warn;
     console.warn = (...args: unknown[]) => seenWarn.push(args);
     try {
-      await Defuddle(document, "https://www.example.com/", { markdown: true });
+      const result = await Defuddle(document, "https://www.example.com/", { markdown: true });
+      assert.ok((result.contentMarkdown ?? result.content).includes("duplicate schema url regression"));
     } finally {
       console.warn = real;
     }
-    assert.ok(
-      seenWarn.some((args) => args[0] === "Failed to parse URL:"),
-      "fixture must trigger Defuddle's benign 'Failed to parse URL:' warning; " +
-        "if a Defuddle upgrade changes this, revisit DEFUDDLE_MUZZLE_TAGS",
-    );
+    assert.deepEqual(seenWarn, [], "the upstream duplicate-URL defect is fixed");
   });
 
-  it("DEFUDDLE_MUZZLE_TAGS swallows the warning as benign (warned, not muzzled)", async () => {
+  it("the compatibility muzzle still treats a synthetic metadata warning as benign", async () => {
     const { parseHTML } = await import("linkedom");
     const { Defuddle } = await import("defuddle/node");
     const { document } = parseHTML(html);
@@ -417,7 +414,12 @@ describe("Defuddle benign metadata warning is muzzled (regression)", () => {
     console.error = (...args: unknown[]) => seenError.push(args);
     try {
       const { value, muzzled, warned } = await withMuzzledConsole(
-        () => Defuddle(document, "https://www.example.com/", { markdown: true }),
+        async () => {
+          // The upgraded dependency no longer emits this warning for the
+          // duplicate-URL fixture; retain suppression coverage independently.
+          console.warn("Failed to parse URL:", new Error("synthetic metadata warning"));
+          return Defuddle(document, "https://www.example.com/", { markdown: true });
+        },
         DEFUDDLE_MUZZLE_TAGS,
       );
       assert.ok(value, "Defuddle still returns a result");

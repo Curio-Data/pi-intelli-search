@@ -2,7 +2,7 @@
 
 This is a **`Pi` extension** that adds intelligent web research tools to the `Pi` coding agent. It provides a 5-stage research pipeline (search, fetch, extract, collate, and cache suggest) as a single tool call, plus individual tools for manual orchestration.
 
-For cross-host development, start at the [Model Context Protocol (MCP) implementation handoff](docs/plans/mcp-intelli-search/README.md). It records the current checkpoint, approved package boundaries, frozen compatibility contracts and next phase. Phase 4 supplies `packages/mcp/` with stdio protocol serving through the official split server package; Phase 5 supplies the generated host plugin bundles and repository marketplaces; Phase 6 supplies the three installation routes, compatibility matrix, extended CI and two-package release wiring. Publication remains on hold pending the owner's explicit approval. The [Post-Phase 6 Checkpoint](docs/plans/mcp-intelli-search/POST-PHASE-6.md) holds the open host plugin findings and their ordered fix list, which is the next work. Its strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
+For current cross-host release work, start at [Release Readiness](docs/RELEASE-READINESS.md). The MCP alpha is published and the implementation branch is merged; the [implementation handoff](docs/plans/mcp-intelli-search/README.md) and [Post-Phase 6 Checkpoint](docs/plans/mcp-intelli-search/POST-PHASE-6.md) are historical evidence, not branch-switch instructions. The corrected candidate still requires the owner's explicit publication approval. Its strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
 
 ---
 
@@ -67,9 +67,9 @@ When referring to `intelli-search` as the program, extension, or package name, s
 
 Markdown headings should use capital letters for the first letter of each word (Title Case). Articles, conjunctions, and prepositions of three letters or fewer are lowercased unless they are the first or last word. The rule applies to **all heading levels** including `####` and to **bold pseudo-headings** such as `**Option A: Use a Pi Built-In Provider**`.
 
-Phrasal-verb particles (`Up`, `Out`, `In`) at the end of a heading are capitalised: `Follow Up`, `Sign In`. All-caps emphasis inside a heading (for example, `When NOT to Search`) is discouraged. Use bold in the body instead, or rephrase the heading.
+Phrasal-verb particles (`Up`, `Out`, `In`) at the end of a heading are capitalised: `Follow Up`, `Sign In`. All-caps emphasis inside a heading (for example, `When NOT to Search`) is discouraged. Use bold in the body instead, or rephrase the heading. Do not use rhetorical questions as headings; state the topic.
 
-**Good:** `## How It Works`, `### Why Extract Before Collate?`, `### Creating a Release`
+**Good:** `## How It Works`, `### Extraction Before Collation`, `### Creating a Release`
 **Avoid:** `## How it works`, `### Why extract before collate?`, `### Creating A Release`
 
 ### 6. Emphasis for Names
@@ -184,9 +184,9 @@ When creating commits:
 - **Language:** TypeScript (ESM, strict mode).
 - **Runtime:** Node.js (runs inside `Pi`'s extension host).
 - **Build:** `tsc` to `dist/`.
-- **Test:** `node --import tsx --test test/*.test.ts`. Test count is shown by the badge in `README.md`.
+- **Test:** `npm test` uses `scripts/run-tests.mjs` to run Node's test runner with private home, agent and scratch directories. Test count is shown by the badge in `README.md`.
 - **Package manager:** `npm`.
-- **License:** Apache-2.0 (Copyright 2026 Ashraf Miah, Curio Data Pro Ltd).
+- **Licence:** Apache-2.0 (Copyright 2026 Ashraf Miah, Curio Data Pro Ltd).
 
 ## Key Dependencies
 
@@ -250,7 +250,7 @@ src/
 
 packages/
 └── mcp/
-    ├── package.json         # Standalone artifact and explicit runtime dependencies
+    ├── package.json         # Standalone artefact and explicit runtime dependencies
     ├── src/                 # CLI, strict config, workspace, provider, runtime and protocol adapters
     ├── test/                # Config, CLI, console, provider, operation and protocol coverage
     ├── tsconfig.json        # Standalone source and test type check
@@ -275,6 +275,11 @@ docs/
 ├── ARCHITECTURE.md           # Detailed pipeline and design decisions
 ├── BENCHMARKS.md             # Extract/collate model benchmark: methodology, harness, recorded results
 ├── COMPONENTS.md             # Third-party dependency attribution
+├── COMPARISON.md             # Search-comparison evidence page
+├── COMPATIBILITY.md          # Host-version compatibility matrix and evidence classes
+├── RELEASE-READINESS.md      # Current release gates, finding dispositions and verification state
+├── evidence/                 # Dated evidence records backing doc claims
+├── images/                   # README and gallery artwork plus generated chart SVGs
 └── plans/mcp-intelli-search/ # Cross-host research, checkpoints and implementation handoff
 
 scripts/
@@ -282,6 +287,7 @@ scripts/
 ├── benchmark-models.sh       # A/B benchmark harness for extract/collate models (live quota)
 ├── plot-downloads.mts       # Download chart generation (npm run chart)
 ├── README.md                # Script usage guide
+├── run-tests.mjs            # Isolated unit-test runner for npm test and test:all
 ├── build-mcp.mjs            # Audited standalone bundles and legal-file copies
 ├── generate-package-readmes.mjs # Package READMEs from the root README; --check is the drift gate
 ├── generate-toc.mjs         # README contents generator; --check is the drift gate
@@ -298,6 +304,8 @@ test/
 ├── core-console.test.ts      # Concurrent diagnostic scopes and restoration
 ├── core-llm.test.ts          # Shared retry/timeout/cancellation policy
 ├── core-operations.test.ts   # Injected engine outcomes, staging and cancellation
+├── dependency-security.test.ts # Executable extraction-path and conversion checks for advisories
+├── e2e-helpers.test.ts       # E2E helper and acceptance-check regressions
 ├── native-model-client.test.ts # Native adapter state and policy delegation
 ├── workspace-paths.test.ts   # Workspace/display path separation
 ├── telemetry.test.ts
@@ -353,7 +361,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline descripti
 2. **Fetch:** Each page is fetched two ways in parallel (HTML to [Defuddle](https://github.com/kepano/defuddle) and Markdown variant). They are compared by quality score; the best is picked.
 3. **Extract:** Configurable model (default: MiniMax M3) per-page extraction (bounded-parallel via `extractionConcurrency`, default 4), compressing ≈50K to ≈3-5K chars.
 4. **Collate:** Configurable model (default: MiniMax M3) deduplicates across extractions, produces summary and cache.
-5. **Cache suggest:** LLM judge (extract model) compares current query against `.search/.index.json` and appends related previous searches to the output. This is purely additive and never blocks or gates the main result.
+5. **Cache suggest:** LLM judge (extract model) compares current query against `.search/.index.json` and appends related previous searches to the output. The judge is awaited under the configured timeout and retry policy, so it can add latency; it never replaces the live search.
 
 The pipeline is self-contained in `src/core/operations/research.ts`. Former shared module paths (`fetch.ts`, `cache.ts`, `annotations.ts`, `prompts.ts`, `types.ts`, `util.ts`) forward to implementations under `src/core/`. Current `Pi` hosts expose `ctx.executeTool()` for nested tool calls, but this pipeline does not depend on that newer capability. Direct stage execution preserves the supported native baseline and the planned host-independent engine boundary.
 
@@ -392,13 +400,13 @@ Loaded from `~/.pi/agent/settings.json` and, only for trusted projects, `<projec
 
 ### Cache
 
-Written to `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. Physical paths, including indexes and locks, resolve against `ctx.cwd` rather than the process directory. Prompts, report headers and results use a separate configured display path. `makeCachePath()` returns an absolute physical path; use `displayCachePath()` for native text. Absolute and parent-relative native cache settings remain supported.
+Written to `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. A successful same-day repeat archives the previous run's artefact set to a numbered sibling folder (`<slug>.1`, then `.2`; `rotateCacheArtefacts()`, best-effort with a logged fallback to in-place replacement) before committing the new set; `llms-full-*` downloads stay with the live folder. A degraded repeat preserves a prior successful report, extractions, sources and index entry untouched and records only the failed attempt in `meta.json`. Physical paths, including indexes and locks, resolve against `ctx.cwd` rather than the process directory. Prompts, report headers and results use a separate configured display path. `makeCachePath()` returns an absolute physical path; use `displayCachePath()` for native text. Absolute and parent-relative native cache settings remain supported.
 
 Documentation downloads use unique directories below the configured cache root's `.staging/`. No download runs under a cache lock. Writers settle before cleanup in `finally`, including cancellation and cache-write failure. Optional staging setup and cleanup errors are logged without discarding the research result. Native absolute and parent-relative cache settings remain valid, so staging can lie outside the workspace; standalone containment checks are a separate adapter responsibility.
 
 **Telemetry sidecar** (v0.11.0+). Each `intelli_research` run also writes a local-only `meta.json` into its cache directory, recording per-stage outcomes (pages fetched/failed, fetch-variant winners, links returned and annotations harvested, search-retry, cache-suggest hits, latency). The schema is owned by `src/core/telemetry.ts`, is additive-only, and carries an independent `schemaVersion` decoupled from `extensionVersion`. The write is atomic (temp file then `rename`) and fail-safe: failures are caught and logged, never surfacing to the pipeline result. Suppressed entirely when `disableTelemetry` is true. No network call is added; the word "telemetry" refers to local runtime signals, not remote reporting. The adapter injects package identity; the core never discovers its own package version. Native records retain their legacy shape, while non-native records add optional `packageName` and `adapter` fields. The bundled `scripts/analyze-sessions.sh` aggregates both record forms.
 
-**Cache suggest** (Stage 5) reads `.index.json` back after each research call. It feeds up to 20 recent entries to an LLM judge (using the extract model for cost efficiency) which returns semantically related previous searches. Results are formatted as a `📚 Related cached searches` table appended to the tool output. This is purely supplementary. The live search always runs, and the cache suggestions give the agent (and user) a pointer to prior research if live results are insufficient.
+**Cache suggest** (Stage 5) reads `.index.json` back after each research call. It feeds up to 20 recent entries to an LLM judge (using the extract model for cost efficiency) which returns semantically related previous searches. Results are formatted as a `📚 Related cached searches` table appended to the tool output. The judge is awaited under the model-call timeout and retry policy, so it can add latency; judge failure is logged without discarding completed research, and cancellation propagates. It never replaces the live search, and the cache suggestions give the agent (and user) a pointer to prior research if live results are insufficient.
 
 ## Development Commands
 
@@ -454,6 +462,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 - Test files in `test/` mirror `src/` structure: `cache.test.ts`, `fetch.test.ts`, `settings.test.ts`, etc.
 - Run with `node --import tsx --test` (Node.js built-in test runner).
 - Test count is shown by the badge in `README.md`.
+- `scripts/run-tests.mjs` isolates `HOME`, `PI_CODING_AGENT_DIR` and `TMPDIR` for `npm test`, standalone tests and structural smoke. Filesystem tests must also isolate their own mutable state; never hard-code the operator's agent directory.
 
 ### Test Categories
 
@@ -537,7 +546,7 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `e2e/09_sonar_pro_search.sh` | Verifies registration and settings-based selection of `perplexity/sonar-pro-search` in a vanilla agent dir, then checks non-empty links, completed pipeline, and cached sources. Reports the annotation count |
 | `e2e/10_config_recipes.sh` | Runs each README Configuration Recipe's settings block in a fresh isolated agent dir + cwd and asserts the effective behaviour from telemetry: zero-config defaults, partial blocks preserving unspecified defaults, extract/collate overrides, free-tier pacing keys, and per-project settings via pre-seeded trust.json (the only project-level-settings coverage) |
 | `e2e/11_mcp_stdio.sh` | Builds the standalone package, registers it in an isolated profile's `mcp.json` (direct exposure, no native extension) and drives a real research through `Pi`'s native MCP client, asserting connection, workspace cache, `mcp` telemetry identity and completed outcome. Establishes that `--no-extensions` disconnects MCP servers and that `codemode` exposure hides direct tool calls |
-| `e2e/12_plugin_bundles.sh` | Packs the standalone artifact, generates local-tarball plugin bundles (pre-publication evidence class), vendors the tarball, then exercises real host installation credential-free: Claude Code strict validation, marketplace add, install, `claude mcp list` connection and skill discovery; Codex marketplace add, catalog-path assertion, install, installed-cache layout and prompt-input skill discovery. Skips with a notice when a host CLI is absent. Also asserts Claude Code key delivery with dummy values: the required sensitive key option withholds the server while unset and reaches the server process once set. Credentialed sessions live in `13_claude_code_plugin.sh` and `14_codex_plugin.sh` |
+| `e2e/12_plugin_bundles.sh` | Packs the standalone artefact, generates local-tarball plugin bundles (pre-publication evidence class), vendors the tarball, then exercises real host installation credential-free: Claude Code strict validation, marketplace add, install, `claude mcp list` connection and skill discovery; Codex marketplace add, catalogue-path assertion, install, installed-cache layout and prompt-input skill discovery. Skips with a notice when a host CLI is absent. Also asserts Claude Code key delivery with dummy values: the required sensitive key option withholds the server while unset and reaches the server process once set. Credentialed sessions live in `13_claude_code_plugin.sh` and `14_codex_plugin.sh` |
 | `e2e/13_claude_code_plugin.sh` | Installs the local-tarball Claude Code plugin into an isolated `CLAUDE_CONFIG_DIR`, sets the key through the plugin option only, and drives one real research through `claude -p`: asserts the session reports the server connected, the model calls `intelli_research` without a tool error, and the project cache carries a completed `mcp` sidecar. Authenticates with `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` (static, never stored or refreshed), never a copied credential file, and asserts the operator's credential file is untouched |
 | `e2e/14_codex_plugin.sh` | Installs the local-tarball Codex plugin into a dedicated test profile (`.e2e-auth/codex`, reset to its `auth.json` on every run because Codex caches plugins by version), pre-approves the plugin's tools, exports the forwarded variables and drives one real research through `codex exec --json`: asserts a completed `intelli_research` `mcp_tool_call` and a completed `mcp` cache sidecar. Uses a separate ChatGPT login refreshed in place by one consumer at a time (exclusive lock), never a copy of `~/.codex`, and asserts the operator's `auth.json` is untouched |
 | `run-e2e-all.sh` | Runs every scenario script one at a time with a spacing gap (`E2E_GAP_SECONDS`, default 20). Use this instead of launching scripts in parallel or back-to-back: bursting many calls at one key depletes the rate-limit bucket and produces degraded or hung runs. |
@@ -560,9 +569,10 @@ CI does not run E2E scripts (they require API keys and a live `pi` binary). The 
 
 1. **Build:** `npm run build`
 2. **Unit tests:** `npm test`
-3. **End-to-end test:** `./test/e2e/01_main.sh`
+3. **End-to-end test:** `./test/e2e/01_main.sh` (set `TMPDIR` under the repository's `.tmp/` on encrypted hosts)
+4. **Dependency security:** `npm audit --audit-level=low`; inspect distributed dependency code as well as lockfile entries when a dependency embeds another package
 
-Do not consider a change complete until all three pass. Run all E2E scripts before any release via the sequential runner `./test/run-e2e-all.sh` (it paces calls so the rate-limit bucket does not deplete). Running them in parallel or back-to-back is the documented cause of degraded or hung runs.
+Do not consider a change complete until all required checks pass. Run all E2E scripts before any release via the sequential runner `./test/run-e2e-all.sh` (it paces calls so the rate-limit bucket does not deplete). Running them in parallel or back-to-back is the documented cause of degraded or hung runs.
 
 ### E2E Test Requirements
 
@@ -592,7 +602,7 @@ No API keys are needed.
 3. **models.json merge over `registerProvider()`:** The latter replaces all models for a provider. The former adds non-destructively.
 4. **Dual fetch (Defuddle plus Markdown):** Some sites serve cleaner content via Markdown endpoints. The quality score comparison picks the better version automatically.
 5. **`focusPrompt` is critical:** Without it the extraction LLM works generically. The `promptGuidelines` instruct the agent to always provide it.
-6. **Cache suggest is additive, not a gate:** Stage 5 never blocks or replaces the live pipeline. It uses the cheap extract model as an LLM judge (≈500 input tokens, ≈$0.0002) to find related previous searches. Failures are caught and silently ignored.
+6. **Cache suggest is supplementary, not a gate:** Stage 5 never replaces the live pipeline, but the pipeline awaits it under the configured timeout and retry policy, so it can add latency. It uses the cheap extract model as an LLM judge (≈500 input tokens, ≈$0.0002) to find related previous searches. Failures are logged without discarding completed research.
 7. **Default migration is match-based, not tracked:** When defaults change between versions, users whose model configs match the OLD default exactly get auto-migrated to the NEW default in-memory. Users who customized their config are left alone. Migration never writes to the user's `settings.json`. A notification explains what changed and how to make it permanent. This is tested in `test/settings.test.ts` under `migrateDefaults`.
 8. **Rate-limit resilience is owned at the application layer:** `callLlm()` disables the SDK's retries (`maxRetries: 0`) and invokes the shared model policy's full-jitter backoff plus a hard `AbortController` timeout, because the SDK retries do not honour Retry-After, do not abort cleanly on Esc, and (critically) the SDK request timeout does not cover a stalled streaming body. Stage 1 additionally retries a degraded-200 search (valid response, zero links) that no transport-level check can catch. An opt-in `minRequestIntervalMs` throttle spaces the extract fan-out for tight-limit keys. The pure helpers (`withRetry`, `callWithAbortTimeout`, `isRetryableMessage`, `parseRetryAfterMs`, `createRateLimiter`) live in `util.ts` and are unit-tested in `test/util.test.ts`.
 
@@ -613,7 +623,7 @@ All tools use the `intelli_` prefix to avoid collisions with other `Pi` extensio
 
 Publishing is gated through `npm` staged publishing. CI submits the tarball; the user approves it on `npmjs.com` with 2FA before it goes live:
 - **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, generated-plugin drift, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
-- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. The tag selects exactly one package: `pi-vX.Y.Z` stages the native `@curio-data/pi-intelli-search` package and `mcp-vX.Y.Z` stages `@curio-data/mcp-intelli-search`; any other tag fails. The workflow verifies the tag version against the selected package's manifest, builds and tests both artifacts, and runs `npm stage publish` against the `@curio-data` scope. The dist-tag is derived from the version: stable releases stage to `latest`, while a prerelease such as `0.2.0-alpha.0` stages to its first prerelease identifier (`alpha`), because `npm stage publish` inherits `npm publish`'s guard that throws on a prerelease version without an explicit `--tag`. Authentication is via OIDC trusted publishing (no stored token); provenance is signed automatically (possible exception: the very first staged version of a brand-new package, where npm's visibility check has no package to inspect). The package is then **held in the staging queue** until a maintainer approves it on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) with 2FA. Until approval, the version does not appear on the public registry.
+- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. The tag selects exactly one package: `pi-vX.Y.Z` stages the native `@curio-data/pi-intelli-search` package and `mcp-vX.Y.Z` stages `@curio-data/mcp-intelli-search`; any other tag fails. The workflow verifies the tag version against the selected package's manifest, builds and tests both artifacts, and runs `npm stage publish` against the `@curio-data` scope. The dist-tag is derived from the version: stable releases stage to `latest`, while a prerelease such as `0.2.0-alpha.0` stages to its first prerelease identifier (`alpha`), because `npm stage publish` inherits `npm publish`'s guard that throws on a prerelease version without an explicit `--tag`. Both artefacts are built and tested before staging. Authentication is via OIDC trusted publishing (no stored token); provenance is signed automatically (possible exception: the very first staged version of a brand-new package, where npm's visibility check has no package to inspect). The package is then **held in the staging queue** until a maintainer approves it on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) with 2FA. Until approval, the version does not appear on the public registry.
 
 ### Versioning Scheme (Two Packages, One Core)
 
@@ -621,7 +631,7 @@ Agreed with the owner on 2026-10-05. Both packages are pre-1.0 and version in lo
 
 - **Minor (0.x.0) is the shared core generation.** Any change under `src/core/` bumps the minor version of **both** manifests, even if only one package ships immediately. Letting the minors drift destroys the signal that `pi-intelli-search@0.15.1` and `mcp-intelli-search@0.15.2` run the same core generation, which matters because the MCP package must honour the frozen native contracts.
 - **Patch (0.0.x) is package-specific.** Changes outside `src/core/` (native adapter under `src/`, MCP adapter under `packages/mcp/`, plugins, docs) bump only the affected package's patch. Patches are independent between packages and reset to 0 on every core bump.
-- **Prerelease is an orthogonal maturity marker.** A package carries `-alpha.N` while dev-marked and stages to the derived `alpha` dist-tag, off `latest` (the native package started this way at 0.3.1-alpha.1). Dropping the suffix is the promotion to normal; it is not a version change.
+- **Prerelease is an orthogonal maturity marker.** A package carries `-alpha.N` while dev-marked and stages to the derived `alpha` dist-tag, off `latest` (the native package started this way at 0.3.1-alpha.1). Dropping the suffix is the promotion to normal; it is not a version change. Exception: the manual first publish of a brand-new package sets `latest` even with an explicit `--tag` (see npm Trusted Publisher), because no `latest` existed to protect.
 - **Native minor bumps still need a `DEFAULT_HISTORY` entry** in `src/settings.ts`, including bumps caused by core changes, and both workspaces need `npm install --package-lock-only`. The MCP package has no `DEFAULT_HISTORY`; its version changes never trigger native model migration.
 - **Tags and changelog sections are prefixed per package:** `pi-vX.Y.Z` / `[pi-X.Y.Z]` for the native extension, `mcp-vX.Y.Z` / `[mcp-X.Y.Z]` for the MCP server. Native releases 0.14.0 and older use the unprefixed `vX.Y.Z` form; those tags and releases are historical and never re-released.
 - **Release order within a coupled cycle: MCP first, native held.** The native package is not staged or released until the MCP package of the same core generation is confirmed installable from npmjs (the post-publication gate in the MCP checklist). Owner directive, 2026-10-05.
@@ -641,12 +651,13 @@ Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): the changelog i
 - **Omit internal changes.** CI tweaks, style guide additions, markdownlint fixes, dependency bumps, and internal refactors do not belong unless they affect compatibility.
 - **Omit docs-only changes** that are not user-visible (for example, adding a rule to AGENTS.md).
 - **Ask: would a user care about this?** If no, leave it out. The user can browse the repo if they want commit-level detail.
+- **Historical entries may be corrected for accuracy** (an over-strong claim softened, a wrong fact fixed), provided the correction does not change what the release delivered. Record the repository's convention as correction-in-place, distinct from the append-only rule for benchmark evidence in `docs/BENCHMARKS.md`.
 
 ### Creating a Release
 
 Releases are routinely missed because steps 3 and 4 below are skipped or done halfway. Follow every step. Do not assume.
 
-1. **Verify CI is green.** Confirm all changes are merged to `main` and the latest run is passing.
+1. **Verify CI is green.** Require a passing run for the exact release commit on `main` or a `release/` branch. Prepare an MCP candidate on a release branch so its unpublished catalogue pin does not break installation from `main`; merge it after publication. The native release follows that merge and the MCP registry verification.
 2. **Bump `version` in `package.json`** following [SemVer](https://semver.org/), then sync derived state before anything else: run `npm install --package-lock-only` so the `package-lock.json` root version matches, and add a `DEFAULT_HISTORY` entry for the new version in `src/settings.ts` (defaults unchanged is fine). Both drifts are silent: the lockfile drift was missed in v0.12.1, and a missing history entry disables default migration for upgrading users. Run `npm test` after the bump; the migration guard reads the live package version.
 3. **Update `CHANGELOG.md` in two places.** Both are required:
    - **Top of file:** Add a new `## [pi-X.Y.Z] - YYYY-MM-DD` section above the previous entry. Use the standard sub-headings (`### Added`, `### Changed`, `### Fixed`, `### Compatibility`, `### Removed`, `### Security`) as needed. List user-visible changes only; internal refactors do not need entries unless they affect compatibility.
@@ -669,15 +680,15 @@ Releases are routinely missed because steps 3 and 4 below are skipped or done ha
 
 `@curio-data/mcp-intelli-search` has its own version, release tag prefix and staging queue. The native checklist above does not apply except where noted; in particular the MCP package has no `DEFAULT_HISTORY` and its version changes must never trigger native model migration.
 
-1. **Verify CI is green** on `main` and confirm the owner has explicitly approved this release. Approval of one package is not approval of the other.
+1. **Verify CI is green** for the exact candidate on `main` or a `release/` branch and confirm the owner has explicitly approved this release. Keep unpublished catalogue pins on a release branch until the corresponding MCP version is public. Approval of one package is not approval of the other.
 2. **First release only: publish manually, do not tag.** npm cannot bind a trusted publisher to a package that does not exist, so the first `mcp-v*` version bypasses the CI staging flow: follow the bootstrap sequence under `npm Trusted Publisher` (manual `npm publish --access public --tag alpha`, then bind the trust). From the second release onward every step of this checklist applies, including the GitHub Release tag.
 3. **Bump `version` in `packages/mcp/package.json`** following [SemVer](https://semver.org/), then run `npm install --package-lock-only` so the lockfile workspace version matches.
 4. **Remove the not-published notices** from the root `README.md` (the `Publication Status` paragraph under `MCP Server`, the pending-publication sentence under `Two Packages, One Engine` and the pre-publication launchers) on the first public release only (the first dev-marked alpha keeps them), then run `npm run generate:readmes`. Never edit `packages/mcp/README.md` or the root `*.README.md` previews directly.
-5. **Regenerate the plugin bundles** so the catalogs pin the new version: `npm run generate:plugins`, then confirm `npm run check:plugins` passes. Commit the regenerated catalogs with the version bump; they are what users install from.
+5. **Regenerate the plugin bundles** so the catalogues pin the new version: `npm run generate:plugins`, then confirm `npm run check:plugins` passes. Commit the regenerated catalogues with the version bump; they are what users install from.
 6. **Run the full paced live suite** `./test/run-e2e-all.sh`, including `11_mcp_stdio.sh`, `12_plugin_bundles.sh`, `13_claude_code_plugin.sh` and `14_codex_plugin.sh`, before tagging.
 7. **Update `CHANGELOG.md`** with a `## [mcp-X.Y.Z] - YYYY-MM-DD` section and a matching `[mcp-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-vX.Y.Z` reference link. Core changes are not repeated: one pointer line to the native `[pi-X.Y.Z]` section covers them (see `Changelog Structure`). Verify both edits with the grep checks from step 4 of the native checklist (adjusted for the `mcp-` prefix).
-8. **Commit and push**, then create the _GitHub_ Release with tag `mcp-vX.Y.Z` only after explicit approval. The workflow stages the package; the user approves it on `npmjs.com` with 2FA.
-9. **Post-publication gate:** verify the registry-pin installation route that pre-publication tests could not exercise: install the Claude Code and Codex plugins from the committed catalogs into clean profiles and confirm the `npx` launcher downloads and starts the published version. Record this evidence separately from the local-tarball class in [the compatibility matrix](docs/COMPATIBILITY.md). Only after this gate passes is the native package of the same core generation released.
+8. **Commit and push the release branch**, then create the _GitHub_ Release with tag `mcp-vX.Y.Z` only after explicit approval. The workflow stages the package; the user approves it on `npmjs.com` with 2FA. Merge to `main` only once the pinned version resolves publicly.
+9. **Post-publication gate:** verify the registry-pin installation route that pre-publication tests could not exercise: install the Claude Code and Codex plugins from the committed catalogues into clean profiles and confirm the `npx` launcher downloads and starts the published version. Record this evidence separately from the local-tarball class in [the compatibility matrix](docs/COMPATIBILITY.md). Only after this gate passes is the native package of the same core generation released.
 
 ### Testing the Publish Pipeline
 
@@ -704,7 +715,7 @@ The workflow authenticates to `npm` via OIDC; no stored token is used. Each pack
 
 **Bootstrap: the first publish of a new package is manual (verified 2026-10-05).** npm does not allow configuring a trusted publisher for a package that does not exist on the registry; there is no org-scope or admin pre-configuration path. Entering the full scoped name (`@curio-data/mcp-intelli-search`) in the trust UI before the package exists fails for this reason. The confirmed sequence for `@curio-data/mcp-intelli-search`:
 
-1. **Manual first publish** from a maintainer machine: `npm login` (interactive, 2FA; classic tokens fail on org-scoped packages and bypass-2FA granular tokens are unsupported for trust management), then in `packages/mcp/` run `npm publish --access public --tag alpha` for the dev-marked `0.15.0-alpha.0`. Publishing with `--tag alpha` keeps the first version off `latest`.
+1. **Manual first publish** from a maintainer machine: `npm login` (interactive, 2FA; classic tokens fail on org-scoped packages and bypass-2FA granular tokens are unsupported for trust management), then in `packages/mcp/` run `npm publish --access public --tag alpha` for the dev-marked `0.15.0-alpha.0`. Observed 2026-10-06 registry check: a first publish of a brand-new package sets `latest` alongside `alpha` even with `--tag alpha`, because no `latest` existed to keep it off; a default `npm install @curio-data/mcp-intelli-search` therefore resolved to the alpha until the stable promotion.
 2. **Bind the trusted publisher** once the package page exists, either in the web UI (package Settings → Trusted Publishers) with the bindings listed above, or via CLI: `npm trust github @curio-data/mcp-intelli-search --file release.yml --repo Curio-Data/pi-intelli-search --allow-stage-publish` (npm CLI 11.15.0+). Use the full scoped name; validation of org, repo and workflow filename is case-sensitive (`Curio-Data`, not `curio-data`).
 3. **All subsequent versions** go through the CI staged flow. The manual first publish is the only token/login publish the package ever needs.
 

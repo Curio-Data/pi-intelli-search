@@ -1,318 +1,52 @@
 #!/usr/bin/env bash
-#
-# test/02_cap.sh — E2E test for defaultUrls / maxUrls (cap)
-#
-# Verifies two scenarios:
-#   1. Low cap (maxUrls=3) — agent requests 12 (exhaustive per SKILL.md)
-#      but gets clamped to 3. Pipeline still completes with useful output.
-#   2. Custom defaults (defaultUrls=3, maxUrls=6) — agent omits maxUrls,
-#      uses defaultUrls=3. Cap at 6 is never reached.
-#
-# Usage:
-#   ./test/02_cap.sh
-#
-# Environment:
-#   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
-
+# Verify requested-page limits and the omitted-maxUrls default through real tools.
 set -euo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-# shellcheck disable=SC2034  # consumed by e2e_run_pi in lib.sh
-E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
-
-LOG_DIR="$PROJECT_DIR/.e2e-logs"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-LOG_FILE="$LOG_DIR/e2e-cap-${TIMESTAMP}.log"
-mkdir -p "$LOG_DIR"
-exec > >(tee -a "$LOG_FILE") 2>&1
-echo "📝 Log: $LOG_FILE"
-
-# Load .env if it exists
-# Read .env if it exists (gitignored): parsed, never executed, and only the
-# documented keys (see test/e2e/env.sh). Other credentials kept there stay out.
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
-e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
-  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
-
-# ── Check prerequisites ────────────────────────────────────────────
-if [ -z "${OPENROUTER_API_KEY:-}" ]; then
-  if [ -f "$HOME/.pi/agent/auth.json" ]; then
-    OPENROUTER_API_KEY="$(jq -r '.openrouter.key // empty' "$HOME/.pi/agent/auth.json" 2>/dev/null || true)"
-    if [ -n "$OPENROUTER_API_KEY" ]; then
-      echo "🔑 Detected OPENROUTER_API_KEY from ~/.pi/agent/auth.json"
-    fi
-  fi
+e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS
+export TMPDIR="${TMPDIR:-$PROJECT_DIR/.tmp/e2e}"
+mkdir -p "$TMPDIR" "$PROJECT_DIR/.e2e-logs"
+LOG_FILE="$PROJECT_DIR/.e2e-logs/e2e-cap-$(date +%Y%m%d-%H%M%S).log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+if [[ -z "${OPENROUTER_API_KEY:-}" && -f "$HOME/.pi/agent/auth.json" ]]; then
+  OPENROUTER_API_KEY="$(jq -r '.openrouter.key // empty' "$HOME/.pi/agent/auth.json")"
 fi
-
-if [ -z "${OPENROUTER_API_KEY:-}" ]; then
-  echo "❌ OPENROUTER_API_KEY is not set."
-  echo ""
-  echo "  Get a key from https://openrouter.ai and either:"
-  echo "  - export OPENROUTER_API_KEY=sk-or-v1-..."
-  echo "  - Add it to .env (see .env.example)"
-  exit 1
-fi
-
-if ! command -v pi &>/dev/null; then
-  echo "❌ pi is not installed"
-  exit 1
-fi
-
-# shellcheck source=/dev/null
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
-e2e_setup_loop_model || exit 1
-
-# ═══════════════════════════════════════════════════════════════════
-# Scenario 1: Low cap (maxUrls=3)
-# ═══════════════════════════════════════════════════════════════════
-
-echo ""
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║  SCENARIO 1: Low cap (maxUrls=3)                     ║"
-echo "╚══════════════════════════════════════════════════════╝"
-echo ""
-
-ISOLATED_AGENT_DIR1="$(mktemp -d -t pi-e2e-cap1-XXXXXX)"
-CACHE_DIR1="$PROJECT_DIR/.e2e-cap-test"
-trap 'rm -rf "$ISOLATED_AGENT_DIR1" "$CACHE_DIR1"' EXIT
-
-echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR1"
-
-mkdir -p "$ISOLATED_AGENT_DIR1/sessions"
-
-e2e_write_auth "$ISOLATED_AGENT_DIR1"
-
-# Set defaultUrls=8, maxUrls=3 (tight cap).
-# Agent's SKILL.md says 12 for exhaustive, but the cap clamps to 3.
-cat > "$ISOLATED_AGENT_DIR1/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "searchModel": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "defaultUrls": 8,
-    "maxUrls": 3,
-    "cacheDir": ".e2e-cap-test"
-  }
-}
-EOF
-
-cat > "$ISOLATED_AGENT_DIR1/models.json" <<'MEOF'
-{}
-MEOF
-
-echo "⚙️  defaultUrls=8, maxUrls=3 (cap)"
-echo "⚙️  Expected: agent requests 12 → clamped to 3"
-
-PROMPT1="Use intelli_research with maxUrls=12 to research: what is the latest Node.js LTS version"
-
-if ! e2e_run_pi "$ISOLATED_AGENT_DIR1" "$PROJECT_DIR" "$PROMPT1"; then
-  echo ""
-  echo "❌ pi failed (no cache sidecar after retries)"
-  echo ""
-  echo "--- pi output ---"
-  echo "$E2E_LAST_OUTPUT"
-  echo "-----------------"
-  exit 1
-fi
-OUTPUT1="$E2E_LAST_OUTPUT"
-
-echo "$OUTPUT1"
-
-echo ""
-echo "── Scenario 1 Verification ───────────────────────────────────────────"
-
-ERRORS=0
-
-# Pipeline must have completed (search results present)
-# Look for "Results cached at" which is always emitted on successful
-# pipeline completion. Avoids false positives from "http" matching in
-# stack traces, error messages, or the test banners themselves.
-if echo "$OUTPUT1" | grep -qi "Results cached at"; then
-  echo "✅ Pipeline completed (results present in output)"
-else
-  echo "⚠️  No explicit results in output"
-fi
-
-# Cache must exist in custom dir
-CACHE_DIR1="$PROJECT_DIR/.e2e-cap-test"
-if [ -d "$CACHE_DIR1" ]; then
-  echo "✅ .e2e-cap-test/ cache directory exists"
-else
-  echo "❌ .e2e-cap-test/ cache directory not found"
-  ERRORS=$((ERRORS + 1))
-fi
-
-# Verify at most 3 extractions (cap enforcement)
-if [ -d "$CACHE_DIR1" ]; then
-  LATEST1=$(find "$CACHE_DIR1" -maxdepth 1 -mindepth 1 -type d -not -name '.*' | sort -r | head -1)
-  if [ -n "$LATEST1" ] && [ -d "$LATEST1/extractions" ]; then
-    COUNT1=$(find "$LATEST1/extractions" -type f | wc -l)
-    if [ "$COUNT1" -le 3 ]; then
-      echo "✅ Cap enforced: $COUNT1 extractions (≤3)"
-    else
-      echo "❌ Cap NOT enforced: $COUNT1 extractions (>3)"
-      ERRORS=$((ERRORS + 1))
-    fi
+# shellcheck source=test/e2e/lib.sh
+source "$SCRIPT_DIR/lib.sh"
+e2e_setup_loop_model
+# shellcheck disable=SC2034
+E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
+ROOT="$(mktemp -d "$TMPDIR/cap-XXXXXX")"
+trap 'rm -rf "$ROOT"' EXIT
+for scenario in cap default; do
+  AGENT="$ROOT/$scenario/agent"
+  WORKSPACE="$ROOT/$scenario/workspace"
+  mkdir -p "$AGENT/sessions" "$WORKSPACE"
+  e2e_write_auth "$AGENT"
+  if [[ "$scenario" == cap ]]; then
+    DEFAULT=8; CAP=3
+    PROMPT='Call intelli_research exactly once with maxUrls=12 and focusPrompt="Official release version and date": what is the latest Node.js LTS version?'
   else
-    echo "⚠️  No extractions directory to check cap enforcement"
+    DEFAULT=3; CAP=6
+    PROMPT='Call intelli_research exactly once to find the current TypeScript version, with focusPrompt="Official version and date". Omit maxUrls entirely: this test verifies the configured default. Do not set it even if the skill normally recommends a value.'
   fi
-fi
-
-echo ""
-echo "── Scenario 1 Summary ─────────────────────────────────────────────────"
-if [ "$ERRORS" -gt 0 ]; then
-  echo "❌ Scenario 1 failed ($ERRORS error(s))"
-else
-  echo "✅ Scenario 1 passed — cap clamps agent requests"
-fi
-
-SCENARIO1_ERRORS=$ERRORS
-
-# Clean up scenario 1 cache
-rm -rf "$CACHE_DIR1"
-rm -rf "$ISOLATED_AGENT_DIR1"
-trap - EXIT
-
-# ═══════════════════════════════════════════════════════════════════
-# Scenario 2: Custom defaults (defaultUrls=3, maxUrls=6)
-# ═══════════════════════════════════════════════════════════════════
-
-echo ""
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║  SCENARIO 2: Custom defaults (defaultUrls=3,          ║"
-echo "║              maxUrls=6)                               ║"
-echo "╚══════════════════════════════════════════════════════╝"
-echo ""
-
-ISOLATED_AGENT_DIR2="$(mktemp -d -t pi-e2e-cap2-XXXXXX)"
-CACHE_DIR2="$PROJECT_DIR/.e2e-cap-test2"
-trap 'rm -rf "$ISOLATED_AGENT_DIR2" "$CACHE_DIR2"' EXIT
-
-echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR2"
-
-mkdir -p "$ISOLATED_AGENT_DIR2/sessions"
-
-e2e_write_auth "$ISOLATED_AGENT_DIR2"
-
-cat > "$ISOLATED_AGENT_DIR2/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "searchModel": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "defaultUrls": 3,
-    "maxUrls": 6,
-    "cacheDir": ".e2e-cap-test2"
-  }
-}
-EOF
-
-cat > "$ISOLATED_AGENT_DIR2/models.json" <<'MEOF'
-{}
-MEOF
-
-echo "⚙️  defaultUrls=3, maxUrls=6"
-echo "⚙️  Agent omits maxUrls → uses defaultUrls=3"
-echo ""
-
-# Prompt does NOT mention maxUrls — agent should use defaultUrls=3
-PROMPT2="Use intelli_research to find the latest TypeScript version"
-
-if ! e2e_run_pi "$ISOLATED_AGENT_DIR2" "$PROJECT_DIR" "$PROMPT2"; then
-  echo ""
-  echo "❌ pi failed (no cache sidecar after retries)"
-  echo ""
-  echo "--- pi output ---"
-  echo "$E2E_LAST_OUTPUT"
-  echo "-----------------"
-  exit 1
-fi
-OUTPUT2="$E2E_LAST_OUTPUT"
-
-echo "$OUTPUT2"
-
-echo ""
-echo "── Scenario 2 Verification ───────────────────────────────────────────"
-
-ERRORS2=0
-
-# Pipeline must have completed
-if echo "$OUTPUT2" | grep -qi "Results cached at"; then
-  echo "✅ Pipeline completed (results present in output)"
-else
-  echo "⚠️  No explicit results in output"
-fi
-
-# Cache must exist
-if [ -d "$CACHE_DIR2" ]; then
-  echo "✅ .e2e-cap-test2/ cache directory exists"
-else
-  echo "❌ .e2e-cap-test2/ cache directory not found"
-  ERRORS2=$((ERRORS2 + 1))
-fi
-
-# Verify extractions exist (pipeline ran)
-if [ -d "$CACHE_DIR2" ]; then
-  LATEST2=$(find "$CACHE_DIR2" -maxdepth 1 -mindepth 1 -type d -not -name '.*' | sort -r | head -1)
-  if [ -n "$LATEST2" ] && [ -d "$LATEST2/extractions" ]; then
-    COUNT2=$(find "$LATEST2/extractions" -type f | wc -l)
-    if [ "$COUNT2" -le 6 ]; then
-      echo "✅ Extractions within cap: $COUNT2 (≤6)"
-    else
-      echo "❌ Extractions exceed cap: $COUNT2 (>6)"
-      ERRORS2=$((ERRORS2 + 1))
-    fi
-  else
-    echo "⚠️  No extractions directory found"
-  fi
-fi
-
-echo ""
-echo "── Scenario 2 Summary ─────────────────────────────────────────────────"
-if [ "$ERRORS2" -gt 0 ]; then
-  echo "❌ Scenario 2 failed ($ERRORS2 error(s))"
-else
-  echo "✅ Scenario 2 passed — defaultUrls and maxUrls work independently"
-fi
-
-# Clean up
-rm -rf "$CACHE_DIR2"
-rm -rf "$ISOLATED_AGENT_DIR2"
-trap - EXIT
-
-# ═══════════════════════════════════════════════════════════════════
-# Final tally
-# ═══════════════════════════════════════════════════════════════════
-echo ""
-echo "════════════════════════════════════════════════════════════════"
-TOTAL_ERRORS=$((SCENARIO1_ERRORS + ERRORS2))
-if [ "$TOTAL_ERRORS" -gt 0 ]; then
-  echo "❌ E2E cap test FAILED ($TOTAL_ERRORS total error(s))"
-  exit 1
-fi
-echo "✅ E2E cap test PASSED — cap clamping and defaults work correctly"
+  jq -n --arg provider "$E2E_LOOP_PROVIDER" --arg model "$E2E_LOOP_MODEL" \
+    --argjson default "$DEFAULT" --argjson cap "$CAP" '{
+    defaultProvider: $provider, defaultModel: $model,
+    "pi-intelli-search": {
+      searchModel: {provider:"openrouter",model:"perplexity/sonar"},
+      extractModel: {provider:"openrouter",model:"minimax/minimax-m3"},
+      collateModel: {provider:"openrouter",model:"minimax/minimax-m3"},
+      defaultUrls:$default, maxUrls:$cap, cacheDir:".search"
+    }}' > "$AGENT/settings.json"
+  printf '{}\n' > "$AGENT/models.json"
+  # shellcheck disable=SC2034
+  E2E_TRACE_FILE="$ROOT/$scenario/trace.jsonl"
+  e2e_run_pi "$AGENT" "$WORKSPACE" "$PROMPT"
+  e2e_verify_page_budget "$WORKSPACE/.search" "$E2E_TRACE_FILE" "$scenario"
+  echo "✅ $scenario: completed research, positive artefacts, correct tool arguments and requested-page budget"
+  if [[ "$scenario" == cap ]]; then sleep "${E2E_RUN_GAP_SECONDS:-30}"; fi
+done
+echo "✅ E2E cap test PASSED"

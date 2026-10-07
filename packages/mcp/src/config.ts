@@ -2,7 +2,7 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
 import { readFile, realpath, stat } from "node:fs/promises";
-import { isAbsolute } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { tuningDefaults } from "../../../src/core/defaults.js";
 import type { DeepReadonly } from "../../../src/core/contracts.js";
 import type { ModelConfig, ResearchSettings } from "../../../src/core/types.js";
@@ -162,8 +162,92 @@ function freeze<T>(value: T): DeepReadonly<T> {
   }
   return value as DeepReadonly<T>;
 }
+/** Reasons a selected configuration file cannot become a configuration. */
+export type ConfigurationErrorReason = "missing" | "unreadable" | "invalid-json" | "invalid";
+
+/**
+ * A defect in the selected configuration file itself, as distinct from a
+ * launcher defect (absent arguments or an unusable workspace). The message
+ * names the file and, for malformed JSON, the position; it never quotes the
+ * file body, which may hold a misplaced credential.
+ */
+export class ConfigurationError extends Error {
+  constructor(
+    readonly reason: ConfigurationErrorReason,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ConfigurationError";
+  }
+}
+
+/** Line and column (both 1-based) of a character offset. */
+function position(source: string, offset: number): { line: number; column: number } {
+  const before = source.slice(0, Math.max(0, Math.min(offset, source.length)));
+  const lines = before.split("\n");
+  return { line: lines.length, column: lines[lines.length - 1].length + 1 };
+}
+
+/** Error offset reported by a JSON.parse failure, if any; undefined at end of input. */
+function failureOffset(source: string): number | undefined {
+  try {
+    JSON.parse(source);
+    return undefined;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (/Unexpected end/.test(message)) return undefined;
+    const offset = /at position (\d+)/.exec(message);
+    // V8 omits the position from its "Unexpected token" form; -1 marks it.
+    if (!offset) return -1;
+    const at = Number(offset[1]);
+    return at < source.length ? at : undefined;
+  }
+}
+
+/**
+ * Locates a JSON syntax error without echoing the engine message: V8 quotes
+ * part of the input in some messages (for example `"abc" is not valid JSON`),
+ * and the file may hold a misplaced credential.
+ */
+function syntaxLocation(source: string): string {
+  let offset = failureOffset(source);
+  if (offset === -1) {
+    // Shortest failing prefix: shorter prefixes are merely incomplete.
+    let low = 1;
+    let high = source.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (failureOffset(source.slice(0, middle)) === undefined) low = middle + 1;
+      else high = middle;
+    }
+    offset = low - 1;
+  }
+  if (offset === undefined)
+    return `end of input (line ${position(source, source.trimEnd().length).line}); the file is incomplete`;
+  const { line, column } = position(source, offset);
+  return `line ${line}, column ${column}`;
+}
+
+/** Explicit absolute workspace, canonicalised. A launcher defect, never lazily recovered. */
+export async function resolveWorkspace(workspace: string): Promise<string> {
+  if (!isAbsolute(text(workspace, "workspace")))
+    throw new Error("workspace must be an explicit absolute directory");
+  let canonical: string;
+  try {
+    canonical = await realpath(workspace);
+    if (!(await stat(canonical)).isDirectory()) throw new Error();
+  } catch {
+    throw new Error("workspace must be an existing readable directory");
+  }
+  return canonical;
+}
+
 /** No credential or host-file discovery. Workspace must already exist. */
 export async function parseConfig(value: unknown, workspace: string): Promise<StandaloneConfig> {
+  const { apiKeyEnv, settings } = parseDocument(value);
+  return freeze({ workspace: await resolveWorkspace(workspace), apiKeyEnv, settings });
+}
+function parseDocument(value: unknown): { apiKeyEnv: string; settings: ResearchSettings } {
   const root = object(value, "configuration");
   keys(root, ["providers", "models", "tuning"], "configuration");
   const providers = object(root.providers, "providers");
@@ -224,23 +308,57 @@ export async function parseConfig(value: unknown, workspace: string): Promise<St
     throw new Error(
       "Search requires an explicitly enabled searchWebSearch tool or a supported Sonar search model",
     );
-  if (!isAbsolute(text(workspace, "workspace")))
-    throw new Error("workspace must be an explicit absolute directory");
-  let canonical: string;
-  try {
-    canonical = await realpath(workspace);
-    if (!(await stat(canonical)).isDirectory()) throw new Error();
-  } catch {
-    throw new Error("workspace must be an existing readable directory");
-  }
-  return freeze({ workspace: canonical, apiKeyEnv, settings });
+  return { apiKeyEnv, settings };
 }
-export async function loadConfig(path: string, workspace: string): Promise<StandaloneConfig> {
+/**
+ * Reads and validates the selected file. File defects (missing, unreadable,
+ * malformed JSON, invalid contents) throw ConfigurationError; an unusable
+ * workspace throws a plain Error.
+ */
+export async function loadConfig(file: string, workspace: string): Promise<StandaloneConfig> {
+  // Absolute and printable, so a tool error names the file to repair.
+  const path = resolve(file).replace(/[\x00-\x1f\x7f]/g, "?");
+  let source: string;
+  try {
+    source = await readFile(file, "utf8");
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR")
+      throw new ConfigurationError("missing", `Configuration file not found: ${path}`);
+    throw new ConfigurationError(
+      "unreadable",
+      code === "EISDIR"
+        ? `Configuration path is a directory, not a file: ${path}`
+        : code === "EACCES" || code === "EPERM"
+          ? `Configuration file is not readable (permission denied): ${path}`
+          : `Cannot read configuration file: ${path}`,
+    );
+  }
+  // Editors on some platforms prepend a byte order mark, which JSON forbids.
+  if (source.startsWith("\uFEFF")) source = source.slice(1);
+  if (!source.trim())
+    throw new ConfigurationError("invalid-json", `Configuration file is empty: ${path}`);
   let value: unknown;
   try {
-    value = JSON.parse(await readFile(path, "utf8"));
+    value = JSON.parse(source);
   } catch {
-    throw new Error("Cannot read configuration: provide an explicit readable JSON file");
+    throw new ConfigurationError(
+      "invalid-json",
+      `Configuration file is not valid JSON at ${syntaxLocation(source)}: ${path}`,
+    );
   }
-  return parseConfig(value, workspace);
+  let parsed: ReturnType<typeof parseDocument>;
+  try {
+    parsed = parseDocument(value);
+  } catch (error) {
+    throw new ConfigurationError(
+      "invalid",
+      `Invalid configuration in ${path}: ${error instanceof Error ? error.message : "unknown defect"}`,
+    );
+  }
+  return freeze({
+    workspace: await resolveWorkspace(workspace),
+    apiKeyEnv: parsed.apiKeyEnv,
+    settings: parsed.settings,
+  });
 }

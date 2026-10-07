@@ -3,7 +3,7 @@
 // Fixture stdio server spawned by server.test.ts. Not a test file.
 
 import { parseArgs } from "node:util";
-import { loadConfig } from "../src/config.js";
+import { ConfigurationError, loadConfig, type StandaloneConfig } from "../src/config.js";
 import { installStdoutGuard } from "../src/stdout-guard.js";
 import type { FetchFunction } from "../../../src/core/annotations.js";
 import { catalogue, document, json } from "./helpers.js";
@@ -59,16 +59,30 @@ const transport: FetchFunction = async (url, init = {}) => {
   return json({ choices: [{ message: { content }, finish_reason: "stop" }] });
 };
 
+// Mirrors the CLI: a defective configuration file is loaded lazily per call.
+const { config: file, workspace } = values;
+let config: StandaloneConfig | (() => Promise<StandaloneConfig>);
+try {
+  config = await loadConfig(file, workspace);
+} catch (error) {
+  if (!(error instanceof ConfigurationError)) throw error;
+  process.stderr.write(`FIXTURE_LAZY_CONFIG ${error.reason}\n`);
+  config = () => loadConfig(file, workspace);
+}
+// FIXTURE_PROCESS_ENV=1 reads the credential from process.env, then removes
+// it once serving: a lazy load must still use the startup snapshot.
+const processEnv = process.env.FIXTURE_PROCESS_ENV === "1";
 const { startServer } = await import("../src/server.js");
-const handle = await startServer(await loadConfig(values.config, values.workspace), {
+const handle = await startServer(config, {
   fetch: transport,
-  env: { FIXTURE_KEY: "synthetic-protocol-credential" },
+  env: processEnv ? undefined : { FIXTURE_KEY: "synthetic-protocol-credential" },
   queue: {
     maxConcurrent: Number(process.env.FIXTURE_MAX_CONCURRENT ?? 1),
     maxQueued: Number(process.env.FIXTURE_MAX_QUEUED ?? 8),
   },
   onEnqueue: () => process.stderr.write("FIXTURE_QUEUE_QUEUED\n"),
 });
+if (processEnv) delete process.env.FIXTURE_KEY;
 process.stderr.write("FIXTURE_SERVING\n");
 if (process.env.FIXTURE_DEBUG_CLOSE === "1")
   void handle.closed.then(() => process.stderr.write("FIXTURE_CLOSED\n"));

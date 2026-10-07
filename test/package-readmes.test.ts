@@ -194,7 +194,29 @@ describe("repository package READMEs", () => {
     assert.match(generated.mcp, /^# mcp-intelli-search$/m);
     assert.doesNotMatch(generated.mcp, /^#{2,4} (`Pi` Native Extension|Settings Reference|Configuration Recipes|Development)$/m);
 
+    const rootView = selectLines(readFileSync(join(REPO_ROOT, "README.md"), "utf8"), "root").join("\n");
+    for (const [text, introduction] of [
+      [rootView, "This repository provides two first-class packages"],
+      [generated.pi, "`@curio-data/pi-intelli-search` registers four research tools"],
+      [generated.mcp, "`@curio-data/mcp-intelli-search` serves four research tools"],
+    ]) {
+      assert.match(text, /Intelligent web research[^\n]+\n\n<p align="center">\n  <img src="[^"]*docs\/images\/01\.png"/);
+      const image = text.indexOf("docs/images/01.png");
+      const features = text.indexOf("**Features:**");
+      const intro = text.indexOf(introduction);
+      const contents = text.indexOf("## Contents");
+      assert.ok(image < features && features < intro && intro < contents,
+        "opening sentence, main image and features must precede package introductions and contents");
+      assert.equal(text.split("docs/images/01.png").length, 2, "main image occurs once");
+    }
     for (const text of Object.values(generated)) {
+      assert.match(text, /Archive failure is logged and the completed run can replace canonical files in place/);
+      assert.match(text, /recovery is best-effort, not a complete record of sources consulted/);
+      assert.match(text, /query and metadata can contain personal or confidential information/);
+      assert.match(text, /can be `0` when none are recovered/);
+      assert.match(text, /does not guarantee unique names/);
+      assert.match(text, /^## Licence$/m);
+      assert.ok((anchorsOf(text) as Set<string>).has("license"), "preserve the old licence anchor");
       assert.match(text, /^## Usage Examples$/m);
       assert.doesNotMatch(text, /publication is pending|post-publication|pre-publication|is unpublished/i);
       // Preserve existing inbound usage links after renaming the heading.
@@ -220,6 +242,8 @@ describe("repository package READMEs", () => {
     assert.match(claudeInstall, /--check-config[\s\S]*Configuration is valid\.[\s\S]*claude mcp list/);
     assert.doesNotMatch(claudeInstall, /packages\/mcp\/dist|#generic-mcp-host|\]\(#verification\)/);
     assert.match(generated.mcp, /configuration's \[`tuning` object\]\(#tuning\)/);
+    assert.match(generated.mcp, /category alone does not identify a rejected key/);
+    assert.match(generated.pi, /Native calls await background citation reads for up to two seconds/);
     assert.doesNotMatch(generated.mcp, /README\.md#settings\)/);
   });
 

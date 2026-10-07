@@ -1,17 +1,12 @@
-# scripts/
+# Scripts
 
-Helper scripts for analysing how the `pi-intelli-search` extension is used on
-this host, plus the download-chart generator. These are developer/operator
-tools, not part of the published npm package.
+Developer and operator tools for `intelli-search`: download charts, local usage analysis and generated host plugins. These scripts are not part of the published npm package.
 
-## plot-downloads.mts
+## `plot-downloads.mts`
 
-Renders the weekly npm download chart shown in `README.md` as a hand-drawn
-style SVG (light and dark themes), using [rough.js](https://roughjs.com) with
-explicit seeds so output is byte-identical across runs.
+Renders the weekly npm download chart in `README.md` as a hand-drawn-style Scalable Vector Graphics (SVG) image in light and dark themes, using [_rough.js_](https://roughjs.com). Explicit seeds make rendering byte-identical for unchanged data and rendering inputs.
 
-Run directly with Node 22.18+ (type stripping is on by default). No build
-step:
+Run directly with [_Node.js_](https://nodejs.org/) 22.18 or later; type stripping requires no build step:
 
 ```bash
 node scripts/plot-downloads.mts            # fetch new data, render SVGs
@@ -19,31 +14,23 @@ node scripts/plot-downloads.mts --offline  # render from cache, no network
 npm run chart                              # same as the first command
 ```
 
-### Inputs and outputs
+### Inputs and Outputs
 
 | Path | Role |
 |---|---|
-| `data/downloads.json` | Append-only daily download cache (the real asset; committed) |
+| `data/downloads.json` | Append-only daily download cache (committed) |
 | `docs/images/downloads-light.svg` | Light-theme chart (committed) |
 | `docs/images/downloads-dark.svg` | Dark-theme chart (committed) |
 
-The script fetches only the gap between the cache and the last complete day
-from the npm downloads API, so the 18-month API query ceiling never matters
-once history has accumulated. A weekly GitHub Action
-(`.github/workflows/downloads-chart.yml`) runs it every Monday and commits
-only when the rendered output changed.
+The script fetches only the gap between the cache and the last complete day from the npm downloads application programming interface (API), so accumulated history does not require a query beyond the 18-month ceiling. A weekly [_GitHub_](https://github.com) Action (`.github/workflows/downloads-chart.yml`) runs every Monday and commits only when the rendered output changes.
 
-### Why determinism matters
+### Deterministic Rendering
 
-Every rough.js call passes an explicit integer `seed`. Unseeded calls
-re-randomise the scribble on every run, which would churn the SVGs in git even
-when the numbers are unchanged and defeat the workflow's "commit if changed"
-guard.
+Every rough.js call passes an explicit integer `seed`. Unseeded calls redraw the scribble on every run, changing SVG files in Git even when the numbers are unchanged and defeating the workflow's commit-if-changed guard.
 
-## analyze-sessions.sh
+## `analyze-sessions.sh`
 
-Evaluates extension effectiveness by parsing local `Pi` session logs and the
-`intelli-search` cache. No API keys required. No network access. Deterministic.
+Parses local `Pi` host-session logs and the research cache. It requires no API keys or network access and computes results from the selected local inputs.
 
 ### Usage
 
@@ -59,55 +46,44 @@ PI_SESSIONS_DIR=/path scripts/analyze-sessions.sh
 - `fd` (preferred; falls back to `find`)
 - `rg` is not required by this script
 
-### What it reports
+### Reported Metrics
 
 | Section | Metric |
 |---|---|
-| 1 | Total tool calls by name, across all sessions |
+| 1 | Total tool calls by name, across selected host sessions |
 | 2 | `intelli_*` breakdown and share of all tool calls |
 | 3 | Per-project `intelli_*` usage (rolls up nested subagent sessions) |
-| 4 | Adoption over time: monthly `intelli_*` vs legacy `web_*` calls |
-| 5 | Follow-up research sessions (2+ `intelli_research` calls) |
-| 6 | Adoption rate: sessions using any `intelli_*` tool |
+| 4 | Adoption over time: monthly `intelli_*` and legacy `web_*` calls |
+| 5 | Follow-up host sessions (2+ `intelli_research` calls) |
+| 6 | Adoption rate: host sessions using any `intelli_*` tool |
 | 7 | Cache re-reads: tool calls referencing a `.search/` path |
-| 8 | `.search/` cache sizes per project (from `.index.json`) |
-| 9 | Telemetry sidecars (`meta.json`, v0.11.0+): per-stage success rates, fetch-variant winners (summed across sidecars), search-retry firings, cache-suggest hits |
+| 8 | Research-cache sizes per project (from `.index.json`) |
+| 9 | Telemetry sidecars (`meta.json`, v0.11.0+): per-stage success rates, fetch-variant winners summed across sidecars, search retries and cache-suggest hits |
 
 ### Environment
 
-- `SEARCH_ROOTS` (optional): space-separated roots to scan for `.search/`
-  caches. Defaults to `$HOME /srv /home`.
+- `SEARCH_ROOTS` (optional): space-separated roots to scan for `.search/` caches. Defaults to `$HOME /srv /home`.
 
 ### Provenance
 
-The headline numbers were produced with an early version of this script.
-Re-running it reproduces those numbers (within the limits of session-log
-inference, since live sessions keep appending).
+An early version of this script produced the historical headline numbers. A new run recomputes metrics over the selected logs and cache; mutable inputs and session-log inference limits prevent a claim of exact historical reproduction without a frozen input population.
 
-## generate-plugin-bundles.mjs
+## `generate-plugin-bundles.mjs`
 
-Generates the Claude Code and Codex plugin bundles (`plugins/`) and both
-repository marketplace catalogs (`.claude-plugin/marketplace.json`,
-`.agents/plugins/marketplace.json`) from the shared guidance source in
-`guidance/` and the version pinned in `packages/mcp/package.json`. Run it
-after any MCP package version change or guidance edit; never hand-edit the
-generated files.
+Generates the [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) bundles (`plugins/`) and both repository marketplace catalogues (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) from `guidance/` and the version in `packages/mcp/package.json`. Run it after a Model Context Protocol (MCP) package version change or guidance edit; never hand-edit generated files.
 
 ```bash
 npm run generate:plugins   # rewrite the committed tree (registry launchers)
 npm run check:plugins      # drift gate: committed tree must match generation
 ```
 
-Pre-publication install tests use tarball mode, which emits launchers that
-run a vendored `npm install --prefix <plugin>/vendor` copy of the packed
-tarball instead of the registry pin:
+Pre-publication install tests use tarball mode. Generated launchers run a vendored installation of the packed tarball rather than the registry pin:
 
 ```bash
 node scripts/generate-plugin-bundles.mjs --mode tarball \
   --output /path/to/scratch --codex-vendor-dir /path/to/scratch/plugins/codex/vendor
 ```
 
-Codex performs no path expansion in plugin MCP configuration, so tarball
-mode needs the absolute vendor directory at generation time. Claude Code
-resolves `${CLAUDE_PLUGIN_ROOT}` at launch. `test/e2e/12_plugin_bundles.sh`
-drives the full flow.
+This command generates bundles only; it does not build, pack, vendor-install or install them into a host. Codex performs no path expansion in plugin MCP configuration, so tarball mode requires the absolute vendor directory at generation time. Claude Code resolves `${CLAUDE_PLUGIN_ROOT}` at launch.
+
+The tested full installation flow is [`test/e2e/12_plugin_bundles.sh`](../test/e2e/12_plugin_bundles.sh): build and pack the MCP workspace, generate local bundles, install the tarball into both vendor directories, then install the marketplaces into isolated host profiles and check connection and skill discovery. It uses dummy credentials, not a copied operator credential store. Set `TMPDIR` beneath the repository's gitignored `.tmp/` on encrypted hosts before running it. Credentialed research is a separate check in scenarios 13 and 14; see [Compatibility](../docs/COMPATIBILITY.md#host-plugins) for evidence classes and limits.

@@ -3,9 +3,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, symlink, writeFile, link, readdir } from "node:fs/promises";
+import { mkdir, rm, symlink, writeFile, link, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { parseConfig, loadConfig } from "../src/config.js";
+import { parseConfig, loadConfig, ConfigurationError } from "../src/config.js";
 import { createRuntime } from "../src/runtime.js";
 import { workspacePaths } from "../src/workspace.js";
 import { document, fixture } from "./helpers.js";
@@ -64,12 +64,57 @@ test("rejects missing selections, unknown fields and unsafe tuning without echoi
         (error: Error) => !error.message.includes("secret"),
       );
     await assert.rejects(parseConfig(document(), "."), /absolute/);
-    await assert.rejects(loadConfig(join(f.dir, "missing.json"), f.dir), /read configuration/);
+    await assert.rejects(loadConfig(join(f.dir, "missing.json"), f.dir), /not found/);
     const bad = join(f.dir, "bad.json");
     await writeFile(bad, '{"secret":');
     await assert.rejects(
       loadConfig(bad, f.dir),
       (error: Error) => !error.message.includes("secret"),
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("configuration file defects are distinct, located and never quote the file body", async () => {
+  const f = await fixture();
+  try {
+    const file = join(f.dir, "config.json");
+    const reject = async (reason: string, pattern: RegExp) => {
+      await assert.rejects(loadConfig(file, f.dir), (error: unknown) => {
+        assert(error instanceof ConfigurationError);
+        assert.equal(error.reason, reason);
+        assert.match(error.message, pattern);
+        assert(error.message.includes(file), "names the selected file");
+        assert(!error.message.includes("sk-or-"), "never quotes the body");
+        return true;
+      });
+    };
+    await reject("missing", /^Configuration file not found: /);
+    await mkdir(file);
+    await reject("unreadable", /is a directory/);
+    await rm(file, { recursive: true });
+    await writeFile(file, "");
+    await reject("invalid-json", /is empty/);
+    // V8 reports a position for this defect: line 3, column 3.
+    await writeFile(file, '{\n  "providers": {},\n  sk-or-unquoted: 1\n}');
+    await reject("invalid-json", /not valid JSON at line 3, column 3:/);
+    // V8 omits the position and quotes the input for an unexpected token.
+    await writeFile(file, '{\n  "a":\n    sk-or-bare\n}');
+    await reject("invalid-json", /not valid JSON at line 3, column 5:/);
+    await writeFile(file, '{\n  "providers": "sk-or-truncated');
+    await reject("invalid-json", /end of input \(line 2\)/);
+    await writeFile(file, '{\n  "providers": {\n');
+    await reject("invalid-json", /end of input \(line 2\); the file is incomplete/);
+    await writeFile(file, JSON.stringify({ ...document(), extra: "sk-or-value" }));
+    await reject("invalid", /^Invalid configuration in .*: configuration contains an unknown key$/);
+    // A byte order mark from a Windows editor is tolerated.
+    await writeFile(file, `\uFEFF${JSON.stringify(document())}`);
+    assert.equal((await loadConfig(file, f.dir)).apiKeyEnv, "FIXTURE_KEY");
+    // An unusable workspace is a launcher defect, not a configuration-file defect.
+    await assert.rejects(
+      loadConfig(file, join(f.dir, "absent")),
+      (error: unknown) => !(error instanceof ConfigurationError) && /workspace/.test(String(error)),
     );
   } finally {
     await f.cleanup();
