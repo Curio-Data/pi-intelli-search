@@ -80,7 +80,7 @@ export async function collate(
     throw new Error("Collation returned no visible text; increase collationMaxTokens or choose a model with a smaller reasoning budget");
 
   // ═══════════════════════════════════════════════════════════════
-  // Write cache artifacts under the per-cache-path lock so two
+  // Write cache artefacts under the per-cache-path lock so two
   // concurrent same-query runs do not interleave file writes. A previous
   // run's artefact set is archived to a numbered sibling folder before
   // this run commits its own.

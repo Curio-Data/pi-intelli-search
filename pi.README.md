@@ -22,7 +22,7 @@ Intelligent web research for coding agents: search, extract, collate, and cache 
 - 📄 **Extract:** Per-page large language model (LLM) extraction guided by a _focused prompt_. Compresses ≈50K to ≈3-5K chars of query-relevant content.
 - 🔗 **Collate:** Cross-source deduplication, inconsistency detection, and synthesis into a focused ≈5K-character summary.
 - 💾 **Cache:** Persistent `.search/` cache with automatic cache suggest. Related previous searches surfaced on each query.
-- 🎯 **Configurable:** Select models independently for search, extract and collate. The native extension uses any model `Pi` supports; the MCP server uses explicitly selected OpenRouter models.
+- 🎯 **Configurable:** Select models independently for search, extract and collate. The native extension uses registered, authenticated `Pi` models (capability and context limits apply); the MCP server uses explicitly selected OpenRouter models.
 - 💰 **Cost:** see the [default research-run estimate](#cost).
 
 `@curio-data/pi-intelli-search` registers four research tools natively in [`Pi`](https://github.com/earendil-works/pi), using its settings, authentication and model registry. [Install the extension](#pi-native-extension) to get started.
@@ -515,7 +515,7 @@ The model swap is settings-only:
 
 ### Swapping the Extract and Collate Model
 
-[_MiniMax_](https://minimax.io) M3 (via OpenRouter) is the native default. In [baseline runs 1A, 2A, 1B, 2B and 3C](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/BENCHMARKS.md#baseline-findings), its collations stated their ranking methodology, caveated low-evidence claims and flagged compatibility warnings. M3's recorded ≈1M-token window provides input headroom at the default character limit. M3 and M2.7 had equal per-token pricing in that benchmark, while M3 wrote ≈2× the extraction characters. The recorded default-switch estimate projected doubled extract-stage output-token cost, not whole-session cost; the character measurements alone do not establish a token ratio (see [Decision Recorded](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/BENCHMARKS.md#decision-recorded)). Selecting `minimax/minimax-m2.7` requests leaner extractions, but values matching an upgrading version's historical default remain eligible for model migration. Other registered, authenticated text models can also be selected, subject to capability and context limits. Override in `~/.pi/agent/settings.json` or `.pi/settings.json`:
+[_MiniMax_](https://minimax.io) M3 (via OpenRouter) is the native default. In [baseline runs 1A, 2A, 1B, 2B and 3C](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/BENCHMARKS.md#baseline-findings), its collations stated their ranking methodology, caveated low-evidence claims and flagged compatibility warnings. M3's recorded ≈1M-token window provides input headroom at the default character limit. M3 and M2.7 had equal per-token pricing in that benchmark, while M3 wrote ≈2× the extraction characters. The recorded default-switch estimate projected doubled extract-stage output-token cost, not whole-session cost; the character measurements alone do not establish a token ratio (see [Decision Recorded](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/BENCHMARKS.md#decision-recorded)). Selecting `minimax/minimax-m2.7` requests leaner extractions, but values matching an upgrading version's historical default remain eligible for model migration; the migration is match-based, not intent-based, so an explicit selection equal to a previous default is still migrated (see [Decision Recorded](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/BENCHMARKS.md#decision-recorded)). Other registered, authenticated text models can also be selected, subject to capability and context limits. Override in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 
 **Option A: Use a `Pi` Built-In Provider** (auth via `/login`):
 
@@ -607,7 +607,7 @@ The illustration shows the native pipeline with the model configuration at its c
 
 The search stage merges text links with harvested citation annotations before selecting pages (see [Source Harvesting from Citations](#source-harvesting-from-citations)). Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈30-50K for 10 pages).
 
-On completed and documented degraded research paths, the pipeline attempts to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it.
+Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it.
 
 See [docs/ARCHITECTURE.md](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md) for detailed design decisions.
 
@@ -617,13 +617,13 @@ The estimate below uses the native default models and tuning, also selected in t
 
 Per research run with the default 10 pages: ≈$0.09
 
-| Step                           | Calls            | Cost     |
-| ------------------------------ | ---------------- | -------- |
-| Search (Sonar)               | 1                | ≈$0.007  |
-| Fetch (Defuddle + Markdown)    | 10 (≤4 concurrent) pairs | $0.00    |
-| Extract (M3 via OpenRouter)         | 10 (≤4 concurrent) | ≈$0.07   |
-| Collate (M3 via OpenRouter)         | 1                | ≈$0.01   |
-| Cache Suggest (M3 via OpenRouter)   | 1                | ≈$0.0002 |
+| Step                                | Calls                 | Cost      |
+| ---------------------------------- | --------------------- | --------- |
+| Search (Sonar)                      | 1                     | ≈$0.007   |
+| Fetch (Defuddle + Markdown)         | 10 (≤4 concurrent) pairs | $0.00  |
+| Extract (M3 via OpenRouter)         | 10 (≤4 concurrent)    | ≈$0.07    |
+| Collate (M3 via OpenRouter)         | 1                     | ≈$0.01    |
+| Cache Suggest (M3 via OpenRouter)   | 1                     | ≈$0.0002  |
 
 Since v0.13.0 the search stage adds recovered provider citation URLs to prose links, increasing the candidate source set; `maxUrls` still caps page selection. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 and M2.7 had equal per-token prices in the recorded benchmark; M3 wrote ≈2× the extraction characters, with the cost estimate separately projecting greater token usage); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](#choosing-an-alternative-search-configuration) or [MCP configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#configuration). The extract and collate rows scale with the selected models.
 
@@ -702,7 +702,7 @@ The example below shows the default models and common tuning settings. The [Sett
 | `searchRetryAttempts` | 1. Search | `2` | Total attempts for the search stage when it returns a valid response with zero usable links (a degraded result), including the first. Independent of `llmRetryAttempts`, which covers transport errors. |
 | `minRequestIntervalMs` | 3. Extract | `0` | Minimum gap in milliseconds between concurrent extract LLM calls. `0` disables the throttle. For an observed account limit of approximately 0.33 requests per second, use approximately `3000`. Adjust to observed limits rather than payment status. |
 | `disableLlmsFullDiscovery` | Supplementary Fetch | `false` | Set `true` to skip automatic `llms-full.txt` probes and downloads. This does not disable page fetching or extraction. See [Automatic llms-full.txt Discovery](#automatic-llms-fulltxt-discovery). |
-| `disableTelemetry` | All | `false` | When `false`, completed and documented degraded research paths attempt to write a local `meta.json` sidecar into the configured cache. It contains the full query and per-stage outcomes, which can include confidential information. The sidecar adds no network transmission or credential fields; ordinary research still sends requests to configured services. Set `true` to suppress it. |
+| `disableTelemetry` | All | `false` | When `false`, completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local `meta.json` sidecar into the configured cache. It contains the full query and per-stage outcomes, which can include confidential information. The sidecar adds no network transmission or credential fields; ordinary research still sends requests to configured services. Set `true` to suppress it. |
 
 `httpProxy` is a separate top-level `Pi` setting, not a `pi-intelli-search` namespace key; page fetching honours it too. Its default is unset.
 
@@ -744,9 +744,17 @@ Both packages write this format. The native extension resolves the cache against
 └── .index.json                 # Index of all cached searches
 ```
 
-Each research run writes a cache entry named `<date>-<slug>-<hash>`. The `<hash>` is six hexadecimal characters from a Secure Hash Algorithm 1 (SHA-1) hash of the full query. It distinguishes queries sharing a readable stem and reduces collision risk; it does not guarantee unique names. Concurrent writers use short cache locks, and index updates are atomic. A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and telemetry sidecar to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set. Archive failure is logged and the completed run can replace canonical files in place; interrupted rotation can leave a partial archive. Supplementary `llms-full-*` documentation downloads stay with the live folder. A degraded repeat preserves the earlier successful report, extractions, sources and index entry untouched and records only the failed attempt in `meta.json`. The numbered siblings are a same-day safety net, not a versioned archive: copy a report elsewhere if it must be retained long-term. Cache readers do not take those locks: a multi-file refresh is not a whole-directory atomic snapshot.
+Each research run writes a cache entry named `<date>-<slug>-<hash>`. The `<hash>` is six hexadecimal characters from a Secure Hash Algorithm 1 (SHA-1) hash of the full query. It distinguishes queries sharing a readable stem and reduces collision risk; it does not guarantee unique names. Concurrent writers use short cache locks, and index updates are atomic. Cache readers do not take those locks: a multi-file refresh is not a whole-directory atomic snapshot.
 
-**Local Telemetry (`meta.json`):** Unless disabled, completed and documented degraded research paths attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+Refresh behaviour:
+
+- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and telemetry sidecar to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set.
+- Archive failure is logged and the completed run can replace canonical files in place; interrupted rotation can leave a partial archive.
+- Supplementary `llms-full-*` documentation downloads stay with the live folder and are not archived.
+- A degraded repeat preserves the earlier successful report, extractions, sources and index entry untouched and records only the failed attempt in `meta.json`.
+- The numbered siblings are a same-day safety net, not a versioned archive: copy a report elsewhere if it must be retained long-term.
+
+**Local Telemetry (`meta.json`):** Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.
 
 To suppress the sidecar in the native extension, set `disableTelemetry: true` inside the `pi-intelli-search` namespace in [Settings](#settings).
 
@@ -784,7 +792,7 @@ Weekly npm downloads across all published versions, refreshed every Monday by a 
 
 ## Provenance
 
-Git history was rewritten in `v0.9.0` to normalise commit author and committer metadata on the path to a stable `v1` release. The `gitHead` Secure Hash Algorithm (SHA) identifiers recorded in `npm` Supply-chain Levels for Software Artifacts (SLSA) provenance attestations for versions 0.3.1 through 0.8.0 reference pre-rewrite commits that no longer resolve in this repository. Published tarballs and their tree-level contents are unchanged; only commit metadata was altered. From v0.9.0 onwards, attestations track the rewritten history. See the [Changelog](https://github.com/Curio-Data/pi-intelli-search/blob/main/CHANGELOG.md) entry for v0.9.0 for the full account.
+Git history was rewritten in `v0.9.0` to normalise commit author and committer metadata on the path to a stable `v1` release. The `gitHead` commit identifiers recorded in `npm` Supply-chain Levels for Software Artifacts (SLSA) provenance attestations for versions 0.3.1 through 0.8.0 reference pre-rewrite commits that no longer resolve in this repository. Published tarballs and their tree-level contents are unchanged; only commit metadata was altered. From v0.9.0 onwards, attestations track the rewritten history. See the [Changelog](https://github.com/Curio-Data/pi-intelli-search/blob/main/CHANGELOG.md) entry for v0.9.0 for the full account.
 
 ## Sponsor
 

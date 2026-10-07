@@ -119,7 +119,7 @@ What happens after individual pages are processed, to synthesise findings.
 
 `intelli-search` is the only extension among those compared with a collation stage. The collation LLM sees all per-page extractions and produces a single synthesised summary. It deduplicates overlapping information, flags conflicting claims from different sources, and preserves URLs for attribution. Without this, the agent has to do this work itself, consuming context and reasoning tokens for mechanical synthesis.
 
-Like extraction, the collation model is configurable. Swap it via `collateModel` in the `pi-intelli-search` settings namespace to use any model `Pi` supports.
+Like extraction, the collation model is configurable. Swap it via `collateModel` in the `pi-intelli-search` settings namespace to use another registered, authenticated text model with suitable context and capabilities.
 
 ## Caching
 

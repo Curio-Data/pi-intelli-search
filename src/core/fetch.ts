@@ -120,7 +120,7 @@ function scoreContent(content: string): number {
   // Bonus for tables
   score += (content.match(/^\|/gm) ?? []).length * 20;
 
-  // Penalty for nav chrome artifacts
+  // Penalty for nav chrome artefacts
   score -=
     (content.match(/Skip to content|Was this helpful|Edit page|Report issue|Copy page/g) ?? [])
       .length * 500;

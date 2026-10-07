@@ -49,8 +49,8 @@ The headless agent, not the harness, composes the tool call. Two checks verify f
   - **Recorded Startup Diagnosis:** A `models.json` providers block caused slash-form `defaultModel` resolution to select an OpenRouter fallback. The harness uses split `defaultProvider` and `defaultModel` settings, prefers `kimi-coding/k3` when its key exists, and retries exit-0 runs without a cache entry. The configuration-recipes runner also applies the retry guard.
 - **Run Adjacency:** Back-to-back runs share more links than runs hours apart; Sonar's index drifts on an hours scale. Interleave models (A, B, A, B) rather than blocking them when comparing more than two.
 - **Task Scope:** Results are for the Svelte user interface (UI) libraries query; other domains may rank differently.
-- **Cache Suggestions:** The judge runs only with a populated cache index. Fresh benchmark working directories have no prior entries, so the stage makes no judge call in these runs.
-- **Live Quota:** each run costs real OpenRouter credit (see the cost table in [README](../README.md)).
+- **Cache Suggest:** The judge runs only with a populated cache index. Fresh benchmark working directories have no prior entries, so the stage makes no judge call in these runs.
+- **Live Quota:** Each run costs real OpenRouter credit (see the cost table in [README](../README.md)).
 
 ## Recorded Results
 
@@ -94,7 +94,7 @@ Late-series findings:
 1. **Verbosity and Evidence Handling on Shared Sources:** Runs 5B, 3A and 6B fetched the same seven sources (139.3K to 139.6K input). On that same-URL corpus, whose captured-content identity is not established here, m3 wrote 5.7K and 4.9K per page against gemini's 3.3K, and only the m3 reports opened by stating their evidence base ("across five independent sources..."). The same-URL extraction of dev.to records an output difference, not an isolated model effect without content verification: 6.7K (m3) versus 4.2K (gemini).
 2. **Latency and Output Association:** gemini completed in 41.2s and 34.8s against m3's 63.4s and 49.1s, alongside m3 writing 1.5 to 1.7 times gemini's extraction characters. This series does not isolate verbosity as the cause of the latency difference.
 3. **Leading Ranks:** shadcn-svelte ranked first in 5B, 3A and 6B (the converged corpus) and second in 4A, whose 55.2K input matched the prior evening's 4B fetch exactly. 4A alone promoted daisyUI (framework-agnostic, 40,000+ stars) to first. Skeleton UI held the top three in all four runs.
-4. **Recorded Decision:** Two more runs per model support the v0.14.0 preference for m3's methodology-first collation and transparent low-evidence handling within this task. M3 wrote 1.5 to 1.7 times gemini's extraction characters and took longer in this series. Its advertised ≈1M-token context window is separate from the measured output and latency.
+4. **Recorded Decision:** Two more runs per model support the v0.14.0 preference for m3's methodology-first collation and transparent low-evidence handling within this task. m3 wrote 1.5 to 1.7 times gemini's extraction characters and took longer in this series. The ≈1M-token window is an advertised figure; this series did not measure it.
 
 ### New-Model Series
 
@@ -145,7 +145,7 @@ These findings describe runs 1A, 2A, 1B, 2B and 3C only, not the later series.
 
 1. **Leading Ranks:** shadcn-svelte at #1 and Skeleton UI at #2 in all five runs, across three models and five corpora. Flowbite Svelte held top-5 in all five runs.
 2. **Corpus Association for Ranks 3 to 10:** The two runs with the most-converged corpora (2A and 2B: different models, adjacent in time, four shared sources) produced identical top-10 lists in identical order, while same-model runs with divergent corpora swapped up to three tail entries. Captured inputs were not matched across these runs, so this is an observed association rather than a controlled isolation of corpus effects.
-3. **Shared Sources:** Sonar returned three URLs across all baseline runs (`adminlte.io`, a persistently `404`-returning `annauniversityplus.com` page, and an unrelated portfolio page that every run correctly identified and discarded). The remaining five slots churned run to run.
+3. **Shared Sources:** Sonar returned the same three URLs in every baseline run (`adminlte.io`, a persistently `404`-returning `annauniversityplus.com` page, and an unrelated portfolio page that every run correctly identified and discarded). The remaining five slots churned run to run.
 4. **Evidence Handling Repeated in the Baseline:** minimax-m3 opened both of its reports by stating its ranking methodology and the absence of authoritative npm statistics (2/2), surfaced low-star libraries (Kampsy-ui at 260 stars) transparently, and flagged Svelte 5 compatibility warnings. gemini-3.8-flash (0/2) and minimax-m2.7 (0/1) stated no methodology and silently dropped or omitted low-data entries.
 5. **Within-Benchmark Verbosity:** Per-page extraction output: m2.7 ≈2.7K chars, gemini-3.8-flash ≈3.1K to 4.0K, m3 ≈4.7K to 5.3K, with m3 writing ≈2× m2.7's extraction output at the same per-token price. Five runs establish repeatability within this benchmark, not a controlled model property.
 

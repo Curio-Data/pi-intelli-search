@@ -68,8 +68,11 @@ const toolDefinitions: Array<{
       "concise summary. Writes results to the workspace cache for follow-up. " +
       "Use this after extracting multiple pages with intelli_extract; for " +
       "end-to-end research, use intelli_research. Repeating a query on the " +
-      "same UTC date archives its earlier cached report and source files to " +
-      "a numbered .1 sibling folder before writing new ones.",
+      "same UTC date attempts to archive its earlier cached report, " +
+      "extractions and numbered sources to the lowest free numbered sibling " +
+      "folder (.1, then .2 and so on); archiving is best-effort and a " +
+      "failure lets the completed run replace files in place, so copy a " +
+      "report elsewhere if it must be retained.",
     schema: collateSchema,
     annotations: {
       title: "Intelli Collate",
@@ -91,9 +94,12 @@ const toolDefinitions: Array<{
       "instead. Use maxUrls to control breadth: 3 for targeted, 10 (default) " +
       "for broad, 16 for exhaustive. Always provide focusPrompt to guide " +
       "extraction. All operations call external services and incur provider " +
-      "charges. Repeating a query on the same UTC date archives its cached " +
-      "artefacts to a numbered .1 sibling folder; a degraded repeat preserves " +
-      "the earlier successful report.",
+      "charges. Repeating a query on the same UTC date attempts to archive " +
+      "its cached report, extractions and numbered sources to the lowest " +
+      "free numbered sibling folder (.1, then .2 and so on); archiving is " +
+      "best-effort and a failure lets the completed run replace files in " +
+      "place, so copy a report elsewhere if it must be retained. A degraded " +
+      "repeat preserves the earlier successful report.",
     schema: researchSchema,
     annotations: {
       title: "Intelli Research",

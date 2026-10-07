@@ -32,15 +32,15 @@ The software development kit (SDK) and native fetch assets are verified separate
 |---|---|---|
 | Node.js | v24.19.0 | Development and verification runtime for all standalone gates |
 | Node.js | 22 (floor) | `engines: >=22`; CI validates the aggregate build, test and install gates on Node 22 |
-| MCP SDK | `@modelcontextprotocol/server` 2.3.0 (lockfile-pinned) | Protocol suite: initialization, tool listing, schema rejection, all four operations, degraded outcomes, progress, cancellation, queued cancellation, shutdown and clean stdio framing (deterministic) |
+| MCP SDK | `@modelcontextprotocol/server` 2.3.0 (lockfile-pinned) | Protocol suite: initialisation, tool listing, schema rejection, all four operations, degraded outcomes, progress, cancellation, queued cancellation, shutdown and clean stdio framing (deterministic) |
 | Fetch assets | `wreq-js` 2.3.0, `defuddle` 0.19.4 | Independent tarball install gate exercises real page fetching through the installed native assets on Linux x86-64; other platforms are not verified. Earlier phases verified `defuddle` 0.16.0 |
 
 ## Host Plugins
 
 | Host | Tested Version | Evidence |
 |---|---|---|
-| Claude Code | 2.1.289 | Credential-free installation and key-delivery checks; real local-tarball research; registry-pin installation and connection for `0.15.0-alpha.0` (2026-10-05). Separate capabilities and limits are recorded below |
-| Codex CLI | 0.144.5 | Repeatable credential-free installation checks; real research through the installed plugin in a `codex exec` session on 2026-10-05 with pre-approved plugin tools: completed `intelli_research` call and `mcp` sidecar (credentialed host, local-tarball class). Registry-pin class, 2026-10-05, pinned version `0.15.0-alpha.0`: marketplace added from GitHub into an isolated `CODEX_HOME`, `codex plugin add` installed from the committed catalog, `codex mcp list` shows `intelli_search` enabled on the `npx` pin, and a direct stdio `initialize` plus `tools/list` against the registry-pulled server returned all four `intelli_*` tools; separate one-time observations and exclusions listed below |
+| Claude Code | 2.1.289 | Credential-free installation and key-delivery checks; real local-tarball research; registry-pin installation and connection for `0.15.0-alpha.0` (2026-10-05). Capabilities and limits are itemised below |
+| Codex CLI | 0.144.5 | Credential-free installation checks, real research through the installed plugin, and registry-pin installation, connection and tool listing for `0.15.0-alpha.0` (2026-10-05). Capabilities and limits are itemised below |
 
 ### Claude Code Evidence and Limits
 
@@ -56,14 +56,17 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 
 ### Codex Evidence and Limits
 
-- **Repeatable Checks:** Marketplace add, `codex plugin add` installation, installed-cache layout and `codex debug prompt-input` skill discovery use the credential-free, local-tarball evidence classes. `test/e2e/14_codex_plugin.sh` adds a real `codex exec` research session from a dedicated login.
-- **Unattended Approval:** `codex exec` cancels a plugin MCP tool call that would prompt (`user cancelled MCP tool call`) even with `approval_policy = "never"`; `default_tools_approval_mode = "approve"` in the plugin's `mcp_servers` table allows it.
-- **One-Time Observations:** The recorded credentialed session completed the MCP handshake and exposed qualified tool names. The 0.144.5 inspection found that the CLI ignored the portable Agent Plugins layout; the shipped bundle uses the compatibility layout. See [Phase 5](plans/mcp-intelli-search/PHASE-5.md#codex-cli-01445).
-- **Excluded Surfaces:** The terminal user interface (TUI) and integrated development environment (IDE) extension were not exercised. The Phase 5 record describes the IDE extension as lacking plugin support at that time; this is not a fresh compatibility check.
+| Capability | Evidence | Limits |
+|---|---|---|
+| Installation and Skill Discovery | Marketplace add, `codex plugin add` installation, installed-cache layout and `codex debug prompt-input` skill discovery; registry-pin class: marketplace from `Curio-Data/pi-intelli-search` into an isolated `CODEX_HOME`, installation from the committed catalogue, `codex mcp list` showing `intelli_search` enabled on the `npx` pin, and a direct stdio `initialize` plus `tools/list` against the registry-pulled server returning all four `intelli_*` tools (2026-10-05, `0.15.0-alpha.0`) | Credential-free, both evidence classes |
+| Real Research | A real `codex exec` session through the installed plugin with pre-approved plugin tools: completed `intelli_research` call and `mcp` sidecar (2026-10-05) | Credentialed host with a dedicated login, local-tarball class |
+| Unattended Approval | `codex exec` cancels a plugin MCP tool call that would prompt (`user cancelled MCP tool call`) even with `approval_policy = "never"`; `default_tools_approval_mode = "approve"` in the plugin's `mcp_servers` table allows it | Recorded on 0.144.5 |
+| Plugin Layout | The 0.144.5 inspection found the CLI ignored the portable Agent Plugins layout; the shipped bundle uses the compatibility layout. See [Phase 5](plans/mcp-intelli-search/PHASE-5.md#codex-cli-01445) | One-time inspection |
+| Excluded Surfaces | The terminal user interface (TUI) and integrated development environment (IDE) extension were not exercised | The Phase 5 record describes the IDE extension as lacking plugin support at that time; not a fresh compatibility check |
 
 ## Release Candidate Verification
 
-The corrected candidate was verified on 2026-10-06, before publication:
+The table records paced live verification of the 2026-10-06 candidate commits. No single invocation of the full paced suite has completed on the final tree: the cache-rotation change landed late on 2026-10-06 (`632fa66`) and the documentation pass on 2026-10-07; the full paced suite must be re-run on the final committed candidate before tagging (see [Release Readiness](RELEASE-READINESS.md#verification)).
 
 | Surface | Observed Evidence |
 |---|---|
@@ -72,9 +75,15 @@ The corrected candidate was verified on 2026-10-06, before publication:
 | Fetch dependencies | Defuddle 0.19.4 and mathml-to-latex 1.8.0 with externally loaded xmldom 0.9.12; full dependency audit reports no advisories |
 | Claude Code | 2.1.291: local-tarball installation and real research pass; the session's model-visible result contains the summary and cache appendix, closing F2's missing-answer observation |
 | Codex CLI | 0.144.5: local-tarball installation, generated skill discovery and credentialed research pass |
-| Paced live scenarios | Scenarios 1 to 4 and 6 to 9 passed before an interruption during scenario 10. Scenario 5 failed the non-empty-summary gate with a reasoning model at a 200-token cap; it was corrected to use the same non-reasoning collation model in both comparisons and passed on rerun with visible synthesis. Scenarios 10 to 14 completed in a paced continuation. One configuration recipe passed on retry after a timeout. The initial scenario 12 assertion still matched an old skill description; it was corrected to match the generated description and rerun successfully. No mandatory host check was skipped |
 
-The candidate's exact versions are in the manifests, and its release gates are in [Release Readiness](RELEASE-READINESS.md). These are local-tarball observations, not verification of an unpublished registry pin. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
+Paced live scenario history:
+
+1. Scenarios 1 to 4 and 6 to 9 passed before an interruption during scenario 10.
+2. Scenario 5 failed the non-empty-summary gate with a reasoning model at a 200-token cap; it was corrected to use the same non-reasoning collation model in both comparisons and passed on rerun with visible synthesis.
+3. Scenarios 10 to 14 completed in a paced continuation. One configuration recipe passed on retry after a timeout.
+4. The initial scenario 12 assertion still matched an old skill description; it was corrected to match the generated description and rerun successfully.
+
+No mandatory host check was skipped. The candidate's exact versions are in the manifests, and its release gates are in [Release Readiness](RELEASE-READINESS.md). These are local-tarball observations, not verification of an unpublished registry pin. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
 
 ## Shared Constraints
 

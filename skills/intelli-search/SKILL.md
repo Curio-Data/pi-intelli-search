@@ -86,7 +86,7 @@ intelli_research(
 ### When Search Results Mix Source Types
 
 The pipeline automatically adapts extraction to source type:
-- **Official Docs or API Reference:** Preserves exact signatures, types, version annotations.
+- **Official Docs or API Reference:** Preserves exact signatures, types and version annotations.
 - **Blog Posts or Tutorials:** Captures practical patterns, gotchas, real-world examples.
 - **Forums (Reddit, Discourse, StackOverflow):** Captures the problem, accepted solution, caveats. Discards tangents.
 
@@ -117,8 +117,8 @@ The `intelli_research` result contains a concise deduplicated summary. Use it di
 
 The tool output also includes a **📚 Related cached searches** section when semantically similar previous searches exist in the configured cache (`.search/` by default). These are discovered by an LLM judge that compares the current query against the cache index. The related searches are:
 - **Supplementary:** The live search always runs. Cached results are offered as additional context.
-- **Incomplete Live Results:** Read a previous `report.md` to cross-reference.
-- **Prior Evidence:** If live results appear incorrect, point to previous research on the same topic.
+- **Cross-Reference:** Read a previous `report.md` when live results are incomplete.
+- **Prior Evidence:** Point to earlier research on the same topic when the live result needs checking.
 
 Only reach into the cache when:
 - The user asks about a specific source that needs re-examination.
@@ -142,15 +142,15 @@ The following are path examples for `read`, not shell commands. List the directo
 
 ## How It Works
 
-The pipeline executes the tool-selection decisions above inside one operation.
+The following stages execute inside the research tool.
 
 `intelli_research` runs a 5-stage pipeline inside a single tool call:
 
 1. **Search:** a search-grounded model (default [_Perplexity Sonar_](https://docs.perplexity.ai)) returns a synthesised answer with prose links, merged with recognised provider-supplied `url_citation` annotations recovered from the response body. Harvesting is best-effort and does not establish every source consulted. Harvested citations join the candidate URL list before page selection and the `maxUrls` cap; not every discovered source is fetched.
 2. **Fetch:** Each page is fetched and cleaned to Markdown via [_Defuddle_](https://github.com/kepano/defuddle) (strips nav, ads, sidebars).
-3. **Extract:** A configurable LLM (default [_MiniMax_](https://minimax.io) M3 via [_OpenRouter_](https://openrouter.ai)) pulls out only the content relevant to the query. A 50K-char page becomes ≈3-5K chars of focused extraction. Extraction adapts to source type: official docs preserve exact API signatures, blog posts capture practical patterns, forums capture accepted solutions.
+3. **Extract:** A configurable LLM (default [_MiniMax_](https://minimax.io) M3 via [_OpenRouter_](https://openrouter.ai)) pulls out only the content relevant to the query. A ≈50K-char page becomes ≈3-5K chars of focused extraction. Extraction adapts to source type: official docs preserve exact API signatures, blog posts capture practical patterns, forums capture accepted solutions.
 4. **Collate:** Another LLM call deduplicates across extractions and produces one concise summary. The model is instructed to flag conflicts and use the source order above.
-5. **Cache Suggest:** An LLM judge finds semantically related previous searches in the configured cache and surfaces them as a supplementary `📚 Related cached searches` table.
+5. **Cache Suggest:** An LLM judge finds semantically related previous searches in the configured cache and surfaces them as a supplementary `📚 Related cached searches` table. The pipeline awaits the judge under the configured timeout and retry policy; judge failure is logged without discarding completed research.
 
 The agent receives the synthesis plus source and cache appendices, with brief `Stage X/5` progress text during execution. `collationMaxTokens` bounds synthesis output, not the appended material; the result has no fixed token length. Citation settlement, supplementary downloads and the cache judge can add latency. The judge is awaited under configured timeout/retry policy; failure is logged without discarding completed research, while cancellation still propagates.
 
@@ -164,5 +164,5 @@ This is also why `focusPrompt` matters. It tells the extraction LLM what to keep
 ## When Not to Search
 
 - Writing or editing code already in the project.
-- General programming concepts already understood with sufficient confidence.
+- General programming concepts that need no current external evidence.
 - Refactoring or debugging with full context available.

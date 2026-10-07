@@ -18,7 +18,7 @@ export INTELLI_SEARCH_CONFIG="$HOME/.config/mcp-intelli-search/config.json"
 export INTELLI_SEARCH_WORKSPACE="$PWD"
 ```
 
-For per-project caches, set `INTELLI_SEARCH_WORKSPACE` to the project directory before each `codex` launch (for example with `direnv`) instead of exporting a fixed path.
+The snippet exports the launch directory as the workspace. For a stable per-project cache regardless of launch directory, set `INTELLI_SEARCH_WORKSPACE` to the project directory through `direnv` or another per-directory mechanism.
 
 Create the parent directory and workspace, then save the following JavaScript Object Notation (JSON) configuration to `$INTELLI_SEARCH_CONFIG`:
 

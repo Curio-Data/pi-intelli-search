@@ -199,7 +199,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
 
   // If no extractions produced useful content (all fetches failed or all
   // extraction LLM calls errored), return the search summary without
-  // creating cache artifacts or running collation.
+  // creating cache artefacts or running collation.
   if (succeededExtractions.length === 0) {
     const fetchFailed = extracted.blockedExtractions.length;
     const extractFailed = extracted.extractions.filter((e) => e.status === "failed").length;
@@ -223,7 +223,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   const collation = await runCollateStage(p, search.searchResult, succeededExtractions, identity);
 
   // Start llms-full downloads BEFORE acquiring any lock, then write cache
-  // artifacts under the per-cache-path lock (only local file I/O there).
+  // artefacts under the per-cache-path lock (only local file I/O there).
   throwIfAborted(p.signal);
   const llms = await startLlmsFullDownloads(p, fetched.successPages);
   try {
@@ -606,7 +606,7 @@ async function startLlmsFullDownloads(
 }
 
 /**
- * Write cache artifacts under the per-cache-path lock (only local file I/O
+ * Write cache artefacts under the per-cache-path lock (only local file I/O
  * happens under the lock; it serialises two concurrent same-query runs),
  * then commit any remaining llms-full downloads under a second short lock.
  * A previous run's artefact set is archived to a numbered sibling folder

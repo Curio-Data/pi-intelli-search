@@ -22,7 +22,7 @@ Intelligent web research for coding agents: search, extract, collate, and cache 
 - 📄 **Extract:** Per-page large language model (LLM) extraction guided by a _focused prompt_. Compresses ≈50K to ≈3-5K chars of query-relevant content.
 - 🔗 **Collate:** Cross-source deduplication, inconsistency detection, and synthesis into a focused ≈5K-character summary.
 - 💾 **Cache:** Persistent `.search/` cache with automatic cache suggest. Related previous searches surfaced on each query.
-- 🎯 **Configurable:** Select models independently for search, extract and collate. The native extension uses any model `Pi` supports; the MCP server uses explicitly selected OpenRouter models.
+- 🎯 **Configurable:** Select models independently for search, extract and collate. The native extension uses registered, authenticated `Pi` models (capability and context limits apply); the MCP server uses explicitly selected OpenRouter models.
 - 💰 **Cost:** see the [default research-run estimate](#cost).
 
 `@curio-data/mcp-intelli-search` serves four research tools over the Model Context Protocol (MCP), using standard input/output (stdio). [Install with Claude Code](#claude-code) using the complete example below, or use [_Codex_](https://developers.openai.com/codex/mcp) or another MCP-compatible host.
@@ -207,7 +207,7 @@ mkdir -p "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/intelli-search-curio-
 
 Save the same [minimal configuration](#create-the-configuration) as `config.json` in that directory. It persists across plugin updates but is removed on uninstall. The launcher uses the opened project as its workspace, so each project's cache stays in its own `.search/` directory.
 
-Restart Claude Code, then run `claude mcp list` and confirm `plugin:intelli-search:intelli_search` shows as connected. The launcher downloads a pinned package through `npx` on first start. Run `/intelli-search:intelli-search` for the host-expanded setup skill. Do not use `claude plugin install --config openrouter_api_key=...`: that exposes the key in process arguments. The installed `intelli-search` skill includes shell-based credential setup and troubleshooting; the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins) records tested host versions.
+Restart Claude Code, then run `claude mcp list` and confirm `plugin:intelli-search:intelli_search` shows as connected. The launcher downloads a pinned package through `npx` on first start. Run `/intelli-search:intelli-search` for the skill with this host's paths substituted. Do not use `claude plugin install --config openrouter_api_key=...`: that exposes the key in process arguments. Then request a quick search through the server and confirm a model-visible answer with sources; connection alone does not verify inference. The installed `intelli-search` skill includes shell-based credential setup and troubleshooting; the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins) records tested host versions.
 
 <a id="route-c-codex-plugin"></a>
 #### Codex
@@ -227,7 +227,7 @@ export INTELLI_SEARCH_WORKSPACE="$PWD"
 codex
 ```
 
-In the session, ask: “Use intelli_search to find the current TypeScript release and cite the official source.” Confirm a successful MCP tool call and an answer with sources. `codex mcp list` alone does not start the server or prove inference. If the tools are unavailable, report the setup failure rather than claim that built-in search used this server.
+In the session, ask: “Use intelli_search to find the current TypeScript release and cite the official source.” Confirm a successful MCP tool call and an answer with sources. `codex mcp list` alone does not start the server or prove inference. If the tools are unavailable, the setup is incomplete: an answer from the host's own web search does not show that this server ran.
 
 Codex filters the server environment; the plugin forwards `OPENROUTER_API_KEY`, `INTELLI_SEARCH_CONFIG` and `INTELLI_SEARCH_WORKSPACE` explicitly. Set all three before each launch. The installed `intelli-search` skill covers persistent configuration and unattended tool approval; see the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins) for verified host behaviour.
 
@@ -325,7 +325,7 @@ The illustration shows the native pipeline with the model configuration at its c
 
 The search stage merges text links with harvested citation annotations before selecting pages (see [Source Harvesting from Citations](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#source-harvesting-from-citations)). Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈30-50K for 10 pages).
 
-On completed and documented degraded research paths, the pipeline attempts to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it.
+Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it.
 
 See [docs/ARCHITECTURE.md](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md) for detailed design decisions.
 
@@ -335,13 +335,13 @@ The estimate below uses the native default models and tuning, also selected in t
 
 Per research run with the default 10 pages: ≈$0.09
 
-| Step                           | Calls            | Cost     |
-| ------------------------------ | ---------------- | -------- |
-| Search (Sonar)               | 1                | ≈$0.007  |
-| Fetch (Defuddle + Markdown)    | 10 (≤4 concurrent) pairs | $0.00    |
-| Extract (M3 via OpenRouter)         | 10 (≤4 concurrent) | ≈$0.07   |
-| Collate (M3 via OpenRouter)         | 1                | ≈$0.01   |
-| Cache Suggest (M3 via OpenRouter)   | 1                | ≈$0.0002 |
+| Step                                | Calls                 | Cost      |
+| ---------------------------------- | --------------------- | --------- |
+| Search (Sonar)                      | 1                     | ≈$0.007   |
+| Fetch (Defuddle + Markdown)         | 10 (≤4 concurrent) pairs | $0.00  |
+| Extract (M3 via OpenRouter)         | 10 (≤4 concurrent)    | ≈$0.07    |
+| Collate (M3 via OpenRouter)         | 1                     | ≈$0.01    |
+| Cache Suggest (M3 via OpenRouter)   | 1                     | ≈$0.0002  |
 
 Since v0.13.0 the search stage adds recovered provider citation URLs to prose links, increasing the candidate source set; `maxUrls` still caps page selection. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 and M2.7 had equal per-token prices in the recorded benchmark; M3 wrote ≈2× the extraction characters, with the cost estimate separately projecting greater token usage); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#choosing-an-alternative-search-configuration) or [MCP configuration](#configuration). The extract and collate rows scale with the selected models.
 
@@ -373,7 +373,7 @@ Use the same configuration and workspace as the registered server. If a project-
 
 ### Serving the Protocol
 
-An invocation without `--check-config` validates the explicit workspace, then serves the four canonical tools (`intelli_search`, `intelli_extract`, `intelli_collate`, `intelli_research`) over stdio until the input stream closes. An explicitly selected missing, unreadable or invalid configuration file does not prevent connection: each tool call returns an actionable `CONFIGURATION` error and rereads the file until it loads successfully. Repair the file and call again. Once loaded, configuration remains fixed until restart. Missing launcher arguments and invalid workspaces still fail at startup; `--check-config` remains strict. Serving performs no inference at startup; credentials are only required when an operation runs.
+An invocation without `--check-config` validates the explicit workspace, then serves the four canonical tools (`intelli_search`, `intelli_extract`, `intelli_collate`, `intelli_research`) over stdio until the input stream closes. An explicitly selected missing, unreadable or invalid configuration file does not prevent connection: each tool call returns an actionable `CONFIGURATION` error, and the server rereads the file on each call until it loads. Repair the file and call again. Once loaded, configuration remains fixed until restart. Missing launcher arguments and invalid workspaces still fail at startup; `--check-config` remains strict. Serving performs no inference at startup; credentials are only required when an operation runs.
 
 - **Registration and Schemas.** Tool names and JSON input schemas mirror the native `Pi` tools verbatim; descriptions adapt the native guidance for protocol clients (host-neutral cache wording, embedded `focusPrompt` and breadth guidance), because the protocol offers no separate guidance channel. Invalid tool arguments are reported as tool errors (`isError` results), matching the software development kit (SDK) distinction between malformed protocol requests and invalid arguments.
 - **Results.** Successful calls return the complete operation text both as text content and as `structuredContent.text`, alongside `outcome` and `details`. Hosts that prefer the structured representation receive the same answer, sources and cache suggestions. The duplication is intentional for host compatibility; a host that forwards both representations can consume extra context. Degraded research (`no-links`, `fetch-failed`, `extraction-failed`) remains a normal result. Execution failures return `isError` results tagged with the safe `StandaloneError` category rather than raw provider causes.
@@ -431,7 +431,7 @@ Unspecified tuning comes from the canonical [shared defaults](https://github.com
 
 **Reasoning:** The adapter sends reasoning fields only when the catalogue advertises reasoning support; non-reasoning models receive neither effort nor exclusion fields.
 
-**Output Budget:** Empty output after token-budget exhaustion is an error, not a successful extraction. Both adapters also reject empty collation before writing a completed report. Increase the output-token limit or lower reasoning effort when this diagnostic occurs.
+**Output Budget:** Empty output after token-budget exhaustion is an error, not a successful extraction. Empty collation is likewise rejected before a completed report is written. When these diagnostics occur, increase `collationMaxTokens`, lower reasoning effort, or choose a model with a smaller reasoning budget.
 
 ### Direct Engine Verification
 
@@ -443,7 +443,7 @@ npm run test:all
 npm run test:mcp:install
 ```
 
-The installation gate packs the artefact, installs production dependencies into an isolated directory and denies all ancestor dependency resolution in both module systems. It runs the installed executable's `--help` and `--version`, all four operations with synthetic inference, and actual page fetching against a loopback fixture through the installed native fetch assets. A raw protocol exchange against the installed server verifies initialization, tool listing, invalid-argument rejection without inference and clean shutdown, and asserts that standard output carries only protocol frames. The deterministic installation gate uses no provider credentials and does not establish live MCP interoperability.
+The installation gate packs the artefact, installs production dependencies into an isolated directory and denies all ancestor dependency resolution in both module systems. It runs the installed executable's `--help` and `--version`, all four operations with synthetic inference, and actual page fetching against a loopback fixture through the installed native fetch assets. A raw protocol exchange against the installed server verifies initialisation, tool listing, invalid-argument rejection without inference and clean shutdown, and asserts that standard output carries only protocol frames. The deterministic installation gate uses no provider credentials and does not establish live MCP interoperability.
 
 The recorded live scenario `test/e2e/11_mcp_stdio.sh` exercises a real research call through the MCP client of an isolated `Pi` profile. Its evidence is recorded separately in the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md), not supplied by the installation gate.
 
@@ -494,10 +494,10 @@ Every startup failure is diagnostic-only and lands on standard error; standard o
 |---|---|
 | `Explicit --config and --workspace are required` | The server started without both selections. Supply `--config`/`--workspace` or the `INTELLI_SEARCH_CONFIG`/`INTELLI_SEARCH_WORKSPACE` environment variables, then restart the host. |
 | `workspace must be an explicit absolute directory` | The workspace selection is relative or a host placeholder was not expanded. Use a literal absolute path; on hosts with placeholder expansion, verify the expansion on the installed host version. |
-| `Configuration file not found`, `not readable`, `empty` or `not valid JSON` | The selected file is missing or defective. The error names its absolute path; JSON syntax errors include a location without showing file contents. While serving, repair the file and call again. `--check-config` reports the error and exits 1. |
+| `Configuration file not found`, `not readable`, `empty` or `not valid JSON` | The selected file is missing or defective. The error names its absolute path; JSON syntax errors include a location without showing file contents. `--check-config` reports the error and exits 1. While serving, repair the file and call again. |
 | Configuration rejected with an unknown-key or range error | The loader is strict: unknown keys, invalid types and out-of-range values fail validation. Correct the configuration and call again if it has not yet loaded. The [Tuning](#tuning) table lists accepted keys and ranges. |
-| Tools never appear in the host | Check absent launcher arguments, an unusable workspace or an unsafe cache. Read the host's MCP server logs for the standard-error diagnostic. Claude Code can retain a failure from an older server: try `/mcp` reconnect, then restart; the recorded failure cache expired after approximately 15 minutes. A connected server still needs a successful tool call to verify inference. |
-| `CONFIGURATION` names a missing or invalid file | Repair the selected file. If it has not yet loaded, call again; once loaded, configuration changes require a restart. |
+| Tools never appear in the host | Check absent launcher arguments, an unusable workspace or an unsafe cache. Read the host's MCP server logs for the standard-error diagnostic. Claude Code can cache a startup failure from an older server: try `/mcp` reconnect, then restart ([evidence and limits](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#claude-code-evidence-and-limits)). A connected server still needs a successful tool call to verify inference. |
+| `CONFIGURATION` persists after the file is repaired | A file that has not yet loaded is reread on the next call; once loaded, configuration changes require a restart. |
 | Diagnostic names a missing credential environment variable | Supply the named variable through the host's supported credential mechanism and restart. The server snapshots credentials at startup. |
 | Catalogue preflight names a model role or capability | Correct the model identifier or required capabilities using [Configuration](#configuration). Read the diagnostic; catalogue lookup failures are not proof of invalid credentials. Restart after changing loaded model selections. |
 | `PROVIDER` reports authentication, access, credit or transport failure | Follow the specific diagnostic: check credentials, model access, account credit or connectivity. Restart after changing credentials. The category alone does not identify a rejected key. |
@@ -524,9 +524,17 @@ Both packages write this format. The native extension resolves the cache against
 └── .index.json                 # Index of all cached searches
 ```
 
-Each research run writes a cache entry named `<date>-<slug>-<hash>`. The `<hash>` is six hexadecimal characters from a Secure Hash Algorithm 1 (SHA-1) hash of the full query. It distinguishes queries sharing a readable stem and reduces collision risk; it does not guarantee unique names. Concurrent writers use short cache locks, and index updates are atomic. A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and telemetry sidecar to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set. Archive failure is logged and the completed run can replace canonical files in place; interrupted rotation can leave a partial archive. Supplementary `llms-full-*` documentation downloads stay with the live folder. A degraded repeat preserves the earlier successful report, extractions, sources and index entry untouched and records only the failed attempt in `meta.json`. The numbered siblings are a same-day safety net, not a versioned archive: copy a report elsewhere if it must be retained long-term. Cache readers do not take those locks: a multi-file refresh is not a whole-directory atomic snapshot.
+Each research run writes a cache entry named `<date>-<slug>-<hash>`. The `<hash>` is six hexadecimal characters from a Secure Hash Algorithm 1 (SHA-1) hash of the full query. It distinguishes queries sharing a readable stem and reduces collision risk; it does not guarantee unique names. Concurrent writers use short cache locks, and index updates are atomic. Cache readers do not take those locks: a multi-file refresh is not a whole-directory atomic snapshot.
 
-**Local Telemetry (`meta.json`):** Unless disabled, completed and documented degraded research paths attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+Refresh behaviour:
+
+- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and telemetry sidecar to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set.
+- Archive failure is logged and the completed run can replace canonical files in place; interrupted rotation can leave a partial archive.
+- Supplementary `llms-full-*` documentation downloads stay with the live folder and are not archived.
+- A degraded repeat preserves the earlier successful report, extractions, sources and index entry untouched and records only the failed attempt in `meta.json`.
+- The numbered siblings are a same-day safety net, not a versioned archive: copy a report elsewhere if it must be retained long-term.
+
+**Local Telemetry (`meta.json`):** Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.
 
 To suppress the sidecar in the MCP server, set `"disableTelemetry": true` inside the configuration's [`tuning` object](#tuning).
 

@@ -4,7 +4,21 @@ This document lists third-party software used by the native `pi-intelli-search` 
 
 ## Capability Map
 
-The map distinguishes shared dependencies from native-only peers and MCP-only runtime dependencies. TLS means Transport Layer Security; HTTP means Hypertext Transfer Protocol; HTML means Hypertext Markup Language; DOM means Document Object Model; LLM means large language model; API means application programming interface; JSON means JavaScript Object Notation; TUI means terminal user interface; SDK means software development kit; stdio means standard input/output.
+The map distinguishes shared dependencies from native-only peers and MCP-only runtime dependencies. Acronyms used across this document:
+
+| Acronym | Expansion |
+|---|---|
+| TLS | Transport Layer Security |
+| HTTP | Hypertext Transfer Protocol |
+| HTML | Hypertext Markup Language |
+| DOM | Document Object Model |
+| LLM | large language model |
+| API | application programming interface |
+| JSON | JavaScript Object Notation |
+| TUI | terminal user interface |
+| SDK | software development kit |
+| stdio | standard input/output |
+| MCP | Model Context Protocol |
 
 | Capability | Dependency | Boundary | Replacement Responsibility |
 |---|---|---|---|
@@ -34,6 +48,7 @@ These packages are installed via `npm` and distributed with the extension.
 - **Author:** Kepano
 - **Licence:** MIT
 - **Usage:** [_Defuddle_](https://github.com/kepano/defuddle) extracts HTML content through `defuddle/node` in `src/core/fetch.ts`, stripping navigation, ads and sidebars to produce Markdown.
+- **Transitive dependencies:** Defuddle's MathML conversion is provided by `mathml-to-latex` 1.8.0 (MIT), whose converter loads the Extensible Markup Language (XML) parser `@xmldom/xmldom` 0.9.12 (MIT) externally rather than embedding a private copy. The 0.15.0 security review covers exactly this parser provenance; see [the compatibility matrix](COMPATIBILITY.md#release-candidate-verification) for the audited versions.
 
 ### `linkedom`
 
