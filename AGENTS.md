@@ -2,7 +2,7 @@
 
 This is a **`Pi` extension** that adds intelligent web research tools to the `Pi` coding agent. It provides a 5-stage research pipeline (search, fetch, extract, collate, and cache suggest) as a single tool call, plus individual tools for manual orchestration.
 
-For current cross-host release work, start at [Release Readiness](docs/RELEASE-READINESS.md). The MCP package is published as stable `0.15.0` (2026-10-07); the native `pi-v0.15.0` release is held for the owner's explicit approval after the MCP post-publication gate. The [implementation handoff](docs/plans/mcp-intelli-search/README.md) and [Post-Phase 6 Checkpoint](docs/plans/mcp-intelli-search/POST-PHASE-6.md) are historical evidence, not branch-switch instructions. The strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
+For current cross-host release work, start at [Release Readiness](docs/RELEASE-READINESS.md). Both packages are published as the stable `0.15.0` generation (2026-10-07): the native extension and the MCP server. The [implementation handoff](docs/plans/mcp-intelli-search/README.md) and [Post-Phase 6 Checkpoint](docs/plans/mcp-intelli-search/POST-PHASE-6.md) are historical evidence, not branch-switch instructions. The strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
 
 ---
 

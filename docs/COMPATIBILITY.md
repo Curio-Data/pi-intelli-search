@@ -66,7 +66,7 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 
 ## Release Candidate Verification
 
-The table records paced live verification of the 2026-10-06 candidate commits. No single invocation of the full paced suite has completed on the final tree: the cache-rotation change landed late on 2026-10-06 (`632fa66`) and the documentation pass on 2026-10-07; the full paced suite must be re-run on the final committed candidate before tagging (see [Release Readiness](RELEASE-READINESS.md#verification)).
+The table records paced live verification of the 2026-10-06 candidate commits. The full paced suite subsequently completed on the merged `main` tree (2026-10-07: 14 scenarios, 0 failed, 0 skipped) before either package was staged; see [Release Readiness](RELEASE-READINESS.md#verification).
 
 | Surface | Observed Evidence |
 |---|---|
