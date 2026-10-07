@@ -4,9 +4,9 @@ The current working candidate fixes the release-review findings across the nativ
 
 ## Publication State
 
-The MCP bootstrap is complete: the registry published its initial alpha on 2026-10-05, and both `alpha` and `latest` pointed to it at the 2026-10-06 check. The native package remained at its previous stable release. The planning branch is merged into `main`; the old [phased handoff](plans/mcp-intelli-search/README.md) is historical, not a branch-switch instruction.
+The MCP package is published as stable `0.15.0` (2026-10-07, 15:47 UTC): the maintainer approved the staged package with two-factor authentication, `latest` moved from `0.15.0-alpha.0` to `0.15.0`, and the registry-pin installation gate against the published version is recorded in [Compatibility](COMPATIBILITY.md#release-candidate-verification). The full paced live suite passed on the merged `main` tree before staging (14 scenarios, 0 failed, 2026-10-07). The native package remains at `0.14.0` pending the owner's explicit `pi-v0.15.0` approval; `main` carries the merged candidate with green CI, and the old [phased handoff](plans/mcp-intelli-search/README.md) is historical, not a branch-switch instruction.
 
-The candidate ships as the `0.15.0` stable generation: the native `0.15.0` was prepared but never published, and the MCP package promotes its published `0.15.0-alpha.0` to stable. Generated plugin launchers pin the candidate version. Do not publish those new pins on the default installation branch before the matching MCP package is available; use a release branch and local-tarball verification until publication.
+Bootstrap history: the registry published the initial alpha on 2026-10-05 (both `alpha` and `latest` pointed to it at the 2026-10-06 check); the stable promotion on 2026-10-07 moved `latest` to `0.15.0`. The trusted-runner binding was created with the npm CLI `npm trust` command on 2026-10-07 after a UI-created entry failed the staged publish twice with `E401`; the two-command bootstrap sequence is documented in `AGENTS.md` under npm Trusted Publisher.
 
 ## Finding Dispositions
 
@@ -74,9 +74,9 @@ The corrected candidate is committed and pushed on `release/0.15.0` with this ch
 ## Remaining Owner Gates
 
 1. Confirm rotation of the test token previously recorded as exposed in [the historical checkpoint](plans/mcp-intelli-search/POST-PHASE-6.md). Do not copy, read or refresh operator credential files as a test workaround.
-2. The corrected candidate is committed on `release/0.15.0`; the cache-refresh work above has landed as a follow-up commit on the same branch, including the pre-existing README attribution addition already carried by the candidate. Require green CI on the exact final commit. Keep the unpublished catalogue pin off `main` until MCP publication makes it installable.
-3. Confirm the MCP package's own trusted-publisher binding for `Curio-Data/pi-intelli-search`, `release.yml`, no environment and stage-publish permission only. Do not repeat the first-publish bootstrap.
-4. Approve MCP staging explicitly. After the maintainer approves the staged package with two-factor authentication, verify registry dist-tags and install both host plugins into clean profiles against the published pin. Record that evidence in [Compatibility](COMPATIBILITY.md).
-5. Approve the native release separately only after matching-generation MCP verification. Verify the native package from the registry after maintainer approval.
+2. Done 2026-10-07: green CI on the final commits (`44a2bde`, `c832406`, `1a6ef1a` on `release/0.15.0`; merge commits `42c7854` and `e1611ca` on `main`), the merged candidate is on `main`, and the catalogue pin resolves publicly after MCP publication.
+3. Done 2026-10-07: the MCP package's own trusted-publisher binding was created with `npm trust github @curio-data/mcp-intelli-search --file release.yml --repo Curio-Data/pi-intelli-search --allow-stage-publish` (CLI-verified; a preceding UI-created entry was deleted). No first-publish bootstrap repeats.
+4. Done 2026-10-07: the owner approved MCP staging explicitly; the staged package was approved with two-factor authentication, registry dist-tags verified (`latest` at `0.15.0`), and both host plugins installed into clean profiles against the published pin (recorded in [Compatibility](COMPATIBILITY.md#release-candidate-verification)).
+5. Open: approve the native release separately. `pi-v0.15.0` is prepared on the merged `main` tree; stage it only after this gate's MCP verification (recorded above) and verify the native package from the registry after maintainer approval.
 
 CI also checks registry-pin availability on `main` and pull requests targeting it, while `release/` pushes can validate unpublished candidates. The release workflow requires its commit to belong to `main` or a `release/` branch with successful CI, checks both generated artefacts and tarball installations, audits dependencies, and verifies the exact MCP registry pin before native staging. Registry existence does not replace the owner's clean-profile host verification gate.

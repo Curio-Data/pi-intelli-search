@@ -36,9 +36,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - The minimum supported version remains `Pi` 0.81.1. Live load checks on 2026-10-04 exercised both model-call paths: the legacy provider on 0.81.1 and the registry facade on 0.86.0. See the [compatibility matrix](docs/COMPATIBILITY.md#native-pi-extension-curio-datapi-intelli-search) for evidence.
 - Native release tags now use `pi-vX.Y.Z`; MCP tags use `mcp-vX.Y.Z`. Historical `vX.Y.Z` tags still identify native releases. The fixes prepared for the unreleased native 0.14.1 are included in this release.
 
-## [mcp-0.15.0] - 2026-10-06
+## [mcp-0.15.0] - 2026-10-07
 
-Core behaviour is shared with [pi-0.15.0] and recorded there. This is the stable promotion of the published [mcp-0.15.0-alpha.0]; publication remains subject to the release checklist.
+Core behaviour is shared with [pi-0.15.0] and recorded there. This is the stable promotion of the published [mcp-0.15.0-alpha.0]; it was staged through CI, approved by the maintainer and published on 2026-10-07, moving `latest` from the alpha to `0.15.0`.
 
 ### Fixed
 

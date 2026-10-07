@@ -39,8 +39,8 @@ The software development kit (SDK) and native fetch assets are verified separate
 
 | Host | Tested Version | Evidence |
 |---|---|---|
-| Claude Code | 2.1.289 | Credential-free installation and key-delivery checks; real local-tarball research; registry-pin installation and connection for `0.15.0-alpha.0` (2026-10-05). Capabilities and limits are itemised below |
-| Codex CLI | 0.144.5 | Credential-free installation checks, real research through the installed plugin, and registry-pin installation, connection and tool listing for `0.15.0-alpha.0` (2026-10-05). Capabilities and limits are itemised below |
+| Claude Code | 2.1.289, 2.1.292 | Credential-free installation and key-delivery checks; real local-tarball research; registry-pin installation and connection for `0.15.0-alpha.0` (2026-10-05) and for published `0.15.0` (2026-10-07, 2.1.292). Capabilities and limits are itemised below |
+| Codex CLI | 0.144.5, 0.160.1 | Credential-free installation checks, real research through the installed plugin, and registry-pin installation, connection and tool listing for `0.15.0-alpha.0` (2026-10-05) and published `0.15.0` (2026-10-07, 0.160.1); full credentialed local-tarball research also passed on 0.160.1 (2026-10-07). Capabilities and limits are itemised below |
 
 ### Claude Code Evidence and Limits
 
@@ -49,7 +49,7 @@ The software development kit (SDK) and native fetch assets are verified separate
 | Installation and Skill Discovery | On 2.1.289: strict plugin/marketplace validation, marketplace add, install, `claude mcp list` connection and `claude plugin details` skill discovery | Credential-free dummy values, local-tarball class |
 | Required Key Option | The server is withheld while `openrouter_api_key` is unset. Once set, it reaches the process as `OPENROUTER_API_KEY` over a different exported value and is stored under `pluginSecrets` in `.credentials.json` on Linux | Dummy-value check on 2.1.289; not a claim about every platform |
 | Real Research | A `claude -p` session connected, called `intelli_research` without a tool error and wrote a completed `mcp` sidecar in the project cache (2026-10-05) | Credentialed host, local-tarball class; model-visible answer verification is separate in [Release Candidate Verification](#release-candidate-verification) |
-| Registry Installation | Isolated `CLAUDE_CONFIG_DIR`, marketplace from `Curio-Data/pi-intelli-search`, plugin install, key via `--values-stdin`, configuration as instructed, and connection through `npx -y --package @curio-data/mcp-intelli-search@0.15.0-alpha.0` | Registry-pin class, 2026-10-05; connection does not establish full research |
+| Registry Installation | Isolated `CLAUDE_CONFIG_DIR`, marketplace from `Curio-Data/pi-intelli-search`, plugin install, key via `--values-stdin`, configuration as instructed, and connection through the `npx` launcher: `0.15.0-alpha.0` on 2.1.289 (2026-10-05); published `0.15.0` on 2.1.292 (2026-10-07), plus a direct `--version` probe of the published package returning `0.15.0` | Registry-pin class; connection does not establish full research |
 | Tool Names and Paths | Qualified tool names observed in one credentialed session; `${CLAUDE_PROJECT_DIR}` expansion in MCP `env` verified | One-time recorded on 2.1.289 only |
 
 One-time setup observations on 2.1.289 (2026-10-05): an optional unset key option sent an empty `OPENROUTER_API_KEY`, overriding an exported value; `${user_config.KEY:-fallback}` was unsupported. These observations motivated the required option. Installation printed a needs-configuration notice rather than prompting. `claude plugin configure --values-stdin` reported `Restart Claude Code to apply it`; an open session retained its loaded value through `/mcp` reconnect until the operator set the key through `/plugin` Configure. Uninstall emptied the plugin data directory. Host documentation lists `--values-stdin` from 2.1.285, a documentation statement rather than a local check of that version.
@@ -83,11 +83,21 @@ Paced live scenario history:
 3. Scenarios 10 to 14 completed in a paced continuation. One configuration recipe passed on retry after a timeout.
 4. The initial scenario 12 assertion still matched an old skill description; it was corrected to match the generated description and rerun successfully.
 
-No mandatory host check was skipped. The candidate's exact versions are in the manifests, and its release gates are in [Release Readiness](RELEASE-READINESS.md). These are local-tarball observations, not verification of an unpublished registry pin. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
+No mandatory host check was skipped. The candidate's exact versions are in the manifests, and its release gates are in [Release Readiness](RELEASE-READINESS.md). Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
+
+### Published `0.15.0` Registry-Pin Verification (2026-10-07)
+
+After the maintainer approved the staged package (`latest` moved to `0.15.0` at 15:47 UTC), both host plugins were installed from the committed catalogues into clean profiles against the published pin, with no credentials beyond a dummy key option:
+
+- **Claude Code 2.1.292:** isolated `CLAUDE_CONFIG_DIR`, marketplace added from `Curio-Data/pi-intelli-search`, plugin installed, dummy key option set, minimal configuration written; `claude mcp list` shows `plugin:intelli-search:intelli_search` connected through the committed `npx -y --package @curio-data/mcp-intelli-search@0.15.0` launcher.
+- **Codex CLI 0.160.1:** isolated `CODEX_HOME`, marketplace added from the same GitHub source, plugin installed (installed-cache root at version `0.15.0`); `codex mcp list` shows `intelli_search` enabled on the same `npx` pin.
+- **Direct stdio probe:** `initialize` plus `tools/list` against the registry-pulled server returned all four `intelli_*` tools; the probe also exercised the explicitly-selected-missing-configuration recovery path, serving the protocol with an actionable per-call configuration error rather than refusing connection.
+
+Full research through the registry-pin route remains open evidence; the credentialed full-research scenarios (13 and 14) run in the local-tarball class and passed on this tree on 2026-10-07 (Codex on 0.160.1).
 
 ## Shared Constraints
 
-- The committed plugin launchers pin the exact `@curio-data/mcp-intelli-search` version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. The initial alpha is published under both `alpha` and `latest` as of the recorded registry check. The working candidate's regenerated pin is not published; keep it on a release branch until its MCP version resolves publicly. Publication and exact-pin host verification remain separate release gates.
+- The committed plugin launchers pin the exact `@curio-data/mcp-intelli-search` version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. The stable `0.15.0` pin is published and verified: `latest` moved to `0.15.0` on 2026-10-07, and both host plugins installed from the committed catalogues into clean profiles against it. The registry-pin class covers installation, connection and tool listing; a full research call through the registry-pin route remains open evidence (the credentialed full-research scenarios run in the local-tarball class).
 - Full research calls have been driven through both host plugins in the local-tarball class (`test/e2e/13_claude_code_plugin.sh`, `test/e2e/14_codex_plugin.sh`). A full research call through the registry-pin route remains open evidence; the registry-pin class currently covers installation, connection and tool listing, plus a direct `npx` pull that runs the published CLI.
 - Only [_OpenRouter_](https://openrouter.ai) is a verified standalone inference provider. Other OpenAI-compatible endpoints are not claimed: reasoning, search-tool and citation behaviour differs between compatible-looking endpoints.
 - _macOS_ and _Windows_ are not verified for any artefact; the fetch dependency's native assets are exercised on _Linux_ x86-64 only.
