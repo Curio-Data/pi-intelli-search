@@ -11,8 +11,7 @@ Run directly with [_Node.js_](https://nodejs.org/) 22.18 or later; type strippin
 ```bash
 node scripts/plot-downloads.mts              # fetch new data, render SVGs
 node scripts/plot-downloads.mts --offline    # render from cache, no network
-node scripts/plot-downloads.mts --fake-mcp 200  # preview with a placeholder MCP series
-npm run chart                                  # same as the first command
+npm run chart                                # same as the first command
 ```
 
 ### Inputs and Outputs
@@ -25,8 +24,6 @@ npm run chart                                  # same as the first command
 | `docs/images/downloads-dark.svg` | Dark-theme chart (committed) |
 
 The script fetches only the gap between the cache and the last complete day from the npm downloads application programming interface (API), so accumulated history does not require a query beyond the 18-month ceiling. A weekly [_GitHub_](https://github.com) Action (`.github/workflows/downloads-chart.yml`) runs every Monday and commits only when the rendered output changes.
-
-`--fake-mcp <weekly>` is a preview mode: it replaces the MCP series with a flat placeholder of `<weekly>` downloads per week aligned to the native weeks, marks the rendered image as sample data and writes nothing to the MCP cache. It exists to preview the stacked layout; never commit its output to a branch that documents real statistics.
 
 ### Deterministic Rendering
 

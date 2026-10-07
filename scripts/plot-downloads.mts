@@ -3,8 +3,7 @@
  * the native Pi extension (@curio-data/pi-intelli-search, bottom) and the MCP
  * server (@curio-data/mcp-intelli-search, top).
  * Run: node scripts/plot-downloads.mts
- *      node scripts/plot-downloads.mts --offline        (render from cache, no network)
- *      node scripts/plot-downloads.mts --fake-mcp 200   (preview: placeholder MCP series)
+ *      node scripts/plot-downloads.mts --offline   (render from cache, no network)
  */
 import rough from 'roughjs';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
@@ -139,7 +138,6 @@ const esc = (s: string) =>
 function render(
   weeks: { week: string; pi: number; mcp: number }[],
   theme: keyof typeof THEMES,
-  fakeMcp: boolean,
 ): string {
   const t = THEMES[theme];
   const W = 900, H = 360;
@@ -233,46 +231,27 @@ function render(
   legend('mcp server', t.mcp, W - M.right - 118);
   legend('pi extension', t.pi, W - M.right - 262);
 
-  const sampleNote = fakeMcp ? ' · mcp series is sample data' : '';
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${font}" role="img" aria-label="Stacked weekly npm downloads for @curio-data/pi-intelli-search and @curio-data/mcp-intelli-search${fakeMcp ? ' (mcp series is sample data)' : ''}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${font}" role="img" aria-label="Stacked weekly npm downloads for @curio-data/pi-intelli-search and @curio-data/mcp-intelli-search">
 <rect width="${W}" height="${H}" fill="${t.bg}"/>
 <text x="${M.left}" y="28" font-size="18" fill="${t.ink}">weekly npm downloads &#183; both intelli-search packages</text>
-<text x="${M.left}" y="48" font-size="13" fill="${t.ink}" opacity="0.65">${total.toLocaleString('en-GB')} over ${weeks.length} weeks${esc(sampleNote)}</text>
+<text x="${M.left}" y="48" font-size="13" fill="${t.ink}" opacity="0.65">${total.toLocaleString('en-GB')} over ${weeks.length} weeks</text>
 ${parts.join('\n')}
 </svg>
 `;
 }
 
 const offline = process.argv.includes('--offline');
-const fakeArg = process.argv.find((a) => a.startsWith('--fake-mcp='));
-const fakeFlagIdx = process.argv.indexOf('--fake-mcp');
-const fakeRaw =
-  fakeArg ? fakeArg.split('=')[1] :
-  fakeFlagIdx !== -1 ? process.argv[fakeFlagIdx + 1] : undefined;
-const fakeMcp = fakeRaw ? Math.max(0, Math.round(Number(fakeRaw))) : undefined;
-if (fakeRaw !== undefined && (fakeMcp === undefined || Number.isNaN(Number(fakeRaw)))) {
-  console.error('--fake-mcp needs a weekly download number, for example --fake-mcp 200');
-  process.exit(1);
-}
 
 const piWeeks = toWeeks(await refresh('pi', offline));
-let mcpWeeks: Week[];
-if (fakeMcp !== undefined) {
-  // Preview only: a flat placeholder MCP series aligned to the pi weeks. The
-  // rendered SVG is marked as sample data and no fake value touches a cache.
-  mcpWeeks = piWeeks.map((w) => ({ week: w.week, downloads: fakeMcp }));
-  console.log(`Preview mode: mcp series is a flat ${fakeMcp}/week placeholder.`);
-} else {
-  mcpWeeks = toWeeks(await refresh('mcp', offline));
-}
+const mcpWeeks = toWeeks(await refresh('mcp', offline));
 const weeks = stackWeeks(piWeeks, mcpWeeks);
 if (!weeks.length) {
   console.error('No complete weeks with data yet: nothing rendered.');
   process.exit(0);
 }
 await mkdir(dirname(OUT_LIGHT), { recursive: true });
-await writeFile(OUT_LIGHT, render(weeks, 'light', fakeMcp !== undefined));
-await writeFile(OUT_DARK, render(weeks, 'dark', fakeMcp !== undefined));
+await writeFile(OUT_LIGHT, render(weeks, 'light'));
+await writeFile(OUT_DARK, render(weeks, 'dark'));
 console.log(
   `Rendered ${weeks.length} weeks (${piWeeks.length} pi, ${mcpWeeks.length} mcp).`,
 );
