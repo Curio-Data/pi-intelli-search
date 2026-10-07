@@ -6,9 +6,13 @@ Use these tools for current web research when this skill is selected, rather tha
 
 Inference uses the configured provider account. The server runs one operation at a time with up to eight requests queued; excess submissions receive a busy error rather than waiting.
 
-{{SETUP}}
-
 ## When to Use Which Tool
+
+Start with `{{TOOL_SEARCH}}` for a factual question, latest version, release date or brief lookup. A request for current information or sources alone does not require the research pipeline. Keep the scope of the question: do not add comparisons, pricing or release history unless requested.
+
+If a search answer looks stale or its sources disagree on the current version, try one narrower `{{TOOL_SEARCH}}` targeting official sources before escalating to research. Report unresolved uncertainty rather than treating an older release as current.
+
+Use `{{TOOL_RESEARCH}}` for multi-page comparisons or detailed analysis, or when a search answer leaves a specific evidence gap requiring multiple pages. Search does not fetch and extract each cited page; research adds those stages, collation and cache suggestions. That pipeline makes more provider calls and can take minutes. A longer source list alone is not a reason to choose it.
 
 ### Quick Factual Question
 
@@ -20,7 +24,7 @@ Use `{{TOOL_SEARCH}}` for a quick factual answer with sources but no deep analys
 
 ### Deep Research for a Coding Task
 
-Use `{{TOOL_RESEARCH}}` for the full pipeline. Always provide a `focusPrompt` to specify the content to retain. Without that guidance, the extraction model produces generic summaries. Translate the user's intent into a specific extraction focus.
+Use `{{TOOL_RESEARCH}}` when the task needs the full pipeline. Set `maxUrls` to the smallest useful breadth, starting with `3` for targeted research. Always provide a `focusPrompt` to specify the content to retain. Without that guidance, the extraction model produces generic summaries. Translate the user's intent into a specific extraction focus.
 
 #### Example: Learning a New Feature
 
@@ -29,6 +33,7 @@ User: "How do runes work in Svelte 5?"
 
 {{TOOL_RESEARCH}}(
   query="Svelte 5 runes tutorial examples",
+  maxUrls=3,
   focusPrompt="Extract the core rune concepts ($state, $derived, $effect), their syntax, and how they replace the old reactive declarations. Include migration patterns from Svelte 4."
 )
 ```
@@ -40,6 +45,7 @@ User: "How do I set up podman rootless with systemd?"
 
 {{TOOL_RESEARCH}}(
   query="podman rootless systemd unit configuration",
+  maxUrls=3,
   focusPrompt="Extract the exact directory paths podman rootless uses for systemd units, the XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS setup, and the systemd --user enable commands. Include file paths."
 )
 ```
@@ -51,6 +57,7 @@ User: "Why is my Cloudflare Worker timing out on KV writes?"
 
 {{TOOL_RESEARCH}}(
   query="Cloudflare Workers KV write timeout limits",
+  maxUrls=3,
   focusPrompt="Extract KV write limits, timeout thresholds, storage limits, and any workarounds for bulk writes. Focus on hard numbers and error messages."
 )
 ```
@@ -62,6 +69,7 @@ User: "Should I use Tailwind or Vanilla Extract for a new project?"
 
 {{TOOL_RESEARCH}}(
   query="Tailwind CSS vs Vanilla Extract comparison 2026",
+  maxUrls=6,
   focusPrompt="Extract pros/cons, bundle size benchmarks, DX tradeoffs, and migration costs. Note which claims come from official sources vs blog opinions."
 )
 ```
@@ -75,6 +83,7 @@ User: "How do I use the Defuddle npm package?"
 
 {{TOOL_RESEARCH}}(
   query="defuddle npm content extraction usage",
+  maxUrls=3,
   focusPrompt="Extract the API: install command, function signatures, options object, and output format. Include working code examples."
 )
 ```
@@ -172,6 +181,8 @@ This is also why `focusPrompt` matters. It tells the extraction model what to ke
 - Writing or editing code already in the project.
 - General programming concepts that need no current external evidence.
 - Refactoring or debugging with full context available.
+
+{{SETUP}}
 
 ## Failure Modes
 

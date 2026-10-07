@@ -1,93 +1,75 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 #
-# test/e2e/13_claude_code_plugin.sh — credentialed Claude Code plugin run
+# Credentialed Claude Code plugin and unforced routing evaluation.
+# Installs the local-tarball plugin into an isolated profile, supplies its
+# sensitive key option, and runs four fresh sessions. Scenario 12 separately
+# covers credential-free installation. No prompt names the desired operation;
+# both search and research remain available in every session.
 #
-# Installs the generated Claude Code plugin (local-tarball class) into an
-# isolated CLAUDE_CONFIG_DIR, supplies the OpenRouter key through the
-# plugin's sensitive userConfig option, and drives one real research call
-# through `claude -p`. Scenario 12 proves installation and key delivery
-# credential-free; this scenario proves the installed plugin works for a
-# real Claude Code session end to end.
-#
-# Usage:
-#   ./test/e2e/13_claude_code_plugin.sh
-#
+# Usage: ./test/e2e/13_claude_code_plugin.sh
 # Environment:
-#   OPENROUTER_API_KEY       Required (auto-detected from ~/.pi/agent/auth.json).
-#   CLAUDE_CODE_OAUTH_TOKEN  Required: a long-lived token from
-#                            `claude setup-token`, kept in the gitignored .env.
+#   OPENROUTER_API_KEY       Required; .env or native auth.json fallback.
+#   CLAUDE_CODE_OAUTH_TOKEN  Required static token from claude setup-token.
 #   E2E_CLAUDE_MODEL         Session model (default: sonnet).
-#   E2E_TIMEOUT_SECONDS      Per-attempt timeout (default: 600).
+#   E2E_TIMEOUT_SECONDS      Factual-session timeout (default: 180).
+#   E2E_RESEARCH_TIMEOUT_SECONDS  Deep-analysis timeout (default: 540).
+#   E2E_RUN_GAP_SECONDS      Gap between sessions (default: 20).
+#   E2E_KEEP_ARTIFACTS       Set to 1 to retain successful traces; plugin
+#                            credential file is always removed.
 #
-# Credential safety. The session authenticates only with
-# CLAUDE_CODE_OAUTH_TOKEN, a static token that Claude Code neither stores nor
-# refreshes. No credential file is copied from the operator's profile, so no
-# refresh-token chain can fork (the Phase 5 incident). ANTHROPIC_API_KEY and
-# ANTHROPIC_AUTH_TOKEN are unset because they take precedence over the token.
-# The script asserts that the isolated profile never receives a login
-# credential and that the operator's own credential file is untouched.
-#
-# Live quota is consumed: one maxUrls=1 research on OpenRouter and one short
-# session on the Claude subscription. Run through ./test/run-e2e-all.sh.
-
+# Never copy login credentials: a copied refresh-token chain can invalidate
+# the operator's login. The static token is never stored or refreshed.
+# Live quota: three searches and deep research capped at three pages per
+# call, plus four Claude sessions. Deep analysis may need follow-up calls.
+# Run through ./test/run-e2e-all.sh.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-
-# The credential probes and cleanup below rely on /proc, GNU stat and the
-# Linux credential-file layout; elsewhere they would pass vacuously.
-if [[ "$(uname -s)" != "Linux" ]]; then
-  echo "⚠️  SKIP: scenario 13 is recorded for Linux hosts only."
+if [[ "$(uname -s)" != Linux ]]; then
+  echo "SKIP: scenario 13 is recorded for Linux hosts only."
   exit 77
 fi
 
-# Parse .env BEFORE any output reaches the log: only the two named keys are
-# read, and the file is never executed (see test/e2e/env.sh).
+# Parse only the named keys before logging. Never execute .env.
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY CLAUDE_CODE_OAUTH_TOKEN
-
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-LOG_FILE="$LOG_DIR/e2e-claude-code-plugin-${TIMESTAMP}.log"
+LOG_FILE="$LOG_DIR/e2e-claude-code-plugin-$(date +%Y%m%d-%H%M%S).log"
 mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LOG_FILE") 2>&1
-echo "📝 Log: $LOG_FILE"
+echo "Log: $LOG_FILE"
 
-# Two attempts plus build and pacing must fit the paced runner's per-script
-# timeout (E2E_SCRIPT_TIMEOUT_SECONDS, default 1200).
-E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-540}"
+# Deep analysis can need multiple operations; give it a longer deadline.
+# The paced runner also enforces its own overall per-script timeout.
+E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-180}"
+E2E_RESEARCH_TIMEOUT_SECONDS="${E2E_RESEARCH_TIMEOUT_SECONDS:-540}"
+E2E_RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-20}"
+E2E_KEEP_ARTIFACTS="${E2E_KEEP_ARTIFACTS:-0}"
 E2E_CLAUDE_MODEL="${E2E_CLAUDE_MODEL:-sonnet}"
-
-if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -f "$HOME/.pi/agent/auth.json" ]; then
-  OPENROUTER_API_KEY="$(jq -r '.openrouter.key // empty' "$HOME/.pi/agent/auth.json" 2>/dev/null || true)"
-  [ -n "$OPENROUTER_API_KEY" ] && echo "🔑 Detected OPENROUTER_API_KEY from ~/.pi/agent/auth.json"
+[[ "$E2E_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ && "$E2E_RESEARCH_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ && "$E2E_RUN_GAP_SECONDS" =~ ^[0-9]+$ ]] || {
+  echo "Invalid session timeout or gap" >&2
+  exit 1
+}
+if [[ -z "${OPENROUTER_API_KEY:-}" && -f "$HOME/.pi/agent/auth.json" ]]; then
+  OPENROUTER_API_KEY="$(jq -r '.openrouter.key // empty' "$HOME/.pi/agent/auth.json")"
 fi
-if [ -z "${OPENROUTER_API_KEY:-}" ]; then
-  echo "❌ OPENROUTER_API_KEY is not set."
+if [[ -z "${OPENROUTER_API_KEY:-}" || -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+  echo "OPENROUTER_API_KEY and CLAUDE_CODE_OAUTH_TOKEN are required."
+  echo "Create the static token with 'claude setup-token' outside an agent session."
   exit 1
 fi
-if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
-  echo "❌ CLAUDE_CODE_OAUTH_TOKEN is not set."
-  echo "   Run 'claude setup-token' once and add CLAUDE_CODE_OAUTH_TOKEN=<token> to $PROJECT_DIR/.env"
+# printf builds the option JSON without placing the secret in process argv.
+[[ "$OPENROUTER_API_KEY" =~ ^[A-Za-z0-9_-]+$ ]] || {
+  echo "OPENROUTER_API_KEY contains unexpected characters."
   exit 1
-fi
-# The option JSON is built with the printf builtin (no process argv), which
-# is only safe for a key without JSON metacharacters.
-if [[ ! "$OPENROUTER_API_KEY" =~ ^[A-Za-z0-9_-]+$ ]]; then
-  echo "❌ OPENROUTER_API_KEY contains unexpected characters."
-  exit 1
-fi
+}
 for tool in claude node npm jq rg; do
-  if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "❌ required tool not on PATH: $tool"
-    exit 1
-  fi
+  command -v "$tool" >/dev/null || { echo "Missing tool: $tool"; exit 1; }
 done
-
-# The session key travels only through the plugin option, never the
-# environment, so the run also proves the option route.
 OPTION_KEY="$OPENROUTER_API_KEY"
 unset OPENROUTER_API_KEY ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
 export CLAUDE_CODE_OAUTH_TOKEN
@@ -96,45 +78,34 @@ mkdir -p "$PROJECT_DIR/.tmp"
 E2E_ROOT="$(mktemp -d "$PROJECT_DIR/.tmp/intelli-claude-e2e-XXXXXXXX")"
 CLAUDE_HOME_DIR="$E2E_ROOT/claude-home"
 WORKSPACE="$E2E_ROOT/workspace"
-mkdir -p "$CLAUDE_HOME_DIR" "$WORKSPACE"
-echo "📁 Scratch: $E2E_ROOT"
-
+mkdir -p "$CLAUDE_HOME_DIR" "$WORKSPACE" "$E2E_ROOT/tmp"
+export TMPDIR="$E2E_ROOT/tmp"
+echo "Scratch: $E2E_ROOT"
 OPERATOR_CREDENTIALS="$HOME/.claude/.credentials.json"
 OPERATOR_MTIME="$(stat -c %Y "$OPERATOR_CREDENTIALS" 2>/dev/null || echo absent)"
-
 cleanup() {
   local rc=$?
-  # The isolated credential file holds the real OpenRouter key as a plugin
-  # secret: remove it whatever the outcome, and the whole tree on success.
+  # The plugin secret is removed on success and failure, including retained runs.
   rm -f "$CLAUDE_HOME_DIR/.credentials.json"
-  if [[ "$rc" -eq 0 ]]; then rm -rf "$E2E_ROOT"; fi
+  if [[ "$rc" -eq 0 && "$E2E_KEEP_ARTIFACTS" != 1 ]]; then rm -rf "$E2E_ROOT"; fi
   exit "$rc"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-
 ERRORS=0
-ok()  { echo "✅ $1"; }
-bad() { ERRORS=$((ERRORS + 1)); echo "❌ $1"; }
-
+ok() { echo "PASS: $1"; }
+bad() { ERRORS=$((ERRORS + 1)); echo "FAIL: $1"; }
 export CLAUDE_CONFIG_DIR="$CLAUDE_HOME_DIR"
 
-# ── Pre-flight: the isolated profile authenticates with the token ──
-echo
-echo "── Pre-flight: claude $(claude --version 2>/dev/null | awk '{print $1}')"
+echo "Claude $(claude --version), requested model: $E2E_CLAUDE_MODEL"
 AUTH_STATUS="$(claude auth status 2>/dev/null || true)"
-if jq -e '.authMethod == "oauth_token"' <<<"$AUTH_STATUS" >/dev/null 2>&1; then
-  ok "isolated profile authenticates with CLAUDE_CODE_OAUTH_TOKEN"
-else
-  echo "❌ unexpected auth status in the isolated profile:"
-  jq -c '{authMethod, loggedIn, configDirectory}' <<<"$AUTH_STATUS" 2>/dev/null || echo "$AUTH_STATUS"
+if ! jq -e '.authMethod == "oauth_token"' <<<"$AUTH_STATUS" >/dev/null; then
+  echo "Isolated profile is not authenticating with the static OAuth token."
   exit 1
 fi
+ok "isolated profile authenticates with CLAUDE_CODE_OAUTH_TOKEN"
 
-# ── Build, pack and vendor the plugin (as scenario 12) ─────────────
-echo
-echo "── Build and install the local-tarball plugin"
 (cd "$PROJECT_DIR" && npm run build:mcp >/dev/null 2>&1)
 mkdir -p "$E2E_ROOT/pack"
 TARBALL="$(cd "$PROJECT_DIR" && npm pack --workspace @curio-data/mcp-intelli-search --pack-destination "$E2E_ROOT/pack" 2>/dev/null | tail -1)"
@@ -145,21 +116,20 @@ node "$PROJECT_DIR/scripts/generate-plugin-bundles.mjs" \
   --codex-vendor-dir "$WORK/plugins/codex/vendor" >/dev/null
 npm install --prefix "$WORK/plugins/claude-code/vendor" --omit=dev --ignore-scripts "$TARBALL" >/dev/null 2>&1
 claude plugin marketplace add "$WORK" >/dev/null 2>&1
-if ! claude plugin install intelli-search@curio-data-plugins >/dev/null 2>&1; then
-  echo "❌ plugin install failed"
+if ! claude plugin install intelli-search@curio-data-plugins > "$E2E_ROOT/plugin-install.log" 2>&1; then
+  echo "Plugin install failed; inspect $E2E_ROOT/plugin-install.log"
   exit 1
 fi
 ok "plugin installed from $(basename "$TARBALL")"
-
-# printf is a shell builtin: the key never appears in a process argv.
 if ! printf '{"openrouter_api_key":"%s"}' "$OPTION_KEY" \
     | claude plugin configure intelli-search@curio-data-plugins --values-stdin >/dev/null 2>&1; then
-  echo "❌ claude plugin configure failed; the key option is not set"
+  echo "Plugin key configuration failed."
   exit 1
 fi
+unset OPTION_KEY
 if ! jq -e '.pluginSecrets["intelli-search@curio-data-plugins"].openrouter_api_key | length > 0' \
     "$CLAUDE_HOME_DIR/.credentials.json" >/dev/null 2>&1; then
-  echo "❌ the key option did not reach the isolated credential store"
+  echo "Plugin key did not reach the isolated credential store."
   exit 1
 fi
 PLUGIN_DATA="$CLAUDE_HOME_DIR/plugins/data/intelli-search-curio-data-plugins"
@@ -184,130 +154,95 @@ cat > "$PLUGIN_DATA/config.json" <<'EOF'
       "provider": "openrouter",
       "model": "minimax/minimax-m3"
     }
+  },
+  "tuning": {
+    "defaultUrls": 3,
+    "maxUrls": 3
   }
 }
 EOF
-ok "key option set and config.json written as the skill instructs"
+ok "key option and bounded research configuration set"
 
-# ── Live session ───────────────────────────────────────────────────
-TOOL="mcp__plugin_intelli-search_intelli_search__intelli_research"
-SERVER="plugin:intelli-search:intelli_search"
-PROMPT="Call the tool $TOOL with query \"the current TypeScript release\", maxUrls 1, domains [\"typescriptlang.org\"] and focusPrompt \"the official release announcement, version number and release date\". Then answer with the version and the source URL."
-
-echo
-echo "── claude -p (model: $E2E_CLAUDE_MODEL)"
-STREAM="$E2E_ROOT/stream.jsonl"
-RAN=0
-# completed_sidecar: true once this run has a completed research, so a retry
-# never spends a second live research after the first one finished.
-completed_sidecar() {
-  find "$WORKSPACE/.search" -maxdepth 2 -name meta.json \
-    -exec jq -c 'select(.outcome == "completed")' {} + 2>/dev/null | rg -q .
-}
-for ATTEMPT in 1 2; do
-  (cd "$WORKSPACE" && timeout --foreground "${E2E_TIMEOUT_SECONDS}s" claude -p "$PROMPT" \
-      --model "$E2E_CLAUDE_MODEL" \
-      --output-format stream-json --verbose \
-      --no-session-persistence \
-      --allowedTools "$TOOL" \
-      > "$STREAM" 2> "$E2E_ROOT/stderr.txt") || true
-  if jq -e 'select(.type == "result")' "$STREAM" >/dev/null 2>&1; then
-    RAN=1
-    break
+# Each case gets an empty workspace and fresh session. Disabling skills in
+# the first case exercises server instructions and descriptions on their own.
+# Pre-allow every plugin tool (and Skill), not only the expected winner.
+PREFIX="mcp__plugin_intelli-search_intelli_search__"
+for CASE in descriptions-only factual-auto factual-explicit comparison-auto; do
+  EXPECTED=intelli_search
+  SKILL_MODE=required
+  CASE_TIMEOUT="$E2E_TIMEOUT_SECONDS"
+  FLAGS=()
+  case "$CASE" in
+    descriptions-only)
+      PROMPT='Using intelli search, what is the latest Nano Banana model release?'
+      SKILL_MODE=disabled
+      FLAGS+=(--disable-slash-commands)
+      ;;
+    factual-auto)
+      PROMPT='Using intelli search, what is the latest Nano Banana model release?'
+      ;;
+    factual-explicit)
+      PROMPT='First load the intelli-search:intelli-search skill. Using intelli search, what is the latest stable TypeScript release?'
+      ;;
+    comparison-auto)
+      PROMPT='Using intelli search, compare SQLite WAL and rollback journal modes for a small multi-user application. Analyse reader/writer concurrency, checkpointing and filesystem constraints using multiple official documentation pages, and explain the tradeoffs.'
+      EXPECTED=intelli_research
+      CASE_TIMEOUT="$E2E_RESEARCH_TIMEOUT_SECONDS"
+      ;;
+  esac
+  CASE_WORKSPACE="$WORKSPACE/$CASE"
+  mkdir -p "$CASE_WORKSPACE"
+  STREAM="$E2E_ROOT/$CASE.jsonl"
+  echo "Case: $CASE"
+  # No automatic retries: a failed routing decision must remain a failure.
+  if ! (cd "$CASE_WORKSPACE" && timeout --foreground "${CASE_TIMEOUT}s" \
+      claude -p "$PROMPT" --model "$E2E_CLAUDE_MODEL" \
+      --output-format stream-json --verbose --no-session-persistence \
+      --allowedTools "Skill,${PREFIX}intelli_search,${PREFIX}intelli_research,${PREFIX}intelli_extract,${PREFIX}intelli_collate" \
+      "${FLAGS[@]}" > "$STREAM" 2> "$E2E_ROOT/$CASE.stderr"); then
+    bad "$CASE: session process failed or timed out"
   fi
-  if completed_sidecar || [[ "$ATTEMPT" -eq 2 ]]; then break; fi
-  echo "   ⚠️  attempt ${ATTEMPT}/2 produced no result event; retrying after 30s"
-  sleep 30
-done
-if [[ "$RAN" -ne 1 ]]; then
-  echo "❌ claude -p produced no result event"
-  tail -20 "$E2E_ROOT/stderr.txt" || true
-  exit 1
-fi
-
-# ── Verification ───────────────────────────────────────────────────
-echo
-echo "── Verification"
-INIT="$(jq -c 'select(.type == "system" and .subtype == "init")' "$STREAM" | head -n 1)"
-if jq -e --arg s "$SERVER" '.mcp_servers[] | select(.name == $s and .status == "connected")' <<<"$INIT" >/dev/null 2>&1; then
-  ok "session init reports $SERVER connected"
-else
-  bad "session init does not report $SERVER connected"
-  jq -c '{mcp_servers, plugins, plugin_errors, mcp_server_errors}' <<<"$INIT" 2>/dev/null || true
-fi
-if jq -e --arg t "$TOOL" '.tools | index($t)' <<<"$INIT" >/dev/null 2>&1; then
-  ok "session exposes $TOOL"
-else
-  bad "session does not expose $TOOL"
-fi
-
-TOOL_USE_ID="$(jq -r --arg t "$TOOL" 'select(.type == "assistant") | .message.content[]? | select(.type == "tool_use" and .name == $t) | .id' "$STREAM" | head -n 1)"
-if [[ -n "$TOOL_USE_ID" ]]; then
-  ok "model called $TOOL"
-  if jq -e --arg id "$TOOL_USE_ID" 'select(.type == "user") | .message.content[]? | select(.type == "tool_result" and .tool_use_id == $id and (.is_error | not))' "$STREAM" >/dev/null 2>&1; then
-    ok "tool result returned without error"
-    # Claude Code may expose structuredContent instead of the text block.
-    # Assert the model-visible payload contains the summary and cache appendix.
-    if jq -se --arg id "$TOOL_USE_ID" '
-      [ .[] | select(.type == "user") | .message.content[]?
-        | select(.type == "tool_result" and .tool_use_id == $id)
-        | .content
-        | if type == "array" then map(select(.type == "text") | .text) | join("\n") else . end
-        | . as $raw | (try fromjson catch $raw)
-        | if type == "object" then (.text // "") else . end
-        | select(type == "string")
-        | contains("**Cache**:") and contains("**Report**:") and
-          (split("\n\n---\n")[0] | length > 100) ] | any
-    ' "$STREAM" >/dev/null 2>&1; then
-      ok "model-visible tool result contains the research summary and cache appendix"
-    else
-      bad "model-visible tool result lacks research text (metadata alone is insufficient)"
+  if node "$PROJECT_DIR/test/helpers/claude-routing.mjs" "$STREAM" "$EXPECTED" "$SKILL_MODE"; then
+    ok "$CASE: discovery, invocation, routing and model-visible result"
+  else
+    bad "$CASE: transcript verification"
+  fi
+  if [[ "$EXPECTED" == intelli_research ]]; then
+    # Deep analysis may follow up on a real evidence gap. Check every sidecar.
+    META_FILES=()
+    if [[ -d "$CASE_WORKSPACE/.search" ]]; then
+      mapfile -t META_FILES < <(find "$CASE_WORKSPACE/.search" -mindepth 2 -maxdepth 2 -name meta.json)
     fi
-  else
-    bad "tool result is an error or missing"
-    jq -c --arg id "$TOOL_USE_ID" 'select(.type == "user") | .message.content[]? | select(.tool_use_id == $id)' "$STREAM" | cut -c1-400
+    VERSION="$(jq -r .version "$PROJECT_DIR/packages/mcp/package.json")"
+    if [[ "${#META_FILES[@]}" -eq 0 ]]; then bad "$CASE: no research sidecar"; fi
+    for META in "${META_FILES[@]}"; do
+      if jq -e --arg v "$VERSION" \
+          '.adapter == "mcp" and .extensionVersion == $v and .outcome == "completed" and (.stages.fetch.requested | type == "number") and .stages.fetch.requested > 0 and .stages.fetch.requested <= 3 and (.stages.extract.succeeded | type == "number") and .stages.extract.succeeded > 0' \
+          "$META" >/dev/null && [[ -s "${META%/meta.json}/report.md" ]]; then
+        ok "$CASE: completed research, current package and configured page cap"
+      else
+        bad "$CASE: invalid research artefacts"
+      fi
+    done
+  elif [[ -d "$CASE_WORKSPACE/.search" ]]; then
+    bad "$CASE: quick lookup unexpectedly created a research cache"
   fi
-else
-  bad "model did not call $TOOL"
-fi
+  if [[ "$CASE" != comparison-auto ]]; then sleep "$E2E_RUN_GAP_SECONDS"; fi
+done
 
-CACHE_DIR="$(find "$WORKSPACE/.search" -maxdepth 1 -mindepth 1 -type d -name '20*' 2>/dev/null | head -n 1 || true)"
-if [ -n "$CACHE_DIR" ] && [ -f "$CACHE_DIR/report.md" ] && [ -f "$CACHE_DIR/meta.json" ]; then
-  ok "cache written in the project directory: ${CACHE_DIR#"$E2E_ROOT"/}"
-else
-  bad "missing cache artifacts under the project's .search/"
-fi
-if [ -n "$CACHE_DIR" ] && [ -f "$CACHE_DIR/meta.json" ]; then
-  if jq -e '.adapter == "mcp" and .outcome == "completed"' "$CACHE_DIR/meta.json" >/dev/null 2>&1; then
-    ok "telemetry records the mcp adapter and a completed outcome"
-  else
-    bad "telemetry lacks the mcp adapter or a completed outcome"
-  fi
-fi
-if jq -e 'select(.type == "result") | select(.is_error | not)' "$STREAM" >/dev/null 2>&1; then
-  ok "session ended without error"
-else
-  bad "session ended with an error"
-fi
-
-# ── Credential hygiene ─────────────────────────────────────────────
-# The file is known to exist: the configure step above asserted the plugin
-# secret in it, so this check cannot pass on a missing file.
-if jq -e 'has("claudeAiOauth")' "$CLAUDE_HOME_DIR/.credentials.json" >/dev/null 2>&1; then
+# The credential file exists because key configuration was asserted above.
+if jq -e 'has("claudeAiOauth")' "$CLAUDE_HOME_DIR/.credentials.json" >/dev/null; then
   bad "isolated profile received a login credential"
 else
-  ok "isolated profile holds no login credential (token was never stored)"
+  ok "isolated profile holds no login credential"
 fi
 if [[ "$(stat -c %Y "$OPERATOR_CREDENTIALS" 2>/dev/null || echo absent)" == "$OPERATOR_MTIME" ]]; then
   ok "operator credential file untouched"
 else
   bad "operator credential file changed during the run"
 fi
-
-echo
-if [[ "$ERRORS" -eq 0 ]]; then
-  echo "🎉 CLAUDE CODE PLUGIN SESSION PASSED"
-else
-  echo "❌ CLAUDE CODE PLUGIN SESSION FAILED ($ERRORS check(s))"
+if [[ "$ERRORS" -ne 0 ]]; then
+  echo "CLAUDE CODE PLUGIN SESSION FAILED ($ERRORS checks)"
   exit 1
 fi
+echo "CLAUDE CODE PLUGIN SESSION PASSED"

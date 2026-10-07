@@ -88,3 +88,28 @@ node scripts/generate-plugin-bundles.mjs --mode tarball \
 This command generates bundles only; it does not build, pack, vendor-install or install them into a host. Codex performs no path expansion in plugin MCP configuration, so tarball mode requires the absolute vendor directory at generation time. Claude Code resolves `${CLAUDE_PLUGIN_ROOT}` at launch.
 
 The tested full installation flow is [`test/e2e/12_plugin_bundles.sh`](../test/e2e/12_plugin_bundles.sh): build and pack the MCP workspace, generate local bundles, install the tarball into both vendor directories, then install the marketplaces into isolated host profiles and check connection and skill discovery. It uses dummy credentials, not a copied operator credential store. Set `TMPDIR` beneath the repository's gitignored `.tmp/` on encrypted hosts before running it. Credentialed research is a separate check in scenarios 13 and 14; see [Compatibility](../docs/COMPATIBILITY.md#host-plugins) for evidence classes and limits.
+
+## Claude Tool Routing
+
+[`test/e2e/13_claude_code_plugin.sh`](../test/e2e/13_claude_code_plugin.sh) evaluates tool selection in four fresh Claude Code sessions against the generated local-tarball plugin. It distinguishes installation and skill discovery from successful skill invocation before an operation. Both search and research remain available; no prompt names the expected operation.
+
+| Case | Skill State | Expected Operation |
+|---|---|---|
+| Latest Model Release | Disabled with `--disable-slash-commands` | Search using server instructions and tool descriptions |
+| Latest Model Release | Available, no explicit loading request | Skill invocation, then search |
+| Latest Package Release | Explicit loading request | Skill invocation, then search |
+| Detailed Comparison | Available, no explicit loading request | Skill invocation, then research with an extraction focus and page budget |
+
+The factual cases allow at most two search calls and reject other plugin operations. The comparison case allows one or more research calls. The automated checks do not establish whether a follow-up query is narrower or addresses missing evidence; inspect the retained transcript to assess that distinction. The checks require successful model-visible answers, sources for search, and completed workspace artefacts for research. Each result records the actual model, operation count, skill discovery and invocation, use of `ToolSearch`, and session duration. These are behavioural observations, not guarantees across models or host versions. The explicit-loading case does not measure automatic skill selection.
+
+Run with `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` and an OpenRouter key, using the credential setup documented in the repository agent guide. The script parses the gitignored `.env`; it never copies the operator's login credentials. Select a model and retain traces with:
+
+```bash
+E2E_CLAUDE_MODEL='claude-opus-5-5[1m]' \
+E2E_KEEP_ARTIFACTS=1 \
+  ./test/e2e/13_claude_code_plugin.sh
+```
+
+This consumes live provider quota and spaces the sessions by `E2E_RUN_GAP_SECONDS` (default `20`). Factual sessions have an `E2E_TIMEOUT_SECONDS` deadline (default `180`); deep analysis has a separate `E2E_RESEARCH_TIMEOUT_SECONDS` deadline (default `540`) to allow follow-up research. Retained runs live under `.tmp/intelli-claude-e2e-*`; the plugin credential file is removed even on failure. The launcher uses an absolute vendored entrypoint, avoiding local workspace binary resolution through `npx`. Do not treat an interactive session opened in this development repository as evidence of the published package without checking its running entrypoint.
+
+The server sends routing and skill-loading guidance in its MCP `instructions` field as well as its tool descriptions. Claude Code [documents server instructions as context used for tool discovery](https://code.claude.com/docs/en/mcp#scale-with-mcp-tool-search). These instructions guide the model; they do not enforce skill loading. Deterministic protocol tests check that the server transmits them, while the live scenario checks the model's actions. Native `Pi` tool descriptions and frozen schemas remain unchanged.

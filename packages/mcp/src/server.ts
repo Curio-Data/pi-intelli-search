@@ -22,6 +22,26 @@ import { installStdoutGuard } from "./stdout-guard.js";
 type OperationName = keyof OperationInputs;
 type Runtime = Awaited<ReturnType<typeof createRuntime>>;
 
+// Kept in the MCP adapter: native tool contracts and shared schemas are unchanged.
+const skillGuidance =
+  "Before the first intelli-search call in a session, load the intelli-search " +
+  "skill if available (plugins expose it as intelli-search:intelli-search). " +
+  "If the host has no such skill, use the tool descriptions without blocking.";
+
+const serverInstructions =
+  "Use intelli-search for current web information. " + skillGuidance + " " +
+  "Start with intelli_search for factual questions, latest versions, release " +
+  "dates and brief lookups. It returns an answer with sources without the " +
+  "multi-page fetch, extraction and collation pipeline. If a search answer " +
+  "looks stale or its sources disagree on the current version, try one " +
+  "narrower intelli_search targeting official sources before escalating. " +
+  "Use intelli_research " +
+  "for comparisons, detailed analysis or when a search answer leaves a " +
+  "specific evidence gap requiring multiple pages. Do not expand a simple " +
+  "lookup into unrequested research. For research, supply a focusPrompt and " +
+  "set maxUrls to the smallest useful breadth (3 for targeted research). " +
+  "Use the returned summary; read cache files only when it is insufficient.";
+
 const toolDefinitions: Array<{
   name: OperationName;
   title: string;
@@ -33,8 +53,12 @@ const toolDefinitions: Array<{
     name: "intelli_search",
     title: "Intelli Search",
     description:
-      "Search the web and return a concise answer with source URLs. " +
-      "For multi-page deep research, use intelli_research instead.",
+      "Start here for quick factual questions, latest model or package " +
+      "versions, release dates and brief lookups. Returns a grounded answer " +
+      "with source URLs without fetching and extracting each page. A request " +
+      "for current information or sources alone does not need intelli_research. " +
+      "Escalate to intelli_research only for detailed analysis, comparisons " +
+      "or a specific evidence gap requiring multiple pages. " + skillGuidance,
     schema: searchSchema,
     annotations: {
       title: "Intelli Search",
@@ -51,7 +75,7 @@ const toolDefinitions: Array<{
       "page to the parts that matter for a given query. Always provide " +
       "focusPrompt to guide extraction; without it the extraction is generic. " +
       "Use this for individual pages you already have; for end-to-end " +
-      "research, use intelli_research.",
+      "research, use intelli_research. " + skillGuidance,
     schema: extractSchema,
     annotations: {
       title: "Intelli Extract",
@@ -72,7 +96,7 @@ const toolDefinitions: Array<{
       "extractions and numbered sources to the lowest free numbered sibling " +
       "folder (.1, then .2 and so on); archiving is best-effort and a " +
       "failure lets the completed run replace files in place, so copy a " +
-      "report elsewhere if it must be retained.",
+      "report elsewhere if it must be retained. " + skillGuidance,
     schema: collateSchema,
     annotations: {
       title: "Intelli Collate",
@@ -86,12 +110,16 @@ const toolDefinitions: Array<{
     name: "intelli_research",
     title: "Intelli Research",
     description:
-      "Search the web, fetch top results, extract relevant content from each " +
-      "page, and deduplicate into a concise summary. Writes all results to " +
-      "the workspace cache for follow-up; use the returned summary directly " +
-      "and read cached pages only when it is insufficient. This is the " +
-      "primary research tool; for quick factual lookups, use intelli_search " +
-      "instead. Use maxUrls to control breadth: 3 for targeted, 10 (default) " +
+      "Use for multi-page comparisons, detailed analysis or a specific " +
+      "evidence gap left by intelli_search. For a quick fact, latest model " +
+      "or package version, or release date, call intelli_search first, not " +
+      "this tool. Do not expand a simple lookup into unrequested research. " +
+      "This longer-running pipeline searches, fetches pages, extracts each " +
+      "page and collates the results; it can take minutes and incurs more " +
+      "provider calls than intelli_search. " + skillGuidance + " " +
+      "Writes results to the workspace cache; use the returned summary " +
+      "directly and read cached pages only when it is insufficient. " +
+      "Use maxUrls to control breadth: 3 for targeted, 10 (default) " +
       "for broad, 16 for exhaustive. Always provide focusPrompt to guide " +
       "extraction. All operations call external services and incur provider " +
       "charges. Repeating a query on the same UTC date attempts to archive " +
@@ -202,7 +230,10 @@ export function createProtocolServer(
     onEnqueue,
   );
   const resolveRuntime = typeof runtime === "function" ? runtime : () => Promise.resolve(runtime);
-  const server = new McpServer({ name: identity.name, version: identity.version });
+  const server = new McpServer(
+    { name: identity.name, version: identity.version },
+    { instructions: serverInstructions },
+  );
   for (const tool of toolDefinitions) {
     server.registerTool(
       tool.name,
