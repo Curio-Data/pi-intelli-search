@@ -4,21 +4,22 @@ Developer and operator tools for `intelli-search`: download charts, local usage 
 
 ## `plot-downloads.mts`
 
-Renders the weekly npm download chart in `README.md` as a hand-drawn-style Scalable Vector Graphics (SVG) image in light and dark themes, using [_rough.js_](https://roughjs.com). Explicit seeds make rendering byte-identical for unchanged data and rendering inputs.
+Renders the weekly npm download chart in `README.md` as a hand-drawn-style stacked Scalable Vector Graphics (SVG) image in light and dark themes, using [_rough.js_](https://roughjs.com). Each bar stacks the native extension's weekly downloads (lower segment) with the MCP server's (upper segment). Explicit seeds make rendering byte-identical for unchanged data and rendering inputs.
 
 Run directly with [_Node.js_](https://nodejs.org/) 22.18 or later; type stripping requires no build step:
 
 ```bash
-node scripts/plot-downloads.mts            # fetch new data, render SVGs
-node scripts/plot-downloads.mts --offline  # render from cache, no network
-npm run chart                              # same as the first command
+node scripts/plot-downloads.mts              # fetch new data, render SVGs
+node scripts/plot-downloads.mts --offline    # render from cache, no network
+npm run chart                                # same as the first command
 ```
 
 ### Inputs and Outputs
 
 | Path | Role |
 |---|---|
-| `data/downloads.json` | Append-only daily download cache (committed) |
+| `data/downloads.json` | Append-only daily download cache, native package (committed) |
+| `data/downloads-mcp.json` | Append-only daily download cache, MCP package (committed) |
 | `docs/images/downloads-light.svg` | Light-theme chart (committed) |
 | `docs/images/downloads-dark.svg` | Dark-theme chart (committed) |
 

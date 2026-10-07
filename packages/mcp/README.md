@@ -79,7 +79,6 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
   - [MCP Server Compatibility](#mcp-server-compatibility)
 - [Documentation](#documentation)
 - [Downloads](#downloads)
-  - [MCP Server Downloads](#mcp-server-downloads)
 - [Sponsor](#sponsor)
 - [Licence](#licence)
 - [Use of Large Language Models](#use-of-large-language-models)
@@ -561,9 +560,14 @@ For the standalone MCP server and host plugins, including exact tested versions 
 
 ## Downloads
 
-### MCP Server Downloads
+Weekly npm downloads for both packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment. The chart is rendered with [rough.js](https://roughjs.com) from append-only daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see `scripts/plot-downloads.mts`).
 
-View download statistics on the [`@curio-data/mcp-intelli-search` package page](https://www.npmjs.com/package/@curio-data/mcp-intelli-search).
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/downloads-dark.svg">
+    <img alt="Stacked weekly npm downloads for @curio-data/pi-intelli-search and @curio-data/mcp-intelli-search" src="https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/downloads-light.svg" width="800" />
+  </picture>
+</p>
 
 ## Sponsor
 
