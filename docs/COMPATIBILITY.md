@@ -1,6 +1,6 @@
 # Compatibility Matrix
 
-This document records host versions, artefacts and evidence classes for `intelli-search`. A version absent from this matrix has no recorded verification here. Declared ranges in the [native](../package.json) and [standalone](../packages/mcp/package.json) manifests govern compatibility requirements; this matrix records the checks performed, not a narrower support range. MCP means Model Context Protocol.
+This document records host versions, artefacts and evidence classes for `intelli-search`. A version absent from this matrix has no recorded verification here. Declared ranges in the [native](../package.json) and [standalone](../packages/mcp/package.json) manifests govern compatibility requirements; this matrix records the checks performed, not a narrower support range. MCP means Model Context Protocol; CLI means command-line interface.
 
 ## Evidence Classes
 
@@ -8,11 +8,11 @@ This document records host versions, artefacts and evidence classes for `intelli
 |---|---|
 | Deterministic | Offline tests that run in continuous integration (CI) on every change (unit, contract, protocol and packaging gates). |
 | Live: `Pi` Host | Repeatable live scenarios through the native extension or `Pi`'s own MCP client (`test/e2e/`), consuming provider quota. |
-| Live: credential-free host | Repeatable host installation checks that need no model session (`test/e2e/12_plugin_bundles.sh`). |
-| Live: credentialed host | Repeatable real host sessions through an installed plugin, authenticated with a non-refreshing host token (`test/e2e/13_claude_code_plugin.sh`) or a dedicated separate login refreshed in place by one consumer (`test/e2e/14_codex_plugin.sh`), never a copied credential file. |
-| One-time recorded | Credentialed host observations recorded once (2026-10-04). Not repeatable gates: copying Open Authorization (OAuth) credentials into disposable profiles invalidates refresh-token chains, so these checks are prohibited from re-run in that form. The credentialed host class replaces them where a non-refreshing token exists. |
-| Local-tarball | Pre-publication evidence: plugins launched a vendored copy of the packed MCP tarball. Registry-pin installation is the separate post-publication class below. |
-| Registry-pin | Post-publication evidence: plugins installed from the committed repository marketplaces launch the exact pinned version from the public registry through `npx`. Recorded once per published version. |
+| Live: Credential-Free Host | Repeatable host installation checks that need no model session (`test/e2e/12_plugin_bundles.sh`). |
+| Live: Credentialed Host | Repeatable real host sessions through an installed plugin, authenticated with a non-refreshing host token (`test/e2e/13_claude_code_plugin.sh`) or a dedicated separate login refreshed in place by one consumer (`test/e2e/14_codex_plugin.sh`), never a copied credential file. |
+| One-Time Recorded | Credentialed host observations recorded once (2026-10-04). Not repeatable gates: copying Open Authorization (OAuth) credentials into disposable profiles invalidates refresh-token chains, so these checks are prohibited from re-run in that form. The credentialed host class replaces them where a non-refreshing token exists. |
+| Local-Tarball | Pre-publication evidence: plugins launched a vendored copy of the packed MCP tarball. Registry-pin installation is the separate post-publication class below. |
+| Registry-Pin | Post-publication evidence: plugins installed from the committed repository marketplaces launch the exact pinned version from the public registry through `npx`. Recorded once per published version. |
 
 ## Native `Pi` Extension (`@curio-data/pi-intelli-search`)
 
@@ -39,14 +39,26 @@ The software development kit (SDK) and native fetch assets are verified separate
 
 | Host | Tested Version | Evidence |
 |---|---|---|
-| Claude Code | 2.1.289 | `claude plugin validate --strict` on plugin and marketplace; marketplace add, install, `claude mcp list` connection, `claude plugin details` skill discovery, and key delivery: the required sensitive `openrouter_api_key` option withholds the server while unset, reaches the server process as `OPENROUTER_API_KEY` over a different exported value, and is stored under `pluginSecrets` in `.credentials.json` on Linux (credential-free dummy values, local-tarball class). One-time observations on 2.1.289 (2026-10-05): with the option declared optional and unset, the server received an empty `OPENROUTER_API_KEY` that overrode an exported value, and `${user_config.KEY:-fallback}` is not supported, which is why the option is required; installation prints a needs-configuration notice rather than asking; `claude plugin configure --values-stdin` reports `Restart Claude Code to apply it`, and an already-open session kept its loaded value through `/mcp` reconnect until the operator set the key through `/plugin` Configure; uninstall emptied the plugin data directory. The documentation lists `--values-stdin` from 2.1.285. Real research through the installed plugin in a `claude -p` session on 2026-10-05: server connected, `intelli_research` called without a tool error, completed `mcp` sidecar in the project cache (credentialed host, local-tarball class). Registry-pin class, 2026-10-05, pinned version `0.15.0-alpha.0`: marketplace added from GitHub (`Curio-Data/pi-intelli-search`) into an isolated `CLAUDE_CONFIG_DIR`, plugin installed, key set through `claude plugin configure --values-stdin`, `config.json` written as the skill instructs, and `claude mcp list` connected through `npx -y --package @curio-data/mcp-intelli-search@0.15.0-alpha.0`. Qualified tool names observed in one credentialed session (one-time recorded). `${CLAUDE_PROJECT_DIR}` MCP `env` expansion is verified on this version only |
+| Claude Code | 2.1.289 | Credential-free installation and key-delivery checks; real local-tarball research; registry-pin installation and connection for `0.15.0-alpha.0` (2026-10-05). Separate capabilities and limits are recorded below |
 | Codex CLI | 0.144.5 | Repeatable credential-free installation checks; real research through the installed plugin in a `codex exec` session on 2026-10-05 with pre-approved plugin tools: completed `intelli_research` call and `mcp` sidecar (credentialed host, local-tarball class). Registry-pin class, 2026-10-05, pinned version `0.15.0-alpha.0`: marketplace added from GitHub into an isolated `CODEX_HOME`, `codex plugin add` installed from the committed catalog, `codex mcp list` shows `intelli_search` enabled on the `npx` pin, and a direct stdio `initialize` plus `tools/list` against the registry-pulled server returned all four `intelli_*` tools; separate one-time observations and exclusions listed below |
+
+### Claude Code Evidence and Limits
+
+| Capability | Evidence | Limits |
+|---|---|---|
+| Installation and Skill Discovery | On 2.1.289: strict plugin/marketplace validation, marketplace add, install, `claude mcp list` connection and `claude plugin details` skill discovery | Credential-free dummy values, local-tarball class |
+| Required Key Option | The server is withheld while `openrouter_api_key` is unset. Once set, it reaches the process as `OPENROUTER_API_KEY` over a different exported value and is stored under `pluginSecrets` in `.credentials.json` on Linux | Dummy-value check on 2.1.289; not a claim about every platform |
+| Real Research | A `claude -p` session connected, called `intelli_research` without a tool error and wrote a completed `mcp` sidecar in the project cache (2026-10-05) | Credentialed host, local-tarball class; model-visible answer verification is separate in [Release Candidate Verification](#release-candidate-verification) |
+| Registry Installation | Isolated `CLAUDE_CONFIG_DIR`, marketplace from `Curio-Data/pi-intelli-search`, plugin install, key via `--values-stdin`, configuration as instructed, and connection through `npx -y --package @curio-data/mcp-intelli-search@0.15.0-alpha.0` | Registry-pin class, 2026-10-05; connection does not establish full research |
+| Tool Names and Paths | Qualified tool names observed in one credentialed session; `${CLAUDE_PROJECT_DIR}` expansion in MCP `env` verified | One-time recorded on 2.1.289 only |
+
+One-time setup observations on 2.1.289 (2026-10-05): an optional unset key option sent an empty `OPENROUTER_API_KEY`, overriding an exported value; `${user_config.KEY:-fallback}` was unsupported. These observations motivated the required option. Installation printed a needs-configuration notice rather than prompting. `claude plugin configure --values-stdin` reported `Restart Claude Code to apply it`; an open session retained its loaded value through `/mcp` reconnect until the operator set the key through `/plugin` Configure. Uninstall emptied the plugin data directory. Host documentation lists `--values-stdin` from 2.1.285, a documentation statement rather than a local check of that version.
 
 ### Codex Evidence and Limits
 
 - **Repeatable Checks:** Marketplace add, `codex plugin add` installation, installed-cache layout and `codex debug prompt-input` skill discovery use the credential-free, local-tarball evidence classes. `test/e2e/14_codex_plugin.sh` adds a real `codex exec` research session from a dedicated login.
 - **Unattended Approval:** `codex exec` cancels a plugin MCP tool call that would prompt (`user cancelled MCP tool call`) even with `approval_policy = "never"`; `default_tools_approval_mode = "approve"` in the plugin's `mcp_servers` table allows it.
-- **One-Time Observations:** The recorded credentialed session completed the MCP handshake and exposed qualified tool names. The 0.144.5 inspection found that the command-line interface (CLI) ignored the portable Agent Plugins layout; the shipped bundle uses the compatibility layout. See [Phase 5](plans/mcp-intelli-search/PHASE-5.md#codex-cli-01445).
+- **One-Time Observations:** The recorded credentialed session completed the MCP handshake and exposed qualified tool names. The 0.144.5 inspection found that the CLI ignored the portable Agent Plugins layout; the shipped bundle uses the compatibility layout. See [Phase 5](plans/mcp-intelli-search/PHASE-5.md#codex-cli-01445).
 - **Excluded Surfaces:** The terminal user interface (TUI) and integrated development environment (IDE) extension were not exercised. The Phase 5 record describes the IDE extension as lacking plugin support at that time; this is not a fresh compatibility check.
 
 ## Release Candidate Verification

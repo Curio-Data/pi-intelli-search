@@ -123,7 +123,7 @@ function renderSkill(host, root = REPO_ROOT) {
   const cacheReadHint =
     host === "claude-code"
       ? "Use the `Read` tool, this host's file-reading capability."
-      : "Read those files with your shell or file-reading tools.";
+      : "Read those files with available shell or file-reading tools.";
   const setup = readFileSync(
     join(root, "guidance", `setup-${host}.md`),
     "utf8",
@@ -395,7 +395,7 @@ No arguments: regenerate the tracked registry launchers and marketplaces.
 
 Build and npm pack the MCP workspace first; install that tarball into both
 vendor directories before installing the generated marketplaces.
-See scripts/README.md for the complete local-tarball procedure.`);
+See scripts/README.md for the generator reference and the tested install flow.`);
     return;
   }
   const args = parseArgs(process.argv.slice(2));

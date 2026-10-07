@@ -189,6 +189,13 @@ describe("plugin bundle generation", () => {
         skill.includes("file-reading"),
         `${host}: host-neutral file-reading wording`,
       );
+      assert.match(skill, /Archiving is best-effort/, `${host}: no retention guarantee`);
+      assert.match(skill, /new run can replace the canonical files in place/, `${host}: archive fallback disclosed`);
+      assert.match(skill, /Harvesting is best-effort, not a complete record of sources consulted/, `${host}: citation scope`);
+      assert.match(skill, /pipeline awaits the judge/, `${host}: supplementary-stage latency`);
+      assert.match(skill, /`details\.cachePath`/, `${host}: custom cache paths supported`);
+      assert.match(skill, /pass catalogue validation for the required roles/, `${host}: model capability limits`);
+      assert.ok(!skill.includes("your shell"), `${host}: host-neutral register`);
       assert.ok(!skill.includes("{{"), `${host}: no unreplaced tokens`);
       assert.ok(!skill.includes("\u2014"), `${host}: no typographic em dash`);
       assert.ok(
