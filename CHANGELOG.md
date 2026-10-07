@@ -6,10 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [pi-0.16.0] - Unreleased
+
+### Fixed
+
+- Completed collation uses only successful, non-empty extractions rather than treating search-only citations as fetched evidence. The Source Assessment inventory and cache references are generated from the run's actual evidence manifest. Unknown source IDs, prose URLs absent from the supplied evidence and model-generated numbered cache references fail before report writes or refresh rotation, preserving prior successful output.
+- Empty research extractions count as failures. Manual collation requires non-empty evidence, rejects duplicate extraction URLs and labels its evidence as caller-supplied rather than server-fetched. Optional full pages appear as `Not cached` when absent, and follow-up hints no longer guess a first-page filename.
+
+### Changed
+
+- Source Assessment now records evidence identity, extraction type and exact cache paths instead of model-generated relevance and unique-contribution ratings. The optional manual `searchSummary` input remains accepted but does not supply synthesis evidence. Input parameters, model defaults and the directory layout are unchanged; reference validation does not establish factual accuracy. Code examples and extracted cross-links remain content rather than additional fetched sources.
+
+## [mcp-0.16.0] - Unreleased
+
+Core behaviour is shared with [pi-0.16.0] and recorded there.
+
 ### Changed
 
 - The MCP server sends search-first routing and optional skill-loading guidance through its `instructions` field and tool descriptions. Factual questions, latest versions and release dates are directed to `intelli_search`; comparisons, detailed analysis and multi-page evidence gaps are directed to `intelli_research`. These instructions guide host models rather than enforce tool choice.
-- The _Claude Code_ and _Codex_ plugin skills place tool selection before setup and give every research example an explicit `maxUrls` page budget. Native tool descriptions, configuration and the shared engine are unchanged.
+- The _Claude Code_ and _Codex_ plugin skills place tool selection before setup and give every research example an explicit `maxUrls` page budget. Native tool descriptions are unchanged.
 
 ## [pi-0.15.0] - 2026-10-07
 
@@ -434,6 +449,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
 [mcp-0.15.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.15.0
+[pi-0.16.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.16.0
+[mcp-0.16.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.16.0
 [pi-0.15.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.15.0
 [mcp-0.15.0-alpha.0]: https://www.npmjs.com/package/@curio-data/mcp-intelli-search/v/0.15.0-alpha.0
 [0.14.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/v0.14.0

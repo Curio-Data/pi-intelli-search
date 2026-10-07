@@ -78,30 +78,21 @@ function makeExt(url: string, title: string): ExtractResult {
 }
 
 describe("buildCollationMessage", () => {
-  it("includes query, cache path, and per-source blocks with file references", () => {
+  it("includes only successful extraction evidence, not search claims or cache paths", () => {
     const msg = buildCollationMessage(
-      "the query",
-      ".search/2026-01-01-slug-hash",
-      "SEARCH SUMMARY",
-      [makeExt("https://example.com/a", "Page A"), makeExt("https://other.org/b", "Page B")],
+      "the query", ".search/2026-01-01-slug-hash", "SEARCH SUMMARY https://unfetched.example/",
+      [makeExt("https://example.com/a", "Page A"), makeExt("https://other.org/b", "Page B"),
+        { ...makeExt("https://failed.example", "Failed"), status: "failed" },
+        { ...makeExt("https://empty.example", "Empty"), extraction: " \n" }],
     );
-    assert.ok(msg.startsWith("Original query: the query\n"));
-    assert.ok(msg.includes("Cache path: .search/2026-01-01-slug-hash/\n\n"));
-    assert.ok(msg.includes("Search summary (from the search model):\nSEARCH SUMMARY\n\n"));
-    assert.ok(msg.includes("--- Source 1: https://example.com/a ---\n"));
-    assert.ok(msg.includes("Title: Page A\n"));
-    assert.ok(msg.includes("Type: official docs\n"));
-    assert.ok(
-      msg.includes("Extraction file: .search/2026-01-01-slug-hash/extractions/01-example-com.md\n"),
-    );
-    assert.ok(
-      msg.includes("Full page file: .search/2026-01-01-slug-hash/sources/01-example-com.md\n"),
-    );
-    assert.ok(msg.includes("--- Source 2: https://other.org/b ---\n"));
-    assert.ok(
-      msg.includes("Extraction file: .search/2026-01-01-slug-hash/extractions/02-other-org.md\n"),
-    );
-    assert.ok(msg.includes("\nEXTRACTED:https://example.com/a\n\n"));
+    assert.deepEqual(JSON.parse(msg), {
+      query: "the query",
+      sources: [
+        { id: "S1", url: "https://example.com/a", title: "Page A", type: "official docs", extraction: "EXTRACTED:https://example.com/a" },
+        { id: "S2", url: "https://other.org/b", title: "Page B", type: "official docs", extraction: "EXTRACTED:https://other.org/b" },
+      ],
+    });
+    assert.doesNotMatch(msg, /SEARCH SUMMARY|unfetched|failed|empty|\.search/);
   });
 
   it("omits the search summary section when not given", () => {
@@ -111,7 +102,7 @@ describe("buildCollationMessage", () => {
     assert.ok(!msg.includes("Search summary"));
   });
 
-  it("cites physical filenames for mixed outcomes when given a run identity", () => {
+  it("keeps evidence IDs independent of file slots in mixed runs", () => {
     const extractions = [
       { ...makeExt("https://a.example/", "a"), extraction: "", status: "failed" as const },
       makeExt("https://b.example/", "b"),
@@ -127,20 +118,17 @@ describe("buildCollationMessage", () => {
       extractions.filter((e) => e.status === "success"),
       identity,
     );
-    // The leading failure keeps its slot; successful extractions cite the
-    // files writeCacheFiles writes instead of renumbering.
-    assert.ok(msg.includes("Extraction file: .search/x/extractions/02-b-example.md\n"));
-    assert.ok(msg.includes("Full page file: .search/x/sources/02-b-example.md\n"));
-    assert.ok(msg.includes("Extraction file: .search/x/extractions/03-c-example.md\n"));
-    assert.ok(!msg.includes("01-b-example.md"), "must not cite a renumbered file");
+    assert.deepEqual(JSON.parse(msg).sources.map((source: { id: string }) => source.id), ["S1", "S2"]);
+    assert.doesNotMatch(msg, /\.md|\.search/);
+    assert.equal(identity.extractionFileFor("https://b.example/"), "02-b-example.md");
   });
 
   it("omits the full-page line when the identity has no source file for a URL", () => {
     const extraction = makeExt("https://a.example/", "a");
     const identity = allocateSourceIdentity([extraction], []);
     const msg = buildCollationMessage("q", ".search/x", undefined, [extraction], identity);
-    assert.ok(msg.includes("Extraction file: .search/x/extractions/01-a-example.md\n"));
-    assert.ok(!msg.includes("Full page file"), "no full page exists; none may be advertised");
+    assert.doesNotMatch(msg, /Full page file|Extraction file|\.search/);
+    assert.equal(JSON.parse(msg).sources[0].id, "S1");
   });
 });
 
@@ -151,8 +139,9 @@ describe("formatCacheAppendix", () => {
     assert.ok(out.includes("**Cache**: `.search/slug/`\n"));
     assert.ok(out.includes("**Report**: `.search/slug/report.md`\n"));
     assert.ok(out.includes("**Sources**: 3 succeeded, 2 failed\n"));
-    assert.ok(out.includes("- Read the extraction: `read .search/slug/extractions/01-*.md`\n"));
-    assert.ok(out.includes("- Read the full page: `read .search/slug/sources/01-*.md`\n"));
+    assert.ok(out.includes("Read the report: `read .search/slug/report.md`\n"));
+    assert.ok(out.includes("Choose exact extraction and full-page paths"));
+    assert.doesNotMatch(out, /01-\*/);
   });
 });
 

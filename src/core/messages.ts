@@ -8,7 +8,8 @@
 //
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 // SPDX-License-Identifier: Apache-2.0
-import { allocateSourceIdentity, type SourceIdentity } from "./cache.js";
+import type { SourceIdentity } from "./cache.js";
+import { evidenceExtractions } from "./provenance.js";
 import { truncateContent } from "./util.js";
 import type { ExtractResult, ResearchSettings } from "./types.js";
 import type { DeepReadonly } from "./contracts.js";
@@ -91,59 +92,27 @@ export function buildExtractionMessage(
 }
 
 /**
- * Build the user message for the collation call. Includes the search summary
- * when present and one block per succeeded extraction with cache file
- * references the collation model can cite.
- *
- * File references come from `identity`, so the prompt cites exactly the
- * filenames `writeCacheFiles` writes with the same identity. Without an
- * identity the fallback renumbers the succeeded list (the historical
- * behaviour for fully successful runs); full-page references are only
- * printed when the identity actually allocates one for the URL, so manual
- * collation without optional full-page content advertises no missing file.
+ * Give synthesis only the supplied evidence, not the search model's claims or
+ * cache paths. Legacy arguments remain accepted by this shared helper, but do
+ * not cross the evidence boundary. Provenance is rendered after validation.
  */
 export function buildCollationMessage(
   query: string,
-  cachePath: string,
-  searchSummary: string | undefined,
+  _cachePath: string,
+  _searchSummary: string | undefined,
   succeededExtractions: ExtractResult[],
-  identity?: SourceIdentity,
+  _identity?: SourceIdentity,
 ): string {
-  // Legacy fallback for callers without a run identity: renumber the
-  // succeeded list and assume a full page exists for each (the historical
-  // behaviour). Operations pass a real identity so mixed outcomes cite
-  // exactly the files written.
-  const id =
-    identity ??
-    allocateSourceIdentity(
-      succeededExtractions,
-      succeededExtractions.map((e) => ({
-        url: e.url,
-        title: e.title,
-        content: "",
-        status: "success" as const,
-      })),
-    );
-  let msg = `Original query: ${query}\n`;
-  msg += `Cache path: ${cachePath}/\n\n`;
-  if (searchSummary) {
-    msg += `Search summary (from the search model):\n${searchSummary}\n\n`;
-  }
-  for (const [i, ext] of succeededExtractions.entries()) {
-    const extractionFile = id.extractionFileFor(ext.url);
-    const sourceFile = id.sourceFileFor(ext.url);
-    msg += `--- Source ${i + 1}: ${ext.url} ---\n`;
-    msg += `Title: ${ext.title}\n`;
-    msg += `Type: ${ext.sourceType}\n`;
-    if (extractionFile) {
-      msg += `Extraction file: ${cachePath}/extractions/${extractionFile}\n`;
-    }
-    if (sourceFile) {
-      msg += `Full page file: ${cachePath}/sources/${sourceFile}\n`;
-    }
-    msg += `\n${ext.extraction}\n\n`;
-  }
-  return msg;
+  return JSON.stringify({
+    query,
+    sources: evidenceExtractions(succeededExtractions).map((source, index) => ({
+      id: `S${index + 1}`,
+      url: source.url,
+      title: source.title,
+      type: source.sourceType,
+      extraction: source.extraction,
+    })),
+  }, null, 2);
 }
 
 /**
@@ -156,8 +125,7 @@ export function formatCacheAppendix(cachePath: string, succeeded: number, failed
   out += `**Cache**: \`${cachePath}/\`\n`;
   out += `**Report**: \`${cachePath}/report.md\`\n`;
   out += `**Sources**: ${succeeded} succeeded, ${failed} failed\n`;
-  out += `\nTo explore a specific source:\n`;
-  out += `- Read the extraction: \`read ${cachePath}/extractions/01-*.md\`\n`;
-  out += `- Read the full page: \`read ${cachePath}/sources/01-*.md\`\n`;
+  out += `\n- Read the report: \`read ${cachePath}/report.md\`\n`;
+  out += `\nChoose exact extraction and full-page paths from the Source assessment above; Not cached means no full-page file exists for that source.\n`;
   return out;
 }

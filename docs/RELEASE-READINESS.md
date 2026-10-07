@@ -1,6 +1,12 @@
 # Release Readiness
 
-The current working candidate fixes the release-review findings across the native extension, shared engine and Model Context Protocol (MCP) server. Package versions are defined by the two manifests; their release notes are in [CHANGELOG.md](../CHANGELOG.md). This page records release gates, not authorisation to publish.
+The current working candidate corrects source provenance in the shared engine and carries the MCP tool-routing improvements. Package manifests on `release/0.16.0` define the prepared generation; it is not published. The publication history and earlier independent-review sections below describe the previous stable release, not clearance of this candidate. Package versions are defined by the two manifests; their release notes are in [CHANGELOG.md](../CHANGELOG.md). This page records release gates, not authorisation to publish.
+
+## Current Candidate
+
+The owner requested implementation of the provenance finding recorded in the [MCP routing review](evidence/2026-10-07-mcp-routing-review.md), including correction of pre-existing errors. The shared engine now gives collation successful extraction evidence only, renders one authoritative Source Assessment from the run manifest and validates references before report writes or rotation. Manual evidence is labelled caller-supplied. Both package manifests, the lockfile, native default history and generated plugin pins advance together; the release branch holds unpublished pins away from `main`.
+
+Independent review caught an over-strict first validator. The corrected validator preserves code examples and cross-links found in extracted content while keeping those links out of the fetched-source inventory. Verification and review dispositions for this candidate are recorded in the [provenance correction evidence](evidence/2026-10-07-provenance-correction.md). Do not substitute the previous release's full-suite or registry evidence for fresh candidate verification. Both packages still require explicit publication approval; publish MCP first, verify its registry installation and only then release native.
 
 ## Publication State
 
@@ -37,7 +43,7 @@ The security review checked [the Defuddle advisory](https://github.com/advisorie
 
 ## Independent Review
 
-Two independent whole-release reviewers examined the combined candidate after the fixes, and both re-examined the corrected tree after adjudication (reports under `.tmp/agents/release-016/reports/`, not tracked). Their verdicts agree: **no shipping-code or verification blocker remains**.
+Two independent whole-release reviewers examined the combined candidate after the fixes, and both re-examined the corrected tree after adjudication (reports under `.tmp/agents/release-016/reports/`, not tracked). Their verdicts agreed that no shipping-code or verification blocker remained for the previous stable release. That verdict does not cover the current provenance candidate.
 
 - The first review round caught a release-verification blocker: scenario 5 had failed in the interrupted suite and the initial evidence summary overstated completion. The correction (non-reasoning comparison model, retained strict assertions, honest evidence) was confirmed resolved in the follow-up pass.
 - Residual, resolved after the follow-up: the native `Pi` tool descriptions initially did not carry the cache-replacement disclosure. The owner approved it on 2026-10-06; both descriptions now carry it and the frozen tool-description fixture was regenerated as an intentional contract change.
