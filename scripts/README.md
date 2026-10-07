@@ -18,12 +18,12 @@ npm run chart                                # same as the first command
 
 | Path | Role |
 |---|---|
-| `data/downloads.json` | Append-only daily download cache, native package (committed) |
-| `data/downloads-mcp.json` | Append-only daily download cache, MCP package (committed) |
+| `data/downloads.json` | Daily download cache, native package (committed) |
+| `data/downloads-mcp.json` | Daily download cache, MCP package (committed) |
 | `docs/images/downloads-light.svg` | Light-theme chart (committed) |
 | `docs/images/downloads-dark.svg` | Dark-theme chart (committed) |
 
-The script fetches only the gap between the cache and the last complete day from the npm downloads application programming interface (API), so accumulated history does not require a query beyond the 18-month ceiling. A weekly [_GitHub_](https://github.com) Action (`.github/workflows/downloads-chart.yml`) runs every Monday and commits only when the rendered output changes.
+The script fetches the gap between the cache and the last complete day from the npm downloads application programming interface (API), so accumulated history does not require a query beyond the 18-month ceiling. The final three cached days are re-fetched on every run and overwrite their cached values, because npm computes a day's downloads shortly after UTC midnight and can revise recent days; without the trailing window a provisional value would be frozen by the cache. A weekly [_GitHub_](https://github.com) Action (`.github/workflows/downloads-chart.yml`) runs every Monday and commits only when the rendered output changes. Only complete Monday-to-Sunday weeks are drawn.
 
 ### Deterministic Rendering
 

@@ -66,13 +66,23 @@ async function loadCache(pkg: Pkg): Promise<Day[]> {
   }
 }
 
-/** Append-only: fetch just the gap between the cache and the last complete day. */
+/** npm computes a day's downloads shortly after UTC midnight and can revise
+ * recent days. Re-fetch a short trailing window so a provisional value can
+ * never be frozen by the append-only cache. */
+const REFETCH_DAYS = 3;
+
+/** Append-only plus the trailing re-fetch window: fetch the gap between the
+ * cache and the last complete day, overlapping the final days. */
 async function refresh(pkg: Pkg, offline: boolean): Promise<Day[]> {
   const cached = await loadCache(pkg);
   if (offline) return cached;
 
   const end = lastCompleteDay();
-  const start = cached.length ? addDays(cached[cached.length - 1].day, 1) : FIRST_DAY[pkg];
+  const start = cached.length
+    ? (cached.length >= REFETCH_DAYS
+        ? cached[cached.length - REFETCH_DAYS].day
+        : FIRST_DAY[pkg])
+    : FIRST_DAY[pkg];
   if (start > end) return cached;
 
   const fresh: Day[] = [];
@@ -84,6 +94,7 @@ async function refresh(pkg: Pkg, offline: boolean): Promise<Day[]> {
   }
 
   const merged = [...cached, ...fresh.filter((d) => d.day >= start && d.day <= end)];
+  // Later entries win, so re-fetched days overwrite their cached values.
   const seen = new Map(merged.map((d) => [d.day, d]));
   const out = [...seen.values()].sort((a, b) => a.day.localeCompare(b.day));
 
@@ -217,19 +228,20 @@ function render(
   const font =
     "'Comic Sans MS','Segoe Print','Bradley Hand','Chalkboard SE',cursive,sans-serif";
 
-  // legend: pi bottom segment, mcp top segment
-  const legend = (label: string, colour: string, x: number) => {
+  // legend: pi bottom segment, mcp top segment; the swatch hatch matches its
+  // series so the hatch direction stays a redundant cue beside colour.
+  const legend = (label: string, colour: string, angle: number, x: number) => {
     draw(g.rectangle(x, 36, 14, 14, {
       stroke: colour, strokeWidth: 1.4, fill: colour,
-      fillStyle: 'hachure', fillWeight: 1.2, hachureAngle: -41,
+      fillStyle: 'hachure', fillWeight: 1.2, hachureAngle: angle,
       roughness: 1.2, seed: seed++,
     }));
     parts.push(
       `<text x="${x + 20}" y="48" font-size="13" fill="${t.ink}" opacity="0.85">${esc(label)}</text>`,
     );
   };
-  legend('mcp server', t.mcp, W - M.right - 118);
-  legend('pi extension', t.pi, W - M.right - 262);
+  legend('mcp server', t.mcp, 49, W - M.right - 118);
+  legend('pi extension', t.pi, -41, W - M.right - 262);
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${font}" role="img" aria-label="Stacked weekly npm downloads for @curio-data/pi-intelli-search and @curio-data/mcp-intelli-search">
 <rect width="${W}" height="${H}" fill="${t.bg}"/>

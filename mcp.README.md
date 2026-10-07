@@ -560,7 +560,7 @@ For the standalone MCP server and host plugins, including exact tested versions 
 
 ## Downloads
 
-Weekly npm downloads for both packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment. The chart is rendered with [rough.js](https://roughjs.com) from append-only daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see `scripts/plot-downloads.mts`).
+Weekly npm downloads for both packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment. The chart is rendered with [rough.js](https://roughjs.com) from daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see `scripts/plot-downloads.mts`); the caches are append-only with a short trailing re-fetch window so npm's revisions of recent days are picked up. Only complete Monday-to-Sunday weeks are drawn, so a package's segment appears from the first refresh after its first complete week.
 
 <p align="center">
   <picture>
