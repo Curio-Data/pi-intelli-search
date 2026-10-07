@@ -22,6 +22,7 @@ This document records host versions, artefacts and evidence classes for `intelli
 | `Pi` host (facade boundary) | 0.86.0 | Real load check 2026-10-04: the branch build loads and `intelli_search` completes through the `ctx.modelRegistry.streamSimple()` facade in a dependency-isolated install; deterministic coverage of both dispatch paths |
 | `Pi` host | 1.0.0 | Compatibility audited and verified 2026-10-02, including the `fetch`/`onPayload` request hooks against pi-ai 1.0.0 |
 | `Pi` host | 1.0.1, 1.0.2 | Development hosts for the shared-engine phases; all entry gates and live scenarios |
+| `Pi` host and MCP client | 1.0.4 | Current-candidate native research and MCP-through-host checks; see [Current Candidate Verification](#current-candidate-verification) |
 | `Pi` as MCP client | 1.0.1, 1.0.2 | `test/e2e/11_mcp_stdio.sh`: real research through `Pi`'s MCP client against the standalone server (live `Pi` host class). Exact versions are recorded in [Phase 4](plans/mcp-intelli-search/PHASE-4.md#verification) and [Phase 6](plans/mcp-intelli-search/PHASE-6.md#verification) |
 
 ## Standalone MCP Server (`@curio-data/mcp-intelli-search`)
@@ -32,14 +33,14 @@ The software development kit (SDK) and native fetch assets are verified separate
 |---|---|---|
 | Node.js | v24.19.0 | Development and verification runtime for all standalone gates |
 | Node.js | 22 (floor) | `engines: >=22`; CI validates the aggregate build, test and install gates on Node 22 |
-| MCP SDK | `@modelcontextprotocol/server` 2.3.0 (lockfile-pinned) | Protocol suite: initialisation, tool listing, schema rejection, all four operations, degraded outcomes, progress, cancellation, queued cancellation, shutdown and clean stdio framing (deterministic) |
-| Fetch assets | `wreq-js` 2.3.0, `defuddle` 0.19.4 | Independent tarball install gate exercises real page fetching through the installed native assets on Linux x86-64; other platforms are not verified. Earlier phases verified `defuddle` 0.16.0 |
+| MCP SDK | `@modelcontextprotocol/server` 2.3.1 (current lockfile) | Protocol suite: initialisation, server instructions, tool listing, schema rejection, all four operations, degraded outcomes, progress, cancellation, queued cancellation, shutdown and clean stdio framing (deterministic). Earlier phases verified 2.3.0 |
+| Fetch assets | `wreq-js` 2.3.1, `defuddle` 0.19.4 (current lockfile) | Independent tarball install gate exercises real page fetching through the installed native assets on Linux x86-64; other platforms are not verified. Earlier phases verified `wreq-js` 2.3.0 and `defuddle` 0.16.0 |
 
 ## Host Plugins
 
 | Host | Tested Version | Evidence |
 |---|---|---|
-| Claude Code | 2.1.289, 2.1.292 | Credential-free installation and key-delivery checks; real local-tarball research; registry-pin installation and connection for `0.15.0-alpha.0` (2026-10-05) and for published `0.15.0` (2026-10-07, 2.1.292). Capabilities and limits are itemised below |
+| Claude Code | 2.1.289, 2.1.292, 2.1.293 | Credential-free installation and key-delivery checks; real local-tarball research; registry-pin installation and connection for `0.15.0-alpha.0` (2026-10-05) and for published `0.15.0` (2026-10-07, 2.1.292). Capabilities and limits are itemised below |
 | Codex CLI | 0.144.5, 0.160.1 | Credential-free installation checks, real research through the installed plugin, and registry-pin installation, connection and tool listing for `0.15.0-alpha.0` (2026-10-05) and published `0.15.0` (2026-10-07, 0.160.1); full credentialed local-tarball research also passed on 0.160.1 (2026-10-07). Capabilities and limits are itemised below |
 
 ### Claude Code Evidence and Limits
@@ -64,9 +65,23 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 | Plugin Layout | The 0.144.5 inspection found the CLI ignored the portable Agent Plugins layout; the shipped bundle uses the compatibility layout. See [Phase 5](plans/mcp-intelli-search/PHASE-5.md#codex-cli-01445) | One-time inspection |
 | Excluded Surfaces | The terminal user interface (TUI) and integrated development environment (IDE) extension were not exercised | The Phase 5 record describes the IDE extension as lacking plugin support at that time; not a fresh compatibility check |
 
+## Current Candidate Verification
+
+The [provenance correction evidence](evidence/2026-10-07-provenance-correction.md) records the prepared manifests' local verification. These checks do not establish publication of the candidate or a successful install from its registry pin.
+
+| Surface | Current Evidence | Remaining Limit |
+|---|---|---|
+| Native Host | `Pi` 1.0.4, default native research; successful rerun after final source changes | The complete paced suite is still pending for this generation |
+| MCP Host | Real standalone research through `Pi`'s MCP client; completed `mcp` identity and cache | No current-candidate registry-pin installation |
+| Output Budget | The paired non-reasoning collation check passes, including its tight limit | It establishes the configured size comparison, not a fixed result length including inventories |
+| Claude Code | 2.1.293 with Opus 5.5: neutral factual lookup, automatic and explicit skill invocation, and comparison research pass against the local tarball | `Bash` is removed for controlled routing; other host tools remain exposed. This is not an unrestricted-shell evaluation or a guarantee across models |
+| Provenance | Comparison inventories independently match extraction counts; every listed file exists and its source header matches | Reference consistency is not factual accuracy or claim-level grounding |
+| Deterministic and Packaging | Both builds, all tests, frozen native contracts, generated gates, audit and both independent tarball installs pass; implementation CI is linked from Release Readiness | Require exact-commit CI again for later edits |
+| Codex Plugin | No new credentialed candidate run recorded here | Scenario 14 remains a pending full-suite gate; previous stable evidence below does not cover this candidate |
+
 ## Release Candidate Verification
 
-The table records paced live verification of the 2026-10-06 candidate commits. The full paced suite subsequently completed on the merged `main` tree (2026-10-07: 14 scenarios, 0 failed, 0 skipped) before either package was staged; see [Release Readiness](RELEASE-READINESS.md#verification).
+This section records the previous stable generation, not the current provenance candidate. The table records paced live verification of the 2026-10-06 candidate commits. The full paced suite subsequently completed on the merged `main` tree (2026-10-07: 14 scenarios, 0 failed, 0 skipped) before either package was staged; see [Release Readiness](RELEASE-READINESS.md#previous-publication).
 
 | Surface | Observed Evidence |
 |---|---|
@@ -83,7 +98,7 @@ Paced live scenario history:
 3. Scenarios 10 to 14 completed in a paced continuation. One configuration recipe passed on retry after a timeout.
 4. The initial scenario 12 assertion still matched an old skill description; it was corrected to match the generated description and rerun successfully.
 
-No mandatory host check was skipped. The candidate's exact versions are in the manifests, and its release gates are in [Release Readiness](RELEASE-READINESS.md). Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
+No mandatory host check was skipped. The versions for this historical candidate are recorded in its release tags and changelog entries; the current manifests describe the next prepared generation. Its active gates are in [Release Readiness](RELEASE-READINESS.md). Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
 
 ### Published `0.15.0` Registry-Pin Verification (2026-10-07)
 
@@ -97,7 +112,7 @@ Full research through the registry-pin route remains open evidence; the credenti
 
 ## Shared Constraints
 
-- The committed plugin launchers pin the exact `@curio-data/mcp-intelli-search` version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. The stable `0.15.0` pin is published and verified: `latest` moved to `0.15.0` on 2026-10-07, and both host plugins installed from the committed catalogues into clean profiles against it. The registry-pin class covers installation, connection and tool listing; a full research call through the registry-pin route remains open evidence (the credentialed full-research scenarios run in the local-tarball class).
+- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. The current prepared pin is unpublished, so fresh plugin installation from `main` cannot resolve it until MCP publication. The stable registry pin recorded above is historical evidence, not verification of the current launchers. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
 - Full research calls have been driven through both host plugins in the local-tarball class (`test/e2e/13_claude_code_plugin.sh`, `test/e2e/14_codex_plugin.sh`). A full research call through the registry-pin route remains open evidence; the registry-pin class currently covers installation, connection and tool listing, plus a direct `npx` pull that runs the published CLI.
 - Only [_OpenRouter_](https://openrouter.ai) is a verified standalone inference provider. Other OpenAI-compatible endpoints are not claimed: reasoning, search-tool and citation behaviour differs between compatible-looking endpoints.
 - _macOS_ and _Windows_ are not verified for any artefact; the fetch dependency's native assets are exercised on _Linux_ x86-64 only.

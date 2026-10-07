@@ -517,7 +517,7 @@ Both packages write this format. The native extension resolves the cache against
 ```text
 .search/
 ├── 2026-04-19-d1-worker-api-3f7a2c/
-│   ├── report.md               # Collated summary + source index
+│   ├── report.md               # Synthesis + authoritative source inventory
 │   ├── query.txt               # Original search query
 │   ├── meta.json               # Local-only telemetry sidecar (v0.11.0+)
 │   ├── extractions/            # Per-page LLM extractions (≈3-5K each)

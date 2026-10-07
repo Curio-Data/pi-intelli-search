@@ -111,6 +111,12 @@ For a different focus per URL (for example, comparing alternatives side-by-side)
 
 Example: researching "KV vs Durable Objects". Extract KV pages with `focusPrompt="Extract KV read/write patterns, consistency model, and latency characteristics"`. Extract Durable Objects pages with `focusPrompt="Extract the consistency guarantees, transaction API, and single-computer model"`.
 
+## Evidence and Provenance
+
+The Source Assessment inventory is generated from successful, non-empty extractions, not the search model's citations. IDs such as `[S1]` identify those evidence entries; cross-links in the synthesis are not additional fetched pages. Read exact cache paths from the inventory rather than guessing numbered filenames. `Not cached` means no full-page file exists for that source. The checks establish reference consistency, not factual accuracy.
+
+Manual `intelli_collate` treats its inputs as caller-supplied evidence. Supply one non-empty successful extraction per URL; the optional `searchSummary` is accepted for compatibility but does not enter synthesis. Provenance failures return an error before report writes and preserve any prior successful output. They are not automatically retried; a manual rerun repeats the paid stages.
+
 ## Using the Result
 
 The `intelli_research` result contains a concise deduplicated summary. Use it directly. Read cache files only when the summary is insufficient for the task.

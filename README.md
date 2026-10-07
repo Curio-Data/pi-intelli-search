@@ -39,6 +39,8 @@ This repository provides two first-class packages from one research engine:
 - `@curio-data/mcp-intelli-search`: a standalone Model Context Protocol (MCP) server over standard input/output (stdio) for MCP-compatible hosts, including [_Claude Code_](https://code.claude.com/docs/en/mcp) and [_Codex_](https://developers.openai.com/codex/mcp).
 
 Both packages run the same five-stage pipeline with the same cache format. [Install](#install) covers both the [`Pi` native extension](#pi-native-extension) and the [MCP server](#mcp-server), including direct MCP registration and host plugins.
+
+The repository contains an unpublished coupled release candidate. The default marketplace launchers pin that candidate, so fresh plugin installation from `main` cannot resolve the server until MCP publication. Published npm packages remain available; the new provenance behaviour described here belongs to the prepared candidate. [Release Readiness](docs/RELEASE-READINESS.md) records the handoff and publication gates. Remove this notice after both packages are published and the registry-pin installations are verified.
 <!-- /packages -->
 <!-- packages:pi hidden
 `@curio-data/pi-intelli-search` registers four research tools natively in [`Pi`](https://github.com/earendil-works/pi), using its settings, authentication and model registry. [Install the extension](#pi-native-extension) to get started.
@@ -1121,7 +1123,7 @@ Both packages write this format. The native extension resolves the cache against
 ```text
 .search/
 ├── 2026-04-19-d1-worker-api-3f7a2c/
-│   ├── report.md               # Collated summary + source index
+│   ├── report.md               # Synthesis + authoritative source inventory
 │   ├── query.txt               # Original search query
 │   ├── meta.json               # Local-only telemetry sidecar (v0.11.0+)
 │   ├── extractions/            # Per-page LLM extractions (≈3-5K each)

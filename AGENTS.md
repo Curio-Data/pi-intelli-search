@@ -2,7 +2,7 @@
 
 This is a **`Pi` extension** that adds intelligent web research tools to the `Pi` coding agent. It provides a 5-stage research pipeline (search, fetch, extract, collate, and cache suggest) as a single tool call, plus individual tools for manual orchestration.
 
-For current cross-host release work, start at [Release Readiness](docs/RELEASE-READINESS.md). Both packages are published as the stable `0.15.0` generation (2026-10-07): the native extension and the MCP server. The [implementation handoff](docs/plans/mcp-intelli-search/README.md) and [Post-Phase 6 Checkpoint](docs/plans/mcp-intelli-search/POST-PHASE-6.md) are historical evidence, not branch-switch instructions. The strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
+For current cross-host release work, start at [Release Readiness](docs/RELEASE-READINESS.md). It distinguishes the prepared manifests from the published packages and records the owner-directed handoff from `main`, including exact-commit CI and registry-pin constraints. A fresh release agent must read that handoff before creating tags or releases. The [implementation handoff](docs/plans/mcp-intelli-search/README.md) and [Post-Phase 6 Checkpoint](docs/plans/mcp-intelli-search/POST-PHASE-6.md) are historical evidence, not branch-switch instructions. The strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
 
 ---
 
@@ -221,6 +221,7 @@ src/
 │   ├── console.ts           # Async-scoped dependency diagnostic suppression
 │   ├── annotations.ts       # Citation harvesting
 │   ├── messages.ts          # Message and appendix builders
+│   ├── provenance.ts        # Evidence validation and deterministic source inventory
 │   ├── prompts.ts           # System prompts
 │   ├── progress.ts          # Host-neutral stage progress
 │   ├── telemetry.ts         # Local sidecar with injected identity
@@ -620,6 +621,8 @@ All tools use the `intelli_` prefix to avoid collisions with other `Pi` extensio
 ## Release Policy
 
 **The agent must never create a _GitHub_ Release or trigger `npm` publication without the user's explicit permission.**
+
+The default checklists below keep unpublished catalogue pins off `main`. The owner explicitly directed the current candidate to merge before publication (2026-10-07), with a fresh agent releasing from `main`. This exception changes merge timing only: preserve the registry-pin guard, validate the exact merged commit through the retained `release/` branch, and keep MCP-first publication and separate approval gates. [Release Readiness](docs/RELEASE-READINESS.md#release-from-main) is the active handoff for this cycle.
 
 Publishing is gated through `npm` staged publishing. CI submits the tarball; the user approves it on `npmjs.com` with 2FA before it goes live:
 - **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, generated-plugin drift, and `npm pack --dry-run`. Catches packaging problems before they reach a release.

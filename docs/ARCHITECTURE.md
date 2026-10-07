@@ -102,7 +102,7 @@ The standalone bundle externalises its declared third-party dependencies and imp
 
 ### Protocol Serving
 
-The standalone package serves the four canonical tools as an MCP server over stdio through the official split server package (`@modelcontextprotocol/server`, lockfile-pinned). Tool names and input schemas mirror the native tools; descriptions embed the guidance the protocol has no separate channel for. One operation runs at a time with a bounded queue; stage progress maps to `notifications/progress` when the client supplies a token, and client cancellation aborts through the shared model policy. A startup guard diverts every non-protocol write away from standard output, so the stream carries protocol frames only; diagnostics use standard error. Closing standard input or receiving `SIGINT`/`SIGTERM` drains and aborts in-flight and queued work. [Phase 4 Results](plans/mcp-intelli-search/PHASE-4.md) records the protocol verification.
+The standalone package serves the four canonical tools as an MCP server over stdio through the official split server package (`@modelcontextprotocol/server`, lockfile-pinned). Tool names and input parameters mirror the native tools. The initialize response carries server `instructions` for routing and optional skill loading, and the tool descriptions carry the same guidance. Hosts that defer tool definitions receive server instructions before loading those definitions; the guidance does not enforce model choice. One operation runs at a time with a bounded queue; stage progress maps to `notifications/progress` when the client supplies a token, and client cancellation aborts through the shared model policy. A startup guard diverts every non-protocol write away from standard output, so the stream carries protocol frames only; diagnostics use standard error. Closing standard input or receiving `SIGINT`/`SIGTERM` drains and aborts in-flight and queued work. [Phase 4 Results](plans/mcp-intelli-search/PHASE-4.md) records the protocol verification.
 
 Successful and degraded results carry the same complete operation text in `content` and `structuredContent.text`. An explicitly selected defective configuration file leaves the protocol available with actionable tool errors and is reread on each call until it loads. Missing launcher arguments and invalid workspaces still fail before serving; loaded configuration and startup credentials remain fixed until restart.
 
@@ -158,7 +158,7 @@ plugins/                    # Generated Claude Code and Codex bundles (manifests
 ```
 .search/
 ├── 2026-04-19-d1-worker-api-3f7a2c/
-│   ├── report.md                              # Collated summary + source index
+│   ├── report.md                              # Synthesis + authoritative source inventory
 │   ├── query.txt                              # Original search query
 │   ├── meta.json                              # Local-only telemetry sidecar (v0.11.0+)
 │   ├── extractions/                           # Per-page LLM extractions (≈3-5K each)
