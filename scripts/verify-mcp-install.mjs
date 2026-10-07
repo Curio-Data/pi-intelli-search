@@ -53,7 +53,7 @@ async function run(command, args, cwd = dir, extraEnv = {}) {
 }
 try {
   await run("npm", ["run", "build:mcp"], root);
-  const packed = JSON.parse(
+  const packOutput = JSON.parse(
     (
       await run(
         "npm",
@@ -69,7 +69,14 @@ try {
         root,
       )
     ).stdout,
-  )[0];
+  );
+  // npm 11 and earlier print an array of pack manifests; npm 12 keys the same
+  // manifests by package name. Accept both so the gate does not depend on the
+  // runner's npm version.
+  const packed = Array.isArray(packOutput)
+    ? packOutput[0]
+    : Object.values(packOutput)[0];
+  assert(packed, "npm pack --json produced no manifest");
   const names = packed.files.map((entry) => entry.path);
   for (const name of [
     "dist/cli.js",
