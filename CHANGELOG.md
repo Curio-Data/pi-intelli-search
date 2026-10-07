@@ -6,9 +6,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-The versioned sections marked `Unreleased` are prepared release notes, not publication records. Set each release date when that package's release is approved.
+Release dates record approval of the package release, not publication on `npm`. [Release Readiness](docs/RELEASE-READINESS.md) records staging and publication state.
 
-## [pi-0.16.0] - Unreleased
+## [pi-0.16.0] - 2026-10-07
 
 ### Fixed
 
@@ -20,7 +20,7 @@ The versioned sections marked `Unreleased` are prepared release notes, not publi
 - Reports contain one Source Assessment inventory with `S1`-style identifiers, replacing the separate Source Index and model-generated relevance and unique-contribution ratings. The inventory records evidence identity, extraction type and exact cache paths. The optional manual `searchSummary` input remains accepted but does not supply synthesis evidence. Input parameters, model defaults and the directory layout are unchanged; reference validation does not establish factual accuracy. Code examples and extracted cross-links remain content rather than additional fetched sources.
 - Provenance validation failures return an actionable error rather than a completed report. They are not automatically retried; a manual rerun repeats the paid stages. Existing successful cache output is preserved.
 
-## [mcp-0.16.0] - Unreleased
+## [mcp-0.16.0] - 2026-10-07
 
 Core behaviour is shared with [pi-0.16.0] and recorded there.
 

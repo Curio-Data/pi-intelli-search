@@ -22,7 +22,8 @@ This document records host versions, artefacts and evidence classes for `intelli
 | `Pi` host (facade boundary) | 0.86.0 | Real load check 2026-10-04: the branch build loads and `intelli_search` completes through the `ctx.modelRegistry.streamSimple()` facade in a dependency-isolated install; deterministic coverage of both dispatch paths |
 | `Pi` host | 1.0.0 | Compatibility audited and verified 2026-10-02, including the `fetch`/`onPayload` request hooks against pi-ai 1.0.0 |
 | `Pi` host | 1.0.1, 1.0.2 | Development hosts for the shared-engine phases; all entry gates and live scenarios |
-| `Pi` host and MCP client | 1.0.4 | Current-candidate native research and MCP-through-host checks; see [Current Candidate Verification](#current-candidate-verification) |
+| `Pi` host and MCP client | 1.0.4 | Complete current-candidate paced live suite; see [Current Candidate Verification](#current-candidate-verification) |
+| pi-ai peer dependency | 1.1.0 | Independent native fresh-tarball installation and plain-Node smoke import pass on 2026-10-07; runtime loading, tool registration and package identity only, not a live pipeline on a newer `Pi` host |
 | `Pi` as MCP client | 1.0.1, 1.0.2 | `test/e2e/11_mcp_stdio.sh`: real research through `Pi`'s MCP client against the standalone server (live `Pi` host class). Exact versions are recorded in [Phase 4](plans/mcp-intelli-search/PHASE-4.md#verification) and [Phase 6](plans/mcp-intelli-search/PHASE-6.md#verification) |
 
 ## Standalone MCP Server (`@curio-data/mcp-intelli-search`)
@@ -71,13 +72,15 @@ The [provenance correction evidence](evidence/2026-10-07-provenance-correction.m
 
 | Surface | Current Evidence | Remaining Limit |
 |---|---|---|
-| Native Host | `Pi` 1.0.4, default native research; successful rerun after final source changes | The complete paced suite is still pending for this generation |
+| Native Host | `Pi` 1.0.4: complete paced suite on merged commit `5605a2a` passes on 2026-10-07 | Local candidate execution, not installation of the published native candidate |
 | MCP Host | Real standalone research through `Pi`'s MCP client; completed `mcp` identity and cache | No current-candidate registry-pin installation |
 | Output Budget | The paired non-reasoning collation check passes, including its tight limit | It establishes the configured size comparison, not a fixed result length including inventories |
-| Claude Code | 2.1.293 with Opus 5.5: neutral factual lookup, automatic and explicit skill invocation, and comparison research pass against the local tarball | `Bash` is removed for controlled routing; other host tools remain exposed. This is not an unrestricted-shell evaluation or a guarantee across models |
+| Claude Code | 2.1.293: neutral factual lookup, automatic and explicit skill invocation, and comparison research pass against the local tarball with Opus 5.5 during implementation and Sonnet 5.5 in the full release suite | `Bash` is removed for controlled routing; other host tools remain exposed. This is not an unrestricted-shell evaluation or a guarantee across models |
 | Provenance | Comparison inventories independently match extraction counts; every listed file exists and its source header matches | Reference consistency is not factual accuracy or claim-level grounding |
 | Deterministic and Packaging | Both builds, all tests, frozen native contracts, generated gates, audit and both independent tarball installs pass; implementation CI is linked from Release Readiness | Require exact-commit CI again for later edits |
-| Codex Plugin | No new credentialed candidate run recorded here | Scenario 14 remains a pending full-suite gate; previous stable evidence below does not cover this candidate |
+| Codex Plugin | 0.160.1: scenario 14 passes on 2026-10-07 with the dedicated profile, completed research and `mcp` sidecar | Local-tarball class, not current-candidate registry-pin research |
+
+The full paced runner completed on merged commit `5605a2a` on 2026-10-07 with every mandatory scenario passing and none failed or skipped. Pipeline models retain each scenario's configuration; the `Pi` agent loop used native DeepSeek Flash. Both independent fresh-install gates passed, including native resolution of pi-ai 1.1.0 after a transient upstream tarball 404. Release logs are retained under gitignored `.tmp/release-016/`; exact-commit CI must validate subsequent release-preparation edits.
 
 ## Release Candidate Verification
 

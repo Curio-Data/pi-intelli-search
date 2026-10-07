@@ -1,6 +1,6 @@
 # Release Readiness
 
-The prepared candidate combines shared-engine provenance corrections with search-first Model Context Protocol (MCP) routing. Package versions are defined by [the native manifest](../package.json) and [the MCP manifest](../packages/mcp/package.json); prepared notes are in [CHANGELOG.md](../CHANGELOG.md). Neither candidate package is published. This page is the handoff for a fresh release agent working from `main`, not authorisation to publish.
+The prepared candidate combines shared-engine provenance corrections with search-first Model Context Protocol (MCP) routing. Package versions are defined by [the native manifest](../package.json) and [the MCP manifest](../packages/mcp/package.json); prepared notes are in [CHANGELOG.md](../CHANGELOG.md). Neither candidate package is published. The owner authorised staged releases for both packages on 2026-10-07. MCP stages first; native staging remains conditional on maintainer approval of MCP on `npm` and clean registry-pin host verification.
 
 ## Current Candidate
 
@@ -15,16 +15,16 @@ Both manifests, the lockfile, native default history and plugin pins advance tog
 | Gate | State | Evidence |
 |---|---|---|
 | Implementation Review | Passed | Opus 5.5 and native DeepSeek Flash confirmed no implementation blocker after corrections; dispositions in the provenance evidence |
-| Builds and Deterministic Tests | Passed on the implementation commit | Both builds, isolated native and MCP tests, native-contract types and generated-file gates; test total appears only in the root README badge |
-| Packaging and Security | Passed on the implementation commit | Both independent fresh-tarball installation gates, ShellCheck and full dependency audit |
+| Builds and Deterministic Tests | Passed again on the merged candidate | Both builds, isolated native and MCP tests, native-contract types and generated-file gates; test total appears only in the root README badge |
+| Packaging and Security | Passed again on the merged candidate | Both independent fresh-tarball installation gates, ShellCheck and full dependency audit; native fresh installation resolves pi-ai 1.1.0 |
 | Implementation CI | Passed | Commit `fd0c26d`, [run 37679997280](https://github.com/Curio-Data/pi-intelli-search/actions/runs/37679997280); require exact-commit CI again for later edits |
 | Targeted Live Checks | Passed | Paced scenarios `01_main`, `05_collation_limits`, `11_mcp_stdio` and `13_claude_code_plugin`; native research and all Opus cases rerun after the final source corrections |
-| Full Paced Live Suite | Pending for this generation | Run the complete suite on the final candidate; the previous stable release's suite is not current evidence |
+| Full Paced Live Suite | Passed on merged commit `5605a2a` | Complete paced runner on 2026-10-07: all mandatory scenarios passed, none failed or skipped; native DeepSeek Flash agent loop, Claude Sonnet 5.5 and the dedicated Codex profile |
 | Candidate Registry Pins | Not published | The prepared MCP version returned no registry match on 2026-10-07; both published `latest` tags still identify the previous stable generation |
-| Publication Approval | Not granted by this handoff | Merge permission is not permission to create a GitHub Release or trigger staged publication |
+| Staging Approval | Granted by the owner on 2026-10-07 | Both package releases authorised; native retains the MCP publication and registry-pin verification prerequisites. Approval of the staged tarballs on `npm` remains a separate maintainer action |
 | Post-Publication Host Installation | Pending | Verify both clean-profile plugins against the exact published pin before native staging |
 
-Local gate logs and reviewer reports are under gitignored `.tmp/agents/provenance-fix/`; tracked evidence pages contain the conclusions so the handoff does not depend on that scratch surviving. [Compatibility](COMPATIBILITY.md#current-candidate-verification) distinguishes current local-tarball checks from historical registry-pin checks.
+Implementation logs and reviewer reports are under gitignored `.tmp/agents/provenance-fix/`; release gate logs are under `.tmp/release-016/`. Tracked evidence pages contain the conclusions so the handoff does not depend on that scratch surviving. The first native fresh-install attempt failed because the advertised upstream pi-ai 1.1.0 tarball returned 404; the unmodified gate passed after a paced retry with that same peer version. [Compatibility](COMPATIBILITY.md#current-candidate-verification) distinguishes current local-tarball checks from historical registry-pin checks.
 
 ## Release from Main
 
@@ -39,14 +39,14 @@ The release workflow selects the newest eligible push CI run for the target comm
 ### Fresh-Agent Checklist
 
 1. Start from a clean, current `main`. Read this page, the package-prefixed changelog entries and both evidence records. Confirm both manifests, lockfile entries, native default history and generated plugin pins agree; verify the actual registry state rather than assuming publication.
-2. Run the full paced live suite on the final candidate. [_Kimi_](https://www.kimi.com) agent-loop quota failures were retained as failures during implementation. Native [_DeepSeek_](https://www.deepseek.com) Flash was used successfully instead; scenarios 1 and 11 consume `TEST_MODEL`, while other scenarios use `E2E_LOOP_MODEL_ID`. The pipeline models remain scenario-configured. Use the existing credential workflow in `AGENTS.md`; never copy operator OAuth credentials.
+2. The full paced live suite passed on merged commit `5605a2a`. Repeat it if executable candidate code changes. [_Kimi_](https://www.kimi.com) agent-loop quota failures were retained as failures during implementation. Native [_DeepSeek_](https://www.deepseek.com) Flash was used successfully instead; scenarios 1 and 11 consume `TEST_MODEL`, while other scenarios use `E2E_LOOP_MODEL_ID`. The pipeline models remain scenario-configured. Use the existing credential workflow in `AGENTS.md`; never copy operator OAuth credentials.
 3. Set each prepared changelog date when that package's release is approved. If this or another edit changes the commit, commit and push it, then validate that exact commit through `release/0.16.0` while the MCP registry pin remains unpublished. Require the newest eligible push CI run to pass. Confirm both changelog headings and reference links exist; never tag a commit that only passed an earlier ancestor's checks.
-4. Obtain explicit approval for the MCP release. Create the approved [_GitHub_ Release](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases) with the `mcp-v` tag matching its manifest; use the full target commit SHA. Publishing that release triggers the existing trusted-publishing workflow, which submits the package to npm staging. The maintainer approves the staged package on npm with two-factor authentication; the agent never approves it.
+4. The owner has approved MCP staging for this candidate. Create the approved [_GitHub_ Release](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases) with the `mcp-v` tag matching its manifest; use the full target commit SHA. Publishing that release triggers the existing trusted-publishing workflow, which submits the package to npm staging. The maintainer approves the staged package on npm with two-factor authentication; the agent never approves it.
 5. Verify MCP registry publication and the expected dist-tag. Install both plugins from the committed catalogues into clean profiles and confirm the pinned launcher downloads and starts the published server. Record this as registry-pin evidence in the compatibility matrix. Rerun main CI after the pin becomes public.
-6. Only after that gate passes, obtain separate native release approval and stage the `pi-v` tag matching its manifest. Require exact-commit CI and retain the native derived-README publish hook. The maintainer approves this staged package separately. Verify its registry publication and installed README.
+6. Only after that gate passes, use the owner's approval of native staging and stage the `pi-v` tag matching its manifest. Require exact-commit CI and retain the native derived-README publish hook. The maintainer approves this staged package separately. Verify its registry publication and installed README.
 7. Update publication state, compatibility evidence and changelog dates from observed results. Remove the repository-only pending-publication notice in the root README after both packages and the plugin pins are verified, then regenerate the package READMEs. No bootstrap publish or trusted-publisher reconfiguration is required for these existing packages.
 
-The tested loop-model selection for the pending full suite is:
+The completed full suite used this loop-model selection:
 
 ```bash
 TEST_MODEL=deepseek/deepseek-flash \
@@ -55,7 +55,7 @@ TMPDIR="$PWD/.tmp" \
   ./test/run-e2e-all.sh
 ```
 
-This is a pending release check, not a recorded full-suite pass. It consumes live quota. Scenarios 13 and 14 require the existing private token and dedicated login described in `AGENTS.md`; a skipped mandatory scenario is missing evidence, not a pass.
+This command completed successfully on the merged candidate on 2026-10-07. It consumes live quota. Scenarios 13 and 14 require the existing private token and dedicated login described in `AGENTS.md`; a skipped mandatory scenario is missing evidence, not a pass.
 
 ## Previous Publication
 
