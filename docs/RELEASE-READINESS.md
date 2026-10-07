@@ -1,6 +1,6 @@
 # Release Readiness
 
-The prepared candidate combines shared-engine provenance corrections with search-first Model Context Protocol (MCP) routing. Package versions are defined by [the native manifest](../package.json) and [the MCP manifest](../packages/mcp/package.json); prepared notes are in [CHANGELOG.md](../CHANGELOG.md). Neither candidate package is published. The owner authorised staged releases for both packages on 2026-10-07. MCP stages first; native staging remains conditional on maintainer approval of MCP on `npm` and clean registry-pin host verification.
+The prepared candidate combines shared-engine provenance corrections with search-first Model Context Protocol (MCP) routing. Package versions are defined by [the native manifest](../package.json) and [the MCP manifest](../packages/mcp/package.json); prepared notes are in [CHANGELOG.md](../CHANGELOG.md). Neither candidate package is published. MCP is staged and awaits maintainer approval on `npm`; native is not staged. The owner authorised staged releases for both packages on 2026-10-07. MCP stages first; native staging remains conditional on maintainer approval of MCP on `npm` and clean registry-pin host verification.
 
 ## Current Candidate
 
@@ -17,12 +17,14 @@ Both manifests, the lockfile, native default history and plugin pins advance tog
 | Implementation Review | Passed | Opus 5.5 and native DeepSeek Flash confirmed no implementation blocker after corrections; dispositions in the provenance evidence |
 | Builds and Deterministic Tests | Passed again on the merged candidate | Both builds, isolated native and MCP tests, native-contract types and generated-file gates; test total appears only in the root README badge |
 | Packaging and Security | Passed again on the merged candidate | Both independent fresh-tarball installation gates, ShellCheck and full dependency audit; native fresh installation resolves pi-ai 1.1.0 |
-| Implementation CI | Passed | Commit `fd0c26d`, [run 37679997280](https://github.com/Curio-Data/pi-intelli-search/actions/runs/37679997280); require exact-commit CI again for later edits |
+| Release CI | Passed for the exact tagged commit | Commit `7a6bbb8`, [run 37695372137](https://github.com/Curio-Data/pi-intelli-search/actions/runs/37695372137) on `release/0.16.0`; main fails only at its unpublished registry-pin guard |
 | Targeted Live Checks | Passed | Paced scenarios `01_main`, `05_collation_limits`, `11_mcp_stdio` and `13_claude_code_plugin`; native research and all Opus cases rerun after the final source corrections |
 | Full Paced Live Suite | Passed on merged commit `5605a2a` | Complete paced runner on 2026-10-07: all mandatory scenarios passed, none failed or skipped; native DeepSeek Flash agent loop, Claude Sonnet 5.5 and the dedicated Codex profile |
 | Candidate Registry Pins | Not published | The prepared MCP version returned no registry match on 2026-10-07; both published `latest` tags still identify the previous stable generation |
 | Staging Approval | Granted by the owner on 2026-10-07 | Both package releases authorised; native retains the MCP publication and registry-pin verification prerequisites. Approval of the staged tarballs on `npm` remains a separate maintainer action |
+| MCP Staging | Completed on 2026-10-07 at 22:22 UTC | Tag `mcp-v0.16.0` targets `7a6bbb8`; [workflow 37695541215](https://github.com/Curio-Data/pi-intelli-search/actions/runs/37695541215) staged with `latest` and signed provenance. Staging ID: `565b5093-62ac-49f0-8c5d-d59f3f602043` |
 | Post-Publication Host Installation | Pending | Verify both clean-profile plugins against the exact published pin before native staging |
+| Native Staging | Held | Await MCP approval on `npm`, public availability and clean-profile registry-pin verification; do not create the native release tag before this gate passes |
 
 Implementation logs and reviewer reports are under gitignored `.tmp/agents/provenance-fix/`; release gate logs are under `.tmp/release-016/`. Tracked evidence pages contain the conclusions so the handoff does not depend on that scratch surviving. The first native fresh-install attempt failed because the advertised upstream pi-ai 1.1.0 tarball returned 404; the unmodified gate passed after a paced retry with that same peer version. [Compatibility](COMPATIBILITY.md#current-candidate-verification) distinguishes current local-tarball checks from historical registry-pin checks.
 
