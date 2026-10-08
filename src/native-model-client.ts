@@ -16,9 +16,13 @@ export function validateModelConfigs(
 
 /**
  * Near-miss hint for a model missing from the registry: other model ids under
- * the same provider, so a typo is visible at a glance. `getAllModels()` exists
- * from `Pi` 0.99 and `getModels()` on older hosts in the supported range; when
- * neither is available the hint is empty and the bare binding line remains.
+ * the same provider, so a typo is visible at a glance. The extension-facing
+ * ModelRegistry facade is narrower than the internal ModelRuntime: it exposes
+ * getModelsOfType("chat", provider) from `Pi` 0.99 and getAll() (filtered here
+ * by model.provider) on older hosts in the supported range. ModelRuntime's
+ * getAllModels()/getModels() are not reachable from an extension context, and
+ * when neither facade method is available the hint is empty and the bare
+ * binding line remains.
  */
 export function describeModelCatalog(
   ctx: ExtensionContext,
@@ -26,11 +30,19 @@ export function describeModelCatalog(
   excludeModel: string,
 ): string {
   const registry = ctx.modelRegistry as unknown as {
-    getAllModels?: (providerId?: string) => ReadonlyArray<{ id: string }>;
-    getModels?: (providerId?: string) => ReadonlyArray<{ id: string }>;
+    getModelsOfType?: (
+      type: "chat",
+      provider?: string,
+    ) => ReadonlyArray<{ id: string; provider: string }>;
+    getAll?: () => ReadonlyArray<{ id: string; provider: string }>;
   };
   try {
-    const models = registry.getAllModels?.(provider) ?? registry.getModels?.(provider);
+    let models: ReadonlyArray<{ id: string; provider: string }> | undefined;
+    if (typeof registry.getModelsOfType === "function") {
+      models = registry.getModelsOfType("chat", provider);
+    } else if (typeof registry.getAll === "function") {
+      models = registry.getAll().filter((m) => m.provider === provider);
+    }
     if (!models || models.length === 0) return "";
     const ids = models
       .map((m) => m.id)

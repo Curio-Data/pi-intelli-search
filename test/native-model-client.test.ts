@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { AssistantMessage, Context, SimpleStreamOptions } from "@earendil-works/pi-ai";
-import { createNativeModelClient } from "../src/native-model-client.js";
+import { createNativeModelClient, describeModelCatalog } from "../src/native-model-client.js";
 import type { ModelRequest, ModelUsage } from "../src/core/contracts.js";
 
 const model = { provider: "fixture", model: "chosen" };
@@ -225,5 +225,55 @@ describe("native model client", () => {
     );
     await assert.rejects(client.complete({ ...request, timeoutMs: 5 }), /timed out .* after 5ms/);
     assert.equal(calls, 1);
+  });
+});
+
+describe("describeModelCatalog (real ModelRegistry facade shapes)", () => {
+  it("lists same-provider alternatives through getModelsOfType (Pi >= 0.99 facade)", () => {
+    const ctx = {
+      modelRegistry: {
+        getModelsOfType: (_type: "chat", provider?: string) =>
+          [
+            { id: "perplexity/sonar", provider: "openrouter" },
+            { id: "perplexity/sonar-pro", provider: "openrouter" },
+            { id: "minimax/minimax-m3", provider: "openrouter" },
+            { id: "other/x", provider: "deepseek" },
+          ].filter((m) => !provider || m.provider === provider),
+      },
+    } as unknown as ExtensionContext;
+    const hint = describeModelCatalog(ctx, "openrouter", "perplexity/sonar");
+    assert.match(hint, /Available openrouter models:/);
+    assert.match(hint, /perplexity\/sonar-pro/);
+    assert.doesNotMatch(hint, /perplexity\/sonar,/);
+    assert.doesNotMatch(hint, /other\/x/);
+  });
+
+  it("falls back to getAll filtered by provider on older facades", () => {
+    const ctx = {
+      modelRegistry: {
+        getAll: () => [
+          { id: "perplexity/sonar-pro", provider: "openrouter" },
+          { id: "deepseek-chat", provider: "deepseek" },
+        ],
+      },
+    } as unknown as ExtensionContext;
+    assert.match(
+      describeModelCatalog(ctx, "openrouter", "perplexity/sonar"),
+      /perplexity\/sonar-pro/,
+    );
+    assert.equal(describeModelCatalog(ctx, "deepseek", "deepseek-chat"), "");
+  });
+
+  it("returns an empty hint when the facade exposes no catalogue accessor", () => {
+    const ctx = { modelRegistry: {} } as unknown as ExtensionContext;
+    assert.equal(describeModelCatalog(ctx, "openrouter", "perplexity/sonar"), "");
+    const throwing = {
+      modelRegistry: {
+        getModelsOfType: () => {
+          throw new Error("catalog unavailable");
+        },
+      },
+    } as unknown as ExtensionContext;
+    assert.equal(describeModelCatalog(throwing, "openrouter", "perplexity/sonar"), "");
   });
 });
