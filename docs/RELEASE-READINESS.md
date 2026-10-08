@@ -37,9 +37,9 @@ A subsequent scenario 01 run exposed an intermittent test selector defect: it ch
 
 Both packages from the provenance generation are published on `npm` at the existing `pi-v0.16.0` and `mcp-v0.16.0` release tags. The owner authorised staging on 2026-10-07 and approved both staged packages on 2026-10-08. MCP publication and clean registry-pin host verification preceded native staging. Native registry installation and its installed README pass verification. That release cycle is complete; its results do not establish the current candidate's gates.
 
-The shared engine gives collation successful, non-empty extraction evidence only. Code renders one authoritative Source Assessment using the run's file identity, and validates references before report writes or rotation. Manual evidence is labelled caller-supplied; code examples and cross-links in extracted content remain content rather than additional fetched pages. Model-generated relevance and contribution ratings are removed. Reference consistency does not establish factual accuracy. The host-only provenance correction evidence (`evidence/2026-10-07-provenance-correction.md`) records implementation, review dispositions and limitations.
+The shared engine gives collation successful, non-empty extraction evidence only. Code renders one authoritative Source Assessment using the run's file identity, and validates references before report writes or rotation. Manual evidence is labelled caller-supplied; code examples and cross-links in extracted content remain content rather than additional fetched pages. Model-generated relevance and contribution ratings are removed. Reference consistency does not establish factual accuracy.
 
-MCP server instructions, descriptions and generated host skills guide factual lookups to search and multi-page analysis to research. These instructions guide models rather than enforce their actions. The host-only routing review (`evidence/2026-10-07-mcp-routing-review.md`) records neutral-prompt evaluations, skill-loading checks and the controlled no-`Bash` evaluation boundary. Native tool descriptions are unchanged; the shared collation prompt, report prose and `searchSummary` description change intentionally.
+MCP server instructions, descriptions and generated host skills guide factual lookups to search and multi-page analysis to research. These instructions guide models rather than enforce their actions. A routing review recorded neutral-prompt evaluations, skill-loading checks and the controlled no-`Bash` evaluation boundary. Native tool descriptions are unchanged; the shared collation prompt, report prose and `searchSummary` description change intentionally.
 
 Both manifests, the lockfile, native default history and plugin pins advanced together. The root README generates package READMEs, and shared guidance generates plugin skills. Do not hand-edit those derived files or recreate the published release tags.
 
@@ -119,7 +119,7 @@ The following corrections shipped in the previous stable generation; they are no
 | F11: generator discoverability | Non-mutating help and a linked generator reference | Generator tests |
 | F14: unresolvable related report | Return each exact report path | Cache and native-fixture regressions |
 
-The `F` series is recorded in the historical Phase 6 checkpoint (host-only `.plan/mcp-intelli-search/POST-PHASE-6.md`). The `R` series comes from the 2026-10-06 release review. Its initial suite was interrupted and failed scenario 5; later correction and the completed pre-publication suite closed that evidence gap. Do not reuse the initial interrupted-run claims or the old branch instructions for the current candidate.
+The `F` series comes from the 2026-10-05 Phase 6 checkpoint of the MCP implementation programme. The `R` series comes from the 2026-10-06 release review. Its initial suite was interrupted and failed scenario 5; later correction and the completed pre-publication suite closed that evidence gap. Do not reuse the initial interrupted-run claims or the old branch instructions for the current candidate.
 
 ## Shared Safety Constraints
 

@@ -26,7 +26,7 @@ This document records host versions, artefacts and evidence classes for `intelli
 | `Pi` host | 1.0.1, 1.0.2 | Development hosts for the shared-engine phases; all entry gates and live scenarios |
 | `Pi` Host and MCP Client | 1.0.4 | Complete previous provenance-generation paced live suite; see [Provenance Generation Verification](#provenance-generation-verification) |
 | pi-ai peer dependency | 1.1.0 | Independent native fresh-tarball installation and plain-Node smoke import pass on 2026-10-07; runtime loading, tool registration and package identity only, not a live pipeline on a newer `Pi` host |
-| `Pi` as MCP client | 1.0.1, 1.0.2 | `test/e2e/11_mcp_stdio.sh`: real research through `Pi`'s MCP client against the standalone server (live `Pi` host class). Exact versions are recorded in the Phase 4 and Phase 6 verification records (host-only `.plan/mcp-intelli-search/`) |
+| `Pi` as MCP client | 1.0.1, 1.0.2 | `test/e2e/11_mcp_stdio.sh`: real research through `Pi`'s MCP client against the standalone server (live `Pi` host class) |
 
 ## Standalone MCP Server (`@curio-data/mcp-intelli-search`)
 
@@ -65,7 +65,7 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 | Installation and Skill Discovery | Marketplace add, `codex plugin add` installation, installed-cache layout and `codex debug prompt-input` skill discovery; registry-pin class: marketplace from `Curio-Data/pi-intelli-search` into an isolated `CODEX_HOME`, installation from the committed catalogue, `codex mcp list` showing `intelli_search` enabled on the `npx` pin, and a direct stdio `initialize` plus `tools/list` against the registry-pulled server returning all four `intelli_*` tools (2026-10-05, `0.15.0-alpha.0`) | Credential-free, both evidence classes |
 | Real Research | A real `codex exec` session through the installed plugin with pre-approved plugin tools: completed `intelli_research` call and `mcp` sidecar (2026-10-05) | Credentialed host with a dedicated login, local-tarball class |
 | Unattended Approval | `codex exec` cancels a plugin MCP tool call that would prompt (`user cancelled MCP tool call`) even with `approval_policy = "never"`; `default_tools_approval_mode = "approve"` in the plugin's `mcp_servers` table allows it | Recorded on 0.144.5 |
-| Plugin Layout | The 0.144.5 inspection found the CLI ignored the portable Agent Plugins layout; the shipped bundle uses the compatibility layout. See the Phase 5 record (host-only `.plan/mcp-intelli-search/PHASE-5.md`) | One-time inspection |
+| Plugin Layout | The 0.144.5 inspection found the CLI ignored the portable Agent Plugins layout; the shipped bundle uses the compatibility layout | One-time inspection |
 | Excluded Surfaces | The terminal user interface (TUI) and integrated development environment (IDE) extension were not exercised | The Phase 5 record describes the IDE extension as lacking plugin support at that time; not a fresh compatibility check |
 
 ## Current Candidate Verification
@@ -103,7 +103,7 @@ The downloaded tarball's SHA-1 matches registry metadata, and its README matches
 
 ## Provenance Generation Verification
 
-The host-only provenance correction evidence (`evidence/2026-10-07-provenance-correction.md`) records that generation's local verification. Local-tarball checks do not establish registry availability. The provenance-generation MCP package is published; [the registry-pin verification below](#published-0160-registry-pin-verification-2026-10-08) records independent installation of the launchers committed at that release.
+The provenance correction passed that generation's local verification. Local-tarball checks do not establish registry availability. The provenance-generation MCP package is published; [the registry-pin verification below](#published-0160-registry-pin-verification-2026-10-08) records independent installation of the launchers committed at that release.
 
 | Surface | Recorded Evidence | Remaining Limit |
 |---|---|---|
@@ -171,4 +171,4 @@ Full research through the registry-pin route remains open evidence; the credenti
 - Only [_OpenRouter_](https://openrouter.ai) is a verified standalone inference provider. Other OpenAI-compatible endpoints are not claimed: reasoning, search-tool and citation behaviour differs between compatible-looking endpoints.
 - _macOS_ and _Windows_ are not verified for any artefact; the fetch dependency's native assets are exercised on _Linux_ x86-64 only.
 
-The per-phase verification records behind this matrix live in the host-only implementation handoff (`.plan/mcp-intelli-search/README.md`); `.plan/mcp-intelli-search/PHASE-5.md` records the empirical host findings in detail.
+

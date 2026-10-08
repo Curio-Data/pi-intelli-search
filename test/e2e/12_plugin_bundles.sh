@@ -25,7 +25,7 @@
 #
 # Requirements:
 #   - claude and codex CLIs on PATH (absence skips the scenario with a
-#     notice; host versions are pinned in host-only .plan/mcp-intelli-search/PHASE-5.md).
+#     notice; host versions are pinned in the compatibility matrix).
 #   - No credentials and no model requests: servers start without an API key
 #     and no research operation is executed.
 #
