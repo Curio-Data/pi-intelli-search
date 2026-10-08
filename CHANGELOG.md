@@ -6,8 +6,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-Release dates record approval of the package release, not publication on `npm`. [Release Readiness](docs/RELEASE-READINESS.md) records staging and publication state.
-
 ## [pi-0.16.0] - 2026-10-08
 
 ### Fixed

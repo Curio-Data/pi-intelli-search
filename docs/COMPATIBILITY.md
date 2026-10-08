@@ -82,6 +82,12 @@ The [provenance correction evidence](evidence/2026-10-07-provenance-correction.m
 
 The full paced runner completed on merged commit `5605a2a` on 2026-10-07 with every mandatory scenario passing and none failed or skipped. Pipeline models retain each scenario's configuration; the `Pi` agent loop used native DeepSeek Flash. Both independent fresh-install gates passed, including native resolution of pi-ai 1.1.0 after a transient upstream tarball 404. Release logs are retained under gitignored `.tmp/release-016/`; exact-commit CI must validate subsequent release-preparation edits.
 
+### Published Native Package Verification (2026-10-08)
+
+The native package's `latest` tag resolves to the current native manifest version. The registry records publication at 07:41:48 UTC and exposes its signed provenance attestation. `test/run-e2e-publish.sh` passes against the explicit published version in a clean installation, with `HOME` and `PI_CODING_AGENT_DIR` isolated under repository `.tmp/`. The installed extension loads under plain Node, registers all four tools with the required shapes and subscribes to session startup. Expected source, build, skill and legal files are present; test, workflow and environment files are absent; host peer dependencies are not bundled.
+
+The downloaded published tarball's SHA-1 matches registry metadata. Its README matches `pi.README.md` at the native release tag byte-for-byte, confirming that the publish hook shipped the native derivation rather than the repository README. Logs and the downloaded README are retained under gitignored `.tmp/release-016/native-registry-install.log` and `.tmp/release-016/native-public/`. These checks establish registry installation, package shape and runtime loading, not a live model call through the installed registry package.
+
 ### Published `0.16.0` Registry-Pin Verification (2026-10-08)
 
 The maintainer approved the staged MCP package; the registry records publication at 07:27:25 UTC and `latest` resolves to the current MCP manifest version. Both host plugins were installed from the committed marketplaces fetched from `Curio-Data/pi-intelli-search` into fresh profiles. No host login credentials were copied, and the only inference credential used was a dummy plugin option.
