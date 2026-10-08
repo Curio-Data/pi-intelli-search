@@ -40,7 +40,7 @@ This repository provides two first-class packages from one research engine:
 
 Both packages run the same five-stage pipeline with the same cache format. [Install](#install) covers both the [`Pi` native extension](#pi-native-extension) and the [MCP server](#mcp-server), including direct MCP registration and host plugins.
 
-The repository contains an unpublished coupled release candidate. The default marketplace launchers pin that candidate, so fresh plugin installation from `main` cannot resolve the server until MCP publication. Published npm packages remain available; the new provenance behaviour described here belongs to the prepared candidate. [Release Readiness](docs/RELEASE-READINESS.md) records the handoff and publication gates. Remove this notice after both packages are published and the registry-pin installations are verified.
+The MCP package is published, and the default marketplace launchers pass clean-profile installation checks against its registry pin. The matching native release remains pending publication; the new provenance behaviour described here is available through MCP and belongs to the prepared native release. [Release Readiness](docs/RELEASE-READINESS.md) records staging and publication gates. Remove this notice after both packages are published and the registry-pin installations are verified.
 <!-- /packages -->
 <!-- packages:pi hidden
 `@curio-data/pi-intelli-search` registers four research tools natively in [`Pi`](https://github.com/earendil-works/pi), using its settings, authentication and model registry. [Install the extension](#pi-native-extension) to get started.

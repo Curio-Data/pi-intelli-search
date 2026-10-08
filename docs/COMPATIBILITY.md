@@ -68,12 +68,12 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 
 ## Current Candidate Verification
 
-The [provenance correction evidence](evidence/2026-10-07-provenance-correction.md) records the prepared manifests' local verification. These checks do not establish publication of the candidate or a successful install from its registry pin.
+The [provenance correction evidence](evidence/2026-10-07-provenance-correction.md) records the prepared manifests' local verification. The local-tarball checks do not establish registry availability. The MCP package is now published; [the registry-pin verification below](#published-0160-registry-pin-verification-2026-10-08) records independent installation of the committed launchers.
 
 | Surface | Current Evidence | Remaining Limit |
 |---|---|---|
 | Native Host | `Pi` 1.0.4: complete paced suite on merged commit `5605a2a` passes on 2026-10-07 | Local candidate execution, not installation of the published native candidate |
-| MCP Host | Real standalone research through `Pi`'s MCP client; completed `mcp` identity and cache | No current-candidate registry-pin installation |
+| MCP Host | Real standalone research through `Pi`'s MCP client; completed `mcp` identity and cache; published registry-pin installation and protocol checks below | Full registry-pin research remains unverified |
 | Output Budget | The paired non-reasoning collation check passes, including its tight limit | It establishes the configured size comparison, not a fixed result length including inventories |
 | Claude Code | 2.1.293: neutral factual lookup, automatic and explicit skill invocation, and comparison research pass against the local tarball with Opus 5.5 during implementation and Sonnet 5.5 in the full release suite | `Bash` is removed for controlled routing; other host tools remain exposed. This is not an unrestricted-shell evaluation or a guarantee across models |
 | Provenance | Comparison inventories independently match extraction counts; every listed file exists and its source header matches | Reference consistency is not factual accuracy or claim-level grounding |
@@ -81,6 +81,16 @@ The [provenance correction evidence](evidence/2026-10-07-provenance-correction.m
 | Codex Plugin | 0.160.1: scenario 14 passes on 2026-10-07 with the dedicated profile, completed research and `mcp` sidecar | Local-tarball class, not current-candidate registry-pin research |
 
 The full paced runner completed on merged commit `5605a2a` on 2026-10-07 with every mandatory scenario passing and none failed or skipped. Pipeline models retain each scenario's configuration; the `Pi` agent loop used native DeepSeek Flash. Both independent fresh-install gates passed, including native resolution of pi-ai 1.1.0 after a transient upstream tarball 404. Release logs are retained under gitignored `.tmp/release-016/`; exact-commit CI must validate subsequent release-preparation edits.
+
+### Published `0.16.0` Registry-Pin Verification (2026-10-08)
+
+The maintainer approved the staged MCP package; the registry records publication at 07:27:25 UTC and `latest` resolves to the current MCP manifest version. Both host plugins were installed from the committed marketplaces fetched from `Curio-Data/pi-intelli-search` into fresh profiles. No host login credentials were copied, and the only inference credential used was a dummy plugin option.
+
+- **Claude Code 2.1.293:** isolated `CLAUDE_CONFIG_DIR`, marketplace add, plugin install, required key option through `--values-stdin` and explicit configuration. `claude mcp list` shows `plugin:intelli-search:intelli_search` connected through the committed `npx` pin, and `claude plugin details` discovers the skill.
+- **Codex CLI 0.160.1:** isolated `CODEX_HOME`, marketplace add, plugin install and forwarded variables. `codex mcp list --json` shows the server enabled with the committed pin; the installed plugin cache and `codex debug prompt-input` expose the current skill. Listing an enabled server is not itself a connection check.
+- **Independent Registry Launcher:** a fresh npm cache and consumer directory resolve the executable under that cache's `_npx/`, not the repository workspace. `--version` returns the pinned version. A direct standard-input/output (stdio) probe against that registry-downloaded executable receives the expected server identity, routing instructions and all four tools through `initialize` and `tools/list`, then exits cleanly. The expected startup banner stays on standard error; standard output contains protocol frames only.
+
+Evidence is retained under gitignored `.tmp/release-016/registry/`, with the coordinator log at `.tmp/release-016/registry-verification.log`. This is credential-free registry-pin installation, connection and tool-listing evidence, not a full research call or proof that a host model received a research answer. The first direct probe rejected the documented standard-error startup banner because its assertion was over-strict; the corrected assertion checks the exact banner, and the probe passed without changing package code.
 
 ## Release Candidate Verification
 
@@ -115,7 +125,7 @@ Full research through the registry-pin route remains open evidence; the credenti
 
 ## Shared Constraints
 
-- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. The current prepared pin is unpublished, so fresh plugin installation from `main` cannot resolve it until MCP publication. The stable registry pin recorded above is historical evidence, not verification of the current launchers. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
+- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. The current MCP pin is published, and fresh plugin installation from `main` passes the registry-pin checks recorded above. Previous stable registry checks remain historical evidence. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
 - Full research calls have been driven through both host plugins in the local-tarball class (`test/e2e/13_claude_code_plugin.sh`, `test/e2e/14_codex_plugin.sh`). A full research call through the registry-pin route remains open evidence; the registry-pin class currently covers installation, connection and tool listing, plus a direct `npx` pull that runs the published CLI.
 - Only [_OpenRouter_](https://openrouter.ai) is a verified standalone inference provider. Other OpenAI-compatible endpoints are not claimed: reasoning, search-tool and citation behaviour differs between compatible-looking endpoints.
 - _macOS_ and _Windows_ are not verified for any artefact; the fetch dependency's native assets are exercised on _Linux_ x86-64 only.
