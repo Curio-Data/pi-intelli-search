@@ -2,7 +2,7 @@
 
 This is a **`Pi` extension** that adds intelligent web research tools to the `Pi` coding agent. It provides a 5-stage research pipeline (search, fetch, extract, collate, and cache suggest) as a single tool call, plus individual tools for manual orchestration.
 
-For current cross-host release work, start at [Release Readiness](docs/RELEASE-READINESS.md). It distinguishes the prepared candidate from published packages and records its branch, exact-commit CI requirements and registry-pin constraints. A fresh release agent must read that handoff before creating tags or releases. The implementation handoff and Post-Phase 6 Checkpoint (host-only `.plan/mcp-intelli-search/`, gitignored and absent from a fresh clone) are historical evidence, not branch-switch instructions. The strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
+The strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
 
 ---
 
@@ -178,6 +178,25 @@ When creating commits:
 - Avoid multiple "add" statements unless necessary. A single statement can cover multiple related items (for example, helper functions).
 - Always check for changes before committing. Do not assume changes you made still exist, as files are often manually edited.
 
+## Changelog Conventions
+
+### Changelog Structure
+
+One canonical `CHANGELOG.md` at the repository root covers both packages. The audiences overlap and core changes appear in both histories, so splitting the file would duplicate entries or force readers to open two files.
+
+- Native sections are `## [pi-X.Y.Z]`, MCP sections `## [mcp-X.Y.Z]`; a horizontal rule and note below the newest entries separate the prefixed era from the historical unprefixed native entries.
+- **Write core changes once, under the native section.** The matching MCP section carries a one-line pointer ("Core behaviour is shared with [pi-X.Y.Z] and recorded there") plus only its adapter-specific entries.
+
+### Changelog Principles
+
+Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): the changelog is for humans, not machines. Its purpose is to document **user-noticeable differences**, often spanning multiple commits, not to replace `git log`.
+
+- **Group related changes.** One entry can cover many commits (for example, "Documentation restructured" covers SKILL.md reordering, README tightening, heading fixes, and assertive voice rewrites).
+- **Omit internal changes.** CI tweaks, style guide additions, markdownlint fixes, dependency bumps, and internal refactors do not belong unless they affect compatibility.
+- **Omit docs-only changes** that are not user-visible (for example, adding a rule to AGENTS.md).
+- **Ask: would a user care about this?** If no, leave it out. The user can browse the repo if they want commit-level detail.
+- **Historical entries may be corrected for accuracy** (an over-strong claim softened, a wrong fact fixed), provided the correction does not change what the release delivered. Record the repository's convention as correction-in-place, distinct from the append-only rule for benchmark evidence in `docs/BENCHMARKS.md`.
+
 ## Project Overview
 
 - **Package name:** `@curio-data/pi-intelli-search`
@@ -278,7 +297,6 @@ docs/
 ├── COMPONENTS.md             # Third-party dependency attribution
 ├── COMPARISON.md             # Search-comparison evidence page
 ├── COMPATIBILITY.md          # Host-version compatibility matrix and evidence classes
-├── RELEASE-READINESS.md      # Current release gates, finding dispositions and verification state
 └── images/                   # README and gallery artwork plus generated chart SVGs
 
 scripts/
@@ -351,13 +369,6 @@ test/
 └── util.test.ts
 ```
 
-## Host-Only Artefacts
-
-Following the verification-first methodology (VFM) used across this host, plans and regenerated proof stay local and are never committed. Both directories are gitignored and absent from a fresh clone; tracked documents reference them by path only.
-
-- `.plan/`: implementation plans, phase records and checkpoints (for example `.plan/mcp-intelli-search/`).
-- `evidence/`: dated evidence records backing claims in `docs/`.
-
 ## Architecture
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline description, design decisions, and fetch strategy.
@@ -382,7 +393,7 @@ The pipeline is self-contained in `src/core/operations/research.ts`. Former shar
 - Auth flows through `Pi`'s native system (`auth.json`, env vars, OAuth). No API key management happens in this code.
 - **Retry and timeout are owned by `src/core/llm.ts`, not the SDK.** Native `callLlm()` passes `maxRetries: 0` to the provider stream and invokes the shared policy, which wraps each call in `withRetry()` (full-jitter exponential backoff, honours Retry-After, bounded by `llmRetryAttempts`/`retryBaseDelayMs`/`retryMaxDelayMs`). On the OpenRouter path a 429 does not arrive as a non-2xx status: the SDK throws after its retries and the stream resolves with `stopReason: "error"` and the status in `errorMessage`, which the retry classifier inspects. The `onResponse` callback only observes (it captures a Retry-After header); it must never throw, because a throw propagates out of the stream and bypasses retry.
 - **Per-call timeout via `callWithAbortTimeout()` (`src/core/util.ts`).** The SDK request timeout does not cover a stalled streaming body, so the shared model policy aborts the whole call with an `AbortController` after `llmTimeoutMs`, combined with the tool's signal so Esc still cancels. Actual timer expiry is retryable; permanent provider exceptions are not classified as timeouts. Cancellation also propagates through stage boundaries and cache-lock waits.
-- **Routine fetch and retry notices must not write directly to the console.** Raw terminal writes bypass the `Pi` TUI renderer. The branch removes routine fetch-comparison output and routes native retries through `ModelRequest.onRetryNotice` into stage progress; when no callback is supplied, the native model client provides a no-op and native `callLlm()` uses a silent policy logger. The shared policy retains its logger fallback for other adapters; MCP research can send retry progress while catalogue preflight and one-shot calls use stderr. Telemetry records aggregate variant winners (`fetch.winners`), not per-page scores. Native operation error logging remains outside this targeted fix. The source audit covers direct console calls, not transitive logger calls. These fixes shipped in the previous stable generation; [Release Readiness](docs/RELEASE-READINESS.md) records the current candidate and its remaining gates.
+- **Routine fetch and retry notices must not write directly to the console.** Raw terminal writes bypass the `Pi` TUI renderer. The branch removes routine fetch-comparison output and routes native retries through `ModelRequest.onRetryNotice` into stage progress; when no callback is supplied, the native model client provides a no-op and native `callLlm()` uses a silent policy logger. The shared policy retains its logger fallback for other adapters; MCP research can send retry progress while catalogue preflight and one-shot calls use stderr. Telemetry records aggregate variant winners (`fetch.winners`), not per-page scores. Native operation error logging remains outside this targeted fix. The source audit covers direct console calls, not transitive logger calls. These fixes shipped in the previous stable generation.
 - **Policy Scope.** Configured model retries and application timeouts apply inside `intelli_research`. The native standalone search, extract and collate operations retain one attempt and no application-level timeout for compatibility. The standalone MCP adapter must apply explicit policy defaults for all its model calls before exposing tools.
 - **Application-level search retry.** Stage 1 retries up to `searchRetryAttempts` times when the search model returns a valid response with zero usable links (a degraded 200 that transport retry cannot catch).
 - **Optional extract throttle.** `minRequestIntervalMs` (default 0, off) spaces concurrent extract calls via a per-run rate limiter for keys with tight rate limits.
@@ -555,8 +566,8 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `e2e/10_config_recipes.sh` | Runs each README Configuration Recipe's settings block in a fresh isolated agent dir + cwd and asserts the effective behaviour from telemetry: zero-config defaults, partial blocks preserving unspecified defaults, extract/collate overrides, free-tier pacing keys, and per-project settings via pre-seeded trust.json (the only project-level-settings coverage) |
 | `e2e/11_mcp_stdio.sh` | Builds the standalone package, registers it in an isolated profile's `mcp.json` (direct exposure, no native extension) and drives a real research through `Pi`'s native MCP client, asserting connection, workspace cache, `mcp` telemetry identity and completed outcome. Establishes that `--no-extensions` disconnects MCP servers and that `codemode` exposure hides direct tool calls |
 | `e2e/12_plugin_bundles.sh` | Packs the standalone artefact, generates local-tarball plugin bundles (pre-publication evidence class), vendors the tarball, then exercises real host installation credential-free: Claude Code strict validation, marketplace add, install, `claude mcp list` connection and skill discovery; Codex marketplace add, catalogue-path assertion, install, installed-cache layout and prompt-input skill discovery. Skips with a notice when a host CLI is absent. Also asserts Claude Code key delivery with dummy values: the required sensitive key option withholds the server while unset and reaches the server process once set. Credentialed sessions live in `13_claude_code_plugin.sh` and `14_codex_plugin.sh` |
-| `e2e/13_claude_code_plugin.sh` | Installs the local-tarball Claude Code plugin into an isolated `CLAUDE_CONFIG_DIR` and sets the key through the plugin option only. Fresh sessions evaluate factual lookup with skills disabled, automatic skill loading, explicit skill loading, and a detailed comparison. Prompts name the installed web research plugin, not either operation; only the explicit-loading case names the skill. Both search and research remain available. Checks distinguish skill discovery from successful invocation, verify operation choice and model-visible results, and require completed `mcp` research artefacts. Authenticates with the static `CLAUDE_CODE_OAUTH_TOKEN`, never a copied credential file, and asserts the operator's credentials are untouched. `E2E_KEEP_ARTIFACTS=1` retains traces without the plugin credential file; see `scripts/README.md` |
-| `e2e/14_codex_plugin.sh` | Installs the local-tarball Codex plugin into a dedicated test profile (`.e2e-auth/codex`, reset to its `auth.json` on every run because Codex caches plugins by version), pre-approves the plugin's tools, exports the forwarded variables and drives one real research through `codex exec --json`: asserts a completed `intelli_research` `mcp_tool_call` and a completed `mcp` cache sidecar. Uses a separate ChatGPT login refreshed in place by one consumer at a time (exclusive lock), never a copy of `~/.codex`, and asserts the operator's `auth.json` is untouched |
+| `e2e/13_claude_code_plugin.sh` | Installs the local-tarball Claude Code plugin into an isolated `CLAUDE_CONFIG_DIR` and sets the key through the plugin option only. Fresh sessions evaluate factual lookup with skills disabled, automatic skill loading, explicit skill loading, and a detailed comparison. Prompts name the installed web research plugin, not either operation; only the explicit-loading case names the skill. Both search and research remain available. Checks distinguish skill discovery from successful invocation, verify operation choice and model-visible results, and require completed `mcp` research artefacts. Requires a maintainer-owned Claude Code credential held outside the repository, and asserts the operator's credentials are untouched. `E2E_KEEP_ARTIFACTS=1` retains traces; see `scripts/README.md` |
+| `e2e/14_codex_plugin.sh` | Installs the local-tarball Codex plugin into a dedicated gitignored test profile (reset on every run because Codex caches plugins by version), pre-approves the plugin's tools, exports the forwarded variables and drives one real research through `codex exec --json`: asserts a completed `intelli_research` `mcp_tool_call` and a completed `mcp` cache sidecar. Requires a dedicated maintainer-owned Codex login, and asserts the operator's `auth.json` is untouched |
 | `e2e/15_pi_floor.sh` | Installs a host-isolated pinned `Pi` 0.86.0 host under `.tmp/pi-floor/` and runs real native research through the required registry facade (the extension's peer value imports still resolve from the repository tree; the only such import, `CONFIG_DIR_NAME`, is identical across the supported range). Requires a completed cache sidecar, non-empty search links and synthesis, and a positive `search.annotationsHarvested` count to guard fetch-tee citation recovery on the pre-0.99 host. Probes supported flags and omits unavailable flags such as `--no-session`; the agent loop uses `openrouter/minimax/minimax-m3` |
 | `run-e2e-all.sh` | Runs every scenario script one at a time with a spacing gap (`E2E_GAP_SECONDS`, default 20). Use this instead of launching scripts in parallel or back-to-back: bursting many calls at one key depletes the rate-limit bucket and produces degraded or hung runs. |
 
@@ -570,7 +581,7 @@ No E2E script may be committed without being executed at least once to completio
 
 - **Before committing a new E2E script**, run it with a real API key and confirm it exits 0 with the expected verification checks passing.
 - **`shellcheck` is mandatory.** Every shell script must pass `shellcheck` with zero findings. This catches unbound variables, quoting bugs, and syntax errors that `set -euo pipefail` alone will not catch until runtime.
-- **`set -euo pipefail` is mandatory** at the top of every E2E script. The `-u` flag turns any reference to an undefined variable into a hard error. If a script references `$E2E_EXTENSION_PATH` or any other variable, it must define that variable before first use. No E2E script may depend on variables from the caller's environment (except `OPENROUTER_API_KEY` and, for host-session scenarios, `CLAUDE_CODE_OAUTH_TOKEN`, which are documented).
+- **`set -euo pipefail` is mandatory** at the top of every E2E script. The `-u` flag turns any reference to an undefined variable into a hard error. If a script references `$E2E_EXTENSION_PATH` or any other variable, it must define that variable before first use. No E2E script may depend on variables from the caller's environment (except documented credentials such as `OPENROUTER_API_KEY`).
 
 CI does not run E2E scripts (they require API keys and a live `pi` binary). The only gate is the developer running the script. If it is not run, it is not tested. If it is not tested, it rots.
 
@@ -591,7 +602,7 @@ The E2E tests auto-detect `OPENROUTER_API_KEY` from `~/.pi/agent/auth.json`. Onl
 OPENROUTER_API_KEY=sk-or-v1-... ./test/e2e/01_main.sh
 ```
 
-`13_claude_code_plugin.sh` also needs `CLAUDE_CODE_OAUTH_TOKEN` in the gitignored `.env` (mode 600). Each value must be `NAME=VALUE` on one line: scenarios 13 and 14 parse `.env` with `test/e2e/env.sh` (never `source`), read only the keys they need before any output reaches `.e2e-logs/`, and refuse a malformed line or a group- or world-readable file. Create it once with `claude setup-token` in a separate terminal, never through an agent session, because the command prints the token. The token is static for a year and is never written to the isolated profile. `14_codex_plugin.sh` needs a dedicated Codex login, created once in a separate terminal with `CODEX_HOME="$PWD/.e2e-auth/codex" codex login --device-auth` (gitignored, mode 700). Never copy `~/.claude/.credentials.json` or `~/.codex/auth.json` into a test profile: a copied refresh-token chain invalidates the operator's login.
+`13_claude_code_plugin.sh` and `14_codex_plugin.sh` additionally require maintainer-owned Claude Code and Codex credentials held outside the repository; they cannot run without them. Never copy an operator's credential files (for example `~/.claude/.credentials.json` or `~/.codex/auth.json`) into a test profile: a copied refresh-token chain invalidates the operator's login.
 
 ### E2E Publish Test
 
@@ -625,120 +636,6 @@ All tools use the `intelli_` prefix to avoid collisions with other `Pi` extensio
 | `intelli_extract` | Per-page query-relevant content extraction |
 | `intelli_collate` | Deduplicate and cache extractions |
 | `intelli_research` | Full 5-stage pipeline (search, fetch, extract, collate, cache suggest) |
-
-## Release Policy
-
-**The agent must never create a _GitHub_ Release or trigger `npm` publication without the user's explicit permission.**
-
-The default checklists below keep unpublished catalogue pins off `main`. On 2026-10-08 the owner explicitly authorised merging the current candidate before publication and releasing both packages through GitHub and npm staging. Preserve the registry-pin guard, require exact-commit CI and keep MCP-first publication and separate maintainer approvals. [Release Readiness](docs/RELEASE-READINESS.md#current-candidate) records this cycle's exception and active gates; it does not authorise later releases.
-
-Publishing is gated through `npm` staged publishing. CI submits the tarball; the user approves it on `npmjs.com` with 2FA before it goes live:
-- **CI workflow** (`.github/workflows/ci.yml`): Runs on every push to `main` and every PR. Validates build, tests, generated-plugin drift, and `npm pack --dry-run`. Catches packaging problems before they reach a release.
-- **Release workflow** (`.github/workflows/release.yml`): Runs only when a _GitHub_ Release is **published**. The tag selects exactly one package: `pi-vX.Y.Z` stages the native `@curio-data/pi-intelli-search` package and `mcp-vX.Y.Z` stages `@curio-data/mcp-intelli-search`; any other tag fails. The workflow verifies the tag version against the selected package's manifest, builds and tests both artifacts, and runs `npm stage publish` against the `@curio-data` scope. The dist-tag is derived from the version: stable releases stage to `latest`, while a prerelease such as `0.2.0-alpha.0` stages to its first prerelease identifier (`alpha`), because `npm stage publish` inherits `npm publish`'s guard that throws on a prerelease version without an explicit `--tag`. Both artefacts are built and tested before staging. Authentication is via OIDC trusted publishing (no stored token); provenance is signed automatically (possible exception: the very first staged version of a brand-new package, where npm's visibility check has no package to inspect). The package is then **held in the staging queue** until a maintainer approves it on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) with 2FA. Until approval, the version does not appear on the public registry.
-
-### Versioning Scheme (Two Packages, One Core)
-
-Agreed with the owner on 2026-10-05. Both packages are pre-1.0 and version in lockstep on the minor number:
-
-- **Minor (0.x.0) is the shared core generation.** Any change under `src/core/` bumps the minor version of **both** manifests, even if only one package ships immediately. Letting the minors drift destroys the signal that `pi-intelli-search@0.15.1` and `mcp-intelli-search@0.15.2` run the same core generation, which matters because the MCP package must honour the frozen native contracts.
-- **Patch (0.0.x) is package-specific.** Changes outside `src/core/` (native adapter under `src/`, MCP adapter under `packages/mcp/`, plugins, docs) bump only the affected package's patch. Patches are independent between packages and reset to 0 on every core bump.
-- **Prerelease is an orthogonal maturity marker.** A package carries `-alpha.N` while dev-marked and stages to the derived `alpha` dist-tag, off `latest` (the native package started this way at 0.3.1-alpha.1). Dropping the suffix is the promotion to normal; it is not a version change. Exception: the manual first publish of a brand-new package sets `latest` even with an explicit `--tag` (see npm Trusted Publisher), because no `latest` existed to protect.
-- **Native minor bumps still need a `DEFAULT_HISTORY` entry** in `src/settings.ts`, including bumps caused by core changes, and both workspaces need `npm install --package-lock-only`. The MCP package has no `DEFAULT_HISTORY`; its version changes never trigger native model migration.
-- **Tags and changelog sections are prefixed per package:** `pi-vX.Y.Z` / `[pi-X.Y.Z]` for the native extension, `mcp-vX.Y.Z` / `[mcp-X.Y.Z]` for the MCP server. Native releases 0.14.0 and older use the unprefixed `vX.Y.Z` form; those tags and releases are historical and never re-released.
-- **Release order within a coupled cycle: MCP first, native held.** The native package is not staged or released until the MCP package of the same core generation is confirmed installable from npmjs (the post-publication gate in the MCP checklist). Owner directive, 2026-10-05.
-
-### Changelog Structure
-
-One canonical `CHANGELOG.md` at the repository root covers both packages. The audiences overlap and core changes appear in both histories, so splitting the file would duplicate entries or force readers to open two files.
-
-- Native sections are `## [pi-X.Y.Z]`, MCP sections `## [mcp-X.Y.Z]`; a horizontal rule and note below the newest entries separate the prefixed era from the historical unprefixed native entries.
-- **Write core changes once, under the native section.** The matching MCP section carries a one-line pointer ("Core behaviour is shared with [pi-X.Y.Z] and recorded there") plus only its adapter-specific entries.
-
-### Changelog Principles
-
-Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): the changelog is for humans, not machines. Its purpose is to document **user-noticeable differences**, often spanning multiple commits, not to replace `git log`.
-
-- **Group related changes.** One entry can cover many commits (for example, "Documentation restructured" covers SKILL.md reordering, README tightening, heading fixes, and assertive voice rewrites).
-- **Omit internal changes.** CI tweaks, style guide additions, markdownlint fixes, dependency bumps, and internal refactors do not belong unless they affect compatibility.
-- **Omit docs-only changes** that are not user-visible (for example, adding a rule to AGENTS.md).
-- **Ask: would a user care about this?** If no, leave it out. The user can browse the repo if they want commit-level detail.
-- **Historical entries may be corrected for accuracy** (an over-strong claim softened, a wrong fact fixed), provided the correction does not change what the release delivered. Record the repository's convention as correction-in-place, distinct from the append-only rule for benchmark evidence in `docs/BENCHMARKS.md`.
-
-### Creating a Release
-
-Releases are routinely missed because steps 3 and 4 below are skipped or done halfway. Follow every step. Do not assume.
-
-1. **Verify CI is green.** Require a passing run for the exact release commit on `main` or a `release/` branch. Prepare an MCP candidate on a release branch so its unpublished catalogue pin does not break installation from `main`; merge it after publication. The native release follows that merge and the MCP registry verification.
-2. **Bump `version` in `package.json`** following [SemVer](https://semver.org/), then sync derived state before anything else: run `npm install --package-lock-only` so the `package-lock.json` root version matches, and add a `DEFAULT_HISTORY` entry for the new version in `src/settings.ts` (defaults unchanged is fine). Both drifts are silent: the lockfile drift was missed in v0.12.1, and a missing history entry disables default migration for upgrading users. Run `npm test` after the bump; the migration guard reads the live package version.
-3. **Update `CHANGELOG.md` in two places.** Both are required:
-   - **Top of file:** Add a new `## [pi-X.Y.Z] - YYYY-MM-DD` section above the previous entry. Use the standard sub-headings (`### Added`, `### Changed`, `### Fixed`, `### Compatibility`, `### Removed`, `### Security`) as needed. List user-visible changes only; internal refactors do not need entries unless they affect compatibility.
-   - **Bottom of file:** Add a corresponding reference link `[pi-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-vX.Y.Z` below the existing reference block. Without this entry the version heading at the top will not link to the GitHub release.
-4. **Verify both CHANGELOG edits exist before committing.** Run:
-
-   ```bash
-   grep -n "^## \[pi-X.Y.Z\]" CHANGELOG.md   # must return one match
-   grep -n "^\[pi-X.Y.Z\]:"  CHANGELOG.md   # must return one match
-   ```
-
-   Both must match. If either is missing, fix before continuing.
-5. **Commit and push** the version bump and CHANGELOG together. Suggested commit subject: `Release pi-vX.Y.Z`. The native package's README is derived from the root `README.md` by the `prepublishOnly` hook during `npm stage publish`; confirm `npm run check:readmes` passes first. After any local `npm publish --dry-run`, run `npm run restore:readme`.
-6. **Request explicit user approval** before creating the GitHub Release. The agent must not stage a publish without it (see `Release Policy` above). In a coupled release cycle the native release also waits for the MCP post-publication gate (see `Versioning Scheme`).
-7. **On approval, create the GitHub Release** with tag `pi-vX.Y.Z`. The workflow then runs `npm stage publish`, which submits the tarball to the staging queue. The agent's responsibility ends here.
-8. **User approves the staged package** on [npmjs.com](https://www.npmjs.com/package/@curio-data/pi-intelli-search) via the Staged Packages tab, providing 2FA. The agent must never attempt to approve a staged publish, even if given credentials.
-9. **Verify publication.** After approval, check `https://www.npmjs.com/package/@curio-data/pi-intelli-search` shows the new version.
-
-### Releasing the MCP Package
-
-`@curio-data/mcp-intelli-search` has its own version, release tag prefix and staging queue. The native checklist above does not apply except where noted; in particular the MCP package has no `DEFAULT_HISTORY` and its version changes must never trigger native model migration.
-
-1. **Verify CI is green** for the exact candidate on `main` or a `release/` branch and confirm the owner has explicitly approved this release. Keep unpublished catalogue pins on a release branch until the corresponding MCP version is public. Approval of one package is not approval of the other.
-2. **First release only: publish manually, do not tag.** npm cannot bind a trusted publisher to a package that does not exist, so the first `mcp-v*` version bypasses the CI staging flow: follow the bootstrap sequence under `npm Trusted Publisher` (manual `npm publish --access public --tag alpha`, then bind the trust). From the second release onward every step of this checklist applies, including the GitHub Release tag.
-3. **Bump `version` in `packages/mcp/package.json`** following [SemVer](https://semver.org/), then run `npm install --package-lock-only` so the lockfile workspace version matches.
-4. **Remove the not-published notices** from the root `README.md` (the `Publication Status` paragraph under `MCP Server`, the pending-publication sentence under `Two Packages, One Engine` and the pre-publication launchers) on the first public release only (the first dev-marked alpha keeps them), then run `npm run generate:readmes`. Never edit `packages/mcp/README.md` or the root `*.README.md` previews directly.
-5. **Regenerate the plugin bundles** so the catalogues pin the new version: `npm run generate:plugins`, then confirm `npm run check:plugins` passes. Commit the regenerated catalogues with the version bump; they are what users install from.
-6. **Run the full paced live suite** `./test/run-e2e-all.sh`, including `11_mcp_stdio.sh`, `12_plugin_bundles.sh`, `13_claude_code_plugin.sh` and `14_codex_plugin.sh`, before tagging.
-7. **Update `CHANGELOG.md`** with a `## [mcp-X.Y.Z] - YYYY-MM-DD` section and a matching `[mcp-X.Y.Z]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-vX.Y.Z` reference link. Core changes are not repeated: one pointer line to the native `[pi-X.Y.Z]` section covers them (see `Changelog Structure`). Verify both edits with the grep checks from step 4 of the native checklist (adjusted for the `mcp-` prefix).
-8. **Commit and push the release branch**, then create the _GitHub_ Release with tag `mcp-vX.Y.Z` only after explicit approval. The workflow stages the package; the user approves it on `npmjs.com` with 2FA. Merge to `main` only once the pinned version resolves publicly.
-9. **Post-publication gate:** verify the registry-pin installation route that pre-publication tests could not exercise: install the Claude Code and Codex plugins from the committed catalogues into clean profiles and confirm the `npx` launcher downloads and starts the published version. Record this evidence separately from the local-tarball class in [the compatibility matrix](docs/COMPATIBILITY.md). Only after this gate passes is the native package of the same core generation released.
-
-### Testing the Publish Pipeline
-
-Before the first real release, validate the pipeline with a pre-release:
-1. Bump version to a pre-release identifier (for example, `0.3.1-alpha.1`).
-2. Create a _GitHub_ Release with the **Pre-release** checkbox checked.
-3. The `published` event triggers the workflow (it fires for pre-releases too), exercising the full publish path. The workflow derives the dist-tag from the prerelease identifier (`alpha`), which is what allows a prerelease version past `npm stage publish`'s inherited guard.
-4. `npm` will **not** set pre-release versions as `latest`, and the derived dist-tag keeps them off it doubly. Early adopters will not get it by default.
-5. Verify the package appears on `npm`, then delete the pre-release tag if not needed.
-
-A staged dist-tag is immutable once staged; changing it means rejecting the staged version and re-staging. Whether a staging-only trusted publisher may set a non-`latest` dist-tag at stage time is unverified until the first live run; watch the first `mcp-v*-alpha*` release for it.
-
-### npm Trusted Publisher
-
-The workflow authenticates to `npm` via OIDC; no stored token is used. Each package needs its own binding. The trusted publisher is configured on the `@curio-data/pi-intelli-search` package page on `npmjs.com` under **Settings → Trusted Publishers** with the following bindings:
-
-- Organization: `Curio-Data`
-- Repository: `pi-intelli-search`
-- Workflow filename: `release.yml`
-- Environment: (none)
-- Allowed actions: `npm stage publish` only
-
-`@curio-data/mcp-intelli-search` requires the same binding on its own package page before its first release; the native package's binding does not cover it. Creating that binding is a maintainer action on `npmjs.com`, not something the agent can perform or verify from the repository.
-
-**Bootstrap: the first publish of a new package is two CLI commands (both verified live).** npm does not allow configuring a trusted publisher for a package that does not exist on the registry; there is no org-scope or admin pre-configuration path. Entering the full scoped name (`@curio-data/mcp-intelli-search`) in the trust UI before the package exists fails for this reason. The verified sequence for `@curio-data/mcp-intelli-search`:
-
-1. **Manual first publish** (verified 2026-10-05): `npm login` (interactive, 2FA; classic tokens fail on org-scoped packages and bypass-2FA granular tokens are unsupported for trust management), then in `packages/mcp/` run `npm publish --access public --tag alpha` for the dev-marked `0.15.0-alpha.0`. Observed 2026-10-06 registry check: a first publish of a brand-new package sets `latest` alongside `alpha` even with `--tag alpha`, because no `latest` existed to keep it off; a default `npm install @curio-data/mcp-intelli-search` therefore resolved to the alpha until the stable promotion.
-2. **Bind the trusted runner via the npm CLI** (verified 2026-10-07), once the package exists from step 1:
-
-   ```bash
-   npm trust github @curio-data/mcp-intelli-search --file release.yml --repo Curio-Data/pi-intelli-search --allow-stage-publish
-   ```
-
-   npm CLI 11.15.0+ required. Use the full scoped name; validation of org, repo and workflow filename is case-sensitive (`Curio-Data`, not `curio-data`). Prefer the CLI to the web UI: the two `npm trust` flags cannot mistype a field the way the UI form can, and a UI-created entry that does not match the workflow identity exactly fails only at publish time (see the symptom paragraph below for the 2026-10-07 E401 incident).
-3. **All subsequent versions** go through the CI staged flow. The manual first publish is the only token/login publish the package ever needs.
-
-Known symptoms of a misconfigured trust: a misleading `404 Not Found`, `ENEEDAUTH` or `E401` at publish time, because npm does not validate the configuration when it is saved. Verified 2026-10-07 on `@curio-data/mcp-intelli-search`: a UI-created entry whose fields did not match the workflow identity showed "Trusted publishing config not yet validated" in the npmjs UI and failed the `Stage publish` step with `E401 Unable to authenticate` twice, after every other verification step passed; the CLI `npm trust` command above produced a working binding whose first staged publish succeeded immediately and thereby validated the configuration. There is no manual validate action: npm validates a trusted-publisher entry automatically on the first successful publish from the matching workflow, and an entry that is never validated **expires after 48 hours** (GitHub changelog, 2026-10-02). When diagnosing an `E401` at `Stage publish` with all prior steps green: first confirm the four binding fields (owner, repo, workflow filename, empty environment) against the workflow's actual identity, delete and recreate the entry rather than editing (entries cannot be edited), and confirm the workflow pins a verified npm major (see the `Upgrade npm` step in `release.yml`; npm 12.2 failed the exchange independently of the binding, so the workflow pins npm 11 until a staged publish on npm 12 is verified). Set the environment field only if the publish job itself declares `environment: <name>` (ours does not). A package may hold up to ten trust configurations; ours keeps `npm stage publish` only, created after 2026-09-03.
-
-`npm publish` is intentionally **not** in the allowed actions list, so even a workflow compromise cannot push directly to the public registry; every release passes through the staged-publish approval gate.
 
 ## Compatibility
 

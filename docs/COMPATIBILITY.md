@@ -70,7 +70,7 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 
 ## Current Candidate Verification
 
-The floor-modernisation candidate is merged to `main` at `99fea6f`. All 15 mandatory scenarios in `test/run-e2e-all.sh` passed on that commit on 2026-10-08, with none failed or skipped. Both manifest versions are published. MCP registry-pin checks and native registry installation pass. [Release Readiness](RELEASE-READINESS.md#current-candidate) records owner approval and the completed release gates. The targeted implementation checks above remain separate from this merged-tree verification.
+The floor-modernisation candidate is merged to `main` at `99fea6f`. All 15 mandatory scenarios in `test/run-e2e-all.sh` passed on that commit on 2026-10-08, with none failed or skipped. Both manifest versions are published. MCP registry-pin checks and native registry installation pass. The targeted implementation checks above remain separate from this merged-tree verification.
 
 | Surface | Candidate Evidence | Remaining Limit |
 |---|---|---|
@@ -135,7 +135,7 @@ Evidence is retained under gitignored `.tmp/release-016/registry/`, with the coo
 
 ## Release Candidate Verification
 
-This section records the stable generation preceding the provenance corrections, not the current floor-modernisation candidate. The table records paced live verification of the 2026-10-06 candidate commits. The full paced suite subsequently completed on the merged `main` tree (2026-10-07: 14 scenarios, 0 failed, 0 skipped) before either package was staged; see [Release Readiness](RELEASE-READINESS.md#previous-publication).
+This section records the stable generation preceding the provenance corrections, not the current floor-modernisation candidate. The table records paced live verification of the 2026-10-06 candidate commits. The full paced suite subsequently completed on the merged `main` tree (2026-10-07: 14 scenarios, 0 failed, 0 skipped) before either package was staged.
 
 | Surface | Observed Evidence |
 |---|---|
@@ -152,7 +152,7 @@ Paced live scenario history:
 3. Scenarios 10 to 14 completed in a paced continuation. One configuration recipe passed on retry after a timeout.
 4. The initial scenario 12 assertion still matched an old skill description; it was corrected to match the generated description and rerun successfully.
 
-No mandatory host check was skipped. The versions for this historical candidate are recorded in its release tags and changelog entries. The current manifests identify the published floor-modernisation generation; [Release Readiness](RELEASE-READINESS.md) records its completed gates. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
+No mandatory host check was skipped. The versions for this historical candidate are recorded in its release tags and changelog entries. The current manifests identify the published floor-modernisation generation. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
 
 ### Published `0.15.0` Registry-Pin Verification (2026-10-07)
 
