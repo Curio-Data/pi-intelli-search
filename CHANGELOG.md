@@ -6,6 +6,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [pi-0.17.0] - 2026-10-08
+
+Prepared candidate, not published on `npm`.
+
+### Compatibility
+
+- The native extension now requires `Pi` >= 0.86.0. Model calls use only `ctx.modelRegistry.streamSimple()`, which normalises system prompts and applies host authentication and endpoint overrides. The legacy direct-provider path is removed; a missing facade produces an actionable upgrade error.
+- Live research passes on `Pi` 1.1.0 and the pinned 0.86.0 floor host on 2026-10-08. The floor check confirms citation recovery through the fetch-tee fallback. These targeted checks do not establish a completed full paced suite; see the [compatibility matrix](docs/COMPATIBILITY.md#current-candidate-verification).
+
+### Changed
+
+- All four native tools declare permission hints matching the MCP tools: search and extract are read-only; collate and research carry a destructive hint because cache refreshes write and archive prior output. These are host-consumed hints, not enforced permissions. Native tools prefer strict JavaScript Object Notation (JSON) schema sampling for their arguments where supported, with automatic fallback for unsupported models or schemas.
+- Native citation recovery combines the parsed provider-stream hook on `pi-ai` >= 1.0.0 with the existing fetch-tee fallback for older supported hosts. Both channels share a deduplicated per-attempt sink, preserving citation recovery at the raised host floor.
+- Final `intelli_research` results show execution duration on `Pi` >= 1.1.0 when the host supplies a duration of at least one second. Older hosts omit the line. Missing-model research errors list same-provider alternatives when the host exposes compatible catalogue methods.
+
+### Fixed
+
+- The shared model policy retries `server_busy` and “servers are currently busy” provider errors within the configured attempt limit. Native one-shot tools retain their single-attempt policy.
+
+## [mcp-0.17.0] - 2026-10-08
+
+Core behaviour is shared with [pi-0.17.0] and recorded there. This candidate is not published on `npm`.
+
+### Changed
+
+- The [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin launchers pin the prepared MCP manifest version. Registry installation of those candidate pins requires publication; existing published releases remain available.
+
 ## [pi-0.16.0] - 2026-10-08
 
 ### Fixed
@@ -449,6 +476,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[pi-0.17.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.17.0
+[mcp-0.17.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.17.0
 [mcp-0.15.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.15.0
 [pi-0.16.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.16.0
 [mcp-0.16.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.16.0

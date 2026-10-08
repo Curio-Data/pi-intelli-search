@@ -18,11 +18,13 @@ This document records host versions, artefacts and evidence classes for `intelli
 
 | Component | Tested Version | Evidence |
 |---|---|---|
-| `Pi` host (peer floor) | 0.81.1 | Real load check 2026-10-04: the branch build loads and `intelli_search` completes through the legacy provider dispatch path in a dependency-isolated install (Node.js v24.19.0); both dispatch paths also covered deterministically (`test/llm.test.ts`) |
-| `Pi` host (facade boundary) | 0.86.0 | Real load check 2026-10-04: the branch build loads and `intelli_search` completes through the `ctx.modelRegistry.streamSimple()` facade in a dependency-isolated install; deterministic coverage of both dispatch paths |
+| `Pi` Host (Historical Peer Floor) | 0.81.1 | Real load check 2026-10-04: that branch build loaded and `intelli_search` completed through the legacy provider dispatch path in a dependency-isolated install (Node.js v24.19.0); both paths had deterministic coverage then. This host is below the current peer floor |
+| `Pi` Host (Historical Facade Boundary) | 0.86.0 | Real load check 2026-10-04: that branch build loaded and `intelli_search` completed through the facade in a dependency-isolated install; both dispatch paths had deterministic coverage then |
+| `Pi` Host (Current Peer Floor) | 0.86.0 | Live `test/e2e/15_pi_floor.sh` passed on 2026-10-08 against implementation commit `a52bd31`: dependency-isolated pinned host, completed native research, `search.linksReturned=1` and `search.annotationsHarvested=13` through the fetch-tee fallback. The host predates `onProviderStreamEvent`; the agent loop used `openrouter/minimax/minimax-m3`. Targeted implementation verification, not a full paced-suite result |
+| `Pi` Host | 1.1.0 | Live `test/e2e/01_main.sh` passed on 2026-10-08 against implementation commit `a52bd31`: `fetch.succeeded=1`, `collate.summaryChars=1464`. Targeted implementation verification of native research only, not a completed full paced suite |
 | `Pi` host | 1.0.0 | Compatibility audited and verified 2026-10-02, including the `fetch`/`onPayload` request hooks against pi-ai 1.0.0 |
 | `Pi` host | 1.0.1, 1.0.2 | Development hosts for the shared-engine phases; all entry gates and live scenarios |
-| `Pi` host and MCP client | 1.0.4 | Complete current-candidate paced live suite; see [Current Candidate Verification](#current-candidate-verification) |
+| `Pi` Host and MCP Client | 1.0.4 | Complete previous provenance-generation paced live suite; see [Provenance Generation Verification](#provenance-generation-verification) |
 | pi-ai peer dependency | 1.1.0 | Independent native fresh-tarball installation and plain-Node smoke import pass on 2026-10-07; runtime loading, tool registration and package identity only, not a live pipeline on a newer `Pi` host |
 | `Pi` as MCP client | 1.0.1, 1.0.2 | `test/e2e/11_mcp_stdio.sh`: real research through `Pi`'s MCP client against the standalone server (live `Pi` host class). Exact versions are recorded in [Phase 4](plans/mcp-intelli-search/PHASE-4.md#verification) and [Phase 6](plans/mcp-intelli-search/PHASE-6.md#verification) |
 
@@ -68,9 +70,21 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 
 ## Current Candidate Verification
 
-The [provenance correction evidence](evidence/2026-10-07-provenance-correction.md) records the prepared manifests' local verification. The local-tarball checks do not establish registry availability. The MCP package is now published; [the registry-pin verification below](#published-0160-registry-pin-verification-2026-10-08) records independent installation of the committed launchers.
+The prepared manifests identify the floor-modernisation candidate at implementation commit `a52bd31`; [Release Readiness](RELEASE-READINESS.md#current-candidate) records its branch and publication gates. Both packages remain unpublished at that candidate version. The targeted native checks above and deterministic gates record implementation verification on 2026-10-08, not a completed full paced suite.
 
-| Surface | Current Evidence | Remaining Limit |
+| Surface | Candidate Evidence | Remaining Limit |
+|---|---|---|
+| Native Floor Host | Pinned `Pi` 0.86.0: scenario 15 passes with completed research and fetch-tee citation recovery | One targeted native scenario, not all settings or plugin routes |
+| Native Current Host | `Pi` 1.1.0: scenario 01 passes with a fetched page and non-empty synthesis | Does not independently establish interactive duration rendering or each metadata consumer |
+| Deterministic Gates | Build, native and standalone tests, native-contract type check, generated README/contents/plugin drift checks and audit pass at the implementation commit | Later documentation and generated outputs require fresh gates on the integrated commit |
+| Full Paced Live Suite | Not run for this candidate | Run `test/run-e2e-all.sh`, including the new floor scenario, before release |
+| Packaging and Registry Pins | Candidate plugin launchers pin the unpublished MCP manifest version | Fresh-install gates and post-publication registry-pin checks remain required; previous published-generation checks are not candidate evidence |
+
+## Provenance Generation Verification
+
+The [provenance correction evidence](evidence/2026-10-07-provenance-correction.md) records that generation's local verification. Local-tarball checks do not establish registry availability. The provenance-generation MCP package is published; [the registry-pin verification below](#published-0160-registry-pin-verification-2026-10-08) records independent installation of the launchers committed at that release.
+
+| Surface | Recorded Evidence | Remaining Limit |
 |---|---|---|
 | Native Host | `Pi` 1.0.4: complete paced suite on merged commit `5605a2a` passes on 2026-10-07 | Local candidate execution, not installation of the published native candidate |
 | MCP Host | Real standalone research through `Pi`'s MCP client; completed `mcp` identity and cache; published registry-pin installation and protocol checks below | Full registry-pin research remains unverified |
@@ -84,13 +98,13 @@ The full paced runner completed on merged commit `5605a2a` on 2026-10-07 with ev
 
 ### Published Native Package Verification (2026-10-08)
 
-The native package's `latest` tag resolves to the current native manifest version. The registry records publication at 07:41:48 UTC and exposes its signed provenance attestation. `test/run-e2e-publish.sh` passes against the explicit published version in a clean installation, with `HOME` and `PI_CODING_AGENT_DIR` isolated under repository `.tmp/`. The installed extension loads under plain Node, registers all four tools with the required shapes and subscribes to session startup. Expected source, build, skill and legal files are present; test, workflow and environment files are absent; host peer dependencies are not bundled.
+At this verification, the native package's `latest` tag resolved to the version at release tag `pi-v0.16.0`, not the subsequently prepared native manifest version. The registry records publication at 07:41:48 UTC and exposes its signed provenance attestation. `test/run-e2e-publish.sh` passes against the explicit published version in a clean installation, with `HOME` and `PI_CODING_AGENT_DIR` isolated under repository `.tmp/`. The installed extension loads under plain Node, registers all four tools with the required shapes and subscribes to session startup. Expected source, build, skill and legal files are present; test, workflow and environment files are absent; host peer dependencies are not bundled.
 
 The downloaded published tarball's SHA-1 matches registry metadata. Its README matches `pi.README.md` at the native release tag byte-for-byte, confirming that the publish hook shipped the native derivation rather than the repository README. Logs and the downloaded README are retained under gitignored `.tmp/release-016/native-registry-install.log` and `.tmp/release-016/native-public/`. These checks establish registry installation, package shape and runtime loading, not a live model call through the installed registry package.
 
 ### Published `0.16.0` Registry-Pin Verification (2026-10-08)
 
-The maintainer approved the staged MCP package; the registry records publication at 07:27:25 UTC and `latest` resolves to the current MCP manifest version. Both host plugins were installed from the committed marketplaces fetched from `Curio-Data/pi-intelli-search` into fresh profiles. No host login credentials were copied, and the only inference credential used was a dummy plugin option.
+The maintainer approved the staged MCP package; the registry records publication at 07:27:25 UTC and, at this verification, `latest` resolved to the version at release tag `mcp-v0.16.0`, not the subsequently prepared MCP manifest version. Both host plugins were installed from the committed marketplaces fetched from `Curio-Data/pi-intelli-search` into fresh profiles. No host login credentials were copied, and the only inference credential used was a dummy plugin option.
 
 - **Claude Code 2.1.293:** isolated `CLAUDE_CONFIG_DIR`, marketplace add, plugin install, required key option through `--values-stdin` and explicit configuration. `claude mcp list` shows `plugin:intelli-search:intelli_search` connected through the committed `npx` pin, and `claude plugin details` discovers the skill.
 - **Codex CLI 0.160.1:** isolated `CODEX_HOME`, marketplace add, plugin install and forwarded variables. `codex mcp list --json` shows the server enabled with the committed pin; the installed plugin cache and `codex debug prompt-input` expose the current skill. Listing an enabled server is not itself a connection check.
@@ -100,7 +114,7 @@ Evidence is retained under gitignored `.tmp/release-016/registry/`, with the coo
 
 ## Release Candidate Verification
 
-This section records the previous stable generation, not the current provenance candidate. The table records paced live verification of the 2026-10-06 candidate commits. The full paced suite subsequently completed on the merged `main` tree (2026-10-07: 14 scenarios, 0 failed, 0 skipped) before either package was staged; see [Release Readiness](RELEASE-READINESS.md#previous-publication).
+This section records the stable generation preceding the provenance corrections, not the current floor-modernisation candidate. The table records paced live verification of the 2026-10-06 candidate commits. The full paced suite subsequently completed on the merged `main` tree (2026-10-07: 14 scenarios, 0 failed, 0 skipped) before either package was staged; see [Release Readiness](RELEASE-READINESS.md#previous-publication).
 
 | Surface | Observed Evidence |
 |---|---|
@@ -131,7 +145,7 @@ Full research through the registry-pin route remains open evidence; the credenti
 
 ## Shared Constraints
 
-- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. The current MCP pin is published, and fresh plugin installation from `main` passes the registry-pin checks recorded above. Previous stable registry checks remain historical evidence. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
+- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. The candidate branch's MCP pin is unpublished, so its registry launcher cannot resolve until publication. Installation checks for the published pin from `main` remain historical evidence for that release, not verification of the candidate pin. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
 - Full research calls have been driven through both host plugins in the local-tarball class (`test/e2e/13_claude_code_plugin.sh`, `test/e2e/14_codex_plugin.sh`). A full research call through the registry-pin route remains open evidence; the registry-pin class currently covers installation, connection and tool listing, plus a direct `npx` pull that runs the published CLI.
 - Only [_OpenRouter_](https://openrouter.ai) is a verified standalone inference provider. Other OpenAI-compatible endpoints are not claimed: reasoning, search-tool and citation behaviour differs between compatible-looking endpoints.
 - _macOS_ and _Windows_ are not verified for any artefact; the fetch dependency's native assets are exercised on _Linux_ x86-64 only.
