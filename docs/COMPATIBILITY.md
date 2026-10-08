@@ -70,7 +70,7 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 
 ## Current Candidate Verification
 
-The floor-modernisation candidate is merged to `main` at `99fea6f`. All 15 mandatory scenarios in `test/run-e2e-all.sh` passed on that commit on 2026-10-08, with none failed or skipped. The MCP manifest version is published and its registry-pin checks pass; the native candidate remains unpublished. [Release Readiness](RELEASE-READINESS.md#current-candidate) records owner approval and the remaining gates. The targeted implementation checks above remain separate from this merged-tree verification.
+The floor-modernisation candidate is merged to `main` at `99fea6f`. All 15 mandatory scenarios in `test/run-e2e-all.sh` passed on that commit on 2026-10-08, with none failed or skipped. Both manifest versions are published. MCP registry-pin checks and native registry installation pass. [Release Readiness](RELEASE-READINESS.md#current-candidate) records owner approval and the completed release gates. The targeted implementation checks above remain separate from this merged-tree verification.
 
 | Surface | Candidate Evidence | Remaining Limit |
 |---|---|---|
@@ -94,6 +94,12 @@ The maintainer approved the staged MCP package. The registry records publication
 - **Independent Registry Launcher:** a fresh npm cache and consumer directory resolve the executable beneath that cache's `_npx/`, not the repository workspace. Its package identity and `--version` match the published pin. A direct standard-input/output (stdio) probe returns the expected server identity, routing instructions and all four tools through `initialize` and `tools/list`, then exits cleanly. Standard output contains protocol frames only; standard error contains the expected startup banner.
 
 Evidence is retained under `.tmp/release-017/registry/` and `.tmp/release-017/registry-verification.log`. This is registry installation, connection and tool-listing evidence, not a full research call or proof that a host model received an answer. The credentialed full-research checks remain in the local-tarball class.
+
+### Published `0.17.0` Native Package Verification (2026-10-08)
+
+The registry records native publication at 11:52:19 UTC; `latest` resolves to the version at `pi-v0.17.0`, and registry metadata exposes its signed provenance attestation. `test/run-e2e-publish.sh` passes against that explicit version with `HOME`, `PI_CODING_AGENT_DIR` and scratch isolated under repository `.tmp/`. The installed extension loads under plain Node, registers all four tools and its session-start subscription, and contains the expected source, build, skill and legal files. Tests, workflows and environment files are absent; host peer dependencies are not bundled.
+
+The downloaded tarball's SHA-1 matches registry metadata, and its README matches `pi.README.md` at the native release tag byte-for-byte. Evidence is retained under `.tmp/release-017/native-registry-install.log` and `.tmp/release-017/native-public/`. These checks establish published-package installation, runtime loading and README derivation, not a live model call through the registry-installed native package.
 
 ## Provenance Generation Verification
 
@@ -146,7 +152,7 @@ Paced live scenario history:
 3. Scenarios 10 to 14 completed in a paced continuation. One configuration recipe passed on retry after a timeout.
 4. The initial scenario 12 assertion still matched an old skill description; it was corrected to match the generated description and rerun successfully.
 
-No mandatory host check was skipped. The versions for this historical candidate are recorded in its release tags and changelog entries; the current manifests describe the next prepared generation. Its active gates are in [Release Readiness](RELEASE-READINESS.md). Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
+No mandatory host check was skipped. The versions for this historical candidate are recorded in its release tags and changelog entries. The current manifests identify the published floor-modernisation generation; [Release Readiness](RELEASE-READINESS.md) records its completed gates. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
 
 ### Published `0.15.0` Registry-Pin Verification (2026-10-07)
 
