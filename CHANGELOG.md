@@ -13,7 +13,7 @@ Prepared candidate, not published on `npm`.
 ### Compatibility
 
 - The native extension now requires `Pi` >= 0.86.0. Model calls use only `ctx.modelRegistry.streamSimple()`, which normalises system prompts and applies host authentication and endpoint overrides. The legacy direct-provider path is removed; a missing facade produces an actionable upgrade error.
-- Live research passes on `Pi` 1.1.0 and the pinned 0.86.0 floor host on 2026-10-08. The floor check confirms citation recovery through the fetch-tee fallback. These targeted checks do not establish a completed full paced suite; see the [compatibility matrix](docs/COMPATIBILITY.md#current-candidate-verification).
+- The full paced live suite passes on merged commit `99fea6f` on 2026-10-08, including native research on `Pi` 1.1.0, fetch-tee citation recovery on the pinned 0.86.0 floor host, and credentialed local-tarball plugin research. Registry-pin verification follows MCP publication; see the [compatibility matrix](docs/COMPATIBILITY.md#current-candidate-verification).
 
 ### Changed
 

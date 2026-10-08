@@ -70,15 +70,20 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 
 ## Current Candidate Verification
 
-The prepared manifests identify the floor-modernisation candidate at implementation commit `a52bd31`; [Release Readiness](RELEASE-READINESS.md#current-candidate) records its branch and publication gates. Both packages remain unpublished at that candidate version. The targeted native checks above and deterministic gates record implementation verification on 2026-10-08, not a completed full paced suite.
+The floor-modernisation candidate is merged to `main` at `99fea6f`. All 15 mandatory scenarios in `test/run-e2e-all.sh` passed on that commit on 2026-10-08, with none failed or skipped. Both packages remain unpublished at the manifest versions; [Release Readiness](RELEASE-READINESS.md#current-candidate) records owner approval and the publication gates. The targeted implementation checks above remain separate from this merged-tree verification.
 
 | Surface | Candidate Evidence | Remaining Limit |
 |---|---|---|
-| Native Floor Host | Pinned `Pi` 0.86.0: scenario 15 passes with completed research and fetch-tee citation recovery | One targeted native scenario, not all settings or plugin routes |
-| Native Current Host | `Pi` 1.1.0: scenario 01 passes with a fetched page and non-empty synthesis | Does not independently establish interactive duration rendering or each metadata consumer |
-| Deterministic Gates | Build, native and standalone tests, native-contract type check, generated README/contents/plugin drift checks and audit pass at the implementation commit | Later documentation and generated outputs require fresh gates on the integrated commit |
-| Full Paced Live Suite | Not run for this candidate | Run `test/run-e2e-all.sh`, including the new floor scenario, before release |
-| Packaging and Registry Pins | Candidate plugin launchers pin the unpublished MCP manifest version | Fresh-install gates and post-publication registry-pin checks remain required; previous published-generation checks are not candidate evidence |
+| Native Floor Host | Pinned `Pi` 0.86.0: scenario 15 passes on `99fea6f`, with completed research, one search link, 43 recovered citations and non-empty synthesis through fetch-tee recovery | Floor-host coverage is one native scenario, not every setting or plugin route; it does not establish strict domain filtering |
+| Native Current Host | `Pi` 1.1.0: native scenarios and real research through the MCP client pass in the full suite | Does not independently establish interactive duration rendering or each metadata consumer |
+| Claude Code | 2.1.294, Sonnet 5.5: all four scenario 13 cases pass, including model-visible factual answers, automatic and explicit skill loading, and completed comparison research | Local-tarball class; `Bash` is removed for controlled routing, not an unrestricted-shell evaluation |
+| Codex CLI | 0.160.1: scenario 14 passes with a completed research tool call and `mcp` sidecar through the dedicated profile | Local-tarball class, not registry-pin research |
+| Deterministic Gates | Both builds, native and standalone tests, native-contract types, generated gates, ShellCheck and dependency audit pass on `99fea6f` | Later release-preparation commits require exact-commit CI |
+| Full Paced Live Suite | All mandatory scenarios pass on `99fea6f`, including credential-free plugin installation and the floor host | Local candidate execution; pipeline output checks do not establish factual accuracy |
+| Packaging | Both independent fresh-tarball installs pass on `99fea6f`; native consumer installation resolves pi-ai 1.1.0 | Installation and runtime loading, not live research through the published native package |
+| Registry Pins | Main's plugin launchers pin the unpublished MCP manifest version under the owner-approved merge exception | Post-publication clean-profile verification remains required before native staging |
+
+Logs are retained under gitignored `.tmp/release-017/`, with the full paced output in `live.log`. The native agent loop used [_DeepSeek Flash_](https://www.deepseek.com) except for the floor scenario's configured [_OpenRouter_](https://openrouter.ai) model; pipeline roles retained each scenario's model configuration. Both credentialed host checks confirmed the operator's credential files were untouched.
 
 ## Provenance Generation Verification
 
@@ -145,7 +150,7 @@ Full research through the registry-pin route remains open evidence; the credenti
 
 ## Shared Constraints
 
-- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. The candidate branch's MCP pin is unpublished, so its registry launcher cannot resolve until publication. Installation checks for the published pin from `main` remain historical evidence for that release, not verification of the candidate pin. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
+- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. Main's candidate MCP pin is unpublished under the owner-approved merge exception, so its registry launcher cannot resolve until publication. Earlier published-pin installation checks remain historical evidence, not verification of the candidate pin. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
 - Full research calls have been driven through both host plugins in the local-tarball class (`test/e2e/13_claude_code_plugin.sh`, `test/e2e/14_codex_plugin.sh`). A full research call through the registry-pin route remains open evidence; the registry-pin class currently covers installation, connection and tool listing, plus a direct `npx` pull that runs the published CLI.
 - Only [_OpenRouter_](https://openrouter.ai) is a verified standalone inference provider. Other OpenAI-compatible endpoints are not claimed: reasoning, search-tool and citation behaviour differs between compatible-looking endpoints.
 - _macOS_ and _Windows_ are not verified for any artefact; the fetch dependency's native assets are exercised on _Linux_ x86-64 only.

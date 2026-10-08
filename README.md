@@ -145,6 +145,8 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
 
 <!-- packages:none -->
 Choose a package by host: the [`Pi` native extension](#pi-native-extension) for `Pi`, or the [MCP server](#mcp-server) for MCP-compatible hosts.
+
+The repository marketplaces currently pin an unpublished MCP candidate, so their plugin launchers cannot start until publication. The [direct MCP registration](#register-the-server) commands use the published package without that candidate pin. See [Release Readiness](docs/RELEASE-READINESS.md#current-candidate) for the publication state.
 <!-- /packages -->
 
 <!-- packages:pi -->
@@ -1159,7 +1161,7 @@ To suppress the sidecar in the MCP server, set `"disableTelemetry": true` inside
 <!-- packages:pi -->
 ### `Pi` Extension Compatibility
 
-- **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. Targeted live research passes on the floor host and `Pi` 1.1.0 (2026-10-08); the [compatibility matrix](docs/COMPATIBILITY.md#current-candidate-verification) records the checks and the pending full paced suite.
+- **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. The full paced live suite passes on the merged candidate (2026-10-08), including research on the floor host and `Pi` 1.1.0; the [compatibility matrix](docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball checks from registry-pin verification.
 - User interface (UI) notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, remote procedure call (RPC)).
 - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
 - Retry and timeout are owned by the shared model policy, invoked by native `callLlm()`, independently of `Pi`'s `retry.provider.maxRetries`. Native calls force SDK `maxRetries: 0`. Configured backoff and application timeout apply inside `intelli_research`; the three standalone tools retain their one-attempt, no-application-timeout behaviour.
