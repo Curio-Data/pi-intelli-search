@@ -24,6 +24,16 @@
           }
         }
       },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "constrainedSampling": {
+        "type": "json_schema",
+        "strict": "prefer"
+      },
       "hasRenderResult": false
     },
     {
@@ -61,6 +71,16 @@
             "description": "Optional focus guidance for extraction"
           }
         }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "constrainedSampling": {
+        "type": "json_schema",
+        "strict": "prefer"
       },
       "hasRenderResult": false
     },
@@ -141,6 +161,16 @@
           }
         }
       },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "constrainedSampling": {
+        "type": "json_schema",
+        "strict": "prefer"
+      },
       "hasRenderResult": false
     },
     {
@@ -182,6 +212,16 @@
             "description": "Focus guidance for all extractions"
           }
         }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "constrainedSampling": {
+        "type": "json_schema",
+        "strict": "prefer"
       },
       "hasRenderResult": true
     }

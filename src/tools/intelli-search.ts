@@ -17,6 +17,20 @@ export const intelliSearchTool = {
   promptSnippet:
     "intelli_search(query): search the web and return synthesised results with source URLs",
   parameters: searchSchema,
+  // Permission hints (Pi >= 0.99 consumes them; older hosts ignore the
+  // field). Semantically the same hints the standalone MCP package declares:
+  // reading the open web, no workspace mutation, not idempotent (provider
+  // results vary call to call). destructiveHint is stated explicitly where
+  // the MCP package relies on the default.
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: true,
+  },
+  // Prefer strict JSON-schema sampling where the active model supports it;
+  // capability metadata downgrades unsupported models to normal tool calls.
+  constrainedSampling: { type: "json_schema", strict: "prefer" } as const,
 
   async execute(
     _toolCallId: string,

@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   settleAnnotationSink,
   createAnnotationSink,
+  harvestChunkAnnotations,
   mergeCitations,
   parseCitations,
   wrapFetchForAnnotations,
@@ -74,6 +75,33 @@ describe("parseCitations", () => {
   it("returns [] for bodies that are neither SSE nor JSON", () => {
     assert.deepStrictEqual(parseCitations("<html>gateway error</html>"), []);
     assert.deepStrictEqual(parseCitations(""), []);
+  });
+});
+
+describe("harvestChunkAnnotations", () => {
+  it("fills the sink from a parsed stream chunk, deduping urls", () => {
+    const sink = createAnnotationSink();
+    const chunk = JSON.parse(
+      `{"choices":[{"delta":{"annotations":[${ANN("https://a.example")},${ANN("https://b.example", "B")}]}}]}`,
+    );
+    harvestChunkAnnotations(chunk, sink);
+    harvestChunkAnnotations(chunk, sink);
+    assert.deepEqual(sink.citations, [
+      { url: "https://a.example" },
+      { url: "https://b.example", title: "B" },
+    ]);
+  });
+
+  it("accepts non-streaming message shapes and ignores junk", () => {
+    const sink = createAnnotationSink();
+    harvestChunkAnnotations(
+      { choices: [{ message: { annotations: [{ type: "url_citation", url_citation: { url: "https://c.example" } }] } }] },
+      sink,
+    );
+    harvestChunkAnnotations(null, sink);
+    harvestChunkAnnotations({ choices: "nope" }, sink);
+    harvestChunkAnnotations("data: not-json", sink);
+    assert.deepEqual(sink.citations, [{ url: "https://c.example" }]);
   });
 });
 

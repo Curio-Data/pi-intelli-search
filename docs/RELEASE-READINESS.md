@@ -1,8 +1,35 @@
 # Release Readiness
 
-Both packages are published on `npm` and their `latest` tags resolve to the versions in [the native manifest](../package.json) and [the MCP manifest](../packages/mcp/package.json). This release combines shared-engine provenance corrections with search-first Model Context Protocol (MCP) routing; release notes are in [CHANGELOG.md](../CHANGELOG.md). The owner authorised staging on 2026-10-07 and approved both staged packages on 2026-10-08. MCP publication and clean registry-pin host verification preceded native staging. Native registry installation and its installed README also pass verification. The release cycle is complete.
+The [native manifest](../package.json) and [MCP manifest](../packages/mcp/package.json) identify a prepared, unpublished floor-modernisation candidate. Model Context Protocol (MCP) publication remains first; native staging waits for MCP registry availability and clean registry-pin verification. The completed provenance release below is historical evidence, not approval or verification of this candidate. [CHANGELOG.md](../CHANGELOG.md) records both package histories.
 
-## Current Release
+## Current Candidate
+
+The candidate is integrated on `feat/pi-0.86-floor-modernization` (code `a52bd31`, documentation merged in `50fd58a`, catalogue-hint facade fix `3ddd9f7`, regenerated readmes `12adc1f`, review-findings fix commit on top). Both manifests advance together because the shared citation harvester and retry classifier change. Native peer floors require `Pi` >= 0.86.0; model dispatch uses only the registry facade. Citation harvesting combines the parsed provider-stream hook (`pi-ai` >= 0.99.0) with fetch-tee recovery for hosts whose `pi-ai` predates 0.99.0. Native tools declare MCP-parity permission hints and prefer strict JavaScript Object Notation (JSON) schema argument sampling where supported; research rendering uses the newer duration context when available. On the 0.86.x floor hosts `pi-ai` treated OpenAI-compatible endpoints as strict-capable by default (upstream correction in 0.87.0), so strict argument schemas can reach such an endpoint that does not support them; `compat.supportsStrictMode: false` on the model in `models.json` is the workaround and is recorded in the [changelog](../CHANGELOG.md).
+
+The candidate plugin launchers pin the unpublished MCP manifest version. Keep those pins on the candidate branch until publication unless the owner explicitly approves a merge-before-publication exception. Fresh registry-pin installation of the candidate cannot pass before the pinned version is public. Do not weaken main's published-pin guard or treat previous-generation installation checks as candidate evidence. The completed cycle's earlier merge exception does not authorise this one.
+
+### Candidate Gates
+
+| Gate | State | Evidence or Required Action |
+|---|---|---|
+| Implementation | Prepared | Code `a52bd31`, facade-hint fix `3ddd9f7` and the review-findings commit on the candidate branch; manifests, lockfile, native default history and regenerated plugin pins agree |
+| Deterministic Gates | Passed at the integrated tree | Build, native and standalone tests (605 total after the review fixes, canonical in the root README badge), native-contract type check, generated README/contents/plugin drift checks and dependency audit; run by an independent reviewer at `12adc1f` and rerun by the coordinator after the review fixes |
+| Targeted Native Research | Passed on 2026-10-08 | Scenario 01 on `Pi` 1.1.0 and scenario 15 on a host-isolated pinned `Pi` 0.86.0; [Compatibility](COMPATIBILITY.md#current-candidate-verification) records scope and fallback-citation evidence. Live evidence predates the catalogue-hint fix; that fix touches only the error path |
+| Documentation Integration | Done | Documentation merged (`50fd58a`), README contents and package READMEs regenerated; review-findings corrections applied on top |
+| Independent Review | Passed on 2026-10-08 | Two reviewers (Pi/DeepSeek Flash and Claude Code/Opus 5.5) found no correctness regression; findings applied: catalogue-hint ranking, pi-ai 0.99.0 boundary correction, duration-format parity with tests, badge and handoff accuracy, strict-sampling floor caveat documented. Reports under gitignored `.tmp/agents/2026-10-08-017-modernization/reports/` |
+| Fresh Installation | Pending for the candidate | Run both independent fresh-tarball gates against the integrated tree; earlier published-generation installs are separate evidence |
+| Full Paced Live Suite | Not run for this candidate | Run `test/run-e2e-all.sh` before release, including scenario 15. Use the credential-isolation and pacing rules in `AGENTS.md`; a skipped mandatory scenario is missing evidence |
+| Exact-Commit CI | Required before each release | Require a passing eligible push run on the exact release commit on `main` or a `release/` branch (the `feat/` branch carries no CI runs). Documentation, generation or release-preparation edits change that commit and require new CI |
+| Publication and Approval | Not published; separate approval required | Obtain explicit MCP release permission, stage through the existing workflow and wait for maintainer approval on `npm`. Approval of the completed release does not authorise this candidate |
+| Post-Publication MCP Gate | Pending | Verify registry availability, the intended dist-tag and clean-profile installation from the committed catalogues; record registry-pin evidence separately from local-tarball research |
+| Native Release | Held | Stage only after the MCP post-publication gate passes and separate native release permission is granted |
+
+The fresh merge agent must preserve the candidate/publication distinction through integration and release preparation. Do not create tags, publish releases or stage either package from this documentation handoff alone. Exact-commit CI is required after integration, not borrowed from implementation verification or the completed cycle. If an explicit merge-before-publication exception is granted, retain main's registry-pin guard and validate the exact merged tree through a matching `release/` branch, following the CI ordering caveat recorded below.
+
+<a id="current-release"></a>
+## Published Provenance Generation
+
+Both packages from the provenance generation are published on `npm` at the existing `pi-v0.16.0` and `mcp-v0.16.0` release tags. The owner authorised staging on 2026-10-07 and approved both staged packages on 2026-10-08. MCP publication and clean registry-pin host verification preceded native staging. Native registry installation and its installed README pass verification. That release cycle is complete; its results do not establish the current candidate's gates.
 
 The shared engine gives collation successful, non-empty extraction evidence only. Code renders one authoritative Source Assessment using the run's file identity, and validates references before report writes or rotation. Manual evidence is labelled caller-supplied; code examples and cross-links in extracted content remain content rather than additional fetched pages. Model-generated relevance and contribution ratings are removed. Reference consistency does not establish factual accuracy. The [provenance correction evidence](evidence/2026-10-07-provenance-correction.md) records implementation, review dispositions and limitations.
 
@@ -10,7 +37,8 @@ MCP server instructions, descriptions and generated host skills guide factual lo
 
 Both manifests, the lockfile, native default history and plugin pins advanced together. The root README generates package READMEs, and shared guidance generates plugin skills. Do not hand-edit those derived files or recreate the published release tags.
 
-## Verification State
+<a id="verification-state"></a>
+## Previous Verification State
 
 | Gate | State | Evidence |
 |---|---|---|
@@ -20,18 +48,18 @@ Both manifests, the lockfile, native default history and plugin pins advanced to
 | Release CI | Passed for both exact tagged commits | MCP tag commit `7a6bbb8`: [run 37695372137](https://github.com/Curio-Data/pi-intelli-search/actions/runs/37695372137). Native tag commit `bac0015`: [main run 37744133105](https://github.com/Curio-Data/pi-intelli-search/actions/runs/37744133105) and [release run 37744136529](https://github.com/Curio-Data/pi-intelli-search/actions/runs/37744136529) pass, including the published-pin guard on main |
 | Targeted Live Checks | Passed | Paced scenarios `01_main`, `05_collation_limits`, `11_mcp_stdio` and `13_claude_code_plugin`; native research and all Opus cases rerun after the final source corrections |
 | Full Paced Live Suite | Passed on merged commit `5605a2a` | Complete paced runner on 2026-10-07: all mandatory scenarios passed, none failed or skipped; native DeepSeek Flash agent loop, Claude Sonnet 5.5 and the dedicated Codex profile |
-| Registry Publication | Both Published | On 2026-10-08 the registry records MCP publication at 07:27:25 UTC and native at 07:41:48 UTC. Both `latest` tags resolve to the current manifests; both packages expose signed provenance attestations |
+| Registry Publication | Both Published | On 2026-10-08 the registry records MCP publication at 07:27:25 UTC and native at 07:41:48 UTC. At verification, both `latest` tags resolved to the existing provenance release tags; both published packages expose signed provenance attestations |
 | Staging Approval | Granted by the owner on 2026-10-07 | Both package releases authorised; native retains the MCP publication and registry-pin verification prerequisites. Approval of the staged tarballs on `npm` remains a separate maintainer action |
 | MCP Staging | Completed on 2026-10-07 at 22:22 UTC | Tag `mcp-v0.16.0` targets `7a6bbb8`; [workflow 37695541215](https://github.com/Curio-Data/pi-intelli-search/actions/runs/37695541215) staged with `latest` and signed provenance. Staging ID: `565b5093-62ac-49f0-8c5d-d59f3f602043` |
 | Post-Publication Host Installation | Passed on 2026-10-08 | Both plugins installed from the committed marketplaces into clean profiles; registry-pulled CLI identity, instructions and tool listing verified. [Compatibility](COMPATIBILITY.md#published-0160-registry-pin-verification-2026-10-08) records scope and limits |
 | Native Staging | Completed on 2026-10-08 at 07:37 UTC | Tag `pi-v0.16.0` targets `bac0015`; [workflow 37744380551](https://github.com/Curio-Data/pi-intelli-search/actions/runs/37744380551) verified the published MCP pin and staged with `latest` and signed provenance. Staging ID: `8fbcc163-27e2-4f41-8645-7321eb272524` |
-| Native Registry Verification | Passed on 2026-10-08 | `test/run-e2e-publish.sh` passes against the explicit native manifest version with isolated home and agent directories. Published tarball SHA-1 matches registry metadata, and its README matches the tagged native derivation byte-for-byte |
+| Native Registry Verification | Passed on 2026-10-08 | `test/run-e2e-publish.sh` passes against the version at `pi-v0.16.0` with isolated home and agent directories. Published tarball SHA-1 matches registry metadata, and its README matches the tagged native derivation byte-for-byte |
 
-Implementation logs and reviewer reports are under gitignored `.tmp/agents/provenance-fix/`; release gate logs are under `.tmp/release-016/`. Tracked evidence pages contain the conclusions so the handoff does not depend on that scratch surviving. The first native fresh-install attempt failed because the advertised upstream pi-ai 1.1.0 tarball returned 404; the unmodified gate passed after a paced retry with that same peer version. [Compatibility](COMPATIBILITY.md#current-candidate-verification) distinguishes current local-tarball checks from historical registry-pin checks.
+Implementation logs and reviewer reports are under gitignored `.tmp/agents/provenance-fix/`; release gate logs are under `.tmp/release-016/`. Tracked evidence pages contain the conclusions so the handoff does not depend on that scratch surviving. The first native fresh-install attempt failed because the advertised upstream pi-ai 1.1.0 tarball returned 404; the unmodified gate passed after a paced retry with that same peer version. [Compatibility](COMPATIBILITY.md#provenance-generation-verification) records that generation's local-tarball and registry-pin checks separately.
 
 ## Release from Main
 
-The owner directed: update documentation, commit and push, merge to `main`, then hand release work to a fresh agent (2026-10-07). This is an explicit exception to the default policy of holding unpublished catalogue pins off `main`. It changes merge timing only; MCP-first publication, exact-commit CI and separate approval gates remain mandatory.
+This section records the completed provenance cycle's merge procedure. The owner directed: update documentation, commit and push, merge to `main`, then hand release work to a fresh agent (2026-10-07). That was an explicit exception to holding unpublished catalogue pins off `main`, limited to that cycle. It changed merge timing only; MCP-first publication, exact-commit CI and separate approval gates remained mandatory. It is not a branch-switch instruction or approval for the current candidate.
 
 Before MCP publication, fresh plugin installation from the default repository marketplaces could not resolve the prepared server pin. Main's `Require published catalog pins before merging to main` CI step failed for that reason. The unchanged guard now passes after publication, and clean-profile registry-pin checks pass. The local-tarball checks remain a separate evidence class.
 

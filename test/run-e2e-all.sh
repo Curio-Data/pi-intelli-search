@@ -66,6 +66,7 @@ SCRIPTS=(
   e2e/12_plugin_bundles.sh
   e2e/13_claude_code_plugin.sh
   e2e/14_codex_plugin.sh
+  e2e/15_pi_floor.sh
 )
 
 echo "🧪 Sequential E2E run — ${#SCRIPTS[@]} scripts, ${GAP}s gap, ${SCRIPT_TIMEOUT}s timeout per script"

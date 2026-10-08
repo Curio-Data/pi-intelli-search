@@ -9,7 +9,6 @@ import {
   type Context,
   type Message,
   type Model,
-  type Provider,
   type SimpleStreamOptions,
   type ThinkingLevel,
 } from "@earendil-works/pi-ai";
@@ -18,6 +17,7 @@ import type { ModelRetryConfig, ModelUsage } from "./core/contracts.js";
 import type { AnnotationSink } from "./annotations.js";
 import {
   createAnnotationSink,
+  harvestChunkAnnotations,
   settleAnnotationSink,
   wrapFetchForAnnotations,
 } from "./annotations.js";
@@ -32,13 +32,13 @@ import { runModelWithPolicy } from "./core/llm.js";
  * passed straight to a provider compiles fine on older typings but the provider
  * silently drops the systemPrompt field. The registry's streamSimple() accepts a
  * raw Context, normalises it, resolves auth, and applies the auth baseUrl
- * override internally — exactly what this file did by hand before, plus
- * normalisation. pi-ai 1.0.0 formalised the contract in the type system:
- * the Provider interface now declares streamSimple(model, context:
- * TranscriptContext, ...), which makes this facade the only type-correct
- * dispatch on current `Pi`. Structural subset of `Pi`'s ModelRegistry; on
- * `Pi` <= 0.85 the streamSimple property is absent and the legacy provider
- * path below is used instead.
+ * override internally. Since 0.17.0 the peer floor is `Pi` >= 0.86.0, so the
+ * facade is the one and only dispatch path; the legacy manual provider
+ * transport that mirrored ModelRuntime.prepareRequest is gone. pi-ai 1.0.0
+ * formalised the normalisation contract in the type system: the Provider
+ * interface declares streamSimple(model, context: TranscriptContext, ...),
+ * which makes a direct provider call type-incorrect as well as lossy.
+ * Structural subset of `Pi`'s ModelRegistry.
  *
  * The seam carries the REGISTRY OBJECT, not a detached streamSimple function:
  * Pi's implementation reads `this.runtime`, so a detached call throws
@@ -55,29 +55,17 @@ export interface ModelRegistryFacade {
 /**
  * Narrow injectable seam for deterministic callLlm tests.
  *
- * Two transports, dispatched by feature detection of the registry facade:
- *
- * - Pi >= 0.86: ctx.modelRegistry.streamSimple(model, context, options), the
- *   facade introduced for extension model calls. It normalises the context
- *   (folding systemPrompt into the transcript), resolves auth, and applies the
- *   baseUrl override internally.
- * - Pi 0.81.1-0.85.x: the provider's streamSimple() (the pi-ai root API),
- *   reached through ctx.modelRegistry.getProvider() with auth and the baseUrl
- *   override applied by hand here.
+ * Single transport: `ctx.modelRegistry.streamSimple(model, context, options)`,
+ * the facade introduced for extension model calls in `Pi` 0.86.0 and required
+ * by the peer floor. It normalises the context (folding systemPrompt into the
+ * transcript), resolves auth, and applies the baseUrl override internally.
  *
  * The deprecated @earendil-works/pi-ai/compat entrypoint is not imported
  * anywhere: upstream documents it as deleted with the ModelManager migration,
  * and test/compat-guard.test.ts enforces that.
  */
 export const __harness: {
-  /** Legacy transport (Pi <= 0.85): the composed Provider object. */
-  streamSimple: (
-    provider: Provider,
-    model: Model<Api>,
-    context: Context,
-    options?: SimpleStreamOptions,
-  ) => Promise<AssistantMessage>;
-  /** Facade transport (`Pi` >= 0.86): the registry object (method call, not detached). */
+  /** Facade transport: the registry object (method call, not detached). */
   registryStreamSimple: (
     registry: ModelRegistryFacade,
     model: Model<Api>,
@@ -85,12 +73,6 @@ export const __harness: {
     options?: SimpleStreamOptions,
   ) => Promise<AssistantMessage>;
 } = {
-  // Only reached on 0.81.1-0.85.x, whose provider accepts the raw Context.
-  // Current SDK typings require TranscriptContext; do not weaken the modern
-  // path or normalize legacy messages using an API absent at the peer floor.
-  streamSimple: (provider, model, context, options) =>
-    (provider as unknown as Pick<ModelRegistryFacade, "streamSimple">)
-      .streamSimple(model, context, options).result(),
   registryStreamSimple: (registry, model, context, options) =>
     registry.streamSimple(model, context, options).result(),
 };
@@ -99,19 +81,14 @@ export const __harness: {
 export type LlmRetryConfig = ModelRetryConfig;
 
 /**
- * Call an LLM via pi's model registry, dispatched by feature detection:
+ * Call an LLM via pi's model registry facade, the single supported transport
+ * on the `Pi` >= 0.86 peer floor. The facade normalises the context (the
+ * systemPrompt is folded into the transcript before a provider sees it),
+ * resolves auth, and applies the auth baseUrl override.
  *
- * - `Pi` >= 0.86: `ctx.modelRegistry.streamSimple()` (the registry facade).
- *   It normalises the context (the systemPrompt must be folded into the
- *   transcript before a provider sees it), resolves auth, and applies the
- *   auth baseUrl override.
- * - `Pi` 0.81.1-0.85.x: the provider's `streamSimple()` (pi-ai root API,
- *   reached through `ctx.modelRegistry.getProvider()`), with auth and the
- *   baseUrl override applied by hand here.
- *
- * Both paths use pi's native auth system (auth.json, env vars, OAuth) and
- * carry the provider-neutral reasoning parameter, which is required for
- * reasoning models (MiniMax M3 and others).
+ * Uses pi's native auth system (auth.json, env vars, OAuth) and carries the
+ * provider-neutral reasoning parameter, which is required for reasoning
+ * models (MiniMax M3 and others).
  *
  * Transient failures (HTTP 429, 5xx, network/timeout) are retried with
  * full-jitter exponential backoff, honouring any Retry-After hint in the
@@ -176,33 +153,19 @@ export async function callLlm(
     );
   }
 
-  // 2b. Resolve the provider. This is the same composed Provider object
-  //     (models.json overlays included) that Pi's own ModelRuntime dispatches
-  //     to. modelRegistry.getProvider() exists since Pi 0.81.1; on older
-  //     versions surface a clear version error instead of a TypeError.
-  if (typeof ctx.modelRegistry.getProvider !== "function") {
+  // 2b. The registry facade (`Pi` >= 0.86.0) is the required dispatch point:
+  //     it normalises the context (a raw Context handed straight to a provider
+  //     silently drops the systemPrompt on every `Pi` >= 0.86), resolves auth,
+  //     and applies the auth baseUrl override internally. There is no provider
+  //     fallback; a host without the facade is below the peer floor and gets a
+  //     clear version error instead of a TypeError.
+  const registry = ctx.modelRegistry as unknown as ModelRegistryFacade | undefined;
+  if (typeof registry?.streamSimple !== "function") {
     throw new Error(
-      `modelRegistry.getProvider() is unavailable; pi-intelli-search >= 0.12.5 requires Pi >= 0.81.1. ` +
-        `Update Pi, or stay on pi-intelli-search 0.12.4.`,
+      `ctx.modelRegistry.streamSimple() is unavailable; pi-intelli-search >= 0.17.0 requires Pi >= 0.86. ` +
+        `Update Pi, or stay on pi-intelli-search 0.16.x.`,
     );
   }
-  const provider: Provider | undefined = ctx.modelRegistry.getProvider(config.provider);
-  if (!provider || typeof provider.streamSimple !== "function") {
-    throw new Error(
-      `No API provider registered for ${config.provider} (needed by ${config.provider}/${config.model}). ` +
-        `Check ~/.pi/agent/models.json or provider registration.`,
-    );
-  }
-  // 2c. Feature-detect the `Pi` >= 0.86 registry facade. On those versions the
-  //     facade is the correct dispatch point (it normalises the context before
-  //     the provider sees it); on older versions the property is absent and
-  //     the manual path below applies the auth-resolved baseUrl as a
-  //     per-request model override, mirroring ModelRuntime.prepareRequest
-  //     (proxy endpoints, custom gateways).
-  const registry86 = ctx.modelRegistry as unknown as ModelRegistryFacade | undefined;
-  const useFacade = typeof registry86?.streamSimple === "function";
-  const requestModel: Model<Api> =
-    !useFacade && auth.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model;
 
   // 3. Build messages
   const messages: Message[] = [
@@ -242,6 +205,18 @@ export async function callLlm(
         env: auth.env,
         ...(signal ? { signal } : {}),
         ...(annotationFetch ? { fetch: annotationFetch } : {}),
+        // Supported citation channel (pi-ai >= 0.99): the OpenAI Completions
+        // adapter, which serves OpenRouter, invokes this for every parsed SSE
+        // chunk before normalisation. Hosts on pi-ai < 0.99 ignore the option,
+        // which is why the fetch wrapper above stays as the fallback channel;
+        // both feed the same per-attempt sink and dedupe by URL.
+        ...(annotations
+          ? {
+              onProviderStreamEvent: (data: unknown) => {
+                harvestChunkAnnotations(data, annotations);
+              },
+            }
+          : {}),
         maxTokens: options?.maxTokens,
         reasoning: options?.reasoning ?? "low",
         ...(options?.payloadPatch
@@ -259,9 +234,7 @@ export async function callLlm(
           }
         },
       };
-      const value = useFacade
-        ? await __harness.registryStreamSimple(registry86!, model, context, streamOptions)
-        : await __harness.streamSimple(provider, requestModel, context, streamOptions);
+      const value = await __harness.registryStreamSimple(registry, model, context, streamOptions);
       if (value.stopReason === "error")
         return { value, error: value.errorMessage ?? "unknown error" };
       if (annotations) {

@@ -113,6 +113,22 @@ function citationsFromChunk(parsed: unknown): HarvestedCitation[] {
 }
 
 /**
+ * Harvest citations from one already-parsed provider stream chunk into `sink`.
+ *
+ * This is the supported twin of the fetch-tee channel: pi-ai's OpenAI
+ * Chat Completions adapter (which serves OpenRouter) invokes the
+ * `onProviderStreamEvent` stream option with each parsed SSE chunk before
+ * normalisation (pi-ai >= 0.99), delivering exactly the
+ * `choices[].delta.annotations[]` shapes this parser handles. Dual-channel
+ * note: hosts on pi-ai < 0.99 ignore that option, which is why
+ * `wrapFetchForAnnotations` remains the fallback; both channels feed the same
+ * per-attempt sink and `pushCitation` dedupes by URL, so overlap is harmless.
+ */
+export function harvestChunkAnnotations(parsed: unknown, sink: AnnotationSink): void {
+  for (const citation of citationsFromChunk(parsed)) pushCitation(sink, citation);
+}
+
+/**
  * Parse citations from a raw HTTP response body. Accepts both SSE
  * (`data: {json}` lines, `data: [DONE]` terminator, `:`-prefixed comments)
  * and plain JSON (non-streaming responses). Junk lines are ignored; a body

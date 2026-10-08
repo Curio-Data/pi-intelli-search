@@ -16,7 +16,8 @@ import type { ToolResultLike, OnUpdate, PiTheme } from "../host-types.js";
 import { callLlm } from "../llm.js";
 import { fetchPages } from "../fetch.js";
 import { downloadLlmsFullToCache } from "../fetch.js";
-export { validateModelConfigs } from "../native-model-client.js";
+import { describeModelCatalog } from "../native-model-client.js";
+export { validateModelConfigs, describeModelCatalog } from "../native-model-client.js";
 
 type ProgressDetails = OperationProgress;
 type StageName = ResearchStage;
@@ -56,20 +57,39 @@ export const intelliResearchTool = {
     "Use domains to target specific sites (e.g., ['docs.python.org']) when the user references a specific documentation source.",
   ],
   parameters: researchSchema,
+  // Permission hints (Pi >= 0.99 consumes them; older hosts ignore the
+  // field). Semantically the same hints the standalone MCP package declares:
+  // research writes and archives the cache, so it is not read-only.
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: true,
+  },
+  // Prefer strict JSON-schema sampling where the active model supports it;
+  // capability metadata downgrades unsupported models to normal tool calls.
+  constrainedSampling: { type: "json_schema", strict: "prefer" } as const,
 
   renderResult(
     result: ToolResultLike,
     { isPartial }: { isPartial: boolean; expanded: boolean },
     theme: PiTheme,
-    _context: unknown,
+    context: unknown,
   ): Text {
     if (isPartial && result.details?.stage) {
       return renderProgressBar(result.details as unknown as ProgressDetails, theme);
     }
-    // Final result: show the collated summary text (compact fallback)
+    // Final result: show the collated summary text (compact fallback).
+    // Pi 1.1.0 added durationMs to the tool render context; hosts below 1.1.0
+    // pass no such field, so the duration line is skipped there.
     const content = result.content?.[0];
     const text = content?.type === "text" ? content.text : "";
-    return new Text(text, 0, 0);
+    const durationMs = (context as { durationMs?: number } | undefined)?.durationMs;
+    const duration =
+      durationMs !== undefined && durationMs >= 1000
+        ? "\n" + theme.fg("dim", `⏱ ${formatDuration(durationMs)}`)
+        : "";
+    return new Text(text + duration, 0, 0);
   },
 
   async execute(
@@ -109,9 +129,10 @@ export const intelliResearchTool = {
       );
     } catch (err) {
       if (err instanceof MissingModelsError) {
-        const lines = err.bindings.map(
-          (m) => `  ${m.role}: ${m.config.provider}/${m.config.model}`,
-        );
+        const lines = err.bindings.map((m) => {
+          const hint = describeModelCatalog(ctx, m.config.provider, m.config.model);
+          return `  ${m.role}: ${m.config.provider}/${m.config.model}${hint ? `\n${hint}` : ""}`;
+        });
         throw new Error(
           `Configured model(s) not found in Pi's model registry:\n${lines.join("\n")}\n` +
             `Check your settings.json for typos or missing provider configuration. ` +
@@ -131,6 +152,18 @@ export function progressUpdate(
   subProgress?: { current: number; total: number },
 ) {
   return nativeProgress(progress(stage, message, subProgress));
+}
+
+/** Format a pipeline duration the way `Pi` formats shell durations. */
+export function formatDuration(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const totalSeconds = Math.floor(seconds);
+  const minutes = Math.floor(totalSeconds / 60);
+  const rem = totalSeconds % 60;
+  if (minutes < 60) return `${minutes}m ${rem}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m ${rem}s`;
 }
 
 /**

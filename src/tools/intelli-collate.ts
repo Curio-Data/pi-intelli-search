@@ -25,6 +25,18 @@ export const intelliCollateTool = {
     "intelli_collate(extractions, query): deduplicate and synthesise extractions into concise summary",
   executionMode: "sequential" as const,
   parameters: collateSchema,
+  // Permission hints (Pi >= 0.99 consumes them; older hosts ignore the
+  // field). Semantically the same hints the standalone MCP package declares:
+  // collation writes and archives the cache, so it is not read-only.
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: true,
+  },
+  // Prefer strict JSON-schema sampling where the active model supports it;
+  // capability metadata downgrades unsupported models to normal tool calls.
+  constrainedSampling: { type: "json_schema", strict: "prefer" } as const,
 
   async execute(
     _toolCallId: string,

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { AssistantMessage, Context, SimpleStreamOptions } from "@earendil-works/pi-ai";
-import { createNativeModelClient } from "../src/native-model-client.js";
+import { createNativeModelClient, describeModelCatalog } from "../src/native-model-client.js";
 import type { ModelRequest, ModelUsage } from "../src/core/contracts.js";
 
 const model = { provider: "fixture", model: "chosen" };
@@ -13,7 +13,7 @@ const request: ModelRequest = { model, systemPrompt: "system", userMessage: "use
 const usage: ModelUsage = { input: 17, output: 3, totalTokens: 20 };
 
 function context(
-  facade: boolean,
+  _facade: boolean,
   transport: (context: Context, options: SimpleStreamOptions) => Promise<AssistantMessage>,
 ): ExtensionContext {
   const streamSimple = (_model: unknown, ctx: Context, options: SimpleStreamOptions) => ({
@@ -24,8 +24,7 @@ function context(
       find: (provider: string, id: string) =>
         provider === model.provider && id === model.model ? { provider, id } : undefined,
       getApiKeyAndHeaders: async () => ({ ok: true, apiKey: "synthetic" }),
-      getProvider: () => ({ streamSimple }),
-      ...(facade ? { streamSimple } : {}),
+      streamSimple,
     },
   } as unknown as ExtensionContext;
 }
@@ -149,24 +148,22 @@ describe("native model client", () => {
     await assert.rejects(failing.complete(request), (err) => err === error);
   });
 
-  for (const facade of [false, true]) {
-    it(`delegates through real callLlm on the ${facade ? "facade" : "legacy"} path`, async () => {
-      let calls = 0;
-      const client = createNativeModelClient(
-        context(facade, async (ctx, options) => {
-          calls++;
-          assert.equal(ctx.systemPrompt, "system");
-          assert.deepEqual(ctx.messages[0].content, [{ type: "text", text: "user" }]);
-          assert.equal(options.maxRetries, 0);
-          assert.equal(options.reasoning, "low");
-          assert.equal(options.apiKey, "synthetic");
-          return response();
-        }),
-      );
-      assert.deepEqual(await client.complete(request), { text: "answer", citations: [], usage });
-      assert.equal(calls, 1);
-    });
-  }
+  it("delegates through real callLlm on the facade transport", async () => {
+    let calls = 0;
+    const client = createNativeModelClient(
+      context(true, async (ctx, options) => {
+        calls++;
+        assert.equal(ctx.systemPrompt, "system");
+        assert.deepEqual(ctx.messages[0].content, [{ type: "text", text: "user" }]);
+        assert.equal(options.maxRetries, 0);
+        assert.equal(options.reasoning, "low");
+        assert.equal(options.apiKey, "synthetic");
+        return response();
+      }),
+    );
+    assert.deepEqual(await client.complete(request), { text: "answer", citations: [], usage });
+    assert.equal(calls, 1);
+  });
 
   it("leaves retry ownership and provider-error classification in callLlm", async () => {
     let calls = 0;
@@ -228,5 +225,75 @@ describe("native model client", () => {
     );
     await assert.rejects(client.complete({ ...request, timeoutMs: 5 }), /timed out .* after 5ms/);
     assert.equal(calls, 1);
+  });
+});
+
+describe("describeModelCatalog (real ModelRegistry facade shapes)", () => {
+  it("lists same-provider alternatives through getModelsOfType (Pi >= 0.99 facade)", () => {
+    const ctx = {
+      modelRegistry: {
+        getModelsOfType: (_type: "chat", provider?: string) =>
+          [
+            { id: "perplexity/sonar", provider: "openrouter" },
+            { id: "perplexity/sonar-pro", provider: "openrouter" },
+            { id: "minimax/minimax-m3", provider: "openrouter" },
+            { id: "other/x", provider: "deepseek" },
+          ].filter((m) => !provider || m.provider === provider),
+      },
+    } as unknown as ExtensionContext;
+    const hint = describeModelCatalog(ctx, "openrouter", "perplexity/sonar");
+    assert.match(hint, /Available openrouter models:/);
+    assert.match(hint, /perplexity\/sonar-pro/);
+    assert.doesNotMatch(hint, /perplexity\/sonar,/);
+    assert.doesNotMatch(hint, /other\/x/);
+  });
+
+  it("ranks same-vendor near-misses first over alphabetical noise", () => {
+    const catalogue = [
+      "aion-labs/aion-3.5",
+      "amazon/nova-micro-v1",
+      "minimax/minimax-m2.7",
+      "minimax/minimax-m3",
+      "perplexity/sonar",
+    ];
+    const ctx = {
+      modelRegistry: {
+        getModelsOfType: (_type: "chat", _provider?: string) =>
+          catalogue.map((id) => ({ id, provider: "openrouter" })),
+      },
+    } as unknown as ExtensionContext;
+    const hint = describeModelCatalog(ctx, "openrouter", "minimax/minimax-m3x");
+    const listed = hint.replace(/^.*: /, "").split(" ")[0];
+    assert.equal(listed, "minimax/minimax-m3,", "closest same-vendor id ranks first");
+    assert.match(hint, /minimax\/minimax-m2\.7/);
+  });
+
+  it("falls back to getAll filtered by provider on older facades", () => {
+    const ctx = {
+      modelRegistry: {
+        getAll: () => [
+          { id: "perplexity/sonar-pro", provider: "openrouter" },
+          { id: "deepseek-chat", provider: "deepseek" },
+        ],
+      },
+    } as unknown as ExtensionContext;
+    assert.match(
+      describeModelCatalog(ctx, "openrouter", "perplexity/sonar"),
+      /perplexity\/sonar-pro/,
+    );
+    assert.equal(describeModelCatalog(ctx, "deepseek", "deepseek-chat"), "");
+  });
+
+  it("returns an empty hint when the facade exposes no catalogue accessor", () => {
+    const ctx = { modelRegistry: {} } as unknown as ExtensionContext;
+    assert.equal(describeModelCatalog(ctx, "openrouter", "perplexity/sonar"), "");
+    const throwing = {
+      modelRegistry: {
+        getModelsOfType: () => {
+          throw new Error("catalog unavailable");
+        },
+      },
+    } as unknown as ExtensionContext;
+    assert.equal(describeModelCatalog(throwing, "openrouter", "perplexity/sonar"), "");
   });
 });
