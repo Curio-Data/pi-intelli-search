@@ -26,7 +26,7 @@ export const intelliCollateTool = {
   executionMode: "sequential" as const,
   parameters: collateSchema,
   // Permission hints (Pi >= 0.99 consumes them; older hosts ignore the
-  // field). Mirrors the standalone MCP package's tool annotations exactly:
+  // field). Semantically the same hints the standalone MCP package declares:
   // collation writes and archives the cache, so it is not read-only.
   annotations: {
     readOnlyHint: false,

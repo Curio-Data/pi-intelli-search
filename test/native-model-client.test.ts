@@ -248,6 +248,26 @@ describe("describeModelCatalog (real ModelRegistry facade shapes)", () => {
     assert.doesNotMatch(hint, /other\/x/);
   });
 
+  it("ranks same-vendor near-misses first over alphabetical noise", () => {
+    const catalogue = [
+      "aion-labs/aion-3.5",
+      "amazon/nova-micro-v1",
+      "minimax/minimax-m2.7",
+      "minimax/minimax-m3",
+      "perplexity/sonar",
+    ];
+    const ctx = {
+      modelRegistry: {
+        getModelsOfType: (_type: "chat", _provider?: string) =>
+          catalogue.map((id) => ({ id, provider: "openrouter" })),
+      },
+    } as unknown as ExtensionContext;
+    const hint = describeModelCatalog(ctx, "openrouter", "minimax/minimax-m3x");
+    const listed = hint.replace(/^.*: /, "").split(" ")[0];
+    assert.equal(listed, "minimax/minimax-m3,", "closest same-vendor id ranks first");
+    assert.match(hint, /minimax\/minimax-m2\.7/);
+  });
+
   it("falls back to getAll filtered by provider on older facades", () => {
     const ctx = {
       modelRegistry: {

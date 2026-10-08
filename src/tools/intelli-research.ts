@@ -58,7 +58,7 @@ export const intelliResearchTool = {
   ],
   parameters: researchSchema,
   // Permission hints (Pi >= 0.99 consumes them; older hosts ignore the
-  // field). Mirrors the standalone MCP package's tool annotations exactly:
+  // field). Semantically the same hints the standalone MCP package declares:
   // research writes and archives the cache, so it is not read-only.
   annotations: {
     readOnlyHint: false,
@@ -155,12 +155,15 @@ export function progressUpdate(
 }
 
 /** Format a pipeline duration the way `Pi` formats shell durations. */
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.round(ms / 1000);
-  if (totalSeconds < 60) return `${totalSeconds}s`;
+export function formatDuration(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const totalSeconds = Math.floor(seconds);
   const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  const rem = totalSeconds % 60;
+  if (minutes < 60) return `${minutes}m ${rem}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m ${rem}s`;
 }
 
 /**

@@ -205,9 +205,9 @@ export async function callLlm(
         env: auth.env,
         ...(signal ? { signal } : {}),
         ...(annotationFetch ? { fetch: annotationFetch } : {}),
-        // Supported citation channel (pi-ai >= 1.0): the OpenAI Completions
+        // Supported citation channel (pi-ai >= 0.99): the OpenAI Completions
         // adapter, which serves OpenRouter, invokes this for every parsed SSE
-        // chunk before normalisation. Hosts on pi-ai < 1.0 ignore the option,
+        // chunk before normalisation. Hosts on pi-ai < 0.99 ignore the option,
         // which is why the fetch wrapper above stays as the fallback channel;
         // both feed the same per-attempt sink and dedupe by URL.
         ...(annotations

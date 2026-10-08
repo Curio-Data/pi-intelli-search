@@ -17,9 +17,9 @@ Prepared candidate, not published on `npm`.
 
 ### Changed
 
-- All four native tools declare permission hints matching the MCP tools: search and extract are read-only; collate and research carry a destructive hint because cache refreshes write and archive prior output. These are host-consumed hints, not enforced permissions. Native tools prefer strict JavaScript Object Notation (JSON) schema sampling for their arguments where supported, with automatic fallback for unsupported models or schemas.
-- Native citation recovery combines the parsed provider-stream hook on `pi-ai` >= 1.0.0 with the existing fetch-tee fallback for older supported hosts. Both channels share a deduplicated per-attempt sink, preserving citation recovery at the raised host floor.
-- Final `intelli_research` results show execution duration on `Pi` >= 1.1.0 when the host supplies a duration of at least one second. Older hosts omit the line. Missing-model research errors list same-provider alternatives when the host exposes compatible catalogue methods.
+- All four native tools declare permission hints matching the MCP tools: search and extract are read-only; collate and research carry a destructive hint because cache refreshes write and archive prior output. These are host-consumed hints, not enforced permissions. Native tools prefer strict JavaScript Object Notation (JSON) schema sampling for their arguments where supported, with automatic fallback for unsupported models or schemas. Caveat on the floor hosts: `pi-ai` 0.86.x treated OpenAI-compatible endpoints as strict-capable by default (corrected upstream in 0.87.0), so on `Pi` 0.86.0/0.86.1 strict schemas can reach such an endpoint when it does not support them; set `compat.supportsStrictMode: false` on the model in `models.json` if that bites.
+- Native citation recovery combines the parsed provider-stream hook on `pi-ai` >= 0.99.0 with the existing fetch-tee fallback for hosts whose `pi-ai` predates 0.99.0. Both channels share a deduplicated per-attempt sink, preserving citation recovery at the raised host floor.
+- Final `intelli_research` results show execution duration on `Pi` >= 1.1.0 when the host supplies a duration of at least one second. Older hosts omit the line. Missing-model research errors list the nearest same-provider alternatives (same vendor and edit distance first) when the host exposes compatible catalogue methods.
 
 ### Fixed
 

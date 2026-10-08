@@ -20,7 +20,7 @@ export const intelliExtractTool = {
     "intelli_extract(page, query, focusPrompt?): LLM extraction of query-relevant content from a web page",
   parameters: extractSchema,
   // Permission hints (Pi >= 0.99 consumes them; older hosts ignore the
-  // field). Mirrors the standalone MCP package's tool annotations exactly.
+  // field). Semantically the same hints the standalone MCP package declares.
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

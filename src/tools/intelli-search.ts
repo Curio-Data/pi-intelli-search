@@ -18,9 +18,10 @@ export const intelliSearchTool = {
     "intelli_search(query): search the web and return synthesised results with source URLs",
   parameters: searchSchema,
   // Permission hints (Pi >= 0.99 consumes them; older hosts ignore the
-  // field). Mirrors the standalone MCP package's tool annotations exactly:
+  // field). Semantically the same hints the standalone MCP package declares:
   // reading the open web, no workspace mutation, not idempotent (provider
-  // results vary call to call).
+  // results vary call to call). destructiveHint is stated explicitly where
+  // the MCP package relies on the default.
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,
