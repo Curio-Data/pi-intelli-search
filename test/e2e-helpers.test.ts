@@ -2,7 +2,7 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, readFile, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -36,6 +36,27 @@ it("the live page-budget assertion rejects missing, degraded and wrong-budget ev
   await save();
   await rm(join(entry, "extractions"), { recursive: true });
   assert.notEqual(check().status, 0);
+});
+
+it("mtime-based live cache selectors ignore newer internal staging directories", async (t) => {
+  const cache = await mkdtemp(join(tmpdir(), "e2e-cache-selection-"));
+  t.after(() => rm(cache, { recursive: true, force: true }));
+  const older = join(cache, "entry-z");
+  const latest = join(cache, "entry-a");
+  const staging = join(cache, ".staging");
+  const pending = join(cache, ".staging.123.pending");
+  for (const [index, dir] of [older, latest, staging, pending].entries()) {
+    await mkdir(dir);
+    await utimes(dir, 1000 + index, 1000 + index);
+  }
+  for (const script of ["01_main.sh", "04_migration.sh", "15_pi_floor.sh"]) {
+    const source = await readFile(resolve("test/e2e", script), "utf8");
+    const selection = source.match(/^LATEST_CACHE=.*$/m)?.[0];
+    assert.ok(selection, `missing cache selector in ${script}`);
+    const run = spawnSync("bash", ["-c", `set -euo pipefail; CACHE_DIR="$1"; ${selection}; printf '%s' "$LATEST_CACHE"`, "fixture", cache], { encoding: "utf8" });
+    assert.equal(run.status, 0, `${script}: ${run.stderr}`);
+    assert.equal(run.stdout, latest, script);
+  }
 });
 
 it("E2E auth assembly sends credentials over stdin, not jq arguments", () => {

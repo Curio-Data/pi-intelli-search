@@ -210,7 +210,7 @@ echo "$E2E_LAST_OUTPUT"
 CACHE_DIR="$E2E_CWD/.search"
 ERRORS=0
 
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.search' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.*' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 if [ -z "$LATEST_CACHE" ] || [ ! -f "$LATEST_CACHE/meta.json" ]; then
   echo "❌ No cache entry with meta.json under $CACHE_DIR"
   exit 1

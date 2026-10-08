@@ -13,7 +13,7 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-605%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-606%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -145,8 +145,6 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
 
 <!-- packages:none -->
 Choose a package by host: the [`Pi` native extension](#pi-native-extension) for `Pi`, or the [MCP server](#mcp-server) for MCP-compatible hosts.
-
-The repository marketplaces currently pin an unpublished MCP candidate, so their plugin launchers cannot start until publication. The [direct MCP registration](#register-the-server) commands use the published package without that candidate pin. See [Release Readiness](docs/RELEASE-READINESS.md#current-candidate) for the publication state.
 <!-- /packages -->
 
 <!-- packages:pi -->

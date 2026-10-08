@@ -70,7 +70,7 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 
 ## Current Candidate Verification
 
-The floor-modernisation candidate is merged to `main` at `99fea6f`. All 15 mandatory scenarios in `test/run-e2e-all.sh` passed on that commit on 2026-10-08, with none failed or skipped. Both packages remain unpublished at the manifest versions; [Release Readiness](RELEASE-READINESS.md#current-candidate) records owner approval and the publication gates. The targeted implementation checks above remain separate from this merged-tree verification.
+The floor-modernisation candidate is merged to `main` at `99fea6f`. All 15 mandatory scenarios in `test/run-e2e-all.sh` passed on that commit on 2026-10-08, with none failed or skipped. The MCP manifest version is published and its registry-pin checks pass; the native candidate remains unpublished. [Release Readiness](RELEASE-READINESS.md#current-candidate) records owner approval and the remaining gates. The targeted implementation checks above remain separate from this merged-tree verification.
 
 | Surface | Candidate Evidence | Remaining Limit |
 |---|---|---|
@@ -81,9 +81,19 @@ The floor-modernisation candidate is merged to `main` at `99fea6f`. All 15 manda
 | Deterministic Gates | Both builds, native and standalone tests, native-contract types, generated gates, ShellCheck and dependency audit pass on `99fea6f` | Later release-preparation commits require exact-commit CI |
 | Full Paced Live Suite | All mandatory scenarios pass on `99fea6f`, including credential-free plugin installation and the floor host | Local candidate execution; pipeline output checks do not establish factual accuracy |
 | Packaging | Both independent fresh-tarball installs pass on `99fea6f`; native consumer installation resolves pi-ai 1.1.0 | Installation and runtime loading, not live research through the published native package |
-| Registry Pins | Main's plugin launchers pin the unpublished MCP manifest version under the owner-approved merge exception | Post-publication clean-profile verification remains required before native staging |
+| Registry Pins | Main's plugin launchers resolve the published MCP manifest version; clean-profile checks below pass | Installation, skill discovery, connection and protocol checks, not full registry-pin research |
 
 Logs are retained under gitignored `.tmp/release-017/`, with the full paced output in `live.log`. The native agent loop used [_DeepSeek Flash_](https://www.deepseek.com) except for the floor scenario's configured [_OpenRouter_](https://openrouter.ai) model; pipeline roles retained each scenario's model configuration. Both credentialed host checks confirmed the operator's credential files were untouched.
+
+### Published `0.17.0` Registry-Pin Verification (2026-10-08)
+
+The maintainer approved the staged MCP package. The registry records publication at 11:30:26 Coordinated Universal Time (UTC); `latest` resolves to the version at `mcp-v0.17.0`, with signed provenance. Both plugins install from the committed repository marketplaces into clean profiles without copied login credentials. Checks use a dummy inference key.
+
+- **Claude Code 2.1.294:** the committed `npx` launcher connects, and the installed plugin exposes its skill.
+- **Codex CLI 0.160.1:** the installed cache has the expected version, the exact pinned server is enabled, and prompt-input inspection discovers its skill. An enabled listing alone is not a connection check.
+- **Independent Registry Launcher:** a fresh npm cache and consumer directory resolve the executable beneath that cache's `_npx/`, not the repository workspace. Its package identity and `--version` match the published pin. A direct standard-input/output (stdio) probe returns the expected server identity, routing instructions and all four tools through `initialize` and `tools/list`, then exits cleanly. Standard output contains protocol frames only; standard error contains the expected startup banner.
+
+Evidence is retained under `.tmp/release-017/registry/` and `.tmp/release-017/registry-verification.log`. This is registry installation, connection and tool-listing evidence, not a full research call or proof that a host model received an answer. The credentialed full-research checks remain in the local-tarball class.
 
 ## Provenance Generation Verification
 
@@ -150,7 +160,7 @@ Full research through the registry-pin route remains open evidence; the credenti
 
 ## Shared Constraints
 
-- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. Main's candidate MCP pin is unpublished under the owner-approved merge exception, so its registry launcher cannot resolve until publication. Earlier published-pin installation checks remain historical evidence, not verification of the candidate pin. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
+- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. Main's MCP pin is published and verified through the clean-profile checks above. Earlier generation checks remain historical evidence for their respective pins. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
 - Full research calls have been driven through both host plugins in the local-tarball class (`test/e2e/13_claude_code_plugin.sh`, `test/e2e/14_codex_plugin.sh`). A full research call through the registry-pin route remains open evidence; the registry-pin class currently covers installation, connection and tool listing, plus a direct `npx` pull that runs the published CLI.
 - Only [_OpenRouter_](https://openrouter.ai) is a verified standalone inference provider. Other OpenAI-compatible endpoints are not claimed: reasoning, search-tool and citation behaviour differs between compatible-looking endpoints.
 - _macOS_ and _Windows_ are not verified for any artefact; the fetch dependency's native assets are exercised on _Linux_ x86-64 only.

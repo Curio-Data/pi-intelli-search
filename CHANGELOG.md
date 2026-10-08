@@ -27,11 +27,11 @@ Prepared candidate, not published on `npm`.
 
 ## [mcp-0.17.0] - 2026-10-08
 
-Core behaviour is shared with [pi-0.17.0] and recorded there. This candidate is not published on `npm`.
+Core behaviour is shared with [pi-0.17.0] and recorded there. This package is published on `npm`; clean-profile installation checks against the committed registry pin pass.
 
 ### Changed
 
-- The [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin launchers pin the prepared MCP manifest version. Registry installation of those candidate pins requires publication; existing published releases remain available.
+- The [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin launchers pin the matching MCP manifest version.
 
 ## [pi-0.16.0] - 2026-10-08
 
