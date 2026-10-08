@@ -104,7 +104,7 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 
 - **Standalone Server:** `@curio-data/mcp-intelli-search` exposes the four `intelli_*` tools over standard input/output (`stdio`) without a `Pi` installation. It uses explicit JSON configuration, an assigned workspace and an OpenRouter adapter.
 - **Host Plugins:** [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) bundles install from this repository's marketplaces. The Claude Code plugin receives the OpenRouter key through a required sensitive option stored in the host's credential store.
-- **Installation Guidance:** the [README](README.md#install) documents the three installation routes. The [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) records tested host versions and verification limits; [finding F2](docs/plans/mcp-intelli-search/POST-PHASE-6.md#f2-claude-code-drops-the-text-summary-high-confirmed) records the missing model-visible summary on Claude Code 2.1.289.
+- **Installation Guidance:** the [README](README.md#install) documents the three installation routes. The [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) records tested host versions and verification limits; finding F2 (host-only `.plan/mcp-intelli-search/POST-PHASE-6.md`) records the missing model-visible summary on Claude Code 2.1.289.
 
 ---
 

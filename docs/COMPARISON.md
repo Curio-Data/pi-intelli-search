@@ -176,7 +176,7 @@ A host agent's built-in web tools are an alternative to `intelli-search`. One se
 
 ### Session Scope
 
-The record is a single qualitative observation from 2026-10-06, not a benchmark. The same Claude Code model requested both routes and assessed their outputs; the `Pi` subprocess and research pipeline used their own model calls. The task was not repeated, and the assessment was not blinded. The [session evidence](evidence/2026-10-06-host-native-search.md) identifies the transcript, cached reports, call counts and source passages.
+The record is a single qualitative observation from 2026-10-06, not a benchmark. The same Claude Code model requested both routes and assessed their outputs; the `Pi` subprocess and research pipeline used their own model calls. The task was not repeated, and the assessment was not blinded. The host-only session evidence (`evidence/2026-10-06-host-native-search.md`) identifies the transcript, cached reports, call counts and source passages.
 
 | Item | Recorded Value |
 |---|---|
@@ -199,6 +199,6 @@ These are tool-call counts, not equivalent units of work. Each `intelli_research
 
 ### Findings and Limits
 
-In this session, `intelli_research` returned cross-source syntheses without further page-fetch requests from the host model. The built-in tools supplied additional official pages for checking the result, including the platform-support table and different marketplace submission guidance. The [captured passages](evidence/2026-10-06-host-native-search.md#submission-guidance) establish a discrepancy to investigate, not a confirmed stale-form error.
+In this session, `intelli_research` returned cross-source syntheses without further page-fetch requests from the host model. The built-in tools supplied additional official pages for checking the result, including the platform-support table and different marketplace submission guidance. The captured passages (host-only `evidence/2026-10-06-host-native-search.md`, submission-guidance section) establish a discrepancy to investigate, not a confirmed stale-form error.
 
-These observations apply to the native `Pi` route. In the separate Claude Code 2.1.289 verification, the MCP plugin delivered only the structured result to the model and omitted the summary text ([finding F2](plans/mcp-intelli-search/POST-PHASE-6.md#f2-claude-code-drops-the-text-summary-high-confirmed)). This comparison session did not retest the plugin route on either newer recorded host version. Separate candidate verification on Claude Code 2.1.291 confirmed the model-visible summary and cache appendix; see [Release Candidate Verification](COMPATIBILITY.md#release-candidate-verification). That later evidence does not change the scope of this comparison.
+These observations apply to the native `Pi` route. In the separate Claude Code 2.1.289 verification, the MCP plugin delivered only the structured result to the model and omitted the summary text (finding F2 in the host-only `.plan/mcp-intelli-search/POST-PHASE-6.md`). This comparison session did not retest the plugin route on either newer recorded host version. Separate candidate verification on Claude Code 2.1.291 confirmed the model-visible summary and cache appendix; see [Release Candidate Verification](COMPATIBILITY.md#release-candidate-verification). That later evidence does not change the scope of this comparison.

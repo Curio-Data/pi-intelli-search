@@ -22,7 +22,7 @@
 //                      expansion, so its launcher embeds the absolute vendor
 //                      directory passed here.
 //
-// Host behavior verified empirically (see docs/plans/mcp-intelli-search/PHASE-5.md):
+// Host behavior verified empirically (see host-only .plan/mcp-intelli-search/PHASE-5.md):
 //   Claude Code v2.1.289: full environment inheritance; ${CLAUDE_PLUGIN_ROOT},
 //     ${CLAUDE_PLUGIN_DATA}, ${CLAUDE_PROJECT_DIR} and arbitrary ${VAR}
 //     expand in plugin MCP env values; tools are named

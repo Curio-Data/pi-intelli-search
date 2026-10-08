@@ -44,3 +44,7 @@ npm-debug.log*
 
 # Dedicated credentialed E2E host logins (never copies of operator profiles)
 .e2e-auth/
+
+# VFM host-only artefacts: plans and regenerated proof stay local, never committed.
+/.plan/
+/evidence/

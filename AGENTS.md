@@ -2,7 +2,7 @@
 
 This is a **`Pi` extension** that adds intelligent web research tools to the `Pi` coding agent. It provides a 5-stage research pipeline (search, fetch, extract, collate, and cache suggest) as a single tool call, plus individual tools for manual orchestration.
 
-For current cross-host release work, start at [Release Readiness](docs/RELEASE-READINESS.md). It distinguishes the prepared candidate from published packages and records its branch, exact-commit CI requirements and registry-pin constraints. A fresh release agent must read that handoff before creating tags or releases. The [implementation handoff](docs/plans/mcp-intelli-search/README.md) and [Post-Phase 6 Checkpoint](docs/plans/mcp-intelli-search/POST-PHASE-6.md) are historical evidence, not branch-switch instructions. The strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
+For current cross-host release work, start at [Release Readiness](docs/RELEASE-READINESS.md). It distinguishes the prepared candidate from published packages and records its branch, exact-commit CI requirements and registry-pin constraints. A fresh release agent must read that handoff before creating tags or releases. The implementation handoff and Post-Phase 6 Checkpoint (host-only `.plan/mcp-intelli-search/`, gitignored and absent from a fresh clone) are historical evidence, not branch-switch instructions. The strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
 
 ---
 
@@ -279,9 +279,7 @@ docs/
 ├── COMPARISON.md             # Search-comparison evidence page
 ├── COMPATIBILITY.md          # Host-version compatibility matrix and evidence classes
 ├── RELEASE-READINESS.md      # Current release gates, finding dispositions and verification state
-├── evidence/                 # Dated evidence records backing doc claims
-├── images/                   # README and gallery artwork plus generated chart SVGs
-└── plans/mcp-intelli-search/ # Cross-host research, checkpoints and implementation handoff
+└── images/                   # README and gallery artwork plus generated chart SVGs
 
 scripts/
 ├── analyze-sessions.sh       # Aggregate meta.json telemetry sidecars across sessions
@@ -352,6 +350,13 @@ test/
 ├── smoke.ts
 └── util.test.ts
 ```
+
+## Host-Only Artefacts
+
+Following the verification-first methodology (VFM) used across this host, plans and regenerated proof stay local and are never committed. Both directories are gitignored and absent from a fresh clone; tracked documents reference them by path only.
+
+- `.plan/`: implementation plans, phase records and checkpoints (for example `.plan/mcp-intelli-search/`).
+- `evidence/`: dated evidence records backing claims in `docs/`.
 
 ## Architecture
 
