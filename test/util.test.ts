@@ -357,6 +357,12 @@ describe("isRetryableMessage", () => {
     "request timed out",
     "ETIMEDOUT",
     "ECONNRESET while reading",
+    // Parity with Pi 1.1.0's own retry classifier: the two busy phrasings
+    // the host added (server_busy, "servers are currently busy") must also
+    // retry here, because the extension's pipeline calls own their retry.
+    "server_busy",
+    "servers are currently busy",
+    "error code: server_busy, try again later",
   ];
   const nonRetryable = [
     "No API key for openrouter/x. Run /login.",

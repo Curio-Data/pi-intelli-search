@@ -19,6 +19,17 @@ export const intelliExtractTool = {
   promptSnippet:
     "intelli_extract(page, query, focusPrompt?): LLM extraction of query-relevant content from a web page",
   parameters: extractSchema,
+  // Permission hints (Pi >= 0.99 consumes them; older hosts ignore the
+  // field). Mirrors the standalone MCP package's tool annotations exactly.
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: true,
+  },
+  // Prefer strict JSON-schema sampling where the active model supports it;
+  // capability metadata downgrades unsupported models to normal tool calls.
+  constrainedSampling: { type: "json_schema", strict: "prefer" } as const,
 
   async execute(
     _toolCallId: string,

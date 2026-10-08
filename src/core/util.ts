@@ -217,9 +217,12 @@ export async function withRetry<T>(
 
 // Provider error text that indicates a transient, retryable condition. The
 // OpenRouter path surfaces 429/5xx only as an errorMessage string (no status or
-// headers post-hoc), so classification is necessarily text-based.
+// headers post-hoc), so classification is necessarily text-based. The busy
+// variants mirror Pi 1.1.0's own retry classifier (server_busy / "servers are
+// currently busy"), which the host applies to its agent-loop calls; this
+// policy owns the extension's pipeline calls and keeps the same coverage.
 const RETRYABLE_RE =
-  /\b(429|rate[ _-]?limited?|too many requests|overloaded|server error|service unavailable|temporarily unavailable|500|502|503|504|timed? ?out|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN)\b/i;
+  /\b(429|rate[ _-]?limited?|too many requests|overloaded|server error|server[ _-]?busy|currently busy|service unavailable|temporarily unavailable|500|502|503|504|timed? ?out|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN)\b/i;
 
 /** True when an error/message looks like a transient, retryable failure. */
 export function isRetryableMessage(msg: string | undefined): boolean {

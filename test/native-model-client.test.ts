@@ -13,7 +13,7 @@ const request: ModelRequest = { model, systemPrompt: "system", userMessage: "use
 const usage: ModelUsage = { input: 17, output: 3, totalTokens: 20 };
 
 function context(
-  facade: boolean,
+  _facade: boolean,
   transport: (context: Context, options: SimpleStreamOptions) => Promise<AssistantMessage>,
 ): ExtensionContext {
   const streamSimple = (_model: unknown, ctx: Context, options: SimpleStreamOptions) => ({
@@ -24,8 +24,7 @@ function context(
       find: (provider: string, id: string) =>
         provider === model.provider && id === model.model ? { provider, id } : undefined,
       getApiKeyAndHeaders: async () => ({ ok: true, apiKey: "synthetic" }),
-      getProvider: () => ({ streamSimple }),
-      ...(facade ? { streamSimple } : {}),
+      streamSimple,
     },
   } as unknown as ExtensionContext;
 }
@@ -149,24 +148,22 @@ describe("native model client", () => {
     await assert.rejects(failing.complete(request), (err) => err === error);
   });
 
-  for (const facade of [false, true]) {
-    it(`delegates through real callLlm on the ${facade ? "facade" : "legacy"} path`, async () => {
-      let calls = 0;
-      const client = createNativeModelClient(
-        context(facade, async (ctx, options) => {
-          calls++;
-          assert.equal(ctx.systemPrompt, "system");
-          assert.deepEqual(ctx.messages[0].content, [{ type: "text", text: "user" }]);
-          assert.equal(options.maxRetries, 0);
-          assert.equal(options.reasoning, "low");
-          assert.equal(options.apiKey, "synthetic");
-          return response();
-        }),
-      );
-      assert.deepEqual(await client.complete(request), { text: "answer", citations: [], usage });
-      assert.equal(calls, 1);
-    });
-  }
+  it("delegates through real callLlm on the facade transport", async () => {
+    let calls = 0;
+    const client = createNativeModelClient(
+      context(true, async (ctx, options) => {
+        calls++;
+        assert.equal(ctx.systemPrompt, "system");
+        assert.deepEqual(ctx.messages[0].content, [{ type: "text", text: "user" }]);
+        assert.equal(options.maxRetries, 0);
+        assert.equal(options.reasoning, "low");
+        assert.equal(options.apiKey, "synthetic");
+        return response();
+      }),
+    );
+    assert.deepEqual(await client.complete(request), { text: "answer", citations: [], usage });
+    assert.equal(calls, 1);
+  });
 
   it("leaves retry ownership and provider-error classification in callLlm", async () => {
     let calls = 0;
