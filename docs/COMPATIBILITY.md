@@ -95,7 +95,7 @@ The floor-modernisation generation merged to `main` at `99fea6f`. All 15 mandato
 | Deterministic Gates | Both builds, native and standalone tests, native-contract types, generated gates, ShellCheck and dependency audit pass on `99fea6f` | Later release-preparation commits require exact-commit CI |
 | Full Paced Live Suite | All mandatory scenarios pass on `99fea6f`, including credential-free plugin installation and the floor host | Local candidate execution; pipeline output checks do not establish factual accuracy |
 | Packaging | Both independent fresh-tarball installs pass on `99fea6f`; native consumer installation resolves pi-ai 1.1.0 | Installation and runtime loading, not live research through the published native package |
-| Registry Pins | Main's plugin launchers resolve the published MCP manifest version; clean-profile checks below pass | Installation, skill discovery, connection and protocol checks, not full registry-pin research |
+| Registry Pins | The launchers at `mcp-v0.17.0` resolve the published package; the clean-profile checks below apply to that tag | Installation, skill discovery, connection and protocol checks, not full registry-pin research |
 
 Logs are retained under gitignored `.tmp/release-017/`, with the full paced output in `live.log`. The native agent loop used [_DeepSeek Flash_](https://www.deepseek.com) except for the floor scenario's configured [_OpenRouter_](https://openrouter.ai) model; pipeline roles retained each scenario's model configuration. Both credentialed host checks confirmed the operator's credential files were untouched.
 
@@ -180,7 +180,7 @@ Full research through the registry-pin route remains open evidence; the credenti
 
 ## Shared Constraints
 
-- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. Main's MCP pin is published and verified through the clean-profile checks above. Earlier generation checks remain historical evidence for their respective pins. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
+- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. Current-main launchers pin the prepared candidate, which is not yet published or registry-pin verified. The clean-profile checks above remain historical evidence for their respective release tags. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
 - Full research calls have been driven through both host plugins in the local-tarball class (`test/e2e/13_claude_code_plugin.sh`, `test/e2e/14_codex_plugin.sh`). A full research call through the registry-pin route remains open evidence; the registry-pin class currently covers installation, connection and tool listing, plus a direct `npx` pull that runs the published CLI.
 - Only [_OpenRouter_](https://openrouter.ai) is a verified standalone inference provider. Other OpenAI-compatible endpoints are not claimed: reasoning, search-tool and citation behaviour differs between compatible-looking endpoints.
 - _macOS_ and _Windows_ are not verified for any artefact; the fetch dependency's native assets are exercised on _Linux_ x86-64 only.
