@@ -12,7 +12,7 @@ Prepared for publication; not published.
 
 ### Compatibility
 
-- Verified against `Pi` 1.2.0 through a static interface audit and targeted native and MCP-client research scenarios. The minimum supported host remains `Pi` 0.86.0; model defaults are unchanged. [_OpenRouter_](https://openrouter.ai)'s per-key catalogue does not remove the extension's unconditional `models.json` registrations. Registration does not grant account access. See [verification evidence and limits](docs/COMPATIBILITY.md#pi-120-verification-2026-10-13) and [Native Model Registration](docs/ARCHITECTURE.md#custom-model-registration).
+- Verified against `Pi` 1.2.0 through a static interface audit and the [complete paced candidate suite](docs/COMPATIBILITY.md#0180-candidate-verification-2026-10-13), including native and MCP-client research. Credentialed plugin research passes in the local-tarball class, not against a published candidate. The minimum supported host remains `Pi` 0.86.0; model defaults are unchanged. [_OpenRouter_](https://openrouter.ai)'s per-key catalogue does not remove the extension's unconditional `models.json` registrations. Registration does not grant account access. See [verification evidence and limits](docs/COMPATIBILITY.md#pi-120-verification-2026-10-13) and [Native Model Registration](docs/ARCHITECTURE.md#custom-model-registration).
 - The native settings example references the [settings schema](https://pi.dev/schemas/settings.schema.json) published with `Pi` 1.2.0 for host-setting validation and completion. It permits the `pi-intelli-search` namespace without validating its keys. The [models schema](https://pi.dev/schemas/models.schema.json) accepts the extension's registrations.
 
 ### Changed
