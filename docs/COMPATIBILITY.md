@@ -44,8 +44,10 @@ The software development kit (SDK) and native fetch assets are verified separate
 
 | Host | Tested Version | Evidence |
 |---|---|---|
-| Claude Code | 2.1.289, 2.1.292, 2.1.293 | Credential-free installation and key-delivery checks; real local-tarball research; registry-pin installation and connection for `0.15.0-alpha.0` (2026-10-05) and for published `0.15.0` (2026-10-07, 2.1.292). Capabilities and limits are itemised below |
-| Codex CLI | 0.144.5, 0.160.1 | Credential-free installation checks, real research through the installed plugin, and registry-pin installation, connection and tool listing for `0.15.0-alpha.0` (2026-10-05) and published `0.15.0` (2026-10-07, 0.160.1); full credentialed local-tarball research also passed on 0.160.1 (2026-10-07). Capabilities and limits are itemised below |
+| Claude Code | 2.1.289, 2.1.292, 2.1.293, 2.1.294, 2.1.296 | Credential-free installation and key-delivery checks; credentialed local-tarball research. Latest registry-pin installation, connection and skill discovery pass on 2.1.296; historical checks and evidence limits are recorded below |
+| Codex CLI | 0.144.5, 0.160.1 | Credential-free installation and credentialed local-tarball research. Latest registry-pin installation, enabled-server listing and skill discovery pass on 0.160.1; the independent registry protocol probe is separate from the host's enabled listing |
+
+The latest [registry-pin verification](#published-0180-registry-pin-verification-2026-10-13) covers both hosts. It does not establish full registry-pin research; earlier checks remain evidence for their recorded package and host versions.
 
 ### Claude Code Evidence and Limits
 
@@ -71,7 +73,7 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 
 ## `Pi` 1.2.0 Verification (2026-10-13)
 
-The 0.18.0 minor identified in the [changelog](../CHANGELOG.md#pi-0180---2026-10-13) is prepared for both packages, not published: the changed schema lives in the shared core, so the two-package versioning scheme bumps both. The peer floor and model defaults are unchanged. The checks here do not establish installation of a published 0.18.0 package or new plugin pins.
+The 0.18.0 minor identified in the [changelog](../CHANGELOG.md#pi-0180---2026-10-13) advances both packages because the changed schema lives in the shared core. The peer floor and model defaults are unchanged. The checks in this section predate publication; [MCP registry-pin verification](#published-0180-registry-pin-verification-2026-10-13) is recorded separately below. The native package remains prepared, not published.
 
 The static audit compares installed `Pi` 1.2.0 interfaces with 1.1.0: the `model-registry.d.ts` declaration and the `pi-ai` `index.d.ts` barrel are byte-identical. The barrel's re-exported type modules did change: `pi-ai` relocated its model and compatibility declarations into provider schema modules, and `pi-coding-agent` added optional namespace `aliases` and tool `reachesTools` fields. The `onProviderStreamEvent`, `onPayload`, `ProviderRequestOptions.fetch`, `constrainedSampling` and tool-annotation interfaces used by the extension are unchanged. The [upstream breaking changes](https://github.com/earendil-works/pi/releases/tag/v1.2.0) to `before_agent_start`, theme schemas, `pi mcp list --json` resource reporting and run-start busy state (`ctx.isIdle()` and `pi.sendMessage()` while a run starts) affect no code path used by this extension.
 
@@ -83,7 +85,7 @@ The harness now separates research completion from the agent-loop exit code. `Pi
 
 ## 0.18.0 Candidate Verification (2026-10-13)
 
-All 15 mandatory scenarios in `test/run-e2e-all.sh` pass on candidate `5e74f96`, with none failed or skipped. The shipped runtime matches merge `879f6ee`; the intervening changes correct documentation and a test assertion. Both builds, native and standalone tests, native-contract types, generated-file checks, ShellCheck and the dependency audit pass. Both independent fresh-tarball installation gates passed on the merged runtime. [Exact-commit release-branch CI](https://github.com/Curio-Data/pi-intelli-search/actions/runs/38401566708) also passes. Main's CI fails only the unchanged unpublished-MCP-pin guard; neither candidate package is public.
+All 15 mandatory scenarios in `test/run-e2e-all.sh` pass on candidate `5e74f96`, with none failed or skipped. The shipped runtime matches merge `879f6ee`; the intervening changes correct documentation and a test assertion. Both builds, native and standalone tests, native-contract types, generated-file checks, ShellCheck and the dependency audit pass. Both independent fresh-tarball installation gates passed on the merged runtime. [Exact-commit release-branch CI](https://github.com/Curio-Data/pi-intelli-search/actions/runs/38401566708) also passes. At that verification, main's CI failed only the unchanged unpublished-MCP-pin guard and neither candidate package was public.
 
 | Surface | Observed Evidence | Limit |
 |---|---|---|
@@ -95,7 +97,17 @@ All 15 mandatory scenarios in `test/run-e2e-all.sh` pass on candidate `5e74f96`,
 
 The initial paced run had 14 passes and one failure: the default-budget assertion rejected a raw `maxUrls: null`. A captured retry reproduced it. The host emits raw tool arguments before removing optional nulls during validation; null therefore represents no override in this test. The corrected assertion retains exact cap arguments and rejects explicit default overrides, wrong types, missing calls and duplicate calls. Deterministic regression coverage and independent code review pass, followed by the complete fresh suite above. This is a test correction, not a runtime change.
 
-Logs are retained under gitignored `.tmp/release-018/`: `live.log` records the failed first suite, `cap-retry-trace.jsonl` records the reproduction, and `live-final.log` records the complete passing suite. Deterministic and installation logs are `gates.log`, `docs-gates.log` and `null-gates.log`; independent prose and code reviews are under `.tmp/agents/release-018/reports/`. The agent loop uses native DeepSeek Flash, except for the floor scenario's configured OpenRouter model; pipeline roles retain each scenario's configuration. Both credentialed plugin checks confirm the operator's credentials were untouched. Registry-pin installation remains a post-publication gate, and later release-preparation commits need their own exact-commit CI result.
+Logs are retained under gitignored `.tmp/release-018/`: `live.log` records the failed first suite, `cap-retry-trace.jsonl` records the reproduction, and `live-final.log` records the complete passing suite. Deterministic and installation logs are `gates.log`, `docs-gates.log` and `null-gates.log`; independent prose and code reviews are under `.tmp/agents/release-018/reports/`. The agent loop uses native DeepSeek Flash, except for the floor scenario's configured OpenRouter model; pipeline roles retain each scenario's configuration. Both credentialed plugin checks confirm the operator's credentials were untouched. At candidate verification, registry-pin installation remained a post-publication gate; its completed checks are recorded below. Later release-preparation commits need their own exact-commit CI result.
+
+### Published `0.18.0` Registry-Pin Verification (2026-10-13)
+
+The maintainer approved the staged MCP package. The registry records publication at 13:58:45 Coordinated Universal Time (UTC); `latest` resolves to `0.18.0` and registry metadata exposes signed provenance. The obsolete `alpha` dist-tag is removed; the historical alpha version remains available by explicit version. Both plugins install from the committed repository marketplaces into fresh profiles without copied login credentials, using a dummy inference key.
+
+- **Claude Code 2.1.296:** the exact committed `npx` pin connects, and the installed plugin exposes its skill.
+- **Codex CLI 0.160.1:** the installed cache has the expected version, the pinned server is enabled, and prompt-input inspection discovers its skill. An enabled listing alone is not a connection check.
+- **Independent Registry Launcher:** a fresh npm cache and consumer directory resolve the executable under that cache's `_npx/`, not the repository workspace. Its manifest and `--version` identify the published package. A direct standard-input/output (stdio) probe verifies server identity, returns instructions naming `intelli_search`, and lists all four tools through `initialize` and `tools/list`. It also checks the new `maxUrls` minimum and corrected default description. Standard output contains protocol frames only; standard error contains the expected startup banner, and the process exits cleanly.
+
+Evidence is retained under gitignored `.tmp/release-018/registry/`, `registry-verification.log` and `registry-protocol.json`. This establishes registry installation, skill discovery, connection and tool listing, not a full research call through a registry-installed package. The credentialed full-research checks remain in the local-tarball class. Native publication remains pending.
 
 <a id="current-candidate-verification"></a>
 ## Floor-Modernisation Verification
@@ -182,7 +194,7 @@ Paced live scenario history:
 3. Scenarios 10 to 14 completed in a paced continuation. One configuration recipe passed on retry after a timeout.
 4. The initial scenario 12 assertion still matched an old skill description; it was corrected to match the generated description and rerun successfully.
 
-No mandatory host check was skipped. The versions for this historical candidate are recorded in its release tags and changelog entries. The floor-modernisation release tags identify that published generation; the manifests now identify the prepared 0.18.0 minor. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
+No mandatory host check was skipped. The versions for this historical candidate are recorded in its release tags and changelog entries. The floor-modernisation release tags identify that published generation; the manifests now identify the shared-schema generation recorded in the changelog. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
 
 ### Published `0.15.0` Registry-Pin Verification (2026-10-07)
 
@@ -196,7 +208,7 @@ Full research through the registry-pin route remains open evidence; the credenti
 
 ## Shared Constraints
 
-- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. Current-main launchers pin the prepared candidate, which is not yet published or registry-pin verified. The clean-profile checks above remain historical evidence for their respective release tags. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
+- The committed plugin launchers pin the exact MCP manifest version and download it through `npx` on first start: that route needs network access and Node.js 22 or later. Current-main launchers resolve the published MCP pin, verified through the clean-profile checks above. Earlier checks remain historical evidence for their respective release tags. The registry-pin class covers installation, connection and tool listing; full registry-pin research remains separate evidence.
 - Full research calls have been driven through both host plugins in the local-tarball class (`test/e2e/13_claude_code_plugin.sh`, `test/e2e/14_codex_plugin.sh`). A full research call through the registry-pin route remains open evidence; the registry-pin class currently covers installation, connection and tool listing, plus a direct `npx` pull that runs the published CLI.
 - Only [_OpenRouter_](https://openrouter.ai) is a verified standalone inference provider. Other OpenAI-compatible endpoints are not claimed: reasoning, search-tool and citation behaviour differs between compatible-looking endpoints.
 - _macOS_ and _Windows_ are not verified for any artefact; the fetch dependency's native assets are exercised on _Linux_ x86-64 only.
