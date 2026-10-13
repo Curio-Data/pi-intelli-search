@@ -569,6 +569,8 @@ For the standalone MCP server and host plugins, including exact tested versions 
 
 Weekly npm downloads for both packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment. The chart is rendered with [rough.js](https://roughjs.com) from daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see `scripts/plot-downloads.mts`); the caches are append-only with a short trailing re-fetch window so npm's revisions of recent days are picked up. Only complete Monday-to-Sunday weeks are drawn, so a package's segment appears from the first refresh after its first complete week.
 
+Counts come from npm's bulk downloads API verbatim. The API does not apply the automated-traffic filtering of the npmjs.com package page, so a bar can read higher than the website's weekly figure. Release-week bars also include this repository's own installation-verification runs (registry-pin installs, fresh-tarball gates and plugin connection checks), which land on the publish days.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/downloads-dark.svg">

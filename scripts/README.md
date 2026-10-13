@@ -25,6 +25,8 @@ npm run chart                                # same as the first command
 
 The script fetches the gap between the cache and the last complete day from the npm downloads application programming interface (API), so accumulated history does not require a query beyond the 18-month ceiling. The final three cached days are re-fetched on every run and overwrite their cached values, because npm computes a day's downloads shortly after UTC midnight and can revise recent days; without the trailing window a provisional value would be frozen by the cache. A weekly [_GitHub_](https://github.com) Action (`.github/workflows/downloads-chart.yml`) runs every Monday and commits only when the rendered output changes. Only complete Monday-to-Sunday weeks are drawn.
 
+The bulk downloads API is not the number the npmjs.com package page shows: the website applies automated-traffic filtering that the API does not, so the chart can read above the website's weekly figure (observed 2026-10-13: 612 API versus approximately 300 on the site for the MCP package's publish week). Publish-week bars also include this repository's own installation-verification downloads (registry-pin installs, fresh-tarball gates and plugin connection checks run from npm). Interpret bars as relative uptake, not unique-user counts.
+
 ### Deterministic Rendering
 
 Every rough.js call passes an explicit integer `seed`. Unseeded calls redraw the scribble on every run, changing SVG files in Git even when the numbers are unchanged and defeating the workflow's commit-if-changed guard.
