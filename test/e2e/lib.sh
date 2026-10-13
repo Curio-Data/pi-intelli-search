@@ -26,13 +26,15 @@
 # caller before e2e_run_pi).
 
 # Fail closed: the cap scenario must actually request 12; the default scenario
-# must omit maxUrls. Extractions alone cannot prove the number of fetched URLs.
+# must supply no page override. Pi normalises optional nulls to omission, but
+# tool_execution_start records the raw arguments. Extractions alone cannot
+# prove the number of fetched URLs.
 e2e_verify_page_budget() {
   local cache=$1 trace=$2 scenario=$3 slug entry count
   jq -se --arg mode "$scenario" '
     [.[] | select(.type == "tool_execution_start" and .toolName == "intelli_research") | .args] as $calls |
     ($calls | length) == 1 and
-    (if $mode == "cap" then $calls[0].maxUrls == 12 else ($calls[0] | has("maxUrls") | not) end)
+    (if $mode == "cap" then $calls[0].maxUrls == 12 else $calls[0].maxUrls == null end)
   ' "$trace" >/dev/null || { echo "❌ incorrect/missing research arguments"; return 1; }
   slug="$(jq -er '.searches | if length == 1 then .[0].slug else error("expected one cache entry") end' "$cache/.index.json")" || return 1
   entry="$cache/$slug"

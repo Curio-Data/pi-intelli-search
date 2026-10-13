@@ -25,6 +25,28 @@ it("the live page-budget assertion rejects missing, degraded and wrong-budget ev
   const check = (scenario = "default") => spawnSync("bash", ["-c", 'set -euo pipefail; source "$1"; e2e_verify_page_budget "$2" "$3" "$4"', "fixture", resolve("test/e2e/lib.sh"), cache, trace, scenario], { encoding: "utf8" });
   assert.equal(check().status, 0);
   assert.notEqual(check("cap").status, 0);
+  // The event contains raw provider arguments: the host strips optional nulls
+  // before execution. Null must exercise defaults, not bypass an explicit cap.
+  const event = { type: "tool_execution_start", toolName: "intelli_research", args: { query: "fixture", maxUrls: null as number | string | boolean | null } };
+  for (const [value, defaultPasses, capPasses] of [
+    [null, true, false],
+    [3, false, false],
+    [12, false, true],
+    [0, false, false],
+    ["3", false, false],
+    [false, false, false],
+  ] as const) {
+    event.args.maxUrls = value;
+    await writeFile(trace, JSON.stringify(event));
+    assert.equal(check().status === 0, defaultPasses, `default: maxUrls=${JSON.stringify(value)}`);
+    assert.equal(check("cap").status === 0, capPasses, `cap: maxUrls=${JSON.stringify(value)}`);
+  }
+  event.args.maxUrls = null;
+  await writeFile(trace, `${JSON.stringify(event)}\n${JSON.stringify(event)}`);
+  assert.notEqual(check().status, 0, "multiple research calls must not pass");
+  await writeFile(trace, JSON.stringify({ type: "agent_end" }));
+  assert.notEqual(check().status, 0, "missing research call must not pass");
+  await writeFile(trace, JSON.stringify(event));
   metadata.stages.fetch.requested = 4;
   await save();
   assert.notEqual(check().status, 0);
