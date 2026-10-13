@@ -161,7 +161,7 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
 }
 ```
 
-Since `Pi` 1.2.0 the optional `$schema` line gives editor validation and completion; the published settings schema accepts the `pi-intelli-search` namespace, and the published `models.json` schema accepts the _Sonar_ registrations the extension writes.
+`Pi` 1.2.0 publishes the [settings schema](https://pi.dev/schemas/settings.schema.json) referenced by the optional `$schema` line. It provides editor validation and completion for host settings and permits the `pi-intelli-search` namespace without validating or completing its keys. The published [models schema](https://pi.dev/schemas/models.schema.json) accepts the Sonar registrations the extension writes.
 
 See [Model Configuration](#model-configuration) for model selection, [Configuration Recipes](#configuration-recipes) for complete examples, and [Settings](#settings) for defaults and the full reference.
 
@@ -175,6 +175,8 @@ Both packages expose these four operations. Start with `intelli_search` for fact
 | `intelli_extract`  | Extract query-relevant content from a web page, preserving code and technical detail verbatim.      |
 | `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
 | `intelli_research` | Search, fetch, extract, collate and cache multi-page research in one call.                        |
+
+The native `intelli_research` schema declares `minimum: 1` for `maxUrls`. `Pi` 1.2.0 codemode displays this as an `@minimum` constraint. The runtime default page budget and configured upper cap remain controlled by [Settings](#settings).
 
 ### Evidence and Provenance
 
@@ -771,7 +773,8 @@ To suppress the sidecar in the native extension, set `disableTelemetry: true` in
 
 ### `Pi` Extension Compatibility
 
-- **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. The full paced live suite passes on the merged candidate (2026-10-08), including research on the floor host and `Pi` 1.1.0; the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball checks from registry-pin verification.
+- **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. The full paced live suite passed on the merged floor-modernisation generation (2026-10-08), including research on the floor host and `Pi` 1.1.0; the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball checks from registry-pin verification.
+- **`Pi` 1.2.0 Verification:** A static interface audit and targeted native and MCP-client research checks are recorded on 2026-10-13. The peer floor and model defaults are unchanged; this is not a full paced-suite result on 1.2.0. OpenRouter's per-key catalogue does not remove the extension's unconditional `models.json` registrations, which do not grant account access. See [evidence and limits](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#pi-120-verification-2026-10-13).
 - User interface (UI) notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, remote procedure call (RPC)).
 - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
 - Retry and timeout are owned by the shared model policy, invoked by native `callLlm()`, independently of `Pi`'s `retry.provider.maxRetries`. Native calls force SDK `maxRetries: 0`. Configured backoff and application timeout apply inside `intelli_research`; the three standalone tools retain their one-attempt, no-application-timeout behaviour.

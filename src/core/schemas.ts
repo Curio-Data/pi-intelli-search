@@ -52,12 +52,14 @@ export const researchSchema = Type.Object({
   query: Type.String({ description: "What to research" }),
   maxUrls: Type.Optional(
     Type.Number({
-      // Rendered by codemode as an @minimum tag since Pi 1.2.0; older
-      // hosts and MCP clients ignore the keyword. No "default":
+      // Rendered by codemode as an @minimum tag since Pi 1.2.0. The MCP
+      // runtime already requires a positive integer independently
+      // (packages/mcp/src/runtime.ts), so the keyword formalises existing
+      // behaviour there rather than adding enforcement. No "default":
       // strict-mode schema samplers reject it and the runtime default
       // lives in settings, not the schema.
       minimum: 1,
-      description: "Max URLs to fetch (default: 8, capped by settings.maxUrls)",
+      description: "Max URLs to fetch (default: 10, capped by settings.maxUrls)",
     }),
   ),
   domains: Type.Optional(

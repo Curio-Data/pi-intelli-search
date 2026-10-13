@@ -8,18 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [pi-0.17.1] - 2026-10-13
 
+Prepared for publication; not published.
+
 ### Compatibility
 
-- Verified against `Pi` 1.2.0: the registry facade and pi-ai public types are unchanged, and the 1.2.0 breaking changes touch no extension code path. Per-key OpenRouter catalogue personalisation filters only the built-in catalogue; the extension's `models.json` _Sonar_ registrations still merge on top and stay unconditional (see [Native Model Registration](docs/ARCHITECTURE.md#custom-model-registration)).
-- The configuration examples reference the schemas `Pi` 1.2.0 publishes; the settings schema accepts the `pi-intelli-search` namespace and the models schema accepts the extension's registrations.
+- Verified against `Pi` 1.2.0 through a static interface audit and targeted native and MCP-client research scenarios. The minimum supported host remains `Pi` 0.86.0; model defaults are unchanged. [_OpenRouter_](https://openrouter.ai)'s per-key catalogue does not remove the extension's unconditional `models.json` registrations. Registration does not grant account access. See [verification evidence and limits](docs/COMPATIBILITY.md#pi-120-verification-2026-10-13) and [Native Model Registration](docs/ARCHITECTURE.md#custom-model-registration).
+- The native settings example references the [settings schema](https://pi.dev/schemas/settings.schema.json) published with `Pi` 1.2.0 for host-setting validation and completion. It permits the `pi-intelli-search` namespace without validating its keys. The [models schema](https://pi.dev/schemas/models.schema.json) accepts the extension's registrations.
 
 ### Changed
 
-- The `intelli_research` `maxUrls` parameter declares `minimum: 1` in its schema, which `Pi` 1.2.0 codemode renders as an input constraint. Older hosts and MCP clients ignore the keyword.
-
-### Fixed
-
-- The end-to-end harness treats a fresh completed cache sidecar as the verdict regardless of exit code, because `Pi` 1.2.0 print mode exits 1 when the agent-loop summary is truncated at the output token limit even after a completed research. Truncated attempts without a sidecar are now diagnosed distinctly. The pinned floor-host scenario keeps its exit-0 gate because `Pi` 0.86.0 predates the truncation exit code.
+- The native `intelli_research` `maxUrls` schema declares `minimum: 1`. `Pi` 1.2.0 codemode displays this as an `@minimum` input constraint. The runtime default page budget and configured upper cap are unchanged.
 
 ## [pi-0.17.0] - 2026-10-08
 
@@ -491,6 +489,7 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[pi-0.17.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.17.1
 [pi-0.17.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.17.0
 [mcp-0.17.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.17.0
 [mcp-0.15.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.15.0
