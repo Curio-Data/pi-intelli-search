@@ -71,7 +71,7 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 
 ## `Pi` 1.2.0 Verification (2026-10-13)
 
-The native patch identified in the [changelog](../CHANGELOG.md#pi-0171---2026-10-13) is prepared, not published. The peer floor and model defaults are unchanged. The MCP package and plugin pins remain at their published floor-modernisation release; the checks here do not establish installation of a published native patch or a new MCP release.
+The 0.18.0 minor identified in the [changelog](../CHANGELOG.md#pi-0180---2026-10-13) is prepared for both packages, not published: the changed schema lives in the shared core, so the two-package versioning scheme bumps both. The peer floor and model defaults are unchanged. The checks here do not establish installation of a published 0.18.0 package or new plugin pins.
 
 The static audit compares installed `Pi` 1.2.0 interfaces with 1.1.0: `model-registry.d.ts` and `pi-ai`'s public `index.d.ts` are byte-identical. The `onProviderStreamEvent`, `onPayload`, `ProviderRequestOptions.fetch`, `constrainedSampling` and tool-annotation interfaces used by the extension are unchanged. Other public declarations changed, including model/compatibility-type re-exports and optional namespace/tool fields. The [upstream breaking changes](https://github.com/earendil-works/pi/releases/tag/v1.2.0) to `before_agent_start`, theme schemas, `pi mcp list --json` resource reporting and session-start busy state affect no code path used by this extension.
 
@@ -166,7 +166,7 @@ Paced live scenario history:
 3. Scenarios 10 to 14 completed in a paced continuation. One configuration recipe passed on retry after a timeout.
 4. The initial scenario 12 assertion still matched an old skill description; it was corrected to match the generated description and rerun successfully.
 
-No mandatory host check was skipped. The versions for this historical candidate are recorded in its release tags and changelog entries. The floor-modernisation release tags identify that published generation; the native manifest now identifies the prepared patch. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
+No mandatory host check was skipped. The versions for this historical candidate are recorded in its release tags and changelog entries. The floor-modernisation release tags identify that published generation; the manifests now identify the prepared 0.18.0 minor. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
 
 ### Published `0.15.0` Registry-Pin Verification (2026-10-07)
 

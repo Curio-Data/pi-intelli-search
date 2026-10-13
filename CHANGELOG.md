@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-## [pi-0.17.1] - 2026-10-13
+## [pi-0.18.0] - 2026-10-13
 
 Prepared for publication; not published.
 
@@ -17,7 +17,11 @@ Prepared for publication; not published.
 
 ### Changed
 
-- The native `intelli_research` `maxUrls` schema declares `minimum: 1`. `Pi` 1.2.0 codemode displays this as an `@minimum` input constraint. The runtime default page budget and configured upper cap are unchanged.
+- The `intelli_research` `maxUrls` schema declares `minimum: 1` and its description now states the correct runtime default (10; it said 8, stale since 0.13.0). `Pi` 1.2.0 codemode displays the minimum as an `@minimum` input constraint. The runtime default page budget and configured upper cap are unchanged. The schema lives in the shared core, so this change bumps both packages under the two-package versioning scheme.
+
+## [mcp-0.18.0] - 2026-10-13
+
+Core behaviour is shared with [pi-0.18.0] and recorded there. Prepared for publication; not published. The shared `maxUrls` schema metadata (the `minimum: 1` declaration and corrected default description) is the only change reaching this package; the standalone runtime already required a positive integer, so served validation behaviour is unchanged. The [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin launchers pin the matching MCP manifest version.
 
 ## [pi-0.17.0] - 2026-10-08
 
@@ -489,7 +493,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
-[pi-0.17.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.17.1
+[pi-0.18.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.18.0
+[mcp-0.18.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.18.0
 [pi-0.17.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.17.0
 [mcp-0.17.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.17.0
 [mcp-0.15.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.15.0
