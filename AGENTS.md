@@ -178,6 +178,10 @@ When creating commits:
 - Avoid multiple "add" statements unless necessary. A single statement can cover multiple related items (for example, helper functions).
 - Always check for changes before committing. Do not assume changes you made still exist, as files are often manually edited.
 
+## Versioning Scheme: Two Packages, One Core
+
+This repository versions two packages that share the core engine in `src/core/`: `@curio-data/pi-intelli-search` (the native `Pi` extension) and `@curio-data/mcp-intelli-search` (the standalone MCP server). A change under `src/core/` bumps the minor version of both packages; a package-specific change bumps only that package's patch version. Release tags and changelog sections carry a package prefix: `pi-vX.Y.Z` and `[pi-X.Y.Z]` for the native extension, `mcp-vX.Y.Z` and `[mcp-X.Y.Z]` for the MCP server.
+
 ## Changelog Conventions
 
 ### Changelog Structure
@@ -399,6 +403,7 @@ The pipeline is self-contained in `src/core/operations/research.ts`. Former shar
 - **Optional extract throttle.** `minRequestIntervalMs` (default 0, off) spaces concurrent extract calls via a per-run rate limiter for keys with tight rate limits.
 - Provider-response monitoring via `after_provider_response` event surfaces a rate-limit status in the `Pi` footer even outside tool calls.
 - **Caveat:** `pi -p` (used by the E2E scripts) drives `Pi`'s own agent-loop LLM calls (tool selection and final summary). Those go through `Pi`'s provider path and are **not** wrapped by `callLlm()`'s retry/timeout. A hung `pi` with no open network connection is agent-loop behaviour, not this extension.
+- **Print-mode exit codes are not pipeline verdicts.** Since `Pi` 1.2.0, `pi -p` exits 1 when the agent-loop summary is truncated at the output token limit, even after a completed research. The exit code never decides a scenario: the verdict is a fresh cache sidecar recording a completed outcome with successful fetch and nonempty collation (the shared predicate in `test/e2e/lib.sh`, mirrored in `11_mcp_stdio.sh`). The pinned floor host (`15_pi_floor.sh`) predates the truncation exit code and keeps its exit-0 gate. Do not reintroduce an exit-0 precondition in the other loops.
 
 ### Model Registration
 

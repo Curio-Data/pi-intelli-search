@@ -117,7 +117,7 @@ e2e_run_pi() {
     # token limit, even when the research completed.
     if find "${cwd}" -maxdepth 4 -name meta.json -newer "${ref}" \
       -exec jq -e 'select(.outcome == "completed" and .stages.fetch.succeeded > 0 and .stages.collate.summaryChars > 0)' {} \; \
-      -print 2>/dev/null | grep -q '^/'; then
+      -print -quit 2>/dev/null | grep -q '^/'; then
       ran=1
     fi
     if [[ "${ran}" -eq 1 ]]; then
@@ -128,10 +128,10 @@ e2e_run_pi() {
       fi
       return 0
     fi
-    if printf '%s' "${out}" | grep -q "Response was truncated: the model reached its output token limit"; then
-      echo "   ⚠️  pi attempt ${attempt}/3 truncated at the output token limit without a completed sidecar; retrying after 30s" >&2
+    if printf '%s' "${out}" | grep -q "Response was truncated"; then
+      echo "   ⚠️  pi attempt ${attempt}/3 truncated without a completed sidecar; retrying after 30s" >&2
     else
-      echo "   ⚠️  pi attempt ${attempt}/3 failed (exit ${ec}, cache written: ${ran}); retrying after 30s" >&2
+      echo "   ⚠️  pi attempt ${attempt}/3 failed (exit ${ec}; no completed sidecar); retrying after 30s" >&2
     fi
     sleep 30
   done

@@ -21,7 +21,7 @@ Prepared for publication; not published.
 
 ## [mcp-0.18.0] - 2026-10-13
 
-Core behaviour is shared with [pi-0.18.0] and recorded there. Prepared for publication; not published. The shared `maxUrls` schema metadata (the `minimum: 1` declaration and corrected default description) is the only change reaching this package; the standalone runtime already required a positive integer, so served validation behaviour is unchanged. The [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin launchers pin the matching MCP manifest version.
+Core behaviour is shared with [pi-0.18.0] and recorded there. Prepared for publication; not published. The shared `maxUrls` schema metadata (the `minimum: 1` declaration and corrected default description) is the only change reaching this package. The accepted argument set is unchanged: the standalone runtime already rejected a nonpositive `maxUrls`. The served schema now advertises the lower bound, so a value below 1 fails schema validation with the generic invalid-arguments diagnostic instead of the runtime's specific message. The [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin launchers pin the matching MCP manifest version.
 
 ## [pi-0.17.0] - 2026-10-08
 
