@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [pi-0.18.0] - 2026-10-13
 
-Prepared for publication; not published.
+Published on `npm`; [isolated registry installation and the packaged README](docs/COMPATIBILITY.md#published-0180-native-package-verification-2026-10-13) pass verification.
 
 ### Compatibility
 

@@ -73,7 +73,7 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 
 ## `Pi` 1.2.0 Verification (2026-10-13)
 
-The 0.18.0 minor identified in the [changelog](../CHANGELOG.md#pi-0180---2026-10-13) advances both packages because the changed schema lives in the shared core. The peer floor and model defaults are unchanged. The checks in this section predate publication; [MCP registry-pin verification](#published-0180-registry-pin-verification-2026-10-13) is recorded separately below. The native package remains prepared, not published.
+The 0.18.0 minor identified in the [changelog](../CHANGELOG.md#pi-0180---2026-10-13) advances both packages because the changed schema lives in the shared core. The peer floor and model defaults are unchanged. The checks in this section predate publication; [MCP registry-pin verification](#published-0180-registry-pin-verification-2026-10-13) is recorded separately below. [Native registry installation](#published-0180-native-package-verification-2026-10-13) is also verified after publication.
 
 The static audit compares installed `Pi` 1.2.0 interfaces with 1.1.0: the `model-registry.d.ts` declaration and the `pi-ai` `index.d.ts` barrel are byte-identical. The barrel's re-exported type modules did change: `pi-ai` relocated its model and compatibility declarations into provider schema modules, and `pi-coding-agent` added optional namespace `aliases` and tool `reachesTools` fields. The `onProviderStreamEvent`, `onPayload`, `ProviderRequestOptions.fetch`, `constrainedSampling` and tool-annotation interfaces used by the extension are unchanged. The [upstream breaking changes](https://github.com/earendil-works/pi/releases/tag/v1.2.0) to `before_agent_start`, theme schemas, `pi mcp list --json` resource reporting and run-start busy state (`ctx.isIdle()` and `pi.sendMessage()` while a run starts) affect no code path used by this extension.
 
@@ -107,7 +107,13 @@ The maintainer approved the staged MCP package. The registry records publication
 - **Codex CLI 0.160.1:** the installed cache has the expected version, the pinned server is enabled, and prompt-input inspection discovers its skill. An enabled listing alone is not a connection check.
 - **Independent Registry Launcher:** a fresh npm cache and consumer directory resolve the executable under that cache's `_npx/`, not the repository workspace. Its manifest and `--version` identify the published package. A direct standard-input/output (stdio) probe verifies server identity, returns instructions naming `intelli_search`, and lists all four tools through `initialize` and `tools/list`. It also checks the new `maxUrls` minimum and corrected default description. Standard output contains protocol frames only; standard error contains the expected startup banner, and the process exits cleanly.
 
-Evidence is retained under gitignored `.tmp/release-018/registry/`, `registry-verification.log` and `registry-protocol.json`. This establishes registry installation, skill discovery, connection and tool listing, not a full research call through a registry-installed package. The credentialed full-research checks remain in the local-tarball class. Native publication remains pending.
+Evidence is retained under gitignored `.tmp/release-018/registry/`, `registry-verification.log` and `registry-protocol.json`. This establishes registry installation, skill discovery, connection and tool listing, not a full research call through a registry-installed package. The credentialed full-research checks remain in the local-tarball class.
+
+### Published `0.18.0` Native Package Verification (2026-10-13)
+
+The registry records native publication at 15:01:42 UTC following maintainer approval; `latest` resolves to the version at `pi-v0.18.0`, and registry metadata exposes signed provenance. `test/run-e2e-publish.sh` passes against that explicit version with `HOME`, `PI_CODING_AGENT_DIR`, npm cache and scratch isolated under repository `.tmp/`. The installed extension loads under plain Node, registers all four tools and its session-start subscription, and contains the expected source, build, skill and legal files. Tests, workflows and environment files are absent; host peer dependencies are not bundled.
+
+The downloaded tarball's SHA-1 matches registry metadata, and its README matches `pi.README.md` at the native release tag byte-for-byte. Evidence is retained under `.tmp/release-018/native-registry-install.log`, `native-public-dist.json`, `native-publication.json` and `native-public/`. These checks establish published-package installation, runtime loading and README derivation, not a live model call through the registry-installed native package.
 
 <a id="current-candidate-verification"></a>
 ## Floor-Modernisation Verification
