@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [pi-0.18.0] - 2026-10-13
+
+Prepared for publication; not published.
+
+### Compatibility
+
+- Verified against `Pi` 1.2.0 through a static interface audit and targeted native and MCP-client research scenarios. The minimum supported host remains `Pi` 0.86.0; model defaults are unchanged. [_OpenRouter_](https://openrouter.ai)'s per-key catalogue does not remove the extension's unconditional `models.json` registrations. Registration does not grant account access. See [verification evidence and limits](docs/COMPATIBILITY.md#pi-120-verification-2026-10-13) and [Native Model Registration](docs/ARCHITECTURE.md#custom-model-registration).
+- The native settings example references the [settings schema](https://pi.dev/schemas/settings.schema.json) published with `Pi` 1.2.0 for host-setting validation and completion. It permits the `pi-intelli-search` namespace without validating its keys. The [models schema](https://pi.dev/schemas/models.schema.json) accepts the extension's registrations.
+
+### Changed
+
+- The `intelli_research` `maxUrls` schema declares `minimum: 1` and its description now states the correct runtime default (10; it said 8, stale since 0.13.0). `Pi` 1.2.0 codemode displays the minimum as an `@minimum` input constraint. The runtime default page budget and configured upper cap are unchanged. The schema lives in the shared core, so this change bumps both packages under the two-package versioning scheme.
+
+## [mcp-0.18.0] - 2026-10-13
+
+Core behaviour is shared with [pi-0.18.0] and recorded there. Prepared for publication; not published. The shared `maxUrls` schema metadata (the `minimum: 1` declaration and corrected default description) is the only change reaching this package. The accepted argument set is unchanged: the standalone runtime already rejected a nonpositive `maxUrls`. The served schema now advertises the lower bound, so a value below 1 fails schema validation with the generic invalid-arguments diagnostic instead of the runtime's specific message. The [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin launchers pin the matching MCP manifest version.
+
 ## [pi-0.17.0] - 2026-10-08
 
 Published on `npm`; isolated registry installation and the packaged README pass verification.
@@ -476,6 +493,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[pi-0.18.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.18.0
+[mcp-0.18.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.18.0
 [pi-0.17.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.17.0
 [mcp-0.17.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.17.0
 [mcp-0.15.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.15.0

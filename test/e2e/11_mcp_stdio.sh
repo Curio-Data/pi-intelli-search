@@ -196,13 +196,24 @@ OUTPUT=""
 RAN=0
 REF="$(mktemp)"
 for ATTEMPT in 1 2 3; do
-  if OUTPUT="$(run_pi)"; then
-    if find "$WORKSPACE" -maxdepth 4 -name meta.json -newer "$REF" -print -quit 2>/dev/null | grep -q .; then
-      RAN=1
-      break
+  # The fresh completed sidecar is the verdict regardless of exit code:
+  # `Pi` 1.2.0 print mode exits 1 when the agent-loop summary is
+  # truncated at the output token limit, even after a completed
+  # research. The floor host (15_pi_floor.sh) predates that behaviour
+  # and keeps its exit-0 gate. The predicate matches lib.sh exactly: a
+  # completed outcome with successful fetch and collation, so a degraded
+  # attempt still retries.
+  OUTPUT="$(run_pi)" && ATTEMPT_EC=0 || ATTEMPT_EC=$?
+  if find "$WORKSPACE" -maxdepth 4 -name meta.json -newer "$REF" \
+    -exec jq -e 'select(.outcome == "completed" and .stages.fetch.succeeded > 0 and .stages.collate.summaryChars > 0)' {} \; \
+    -print -quit 2>/dev/null | grep -q '^/'; then
+    RAN=1
+    if [[ "${ATTEMPT_EC}" -ne 0 ]]; then
+      echo "   ℹ️  pi attempt ${ATTEMPT} exited ${ATTEMPT_EC} but wrote a fresh completed sidecar; accepted" >&2
     fi
+    break
   fi
-  echo "   ⚠️  pi attempt ${ATTEMPT}/3 did not produce a fresh sidecar; retrying after 30s" >&2
+  echo "   ⚠️  pi attempt ${ATTEMPT}/3 did not produce a fresh completed sidecar; retrying after 30s" >&2
   sleep 30
 done
 rm -f "$REF"

@@ -32,7 +32,7 @@ intelli_research(
 
 ### Other Parameters
 
-- `maxUrls`: `3` for quick targeted research, `10` (default) for broad research, `16` for exhaustive research. The setting caps this at `maxUrls` (default 20). Requests above the cap are silently clamped.
+- `maxUrls`: `3` for quick targeted research, `10` (default) for broad research, `16` for exhaustive research. Pass at least `1`; the tool schema declares `minimum: 1`. The setting caps this at `maxUrls` (default 20). Requests above the cap are silently clamped; the runtime default and configured cap are unchanged.
 - `domains`: Guide search toward given sources, for example `domains=["react.dev", "github.com"]`. This adds a `site:` filter and, with the web search tool enabled, an engine domain filter. It is guidance, not a hard boundary: returned URLs (uniform resource locators) are not checked against a local allowlist before fetching.
 
 ### Further Examples

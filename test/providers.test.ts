@@ -123,6 +123,63 @@ describe("REQUIRED_MODELS pricing", () => {
   });
 });
 
+describe("REQUIRED_MODELS published-schema conformance", () => {
+  // Mirrors the model entry shape of https://pi.dev/schemas/models.schema.json
+  // (published by Pi 1.2.0), checked deterministically so a drift in our
+  // registrations fails CI without a network fetch. Re-verify the property
+  // list against the published schema on each Pi release audit.
+  const SCHEMA_PROPERTIES = new Set([
+    "id",
+    "name",
+    "api",
+    "baseUrl",
+    "reasoning",
+    "thinkingLevelMap",
+    "input",
+    "inputLimits",
+    "cost",
+    "promptCache",
+    "contextWindow",
+    "maxTokens",
+    "samplingParams",
+    "samplingParamsByThinkingLevel",
+    "headers",
+    "compat",
+  ]);
+
+  it("uses only properties the published models schema declares", () => {
+    for (const model of REQUIRED_MODELS) {
+      for (const key of Object.keys(model)) {
+        assert.ok(
+          SCHEMA_PROPERTIES.has(key),
+          `${model.id}: property "${key}" is not in the published models schema`,
+        );
+      }
+    }
+  });
+
+  it("matches the published models schema value shapes", () => {
+    for (const model of REQUIRED_MODELS) {
+      assert.equal(typeof model.id, "string");
+      assert.ok(model.id.length > 0);
+      assert.equal(typeof model.name, "string");
+      assert.equal(typeof model.reasoning, "boolean");
+      assert.ok(Array.isArray(model.input));
+      for (const modality of model.input) {
+        assert.ok(
+          modality === "text" || modality === "image",
+          `${model.id}: input modality "${modality}" is not text or image`,
+        );
+      }
+      for (const field of ["input", "output", "cacheRead", "cacheWrite"] as const) {
+        assert.equal(typeof model.cost[field], "number", `${model.id}: cost.${field}`);
+      }
+      assert.ok(model.contextWindow > 0, `${model.id}: contextWindow must be positive`);
+      assert.ok(model.maxTokens > 0, `${model.id}: maxTokens must be positive`);
+    }
+  });
+});
+
 describe("REQUIRED_MODELS structure", () => {
   it("models.json has the expected perplexity models after ensureCustomModels", async () => {
     await ensureCustomModels();

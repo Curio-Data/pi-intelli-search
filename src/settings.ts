@@ -174,6 +174,14 @@ const DEFAULT_HISTORY: Record<
     collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   },
+  "0.18.0": {
+    // Pi 1.2.0 compatibility verification + shared maxUrls schema
+    // metadata (minor bump of both packages under the two-package
+    // scheme); model defaults unchanged.
+    extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+    collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  },
 };
 
 /** In-memory settings cache, isolated by the configuration source context. */

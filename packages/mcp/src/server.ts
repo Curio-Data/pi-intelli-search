@@ -22,7 +22,8 @@ import { installStdoutGuard } from "./stdout-guard.js";
 type OperationName = keyof OperationInputs;
 type Runtime = Awaited<ReturnType<typeof createRuntime>>;
 
-// Kept in the MCP adapter: native tool contracts and shared schemas are unchanged.
+// Kept in the MCP adapter: the guidance string is duplicated deliberately
+// rather than imported from the native package.
 const skillGuidance =
   "Before the first intelli-search call in a session, load the intelli-search " +
   "skill if available (plugins expose it as intelli-search:intelli-search). " +

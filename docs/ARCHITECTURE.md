@@ -60,6 +60,10 @@ Merging is text-first: prose links (with their Markdown titles) come before anno
 
 [_Perplexity Sonar_](https://docs.perplexity.ai) and its siblings are not in `Pi`'s built-in model list for [OpenRouter](https://openrouter.ai). The extension writes `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search` to `~/.pi/agent/models.json` on first load (merging by id, non-destructive, adding only what is missing) and refreshes the model registry. This operation is idempotent. Invalid or unreadable existing files are preserved and reported rather than replaced. Valid merges retain existing overrides, follow valid operator-managed symlinks, and use a short lock and atomic replacement.
 
+Registration remains unconditional across the supported host range. On `Pi` 1.2.0, OpenRouter catalogue personalisation filters the built-in chat catalogue to models available to the key and saves that list for offline use. `models.json` entries merge afterwards, so the extension's registrations remain available even when absent from the personalised list. Registration does not grant account access; the provider can still reject a call.
+
+A conditional merge based on the personalised catalogue was rejected. An offline first run without a saved list cannot establish key-specific availability; host-version conditions would produce different registration files and expand the verification matrix; and entries deleted from `models.json` would no longer be restored consistently on the next load. The accepted trade-off is that the registrations supply static context, output-limit and token-price metadata instead of the key-specific values. Context and output limits affect request budgeting, not just display; token prices inform `Pi`'s cost estimates but omit Sonar's per-request search fee. Existing operator-defined entries are preserved. See the [`Pi` 1.2.0 verification](COMPATIBILITY.md#pi-120-verification-2026-10-13) for the audit basis.
+
 <a id="rate-limit-resilience"></a>
 ### Native Rate-Limit Resilience
 

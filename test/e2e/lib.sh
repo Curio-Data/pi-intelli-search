@@ -15,7 +15,12 @@
 #
 # Retry: exit 0 is not proof the pipeline ran (the print-mode
 # tool-call leak), so e2e_run_pi retries any attempt that did not
-# write a fresh .search meta.json sidecar.
+# write a fresh .search meta.json sidecar. Since `Pi` 1.2.0 the
+# reverse also holds: a nonzero exit is not proof the pipeline
+# failed, because print mode exits 1 when the agent-loop summary is
+# truncated at the output token limit even though the research
+# completed. The fresh completed sidecar is the verdict in both
+# directions.
 #
 # Requires: OPENROUTER_API_KEY, jq, E2E_EXTENSION_PATH (set by the
 # caller before e2e_run_pi).
@@ -107,20 +112,27 @@ e2e_run_pi() {
     )" && ec=0 || ec=$?
     if [[ -n "${E2E_TRACE_FILE:-}" ]]; then printf '%s\n' "$out" > "$E2E_TRACE_FILE"; fi
     ran=0
-    if [[ "${ec}" -eq 0 ]]; then
-      # Exit 0 is not proof the pipeline ran: probe for a fresh sidecar.
-      if find "${cwd}" -maxdepth 4 -name meta.json -newer "${ref}" \
-        -exec jq -e 'select(.outcome == "completed" and .stages.fetch.succeeded > 0 and .stages.collate.summaryChars > 0)' {} \; \
-        -print 2>/dev/null | grep -q '^/'; then
-        ran=1
-      fi
+    # The fresh completed sidecar decides, not the exit code: `Pi`
+    # 1.2.0 exits 1 when the final summary is truncated at the output
+    # token limit, even when the research completed.
+    if find "${cwd}" -maxdepth 4 -name meta.json -newer "${ref}" \
+      -exec jq -e 'select(.outcome == "completed" and .stages.fetch.succeeded > 0 and .stages.collate.summaryChars > 0)' {} \; \
+      -print -quit 2>/dev/null | grep -q '^/'; then
+      ran=1
     fi
     if [[ "${ran}" -eq 1 ]]; then
       rm -f "${ref}"
       E2E_LAST_OUTPUT="${out}"
+      if [[ "${ec}" -ne 0 ]]; then
+        echo "   ℹ️  pi attempt ${attempt} exited ${ec} but wrote a fresh completed sidecar; accepted (Pi 1.2 print mode exits 1 on a truncated summary)" >&2
+      fi
       return 0
     fi
-    echo "   ⚠️  pi attempt ${attempt}/3 failed (exit ${ec}, cache written: ${ran}); retrying after 30s" >&2
+    if printf '%s' "${out}" | grep -q "Response was truncated"; then
+      echo "   ⚠️  pi attempt ${attempt}/3 truncated without a completed sidecar; retrying after 30s" >&2
+    else
+      echo "   ⚠️  pi attempt ${attempt}/3 failed (exit ${ec}; no completed sidecar); retrying after 30s" >&2
+    fi
     sleep 30
   done
   rm -f "${ref}"

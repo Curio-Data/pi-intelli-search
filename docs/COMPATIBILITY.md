@@ -22,6 +22,7 @@ This document records host versions, artefacts and evidence classes for `intelli
 | `Pi` Host (Historical Facade Boundary) | 0.86.0 | Real load check 2026-10-04: that branch build loaded and `intelli_search` completed through the facade in a dependency-isolated install; both dispatch paths had deterministic coverage then |
 | `Pi` Host (Current Peer Floor) | 0.86.0 | Live `test/e2e/15_pi_floor.sh` passed on 2026-10-08 against implementation commit `a52bd31`: host-isolated pinned host (the extension's peer value imports resolve from the repository tree; the only such import, `CONFIG_DIR_NAME`, is identical across the supported range), completed native research, `search.linksReturned=1` and `search.annotationsHarvested=13` through the fetch-tee fallback. The host predates `onProviderStreamEvent`; the agent loop used `openrouter/minimax/minimax-m3`. Targeted implementation verification, not a full paced-suite result. The catalogue-hint fix (`3ddd9f7`) landed after this run and touches only the error path |
 | `Pi` Host | 1.1.0 | Live `test/e2e/01_main.sh` passed on 2026-10-08 against implementation commit `a52bd31`: `fetch.succeeded=1`, `collate.summaryChars=1464`. Targeted implementation verification of native research only, not a completed full paced suite |
+| `Pi` Host and MCP Client | 1.2.0 | Static interface audit and targeted live native/MCP-client research recorded on 2026-10-13; see [`Pi` 1.2.0 Verification](#pi-120-verification-2026-10-13). Not a full paced-suite or published-package installation result |
 | `Pi` host | 1.0.0 | Compatibility audited and verified 2026-10-02, including the `fetch`/`onPayload` request hooks against pi-ai 1.0.0 |
 | `Pi` host | 1.0.1, 1.0.2 | Development hosts for the shared-engine phases; all entry gates and live scenarios |
 | `Pi` Host and MCP Client | 1.0.4 | Complete previous provenance-generation paced live suite; see [Provenance Generation Verification](#provenance-generation-verification) |
@@ -68,14 +69,27 @@ One-time setup observations on 2.1.289 (2026-10-05): an optional unset key optio
 | Plugin Layout | The 0.144.5 inspection found the CLI ignored the portable Agent Plugins layout; the shipped bundle uses the compatibility layout | One-time inspection |
 | Excluded Surfaces | The terminal user interface (TUI) and integrated development environment (IDE) extension were not exercised | The Phase 5 record describes the IDE extension as lacking plugin support at that time; not a fresh compatibility check |
 
-## Current Candidate Verification
+## `Pi` 1.2.0 Verification (2026-10-13)
 
-The floor-modernisation candidate is merged to `main` at `99fea6f`. All 15 mandatory scenarios in `test/run-e2e-all.sh` passed on that commit on 2026-10-08, with none failed or skipped. Both manifest versions are published. MCP registry-pin checks and native registry installation pass. The targeted implementation checks above remain separate from this merged-tree verification.
+The 0.18.0 minor identified in the [changelog](../CHANGELOG.md#pi-0180---2026-10-13) is prepared for both packages, not published: the changed schema lives in the shared core, so the two-package versioning scheme bumps both. The peer floor and model defaults are unchanged. The checks here do not establish installation of a published 0.18.0 package or new plugin pins.
+
+The static audit compares installed `Pi` 1.2.0 interfaces with 1.1.0: the `model-registry.d.ts` declaration and the `pi-ai` `index.d.ts` barrel are byte-identical. The barrel's re-exported type modules did change: `pi-ai` relocated its model and compatibility declarations into provider schema modules, and `pi-coding-agent` added optional namespace `aliases` and tool `reachesTools` fields. The `onProviderStreamEvent`, `onPayload`, `ProviderRequestOptions.fetch`, `constrainedSampling` and tool-annotation interfaces used by the extension are unchanged. The [upstream breaking changes](https://github.com/earendil-works/pi/releases/tag/v1.2.0) to `before_agent_start`, theme schemas, `pi mcp list --json` resource reporting and run-start busy state (`ctx.isIdle()` and `pi.sendMessage()` while a run starts) affect no code path used by this extension.
+
+The recorded live checks passed `test/e2e/01_main.sh` through the native extension and `test/e2e/11_mcp_stdio.sh` through `Pi`'s MCP client on 2026-10-13. These are targeted research checks, not a full paced-suite result or verification of every setting. `Pi` 1.2.0 no longer lists MCP resources while connecting.
+
+The harness now separates research completion from the agent-loop exit code. `Pi` 1.2.0 print mode exits `1` when the final summary reaches its output-token limit, including after a completed research call. `test/e2e/lib.sh` accepts a fresh sidecar only when it records a completed outcome, successful fetch and nonempty synthesis, regardless of that exit code; it distinguishes a truncated attempt without that evidence. The MCP scenario applies the same completed-outcome predicate in its retry loop and separately checks report existence, adapter identity and completed outcome. The pinned floor-host scenario retains its exit-`0` gate. This harness adaptation does not change the extension's research result or guarantee a complete agent-loop summary.
+
+[_OpenRouter_](https://openrouter.ai) personalisation filters the built-in chat catalogue before `models.json` entries merge, so the extension's registrations survive. Registration remains unconditional and does not establish account access; see [Native Model Registration](ARCHITECTURE.md#custom-model-registration) for the decision and metadata trade-off. The published [settings schema](https://pi.dev/schemas/settings.schema.json) permits extension namespaces without validating their contents; the [models schema](https://pi.dev/schemas/models.schema.json) accepts the registration shape. The native research schema adds `minimum: 1` for `maxUrls`, displayed as an `@minimum` constraint by `Pi` 1.2.0 codemode; the runtime default and configured upper cap are unchanged.
+
+<a id="current-candidate-verification"></a>
+## Floor-Modernisation Verification
+
+The floor-modernisation generation merged to `main` at `99fea6f`. All 15 mandatory scenarios in `test/run-e2e-all.sh` passed on that commit on 2026-10-08, with none failed or skipped. Both packages in that generation are published. MCP registry-pin checks and native registry installation pass. The targeted implementation checks above remain separate from this merged-tree verification.
 
 | Surface | Candidate Evidence | Remaining Limit |
 |---|---|---|
 | Native Floor Host | Pinned `Pi` 0.86.0: scenario 15 passes on `99fea6f`, with completed research, one search link, 43 recovered citations and non-empty synthesis through fetch-tee recovery | Floor-host coverage is one native scenario, not every setting or plugin route; it does not establish strict domain filtering |
-| Native Current Host | `Pi` 1.1.0: native scenarios and real research through the MCP client pass in the full suite | Does not independently establish interactive duration rendering or each metadata consumer |
+| Native Host at That Verification | `Pi` 1.1.0: native scenarios and real research through the MCP client pass in the full suite | Does not independently establish interactive duration rendering or each metadata consumer |
 | Claude Code | 2.1.294, Sonnet 5.5: all four scenario 13 cases pass, including model-visible factual answers, automatic and explicit skill loading, and completed comparison research | Local-tarball class; `Bash` is removed for controlled routing, not an unrestricted-shell evaluation |
 | Codex CLI | 0.160.1: scenario 14 passes with a completed research tool call and `mcp` sidecar through the dedicated profile | Local-tarball class, not registry-pin research |
 | Deterministic Gates | Both builds, native and standalone tests, native-contract types, generated gates, ShellCheck and dependency audit pass on `99fea6f` | Later release-preparation commits require exact-commit CI |
@@ -135,7 +149,7 @@ Evidence is retained under gitignored `.tmp/release-016/registry/`, with the coo
 
 ## Release Candidate Verification
 
-This section records the stable generation preceding the provenance corrections, not the current floor-modernisation candidate. The table records paced live verification of the 2026-10-06 candidate commits. The full paced suite subsequently completed on the merged `main` tree (2026-10-07: 14 scenarios, 0 failed, 0 skipped) before either package was staged.
+This section records the stable generation preceding the provenance corrections, not the later floor-modernisation generation. The table records paced live verification of the 2026-10-06 candidate commits. The full paced suite subsequently completed on the merged `main` tree (2026-10-07: 14 scenarios, 0 failed, 0 skipped) before either package was staged.
 
 | Surface | Observed Evidence |
 |---|---|
@@ -152,7 +166,7 @@ Paced live scenario history:
 3. Scenarios 10 to 14 completed in a paced continuation. One configuration recipe passed on retry after a timeout.
 4. The initial scenario 12 assertion still matched an old skill description; it was corrected to match the generated description and rerun successfully.
 
-No mandatory host check was skipped. The versions for this historical candidate are recorded in its release tags and changelog entries. The current manifests identify the published floor-modernisation generation. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
+No mandatory host check was skipped. The versions for this historical candidate are recorded in its release tags and changelog entries. The floor-modernisation release tags identify that published generation; the manifests now identify the prepared 0.18.0 minor. Repaired-configuration recovery is covered by deterministic CLI and protocol tests; the host's historical authentication-cache expiry was not retimed.
 
 ### Published `0.15.0` Registry-Pin Verification (2026-10-07)
 

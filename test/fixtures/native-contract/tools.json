@@ -198,7 +198,8 @@
           },
           "maxUrls": {
             "type": "number",
-            "description": "Max URLs to fetch (default: 8, capped by settings.maxUrls)"
+            "minimum": 1,
+            "description": "Max URLs to fetch (default: 10, capped by settings.maxUrls)"
           },
           "domains": {
             "type": "array",

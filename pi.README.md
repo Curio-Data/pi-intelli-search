@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-606%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-608%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -153,12 +153,15 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
 
 ```json
 {
+  "$schema": "https://pi.dev/schemas/settings.schema.json",
   "pi-intelli-search": {
     "defaultUrls": 6,
     "maxUrls": 6
   }
 }
 ```
+
+`Pi` 1.2.0 publishes the [settings schema](https://pi.dev/schemas/settings.schema.json) referenced by the optional `$schema` line. It provides editor validation and completion for host settings and permits the `pi-intelli-search` namespace without validating or completing its keys. The published [models schema](https://pi.dev/schemas/models.schema.json) accepts the Sonar registrations the extension writes.
 
 See [Model Configuration](#model-configuration) for model selection, [Configuration Recipes](#configuration-recipes) for complete examples, and [Settings](#settings) for defaults and the full reference.
 
@@ -172,6 +175,8 @@ Both packages expose these four operations. Start with `intelli_search` for fact
 | `intelli_extract`  | Extract query-relevant content from a web page, preserving code and technical detail verbatim.      |
 | `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
 | `intelli_research` | Search, fetch, extract, collate and cache multi-page research in one call.                        |
+
+The native `intelli_research` schema declares `minimum: 1` for `maxUrls`. `Pi` 1.2.0 codemode displays this as an `@minimum` constraint. The runtime default page budget and configured upper cap remain controlled by [Settings](#settings).
 
 ### Evidence and Provenance
 
@@ -768,7 +773,8 @@ To suppress the sidecar in the native extension, set `disableTelemetry: true` in
 
 ### `Pi` Extension Compatibility
 
-- **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. The full paced live suite passes on the merged candidate (2026-10-08), including research on the floor host and `Pi` 1.1.0; the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball checks from registry-pin verification.
+- **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. The full paced live suite passed on the merged floor-modernisation generation (2026-10-08), including research on the floor host and `Pi` 1.1.0; the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball checks from registry-pin verification.
+- **`Pi` 1.2.0 Verification:** A static interface audit and targeted native and MCP-client research checks are recorded on 2026-10-13. The peer floor and model defaults are unchanged; this is not a full paced-suite result on 1.2.0. OpenRouter's per-key catalogue does not remove the extension's unconditional `models.json` registrations, which do not grant account access. See [evidence and limits](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#pi-120-verification-2026-10-13).
 - User interface (UI) notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, remote procedure call (RPC)).
 - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
 - Retry and timeout are owned by the shared model policy, invoked by native `callLlm()`, independently of `Pi`'s `retry.provider.maxRetries`. Native calls force SDK `maxRetries: 0`. Configured backoff and application timeout apply inside `intelli_research`; the three standalone tools retain their one-attempt, no-application-timeout behaviour.
@@ -786,6 +792,8 @@ To suppress the sidecar in the native extension, set `disableTelemetry: true` in
 ## Downloads
 
 Weekly npm downloads for both packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment. The chart is rendered with [rough.js](https://roughjs.com) from daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see `scripts/plot-downloads.mts`); the caches are append-only with a short trailing re-fetch window so npm's revisions of recent days are picked up. Only complete Monday-to-Sunday weeks are drawn, so a package's segment appears from the first refresh after its first complete week.
+
+Daily counts come from npm's downloads API and are summed into weeks without additional filtering. npm's counting documentation describes these totals as naïve by design: every served package tarball counts, including automation and mirrors, so read the bars as relative uptake, not unique-user counts. The API total can differ from the weekly figure on the `npmjs.com` package page: for the MCP package's publish week of 2026-10-05 to 2026-10-11 the API reported 612 against an operator-observed approximately 300 on the site. npm's public documentation describes no separate website filter, so the cause of that difference is unconfirmed. Verification runs that fetch the published tarballs from the registry, such as the registry-pin plugin checks, also count toward release-week totals.
 
 <p align="center">
   <picture>
