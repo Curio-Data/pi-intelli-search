@@ -60,6 +60,8 @@ Merging is text-first: prose links (with their Markdown titles) come before anno
 
 [_Perplexity Sonar_](https://docs.perplexity.ai) and its siblings are not in `Pi`'s built-in model list for [OpenRouter](https://openrouter.ai). The extension writes `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search` to `~/.pi/agent/models.json` on first load (merging by id, non-destructive, adding only what is missing) and refreshes the model registry. This operation is idempotent. Invalid or unreadable existing files are preserved and reported rather than replaced. Valid merges retain existing overrides, follow valid operator-managed symlinks, and use a short lock and atomic replacement.
 
+The merge stays unconditional on `Pi` >= 1.2.0, where per-key OpenRouter catalogue personalisation filters the built-in catalogue to the models a key may use. Personalisation replaces only the built-in catalogue; `models.json` overlays merge on top afterwards, so the registrations survive. A conditional merge keyed on the personalised catalogue was considered and rejected: the personalised list exists only after a successful network refresh, so an offline first run would leave the models unregistered; version-keyed behaviour would diverge the written file across the supported host range and double the end-to-end matrix; and the self-healing property (a user-deleted entry is restored on next load) would weaken. The trade-off is accepted: the static registrations override the key's personalised context sizes and prices, but those values only drive `Pi`'s `/model` cost estimates and were always approximate (the cost shape cannot express Sonar's per-request search fee).
+
 <a id="rate-limit-resilience"></a>
 ### Native Rate-Limit Resilience
 

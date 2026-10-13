@@ -123,9 +123,16 @@ e2e_run_pi() {
     if [[ "${ran}" -eq 1 ]]; then
       rm -f "${ref}"
       E2E_LAST_OUTPUT="${out}"
+      if [[ "${ec}" -ne 0 ]]; then
+        echo "   ℹ️  pi attempt ${attempt} exited ${ec} but wrote a fresh completed sidecar; accepted (Pi 1.2 print mode exits 1 on a truncated summary)" >&2
+      fi
       return 0
     fi
-    echo "   ⚠️  pi attempt ${attempt}/3 failed (exit ${ec}, cache written: ${ran}); retrying after 30s" >&2
+    if printf '%s' "${out}" | grep -q "Response was truncated: the model reached its output token limit"; then
+      echo "   ⚠️  pi attempt ${attempt}/3 truncated at the output token limit without a completed sidecar; retrying after 30s" >&2
+    else
+      echo "   ⚠️  pi attempt ${attempt}/3 failed (exit ${ec}, cache written: ${ran}); retrying after 30s" >&2
+    fi
     sleep 30
   done
   rm -f "${ref}"
