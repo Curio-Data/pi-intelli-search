@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Compatibility
+
+- Verified against `Pi` 1.2.0: the registry facade and pi-ai public types are unchanged, and the 1.2.0 breaking changes touch no extension code path. Per-key OpenRouter catalogue personalisation filters only the built-in catalogue; the extension's `models.json` _Sonar_ registrations still merge on top. The end-to-end harness now treats a fresh completed cache sidecar as the verdict regardless of exit code, because `Pi` 1.2.0 print mode exits 1 when the agent-loop summary is truncated at the output token limit even after a completed research.
+- The configuration examples reference the schemas `Pi` 1.2.0 publishes; the settings schema accepts the `pi-intelli-search` namespace and the models schema accepts the extension's registrations.
+
 ## [pi-0.17.0] - 2026-10-08
 
 Published on `npm`; isolated registry installation and the packaged README pass verification.

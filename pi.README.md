@@ -153,12 +153,15 @@ No configuration is needed to get started. The defaults use OpenRouter for all s
 
 ```json
 {
+  "$schema": "https://pi.dev/schemas/settings.schema.json",
   "pi-intelli-search": {
     "defaultUrls": 6,
     "maxUrls": 6
   }
 }
 ```
+
+Since `Pi` 1.2.0 the optional `$schema` line gives editor validation and completion; the published settings schema accepts the `pi-intelli-search` namespace, and the published `models.json` schema accepts the _Sonar_ registrations the extension writes.
 
 See [Model Configuration](#model-configuration) for model selection, [Configuration Recipes](#configuration-recipes) for complete examples, and [Settings](#settings) for defaults and the full reference.
 
