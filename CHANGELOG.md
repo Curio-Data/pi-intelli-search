@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Compatibility
+
+- Verified against `Pi` 1.3.0 through a static interface audit, a type check against the shipped declarations and live native research; see [verification evidence and limits](docs/COMPATIBILITY.md#pi-130-verification-2026-10-16). The minimum supported host remains `Pi` 0.86.0; model defaults are unchanged. The `kimi-coding` provider's move to Chat Completions affects no code path in this repository, and host-side retry and tool-argument validation improvements require no extension change.
+
 ## [pi-0.18.0] - 2026-10-13
 
 Published on `npm`; [isolated registry installation and the packaged README](docs/COMPATIBILITY.md#published-0180-native-package-verification-2026-10-13) pass verification.
