@@ -2,6 +2,7 @@
 import { getAgentDir } from "../src/agent-dir.js";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   textContent,
   extractSourceUrls,
@@ -10,6 +11,8 @@ import {
   mapWithConcurrency,
   withRetry,
   isRetryableMessage,
+  NON_RETRYABLE_LIMIT_PATTERNS,
+  RETRYABLE_PATTERNS,
   parseRetryAfterMs,
   createRateLimiter,
   callWithAbortTimeout,
@@ -396,11 +399,23 @@ describe("isRetryableMessage", () => {
     "please retry your request",
     "ResourceExhausted",
     "subscription_sharing_usage_unavailable",
+    // Separator-tolerant busy phrasings retained as documented extras beyond
+    // the upstream list.
+    "The server is currently busy",
+    "server busy, try later",
+    "server-busy",
   ];
   const nonRetryable = [
     "No API key for openrouter/x. Run /login.",
     "Model not found: openrouter/minimax/M3.7",
     "invalid_request_error: max_tokens too large",
+    // Permanent errors whose digit runs would match unbounded status patterns:
+    // the host pre-filters context overflow before classifying, this policy
+    // does not, so the status codes stay word-bounded.
+    "invalid_request_error: max_tokens 5000 exceeds limit 4096",
+    "This model's maximum context length is 128000 tokens. However, you requested 150293 tokens.",
+    "Error code: 400 - prompt too long: 205000 tokens > 200000",
+    "Model not found: openrouter/x (id gen-1729429500)",
     // Quota, budget and billing exhaustion is permanent: it must fail fast
     // even when the message also carries a retryable-looking 429 status.
     "Error code: 429 - insufficient_quota",
@@ -423,6 +438,54 @@ describe("isRetryableMessage", () => {
       assert.strictEqual(isRetryableMessage(m), false);
     });
   }
+});
+
+describe("retry classifier parity with the captured pi-ai 1.3.0 fixture", () => {
+  // The fixture is a machine capture of the upstream classifier lists from the
+  // installed pi-ai 1.3.0 dist/utils/retry.js (comment lines excluded). A host
+  // bump that changes the upstream classifier fails here loudly instead of
+  // drifting unnoticed; update the fixture deliberately, with the release
+  // audit, when that happens.
+  const fixture = JSON.parse(
+    readFileSync(new URL("./fixtures/pi-ai-retry-1.3.0.json", import.meta.url), "utf8"),
+  ) as { nonRetryable: string[]; retryable: string[] };
+
+  // Deliberate divergences, documented inline in src/core/util.ts: the host
+  // pre-filters context overflow before classifying, so it can match bare
+  // status digits; this policy word-bounds them instead.
+  const UPSTREAM_BARE_CODES = ["429", "500", "502", "503", "504", "520", "524"];
+  const BOUNDED_CODES = "\\b(?:429|500|502|503|504|520|524)\\b";
+  const DOCUMENTED_EXTRAS = [
+    BOUNDED_CODES,
+    "ETIMEDOUT",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "temporarily.?unavailable",
+    "server[ _-]?busy",
+    "currently busy",
+  ];
+
+  it("exclusion list matches upstream exactly, in order", () => {
+    assert.deepStrictEqual(NON_RETRYABLE_LIMIT_PATTERNS, fixture.nonRetryable);
+  });
+
+  it("every upstream retryable pattern is present, with bare codes word-bounded", () => {
+    for (const pattern of fixture.retryable) {
+      if (UPSTREAM_BARE_CODES.includes(pattern)) {
+        assert.ok(
+          RETRYABLE_PATTERNS.includes(BOUNDED_CODES),
+          `bounded group covers upstream bare code ${pattern}`,
+        );
+      } else {
+        assert.ok(RETRYABLE_PATTERNS.includes(pattern), `missing upstream pattern: ${pattern}`);
+      }
+    }
+  });
+
+  it("divergences from upstream are exactly the documented extras", () => {
+    const extras = RETRYABLE_PATTERNS.filter((p) => !fixture.retryable.includes(p));
+    assert.deepStrictEqual(extras, DOCUMENTED_EXTRAS);
+  });
 });
 
 describe("parseRetryAfterMs", () => {

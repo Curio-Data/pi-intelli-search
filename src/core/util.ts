@@ -222,10 +222,15 @@ export async function withRetry<T>(
 // the host applies to its agent-loop calls; this policy owns the extension's
 // pipeline calls and keeps the same coverage, including the 1.3.0 additions
 // ("unable to forward upstream", gateway 520/524) and the quota/billing
-// exclusions that must fail fast instead of consuming the retry budget. The
-// extension additionally retains the raw Node transport codes (ETIMEDOUT,
-// ECONNRESET, ECONNREFUSED) observed in earlier live runs.
-const NON_RETRYABLE_LIMIT_PATTERNS = [
+// exclusions that must fail fast instead of consuming the retry budget.
+// Divergences are documented inline: word-bounded status codes (the host
+// pre-filters context overflow; this policy does not) and retained historical
+// extras (raw Node transport codes, the standalone adapter's transient 402
+// wording, and the separator-tolerant busy phrasings).
+// Exported for the parity gate in test/util.test.ts, which diffs these lists
+// against the captured pi-ai 1.3.0 fixture so a future host bump that changes
+// the upstream classifier fails loudly instead of drifting unnoticed.
+export const NON_RETRYABLE_LIMIT_PATTERNS = [
   // Subscription or account limits returned as 429 JSON error types. These are
   // permanent for the purposes of a retry loop, not transient throttles.
   "GoUsageLimitError",
@@ -243,7 +248,7 @@ const NON_RETRYABLE_LIMIT_PATTERNS = [
   "subscription_sharing_usage_limit_exceeded",
 ];
 
-const RETRYABLE_PATTERNS = [
+export const RETRYABLE_PATTERNS = [
   // Generic provider load, HTTP status, and server-side transient failures.
   "overloaded",
   "server_busy",
@@ -252,13 +257,12 @@ const RETRYABLE_PATTERNS = [
   "model is at capacity",
   "rate.?limit",
   "too many requests",
-  "429",
-  "500",
-  "502",
-  "503",
-  "504",
-  "520",
-  "524",
+  // Deliberate divergence from upstream: the bare status codes keep word
+  // boundaries. The host filters context-overflow errors before classifying,
+  // so upstream can match bare digits; this policy has no such pre-filter, and
+  // an unbounded "502" would retry a permanent context-length error whose
+  // token counts embed a matching run (for example "150293 tokens").
+  "\\b(?:429|500|502|503|504|520|524)\\b",
   // Also matches "The service is temporarily unavailable" (pi #10965).
   "service.?(?:is.?)?(?:temporarily.?)?unavailable",
   "server.?error",
@@ -299,6 +303,11 @@ const RETRYABLE_PATTERNS = [
   // OpenRouter adapter uses this wording for a 402 carrying a valid Retry-After
   // header (in-flight spending budget), which is transient.
   "temporarily.?unavailable",
+  // Separator-tolerant busy phrasings retained from the pre-alignment
+  // classifier; upstream lists only "server_busy" and
+  // "servers are currently busy".
+  "server[ _-]?busy",
+  "currently busy",
   // WebSocket transports can report close/error text instead of HTTP/fetch text.
   "websocket.?closed",
   "websocket.?error",
