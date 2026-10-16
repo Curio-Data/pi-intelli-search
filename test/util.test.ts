@@ -357,17 +357,58 @@ describe("isRetryableMessage", () => {
     "request timed out",
     "ETIMEDOUT",
     "ECONNRESET while reading",
-    // Parity with Pi 1.1.0's own retry classifier: the two busy phrasings
-    // the host added (server_busy, "servers are currently busy") must also
-    // retry here, because the extension's pipeline calls own their retry.
+    // Parity with Pi 1.3.0's own retry classifier (pi-ai utils/retry.js): the
+    // host applies this list to its agent-loop calls; the extension's pipeline
+    // calls own their retry and keep the same coverage.
     "server_busy",
     "servers are currently busy",
     "error code: server_busy, try again later",
+    "The service is temporarily unavailable",
+    "currently experiencing high demand",
+    "model is at capacity",
+    "internal error",
+    "HTTP 520",
+    "524 gateway timeout",
+    // Gateway and wrapper wording for transient upstream failures.
+    "Unable to forward upstream stream",
+    "Provider returned error",
+    "The upstream provider returned an error",
+    "exceeded request buffer limit while retrying upstream",
+    // Network, proxy and fetch transport failures.
+    "network error",
+    "connection error",
+    "connection refused",
+    "connection lost",
+    "other side closed",
+    "fetch failed",
+    "getaddrinfo ENOTFOUND api.openrouter.ai",
+    "upstream connect error or disconnect/reset before headers",
+    "socket hang up",
+    "websocket closed",
+    "terminated",
+    // Premature stream endings and HTTP/2 session failures.
+    "stream ended before message_stop",
+    "Anthropic stream ended without a terminal event",
+    "http2 request did not get a response",
+    "pending stream has been canceled",
+    // Explicit retry guidance and gRPC/provider variants.
+    "retry delay exceeded",
+    "please retry your request",
+    "ResourceExhausted",
+    "subscription_sharing_usage_unavailable",
   ];
   const nonRetryable = [
     "No API key for openrouter/x. Run /login.",
     "Model not found: openrouter/minimax/M3.7",
     "invalid_request_error: max_tokens too large",
+    // Quota, budget and billing exhaustion is permanent: it must fail fast
+    // even when the message also carries a retryable-looking 429 status.
+    "Error code: 429 - insufficient_quota",
+    "HTTP 429: quota exceeded",
+    "out of budget",
+    "Monthly usage limit reached; enable available balance usage to continue",
+    "subscription_sharing_usage_limit_exceeded",
+    "FreeUsageLimitError",
     "",
     undefined,
   ];

@@ -217,16 +217,127 @@ export async function withRetry<T>(
 
 // Provider error text that indicates a transient, retryable condition. The
 // OpenRouter path surfaces 429/5xx only as an errorMessage string (no status or
-// headers post-hoc), so classification is necessarily text-based. The busy
-// variants mirror Pi 1.1.0's own retry classifier (server_busy / "servers are
-// currently busy"), which the host applies to its agent-loop calls; this
-// policy owns the extension's pipeline calls and keeps the same coverage.
-const RETRYABLE_RE =
-  /\b(429|rate[ _-]?limited?|too many requests|overloaded|server error|server[ _-]?busy|currently busy|service unavailable|temporarily unavailable|500|502|503|504|timed? ?out|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN)\b/i;
+// headers post-hoc), so classification is necessarily text-based. The lists
+// below mirror Pi 1.3.0's own retry classifier (pi-ai utils/retry.js), which
+// the host applies to its agent-loop calls; this policy owns the extension's
+// pipeline calls and keeps the same coverage, including the 1.3.0 additions
+// ("unable to forward upstream", gateway 520/524) and the quota/billing
+// exclusions that must fail fast instead of consuming the retry budget. The
+// extension additionally retains the raw Node transport codes (ETIMEDOUT,
+// ECONNRESET, ECONNREFUSED) observed in earlier live runs.
+const NON_RETRYABLE_LIMIT_PATTERNS = [
+  // Subscription or account limits returned as 429 JSON error types. These are
+  // permanent for the purposes of a retry loop, not transient throttles.
+  "GoUsageLimitError",
+  "FreeUsageLimitError",
+  "Monthly usage limit reached",
+  "available balance",
+  // Generic quota/budget/billing exhaustion. `insufficient_quota` is OpenAI's
+  // quota/billing error code; the other strings cover common gateway wording.
+  "insufficient_quota",
+  "out of budget",
+  "quota exceeded",
+  "billing",
+  // Sign in with ChatGPT: the subscription's shared usage limit, which resets
+  // after hours rather than seconds.
+  "subscription_sharing_usage_limit_exceeded",
+];
 
-/** True when an error/message looks like a transient, retryable failure. */
+const RETRYABLE_PATTERNS = [
+  // Generic provider load, HTTP status, and server-side transient failures.
+  "overloaded",
+  "server_busy",
+  "servers are currently busy",
+  "currently experiencing high demand",
+  "model is at capacity",
+  "rate.?limit",
+  "too many requests",
+  "429",
+  "500",
+  "502",
+  "503",
+  "504",
+  "520",
+  "524",
+  // Also matches "The service is temporarily unavailable" (pi #10965).
+  "service.?(?:is.?)?(?:temporarily.?)?unavailable",
+  "server.?error",
+  "internal.?error",
+  // Wrapper/provider text for transient upstream failures, including OpenRouter
+  // "Provider returned error" responses (pi #2264) and gateway wording such as
+  // "The upstream provider returned an error" (pi #10842).
+  "provider.?returned.?(?:an.?)?error",
+  "exceeded request buffer limit while retrying upstream",
+  // Gateway failure relaying the upstream response stream, sent as an OpenAI
+  // Responses `response.failed` event without an error code (pi #10920).
+  "unable to forward upstream",
+  // Network, proxy, and fetch transport failures, including raw-fetch failures
+  // such as "upstream connect", "connection refused", and "reset before
+  // headers" (pi #733), plus OpenRouter connection drops (pi #3317).
+  "network.?error",
+  "connection.?error",
+  "connection.?refused",
+  "connection.?lost",
+  "other side closed",
+  "fetch failed",
+  "getaddrinfo",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "upstream.?connect",
+  "reset before headers",
+  "socket hang up",
+  "socket connection was closed",
+  "timed? out",
+  "timeout",
+  "terminated",
+  // Raw Node transport codes observed on the OpenRouter path; upstream matches
+  // the prose forms above but not these codes.
+  "ETIMEDOUT",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  // Bare "temporarily unavailable" without a "service" prefix: the standalone
+  // OpenRouter adapter uses this wording for a 402 carrying a valid Retry-After
+  // header (in-flight spending budget), which is transient.
+  "temporarily.?unavailable",
+  // WebSocket transports can report close/error text instead of HTTP/fetch text.
+  "websocket.?closed",
+  "websocket.?error",
+  // Premature stream endings from SDKs and transports (pi #4433, #3594).
+  "ended without",
+  "stream ended before message_stop",
+  "stream ended before a terminal response event",
+  "http2 request did not get a response",
+  // Node ERR_HTTP2_STREAM_CANCEL: the HTTP/2 session died before the request
+  // was sent, for example after the Bedrock SDK's session timeout (pi #10379).
+  "pending stream has been canceled",
+  // Provider-requested retry delay cap failures flow through the outer retry
+  // policy so callers can surface or abort the backoff (pi #1123).
+  "retry delay",
+  // Explicit retry guidance emitted mid-stream by OpenAI Responses and Bedrock
+  // stream exceptions (pi #6019).
+  "you can retry your request",
+  "try your request again",
+  "please retry your request",
+  // gRPC based providers (for example NVIDIA NIM).
+  "ResourceExhausted",
+  // Sign in with ChatGPT: usage or user data temporarily unavailable. Usage
+  // failures can arrive mid-stream without an HTTP 503 in the message.
+  "subscription_sharing_usage_unavailable",
+  "subscription_sharing_user_unavailable",
+];
+
+const NON_RETRYABLE_LIMIT_RE = new RegExp(NON_RETRYABLE_LIMIT_PATTERNS.join("|"), "i");
+const RETRYABLE_RE = new RegExp(RETRYABLE_PATTERNS.join("|"), "i");
+
+/**
+ * True when an error/message looks like a transient, retryable failure. Quota,
+ * budget and billing exhaustion is never retryable, even when the same message
+ * also carries a retryable-looking status such as 429.
+ */
 export function isRetryableMessage(msg: string | undefined): boolean {
-  return !!msg && RETRYABLE_RE.test(msg);
+  if (!msg) return false;
+  if (NON_RETRYABLE_LIMIT_RE.test(msg)) return false;
+  return RETRYABLE_RE.test(msg);
 }
 
 /**

@@ -6,9 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [pi-0.19.0] - 2026-10-16
+
+Prepared for publication; not published.
+
 ### Compatibility
 
-- Verified against `Pi` 1.3.0 through a static interface audit, a type check against the shipped declarations and live native research; see [verification evidence and limits](docs/COMPATIBILITY.md#pi-130-verification-2026-10-16). The minimum supported host remains `Pi` 0.86.0; model defaults are unchanged. The `kimi-coding` provider's move to Chat Completions affects no code path in this repository, and host-side retry and tool-argument validation improvements require no extension change.
+- Verified against `Pi` 1.3.0 through a static interface audit, a type check against the shipped declarations and live native research; see [verification evidence and limits](docs/COMPATIBILITY.md#pi-130-verification-2026-10-16). The minimum supported host remains `Pi` 0.86.0; model defaults are unchanged. The `kimi-coding` provider's move to Chat Completions affects no code path in this repository, and the host-side tool-argument validation and `--model` disambiguation improvements require no extension change.
+
+### Changed
+
+- The shared retry classifier now mirrors `Pi` 1.3.0's own retry list (pi-ai `utils/retry.js`), which the host applies to its agent-loop calls. Newly retryable transient failures include gateway stream-relay errors (`unable to forward upstream`), OpenRouter wrapper wording (`provider returned error`), Cloudflare gateway statuses (520, 524), capacity messages (`currently experiencing high demand`, `model is at capacity`), network and transport failures (`fetch failed`, `socket hang up`, `reset before headers`, `ENOTFOUND`), premature stream endings, and explicit provider retry guidance. The extension keeps its historical extras: the raw Node transport codes (`ETIMEDOUT`, `ECONNRESET`, `ECONNREFUSED`) and the standalone adapter's transient 402 wording (bare `temporarily unavailable`).
+
+### Fixed
+
+- Quota, budget and billing exhaustion (`insufficient_quota`, `quota exceeded`, `out of budget`, subscription usage-limit errors) is no longer retried. Such failures are permanent and previously consumed the full retry budget before surfacing; they now fail fast, matching the host's exclusion list. The exclusion wins even when the message also carries a retryable-looking 429 status.
+
+## [mcp-0.19.0] - 2026-10-16
+
+Core behaviour is shared with [pi-0.19.0] and recorded there. Prepared for publication; not published. The aligned retry classifier and the quota/billing fail-fast exclusions reach this package through the shared policy that the standalone adapter applies to all its model calls; the adapter's transient 402 wording (bare `temporarily unavailable`) is preserved in the shared list. The [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin launchers pin the matching MCP manifest version.
 
 ## [pi-0.18.0] - 2026-10-13
 
