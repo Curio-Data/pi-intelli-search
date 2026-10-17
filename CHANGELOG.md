@@ -22,9 +22,9 @@ Prepared for publication; not published.
 
 - Quota, budget and billing-limit messages now override transient-looking statuses and wording. A message such as `429 insufficient_quota` fails fast instead of consuming the retry budget, matching the host's exclusion list; bare quota errors without a transient-looking status were already non-retryable. These account limits are not resolved by the policy's short retry loop; subscription limits can reset later.
 
-## [mcp-0.19.0] - 2026-10-16
+## [mcp-0.19.0] - 2026-10-17
 
-Core behaviour is shared with [pi-0.19.0] and recorded there. Prepared for publication; not published. All standalone model calls use the updated shared classifier. The adapter still reduces provider errors to safe status-based messages, so quota or billing details carried only in a response body do not trigger the new exclusions; a quota-related `429` remains retryable on this package. The adapter's transient 402 wording (bare `temporarily unavailable`) is preserved in the shared list. The [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin launchers pin the matching MCP manifest version.
+Core behaviour is shared with [pi-0.19.0] and recorded there. This package is published on `npm`; [clean-profile registry-pin verification](docs/COMPATIBILITY.md#published-0190-registry-pin-verification-2026-10-17) passes. All standalone model calls use the updated shared classifier. The adapter still reduces provider errors to safe status-based messages, so quota or billing details carried only in a response body do not trigger the new exclusions; a quota-related `429` remains retryable on this package. The adapter's transient 402 wording (bare `temporarily unavailable`) is preserved in the shared list. The [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin launchers pin the matching MCP manifest version.
 
 ## [pi-0.18.0] - 2026-10-13
 
