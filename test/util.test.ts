@@ -2,6 +2,7 @@
 import { getAgentDir } from "../src/agent-dir.js";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   textContent,
   extractSourceUrls,
@@ -10,6 +11,8 @@ import {
   mapWithConcurrency,
   withRetry,
   isRetryableMessage,
+  NON_RETRYABLE_LIMIT_PATTERNS,
+  RETRYABLE_PATTERNS,
   parseRetryAfterMs,
   createRateLimiter,
   callWithAbortTimeout,
@@ -357,17 +360,70 @@ describe("isRetryableMessage", () => {
     "request timed out",
     "ETIMEDOUT",
     "ECONNRESET while reading",
-    // Parity with Pi 1.1.0's own retry classifier: the two busy phrasings
-    // the host added (server_busy, "servers are currently busy") must also
-    // retry here, because the extension's pipeline calls own their retry.
+    // Parity with Pi 1.3.0's own retry classifier (pi-ai utils/retry.js): the
+    // host applies this list to its agent-loop calls; the extension's pipeline
+    // calls own their retry and keep the same coverage.
     "server_busy",
     "servers are currently busy",
     "error code: server_busy, try again later",
+    "The service is temporarily unavailable",
+    "currently experiencing high demand",
+    "model is at capacity",
+    "internal error",
+    "HTTP 520",
+    "524 gateway timeout",
+    // Gateway and wrapper wording for transient upstream failures.
+    "Unable to forward upstream stream",
+    "Provider returned error",
+    "The upstream provider returned an error",
+    "exceeded request buffer limit while retrying upstream",
+    // Network, proxy and fetch transport failures.
+    "network error",
+    "connection error",
+    "connection refused",
+    "connection lost",
+    "other side closed",
+    "fetch failed",
+    "getaddrinfo ENOTFOUND api.openrouter.ai",
+    "upstream connect error or disconnect/reset before headers",
+    "socket hang up",
+    "websocket closed",
+    "terminated",
+    // Premature stream endings and HTTP/2 session failures.
+    "stream ended before message_stop",
+    "Anthropic stream ended without a terminal event",
+    "http2 request did not get a response",
+    "pending stream has been canceled",
+    // Explicit retry guidance and gRPC/provider variants.
+    "retry delay exceeded",
+    "please retry your request",
+    "ResourceExhausted",
+    "subscription_sharing_usage_unavailable",
+    // Separator-tolerant busy phrasings retained as documented extras beyond
+    // the upstream list.
+    "The server is currently busy",
+    "server busy, try later",
+    "server-busy",
   ];
   const nonRetryable = [
     "No API key for openrouter/x. Run /login.",
     "Model not found: openrouter/minimax/M3.7",
     "invalid_request_error: max_tokens too large",
+    // Permanent errors whose digit runs would match unbounded status patterns:
+    // the host pre-filters context overflow before classifying, this policy
+    // does not, so the status codes stay word-bounded.
+    "invalid_request_error: max_tokens 5000 exceeds limit 4096",
+    "This model's maximum context length is 128000 tokens. However, you requested 150293 tokens.",
+    "Error code: 400 - prompt too long: 205000 tokens > 200000",
+    "Model not found: openrouter/x (id gen-1729429500)",
+    // Quota, budget and billing exhaustion is permanent: it must fail fast
+    // even when the message also carries a retryable-looking 429 status.
+    "Error code: 429 - insufficient_quota",
+    "HTTP 429: quota exceeded",
+    "out of budget",
+    "Monthly usage limit reached; enable available balance usage to continue",
+    "subscription_sharing_usage_limit_exceeded",
+    "FreeUsageLimitError",
     "",
     undefined,
   ];
@@ -382,6 +438,54 @@ describe("isRetryableMessage", () => {
       assert.strictEqual(isRetryableMessage(m), false);
     });
   }
+});
+
+describe("retry classifier parity with the captured pi-ai 1.3.0 fixture", () => {
+  // The fixture is a machine capture of the upstream classifier lists from the
+  // installed pi-ai 1.3.0 dist/utils/retry.js (comment lines excluded). A host
+  // bump that changes the upstream classifier fails here loudly instead of
+  // drifting unnoticed; update the fixture deliberately, with the release
+  // audit, when that happens.
+  const fixture = JSON.parse(
+    readFileSync(new URL("./fixtures/pi-ai-retry-1.3.0.json", import.meta.url), "utf8"),
+  ) as { nonRetryable: string[]; retryable: string[] };
+
+  // Deliberate divergences, documented inline in src/core/util.ts: the host
+  // pre-filters context overflow before classifying, so it can match bare
+  // status digits; this policy word-bounds them instead.
+  const UPSTREAM_BARE_CODES = ["429", "500", "502", "503", "504", "520", "524"];
+  const BOUNDED_CODES = "\\b(?:429|500|502|503|504|520|524)\\b";
+  const DOCUMENTED_EXTRAS = [
+    BOUNDED_CODES,
+    "ETIMEDOUT",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "temporarily.?unavailable",
+    "server[ _-]?busy",
+    "currently busy",
+  ];
+
+  it("exclusion list matches upstream exactly, in order", () => {
+    assert.deepStrictEqual(NON_RETRYABLE_LIMIT_PATTERNS, fixture.nonRetryable);
+  });
+
+  it("every upstream retryable pattern is present, with bare codes word-bounded", () => {
+    for (const pattern of fixture.retryable) {
+      if (UPSTREAM_BARE_CODES.includes(pattern)) {
+        assert.ok(
+          RETRYABLE_PATTERNS.includes(BOUNDED_CODES),
+          `bounded group covers upstream bare code ${pattern}`,
+        );
+      } else {
+        assert.ok(RETRYABLE_PATTERNS.includes(pattern), `missing upstream pattern: ${pattern}`);
+      }
+    }
+  });
+
+  it("divergences from upstream are exactly the documented extras", () => {
+    const extras = RETRYABLE_PATTERNS.filter((p) => !fixture.retryable.includes(p));
+    assert.deepStrictEqual(extras, DOCUMENTED_EXTRAS);
+  });
 });
 
 describe("parseRetryAfterMs", () => {

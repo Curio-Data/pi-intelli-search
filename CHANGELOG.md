@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [pi-0.19.0] - 2026-10-16
+
+Prepared for publication; not published.
+
+### Compatibility
+
+- Verified against `Pi` 1.3.0 through a static interface audit, a type check against the shipped declarations and live native research; see [verification evidence and limits](docs/COMPATIBILITY.md#pi-130-verification-2026-10-16). The minimum supported host remains `Pi` 0.86.0; model defaults are unchanged. The `kimi-coding` provider's move to Chat Completions requires no repository adjustment: the extension and the end-to-end harness write no base-URL override for that provider. Existing operator-defined overrides must include `/v1`. The host-side tool-argument validation and `--model` disambiguation improvements require no extension change.
+
+### Changed
+
+- The shared retry classifier now mirrors `Pi` 1.3.0's own retry list (`pi-ai`, `utils/retry.js`), which the host applies to its agent-loop calls. Newly retryable transient failures include gateway stream-relay errors (`unable to forward upstream`), [_OpenRouter_](https://openrouter.ai) wrapper wording (`provider returned error`), [_Cloudflare_](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/) gateway statuses (`520`, `524`), capacity messages (`currently experiencing high demand`, `model is at capacity`), network and transport failures (`fetch failed`, `socket hang up`, `reset before headers`, `ENOTFOUND`), premature stream endings, and explicit provider retry guidance. Divergences are deliberate and documented inline: the bare status codes stay word-bounded (the host pre-filters context-overflow errors before classifying; this policy does not, so unbounded digits would retry permanent context-length errors), and the extension keeps its historical extras: the raw Node transport codes (`ETIMEDOUT`, `ECONNRESET`, `ECONNREFUSED`), the standalone adapter's transient 402 wording (bare `temporarily unavailable`), and the separator-tolerant busy phrasings (`server busy`, `server-busy`, `currently busy`). A fixture-based parity gate (`test/fixtures/pi-ai-retry-1.3.0.json`) fails loudly when a future host release changes the upstream list.
+
+### Fixed
+
+- Quota, budget and billing-limit messages now override transient-looking statuses and wording. A message such as `429 insufficient_quota` fails fast instead of consuming the retry budget, matching the host's exclusion list; bare quota errors without a transient-looking status were already non-retryable. These account limits are not resolved by the policy's short retry loop; subscription limits can reset later.
+
+## [mcp-0.19.0] - 2026-10-16
+
+Core behaviour is shared with [pi-0.19.0] and recorded there. Prepared for publication; not published. All standalone model calls use the updated shared classifier. The adapter still reduces provider errors to safe status-based messages, so quota or billing details carried only in a response body do not trigger the new exclusions; a quota-related `429` remains retryable on this package. The adapter's transient 402 wording (bare `temporarily unavailable`) is preserved in the shared list. The [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) plugin launchers pin the matching MCP manifest version.
+
 ## [pi-0.18.0] - 2026-10-13
 
 Published on `npm`; [isolated registry installation and the packaged README](docs/COMPATIBILITY.md#published-0180-native-package-verification-2026-10-13) pass verification.
@@ -493,6 +513,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[pi-0.19.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.19.0
+[mcp-0.19.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.19.0
 [pi-0.18.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.18.0
 [mcp-0.18.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.18.0
 [pi-0.17.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.17.0
