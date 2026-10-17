@@ -6,9 +6,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-## [pi-0.19.0] - 2026-10-16
+## [pi-0.19.0] - 2026-10-17
 
-Prepared for publication; not published.
+Published on `npm`; [isolated registry installation and the packaged README](docs/COMPATIBILITY.md#published-0190-native-package-verification-2026-10-17) pass verification.
 
 ### Compatibility
 
