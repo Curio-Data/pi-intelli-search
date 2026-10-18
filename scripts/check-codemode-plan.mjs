@@ -53,7 +53,7 @@ for (const q of calibration.items) {
   assert(q.evidence && q.question && q.answerA && q.answerB && ["A", "B"].includes(q.proposedPreference));
 }
 assert(calibration.labelStatus.includes("human"));
-const methodPaths = ["../README.md", ...names.map((n) => `../${n}/METHOD.md`)];
+const methodPaths = ["../METHOD.md", ...names.map((n) => `../${n}/METHOD.md`)];
 const domainMap = {};
 for (const q of all) for (const domain of q.domains) (domainMap[domain] ??= []).push(q.id);
 const exposureGroups = [
@@ -72,7 +72,7 @@ const expected = {
     return { experiment: name, partition, ids: selected.map((q) => q.id), sha256: hash(canonical(selected)) };
   })),
   judgeCalibration: { ids: calibration.items.map((q) => q.id), sha256: hash(canonical(calibration.items)), labelStatus: calibration.labelStatus },
-  methods: methodPaths.map((path) => ({ path, sha256: hash(read(`${corpusRoot}/${path}`)) })),
+  methods: methodPaths.map((path) => ({ path, revision: /^Method revision: `([^`]+)`/m.exec(read(`${corpusRoot}/${path}`))?.[1], sha256: hash(read(`${corpusRoot}/${path}`)) })),
   crossExperimentExposureGroups: exposureGroups,
   sharedDomains: Object.fromEntries(Object.entries(domainMap).filter(([, qids]) => qids.length > 1).sort(([a], [b]) => a.localeCompare(b)).map(([d, qids]) => [d, qids.sort()])),
   confirmation: { status: "reserve-only; later D6 preregistration required", sampleSize: null, expansionRule: "Add fresh inputs in a new manifest revision before independent capture; never relabel exposed material." },
@@ -81,6 +81,19 @@ const manifestPath = `${corpusRoot}/manifest.json`;
 if (args.has("--write-manifest")) writeFileSync(manifestPath, `${JSON.stringify(expected, null, 2)}\n`);
 assert.deepEqual(JSON.parse(read(manifestPath)), expected, "Corpus/method manifest drift; inspect changes before deliberate regeneration");
 const contract = read(`${contractRoot}/CONTRACT.md`);
+const specificationRevision = /^Specification revision: `([^`]+)`/m.exec(contract)?.[1];
+assert(specificationRevision, "Missing specification revision");
+const specificationPaths = [
+  ...["CONTRACT.md", "API.ts", "NATIVE-API.ts", "ACCEPTANCE.md", "consumer.typecheck.ts", "tsconfig.json", "LOCK-EVIDENCE.md"].map((p) => `${contractRoot}/${p}`),
+  ...expected.inputFiles.map((f) => `${corpusRoot}/${f.path}`), manifestPath,
+  ...methodPaths.map((p) => `${corpusRoot}/${p}`.split("/").reduce((parts, p) => p === ".." ? parts.slice(0, -1) : [...parts, p], []).join("/")),
+  "scripts/check-codemode-plan.mjs",
+].sort();
+const specificationFiles = specificationPaths.map((path) => ({ path, sha256: hash(readFileSync(path)) }));
+const specificationManifest = `${contractRoot}/SPECIFICATION-SHA256SUMS`;
+const specificationText = specificationFiles.map(({ path, sha256 }) => `${sha256}  ${path}`).join("\n") + "\n";
+if (args.has("--write-manifest")) writeFileSync(specificationManifest, specificationText);
+assert.equal(read(specificationManifest), specificationText, "Candidate specification hash drift");
 const acceptance = read(`${contractRoot}/ACCEPTANCE.md`);
 const clauseIds = [...contract.matchAll(/^### (C\d{2}) /gm)].map((m) => m[1]);
 assert.deepEqual(clauseIds, Array.from({ length: 34 }, (_, i) => `C${String(i + 1).padStart(2, "0")}`));
@@ -96,11 +109,18 @@ for (const path of docs) {
 }
 if (args.has("--require-accepted")) {
   const record = JSON.parse(read(`${contractRoot}/acceptance.json`));
+  assert.equal(record.schemaVersion, 1);
   assert.equal(record.status, "accepted");
-  assert.equal(record.revision, "P0-1");
+  assert.equal(record.revision, specificationRevision);
   assert(/^[a-f0-9]{40}$/.test(record.reviewedCommit));
-  assert.equal(hash(read(`${contractRoot}/REVIEW.md`)), record.reviewReportSha256);
+  const review = read(`${contractRoot}/REVIEW.md`);
+  assert.equal(hash(review), record.reviewReportSha256);
+  assert(/^VERDICT: ACCEPT$/m.test(review) && review.trimEnd().endsWith("STATUS: COMPLETE"), "Independent report must accept the revision and be complete");
+  assert(review.includes(record.reviewedCommit), "Independent report must name the exact reviewed commit");
   assert(record.coordinatorAccepted && record.reviewerModel && record.specificationFiles.length);
+  assert.deepEqual(record.specificationFiles, specificationFiles, "Acceptance must cover the complete frozen bundle");
+  assert.equal(record.specificationManifestSha256, hash(read(specificationManifest)));
+  assert.equal(hash(execFileSync("git", ["show", `${record.reviewedCommit}:${specificationManifest}`])), record.specificationManifestSha256);
   for (const item of record.specificationFiles) {
     assert.equal(hash(readFileSync(item.path)), item.sha256, `Accepted specification changed: ${item.path}`);
     const committed = execFileSync("git", ["show", `${record.reviewedCommit}:${item.path}`]);

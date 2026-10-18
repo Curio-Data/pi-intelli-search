@@ -1,6 +1,6 @@
 # Query Expansion Method
 
-Method revision: `P0-1`. Status: unexecuted exploratory method. [Common rules](../README.md) govern recording, replay, judging, missingness and budget. Exact original queries, three expansions, domains, focuses and rubrics are in the [corpus](../corpus/query-expansion.json) and hashed [manifest](../corpus/manifest.json).
+Method revision: `P0-2`. Status: unexecuted exploratory method. [Common rules](../METHOD.md) govern recording, replay, judging, missingness and budget. Exact original queries, three expansions, domains, focuses and rubrics are in the [corpus](../corpus/query-expansion.json) and hashed [manifest](../corpus/manifest.json).
 
 ## Inputs and Arms
 

@@ -1,6 +1,6 @@
 # Native Codemode Method
 
-Method revision: `P0-1`. Status: unexecuted; no token-saving or quality claim. Read [common rules](../README.md), [corpus](../corpus/codemode.json), [manifest](../corpus/manifest.json) and contract C29–C34. The measurement main is subscription `Pi` `openai-codex/gpt-6.1-sol` in every arm, not a different host/model for the direct control.
+Method revision: `P0-2`. Status: unexecuted; no token-saving or quality claim. Read [common rules](../METHOD.md), [corpus](../corpus/codemode.json), [manifest](../corpus/manifest.json) and contract C29–C34. The measurement main is subscription `Pi` `openai-codex/gpt-6.1-sol` in every arm, not a different host/model for the direct control.
 
 ## Arms
 

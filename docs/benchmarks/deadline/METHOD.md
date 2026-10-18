@@ -1,6 +1,6 @@
 # Deadline and Contention Method
 
-Method revision: `P0-1`. Status: unexecuted exploratory method with later confirmation gate. Read the [common recording/judging/budget rules](../README.md), [corpus manifest](../corpus/manifest.json) and contract C04–C16 before running. This method makes no latency, quality or optimal-default claim.
+Method revision: `P0-2`. Status: unexecuted exploratory method with later confirmation gate. Read the [common recording/judging/budget rules](../METHOD.md), [corpus manifest](../corpus/manifest.json) and contract C04–C16 before running. This method makes no latency, quality or optimal-default claim.
 
 ## Population and Controls
 
@@ -10,7 +10,7 @@ Controls are A0 old direct barrier execution, R1 barrier execution, R1 streaming
 
 ## Development and Replay
 
-Capture source/model responses only after tranche approval and complete observer/fixture proofs. Complete replay fixes search, each physical page response, extraction, collation and suggestions, including retry/error/usage/cancellation observations. A model-response sequence not reached because a policy cancels a page is labelled skipped, not silently charged or called a miss; a newly requested missing response invalidates the block.
+Capture source/model responses only after tranche approval and complete observer/fixture proofs. Complete replay fixes search, each physical page response, extraction, collation and suggestions, including retry/error/usage/cancellation observations. Model fixtures return at the native transport-attempt seam inside the actual scoped policy; page fixtures return below the actual FetchClient. One fixture occurrence equals one transport attempt, so admission, retry spacing, ledger and cancellation are exercised rather than approximated. A model-response sequence not reached because a policy cancels a page is labelled skipped, not silently charged or called a miss; a newly requested missing response invalidates the block.
 
 Use an injected scheduler for deterministic comparison and a resource-aware discrete-event model that includes physical fetch slots, model reserve/slots, runtime start spacing, per-run concurrency, queue delay, retries/backoff, correlated stalls, success/failure/empty evidence, minimum evidence, collation, late drain, discovery and suggestions. Measure the model against recorded traces before using it to narrow policies. Synthetic sweeps are labelled synthetic and cannot validate a production default.
 

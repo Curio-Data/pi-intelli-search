@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
-// P0-1 specification declarations, not a shipped implementation.
+// P0-2 specification declarations, not a shipped implementation.
 import type { TSchema } from "typebox";
 import type {
   SearchParams, ExtractParams, CollateParams, ResearchParams,
@@ -28,6 +28,10 @@ export interface CoordinatorOptions {
   readonly clock: Clock;
   readonly generation: number;
 }
+export declare class AdmissionError extends Error {
+  readonly code: "BUSY" | "CLOSED" | "PAGE_CUTOFF" | "ABORTED";
+  constructor(code: AdmissionError["code"], message?: string);
+}
 export interface AdmissionTicket {
   readonly operationId: string;
   readonly kind: "critical" | "page" | "fetch";
@@ -35,6 +39,7 @@ export interface AdmissionTicket {
   readonly pageId?: string;
 }
 export interface Permit {
+  readonly signal: AbortSignal;
   readonly grantedAtMs: number;
   readonly queueMs: number;
   release(): void;
@@ -53,13 +58,17 @@ export interface OperationLease {
   readonly generation: number;
   readonly signal: AbortSignal;
   /** Acquires a physical HTTP-chain permit; do not hold an outer page permit. */
-  acquireFetch(pageId?: string): Promise<Permit>;
-  /** Cancels queued page admissions, not critical calls or already-started extraction. */
+  acquireFetch(scope?: FetchScope): Promise<Permit>;
+  /** Sticky: reject later page tickets, remove queued pages and abort active page fetches; keep active extraction alive. */
   cutoffPages(): void;
   track<T>(task: Promise<T>): Promise<T>;
   abort(reason?: string): void;
   /** Waits for owned work, then deregisters. Does not abandon work on timeout. */
   settle(): Promise<void>;
+}
+export interface FetchScope {
+  readonly pageId?: string;
+  readonly signal?: AbortSignal;
 }
 export interface ExecutionCoordinator {
   begin(operationId: string, signal?: AbortSignal): OperationLease;
@@ -152,6 +161,7 @@ export interface PolicyHooks {
   readonly scope: ModelCallScope;
   readonly coordinator: ExecutionCoordinator;
   readonly clock: Clock;
+  readonly random: () => number;
 }
 export interface AttemptControl {
   readonly identity: AttemptIdentity;
@@ -252,7 +262,7 @@ export interface FullData {
   readonly timing: Times;
   readonly accounting: AccountingSummary;
   readonly attempts: readonly AttemptRecord[];
-  readonly deadline: { readonly enabled: boolean; readonly reason: "disabled" | "all-terminal" | "adaptive" | "ceiling" | "not-applicable"; readonly minimumMet: boolean };
+  readonly deadline: { readonly enabled: boolean; readonly reason: "disabled" | "all-terminal" | "adaptive" | "minimum" | "ceiling" | "not-applicable"; readonly minimumMet: boolean };
 }
 export interface CoreResult {
   readonly text: string;
@@ -305,9 +315,23 @@ export interface Progress {
 }
 export interface FetchParams { readonly url: string; readonly maxChars?: number }
 export interface FetchResult { readonly page: SourceRecord; readonly transferredBytes: number }
+export interface PageTransportRequest {
+  readonly method: "GET" | "HEAD";
+  readonly headers: Readonly<Record<string, string>>;
+  readonly browser: string;
+  readonly proxy?: string;
+  readonly signal: AbortSignal;
+}
+export interface PageTransportResponse {
+  readonly status: number;
+  readonly url: string;
+  readonly headers: { get(name: string): string | null };
+  readonly body: ReadableStream<Uint8Array> | null;
+}
+export type PageTransport = (url: string, request: PageTransportRequest) => Promise<PageTransportResponse>;
 export interface FetchClient {
-  fetch(params: FetchParams, operation: OperationLease): Promise<FetchResult>;
-  discover(urls: readonly string[], stagingRoot: string, operation: OperationLease): Promise<readonly SourceRecord[]>;
+  fetch(params: FetchParams, operation: OperationLease, scope?: FetchScope): Promise<FetchResult>;
+  discover(urls: readonly string[], stagingRoot: string, operation: OperationLease, signal: AbortSignal): Promise<readonly SourceRecord[]>;
 }
 export interface OperationServices {
   readonly operation: OperationLease;
@@ -347,7 +371,7 @@ export interface CommittedRun {
 export interface RunStore {
   allocate(input: AllocateInput): Promise<Allocation>;
   /** Files contain deterministic source-ID references, never promised unverified paths. */
-  commit(reservation: RunReservation, artifacts: readonly Artifact[], signal: AbortSignal): Promise<CommittedRun>;
+  commit(reservation: RunReservation, artifacts: readonly Artifact[], signal: AbortSignal): Promise<{ readonly status: "committed"; readonly run: CommittedRun } | { readonly status: "unavailable"; readonly diagnostic: Diagnostic }>;
   updateIndex(run: CommittedRun, query: string, signal: AbortSignal): Promise<"updated" | "unavailable">;
   recordAccounting(run: CommittedRun, records: readonly AttemptRecord[], summary: AccountingSummary, signal: AbortSignal): Promise<{ readonly status: "recorded"; readonly path: string } | { readonly status: "unavailable"; readonly diagnostic: Diagnostic }>;
   candidates(current: RunReservation | undefined, query: string, signal: AbortSignal): Promise<readonly IndexCandidate[]>;
@@ -376,10 +400,9 @@ export interface ScopedModelClient {
   preflight(bindings: readonly ModelBinding[]): Promise<ModelBinding[]>;
   complete(request: ExistingModelRequest & { readonly scope: ModelCallScope }): Promise<ExistingModelCompletion>;
 }
-export interface Context extends Omit<ExistingOperationContext, "models" | "onProgress"> {
+export interface Context extends Omit<ExistingOperationContext, "models" | "onProgress" | "signal" | "now" | "random"> {
   readonly services: OperationServices;
   readonly models: ScopedModelClient;
-  readonly onProgress?: (event: Progress) => void;
 }
 export declare function search(params: SearchParams, context: Context): Promise<CoreResult>;
 export declare function extract(params: ExtractParams, context: Context): Promise<CoreResult>;
@@ -393,12 +416,6 @@ export interface EngineOperations {
   readonly research: typeof research;
   readonly fetchPage: typeof fetchPage;
 }
-/** Native tool registration accepts this explicit test seam; no mutable global harness. */
-export interface NativeTestInjection {
-  readonly operations?: Partial<EngineOperations>;
-  readonly transformContext?: (context: Context) => Context;
-}
-
 export interface ModelFixtureRequest {
   readonly model: ModelConfig;
   readonly role: ModelRole;

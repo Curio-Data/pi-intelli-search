@@ -1,0 +1,18 @@
+# P0 Review Dispositions
+
+Specification revision: `P0-2`. This records amendments after the independent Opus 5.5 review blocked P0-1 commit `7fafa5275f4a38e236bf94a50069c50c29ca1eb2`. It does not claim the amended candidate has passed re-review. The final report and decision are recorded through STATUS/acceptance metadata only after review.
+
+| Finding | Amendment | Remaining Proof |
+|---|---|---|
+| B1 / M5: Fetch cancellation lacked independent scopes and sticky cutoff | `FetchScope`, permit signal, explicit discovery signal, sticky page cutoff and fetch-only cancellation in C09/API. Operation signal remains live for collation/publication. | P1/P4/P5 real cancellation and post-cutoff admission tests. |
+| B2: Directory lock required manual crash recovery and contradicted namespace preservation | Supersede it with pinned kernel-released native lock, C25 and LOCK-EVIDENCE. Stable inode is never replaced; ordinary crash release is automatic. Journal repair never resets the namespace. | P2 protocol, dependency/packaging/platform and actual-adapter gates; local source/native primitive checks are limited evidence. |
+| M1: Commit error result unspecified | Explicit committed/unavailable union and publication linearisation boundary. Abort before publication cannot publish; abort after publication preserves valid committed state. | P2/P5 fault and abort-boundary cases. |
+| M2: Replay could bypass attempt policy | Native-only immutable transport-replay factory below native policy/citation handling; page transport below FetchClient. Unit whole-client replacements cannot claim complete replay. | P3 actual loader/bridge/attempt/usage/miss proof. |
+| M3: Context duplicated clocks, signals and progress | Remove inherited duplicates; `services` owns them. Scope operation/ledger identity is asserted; jitter and run-ID random sources are explicit. | P1/P4 integration parity fixtures. |
+| M4: Acceptance gate was undocumented/unwired | Candidate bundle hashes, acceptance.json/REVIEW.md, strict npm command, full-history CI step and builder-base requirement. Pending candidate intentionally fails strict accepted-state check. | Final exact-revision accept report, metadata and successful strict gate before P0 closure. |
+| M6: Existing scan cap is a total workspace gate | Explicit fail-closed pre-inference workspace error and boundary test; no silent scan bypass or automatic deletion. Offline archival/availability limit documented for P4b. | P4/P6 representative-history scan measurements and cap cases. |
+| L1: Disk wire schema detail | Reservation filename/hash canonicalisation fixed; P2 must freeze reviewed versioned schemas before R1 integration. | P2 deliverable, not permission to change the library API. |
+| L2–L5: Reason, jitter, per-call hooks and config path | Minimum reason added; scoped random injection; hooks once per policy invocation; MCP `tuning.execution` location explicit. | Deterministic type/behaviour tests at owning stages. |
+| L6–L8: Readability, small population and housekeeping | Add local stage/decision references, clarify diagnostics versus claims and disclose the small H1 population. Runtime source-tree/recovery documentation remains P4b. | No powered or confirmatory claim; later independent D6 design required. |
+
+Source review and model provenance are retained in the encrypted worktree evidence packet. No builder, runtime feature test, paid measurement or release is authorised merely by this amendment ledger.

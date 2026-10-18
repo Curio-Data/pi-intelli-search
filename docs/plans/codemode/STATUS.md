@@ -1,6 +1,6 @@
 # Codemode Contract Status
 
-Specification revision: `P0-1`. Status: candidate, independent exact-revision review pending. This document records acceptance separately from the specification so a review can name an immutable contract commit without embedding its own hash in that commit.
+Specification revision: `P0-2`. Status: candidate, independent exact-revision review pending. This document records acceptance separately from the specification so a review can name an immutable contract commit without embedding its own hash in that commit.
 
 ## Owner Decisions
 
@@ -19,11 +19,15 @@ Specification revision: `P0-1`. Status: candidate, independent exact-revision re
 
 ## Engineering Selections
 
-The coordinator selected C03's capacity/configuration limits, C06's prespecified cancellation target, C08's timer precedence, C10's replacement gate, C11–C14's admission/pacing/fairness/catalogue ownership, C18's size bound and C21–C27's filesystem/journal/lock/reader/compatibility protocols. These are concrete specifications with future test obligations, not implemented proofs. Exact signatures are in [API.ts](API.ts).
+The coordinator selected C03's capacity/configuration limits, C06's prespecified cancellation target, C08's timer precedence, C10's replacement gate, C11–C14's admission/pacing/fairness/catalogue ownership, C18's size bound and C21–C27's filesystem/journal/lock/reader/compatibility protocols. These are concrete specifications with future test obligations, not implemented proofs. Exact signatures are in [API.ts](API.ts) and native-only [NATIVE-API.ts](NATIVE-API.ts).
 
-The no-eviction lock deliberately trades automatic crash recovery for race-safe ownership and useful non-persisted answers. Manual recovery must stop writers and preserve evidence. No library dependency, automatic stale removal, policy cap, retention utility or platform-support expansion is approved by this selection.
+The earlier directory lock with manual-only crash release was blocked by review and is superseded. C25 now selects a pinned native kernel-lock primitive with automatic release on descriptor/process death and a permanent lockfile that is never replaced. [LOCK-EVIDENCE.md](LOCK-EVIDENCE.md) records source/primitive checks and remaining dependency/install/platform gates. Manual recovery concerns damaged allocation history, not ordinary crashed holders. No stale-age/PID fallback, history reset, policy cap or retention utility is introduced.
+
+The first review blocked P0-1; [REVIEW-DISPOSITIONS.md](REVIEW-DISPOSITIONS.md) records the P0-2 amendments. No blocker is called closed until the exact amended revision is reviewed.
 
 ## Acceptance Record
+
+`SPECIFICATION-SHA256SUMS` hashes the candidate contract/native API/consumer/acceptance/method/corpus/checker bundle before acceptance. `acceptance.json` records the accepted revision, exact reviewed commit, native reviewer model/report hash, coordinator decision and unchanged specification-file hashes; `REVIEW.md` retains the final independent report. They are acceptance evidence, not runtime test reports. `npm run check:codemode-plan` runs `--require-accepted` plus the compile-only consumer and is wired into CI; every builder runs it at the accepted base. A pending candidate intentionally fails that strict accepted-state command while the plain diagnostic checker remains runnable. CI fetches history so the reviewed commit can be checked. Later corpus/method expansions use new versioned files rather than rewriting the frozen P0 bundle.
 
 - Reviewed contract commit: pending.
 - Final contract content digest: pending.

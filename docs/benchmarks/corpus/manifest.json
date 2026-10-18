@@ -155,20 +155,24 @@
   },
   "methods": [
     {
-      "path": "../README.md",
-      "sha256": "a688cf36dd9fae568f14365eb33312403dcc9f79dedd275f2d84eb6ae688a827"
+      "path": "../METHOD.md",
+      "revision": "P0-2",
+      "sha256": "51a6e61af51b75a76e4864146fee65ff4e8df5b5cd041edd80d6fa312e213812"
     },
     {
       "path": "../deadline/METHOD.md",
-      "sha256": "7e3d16901f9e804856200d62e1579e5287596a325d59383373d285f7d5e944b3"
+      "revision": "P0-2",
+      "sha256": "27b2911e0373d6ff66901b5a060d139a1eba5fa359c2d48265ea68ea231aba3e"
     },
     {
       "path": "../query-expansion/METHOD.md",
-      "sha256": "434f859edaa1c5f74e5ed6f3ddd3a1509c4883078e49d259a4d263f27d01b1c4"
+      "revision": "P0-2",
+      "sha256": "1459a9e977cfd82402867cb9a74dfaa3180209ec61f6c9da81c6ae504b19678e"
     },
     {
       "path": "../codemode/METHOD.md",
-      "sha256": "5f88ffff2ed433e675e4471b23d84dc91b4c41aa6449913c38030465d570a679"
+      "revision": "P0-2",
+      "sha256": "1636a9b15331485e610d2413fb20b9350d302fedf9189e35b27de694ef7130f4"
     }
   ],
   "crossExperimentExposureGroups": [

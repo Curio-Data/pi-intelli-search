@@ -15,6 +15,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The contract gate verifies frozen files at the independently reviewed commit.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -50,6 +53,9 @@ jobs:
             echo "$violations"
             exit 1
           fi
+
+      - name: Verify accepted Codemode contract and corpus
+        run: npm run check:codemode-plan
 
       - name: Build and type-check both artifacts
         run: npm run build:all
