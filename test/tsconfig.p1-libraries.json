@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "composite": false,
+    "noEmit": true,
+    "declaration": false
+  },
+  "include": [
+    "core-execution-coordinator.test.ts",
+    "core-usage.test.ts",
+    "fixtures/p1-libraries.typecheck.ts",
+    "../docs/plans/codemode/API.ts"
+  ],
+  "exclude": []
+}
