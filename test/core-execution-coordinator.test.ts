@@ -607,7 +607,6 @@ describe("C11 admitted attempts (T11 library portion)", () => {
     const lease = coordinator.begin("op");
     const ledger = createAttemptLedger();
     const hooks = hooksFor(coordinator, clock, scopeFor(lease, "extract", ledger, "S1"));
-    const sequences: number[] = [];
     let active = -1;
     const run = (error?: string) => async (control: import("../src/core/contracts.js").AttemptControl) => {
       active = coordinator.snapshot().activePages;
@@ -620,7 +619,6 @@ describe("C11 admitted attempts (T11 library portion)", () => {
     assert.equal(first.retryAfterMs, 250);
     assert.equal(coordinator.snapshot().activeModels, 0);
     const second = await runAdmittedAttempt(hooks, { model: fixtureModel }, 2, run());
-    void sequences;
     assert.deepEqual([first.state, second.state], ["failed", "succeeded"]);
     assert.deepEqual(ledger.records().map((record) => [record.attempt, record.state, record.observation?.tokens.inputTotal]), [[1, "failed", 5], [2, "succeeded", 5]]);
     await lease.settle();
@@ -650,6 +648,217 @@ describe("C11 admitted attempts (T11 library portion)", () => {
     await rejectsWith(queued, "ABORTED");
     assert.deepEqual(ledger.records().map((record) => record.state), ["aborted"]);
     held.forEach((permit) => permit.release());
+    await lease.settle();
+  });
+});
+
+describe("P1 review regressions: settlement atomicity (C04, C10)", () => {
+  it("a continuation that tracks after the drain observation gets CLOSED, never an orphaned lease", async () => {
+    const { coordinator } = setup();
+    const lease = coordinator.begin("op");
+    let finishFirst!: () => void;
+    const first = new Promise<void>((resolve) => (finishFirst = resolve));
+    lease.track(first);
+    let second: Promise<void> | undefined;
+    let secondDone = false;
+    let trackError: unknown;
+    // The next stage starts from an ordinary async continuation of the first one.
+    void first.then(async () => {
+      await null;
+      try {
+        second = lease.track(new Promise<void>((resolve) => setImmediate(() => {
+          secondDone = true;
+          resolve();
+        })));
+      } catch (error) {
+        trackError = error;
+      }
+    });
+    const settled = lease.settle().then(() => ({ secondDone, tracked: second !== undefined, active: coordinator.snapshot().activeOperations }));
+    finishFirst();
+    const outcome = await settled;
+    await flush();
+    assert.ok(!outcome.tracked || outcome.secondDone, "settle never resolves while an accepted task is still running");
+    assert.equal(outcome.tracked, false);
+    assert.ok(trackError instanceof AdmissionError && trackError.code === "CLOSED");
+    assert.equal(outcome.active, 0);
+  });
+
+  it("work tracked before the drain observation is awaited, however deep the microtask chain", async () => {
+    const { coordinator } = setup();
+    const lease = coordinator.begin("op");
+    let finishFirst!: () => void;
+    const first = new Promise<void>((resolve) => (finishFirst = resolve));
+    let finishSecond!: () => void;
+    // Registered before track(first), so it runs before the lease sees the first task finish.
+    void first.then(() => lease.track(new Promise<void>((resolve) => (finishSecond = resolve))));
+    lease.track(first);
+    const settled = watch(lease.settle());
+    finishFirst();
+    for (let i = 0; i < 5; i++) await flush();
+    assert.equal(settled.settled, false, "the second stage is owned work");
+    assert.equal(coordinator.snapshot().activeOperations, 1);
+    finishSecond();
+    await flush();
+    assert.equal(settled.settled, true);
+    assert.equal(coordinator.snapshot().activeOperations, 0);
+  });
+
+  it("an acquisition from a post-drain continuation is CLOSED, under settle and under close", async () => {
+    for (const mode of ["settle", "close"] as const) {
+      const { coordinator } = setup();
+      const lease = coordinator.begin("op");
+      const permit = await model(coordinator, lease, "critical");
+      let late: Promise<unknown> | undefined;
+      // A holder that releases and immediately starts its next stage in a later microtask.
+      const waiting = mode === "settle" ? lease.settle() : coordinator.close("replacement");
+      queueMicrotask(() => {
+        permit.release();
+        queueMicrotask(() => {
+          late = model(coordinator, lease, "critical");
+          late.catch(() => {});
+        });
+      });
+      await waiting;
+      await flush();
+      assert.ok(late, mode);
+      await rejectsWith(late!, "CLOSED");
+      assert.deepEqual([coordinator.snapshot().activeModels, coordinator.snapshot().activeOperations], [0, 0], mode);
+    }
+  });
+
+  it("close and a concurrent settle share one drain and both wait for owned work", async () => {
+    const { coordinator } = setup();
+    const lease = coordinator.begin("op");
+    let finish!: () => void;
+    lease.track(new Promise<void>((resolve) => (finish = resolve)));
+    const settled = watch(lease.settle());
+    const closed = watch(coordinator.close());
+    await flush();
+    assert.deepEqual([settled.settled, closed.settled], [false, false]);
+    finish();
+    await flush();
+    assert.deepEqual([settled.settled, closed.settled], [true, true]);
+    assert.equal(coordinator.snapshot().activeOperations, 0);
+  });
+});
+
+describe("P1 review regressions: abort cascades grant nothing (C11, C13)", () => {
+  /** Holders that release synchronously from an abort listener, as a fetch client may. */
+  async function heldReleasingOnAbort(coordinator: ExecutionCoordinator, lease: OperationLease, count: number, listenOn?: AbortSignal) {
+    const held: CoordinatedPermit[] = [];
+    for (let i = 0; i < count; i++) {
+      const permit = await model(coordinator, lease, "critical");
+      (listenOn ?? permit.signal).addEventListener("abort", () => permit.release());
+      held.push(permit);
+    }
+    return held;
+  }
+
+  for (const variant of ["independent ticket signal", "composite of the lease signal"] as const) {
+    it(`operation abort rejects a queued model ticket when holders release synchronously (${variant})`, async () => {
+      const { coordinator } = setup({ modelConcurrency: 2 });
+      const lease = coordinator.begin("op");
+      await heldReleasingOnAbort(coordinator, lease, 2);
+      const signal = variant === "independent ticket signal" ? new AbortController().signal : AbortSignal.any([lease.signal]);
+      const queued = model(coordinator, lease, "critical", { signal });
+      lease.abort("user cancel");
+      await rejectsWith(queued, "ABORTED");
+      assert.deepEqual([coordinator.snapshot().activeModels, coordinator.snapshot().queuedModels], [0, 0]);
+      await lease.settle();
+    });
+  }
+
+  it("operation abort rejects a queued fetch ticket when fetch holders release synchronously", async () => {
+    const { coordinator } = setup({ fetchConcurrency: 2 });
+    const lease = coordinator.begin("op");
+    for (let i = 0; i < 2; i++) {
+      const permit = await lease.acquireFetch({ pageId: `S${i}` });
+      // Registered on the lease signal before the queued ticket's own listener, so it runs first.
+      lease.signal.addEventListener("abort", () => permit.release());
+    }
+    const queued = lease.acquireFetch();
+    lease.abort();
+    await rejectsWith(queued, "ABORTED");
+    assert.deepEqual([coordinator.snapshot().activeFetches, coordinator.snapshot().queuedFetches], [0, 0]);
+    await lease.settle();
+  });
+
+  it("a ticket whose own signal aborted is rejected even if a sibling listener pumps first", async () => {
+    const { coordinator } = setup({ modelConcurrency: 2 });
+    const lease = coordinator.begin("op");
+    const user = new AbortController();
+    // Holders listen on the user signal itself, so they run before the ticket's composite listener.
+    await heldReleasingOnAbort(coordinator, lease, 2, user.signal);
+    const queued = model(coordinator, lease, "critical", { signal: AbortSignal.any([user.signal]) });
+    user.abort();
+    await rejectsWith(queued, "ABORTED");
+    assert.equal(coordinator.snapshot().activeModels, 0);
+    await lease.settle();
+  });
+
+  it("a dead ticket in an abort cascade advances no pacing reservation", async () => {
+    const { clock, coordinator } = setup({ modelConcurrency: 2, minRequestIntervalMs: 100 });
+    const lease = coordinator.begin("op");
+    const a = await model(coordinator, lease, "critical");
+    a.signal.addEventListener("abort", () => a.release());
+    const pendingB = model(coordinator, lease, "critical");
+    await clock.advance(100);
+    const b = await pendingB;
+    b.signal.addEventListener("abort", () => b.release());
+    const queued = model(coordinator, lease, "critical", { signal: new AbortController().signal });
+    await clock.advance(100);
+    assert.equal(clock.pending, 0, "no timer while capacity is full");
+    lease.abort();
+    await rejectsWith(queued, "ABORTED");
+    const other = coordinator.begin("op-2");
+    const next = await model(coordinator, other, "critical");
+    assert.equal(next.grantedAtMs, 200, "the dead ticket reserved no start at 300");
+    next.release();
+    await Promise.all([lease.settle(), other.settle()]);
+  });
+});
+
+describe("P1 review regressions: AttemptControl callback boundary (C16)", () => {
+  it("late and invalid observations never throw into the provider and are logged, not recorded", async () => {
+    const { clock, coordinator } = setup();
+    const lease = coordinator.begin("op");
+    const ledger = createAttemptLedger();
+    const warnings: string[] = [];
+    const hooks: PolicyHooks = { ...hooksFor(coordinator, clock, scopeFor(lease, "search", ledger)), logger: { error() {}, warn: (message) => warnings.push(message) } };
+    let captured!: import("../src/core/contracts.js").AttemptControl;
+    const result = await runAdmittedAttempt(hooks, { model: fixtureModel }, 1, async (control) => {
+      captured = control;
+      control.observe({ tokens: { inputTotal: 7 }, source: "provider-response", costBasis: "unknown" });
+      // An invalid chunk mid-stream is dropped; the attempt still succeeds.
+      control.observe({ tokens: { outputTotal: -1 }, source: "provider-response", costBasis: "unknown" });
+      return { value: "ok" };
+    });
+    assert.equal(result.state, "succeeded");
+    // A usage chunk arriving after the attempt finished.
+    assert.doesNotThrow(() => captured.observe({ tokens: { inputTotal: 999 }, source: "provider-response", costBasis: "unknown" }));
+    assert.doesNotThrow(() => captured.observe(undefined as unknown as import("../src/core/contracts.js").UsageObservation));
+    assert.equal(warnings.length, 3);
+    assert.match(warnings[2], /Ignored usage observation 3 for search-call attempt 1/);
+    assert.deepEqual(ledger.records()[0].observation?.tokens, { inputTotal: 7 });
+    // The ledger itself stays strict.
+    assert.throws(() => ledger.observe(result.identity, { tokens: {}, source: "provider-response", costBasis: "unknown" }), /finished/);
+    await lease.settle();
+  });
+
+  it("a throwing logger cannot reach the provider either", async () => {
+    const { clock, coordinator } = setup();
+    const lease = coordinator.begin("op");
+    const hooks: PolicyHooks = {
+      ...hooksFor(coordinator, clock, scopeFor(lease, "search")),
+      logger: { error() { throw new Error("logger down"); }, warn() { throw new Error("logger down"); } },
+    };
+    let captured!: import("../src/core/contracts.js").AttemptControl;
+    await runAdmittedAttempt(hooks, { model: fixtureModel }, 1, async (control) => {
+      captured = control;
+      return { value: 1 };
+    });
+    assert.doesNotThrow(() => captured.observe({ tokens: {}, source: "provider-response", costBasis: "unknown" }));
     await lease.settle();
   });
 });

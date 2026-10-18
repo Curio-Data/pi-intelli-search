@@ -155,8 +155,8 @@ describe("C16 attempt ledger (T16 library portion)", () => {
       output: 60,
       cacheRead: 200,
       cacheWrite: 100,
-      // Reported 1,050 is kept as-is; the second attempt contributes its known host components only.
-      totalTokens: 1060,
+      // Reported 1,050 is kept as-is; the second attempt contributes its known prompt and output totals.
+      totalTokens: 1460,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.1 },
     });
     const summary = ledger.summary();
@@ -164,6 +164,41 @@ describe("C16 attempt ledger (T16 library portion)", () => {
     assert.equal(summary.missingAttempts, 1);
     assert.equal(summary.tokens.reasoning, 20, "reasoning stays a subset of output");
     assert.equal(summary.tokens.outputTotal, 60);
+  });
+});
+
+describe("P1 review regressions: host total and cost provenance (C16)", () => {
+  function hostTotal(tokens: UsageObservation["tokens"]): number {
+    const ledger = createAttemptLedger();
+    ledger.start(id(1), 0, 0);
+    ledger.observe(id(1), { tokens, source: "provider-response", costBasis: "unknown" });
+    ledger.finish(id(1), "succeeded", 1);
+    return ledger.hostUsage().totalTokens;
+  }
+
+  it("uses a known prompt total without adding its cache components again", () => {
+    assert.equal(hostTotal({ inputTotal: 400, outputTotal: 10 }), 410);
+    assert.equal(hostTotal({ inputTotal: 1000, cacheRead: 200, cacheWrite: 100, outputTotal: 50 }), 1050);
+    assert.equal(hostTotal({ inputTotal: 1000, inputUncached: 700, cacheRead: 200, cacheWrite: 100, outputTotal: 50 }), 1050);
+    // Unknown output is a zero placeholder, disclosed by the mask.
+    assert.equal(hostTotal({ inputTotal: 400 }), 400);
+    // Without a prompt total, the known host components are summed.
+    assert.equal(hostTotal({ inputUncached: 700, cacheRead: 200, cacheWrite: 100, outputTotal: 50 }), 1050);
+    // A reported total always wins.
+    assert.equal(hostTotal({ inputTotal: 400, outputTotal: 10, totalTokens: 415 }), 415);
+  });
+
+  it("a cost with unknown provenance stays on its record and is counted as neither reported nor catalogue", () => {
+    const ledger = createAttemptLedger();
+    ledger.start(id(1), 0, 0);
+    ledger.observe(id(1), { tokens: {}, cost: { total: 0.3 }, source: "sdk-normalized", costBasis: "unknown" });
+    ledger.finish(id(1), "succeeded", 1);
+    assert.deepEqual(ledger.records()[0].observation?.cost, { total: 0.3 });
+    assert.equal(ledger.records()[0].observation?.costBasis, "unknown");
+    const summary = ledger.summary();
+    assert.deepEqual([summary.reportedCost, summary.estimatedCost, summary.costComplete], [{}, {}, false]);
+    assert.equal(hostCostBasis(summary), "none");
+    assert.equal(ledger.hostUsage().cost.total, 0);
   });
 });
 
@@ -177,7 +212,9 @@ describe("C16 adapter normalisation (T16 library portion)", () => {
   // packages/mcp/src/providers/openrouter.ts usage(): input = prompt_tokens.
   const mcp: ModelUsage = { input: 1000, output: 50, cacheRead: 200, cacheWrite: 100, reasoning: 20, totalTokens: 1050, totalCost: 0.0011 };
 
-  it("native and standalone fixtures normalise to the same canonical tokens", () => {
+  // Hand-built arithmetic fixtures. The real MCP adapter does not yet capture
+  // cache_write_tokens, so this is not evidence of native/MCP adapter parity (T16).
+  it("hand-built native and standalone fixtures normalise to the same canonical tokens", () => {
     const a = normalizeNativeUsage(native);
     const b = normalizeMcpUsage(mcp, "gen-1");
     const canonical = { inputTotal: 1000, inputUncached: 700, outputTotal: 50, cacheRead: 200, cacheWrite: 100, reasoning: 20, totalTokens: 1050 };
@@ -200,6 +237,27 @@ describe("C16 adapter normalisation (T16 library portion)", () => {
     assert.equal(normalizeNativeUsage({ input: 700, output: 1 }).tokens.inputUncached, 700);
   });
 
+  it("current standalone adapter output without a cache-write count leaves uncached input unknown", () => {
+    // Shape of packages/mcp/src/providers/openrouter.ts usage(): no cacheWrite field.
+    const observed = normalizeMcpUsage({ input: 1000, output: 50, totalTokens: 1050, totalCost: 0.001, cacheRead: 200, reasoning: 20 });
+    assert.equal(observed.tokens.inputUncached, undefined);
+    assert.equal(observed.tokens.cacheWrite, undefined);
+    const ledger = createAttemptLedger();
+    ledger.start(id(1), 0, 0);
+    ledger.observe(id(1), observed);
+    ledger.finish(id(1), "succeeded", 1);
+    assert.ok(ledger.summary().missingTokenFields.includes("inputUncached"));
+    assert.ok(ledger.summary().missingTokenFields.includes("cacheWrite"));
+    assert.equal(ledger.hostUsage().input, 0, "a disclosed zero placeholder, not a measurement");
+  });
+
+  it("disjoint cache counters leave uncached input unknown instead of clamping to zero", () => {
+    const observed = normalizeMcpUsage({ input: 100, cacheRead: 150, cacheWrite: 0, output: 5 });
+    assert.equal(observed.tokens.inputUncached, undefined);
+    assert.equal(observed.tokens.inputTotal, 100);
+    assert.equal(normalizeMcpUsage({ input: 100, cacheRead: 100, cacheWrite: 0 }).tokens.inputUncached, 0);
+  });
+
   it("keeps cacheWrite1h as a subset, preserves totals and leaves absent cost unknown", () => {
     const observed = normalizeNativeUsage({ input: 10, output: 2, cacheRead: 0, cacheWrite: 30, cacheWrite1h: 20, totalTokens: 42 });
     assert.deepEqual(observed.tokens, { inputTotal: 40, inputUncached: 10, outputTotal: 2, cacheRead: 0, cacheWrite: 30, cacheWrite1h: 20, totalTokens: 42 });
@@ -216,7 +274,7 @@ describe("C16 adapter normalisation (T16 library portion)", () => {
     assert.equal(ledger.hostUsage().totalTokens, 42);
   });
 
-  it("equivalent fixtures produce equivalent ledger summaries apart from cost basis", () => {
+  it("hand-built equivalent fixtures produce equivalent ledger summaries apart from cost basis", () => {
     const summaries = [normalizeNativeUsage(native), normalizeMcpUsage(mcp)].map((observation) => {
       const ledger = createAttemptLedger();
       ledger.start(id(1), 0, 0);

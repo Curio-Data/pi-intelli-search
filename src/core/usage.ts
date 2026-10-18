@@ -105,6 +105,11 @@ function record(entry: Entry): AttemptRecord {
   };
 }
 
+/**
+ * Sums cost of one basis. Cost observed with an `unknown` basis stays on its
+ * record but enters neither reported nor catalogue sums: its provenance is not
+ * established, so it is neither relabelled nor counted (C16).
+ */
 function sumCosts(entries: readonly Entry[], basis: UsageObservation["costBasis"]): CostObservation {
   const out: Mutable<CostObservation> = {};
   for (const entry of entries) {
@@ -218,9 +223,11 @@ function hostUsageOf(list: readonly Entry[]): NumericHostUsage {
     output += tokens.outputTotal ?? 0;
     cacheRead += tokens.cacheRead ?? 0;
     cacheWrite += tokens.cacheWrite ?? 0;
-    // A reported total is kept as reported; otherwise only known host components count.
-    totalTokens += tokens.totalTokens ??
-      (tokens.inputUncached ?? 0) + (tokens.outputTotal ?? 0) + (tokens.cacheRead ?? 0) + (tokens.cacheWrite ?? 0);
+    // A reported total is kept as reported. Otherwise a known prompt total already
+    // includes its cache components, so it replaces them rather than adding to them.
+    totalTokens += tokens.totalTokens ?? (tokens.inputTotal !== undefined
+      ? tokens.inputTotal + (tokens.outputTotal ?? 0)
+      : (tokens.inputUncached ?? 0) + (tokens.cacheRead ?? 0) + (tokens.cacheWrite ?? 0) + (tokens.outputTotal ?? 0));
   }
   // Reported and catalogue costs are never added together.
   const basis = hostCostBasisOf(list);
@@ -294,13 +301,17 @@ export function normalizeNativeUsage(usage: ModelUsage, providerRequestId?: stri
 /**
  * Standalone OpenRouter usage: `input` is the prompt total including cached
  * tokens, and `totalCost` is the provider-reported charge. Uncached input is
- * established only when every cache subset (read and write) is reported.
+ * established only when every cache subset (read and write) is reported; an
+ * absent cache-write count is unknown, not zero.
  */
 export function normalizeMcpUsage(usage: ModelUsage, providerRequestId?: string): UsageObservation {
   const { input, cacheRead, cacheWrite } = usage;
-  const inputUncached = input !== undefined && cacheRead !== undefined && cacheWrite !== undefined
-    ? Math.max(0, input - cacheRead - cacheWrite)
+  const remainder = input !== undefined && cacheRead !== undefined && cacheWrite !== undefined
+    ? input - cacheRead - cacheWrite
     : undefined;
+  // A negative remainder means the cache counters are not subsets of the prompt
+  // (for example a replayed response-cache hit); uncached input stays unknown.
+  const inputUncached = remainder !== undefined && remainder >= 0 ? remainder : undefined;
   const tokens = defined<Mutable<TokenObservation>>({
     inputTotal: input,
     inputUncached,

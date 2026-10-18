@@ -203,16 +203,23 @@ export function createExecutionCoordinator(options: CoordinatorOptions): Executi
     return state.tasks.size === 0 && state.queued.size === 0 && state.activePermits === 0;
   }
 
-  async function whenDrained(state: LeaseState): Promise<void> {
-    while (!drained(state)) {
-      await new Promise<void>((resolve) => {
-        const notify = () => {
-          state.changed.delete(notify);
-          resolve();
-        };
-        state.changed.add(notify);
-      });
-    }
+  /**
+   * Resolves once the lease owns no task, ticket or permit. The drained check and
+   * deregistration run in the same synchronous step, so no continuation can add
+   * work in between: later tracking or admission is `CLOSED`, never orphaned (C04).
+   */
+  function drain(state: LeaseState): Promise<void> {
+    state.settling ??= new Promise<void>((resolve) => {
+      const check = () => {
+        if (!drained(state)) return;
+        state.changed.delete(check);
+        deregister(state);
+        resolve();
+      };
+      state.changed.add(check);
+      check();
+    });
+    return state.settling;
   }
 
   function deregister(state: LeaseState): void {
@@ -288,6 +295,32 @@ export function createExecutionCoordinator(options: CoordinatorOptions): Executi
     return AbortSignal.any(signals);
   }
 
+  function isPageWork(ticket: Ticket): boolean {
+    return ticket.kind === "page" || (ticket.kind === "fetch" && ticket.pageId !== undefined);
+  }
+
+  /** Why a queued ticket can no longer be granted, checked before every dispatch. */
+  function deadReason(ticket: Ticket): AdmissionError | undefined {
+    const state = ticket.operation;
+    if (state.controller.signal.aborted || ticket.signal.aborted || ticket.scopeSignal?.aborted)
+      return new AdmissionError("ABORTED", `Admission for ${state.id} was cancelled`);
+    if (state.cutoffApplied && isPageWork(ticket))
+      return new AdmissionError("PAGE_CUTOFF", `Page work for ${state.id} is cut off`);
+    return undefined;
+  }
+
+  /**
+   * Abort listeners can release permits, and so pump, before a ticket's own abort
+   * listener runs. Rejecting dead tickets first keeps them from taking a slot or
+   * a pacing reservation (C11, C13).
+   */
+  function purgeDead(): void {
+    for (const ticket of [...fetches, ...critical.tickets(), ...pages.tickets()]) {
+      const error = deadReason(ticket);
+      if (error) rejectTicket(ticket, error);
+    }
+  }
+
   function pumpFetches(): void {
     while (activeFetches < fetchConcurrency && fetches.length > 0) {
       const ticket = fetches.shift()!;
@@ -344,6 +377,7 @@ export function createExecutionCoordinator(options: CoordinatorOptions): Executi
 
   function pump(): void {
     if (closed) return;
+    purgeDead();
     pumpFetches();
     pumpModels();
   }
@@ -425,8 +459,9 @@ export function createExecutionCoordinator(options: CoordinatorOptions): Executi
     const abort = (reason?: string) => {
       if (controller.signal.aborted) return;
       const error = new AdmissionError("ABORTED", reason ?? `Operation ${operationId} was aborted`);
-      controller.abort(error);
+      // Queued tickets leave before abort listeners can release permits and pump.
       rejectQueued(state, error);
+      controller.abort(error);
     };
 
     const lease: OperationLease = {
@@ -447,7 +482,7 @@ export function createExecutionCoordinator(options: CoordinatorOptions): Executi
         if (state.cutoffApplied) return;
         state.cutoffApplied = true;
         const error = new AdmissionError("PAGE_CUTOFF", `Page work for ${operationId} is cut off`);
-        rejectQueued(state, error, (ticket) => ticket.kind === "page" || (ticket.kind === "fetch" && ticket.pageId !== undefined));
+        rejectQueued(state, error, isPageWork);
         cutoff.abort(error);
       },
       track<T>(task: Promise<T>): Promise<T> {
@@ -462,8 +497,7 @@ export function createExecutionCoordinator(options: CoordinatorOptions): Executi
       },
       abort,
       settle() {
-        state.settling ??= whenDrained(state).then(() => deregister(state));
-        return state.settling;
+        return drain(state);
       },
     };
     Object.assign(state, { lease });
@@ -519,7 +553,7 @@ export function createExecutionCoordinator(options: CoordinatorOptions): Executi
         rejectQueued(state, error);
         if (!state.controller.signal.aborted) state.controller.abort(error);
       }
-      closing = Promise.all(states.map((state) => whenDrained(state).then(() => deregister(state)))).then(() => {});
+      closing = Promise.all(states.map(drain)).then(() => {});
       return closing;
     },
     owns(lease: OperationLease) {
@@ -577,6 +611,7 @@ export async function runAdmittedAttempt<T>(
   const timeout = new AbortController();
   let timedOut = false;
   let cancelTimer: (() => void) | undefined;
+  let ignoredObservations = 0;
   try {
     scope.ledger.start(identity, permit.grantedAtMs, permit.queueMs);
     if (request.timeoutMs !== undefined && request.timeoutMs > 0) {
@@ -590,8 +625,21 @@ export async function runAdmittedAttempt<T>(
     const control: AttemptControl = {
       identity,
       signal: AbortSignal.any(signals),
+      // Provider stream callbacks call this; a late or invalid observation must
+      // not throw into them. The strict ledger rejects it and the drop is logged.
       observe(observation: UsageObservation) {
-        scope.ledger.observe(identity, observation);
+        try {
+          scope.ledger.observe(identity, observation);
+        } catch (error) {
+          ignoredObservations++;
+          try {
+            hooks.logger.warn(
+              `Ignored usage observation ${ignoredObservations} for ${identity.callId} attempt ${identity.attempt}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          } catch {
+            // A failing logger is not the provider's problem either.
+          }
+        }
       },
     };
     let outcome: AdmittedAttemptResult<T>["outcome"];
