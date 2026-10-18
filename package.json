@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "defuddle": "^0.19.4",
+    "fs-native-extensions": "1.5.1",
     "linkedom": "^0.18.12",
     "wreq-js": "^2.3.0"
   },

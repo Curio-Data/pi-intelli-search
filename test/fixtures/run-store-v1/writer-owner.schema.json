@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "intelli-v1/writer-owner@1",
+  "type": "object",
+  "required": [
+    "schema",
+    "schemaVersion",
+    "pid",
+    "acquiredUtc",
+    "purpose"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "intelli-v1/writer-owner"
+    },
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "acquiredUtc": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+    },
+    "purpose": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "allocate"
+        },
+        {
+          "type": "string",
+          "const": "index"
+        }
+      ]
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    }
+  },
+  "additionalProperties": false
+}

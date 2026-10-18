@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "intelli-v1/committed@1",
+  "type": "object",
+  "required": [
+    "schema",
+    "schemaVersion",
+    "namespaceId",
+    "runId",
+    "admissionSequence",
+    "allocationHash",
+    "compatibilityKey",
+    "query",
+    "startedUtc",
+    "reportOutcome",
+    "files",
+    "nonEvidence"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "intelli-v1/committed"
+    },
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "namespaceId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+    },
+    "admissionSequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "allocationHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "compatibilityKey": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "query": {
+      "type": "string"
+    },
+    "startedUtc": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+    },
+    "reportOutcome": {
+      "type": "string",
+      "const": "succeeded"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "relativePath",
+          "kind",
+          "bytes",
+          "sha256"
+        ],
+        "properties": {
+          "relativePath": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}(/[A-Za-z0-9_][A-Za-z0-9._-]{0,127}){0,3}$",
+            "maxLength": 512
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "report"
+              },
+              {
+                "type": "string",
+                "const": "query"
+              },
+              {
+                "type": "string",
+                "const": "manifest-data"
+              },
+              {
+                "type": "string",
+                "const": "source"
+              },
+              {
+                "type": "string",
+                "const": "extraction"
+              }
+            ]
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 3
+    },
+    "nonEvidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "relativePath",
+          "bytes",
+          "sha256"
+        ],
+        "properties": {
+          "relativePath": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}(/[A-Za-z0-9_][A-Za-z0-9._-]{0,127}){0,3}$",
+            "maxLength": 512
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
