@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 1,
+  "kind": "intelli-benchmark-fixtures",
+  "scenario": "synthetic-codemode-dev",
+  "fixtures": [
+    {
+      "key": {
+        "boundary": "model",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "research.search",
+        "requestSha256": "cd164b661d7d633d5112b68e5494d08251ab5d23ea7f857e113e05dfcf1a9ce7",
+        "occurrence": 1
+      },
+      "request": {
+        "model": {
+          "provider": "fixture-openrouter",
+          "model": "perplexity/sonar"
+        },
+        "role": "search",
+        "systemPrompt": "You are the synthetic search stage.",
+        "userMessage": "public fixture query about streaming schedulers",
+        "maxTokens": 2048,
+        "reasoning": "low",
+        "effectivePayloadPatch": {
+          "plugins": [
+            {
+              "name": "web_search"
+            }
+          ]
+        }
+      },
+      "response": {
+        "text": "Synthetic search answer with [source one](https://example.com/one).",
+        "providerStreamEvents": [
+          {
+            "type": "url_citation",
+            "url": "https://example.com/one",
+            "title": "One",
+            "index": 0
+          },
+          {
+            "type": "url_citation",
+            "url": "https://example.com/two",
+            "title": "Two",
+            "index": 1
+          }
+        ],
+        "responseId": "gen-search-1"
+      },
+      "usage": {
+        "tokens": {
+          "inputTotal": 1147,
+          "inputUncached": 1147,
+          "outputTotal": 210,
+          "totalTokens": 1357
+        },
+        "cost": {
+          "total": 0.0011
+        },
+        "source": "provider-response",
+        "costBasis": "reported",
+        "providerRequestId": "req-search-1"
+      },
+      "delayMs": 2,
+      "contentSha256": "50b4a49c855c4d734c0fc7aef6d31989f462bec20045d3f31a3b3d2b8c3ca0e0"
+    },
+    {
+      "key": {
+        "boundary": "model",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "research.extract/S1",
+        "requestSha256": "f9337e11d0dd99b1d1ef797405856ab41caff96ff30989945f8adfa109e822eb",
+        "occurrence": 1
+      },
+      "request": {
+        "model": {
+          "provider": "fixture-openrouter",
+          "model": "perplexity/sonar"
+        },
+        "role": "extract",
+        "systemPrompt": "You are the synthetic search stage.",
+        "userMessage": "Extract the scheduling guarantees from source S1.",
+        "maxTokens": 2048,
+        "reasoning": "low",
+        "effectivePayloadPatch": null
+      },
+      "response": {
+        "text": "S1: The scheduler must release permits before backoff.",
+        "responseId": "gen-extract-1"
+      },
+      "usage": {
+        "tokens": {
+          "inputTotal": 40010,
+          "inputUncached": 40010,
+          "outputTotal": 320,
+          "totalTokens": 40330
+        },
+        "cost": {
+          "total": 0.0044
+        },
+        "source": "provider-response",
+        "costBasis": "reported",
+        "providerRequestId": "req-extract-1"
+      },
+      "delayMs": 1,
+      "contentSha256": "1a46cb6e383ac5b89d2143d1c38f1295eb247e7e716a50340dae58824d6da1c1"
+    },
+    {
+      "key": {
+        "boundary": "model",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "research.extract/S2",
+        "requestSha256": "2c1e2d25825ff41c3717ae499de792d4d8944e31b8bcfa1e342643d5c7a814f3",
+        "occurrence": 1
+      },
+      "request": {
+        "model": {
+          "provider": "fixture-openrouter",
+          "model": "perplexity/sonar"
+        },
+        "role": "extract",
+        "systemPrompt": "You are the synthetic search stage.",
+        "userMessage": "Extract the scheduling guarantees from source S2.",
+        "maxTokens": 2048,
+        "reasoning": "low",
+        "effectivePayloadPatch": null
+      },
+      "error": {
+        "kind": "rate-limit",
+        "message": "429 Too Many Requests: retry after 1s"
+      },
+      "usage": {
+        "tokens": {
+          "inputTotal": 0,
+          "outputTotal": 0
+        },
+        "source": "provider-response",
+        "costBasis": "unknown"
+      },
+      "delayMs": 1,
+      "contentSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    {
+      "key": {
+        "boundary": "model",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "research.extract/S2",
+        "requestSha256": "2c1e2d25825ff41c3717ae499de792d4d8944e31b8bcfa1e342643d5c7a814f3",
+        "occurrence": 2
+      },
+      "request": {
+        "model": {
+          "provider": "fixture-openrouter",
+          "model": "perplexity/sonar"
+        },
+        "role": "extract",
+        "systemPrompt": "You are the synthetic search stage.",
+        "userMessage": "Extract the scheduling guarantees from source S2.",
+        "maxTokens": 2048,
+        "reasoning": "low",
+        "effectivePayloadPatch": null
+      },
+      "response": {
+        "text": "S2: Late extractions are labelled and excluded from evidence.",
+        "responseId": "gen-extract-2"
+      },
+      "usage": {
+        "tokens": {
+          "inputTotal": 39880,
+          "inputUncached": 39880,
+          "outputTotal": 290,
+          "totalTokens": 40170
+        },
+        "cost": {
+          "total": 0.0043
+        },
+        "source": "provider-response",
+        "costBasis": "reported",
+        "providerRequestId": "req-extract-2"
+      },
+      "delayMs": 1,
+      "contentSha256": "fe993f86a5c37deb6135336b0efc207fc7fc85e5ca55cf3759b02bb7217806f2"
+    },
+    {
+      "key": {
+        "boundary": "model",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "research.collate",
+        "requestSha256": "5750af28854e170c7c6dff7fb05e3adadc2a0b59f93dcfa3e6e78e940912d09c",
+        "occurrence": 1
+      },
+      "request": {
+        "model": {
+          "provider": "fixture-openrouter",
+          "model": "perplexity/sonar"
+        },
+        "role": "collate",
+        "systemPrompt": "You are the synthetic search stage.",
+        "userMessage": "Collate S1 and S2 into the synthetic report.",
+        "maxTokens": 2048,
+        "reasoning": "low",
+        "effectivePayloadPatch": null
+      },
+      "response": {
+        "text": "Synthetic collated report.",
+        "responseId": "gen-collate-1"
+      },
+      "usage": {
+        "tokens": {
+          "inputTotal": 900,
+          "inputUncached": 900,
+          "outputTotal": 450,
+          "totalTokens": 1350
+        },
+        "cost": {
+          "total": 0.0009
+        },
+        "source": "provider-response",
+        "costBasis": "reported",
+        "providerRequestId": "req-collate-1"
+      },
+      "delayMs": 0,
+      "contentSha256": "db6530e2ff231ca839aaa55975653a1139833e989bad88a460341653d702eda1"
+    },
+    {
+      "key": {
+        "boundary": "model",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "suggest.judge",
+        "requestSha256": "0f30163591c85e1693679227f249e88703eef843bf67220e9397c768fea3edeb",
+        "occurrence": 1
+      },
+      "request": {
+        "model": {
+          "provider": "fixture-openrouter",
+          "model": "perplexity/sonar"
+        },
+        "role": "suggest",
+        "systemPrompt": "You are the synthetic search stage.",
+        "userMessage": "Suggest related cached searches for the synthetic query.",
+        "maxTokens": 2048,
+        "reasoning": "low",
+        "effectivePayloadPatch": null
+      },
+      "response": {
+        "text": "No related cached searches.",
+        "responseId": "gen-suggest-1"
+      },
+      "usage": {
+        "tokens": {
+          "inputTotal": 220,
+          "inputUncached": 220,
+          "outputTotal": 20,
+          "totalTokens": 240
+        },
+        "cost": {
+          "total": 0.0001
+        },
+        "source": "provider-response",
+        "costBasis": "reported"
+      },
+      "delayMs": 0,
+      "contentSha256": "d91a9d044ad1a7bd511d165fcb5ba2cfd8ff80766a3835175bbfb3b6eaabd821"
+    }
+  ]
+}

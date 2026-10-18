@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "kind": "intelli-benchmark-fixtures",
+  "scenario": "synthetic-codemode-dev",
+  "fixtures": [
+    {
+      "key": {
+        "boundary": "fetch",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "page.fetch/variant-html",
+        "requestSha256": "d9597a5acc51fec6b92541a8138d7ccde22b6e1e56bc99ac932b05f2bc4b1033",
+        "occurrence": 1
+      },
+      "request": {
+        "url": "https://example.com/one",
+        "method": "GET",
+        "accept": "text/html,application/xhtml+xml",
+        "browser": "chrome-124",
+        "proxyConfigured": false,
+        "maxResponseBytes": 8388608
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/html; charset=utf-8"
+        },
+        "bodyText": "<html><body><h1>Example One</h1><p>Scheduling guarantees.</p></body></html>"
+      },
+      "delayMs": 1,
+      "contentSha256": "ef8a08469e5731b811e6217dcf2b33bedc20ed3ee647d613221f6a3ecd899233"
+    },
+    {
+      "key": {
+        "boundary": "fetch",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "page.fetch/variant-markdown",
+        "requestSha256": "29786ef3ec632c9fcf7467ac83596d181c852357be4540e67423734a4d8fbe18",
+        "occurrence": 1
+      },
+      "request": {
+        "url": "https://example.com/one",
+        "method": "GET",
+        "accept": "text/markdown",
+        "browser": "chrome-124",
+        "proxyConfigured": false,
+        "maxResponseBytes": 8388608
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/markdown; charset=utf-8"
+        },
+        "bodyText": "# Example One\n\nScheduling guarantees."
+      },
+      "delayMs": 1,
+      "contentSha256": "b7beba9b50a1e3c7ef0a792d543f6d64bcf7721a6750f42c7e2dde93d2b62dbd"
+    },
+    {
+      "key": {
+        "boundary": "fetch",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "docs.discovery/probe",
+        "requestSha256": "b814bb6c34bea589df4cc24deee734563d3dcfccf3559ea5697bb40c525a31a3",
+        "occurrence": 1
+      },
+      "request": {
+        "url": "https://example.com/llms-full.txt",
+        "method": "HEAD",
+        "accept": "*/*",
+        "browser": "chrome-124",
+        "proxyConfigured": false,
+        "maxResponseBytes": 8388608
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "text/plain"
+        }
+      },
+      "delayMs": 0,
+      "contentSha256": "ceb1656edff27bd32dafcc8928804312c2c7d16f55c6d83f14616475a299d1fc"
+    }
+  ]
+}
