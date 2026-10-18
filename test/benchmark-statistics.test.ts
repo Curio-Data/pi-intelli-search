@@ -2,8 +2,14 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { bootstrapPairedQueries, estimatePairedQueries, mulberry32 } from "../scripts/benchmarks/statistics.js";
-import { DuplicateCellError } from "../scripts/benchmarks/statistics.js";
+import {
+  DuplicateCellError,
+  InvalidPopulationError,
+  bootstrapPairedQueries,
+  estimatePairedQueries,
+  mulberry32,
+  primaryAvailable,
+} from "../scripts/benchmarks/statistics.js";
 import type { PairedEstimate, QuerySample } from "../scripts/benchmarks/contracts.js";
 
 type Endpoint = Parameters<typeof estimatePairedQueries>[3];
@@ -218,5 +224,100 @@ describe("bootstrapPairedQueries clustered resampling", () => {
     for (const value of draws) counts.set(value, (counts.get(value) ?? 0) + 1);
     // The deterministic PRNG distributes across all three clusters.
     assert.equal(counts.size, 3);
+  });
+});
+
+describe("population and seed validation (R3)", () => {
+  const samples: QuerySample[] = [
+    sample("q1", 1, "A2", 100), sample("q1", 1, "B", 50),
+  ];
+
+  it("rejects duplicate population query ids and repeats", () => {
+    assert.throws(
+      () => estimatePairedQueries(samples, "A2", "B", "mainInputUncached", { queryIds: ["q1", "q1"], repeats: [1] }),
+      DuplicateCellError,
+    );
+    assert.throws(
+      () => estimatePairedQueries(samples, "A2", "B", "mainInputUncached", { queryIds: ["q1"], repeats: [1, 1] }),
+      DuplicateCellError,
+    );
+  });
+
+  it("rejects non-integer or non-positive population entries", () => {
+    assert.throws(
+      () => estimatePairedQueries(samples, "A2", "B", "mainInputUncached", { queryIds: ["q1"], repeats: [1.5] }),
+      InvalidPopulationError,
+    );
+    assert.throws(
+      () => estimatePairedQueries(samples, "A2", "B", "mainInputUncached", { queryIds: ["q1"], repeats: [0] }),
+      InvalidPopulationError,
+    );
+    assert.throws(
+      () => estimatePairedQueries(samples, "A2", "B", "mainInputUncached", { queryIds: [""], repeats: [1] }),
+      InvalidPopulationError,
+    );
+    assert.throws(
+      () => estimatePairedQueries(samples, "A2", "B", "mainInputUncached", { queryIds: [], repeats: [1] }),
+      InvalidPopulationError,
+    );
+  });
+
+  it("rejects non-integer and out-of-range seeds so the echoed seed is the seed used", () => {
+    const estimate = estimatePairedQueries(samples, "A2", "B", "mainInputUncached", { queryIds: ["q1", "q2"], repeats: [1] });
+    const base = { draws: 50, confidence: 0.9, metric: "difference" as const };
+    assert.throws(() => bootstrapPairedQueries(estimate, { ...base, seed: 7.9 }), InvalidPopulationError);
+    assert.throws(() => bootstrapPairedQueries(estimate, { ...base, seed: -1 }), InvalidPopulationError);
+    assert.throws(() => bootstrapPairedQueries(estimate, { ...base, seed: 2 ** 32 }), InvalidPopulationError);
+    // Distinct valid seeds stay distinct: 2**32 - 1 is a legal seed.
+    const highSeed = bootstrapPairedQueries(estimate, { ...base, seed: 2 ** 32 - 1 });
+    assert.equal(highSeed.seed, 2 ** 32 - 1);
+  });
+});
+
+describe("primary inference availability with incomplete populations (R3)", () => {
+  function estimateWith(missing: boolean): ReturnType<typeof estimatePairedQueries> {
+    const samples: QuerySample[] = [
+      sample("q1", 1, "A2", 100), sample("q1", 1, "B", 50),
+      sample("q2", 1, "A2", 200), sample("q2", 1, "B", 120),
+      ...(missing ? [] : [sample("q3", 1, "A2", 300), sample("q3", 1, "B", 150)]),
+    ];
+    return estimatePairedQueries(samples, "A2", "B", "mainInputUncached", {
+      queryIds: ["q1", "q2", "q3"],
+      repeats: [1],
+    });
+  }
+
+  it("primaryAvailable is false with any missing cell, nonpositive mean or partial repeats", () => {
+    const complete = estimateWith(false);
+    assert.equal(complete.missingQueries.length, 0);
+    assert.equal(primaryAvailable(complete, { queryIds: ["q1", "q2", "q3"], repeats: [1] }), true);
+    const incomplete = estimateWith(true);
+    assert.deepEqual(incomplete.missingQueries, ["q3"]);
+    assert.equal(primaryAvailable(incomplete, { queryIds: ["q1", "q2", "q3"], repeats: [1] }), false);
+  });
+
+  it("bootstrap with a population returns null bounds while incomplete unless labelled diagnostic", () => {
+    const incomplete = estimateWith(true);
+    const options = {
+      seed: 11,
+      draws: 200,
+      confidence: 0.95,
+      metric: "log-ratio" as const,
+      population: { queryIds: ["q1", "q2", "q3"], repeats: [1] },
+    };
+    const guarded = bootstrapPairedQueries(incomplete, options);
+    assert.equal(guarded.lower, null);
+    assert.equal(guarded.upper, null);
+    // The explicit diagnostic label restores a complete-case interval; the
+    // caller owns labelling it non-primary.
+    const diagnostic = bootstrapPairedQueries(incomplete, { ...options, diagnostic: true });
+    assert.ok(diagnostic.lower !== null && diagnostic.upper !== null);
+    // A complete population yields bounds without the diagnostic label.
+    const complete = estimateWith(false);
+    const primary = bootstrapPairedQueries(complete, options);
+    assert.ok(primary.lower !== null && primary.upper !== null);
+    // Without any population the interval is always complete-case use.
+    const noPopulation = bootstrapPairedQueries(incomplete, { seed: 11, draws: 200, confidence: 0.95, metric: "log-ratio" });
+    assert.ok(noPopulation.lower !== null);
   });
 });

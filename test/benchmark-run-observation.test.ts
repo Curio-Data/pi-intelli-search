@@ -36,6 +36,27 @@ describe("run observation validation", () => {
     assert.doesNotThrow(() => validateRunObservation(sampleRunObservation({ fixtureSha256: null })));
     assert.throws(() => validateRunObservation(sampleRunObservation({ fixtureSha256: "bad" })), InvalidRunObservationError);
   });
+
+  it("requires error text for failed/aborted runs and rerunReason with rerunOf (L1)", () => {
+    assert.throws(() => validateRunObservation(sampleRunObservation({ status: "failed" })), InvalidRunObservationError);
+    assert.throws(() => validateRunObservation(sampleRunObservation({ status: "aborted" })), InvalidRunObservationError);
+    assert.doesNotThrow(() => validateRunObservation(sampleRunObservation({ status: "failed", error: "pipeline 429" })));
+    assert.throws(
+      () => validateRunObservation(sampleRunObservation({ rerunOf: "run-synthetic-1" })),
+      InvalidRunObservationError,
+    );
+    assert.doesNotThrow(() =>
+      validateRunObservation(sampleRunObservation({ rerunOf: "run-synthetic-1", rerunReason: "technical: provider 529" })),
+    );
+  });
+
+  it("bounds the seed to the unsigned 32-bit range (R3)", () => {
+    assert.throws(
+      () => validateRunObservation(sampleRunObservation({ seed: 2 ** 32 })),
+      InvalidRunObservationError,
+    );
+    assert.doesNotThrow(() => validateRunObservation(sampleRunObservation({ seed: 2 ** 32 - 1 })));
+  });
 });
 
 describe("appendRunObservation", () => {
@@ -75,6 +96,23 @@ describe("appendRunObservation", () => {
       assert.equal(rerunAgain.rerunOf, "run-synthetic-2");
       // Canonical key order: sorted, stable across appends.
       assert.ok(lines[0]!.startsWith('{"arm"'));
+    } finally {
+      await removeDir(dir);
+    }
+  });
+
+  it("rejects a duplicate runId already recorded in the file (L1)", async () => {
+    const dir = await scratchDir("runs");
+    try {
+      await appendRunObservation(dir, sampleRunObservation({ runId: "run-dup" }));
+      await assert.rejects(
+        () => appendRunObservation(dir, sampleRunObservation({ runId: "run-dup", status: "failed", error: "x" })),
+        InvalidRunObservationError,
+      );
+      // A technical rerun under a NEW runId with rerunOf is the valid path.
+      await appendRunObservation(dir, sampleRunObservation({ runId: "run-dup-2", rerunOf: "run-dup", rerunReason: "technical: stall" }));
+      const lines = (await readFile(join(dir, "observations.ndjson"), "utf8")).trim().split("\n");
+      assert.equal(lines.length, 2);
     } finally {
       await removeDir(dir);
     }

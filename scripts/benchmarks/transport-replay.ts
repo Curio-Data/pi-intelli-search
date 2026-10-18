@@ -12,29 +12,43 @@
 // exactly one fixture occurrence per actual transport attempt, after the real
 // scoped policy admits that attempt (the policy invokes this transport once
 // per attempt, so admission, pacing, retries, ledger and cancellation remain
-// real). The injected registry facade argument is accepted for signature
-// compatibility and is never dereferenced: a miss throws ReplayMissError and
-// there is no live fallback path anywhere in this module. The page transport
-// helper sits below the real FetchClient (it returns incremental
-// ReadableStream bodies so real permits, stream limits, comparison, staging
-// and cleanup are exercised).
+// real). The frozen `NativeTestInjection` accepts exactly ONE
+// `registryStreamSimple` per loaded runtime and its arguments carry no scope,
+// call id, role or page id, so a shared instance derives the operation node
+// and role from deterministic request content through a caller-supplied
+// resolver. Ambiguity invalidates the block: when the store holds identical
+// request bytes under two different nodes, or the resolver cannot identify a
+// unique node/role, replay stops with an error and never guesses. There is
+// no live fallback path anywhere in this module. The page transport helper
+// sits below the real FetchClient (incremental ReadableStream bodies keep
+// real permits, stream limits, comparison, staging and cleanup exercised).
 //
 // Timing uses real host wall time: the native transport seam does not inject
 // a clock, and deterministic injected-clock comparisons are a separate core
 // population (BUILDER-HANDOFF, P3 Recorder and Analysis).
+//
+// Cancellation mirrors the live stream (pi-ai 1.1.0
+// api/openai-completions.js: "output.stopReason = options?.signal?.aborted ?
+// 'aborted' : 'error'"): an abort during the recorded delay resolves an
+// AssistantMessage with stopReason "aborted" instead of rejecting, so the
+// real policy exercises its live branch. The fixture occurrence is still
+// consumed: the attempt started and was then cancelled, which counts as
+// consumed-but-not-delivered, never as a skipped or missed response.
 
 import type { Api, AssistantMessage, Context, Model, SimpleStreamOptions, Usage } from "@earendil-works/pi-ai";
 import type { RegistryStreamSimple } from "../../docs/plans/codemode/NATIVE-API.js";
 import type { PageTransport, PageTransportRequest, PageTransportResponse } from "../../src/core/execution-contracts.js";
-import { asJson, requestSha256, type RequestBinding } from "./canonical.js";
+import { asJson, canonicalJson, requestSha256, sha256Canonical, type RequestBinding } from "./canonical.js";
 import { ReplayMissError, type BenchmarkReplayStore } from "./replay-store.js";
-import type { FetchFixtureRequest, FixtureKey, Json, ModelFixtureRequest, UsageObservation } from "./contracts.js";
+import type { FetchFixtureRequest, FixtureKey, Json, ModelFixtureRequest, ModelRole, UsageObservation } from "./contracts.js";
 
 /** Recorded wire shape of a model fixture response (inside FixtureRecord.response). */
 export interface ModelFixtureResponse {
   readonly text: string;
   readonly providerStreamEvents?: readonly Json[];
   readonly responseId?: string;
+  /** Recorded provider response metadata replayed through `options.onResponse`. */
+  readonly providerResponse?: { readonly status: number; readonly headers?: Readonly<Record<string, string>> };
 }
 
 /** Recorded wire shape of a fetch/catalogue fixture response (inside FixtureRecord.response). */
@@ -46,35 +60,70 @@ export interface FetchFixtureResponse {
   readonly bodyBase64?: string;
 }
 
-function sleepWithSignal(delayMs: number, signal: AbortSignal | undefined): Promise<void> {
-  if (delayMs <= 0) {
-    signal?.throwIfAborted();
-    return Promise.resolve();
-  }
-  return new Promise<void>((resolve, reject) => {
+/** Result of deriving node identity from deterministic request content. */
+export type ModelNodeResolution =
+  | { readonly operationNode: string; readonly role: ModelRole }
+  | { readonly ambiguous: true; readonly detail: string };
+
+/**
+ * Derives the fixture operation node and model role from the request content
+ * (without role, which is the value being derived). The resolver must be
+ * deterministic. Returning `ambiguous` stops the replay block; it must never
+ * guess between candidates.
+ */
+export type ModelNodeResolver = (
+  request: Omit<ModelFixtureRequest, "role">,
+  model: Model<Api>,
+  context: Context,
+) => ModelNodeResolution;
+
+/** Result of deriving a page/catalogue node from a fetch request. */
+export type PageNodeResolution =
+  | { readonly operationNode: string }
+  | { readonly ambiguous: true; readonly detail: string };
+
+/** Derives the fixture operation node for one physical fetch request. */
+export type PageNodeResolver = (request: FetchFixtureRequest) => PageNodeResolution;
+
+function abortMessage(model: Model<Api>): AssistantMessage {
+  return {
+    role: "assistant",
+    content: [],
+    api: model.api,
+    provider: model.provider,
+    model: model.id,
+    usage: zeroUsage(),
+    stopReason: "aborted",
+    errorMessage: "Transport replay aborted before the recorded response was delivered",
+    timestamp: Date.now(),
+  };
+}
+
+function zeroUsage(): Usage {
+  return {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
+}
+
+function waitRecordedDelay(delayMs: number, signal: AbortSignal | undefined): Promise<"elapsed" | "aborted"> {
+  if (signal?.aborted) return Promise.resolve("aborted");
+  if (delayMs <= 0) return Promise.resolve("elapsed");
+  return new Promise((resolve) => {
     const timer = setTimeout(() => {
       signal?.removeEventListener("abort", onAbort);
-      resolve();
+      resolve("elapsed");
     }, delayMs);
     const onAbort = () => {
       clearTimeout(timer);
-      reject(abortError());
+      resolve("aborted");
     };
-    if (signal) {
-      if (signal.aborted) {
-        clearTimeout(timer);
-        reject(abortError());
-        return;
-      }
-      signal.addEventListener("abort", onAbort, { once: true });
-    }
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
-}
-
-function abortError(): Error {
-  const error = new Error("Transport replay aborted before the recorded response delay elapsed");
-  error.name = "AbortError";
-  return error;
 }
 
 /** Extracts the canonical user message text from a pi-ai provider context. */
@@ -88,15 +137,11 @@ export function userMessageFromContext(context: Context): string {
     const parts: string[] = [];
     for (const block of content ?? []) {
       if (block.type === "text") parts.push(block.text);
-      else parts.push(`[${block.type}:${canonicalBlockBytes(block)}]`);
+      else parts.push(`[${block.type}:${sha256Canonical(block)}]`);
     }
     return parts.join("\n");
   }
   return "";
-}
-
-function canonicalBlockBytes(block: unknown): number {
-  return JSON.stringify(block ?? null).length;
 }
 
 /** Maps a recorded canonical usage observation back to the pi-ai Usage view. */
@@ -129,33 +174,59 @@ export function usageFromObservation(observation: UsageObservation | undefined):
 export interface TransportReplayOptions {
   readonly store: BenchmarkReplayStore;
   readonly scenario: string;
-  readonly operationNode: string;
   readonly bindings?: readonly RequestBinding[];
 }
 
-export interface ModelTransportReplayOptions extends TransportReplayOptions {
-  /** Model role at this operation node; part of the fixture request identity. */
-  readonly role: ModelFixtureRequest["role"];
+function groupRecordsByRequest(
+  store: BenchmarkReplayStore,
+  bindings: readonly RequestBinding[] | undefined,
+  boundary: FixtureKey["boundary"],
+): Map<string, Set<string>> {
+  // Construction-time ambiguity guard: identical canonical request bytes
+  // recorded under two different operation nodes cannot be distinguished by
+  // any content-derived resolver. One shared instance must refuse such a
+  // fixture set instead of guessing.
+  const groups = new Map<string, Set<string>>();
+  for (const record of store.records()) {
+    if (record.key.boundary !== boundary) continue;
+    const canonical = canonicalJson(record.request);
+    const nodes = groups.get(canonical) ?? new Set<string>();
+    nodes.add(record.key.operationNode);
+    groups.set(canonical, nodes);
+  }
+  void bindings;
+  return groups;
+}
+
+function assertNoAmbiguousNodes(groups: Map<string, Set<string>>, scenario: string, boundary: string): void {
+  for (const [canonical, nodes] of groups) {
+    if (nodes.size > 1) {
+      throw new ReplayMissError(
+        "ambiguous-node",
+        `Ambiguous replay fixtures for scenario "${scenario}" (${boundary}): identical request bytes ${canonical.slice(0, 48)}… are recorded under ${nodes.size} different operation nodes (${[...nodes].join(", ")}); content-derived replay cannot distinguish them and must invalidate the block`,
+      );
+    }
+  }
 }
 
 /**
- * Builds the exact fixture request for a model transport attempt. The
- * effective payload patch is the recorded effect of the supplied `onPayload`
- * hook applied to an empty payload (the forced workflow's search patch
- * attaches a static tools array); a patch that returns undefined is recorded
- * as null. Non-text user content is folded to bounded structural markers so
- * the canonical bytes stay exact without embedding binary payloads.
+ * Builds the exact fixture request for a model transport attempt, without the
+ * role (which the resolver derives). Non-text user content is folded to a
+ * content-hashed structural marker so distinct blocks keep distinct
+ * identities; the canonical text of native pipeline calls (a single text
+ * user message) is exact. The effective payload patch is the recorded effect
+ * of the supplied `onPayload` hook applied to an empty payload (the forced
+ * workflow's search patch attaches a static tools array); a patch that
+ * returns undefined is recorded as null.
  */
 export async function modelFixtureRequest(
   model: Model<Api>,
-  role: ModelFixtureRequest["role"],
   context: Context,
   options?: SimpleStreamOptions,
-): Promise<ModelFixtureRequest> {
+): Promise<Omit<ModelFixtureRequest, "role">> {
   const effectivePayloadPatch = options?.onPayload ? await options.onPayload({}, model) : undefined;
   return {
     model: { provider: model.provider, model: model.id },
-    role,
     systemPrompt: context.systemPrompt ?? "",
     userMessage: userMessageFromContext(context),
     maxTokens: options?.maxTokens ?? null,
@@ -166,16 +237,29 @@ export async function modelFixtureRequest(
   };
 }
 
+export interface ModelTransportReplayOptions extends TransportReplayOptions {
+  /** Deterministic node/role derivation for the one shared instance. */
+  readonly resolveNode: ModelNodeResolver;
+}
+
 /**
- * Fail-closed model transport replay. Signature-compatible with the frozen
- * RegistryStreamSimple seam so the coordinator can inject it as
- * `NativeTestInjection.registryStreamSimple` in `mode: "transport-replay"`.
- * It never invokes `options.fetch`, `globalThis.fetch`, any network primitive
- * or the passed registry object; citations are delivered only through the
- * supplied `onProviderStreamEvent` hook using recorded chunks; response,
- * usage, error and recorded delay are replayed per attempt.
+ * Fail-closed model transport replay for the single native seam. The frozen
+ * `NativeTestInjection` carries no scope at the `RegistryStreamSimple`
+ * signature, so this ONE instance serves every stage of a run: the resolver
+ * derives `{ operationNode, role }` from request content, the derived role
+ * joins the request before hashing, and occurrence counters key by exact
+ * request hash. It never invokes `options.fetch`, `globalThis.fetch`, any
+ * network primitive or the passed registry object; citations are delivered
+ * only through the supplied `onProviderStreamEvent` hook using recorded
+ * chunks; recorded `providerResponse` metadata is replayed through
+ * `onResponse`; response, usage, error and recorded delay are replayed per
+ * attempt. Ambiguous derivation throws `ReplayMissError` (reason
+ * "ambiguous-node") and invalidates the block.
  */
 export function createModelTransportReplay(options: ModelTransportReplayOptions): RegistryStreamSimple {
+  const bindings = options.bindings ?? [];
+  const groups = groupRecordsByRequest(options.store, bindings, "model");
+  assertNoAmbiguousNodes(groups, options.scenario, "model");
   const occurrences = new Map<string, number>();
   const nextOccurrence = (hash: string): number => {
     const next = (occurrences.get(hash) ?? 0) + 1;
@@ -184,28 +268,43 @@ export function createModelTransportReplay(options: ModelTransportReplayOptions)
   };
   const replay: RegistryStreamSimple = async (_registry, model, context, streamOptions) => {
     // The registry parameter is intentionally ignored (no live fallback);
-    // a fixture miss throws and invalidates the block (N1, C30).
-    const fixtureRequest = await modelFixtureRequest(model, options.role, context, streamOptions);
+    // a fixture miss or ambiguous derivation throws and invalidates the
+    // block (N1, C30).
+    const requestWithoutRole = await modelFixtureRequest(model, context, streamOptions);
+    const resolution = options.resolveNode(requestWithoutRole, model, context);
+    if ("ambiguous" in resolution) {
+      throw new ReplayMissError(
+        "ambiguous-node",
+        `Ambiguous model node derivation for scenario "${options.scenario}": ${resolution.detail}`,
+      );
+    }
+    const fixtureRequest: ModelFixtureRequest = { ...requestWithoutRole, role: resolution.role };
     const requestJson = asJson(fixtureRequest);
-    const hash = requestSha256(requestJson, options.bindings ?? []);
+    const hash = requestSha256(requestJson, bindings);
     const key: FixtureKey = {
       boundary: "model",
       scenario: options.scenario,
-      operationNode: options.operationNode,
+      operationNode: resolution.operationNode,
       requestSha256: hash,
       occurrence: nextOccurrence(hash),
     };
     const record = await options.store.lookup(key, requestJson);
-    await sleepWithSignal(record.delayMs, streamOptions?.signal);
+    if ((await waitRecordedDelay(record.delayMs, streamOptions?.signal)) === "aborted") {
+      return abortMessage(model);
+    }
     const response = (record.response ?? null) as ModelFixtureResponse | null;
+    if (response?.providerResponse && streamOptions?.onResponse) {
+      await streamOptions.onResponse(
+        { status: response.providerResponse.status, headers: { ...(response.providerResponse.headers ?? {}) } },
+        model,
+      );
+    }
     if (record.error !== undefined || response === null) {
-      const errorMessage =
-        record.error?.message ?? "replay fixture recorded an error without a message";
+      const errorMessage = record.error?.message ?? "replay fixture recorded an error without a message";
       return errorAssistantMessage(model, errorMessage, record.delayMs, record.usage);
     }
     // Citation replay: recorded provider stream events are delivered through
-    // the supplied hook only. The recorded chunks are passed exactly as
-    // captured, read-only.
+    // the supplied hook only, exactly as captured and read-only.
     if (streamOptions?.onProviderStreamEvent && response.providerStreamEvents) {
       for (const event of response.providerStreamEvents) {
         await streamOptions.onProviderStreamEvent(event, model);
@@ -251,14 +350,19 @@ function errorAssistantMessage(
 export interface PageTransportReplayOptions extends TransportReplayOptions {
   /** Configured aggregate byte bound; part of the fetch fixture request identity. */
   readonly maxResponseBytes: number;
+  /** Deterministic node derivation for the one shared page instance. */
+  readonly resolveNode: PageNodeResolver;
 }
 
 /**
- * Fail-closed page/catalogue transport replay below the real FetchClient.
- * Returns a chunked ReadableStream body so the client's incremental reads,
- * byte limits and cancellation run for real. Never performs network I/O.
+ * Fail-closed page/catalogue transport replay below the real FetchClient,
+ * serving every page node of a run through one shared instance. Returns a
+ * chunked ReadableStream body so the client's incremental reads, byte limits
+ * and cancellation run for real. Never performs network I/O.
  */
 export function createPageTransportReplay(options: PageTransportReplayOptions): PageTransport {
+  const bindings = options.bindings ?? [];
+  assertNoAmbiguousNodes(groupRecordsByRequest(options.store, bindings, "fetch"), options.scenario, "fetch");
   const occurrences = new Map<string, number>();
   const replay: PageTransport = async (url, request: PageTransportRequest) => {
     const fixtureRequest: FetchFixtureRequest = {
@@ -269,19 +373,30 @@ export function createPageTransportReplay(options: PageTransportReplayOptions): 
       proxyConfigured: request.proxy !== undefined,
       maxResponseBytes: options.maxResponseBytes,
     };
+    const resolution = options.resolveNode(fixtureRequest);
+    if ("ambiguous" in resolution) {
+      throw new ReplayMissError(
+        "ambiguous-node",
+        `Ambiguous page node derivation for scenario "${options.scenario}": ${resolution.detail}`,
+      );
+    }
     const requestJson = asJson(fixtureRequest);
-    const hash = requestSha256(requestJson, options.bindings ?? []);
+    const hash = requestSha256(requestJson, bindings);
     const occurrence = (occurrences.get(hash) ?? 0) + 1;
     occurrences.set(hash, occurrence);
     const key: FixtureKey = {
       boundary: "fetch",
       scenario: options.scenario,
-      operationNode: options.operationNode,
+      operationNode: resolution.operationNode,
       requestSha256: hash,
       occurrence,
     };
     const record = await options.store.lookup(key, requestJson);
-    await sleepWithSignal(record.delayMs, request.signal);
+    if ((await waitRecordedDelay(record.delayMs, request.signal)) === "aborted") {
+      const error = new Error("Transport replay aborted before the recorded response was delivered");
+      error.name = "AbortError";
+      throw error;
+    }
     if (record.error !== undefined) {
       const error = new Error(record.error.message);
       error.name = record.error.kind === "abort" ? "AbortError" : "FetchReplayError";
@@ -311,6 +426,73 @@ export function createPageTransportReplay(options: PageTransportReplayOptions): 
   return replay;
 }
 
+/**
+ * Builds a resolver that requires EXACTLY ONE rule to match. Zero or multiple
+ * matches return `ambiguous`, so an overlapping or incomplete rule set stops
+ * the block instead of picking by order.
+ */
+export function uniqueMatchModelResolver(
+  rules: ReadonlyArray<{
+    matches(request: Omit<ModelFixtureRequest, "role">): boolean;
+    operationNode: string;
+    role: ModelRole;
+  }>,
+): ModelNodeResolver {
+  return (request) => {
+    const hits = rules.filter((rule) => {
+      try {
+        return rule.matches(request);
+      } catch {
+        return false;
+      }
+    });
+    if (hits.length === 1) return { operationNode: hits[0]!.operationNode, role: hits[0]!.role };
+    return {
+      ambiguous: true,
+      detail: `${hits.length} resolver rules matched request (systemPrompt "${request.systemPrompt.slice(0, 40)}…", userMessage "${request.userMessage.slice(0, 40)}…")`,
+    };
+  };
+}
+
+/** Page-node variant of {@link uniqueMatchModelResolver}. */
+export function uniqueMatchPageResolver(
+  rules: ReadonlyArray<{ matches(request: FetchFixtureRequest): boolean; operationNode: string }>,
+): PageNodeResolver {
+  return (request) => {
+    const hits = rules.filter((rule) => {
+      try {
+        return rule.matches(request);
+      } catch {
+        return false;
+      }
+    });
+    if (hits.length === 1) return { operationNode: hits[0]!.operationNode };
+    return { ambiguous: true, detail: `${hits.length} resolver rules matched fetch request (${request.method} ${request.url})` };
+  };
+}
+
+/**
+ * Role inference by exact system-prompt match. The four pipeline roles use
+ * four distinct prompts (Observed in src/core/prompts.ts: SEARCH_SYSTEM_PROMPT,
+ * EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT, CACHE_SUGGEST_PROMPT),
+ * so the coordinator wires those constants here; the library itself stays
+ * host-neutral and takes the mapping as configuration. An unknown prompt
+ * yields `null` and the caller decides whether that is ambiguous.
+ */
+export function createRoleInferencer(byPrompt: {
+  readonly search: string;
+  readonly extract: string;
+  readonly collate: string;
+  readonly suggest: string;
+}): (systemPrompt: string) => ModelRole | null {
+  return (systemPrompt) => {
+    for (const [role, prompt] of Object.entries(byPrompt) as Array<[ModelRole, string]>) {
+      if (systemPrompt === prompt) return role;
+    }
+    return null;
+  };
+}
+
 function decodeBody(response: FetchFixtureResponse): Uint8Array {
   if (response.bodyBase64 !== undefined) return new Uint8Array(Buffer.from(response.bodyBase64, "base64"));
   if (response.bodyText !== undefined) return new TextEncoder().encode(response.bodyText);
@@ -324,7 +506,7 @@ function chunkedStream(bytes: Uint8Array, signal: AbortSignal | undefined): Read
   return new ReadableStream<Uint8Array>({
     pull(controller) {
       if (signal?.aborted) {
-        controller.error(abortError());
+        controller.error(abortStreamError());
         return;
       }
       if (offset >= bytes.length) {
@@ -339,4 +521,10 @@ function chunkedStream(bytes: Uint8Array, signal: AbortSignal | undefined): Read
       // Reader cancellation is honoured; nothing to clean up (no sockets).
     },
   });
+}
+
+function abortStreamError(): Error {
+  const error = new Error("Body replay aborted by request signal");
+  error.name = "AbortError";
+  return error;
 }

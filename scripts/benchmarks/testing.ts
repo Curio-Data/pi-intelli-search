@@ -111,3 +111,53 @@ export function forbidNetwork(test: { fail: (message: string) => void }): {
     calls: () => calls,
   };
 }
+
+// Deterministic content-derived resolvers for the committed synthetic
+// scenario "synthetic-codemode-dev": role from the exact per-role system
+// prompt (mirroring the real pipeline's role-distinct prompts), page nodes
+// from the source marker in the user message, fetch nodes from method/url/
+// accept. Shared by the benchmark fixture tests; the coordinator wires the
+// equivalent mapping from src/core/prompts.ts at integration.
+export const SYNTHETIC_ROLE_PROMPTS = {
+  search: "You are the synthetic search stage.",
+  extract: "You are the synthetic extraction stage.",
+  collate: "You are the synthetic collation stage.",
+  suggest: "You are the synthetic cache-suggestion stage.",
+} as const;
+
+export function syntheticModelResolver(): (
+  request: {
+    readonly systemPrompt: string;
+    readonly userMessage: string;
+  },
+) => { readonly operationNode: string; readonly role: "search" | "extract" | "collate" | "suggest" } | { readonly ambiguous: true; readonly detail: string } {
+  return (request) => {
+    const entry = Object.entries(SYNTHETIC_ROLE_PROMPTS).find(([, prompt]) => prompt === request.systemPrompt);
+    if (entry === undefined) {
+      return { ambiguous: true, detail: `unknown synthetic system prompt "${request.systemPrompt}"` };
+    }
+    const role = entry[0] as "search" | "extract" | "collate" | "suggest";
+    if (role === "extract") {
+      const match = /source (S\d+)/.exec(request.userMessage);
+      if (match === null) return { ambiguous: true, detail: "extract request without a source marker" };
+      return { operationNode: `research.extract/${match[1]}`, role };
+    }
+    const nodeByRole = { search: "research.search", collate: "research.collate", suggest: "suggest.judge" } as const;
+    return { operationNode: nodeByRole[role], role };
+  };
+}
+
+export function syntheticPageResolver(): (
+  request: { readonly url: string; readonly method: string; readonly accept: string },
+) => { readonly operationNode: string } | { readonly ambiguous: true; readonly detail: string } {
+  return (request) => {
+    if (request.url === "https://example.com/one" && request.method === "GET") {
+      if (request.accept.includes("markdown")) return { operationNode: "page.fetch/variant-markdown" };
+      return { operationNode: "page.fetch/variant-html" };
+    }
+    if (request.url === "https://example.com/llms-full.txt" && request.method === "HEAD") {
+      return { operationNode: "docs.discovery/probe" };
+    }
+    return { ambiguous: true, detail: `no synthetic page node for ${request.method} ${request.url}` };
+  };
+}

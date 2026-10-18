@@ -28,11 +28,19 @@ describe("payload sanitisation", () => {
     assert.equal(sanitised.messages[0]?.content, "hi");
   });
 
-  it("bounds inline base64/image data with byte markers", () => {
+  it("bounds inline base64/image data with byte markers, in values AND array elements", () => {
     const big = "A".repeat(1024);
     const sanitised = sanitiseProviderPayload({ image: big, short: "AAA" }) as Record<string, unknown>;
     assert.deepEqual(sanitised.image, { redacted: "inline-bytes", bytes: 1024 });
     assert.equal(sanitised.short, "AAA");
+    const withArray = sanitiseProviderPayload({ content: [{ type: "text", text: "ok" }, { type: "image", data: big }] }) as {
+      content: Array<Record<string, unknown>>;
+    };
+    assert.equal(withArray.content[0]?.text, "ok");
+    assert.deepEqual(withArray.content[1]?.data, { redacted: "inline-bytes", bytes: 1024 });
+    const bareArray = sanitiseProviderPayload([big, "short"]) as Json[];
+    assert.deepEqual(bareArray[0], { redacted: "inline-bytes", bytes: 1024 });
+    assert.equal(bareArray[1], "short");
   });
 
   it("keeps tool declarations exact and hashes them canonically", () => {
@@ -79,6 +87,24 @@ describe("request observer", () => {
       await observer.flush();
       assert.equal(observer.complete, true);
       assert.equal((await readFile(outPath, "utf8")).trim().split("\n").length, 3);
+    } finally {
+      await removeDir(dir);
+    }
+  });
+
+  it("serialises concurrent flushes without duplicating captures", async () => {
+    const dir = await scratchDir("observer");
+    try {
+      const observer = createRequestObserver({ outPath: join(dir, "requests.ndjson") });
+      captureProviderPayload(observer, { model: "m", n: 1 }, "assistant-1");
+      captureProviderPayload(observer, { model: "m", n: 2 }, "assistant-2");
+      captureProviderPayload(observer, { model: "m", n: 3 }, "assistant-3");
+      await Promise.all([observer.flush(), observer.flush(), observer.flush()]);
+      assert.equal(observer.complete, true);
+      const lines = (await readFile(join(dir, "requests.ndjson"), "utf8")).trim().split("\n");
+      assert.equal(lines.length, 3); // no duplicated batches
+      const sequences = lines.map((line) => (JSON.parse(line) as { sequence: number }).sequence);
+      assert.deepEqual(sequences, [1, 2, 3]);
     } finally {
       await removeDir(dir);
     }
@@ -264,5 +290,55 @@ describe("parseUsageEvents canonical populations", () => {
     const parsed = parseUsageEvents(events, "json");
     assert.equal(parsed.assistantMessages.length, 2);
     assert.notEqual(parsed.assistantMessages[0]?.id, parsed.assistantMessages[1]?.id);
+  });
+});
+
+describe("pipeline population restriction and unknown preservation (R2)", () => {
+  it("keeps bash, codemode and other tools out of the pipeline population and missing list", () => {
+    const events: Json[] = [
+      { type: "tool_execution_end", toolCallId: "b1", toolName: "bash", result: { output: "ok" }, isError: false },
+      { type: "tool_execution_end", toolCallId: "cm1", toolName: "codemode", result: { content: [] }, isError: false },
+      { type: "tool_execution_end", toolCallId: "rd1", toolName: "read", result: { content: [] }, isError: false },
+      // codemode parent with nested intelli calls carrying real accounting
+      toolEnd("cm1/nested-1", accounting(2), "cm1"),
+      // direct intelli call whose accounting was lost: expected observation missing
+      toolEnd("intelli-direct", null),
+    ];
+    const parsed = parseUsageEvents(events, "json");
+    assert.deepEqual(parsed.toolMessages.map((tool) => tool.toolCallId), ["cm1/nested-1", "intelli-direct"]);
+    assert.equal(parsed.toolMessages[0]?.parentToolCallId, "cm1");
+    assert.equal(parsed.toolMessages[0]?.accounting?.attempts, 2);
+    assert.deepEqual(parsed.missing, ["intelli-direct"]);
+  });
+
+  it("accepts renamed/MCP intelli registrations recognised by their result marker", () => {
+    const events: Json[] = [
+      {
+        type: "tool_execution_end",
+        toolCallId: "mcp-1",
+        toolName: "mcp__fixtures__research",
+        result: { content: [], structuredContent: { accounting: accounting(5) } },
+        isError: false,
+      },
+    ];
+    const parsed = parseUsageEvents(events, "json");
+    assert.equal(parsed.toolMessages.length, 1);
+    assert.equal(parsed.toolMessages[0]?.accounting?.attempts, 5);
+  });
+
+  it("keeps an absent input field unknown instead of inventing a zero uncached value", () => {
+    // Malformed record: cache/output reported, input absent. The H1 primary
+    // endpoint (inputUncached) must stay unknown, not zero.
+    const tokens = tokensFromWireUsage({ cacheRead: 800, output: 40 });
+    assert.equal("inputUncached" in (tokens ?? {}), false);
+    assert.equal("inputTotal" in (tokens ?? {}), false);
+    assert.equal(tokens?.outputTotal, 40);
+    assert.equal(tokens?.cacheRead, 800);
+  });
+
+  it("keeps explicit zeros as reported values", () => {
+    const tokens = tokensFromWireUsage({ input: 0, cacheRead: 0, cacheWrite: 0, output: 0, totalTokens: 0 });
+    assert.equal(tokens?.inputUncached, 0);
+    assert.equal(tokens?.inputTotal, 0);
   });
 });

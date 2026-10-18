@@ -7,7 +7,7 @@
 // is assumed (runs are sequential per series); the writer appends one
 // canonical JSON line per observation and fsyncs before returning.
 
-import { mkdir, open } from "node:fs/promises";
+import { mkdir, open, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { canonicalJson, sha256Text } from "./canonical.js";
 import type { Json, RunObservation } from "./contracts.js";
@@ -68,8 +68,14 @@ export function validateRunObservation(record: RunObservation): void {
   if (!Number.isInteger(record.order) || record.order < 1) {
     throw new InvalidRunObservationError("RunObservation.order must be a positive integer");
   }
-  if (!Number.isInteger(record.seed) || record.seed < 0) {
-    throw new InvalidRunObservationError("RunObservation.seed must be a nonnegative integer");
+  if (!Number.isInteger(record.seed) || record.seed < 0 || record.seed > 0xffffffff) {
+    throw new InvalidRunObservationError("RunObservation.seed must be an integer in [0, 4294967295]");
+  }
+  if ((record.status === "failed" || record.status === "aborted") && (typeof record.error !== "string" || record.error === "")) {
+    throw new InvalidRunObservationError(`RunObservation.error is required for status "${record.status}"`);
+  }
+  if (record.rerunOf !== undefined && (typeof record.rerunReason !== "string" || record.rerunReason === "")) {
+    throw new InvalidRunObservationError("RunObservation.rerunReason is required when rerunOf names the prior run");
   }
   if (typeof record.effectiveSettings !== "object" || record.effectiveSettings === null) {
     throw new InvalidRunObservationError("RunObservation.effectiveSettings must be a JSON object");
@@ -94,7 +100,9 @@ export function validateRunObservation(record: RunObservation): void {
  * Appends one immutable observation to `<root>/observations.ndjson` and
  * returns the file path plus the sha256 of the appended line. The file is
  * created (with parent directories) if absent; existing content is never
- * rewritten, truncated or reordered. The write is a single append of one
+ * rewritten, truncated or reordered. A `runId` that already appears in the
+ * file is rejected: one run has one immutable observation (a technical rerun
+ * uses a new runId with `rerunOf`). The write is a single append of one
  * complete line followed by fsync.
  */
 export async function appendRunObservation(
@@ -104,6 +112,15 @@ export async function appendRunObservation(
   validateRunObservation(record);
   await mkdir(root, { recursive: true });
   const path = join(root, OBSERVATIONS_FILENAME);
+  const existing = await readExistingObservations(path);
+  for (const line of existing) {
+    const prior = JSON.parse(line) as { runId?: unknown };
+    if (prior.runId === record.runId) {
+      throw new InvalidRunObservationError(
+        `RunObservation.runId "${record.runId}" already recorded in ${path}; observations are immutable (use a new runId with rerunOf)`,
+      );
+    }
+  }
   const line = `${canonicalJson(record as unknown as Json)}\n`;
   const handle = await open(path, "a");
   try {
@@ -113,4 +130,24 @@ export async function appendRunObservation(
     await handle.close();
   }
   return { path, sha256: sha256Text(line) };
+}
+
+/** Reads prior observation lines; a missing or empty file starts a new manifest. */
+async function readExistingObservations(path: string): Promise<string[]> {
+  let text: string;
+  try {
+    text = await readFile(path, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  const lines = text.split("\n").filter((line) => line.trim() !== "");
+  for (const line of lines) {
+    try {
+      JSON.parse(line);
+    } catch {
+      throw new InvalidRunObservationError(`Existing observations file ${path} contains a corrupt line and cannot be appended to`);
+    }
+  }
+  return lines;
 }

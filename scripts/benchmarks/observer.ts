@@ -31,15 +31,22 @@ function looksLikeBase64(text: string): boolean {
   return text.length >= BASE64_MIN_LENGTH && /^[A-Za-z0-9+/=\r\n]+$/.test(text);
 }
 
+/** Redacts a string value that looks like inline base64/image data, keeping its size. */
+function redactString(text: string): Json {
+  return looksLikeBase64(text) ? { redacted: "inline-bytes", bytes: text.length } : text;
+}
+
 /**
  * Sanitises a provider request payload for observation: drops sensitive
  * header-like keys anywhere in the object, replaces inline base64/image data
- * with bounded byte-size markers, and leaves every other value exact.
- * Sanitisation is read-only evidence preparation; it never produces a payload
- * replacement for dispatch.
+ * with bounded byte-size markers (in object values AND array elements), and
+ * leaves every other value exact. Sanitisation is read-only evidence
+ * preparation; it never produces a payload replacement for dispatch.
  */
 export function sanitiseProviderPayload(payload: unknown, path = "$"): Json {
-  if (payload === null || typeof payload === "string" || typeof payload === "boolean") return payload as Json;
+  if (payload === null) return null;
+  if (typeof payload === "string") return redactString(payload) as Json;
+  if (typeof payload === "boolean") return payload;
   if (typeof payload === "number") {
     if (!Number.isFinite(payload)) return null;
     return payload;
@@ -55,8 +62,8 @@ export function sanitiseProviderPayload(payload: unknown, path = "$"): Json {
       continue;
     }
     const value = payload[key];
-    if (typeof value === "string" && looksLikeBase64(value)) {
-      out[key] = { redacted: "inline-bytes", bytes: value.length };
+    if (typeof value === "string") {
+      out[key] = redactString(value);
       continue;
     }
     out[key] = sanitiseProviderPayload(value, `${path}.${key}`);
@@ -103,6 +110,10 @@ export function createRequestObserver(options: RequestObserverOptions): FileRequ
   let flushed = 0;
   let captured = 0;
   let complete = true; // nothing captured yet: everything captured is flushed
+  // Flushes are serialised: each flush swaps its batch out synchronously and
+  // chains onto the previous append, so concurrent callers never duplicate a
+  // batch or interleave partial lines.
+  let flushChain: Promise<void> = Promise.resolve();
   const observer: FileRequestObserver = {
     outPath: options.outPath,
     get captured() {
@@ -133,18 +144,36 @@ export function createRequestObserver(options: RequestObserverOptions): FileRequ
         complete = flushed === captured;
         return;
       }
-      await mkdir(dirname(options.outPath), { recursive: true });
-      const handle = await open(options.outPath, "a");
+      const batch = buffer.splice(0, buffer.length);
+      const append = async (): Promise<void> => {
+        await mkdir(dirname(options.outPath), { recursive: true });
+        const handle = await open(options.outPath, "a");
+        try {
+          const chunk = batch.map((record) => canonicalJson(record)).join("\n");
+          await handle.appendFile(chunk.endsWith("\n") ? chunk : `${chunk}\n`, "utf8");
+          await handle.sync();
+        } finally {
+          await handle.close();
+        }
+        flushed += batch.length;
+        complete = flushed === captured;
+      };
+      const previous = flushChain;
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      flushChain = gate;
+      await previous;
       try {
-        const chunk = buffer.map((record) => canonicalJson(record)).join("\n");
-        await handle.appendFile(chunk.endsWith("\n") ? chunk : `${chunk}\n`, "utf8");
-        await handle.sync();
+        await append();
+      } catch (error) {
+        // Keep unsaved captures buffered (in order) so a retry can flush them.
+        buffer.unshift(...batch);
+        throw error;
       } finally {
-        await handle.close();
+        release();
       }
-      flushed += buffer.length;
-      buffer.length = 0;
-      complete = flushed === captured;
     },
   };
   return observer;

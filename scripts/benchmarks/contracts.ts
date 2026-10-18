@@ -226,3 +226,18 @@ export const proofEstimatePairedQueries: MutuallyAssignable<EstimatePairedQuerie
 export const proofBootstrapPairedQueries: MutuallyAssignable<BootstrapPairedQueries, typeof frozenBootstrapPairedQueries> = true;
 export const proofParseUsageEvents: MutuallyAssignable<ParseUsageEvents, typeof frozenParseUsageEvents> = true;
 export const proofAppendRunObservation: MutuallyAssignable<AppendRunObservation, typeof frozenAppendRunObservation> = true;
+
+// ---------------------------------------------------------------------------
+// Implementation proofs: the actual function implementations must stay
+// mutually assignable with the frozen signatures above (not just the locally
+// declared function types). Drift in either direction is a compile error.
+// ---------------------------------------------------------------------------
+
+import type * as Parsers from "./usage-parser.js";
+import type * as Runs from "./run-observation.js";
+import type * as Stats from "./statistics.js";
+
+export const proofEstimatePairedQueriesImpl: MutuallyAssignable<typeof Stats.estimatePairedQueries, EstimatePairedQueries> = true;
+export const proofBootstrapPairedQueriesImpl: MutuallyAssignable<typeof Stats.bootstrapPairedQueries, BootstrapPairedQueries> = true;
+export const proofParseUsageEventsImpl: MutuallyAssignable<typeof Parsers.parseUsageEvents, ParseUsageEvents> = true;
+export const proofAppendRunObservationImpl: MutuallyAssignable<typeof Runs.appendRunObservation, AppendRunObservation> = true;

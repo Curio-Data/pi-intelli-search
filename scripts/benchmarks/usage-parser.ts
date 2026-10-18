@@ -7,11 +7,16 @@
 // - Main-model usage comes ONLY from assistant messages in `message_end`
 //   session events. Each distinct assistant message is counted once; exact
 //   duplicates (repeats of the same finalised message) never double count.
-// - Pipeline usage comes ONCE per canonical tool result: `tool_execution_end`
-//   events keyed by toolCallId, carrying the extension's AccountingSummary in
-//   structuredContent (R2 native shape) or details.intelli (legacy shape).
-//   Nested tool calls (parentToolCallId set) are distinct canonical results
-//   and count once each under their own id.
+// - Pipeline usage comes ONCE per canonical intelli tool result: an
+//   `tool_execution_end` event whose toolName is one of the registered
+//   intelli tools (directly or through an MCP/renamed registration) OR whose
+//   result carries an intelli AccountingSummary marker. `bash`, `read`,
+//   `edit`, the `codemode` script tool and every other non-intelli execution
+//   is outside the pipeline population entirely, so `missing` keeps its
+//   meaning: an EXPECTED observation (an intelli result that lost its
+//   accounting, or an assistant message without usage) is absent. Nested
+//   intelli calls (parentToolCallId set) are distinct canonical results and
+//   count once each under their own id.
 // - `turn_end` (whose message and toolResults repeat finalised results),
 //   `agent_end.messages`, compaction events and RPC protocol records are not
 //   populations: they never enter the sums. This implements "never repeat
@@ -49,11 +54,15 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Maps a pi-ai Usage wire object to the canonical TokenObservation:
- * inputTotal includes cached prompt tokens, inputUncached excludes them
- * (pi-ai `input` is uncached; cacheRead/cacheWrite are the cached subsets),
- * reasoning is a subset of output and never an extra total, totalTokens is
- * preserved without being added to components (C16).
+ * Maps a pi-ai Usage wire object to the canonical TokenObservation,
+ * preserving genuinely missing fields as unknown instead of inventing zeros
+ * (the H1 primary endpoint is `inputUncached`): `inputUncached` is present
+ * only when the wire reports `input`; `inputTotal` (which includes cached
+ * prompt tokens, C16) is present only when input is reported (absent cache
+ * subsets read as the zeros pi-ai's required fields imply). `reasoning` is a
+ * subset of output and never an extra total; `totalTokens` is preserved
+ * without being added to components. Explicit zeros are reported values and
+ * are kept.
  */
 export function tokensFromWireUsage(usage: unknown): TokenObservation | null {
   if (!isJsonObject(usage)) return null;
@@ -75,8 +84,9 @@ export function tokensFromWireUsage(usage: unknown): TokenObservation | null {
     return null;
   }
   return {
-    inputTotal: (rawInput ?? 0) + (rawCacheRead ?? 0) + (rawCacheWrite ?? 0),
-    inputUncached: rawInput ?? 0,
+    ...(rawInput !== undefined
+      ? { inputTotal: rawInput + (rawCacheRead ?? 0) + (rawCacheWrite ?? 0), inputUncached: rawInput }
+      : {}), // input unreported: uncached input and its total stay unknown
     ...(output !== undefined ? { outputTotal: output } : {}),
     ...(rawCacheRead !== undefined ? { cacheRead: rawCacheRead } : {}),
     ...(rawCacheWrite !== undefined ? { cacheWrite: rawCacheWrite } : {}),
@@ -85,6 +95,15 @@ export function tokensFromWireUsage(usage: unknown): TokenObservation | null {
     ...(totalTokens !== undefined ? { totalTokens } : {}),
   };
 }
+
+/** Registered intelli tool names (native); MCP/renamed registrations are recognised by their result marker. */
+const INTELLI_TOOL_NAMES = new Set([
+  "intelli_search",
+  "intelli_extract",
+  "intelli_collate",
+  "intelli_research",
+  "intelli_fetch",
+]);
 
 /** Minimal structural validation of an intelli AccountingSummary payload. */
 export function accountingFromToolResult(result: unknown): AccountingSummary | null {
@@ -102,6 +121,15 @@ export function accountingFromToolResult(result: unknown): AccountingSummary | n
   if (typeof attempts !== "number" || !Number.isInteger(attempts) || attempts < 0) return null;
   if (!isJsonObject(tokens)) return null;
   return candidate as unknown as AccountingSummary;
+}
+
+/** True when a tool execution belongs to the intelli pipeline population. */
+export function isIntelliToolExecution(toolName: unknown, result: unknown): boolean {
+  if (typeof toolName === "string" && INTELLI_TOOL_NAMES.has(toolName)) return true;
+  // Renamed/MCP registrations and codemode-script calls carry the intelli
+  // accounting marker in their result; the codemode parent tool itself does
+  // not (its usage field is host aggregation, not an intelli summary).
+  return accountingFromToolResult(result) !== null;
 }
 
 function assistantId(message: Record<string, unknown>, usedIds: Set<string>): string {
@@ -156,8 +184,16 @@ export function parseUsageEvents(events: readonly Json[], mode: "json" | "rpc"):
     if (type === "tool_execution_end") {
       const toolCallId = event["toolCallId"];
       if (typeof toolCallId !== "string" || toolCallId === "") continue;
+      const toolName = event["toolName"];
+      const result = event["result"];
+      if (!isIntelliToolExecution(toolName, result)) {
+        // Non-intelli executions (bash, read, edit, codemode, unrelated
+        // extensions) are not pipeline observations and never enter
+        // `missing`.
+        continue;
+      }
       const parent = event["parentToolCallId"];
-      const accounting = accountingFromToolResult(event["result"]);
+      const accounting = accountingFromToolResult(result);
       const observation: ToolObservation = {
         toolCallId,
         ...(typeof parent === "string" && parent !== "" ? { parentToolCallId: parent } : {}),

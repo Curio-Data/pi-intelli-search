@@ -10,6 +10,7 @@ import {
   ReplayMissError,
   createFixtureRecorder,
   createReplayStore,
+  fixtureFileSha256,
   loadFixtureFile,
   loadReplayStore,
   saveFixtureFile,
@@ -226,4 +227,124 @@ describe("fixture file verification", () => {
     const raw = JSON.parse(await readFile("scripts/benchmarks/fixtures/synthetic-codemode-dev-model.json", "utf8"));
     assert.equal(raw.schemaVersion, 1);
   });
+
+  it("rejects out-of-order occurrence consumption (L4)", async () => {
+    const { recorder } = recordedStore();
+    const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
+    const request = { query: "identical request" };
+    await assert.rejects(
+      () => store.lookup(key("node.search", requestSha256(request), 2), request),
+      (error: unknown) => error instanceof ReplayMissError && error.reason === "out-of-order",
+    );
+    // In-order service still works afterwards for occurrence 1.
+    const first = await store.lookup(key("node.search", requestSha256(request), 1), request);
+    assert.equal((first.response as { text: string }).text, "one");
+    const second = await store.lookup(key("node.search", requestSha256(request), 2), request);
+    assert.equal((second.response as { text: string }).text, "two");
+  });
+
+  it("rejects non-integer occurrences at load time (R4)", async () => {
+    const { recorder } = recordedStore();
+    const file = recorder.toFile();
+    const broken: FixtureFile = {
+      ...file,
+      fixtures: [{ ...file.fixtures[0]!, key: { ...file.fixtures[0]!.key, occurrence: 1.5 } }],
+    };
+    const path = await tempCopy(broken);
+    await assert.rejects(() => loadFixtureFile(path), InvalidFixtureFileError);
+  });
+
+  it("verifies the whole record payload: usage, error and delay tampering fail (R4)", async () => {
+    const { recorder } = recordedStore();
+    const file = recorder.toFile();
+    // Tampered usage tokens without updating contentSha256.
+    const usageTampered: FixtureFile = {
+      ...file,
+      fixtures: [{ ...file.fixtures[0]!, usage: { tokens: { inputTotal: 999999 }, source: "provider-response", costBasis: "reported" } }],
+    };
+    await assert.rejects(() => verifyOnly(usageTampered), InvalidFixtureFileError);
+    // Tampered delay (timing drives replay).
+    const delayTampered: FixtureFile = {
+      ...file,
+      fixtures: [{ ...file.fixtures[0]!, delayMs: 99999 }],
+    };
+    await assert.rejects(() => verifyOnly(delayTampered), InvalidFixtureFileError);
+    // A retryable 429 rewritten as a non-finite error kind/message is caught by
+    // the whole-record digest as soon as the error bytes change.
+    const { recorder: errRecorder } = recordedStore();
+    errRecorder.record("node.retry", { q: 1 }, { error: { kind: "rate-limit", message: "429 Too Many Requests" }, delayMs: 0 });
+    const errFile = errRecorder.toFile();
+    const errorTampered: FixtureFile = {
+      ...errFile,
+      fixtures: [{ ...errFile.fixtures[errFile.fixtures.length - 1]!, error: { kind: "bad-request", message: "400 permanent" } }],
+    };
+    await assert.rejects(() => verifyOnly(errorTampered), InvalidFixtureFileError);
+  });
+
+  it("rejects bindings that wildcard frozen request fields (L2)", async () => {
+    const recorder = createFixtureRecorder({
+      boundary: "model",
+      scenario: SCENARIO,
+      bindings: [{ name: "$prompt", paths: ["userMessage"] }],
+    });
+    recorder.record("n", { userMessage: "anything at all", maxTokens: 1 }, { response: { text: "x" }, delayMs: 0 });
+    await assert.rejects(() => verifyOnly(recorder.toFile()), InvalidFixtureFileError);
+
+    const fetchRecorder = createFixtureRecorder({
+      boundary: "fetch",
+      scenario: SCENARIO,
+      bindings: [{ name: "$url", paths: ["url"] }],
+    });
+    fetchRecorder.record("n", { url: "https://example.com/x", method: "GET" }, { response: { status: 200 }, delayMs: 0 });
+    await assert.rejects(() => verifyOnly(fetchRecorder.toFile()), InvalidFixtureFileError);
+  });
+
+  it("rejects structurally malformed files with InvalidFixtureFileError (R4)", async () => {
+    const dir = await scratchDir("store");
+    try {
+      for (const [name, content] of [
+        ["null.json", "null"],
+        ["array.json", "[]"],
+        ["string.json", "\"not a file\""],
+        ["no-fixtures.json", JSON.stringify({ schemaVersion: 1, kind: "intelli-benchmark-fixtures", scenario: "s" })],
+      ] as const) {
+        const path = join(dir, name);
+        await writeFile(path, content, "utf8");
+        await assert.rejects(() => loadFixtureFile(path), InvalidFixtureFileError, name);
+      }
+    } finally {
+      await removeDir(dir);
+    }
+  });
+
+  it("exposes a verified whole-file canonical digest (R4)", () => {
+    const { recorder } = recordedStore();
+    const file = recorder.toFile();
+    const digest = fixtureFileSha256(file);
+    assert.match(digest, /^[0-9a-f]{64}$/);
+    assert.equal(digest, fixtureFileSha256(file));
+    // A semantically different but still-valid file (different recorded
+    // delay) produces a different digest: fixtureSha256 pins content.
+    const other = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
+    other.record("node.search", { query: "identical request" }, { response: { text: "one" }, delayMs: 7 });
+    assert.notEqual(digest, fixtureFileSha256(other.toFile()));
+    // An invalid file (tampered usage) has no digest: verification gates it.
+    const tampered: FixtureFile = {
+      ...file,
+      fixtures: [{ ...file.fixtures[0]!, usage: { tokens: { inputTotal: 999999 }, source: "provider-response", costBasis: "reported" } }],
+    };
+    assert.throws(() => fixtureFileSha256(tampered), InvalidFixtureFileError);
+  });
 });
+
+async function verifyOnly(file: FixtureFile): Promise<void> {
+  // Loads through the same verification path without touching disk state.
+  const dir = await scratchDir("store");
+  try {
+    const path = join(dir, "verify.json");
+    await saveFixtureFile(path, file);
+  } finally {
+    await removeDir(dir);
+  }
+}
+

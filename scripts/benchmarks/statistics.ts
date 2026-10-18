@@ -27,6 +27,51 @@ export class DuplicateCellError extends Error {
   }
 }
 
+export class InvalidPopulationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidPopulationError";
+  }
+}
+
+/** Maximum seed: mulberry32 operates on the unsigned 32-bit range, so larger seeds would alias smaller ones. */
+export const MAX_SEED = 0xffffffff;
+
+function validatePopulation(population: { readonly queryIds: readonly string[]; readonly repeats: readonly number[] }): void {
+  if (!Array.isArray(population.queryIds) || population.queryIds.length === 0) {
+    throw new InvalidPopulationError("population.queryIds must be a nonempty array");
+  }
+  const seenQueries = new Set<string>();
+  for (const queryId of population.queryIds) {
+    if (typeof queryId !== "string" || queryId === "") {
+      throw new InvalidPopulationError(`population query id must be a nonempty string, got ${JSON.stringify(queryId)}`);
+    }
+    if (seenQueries.has(queryId)) {
+      throw new DuplicateCellError(`Duplicate population query id "${queryId}": the analysis unit would be double-weighted`);
+    }
+    seenQueries.add(queryId);
+  }
+  if (!Array.isArray(population.repeats) || population.repeats.length === 0) {
+    throw new InvalidPopulationError("population.repeats must be a nonempty array");
+  }
+  const seenRepeats = new Set<number>();
+  for (const repeat of population.repeats) {
+    if (typeof repeat !== "number" || !Number.isInteger(repeat) || repeat < 1) {
+      throw new InvalidPopulationError(`population repeat must be a positive integer, got ${JSON.stringify(repeat)}`);
+    }
+    if (seenRepeats.has(repeat)) {
+      throw new DuplicateCellError(`Duplicate population repeat ${repeat}: paired cells would be double-weighted`);
+    }
+    seenRepeats.add(repeat);
+  }
+}
+
+function validateSeed(seed: number): void {
+  if (typeof seed !== "number" || !Number.isInteger(seed) || seed < 0 || seed > MAX_SEED) {
+    throw new InvalidPopulationError(`seed must be an integer in [0, ${MAX_SEED}] so the echoed seed is the seed used, got ${JSON.stringify(seed)}`);
+  }
+}
+
 function cellValue(sample: QuerySample, endpoint: Endpoint): number | null {
   if (!sample.valid) return null;
   const value = sample[endpoint];
@@ -55,6 +100,7 @@ export function estimatePairedQueries(
   endpoint: Endpoint,
   population: { readonly queryIds: readonly string[]; readonly repeats: readonly number[] },
 ): PairedEstimate {
+  validatePopulation(population);
   const cells = new Map<string, QuerySample>();
   for (const sample of samples) {
     if (sample.arm !== control && sample.arm !== treatment) continue;
@@ -140,20 +186,74 @@ function percentile(sorted: readonly number[], quantile: number): number {
   return sorted[lower]! * (1 - weight) + sorted[upper]! * weight;
 }
 
+/** The expected paired population an estimate was computed against. */
+export interface ExpectedPopulation {
+  readonly queryIds: readonly string[];
+  readonly repeats: readonly number[];
+}
+
+/**
+ * True when every expected query/repeat cell produced a valid pair and every
+ * query mean is ratio-usable, so the prespecified PRIMARY inference (the H1
+ * log-ratio claim) is available. An incomplete population (any missing cell,
+ * any nonpositive query mean, any expected query absent from the pairs)
+ * makes the primary claim unavailable; complete-case estimates remain
+ * diagnostic only and must be labelled as such by the caller (common METHOD,
+ * "a primary benefit claim is unavailable when its prespecified valid-pair
+ * population is incomplete").
+ */
+export function primaryAvailable(estimate: PairedEstimate, population: ExpectedPopulation): boolean {
+  validatePopulation(population);
+  if (estimate.missingQueries.length > 0) return false;
+  if (estimate.undefinedRatioQueries.length > 0) return false;
+  const expectedRepeats = population.repeats.length;
+  const pairsByQuery = new Map(estimate.pairs.map((pair) => [pair.queryId, pair]));
+  for (const queryId of population.queryIds) {
+    const pair = pairsByQuery.get(queryId);
+    if (pair === undefined) return false;
+    if (pair.pairedRepeats !== expectedRepeats) return false;
+  }
+  return true;
+}
+
 /**
  * Query-clustered bootstrap over the paired estimate. Resamples whole query
  * pairs together; the metric selects log-ratio (undefined when any query mean
  * is nonpositive) or difference statistics. Returns null bounds when fewer
  * than two evaluable query clusters exist: a degenerate small sample is not
  * power evidence.
+ *
+ * Primary-inference guard: when `population` is supplied and the estimate's
+ * prespecified valid-pair population is incomplete (see
+ * {@link primaryAvailable}), the interval bounds are returned as null unless
+ * the caller explicitly passes `diagnostic: true`, labelling the run a
+ * complete-case diagnostic rather than a primary inference. Without a
+ * `population`, the interval is always a complete-case diagnostic; callers
+ * making primary claims must supply the population.
  */
 export function bootstrapPairedQueries(
   estimate: PairedEstimate,
-  options: { readonly seed: number; readonly draws: number; readonly confidence: number; readonly metric: "log-ratio" | "difference" },
+  options: {
+    readonly seed: number;
+    readonly draws: number;
+    readonly confidence: number;
+    readonly metric: "log-ratio" | "difference";
+    /** Expected analysis population; supplies the primary-availability guard. */
+    readonly population?: ExpectedPopulation;
+    /** Explicitly labels this bootstrap a complete-case diagnostic. */
+    readonly diagnostic?: boolean;
+  },
 ): { readonly lower: number | null; readonly upper: number | null; readonly draws: number; readonly seed: number } {
   const { seed, draws, confidence, metric } = options;
   if (!Number.isInteger(draws) || draws < 1) throw new Error("draws must be a positive integer");
   if (!(confidence > 0 && confidence < 1)) throw new Error("confidence must lie strictly between 0 and 1");
+  validateSeed(seed);
+  if (options.population !== undefined && !options.diagnostic && !primaryAvailable(estimate, options.population)) {
+    // The primary inference is unavailable with an incomplete population;
+    // null bounds make the unavailability explicit instead of silently
+    // substituting a complete-case interval.
+    return { lower: null, upper: null, draws, seed };
+  }
   if (estimate.pairs.length < 2) return { lower: null, upper: null, draws, seed };
   if (metric === "log-ratio" && estimate.undefinedRatioQueries.length > 0) {
     // The ratio and its interval are unavailable when any query mean is
