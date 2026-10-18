@@ -12,6 +12,7 @@
     "core-operations.test.ts",
     "core-llm.test.ts",
     "core-scoped-policy.test.ts",
+    "core-operation-runtime.test.ts",
     "scoped-adapters.test.ts",
     "native-usage.test.ts",
     "core-cache.test.ts",
