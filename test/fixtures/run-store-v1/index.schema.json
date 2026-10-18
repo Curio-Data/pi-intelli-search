@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "intelli-v1/index@1",
+  "type": "object",
+  "required": [
+    "schema",
+    "schemaVersion",
+    "namespaceId",
+    "entries"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "intelli-v1/index"
+    },
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "namespaceId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "runId",
+          "sequence",
+          "compatibilityKey",
+          "query",
+          "startedUtc",
+          "manifestSha256"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "compatibilityKey": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "query": {
+            "type": "string"
+          },
+          "startedUtc": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+          },
+          "manifestSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

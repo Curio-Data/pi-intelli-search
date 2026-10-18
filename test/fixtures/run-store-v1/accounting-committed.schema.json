@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "intelli-v1/accounting-committed@1",
+  "type": "object",
+  "required": [
+    "schema",
+    "schemaVersion",
+    "namespaceId",
+    "runId",
+    "manifestSha256",
+    "file"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "intelli-v1/accounting-committed"
+    },
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "namespaceId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+    },
+    "manifestSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "file": {
+      "type": "object",
+      "required": [
+        "relativePath",
+        "bytes",
+        "sha256"
+      ],
+      "properties": {
+        "relativePath": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}(/[A-Za-z0-9_][A-Za-z0-9._-]{0,127}){0,3}$",
+          "maxLength": 512
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
