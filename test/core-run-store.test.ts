@@ -7,6 +7,7 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { createHash } from "node:crypto";
 import {
   appendFile,
   lstat,
@@ -24,7 +25,12 @@ import type {
   Diagnostic,
   RunReservation,
 } from "../src/core/execution-contracts.js";
-import { createRunStore, createRunStoreWithHooks, type FaultPoint } from "../src/core/run-store.js";
+import {
+  createRunStore,
+  createRunStoreWithHooks,
+  rebuildRunIndex,
+  type FaultPoint,
+} from "../src/core/run-store.js";
 import { acquireWriterLock, loadNativeLockBinding } from "../src/core/run-lock.js";
 import {
   ACCOUNTING_FILE,
@@ -833,8 +839,26 @@ describe("C23 journal validation fails closed", () => {
     assert.equal((await journalRecords(root)).length, 1, "no admission after cancellation");
   });
 
-  it("an identity with no admissions but no runs/ completes initialisation; with admissions it is damage", async () => {
-    const root = await scratchRoot("init-incomplete");
+  async function treeSnapshot(root: string): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    async function walk(dir: string) {
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        const key = path.slice(root.length);
+        // Lock infrastructure, not evidence: the permanent lockfile and the
+        // diagnostic owner file are created/rewritten by every acquisition.
+        if (entry.name === LOCK_FILE || entry.name === "writer.owner.json") continue;
+        if (entry.isDirectory()) {
+          out.set(key, "dir");
+          await walk(path);
+        } else out.set(key, entry.isFile() ? sha256Of(await readFile(path)) : "link");
+      }
+    }
+    await walk(root);
+    return out;
+  }
+  const sha256Of = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+  async function bareIdentity(root: string, withRuns: boolean): Promise<string> {
     const dir = join(root, NAMESPACE_DIR);
     await mkdir(dir);
     await writeFile(join(dir, JOURNAL_FILE), "");
@@ -847,23 +871,17 @@ describe("C23 journal validation fails closed", () => {
         createdUtc: START,
       }),
     );
-    const diagnostics: Diagnostic[] = [];
-    const store = createRunStore(storeOptions(root, { diagnostics }));
-    for (const expected of [1, 2]) {
-      const result = await store.allocate({
-        operationId: `op${expected}`,
-        query: `q${expected}`,
-        startedUtc: START,
-        signal: never,
-      });
-      assert.equal(
-        result.status === "allocated" && result.reservation.sequence,
-        expected,
-        JSON.stringify(result),
-      );
-    }
-    assert.ok(diagnostics.some((d) => d.code === "NAMESPACE_INIT_COMPLETED"));
-    assert.equal((await readNamespace(dir))?.namespaceId, "a".repeat(32), "identity preserved");
+    if (withRuns) await mkdir(join(dir, RUNS_DIR));
+    return dir;
+  }
+
+  it("an identity without runs/ fails closed even with an empty journal and creates nothing", async () => {
+    const root = await scratchRoot("identity-no-runs");
+    await bareIdentity(root, false);
+    const before = await treeSnapshot(root);
+    await expectUnavailable(root, "RUNS_MISSING");
+    await expectUnavailable(root, "RUNS_MISSING");
+    assert.deepEqual(await treeSnapshot(root), before, "no runs/ or other file created");
 
     const damaged = await damagedRoot("runs-removed");
     const { rename } = await import("node:fs/promises");
@@ -874,6 +892,62 @@ describe("C23 journal validation fails closed", () => {
     await rename(join(linked, NAMESPACE_DIR, RUNS_DIR), join(linked, "real-runs"));
     await symlink(join(linked, "real-runs"), join(linked, NAMESPACE_DIR, RUNS_DIR));
     await expectUnavailable(linked, "RUNS_INVALID");
+  });
+
+  it("a valid prior index with a truncated journal and removed runs never reissues sequence 1 or deletes evidence", async () => {
+    const root = await scratchRoot("reissue-guard");
+    const store = createRunStore(storeOptions(root));
+    const first = await allocated(store, "first");
+    assert.equal(first.sequence, 1);
+    const committed = await store.commit(first, artifactsFor("first"), never);
+    assert.equal(committed.status, "committed");
+    if (committed.status !== "committed") return;
+    assert.equal(await store.updateIndex(committed.run, "first", never), "updated");
+    const dir = join(root, NAMESPACE_DIR);
+    // Foreign damage: journal truncated to zero bytes, runs/ moved out of the namespace.
+    await truncate(join(dir, JOURNAL_FILE), 0);
+    const { rename } = await import("node:fs/promises");
+    await rename(join(dir, RUNS_DIR), join(root, "removed-runs"));
+    const before = await treeSnapshot(root);
+    for (let i = 0; i < 2; i++) await expectUnavailable(root, "RUNS_MISSING");
+    assert.deepEqual(
+      await treeSnapshot(root),
+      before,
+      "index, identity, lock and moved runs untouched",
+    );
+    // Even with an empty runs/ recreated (the normal post-initialisation
+    // shape), the surviving index proves history: still no sequence 1.
+    await mkdir(join(dir, RUNS_DIR));
+    const withRuns = await treeSnapshot(root);
+    for (let i = 0; i < 2; i++) await expectUnavailable(root, "JOURNAL_HISTORY_CONFLICT");
+    assert.deepEqual(await treeSnapshot(root), withRuns, "nothing created or deleted");
+    const index = JSON.parse(await readFile(join(dir, INDEX_FILE), "utf8"));
+    assert.deepEqual(
+      index.entries.map((e: { sequence: number }) => e.sequence),
+      [1],
+      "index not rewritten",
+    );
+    // A corrupt surviving index is history evidence too.
+    await writeFile(join(dir, INDEX_FILE), "{corrupt");
+    await expectUnavailable(root, "JOURNAL_HISTORY_CONFLICT");
+  });
+
+  it("restarting before the identity rename still re-initialises; a valid empty index is not history", async () => {
+    const root = await scratchRoot("fresh-restart");
+    const dir = join(root, NAMESPACE_DIR);
+    await mkdir(dir);
+    await writeFile(join(dir, JOURNAL_FILE), "");
+    await mkdir(join(dir, RUNS_DIR));
+    assert.equal((await allocated(createRunStore(storeOptions(root)), "fresh")).sequence, 1);
+
+    const empty = await scratchRoot("empty-index");
+    await bareIdentity(empty, true);
+    const rebuilt = await rebuildRunIndex(storeOptions(empty), never);
+    assert.equal(rebuilt.status === "rebuilt" && rebuilt.entries, 0);
+    assert.equal(
+      (await allocated(createRunStore(storeOptions(empty)), "after-empty-index")).sequence,
+      1,
+    );
   });
 
   it("a stray file in runs/ fails closed with a not-a-run-directory diagnostic", async () => {

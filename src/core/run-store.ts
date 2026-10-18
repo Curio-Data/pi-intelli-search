@@ -243,31 +243,15 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
     parentSynced = true;
   }
 
-  /** Finish an initialisation that published its identity before runs/ was durable. */
-  async function completeInitialisation(): Promise<void> {
-    try {
-      await mkdir(runsDir);
-      await syncDirectory(namespaceDir);
-      await syncDirectory(options.cacheRoot);
-      parentSynced = true;
-    } catch (error) {
-      throw new StoreError(
-        "DURABILITY_UNAVAILABLE",
-        `Cannot complete initialisation of ${namespaceDir} (creating runs/): ${describe(error)}`,
-      );
-    }
-    options.onDiagnostic({
-      code: "NAMESPACE_INIT_COMPLETED",
-      message: `${namespaceDir} had an identity and no admissions but no runs/ directory (an interrupted initialisation); runs/ was created and synced.`,
-    });
-  }
-
   /**
    * Validate identity and allocation history under the lock. A missing journal
    * is initialisable only when there is no namespace identity, no journalled
-   * history and no run directory at all; otherwise history is unknown. An
-   * identity with an empty journal but no runs/ is an interrupted
-   * initialisation and is completed; with admissions it is damage.
+   * history and no run directory at all; otherwise history is unknown. Fresh
+   * initialisation makes runs/ durable before the identity rename, so an
+   * identity without runs/ is damage, never an interrupted initialisation:
+   * it fails closed even with an empty journal. An empty journal beside a
+   * secondary index is damage too (an index only follows a journalled commit).
+   * Neither case is recovered from the index or from zero bytes.
    */
   async function openNamespace(
     signal: AbortSignal,
@@ -281,21 +265,30 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
       } catch (error) {
         if (errorCode(error) !== "ENOENT") throw error;
       }
-      if (!runsInfo) {
-        if (journal.records.size > 0)
-          throw new StoreError(
-            "RUNS_MISSING",
-            `${runsDir} is missing while the allocation journal records ${journal.records.size} admissions; run evidence was removed. Stop all writers, preserve the namespace and restore runs/ before publishing again.`,
-          );
-        // Identity was published but initialisation stopped before runs/
-        // became durable; with no admissions this completes initialisation.
-        await completeInitialisation();
-      } else if (!runsInfo.isDirectory())
+      if (!runsInfo)
+        throw new StoreError(
+          "RUNS_MISSING",
+          `${runsDir} is missing beside namespace identity ${namespace.namespaceId} (journal records ${journal.records.size} admissions); allocation history is unknown. Stop all writers, preserve the namespace and recover it explicitly before publishing again.`,
+        );
+      else if (!runsInfo.isDirectory())
         throw new StoreError(
           "RUNS_INVALID",
           `${runsDir} is not a real directory (a symlink or file); publication is unavailable until an operator restores it.`,
         );
       else await syncParentOnce();
+      if (journal.records.size === 0) {
+        // A valid empty index (an explicit rebuild before any admission) is not
+        // history; any other index means a journalled commit once existed.
+        const index = await readRunIndex(namespaceDir, namespace.namespaceId);
+        if (
+          index.status !== "missing" &&
+          !(index.status === "valid" && index.index?.entries.length === 0)
+        )
+          throw new StoreError(
+            "JOURNAL_HISTORY_CONFLICT",
+            `Allocation journal ${join(namespaceDir, JOURNAL_FILE)} is empty but ${join(namespaceDir, INDEX_FILE)} records earlier history (${index.status}); allocation history is unknown. Stop all writers, preserve the namespace and recover it explicitly; the index is never used to restore numbering.`,
+          );
+      }
       const names = (await listRunNames(namespaceDir)) ?? [];
       let checked = 0;
       for (const name of names) {
@@ -354,7 +347,7 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
     // Fresh namespace: empty journal, then runs/, then identity, each made
     // durable before the next. A crash before the identity rename leaves a
     // provably fresh namespace (re-initialised); a crash after it leaves an
-    // identity with no admissions, which completeInitialisation() finishes.
+    // identity whose runs/ is already durable, which is accepted as is.
     try {
       const handle = await open(
         journalPath,
