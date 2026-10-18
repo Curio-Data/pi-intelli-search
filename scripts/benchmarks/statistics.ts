@@ -193,19 +193,26 @@ export interface ExpectedPopulation {
 }
 
 /**
- * True when every expected query/repeat cell produced a valid pair and every
- * query mean is ratio-usable, so the prespecified PRIMARY inference (the H1
- * log-ratio claim) is available. An incomplete population (any missing cell,
- * any nonpositive query mean, any expected query absent from the pairs)
- * makes the primary claim unavailable; complete-case estimates remain
- * diagnostic only and must be labelled as such by the caller (common METHOD,
- * "a primary benefit claim is unavailable when its prespecified valid-pair
- * population is incomplete").
+ * True when every expected query/repeat cell produced a valid pair, so the
+ * prespecified PRIMARY inference is available for the given metric. Metric
+ * rules follow the common METHOD (revision P0-2): `undefinedRatioQueries`
+ * (nonpositive query means) make the RATIO endpoint and its interval
+ * unavailable, "not an invented saving; valid difference endpoints still
+ * retain those zero-valued pairs". So for `"difference"` a complete
+ * population with a zero query mean keeps its primary interval, while for
+ * `"log-ratio"` it does not. An incomplete population (any missing cell, any
+ * expected query absent from the pairs, any partial-repeat query) makes the
+ * primary claim unavailable for BOTH metrics; complete-case estimates remain
+ * diagnostic only and must be labelled as such by the caller.
  */
-export function primaryAvailable(estimate: PairedEstimate, population: ExpectedPopulation): boolean {
+export function primaryAvailable(
+  estimate: PairedEstimate,
+  population: ExpectedPopulation,
+  metric: "log-ratio" | "difference",
+): boolean {
   validatePopulation(population);
   if (estimate.missingQueries.length > 0) return false;
-  if (estimate.undefinedRatioQueries.length > 0) return false;
+  if (metric === "log-ratio" && estimate.undefinedRatioQueries.length > 0) return false;
   const expectedRepeats = population.repeats.length;
   const pairsByQuery = new Map(estimate.pairs.map((pair) => [pair.queryId, pair]));
   for (const queryId of population.queryIds) {
@@ -224,12 +231,13 @@ export function primaryAvailable(estimate: PairedEstimate, population: ExpectedP
  * power evidence.
  *
  * Primary-inference guard: when `population` is supplied and the estimate's
- * prespecified valid-pair population is incomplete (see
- * {@link primaryAvailable}), the interval bounds are returned as null unless
- * the caller explicitly passes `diagnostic: true`, labelling the run a
- * complete-case diagnostic rather than a primary inference. Without a
- * `population`, the interval is always a complete-case diagnostic; callers
- * making primary claims must supply the population.
+ * prespecified valid-pair population is incomplete for the requested metric
+ * (see {@link primaryAvailable}; zero query means block only the log-ratio
+ * metric), the interval bounds are returned as null unless the caller
+ * explicitly passes `diagnostic: true`, labelling the run a complete-case
+ * diagnostic rather than a primary inference. Without a `population`, the
+ * interval is always a complete-case diagnostic; callers making primary
+ * claims must supply the population.
  */
 export function bootstrapPairedQueries(
   estimate: PairedEstimate,
@@ -248,7 +256,7 @@ export function bootstrapPairedQueries(
   if (!Number.isInteger(draws) || draws < 1) throw new Error("draws must be a positive integer");
   if (!(confidence > 0 && confidence < 1)) throw new Error("confidence must lie strictly between 0 and 1");
   validateSeed(seed);
-  if (options.population !== undefined && !options.diagnostic && !primaryAvailable(estimate, options.population)) {
+  if (options.population !== undefined && !options.diagnostic && !primaryAvailable(estimate, options.population, metric)) {
     // The primary inference is unavailable with an incomplete population;
     // null bounds make the unavailability explicit instead of silently
     // substituting a complete-case interval.

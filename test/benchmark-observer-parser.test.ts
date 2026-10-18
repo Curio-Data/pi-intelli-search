@@ -174,13 +174,20 @@ const assistantEnd = (usage: unknown, extra: Record<string, unknown> = {}): Json
     message: { role: "assistant", content: [], provider: "openrouter", model: "sonar", timestamp: 1, usage: usage as Json, ...extra },
   }) as unknown as Json;
 
+// Explicit intelli full marker (FullData identity, review C2): a result is
+// recognised by schemaVersion + intelli operation, never by shape alone.
+const FULL_MARKER = { schemaVersion: 1, operation: "intelli_research" } as const;
+
 const toolEnd = (toolCallId: string, accounting: unknown, parent?: string): Json =>
   ({
     type: "tool_execution_end",
     toolCallId,
     toolName: "intelli_research",
     ...(parent !== undefined ? { parentToolCallId: parent } : {}),
-    result: accounting === null ? { content: [] } : { content: [], structuredContent: { accounting: accounting as Json } },
+    result:
+      accounting === null
+        ? { content: [], structuredContent: { ...FULL_MARKER } }
+        : { content: [], structuredContent: { ...FULL_MARKER, accounting: accounting as Json } },
     isError: false,
   }) as unknown as Json;
 
@@ -247,7 +254,7 @@ describe("parseUsageEvents canonical populations", () => {
       assistantEnd(undefined), // missing usage
       { type: "message_end", message: { role: "assistant", content: [], provider: "p", model: "m", timestamp: 2, stopReason: "error", errorMessage: "boom" } },
       toolEnd("no-accounting", null),
-      { type: "tool_execution_end", toolCallId: "legacy", toolName: "intelli_search", result: { content: [], details: { intelli: { accounting: accounting(7) } } }, isError: false },
+      { type: "tool_execution_end", toolCallId: "legacy", toolName: "intelli_search", result: { content: [], details: { intelli: { schemaVersion: 1, operation: "intelli_search", accounting: accounting(7) } } }, isError: false },
     ];
     const parsed = parseUsageEvents(events, "json");
     assert.equal(parsed.assistantMessages.length, 2);
@@ -311,19 +318,88 @@ describe("pipeline population restriction and unknown preservation (R2)", () => 
     assert.deepEqual(parsed.missing, ["intelli-direct"]);
   });
 
-  it("accepts renamed/MCP intelli registrations recognised by their result marker", () => {
+  it("accepts renamed/MCP intelli registrations recognised by their explicit full marker", () => {
     const events: Json[] = [
       {
         type: "tool_execution_end",
         toolCallId: "mcp-1",
         toolName: "mcp__fixtures__research",
-        result: { content: [], structuredContent: { accounting: accounting(5) } },
+        result: { content: [], structuredContent: { schemaVersion: 1, operation: "intelli_research", accounting: accounting(5) } },
         isError: false,
       },
     ];
     const parsed = parseUsageEvents(events, "json");
     assert.equal(parsed.toolMessages.length, 1);
     assert.equal(parsed.toolMessages[0]?.accounting?.attempts, 5);
+  });
+
+  it("rejects foreign tools whose structured output merely resembles accounting (C2)", () => {
+    const events: Json[] = [
+      {
+        type: "tool_execution_end",
+        toolCallId: "foreign-1",
+        toolName: "other_extension_tool",
+        result: {
+          content: [],
+          structuredContent: { attempts: 3, tokens: { inputTotal: 100, outputTotal: 10 } }, // no intelli marker
+        },
+        isError: false,
+      },
+      // Same shape but under a non-intelli schema identity: still excluded.
+      {
+        type: "tool_execution_end",
+        toolCallId: "foreign-2",
+        toolName: "another_tool",
+        result: {
+          content: [],
+          structuredContent: { schemaVersion: 2, operation: "other_op", accounting: accounting(9) },
+        },
+        isError: false,
+      },
+    ];
+    const parsed = parseUsageEvents(events, "json");
+    assert.equal(parsed.toolMessages.length, 0);
+    assert.equal(parsed.missing.length, 0);
+  });
+
+  it("builds an honest compact-marker summary and reads the legacy details.intelli marker", () => {
+    const compact: Json[] = [
+      {
+        type: "tool_execution_end",
+        toolCallId: "mcp-compact",
+        toolName: "mcp__fixtures__research",
+        result: {
+          content: [],
+          structuredContent: {
+            outcome: "completed",
+            meta: { schemaVersion: 1, operation: "intelli_research", attempts: 4, missingAttempts: 1, reportedCost: 0.02, costComplete: false },
+          },
+        },
+        isError: false,
+      },
+    ];
+    const parsed = parseUsageEvents(compact, "json");
+    assert.equal(parsed.toolMessages.length, 1);
+    const summary = parsed.toolMessages[0]?.accounting;
+    assert.equal(summary?.attempts, 4);
+    assert.equal(summary?.missingAttempts, 1);
+    assert.equal(summary?.observedAttempts, 3);
+    assert.deepEqual(summary?.tokens, {}); // token components unknown, never invented
+    assert.equal(summary?.reportedCost?.total, 0.02);
+    assert.equal(summary?.costComplete, false);
+    assert.equal(summary?.parentDelivery, "unknown");
+
+    const legacy: Json[] = [
+      {
+        type: "tool_execution_end",
+        toolCallId: "legacy-1",
+        toolName: "intelli_search",
+        result: { content: [], details: { intelli: { schemaVersion: 1, operation: "intelli_search", accounting: accounting(2) } } },
+        isError: false,
+      },
+    ];
+    const legacyParsed = parseUsageEvents(legacy, "json");
+    assert.equal(legacyParsed.toolMessages[0]?.accounting?.attempts, 2);
   });
 
   it("keeps an absent input field unknown instead of inventing a zero uncached value", () => {

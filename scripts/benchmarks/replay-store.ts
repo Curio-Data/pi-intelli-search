@@ -126,7 +126,7 @@ function validateBindingsForBoundaries(
   at: string,
 ): void {
   for (const binding of bindings) {
-    if (binding !== null && !isJsonObject(binding)) {
+    if (!isJsonObject(binding)) {
       throw new InvalidFixtureFileError(`${at}: binding entries must be objects`);
     }
     if (typeof binding.name !== "string" || binding.name === "") {

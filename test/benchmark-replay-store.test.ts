@@ -299,6 +299,18 @@ describe("fixture file verification", () => {
     await assert.rejects(() => verifyOnly(fetchRecorder.toFile()), InvalidFixtureFileError);
   });
 
+  it("rejects a null binding entry with InvalidFixtureFileError, not a TypeError (review r2)", async () => {
+    const recorder = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
+    recorder.record("n", { generated: { id: "x-1" }, q: 1 }, { response: { text: "ok" }, delayMs: 0 });
+    const file = recorder.toFile();
+    const broken: FixtureFile = { ...file, bindings: [{ name: "$gen", paths: ["generated.id"] }, null as unknown as never] };
+    const path = await tempCopy(broken);
+    await assert.rejects(
+      () => loadFixtureFile(path),
+      (error: unknown) => error instanceof InvalidFixtureFileError,
+    );
+  });
+
   it("rejects structurally malformed files with InvalidFixtureFileError (R4)", async () => {
     const dir = await scratchDir("store");
     try {

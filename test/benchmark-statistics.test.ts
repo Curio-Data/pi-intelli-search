@@ -287,13 +287,47 @@ describe("primary inference availability with incomplete populations (R3)", () =
     });
   }
 
-  it("primaryAvailable is false with any missing cell, nonpositive mean or partial repeats", () => {
+  it("primaryAvailable is metric-aware: zero means block only the log-ratio primary", () => {
+    const population = { queryIds: ["q1", "q2", "q3"], repeats: [1] };
     const complete = estimateWith(false);
     assert.equal(complete.missingQueries.length, 0);
-    assert.equal(primaryAvailable(complete, { queryIds: ["q1", "q2", "q3"], repeats: [1] }), true);
+    assert.equal(complete.undefinedRatioQueries.length, 0);
+    assert.equal(primaryAvailable(complete, population, "log-ratio"), true);
+    assert.equal(primaryAvailable(complete, population, "difference"), true);
     const incomplete = estimateWith(true);
     assert.deepEqual(incomplete.missingQueries, ["q3"]);
-    assert.equal(primaryAvailable(incomplete, { queryIds: ["q1", "q2", "q3"], repeats: [1] }), false);
+    assert.equal(primaryAvailable(incomplete, population, "difference"), false);
+    assert.equal(primaryAvailable(incomplete, population, "log-ratio"), false);
+  });
+
+  it("a complete population with a zero query mean keeps its primary difference interval (C1)", () => {
+    // q3's means are both zero: a plausible judge-quality outcome in both arms.
+    const samples: QuerySample[] = [
+      sample("q1", 1, "A2", 100), sample("q1", 1, "B", 50),
+      sample("q2", 1, "A2", 200), sample("q2", 1, "B", 120),
+      sample("q3", 1, "A2", 0), sample("q3", 1, "B", 0),
+    ];
+    const population = { queryIds: ["q1", "q2", "q3"], repeats: [1] };
+    const estimate = estimatePairedQueries(samples, "A2", "B", "mainInputUncached", population);
+    assert.deepEqual(estimate.missingQueries, []);
+    assert.deepEqual(estimate.undefinedRatioQueries, ["q3"]);
+    // Difference primary: available, zero-valued pairs retained, WITHOUT the
+    // diagnostic label.
+    assert.equal(primaryAvailable(estimate, population, "difference"), true);
+    const difference = bootstrapPairedQueries(estimate, { seed: 21, draws: 300, confidence: 0.95, metric: "difference", population });
+    assert.ok(difference.lower !== null && difference.upper !== null);
+    // Ratio primary: still unavailable for the same population, and the
+    // log-ratio bootstrap itself stays null (no invented saving).
+    assert.equal(primaryAvailable(estimate, population, "log-ratio"), false);
+    const ratio = bootstrapPairedQueries(estimate, { seed: 21, draws: 300, confidence: 0.95, metric: "log-ratio", population });
+    assert.equal(ratio.lower, null);
+    assert.equal(ratio.upper, null);
+    // An incomplete population still blocks the difference primary.
+    const incompleteSamples = samples.slice(0, 4);
+    const incomplete = estimatePairedQueries(incompleteSamples, "A2", "B", "mainInputUncached", population);
+    const incompleteDifference = bootstrapPairedQueries(incomplete, { seed: 21, draws: 300, confidence: 0.95, metric: "difference", population });
+    assert.equal(incompleteDifference.lower, null);
+    assert.equal(incompleteDifference.upper, null);
   });
 
   it("bootstrap with a population returns null bounds while incomplete unless labelled diagnostic", () => {

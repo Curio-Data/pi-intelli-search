@@ -9,12 +9,14 @@
 //   duplicates (repeats of the same finalised message) never double count.
 // - Pipeline usage comes ONCE per canonical intelli tool result: an
 //   `tool_execution_end` event whose toolName is one of the registered
-//   intelli tools (directly or through an MCP/renamed registration) OR whose
-//   result carries an intelli AccountingSummary marker. `bash`, `read`,
-//   `edit`, the `codemode` script tool and every other non-intelli execution
-//   is outside the pipeline population entirely, so `missing` keeps its
-//   meaning: an EXPECTED observation (an intelli result that lost its
-//   accounting, or an assistant message without usage) is absent. Nested
+//   intelli tools OR whose result carries an EXPLICIT intelli identity marker
+//   (full `structuredContent.schemaVersion`+`operation`, compact
+//   `structuredContent.meta` pair, or legacy `details.intelli` pair). Shape
+//   resemblance alone never admits a foreign tool (review C2). `bash`,
+//   `read`, `edit`, the `codemode` script tool and every other non-intelli
+//   execution is outside the pipeline population entirely, so `missing`
+//   keeps its meaning: an expected observation (an intelli result that lost
+//   its accounting, or an assistant message without usage) is absent. Nested
 //   intelli calls (parentToolCallId set) are distinct canonical results and
 //   count once each under their own id.
 // - `turn_end` (whose message and toolResults repeat finalised results),
@@ -96,7 +98,7 @@ export function tokensFromWireUsage(usage: unknown): TokenObservation | null {
   };
 }
 
-/** Registered intelli tool names (native); MCP/renamed registrations are recognised by their result marker. */
+/** Registered intelli tool names (native); renamed/MCP registrations are recognised by explicit result markers. */
 const INTELLI_TOOL_NAMES = new Set([
   "intelli_search",
   "intelli_extract",
@@ -105,31 +107,93 @@ const INTELLI_TOOL_NAMES = new Set([
   "intelli_fetch",
 ]);
 
-/** Minimal structural validation of an intelli AccountingSummary payload. */
-export function accountingFromToolResult(result: unknown): AccountingSummary | null {
+function isIntelliOperation(value: unknown): boolean {
+  return typeof value === "string" && value.startsWith("intelli_");
+}
+
+/** The explicit intelli identity markers a tool result can carry. */
+export type IntelliResultMarker = "full" | "compact" | "legacy-details";
+
+/**
+ * Recognises an intelli tool result by EXPLICIT identity markers, never by
+ * accounting shape alone (review C2): the full native marker is
+ * `structuredContent.schemaVersion === 1` plus `structuredContent.operation`
+ * naming an intelli operation (FullData, C17/R2); the compact marker is the
+ * same pair under `structuredContent.meta` (CompactData projection, C18);
+ * the legacy native marker is `details.intelli` carrying the same pair. A
+ * foreign tool whose structured output merely happens to contain `attempts`
+ * and `tokens` objects carries no marker and stays outside the pipeline
+ * population.
+ */
+export function intelliResultMarker(result: unknown): IntelliResultMarker | null {
   if (!isJsonObject(result)) return null;
   const structured = result["structuredContent"];
+  if (isJsonObject(structured)) {
+    if (structured["schemaVersion"] === 1 && isIntelliOperation(structured["operation"])) return "full";
+    const meta = structured["meta"];
+    if (isJsonObject(meta) && meta["schemaVersion"] === 1 && isIntelliOperation(meta["operation"])) return "compact";
+  }
   const details = result["details"];
-  const candidate = isJsonObject(structured)
-    ? structured["accounting"] ?? structured
-    : isJsonObject(details) && isJsonObject(details["intelli"])
-      ? details["intelli"]["accounting"]
-      : null;
-  if (!isJsonObject(candidate)) return null;
+  if (isJsonObject(details) && isJsonObject(details["intelli"])) {
+    const intelli = details["intelli"];
+    if (intelli["schemaVersion"] === 1 && isIntelliOperation(intelli["operation"])) return "legacy-details";
+  }
+  return null;
+}
+
+function validAccountingShape(candidate: unknown): candidate is AccountingSummary {
+  if (!isJsonObject(candidate)) return false;
   const attempts = candidate["attempts"];
-  const tokens = candidate["tokens"];
+  if (typeof attempts !== "number" || !Number.isInteger(attempts) || attempts < 0) return false;
+  return isJsonObject(candidate["tokens"]);
+}
+
+/**
+ * Extracts the intelli AccountingSummary from a recognised result marker.
+ * Full and legacy results carry the complete summary; compact results carry
+ * only the meta projection, from which an honest partial summary is built
+ * with unknown token fields left empty (never invented) and `parentDelivery`
+ * unknown. Returns null when the marker is present but its accounting is
+ * absent or malformed, so the observation is preserved as missing.
+ */
+export function accountingFromToolResult(result: unknown): AccountingSummary | null {
+  const marker = intelliResultMarker(result);
+  if (marker === null) return null;
+  if (!isJsonObject(result)) return null;
+  if (marker === "full" || marker === "legacy-details") {
+    const holder = marker === "full" ? result["structuredContent"] : (result["details"] as Record<string, unknown>)["intelli"];
+    const candidate = isJsonObject(holder) ? holder["accounting"] : null;
+    return validAccountingShape(candidate) ? (candidate as unknown as AccountingSummary) : null;
+  }
+  const meta = (result["structuredContent"] as Record<string, unknown>)["meta"];
+  if (!isJsonObject(meta)) return null;
+  const attempts = meta["attempts"];
+  const missingAttempts = meta["missingAttempts"];
   if (typeof attempts !== "number" || !Number.isInteger(attempts) || attempts < 0) return null;
-  if (!isJsonObject(tokens)) return null;
-  return candidate as unknown as AccountingSummary;
+  const missing = typeof missingAttempts === "number" && Number.isInteger(missingAttempts) && missingAttempts >= 0 ? missingAttempts : 0;
+  const reported = meta["reportedCost"];
+  const estimated = meta["estimatedCost"];
+  return {
+    attempts,
+    observedAttempts: Math.max(0, attempts - missing),
+    missingAttempts: missing,
+    tokens: {}, // compact projection carries no token components: unknown, never invented
+    ...(typeof reported === "number" ? { reportedCost: { total: reported } } : { reportedCost: {} }),
+    ...(typeof estimated === "number" ? { estimatedCost: { total: estimated } } : { estimatedCost: {} }),
+    missingTokenFields: [],
+    costComplete: meta["costComplete"] === true,
+    parentDelivery: "unknown",
+  };
 }
 
 /** True when a tool execution belongs to the intelli pipeline population. */
 export function isIntelliToolExecution(toolName: unknown, result: unknown): boolean {
   if (typeof toolName === "string" && INTELLI_TOOL_NAMES.has(toolName)) return true;
-  // Renamed/MCP registrations and codemode-script calls carry the intelli
-  // accounting marker in their result; the codemode parent tool itself does
-  // not (its usage field is host aggregation, not an intelli summary).
-  return accountingFromToolResult(result) !== null;
+  // Renamed/MCP registrations and codemode-script calls are recognised by
+  // their explicit intelli identity marker; the codemode parent tool itself
+  // carries none (its usage field is host aggregation, not an intelli
+  // result). Shape resemblance alone never admits a foreign tool.
+  return intelliResultMarker(result) !== null;
 }
 
 function assistantId(message: Record<string, unknown>, usedIds: Set<string>): string {
