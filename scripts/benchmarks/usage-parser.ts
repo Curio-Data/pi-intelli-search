@@ -108,11 +108,23 @@ const INTELLI_TOOL_NAMES = new Set([
 ]);
 
 function isIntelliOperation(value: unknown): boolean {
-  return typeof value === "string" && value.startsWith("intelli_");
+  return typeof value === "string" && INTELLI_TOOL_NAMES.has(value);
 }
 
 /** The explicit intelli identity markers a tool result can carry. */
-export type IntelliResultMarker = "full" | "compact" | "legacy-details";
+export type IntelliResultMarker = "full" | "full-envelope" | "compact" | "compact-envelope" | "legacy-details";
+
+/** Every canonical token field a compact (MCP) projection cannot supply. */
+const ALL_TOKEN_FIELDS: ReadonlyArray<keyof import("./contracts.js").TokenObservation> = [
+  "inputTotal",
+  "inputUncached",
+  "outputTotal",
+  "cacheRead",
+  "cacheWrite",
+  "cacheWrite1h",
+  "reasoning",
+  "totalTokens",
+];
 
 /**
  * Recognises an intelli tool result by EXPLICIT identity markers, never by
@@ -120,10 +132,16 @@ export type IntelliResultMarker = "full" | "compact" | "legacy-details";
  * `structuredContent.schemaVersion === 1` plus `structuredContent.operation`
  * naming an intelli operation (FullData, C17/R2); the compact marker is the
  * same pair under `structuredContent.meta` (CompactData projection, C18);
- * the legacy native marker is `details.intelli` carrying the same pair. A
- * foreign tool whose structured output merely happens to contain `attempts`
- * and `tokens` objects carries no marker and stays outside the pipeline
- * population.
+ * the legacy native marker is `details.intelli` carrying the same pair.
+ * MCP tools delivered through `Pi`'s MCP client nest one level deeper
+ * (review D1): the whole Model Context Protocol (MCP) `CallToolResult`
+ * becomes the tool's `structuredContent` (convertMcpResult spreads the
+ * result minus `_meta` into it; Observed in the host 1.3.0
+ * extensions/mcp/tools.js), so the compact marker also arrives at
+ * `structuredContent.structuredContent.meta` and a full marker at
+ * `structuredContent.structuredContent` itself. A foreign tool whose
+ * structured output merely happens to contain `attempts` and `tokens`
+ * objects carries no marker and stays outside the pipeline population.
  */
 export function intelliResultMarker(result: unknown): IntelliResultMarker | null {
   if (!isJsonObject(result)) return null;
@@ -132,6 +150,15 @@ export function intelliResultMarker(result: unknown): IntelliResultMarker | null
     if (structured["schemaVersion"] === 1 && isIntelliOperation(structured["operation"])) return "full";
     const meta = structured["meta"];
     if (isJsonObject(meta) && meta["schemaVersion"] === 1 && isIntelliOperation(meta["operation"])) return "compact";
+    // CallToolResult envelope nesting (Pi's MCP client, review D1).
+    const envelope = structured["structuredContent"];
+    if (isJsonObject(envelope)) {
+      if (envelope["schemaVersion"] === 1 && isIntelliOperation(envelope["operation"])) return "full-envelope";
+      const envelopeMeta = envelope["meta"];
+      if (isJsonObject(envelopeMeta) && envelopeMeta["schemaVersion"] === 1 && isIntelliOperation(envelopeMeta["operation"])) {
+        return "compact-envelope";
+      }
+    }
   }
   const details = result["details"];
   if (isJsonObject(details) && isJsonObject(details["intelli"])) {
@@ -160,39 +187,72 @@ export function accountingFromToolResult(result: unknown): AccountingSummary | n
   const marker = intelliResultMarker(result);
   if (marker === null) return null;
   if (!isJsonObject(result)) return null;
-  if (marker === "full" || marker === "legacy-details") {
-    const holder = marker === "full" ? result["structuredContent"] : (result["details"] as Record<string, unknown>)["intelli"];
+  if (marker === "full" || marker === "full-envelope" || marker === "legacy-details") {
+    const structured = result["structuredContent"];
+    const holder = marker === "legacy-details"
+      ? (result["details"] as Record<string, unknown>)["intelli"]
+      : marker === "full-envelope" && isJsonObject(structured)
+        ? structured["structuredContent"]
+        : structured;
     const candidate = isJsonObject(holder) ? holder["accounting"] : null;
     return validAccountingShape(candidate) ? (candidate as unknown as AccountingSummary) : null;
   }
-  const meta = (result["structuredContent"] as Record<string, unknown>)["meta"];
+  // Compact projection (direct or inside the MCP CallToolResult envelope).
+  // The compact meta carries no token components and its required fields are
+  // validated strictly (review D2): an absent or malformed `missingAttempts`
+  // is not defaulted to zero completeness but produces a null summary, so the
+  // observation is listed missing instead of inventing `observedAttempts ==
+  // attempts`. Every canonical token field is reported missing because the
+  // projection cannot supply any of them.
+  const structured = result["structuredContent"] as Record<string, unknown>;
+  const meta =
+    marker === "compact-envelope"
+      ? isJsonObject(structured["structuredContent"])
+        ? (structured["structuredContent"] as Record<string, unknown>)["meta"]
+        : undefined
+      : structured["meta"];
   if (!isJsonObject(meta)) return null;
   const attempts = meta["attempts"];
   const missingAttempts = meta["missingAttempts"];
   if (typeof attempts !== "number" || !Number.isInteger(attempts) || attempts < 0) return null;
-  const missing = typeof missingAttempts === "number" && Number.isInteger(missingAttempts) && missingAttempts >= 0 ? missingAttempts : 0;
+  if (typeof missingAttempts !== "number" || !Number.isInteger(missingAttempts) || missingAttempts < 0) return null;
+  const observed = attempts - missingAttempts;
+  if (observed < 0) return null; // bounds: observedAttempts must never be negative
   const reported = meta["reportedCost"];
   const estimated = meta["estimatedCost"];
   return {
     attempts,
-    observedAttempts: Math.max(0, attempts - missing),
-    missingAttempts: missing,
+    observedAttempts: observed,
+    missingAttempts,
     tokens: {}, // compact projection carries no token components: unknown, never invented
     ...(typeof reported === "number" ? { reportedCost: { total: reported } } : { reportedCost: {} }),
     ...(typeof estimated === "number" ? { estimatedCost: { total: estimated } } : { estimatedCost: {} }),
-    missingTokenFields: [],
+    missingTokenFields: [...ALL_TOKEN_FIELDS],
     costComplete: meta["costComplete"] === true,
     parentDelivery: "unknown",
   };
 }
 
+/** True for an MCP-registered intelli tool name (`mcp__<server>__intelli_*`). */
+function isMcpIntelliToolName(toolName: unknown): boolean {
+  if (typeof toolName !== "string") return false;
+  const match = /^mcp__(.+)__(intelli_[a-z0-9_]+)$/.exec(toolName);
+  return match !== null && INTELLI_TOOL_NAMES.has(match[2]!);
+}
+
 /** True when a tool execution belongs to the intelli pipeline population. */
 export function isIntelliToolExecution(toolName: unknown, result: unknown): boolean {
   if (typeof toolName === "string" && INTELLI_TOOL_NAMES.has(toolName)) return true;
-  // Renamed/MCP registrations and codemode-script calls are recognised by
-  // their explicit intelli identity marker; the codemode parent tool itself
-  // carries none (its usage field is host aggregation, not an intelli
-  // result). Shape resemblance alone never admits a foreign tool.
+  // An MCP-registered intelli tool (`mcp__<server>__intelli_*`) is an expected
+  // pipeline observation even when no marker can be recovered (host shape
+  // change, degraded result): it enters the population with a null summary
+  // and is listed missing rather than silently dropped (review D1).
+  if (isMcpIntelliToolName(toolName)) return true;
+  // Renamed registrations and codemode-script calls are recognised by their
+  // explicit intelli identity marker (including the MCP CallToolResult
+  // envelope nesting); the codemode parent tool itself carries none (its
+  // usage field is host aggregation, not an intelli result). Shape
+  // resemblance alone never admits a foreign tool.
   return intelliResultMarker(result) !== null;
 }
 
