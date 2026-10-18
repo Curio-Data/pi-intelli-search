@@ -13,7 +13,14 @@ import {
   type ThinkingLevel,
 } from "@earendil-works/pi-ai";
 import type { ModelConfig } from "./types.js";
-import type { ModelRetryConfig, ModelUsage } from "./core/contracts.js";
+import type {
+  ModelRetryConfig,
+  ModelUsage,
+  PolicyHooks,
+  UsageObservation,
+} from "./core/contracts.js";
+import type { RegistryStreamSimple } from "./native-injection.js";
+import { createNativeUsageCapture } from "./native-usage.js";
 import type { AnnotationSink } from "./annotations.js";
 import {
   createAnnotationSink,
@@ -132,8 +139,12 @@ export async function callLlm(
      * the Pi TUI layout. Dropped when omitted.
      */
     onRetryNotice?: (message: string) => void;
-    /** Successful provider usage, retained by the host-neutral adapter. */
+    /** Successful provider usage, retained for existing callers, not accounting. */
     onUsage?: (usage: ModelUsage) => void;
+    /** Scoped inference policy supplied by the operation-bound model client. */
+    policyHooks?: PolicyHooks;
+    /** Immutable per-runtime transport; replay must not invoke streamOptions.fetch. */
+    registryStreamSimple?: RegistryStreamSimple;
   },
 ): Promise<string> {
   // 1. Resolve model from registry
@@ -190,73 +201,99 @@ export async function callLlm(
   //    errorMessage, which the classifier below inspects. The capture is kept
   //    for the rare 2xx-then-429-header case and non-OpenRouter providers.
   const context: Context = { systemPrompt, messages };
-  const response = await runModelWithPolicy(
-    async (signal, hints) => {
-      // Each attempt has its own sink. Late reads from a failed attempt cannot
-      // contaminate successful citations even when an old clone is still settling.
-      const annotations = options?.annotations ? createAnnotationSink() : undefined;
-      if (options?.annotations) options.annotations.citations.length = 0;
-      const annotationFetch = annotations
-        ? wrapFetchForAnnotations(globalThis.fetch.bind(globalThis), annotations)
-        : undefined;
-      const streamOptions: SimpleStreamOptions = {
-        apiKey: auth.apiKey,
-        headers: auth.headers,
-        env: auth.env,
-        ...(signal ? { signal } : {}),
-        ...(annotationFetch ? { fetch: annotationFetch } : {}),
-        // Supported citation channel (pi-ai >= 0.99): the OpenAI Completions
-        // adapter, which serves OpenRouter, invokes this for every parsed SSE
-        // chunk before normalisation. Hosts on pi-ai < 0.99 ignore the option,
-        // which is why the fetch wrapper above stays as the fallback channel;
-        // both feed the same per-attempt sink and dedupe by URL.
-        ...(annotations
-          ? {
-              onProviderStreamEvent: (data: unknown) => {
-                harvestChunkAnnotations(data, annotations);
-              },
-            }
-          : {}),
-        maxTokens: options?.maxTokens,
-        reasoning: options?.reasoning ?? "low",
-        ...(options?.payloadPatch
-          ? {
-              onPayload: (payload: unknown) =>
-                options.payloadPatch!(payload as Record<string, unknown>),
-            }
-          : {}),
-        maxRetries: 0,
-        onResponse: (res) => {
-          if (res.status === 429 || res.status >= 500) {
-            const ra = res.headers["retry-after"];
-            const secs = ra ? Number(ra) : NaN;
-            hints.retryAfterMs = Number.isFinite(secs) ? secs * 1000 : undefined;
+  const executeAttempt = async (
+    signal: AbortSignal | undefined,
+    hints: { retryAfterMs?: number },
+    observe?: (observation: UsageObservation) => void,
+  ) => {
+    // Each attempt has its own sink. Late reads from a failed attempt cannot
+    // contaminate successful citations even when an old clone is still settling.
+    const annotations = options?.annotations ? createAnnotationSink() : undefined;
+    const usageCapture = observe ? createNativeUsageCapture() : undefined;
+    if (options?.annotations) options.annotations.citations.length = 0;
+    const annotationFetch = annotations
+      ? wrapFetchForAnnotations(globalThis.fetch.bind(globalThis), annotations)
+      : undefined;
+    const streamOptions: SimpleStreamOptions = {
+      apiKey: auth.apiKey,
+      headers: auth.headers,
+      env: auth.env,
+      ...(signal ? { signal } : {}),
+      ...(annotationFetch ? { fetch: annotationFetch } : {}),
+      // Supported citation channel (pi-ai >= 0.99): the OpenAI Completions
+      // adapter, which serves OpenRouter, invokes this for every parsed SSE
+      // chunk before normalisation. Hosts on pi-ai < 0.99 ignore the option,
+      // which is why the fetch wrapper above stays as the fallback channel;
+      // both feed the same per-attempt sink and dedupe by URL.
+      ...(annotations || usageCapture
+        ? {
+            onProviderStreamEvent: (data: unknown) => {
+              usageCapture?.chunk(data);
+              if (annotations) harvestChunkAnnotations(data, annotations);
+            },
           }
-        },
-      };
-      const value = await __harness.registryStreamSimple(registry, model, context, streamOptions);
-      if (value.stopReason === "error")
-        return { value, error: value.errorMessage ?? "unknown error" };
-      if (annotations) {
-        await settleAnnotationSink(annotations);
-        options!.annotations!.citations.push(...annotations.citations);
-      }
-      return { value };
-    },
-    {
-      model: config,
-      signal: options?.signal,
-      retry: options?.retry,
-      timeoutMs: options?.timeoutMs,
-      onRetryNotice: options?.onRetryNotice,
-    },
-    // The native logger is deliberately silent: the model client always
-    // supplies onRetryNotice, and any residual logger fallback must not
-    // write to the console because raw stderr bypasses the Pi TUI layout
-    // instead of going through the renderer. Configuration errors are
-    // thrown to the tool layer; session-start notices use ctx.ui.notify.
-    { error: () => {}, warn: () => {} },
-  );
+        : {}),
+      maxTokens: options?.maxTokens,
+      reasoning: options?.reasoning ?? "low",
+      ...(options?.payloadPatch
+        ? {
+            onPayload: (payload: unknown) =>
+              options.payloadPatch!(payload as Record<string, unknown>),
+          }
+        : {}),
+      maxRetries: 0,
+      onResponse: (res) => {
+        if (res.status === 429 || res.status >= 500) {
+          const ra = res.headers["retry-after"];
+          const secs = ra ? Number(ra) : NaN;
+          hints.retryAfterMs = Number.isFinite(secs) ? secs * 1000 : undefined;
+        }
+      },
+    };
+    const transport = options?.registryStreamSimple ?? __harness.registryStreamSimple;
+    let value: AssistantMessage;
+    try {
+      value = await transport(registry, model, context, streamOptions);
+    } catch (error) {
+      const observation = usageCapture?.observation(undefined);
+      if (observation) observe?.(observation);
+      throw error;
+    }
+    // The SDK always initialises usage, even on failures with no usage payload.
+    // Preserve wire presence instead of treating those placeholders as observed.
+    const observation = usageCapture?.observation(value.usage);
+    if (observation) observe?.(observation);
+    if (value.stopReason === "error")
+      return { value, error: value.errorMessage ?? "unknown error" };
+    if (annotations) {
+      await settleAnnotationSink(annotations);
+      options!.annotations!.citations.push(...annotations.citations);
+    }
+    return { value };
+  };
+  const policyRequest = {
+    model: config,
+    signal: options?.signal,
+    retry: options?.retry,
+    timeoutMs: options?.timeoutMs,
+    onRetryNotice: options?.onRetryNotice,
+  };
+  const response = options?.policyHooks
+    ? await runModelWithPolicy(
+        (control) => executeAttempt(control.signal, control, control.observe),
+        policyRequest,
+        options.policyHooks,
+      )
+    : await runModelWithPolicy(
+        executeAttempt,
+        policyRequest,
+        // The native logger is deliberately silent: the model client always
+        // supplies onRetryNotice, and any residual logger fallback must not
+        // write to the console because raw stderr bypasses the Pi TUI layout
+        // instead of going through the renderer. Configuration errors are
+        // thrown to the tool layer; session-start notices use ctx.ui.notify.
+        { error: () => {}, warn: () => {} },
+      );
 
   if (response.usage) options?.onUsage?.(response.usage);
   return response.content

@@ -3,14 +3,24 @@
 
 import type {
   ModelBinding,
+  ModelCallScope,
   ModelClient,
   ModelCompletion,
   ModelRequest,
   ModelUsage,
   OperationLogger,
+  ScopedModelClient,
+  UsageObservation,
 } from "../../../../src/core/contracts.js";
 import { parseCitations, type FetchFunction } from "../../../../src/core/annotations.js";
-import { runModelWithPolicy, type AttemptHints } from "../../../../src/core/llm.js";
+import {
+  createPolicyHooks,
+  runModelWithPolicy,
+  type AttemptHints,
+  type ModelServices,
+} from "../../../../src/core/llm.js";
+import { AdmissionError } from "../../../../src/core/execution-coordinator.js";
+import { normalizeMcpUsage } from "../../../../src/core/usage.js";
 import { throwIfAborted } from "../../../../src/core/util.js";
 import type { StandaloneConfig } from "../config.js";
 import { StandaloneError } from "../errors.js";
@@ -117,6 +127,7 @@ function usage(value: unknown): ModelUsage | undefined {
     totalTokens: raw.total_tokens,
     totalCost: raw.cost,
     cacheRead: record(raw.prompt_tokens_details).cached_tokens,
+    cacheWrite: record(raw.prompt_tokens_details).cache_write_tokens,
     reasoning: record(raw.completion_tokens_details).reasoning_tokens,
   })) {
     const n = numeric(val);
@@ -135,10 +146,24 @@ export interface OpenRouterOptions {
     random?: () => number;
   };
 }
+export interface ScopedOpenRouterOptions extends OpenRouterOptions {
+  readonly services: ModelServices;
+  readonly random: () => number;
+}
+export function createOpenRouterClient(
+  config: StandaloneConfig,
+  options: ScopedOpenRouterOptions,
+): ScopedModelClient;
 export function createOpenRouterClient(
   config: StandaloneConfig,
   options: OpenRouterOptions,
-): ModelClient {
+): ModelClient;
+export function createOpenRouterClient(
+  config: StandaloneConfig,
+  options: OpenRouterOptions | ScopedOpenRouterOptions,
+): ModelClient | ScopedModelClient {
+  const services = "services" in options ? options.services : undefined;
+  const random = "random" in options ? options.random : Math.random;
   const transport = options.fetch ?? globalThis.fetch;
   const env = { ...(options.env ?? process.env) };
   const settings = config.settings;
@@ -169,6 +194,7 @@ export function createOpenRouterClient(
     init: RequestInit,
     signal: AbortSignal | undefined,
     hints: AttemptHints,
+    onData?: (data: Record<string, unknown>) => void,
   ): Promise<{ raw: string; data: Record<string, unknown> }> {
     let response: Response;
     try {
@@ -189,7 +215,7 @@ export function createOpenRouterClient(
       if (Number.isFinite(delay) && delay >= 0) hints.retryAfterMs = delay;
     }
     if (!response.ok) {
-      void response.body?.cancel().catch(() => {});
+      await response.body?.cancel().catch(() => {});
       throw statusError(response.status, hints);
     }
     let raw: string;
@@ -207,6 +233,9 @@ export function createOpenRouterClient(
     } catch {
       throw new Error("OpenRouter returned malformed JSON");
     }
+    // Usage may accompany a failed response. Record it before converting the
+    // error into a policy failure, not only on successful completion.
+    onData?.(data);
     if (data.error !== undefined) throw responseError(data.error, hints);
     return { raw, data };
   }
@@ -244,8 +273,8 @@ export function createOpenRouterClient(
       throw new Error("Configured search model does not advertise tool support");
     return true;
   }
-  const client: ModelClient = {
-    async preflight(bindings) {
+  const client = {
+    async preflight(bindings: readonly ModelBinding[]) {
       key();
       // No inference is billed by catalogue validation. Its transport is bounded by the same policy.
       if (!catalogue) {
@@ -260,7 +289,7 @@ export function createOpenRouterClient(
             model: settings.searchModel,
             systemPrompt: "",
             userMessage: "",
-            signal: options.signal,
+            signal: services?.operation.signal ?? options.signal,
           }),
           options.logger,
           options.policyTesting,
@@ -269,7 +298,13 @@ export function createOpenRouterClient(
       }
       return bindings.filter((binding) => !capabilities(binding));
     },
-    async complete(request) {
+    async complete(request: ModelRequest & { readonly scope?: ModelCallScope }) {
+      const hooks = services
+        ? createPolicyHooks(services, requiredScope(request.scope), options.logger, random)
+        : undefined;
+      if (!services && request.scope)
+        throw new TypeError("Scoped inference requires operation services");
+      throwIfAborted(services?.operation.signal);
       throwIfAborted(request.signal);
       key();
       if (
@@ -284,73 +319,98 @@ export function createOpenRouterClient(
         (Array.isArray(entry.supported_parameters) &&
           entry.supported_parameters.includes("reasoning")) ||
         Object.keys(record(entry.reasoning)).length > 0;
-      return runModelWithPolicy<ModelCompletion>(
-        async (signal, hints) => {
-          const base: Record<string, unknown> = {
-            model: request.model.model,
-            stream: false,
-            messages: [
-              { role: "system", content: request.systemPrompt },
-              { role: "user", content: request.userMessage },
-            ],
-          };
-          if (supportsReasoning)
-            base.reasoning = { effort: request.reasoning ?? "low", exclude: true };
-          if (request.maxTokens !== undefined) base.max_completion_tokens = request.maxTokens;
-          const payload = request.payloadPatch ? request.payloadPatch(base) : base;
-          // Patches supply supported search tools, never routing or transport changes.
-          if (
-            payload.model !== base.model ||
-            payload.stream !== false ||
-            payload.messages !== base.messages ||
-            "models" in payload ||
-            "route" in payload
-          )
-            throw new Error("Payload patch cannot change model routing or message ownership");
-          const { data, raw } = await send(
-            "/chat/completions",
-            { method: "POST", body: JSON.stringify(payload) },
-            signal,
-            hints,
+      const executeAttempt = async (
+        signal: AbortSignal | undefined,
+        hints: AttemptHints,
+        observe?: (observation: UsageObservation) => void,
+      ): Promise<{ value: ModelCompletion }> => {
+        const base: Record<string, unknown> = {
+          model: request.model.model,
+          stream: false,
+          messages: [
+            { role: "system", content: request.systemPrompt },
+            { role: "user", content: request.userMessage },
+          ],
+        };
+        if (supportsReasoning)
+          base.reasoning = { effort: request.reasoning ?? "low", exclude: true };
+        if (request.maxTokens !== undefined) base.max_completion_tokens = request.maxTokens;
+        const payload = request.payloadPatch ? request.payloadPatch(base) : base;
+        // Patches supply supported search tools, never routing or transport changes.
+        if (
+          payload.model !== base.model ||
+          payload.stream !== false ||
+          payload.messages !== base.messages ||
+          "models" in payload ||
+          "route" in payload
+        )
+          throw new Error("Payload patch cannot change model routing or message ownership");
+        const { data, raw } = await send(
+          "/chat/completions",
+          { method: "POST", body: JSON.stringify(payload) },
+          signal,
+          hints,
+          (data) => {
+            const reported = usage(data.usage);
+            if (reported)
+              observe?.(
+                normalizeMcpUsage(reported, typeof data.id === "string" ? data.id : undefined),
+              );
+          },
+        );
+        const choices = data.choices;
+        if (!Array.isArray(choices) || choices.length !== 1)
+          throw new Error("OpenRouter returned invalid completion choices");
+        const choice = record(choices[0]);
+        if (choice.error !== undefined) throw responseError(choice.error, hints);
+        if (choice.finish_reason === "error")
+          throw new StandaloneError(
+            "PROVIDER",
+            "OpenRouter returned a failed completion without an error classification",
           );
-          const choices = data.choices;
-          if (!Array.isArray(choices) || choices.length !== 1)
-            throw new Error("OpenRouter returned invalid completion choices");
-          const choice = record(choices[0]);
-          if (choice.error !== undefined) throw responseError(choice.error, hints);
-          if (choice.finish_reason === "error")
-            throw new StandaloneError(
-              "PROVIDER",
-              "OpenRouter returned a failed completion without an error classification",
-            );
-          const message = record(choice.message);
-          if (message.refusal || choice.finish_reason === "content_filter")
-            throw new Error("OpenRouter declined the request under provider policy");
-          if (typeof message.content !== "string")
-            throw new Error("OpenRouter returned no text completion");
-          if (!message.content.trim() && choice.finish_reason === "length")
-            throw new Error(
-              "OpenRouter exhausted the output budget without visible text; increase token limits or lower reasoning effort",
-            );
-          return {
-            value: {
-              text: message.content,
-              citations: request.collectCitations ? parseCitations(raw) : [],
-              usage: usage(data.usage),
-            },
-          };
-        },
-        policy(request),
-        options.logger,
-        options.policyTesting,
-      );
+        const message = record(choice.message);
+        if (message.refusal || choice.finish_reason === "content_filter")
+          throw new Error("OpenRouter declined the request under provider policy");
+        if (typeof message.content !== "string")
+          throw new Error("OpenRouter returned no text completion");
+        if (!message.content.trim() && choice.finish_reason === "length")
+          throw new Error(
+            "OpenRouter exhausted the output budget without visible text; increase token limits or lower reasoning effort",
+          );
+        return {
+          value: {
+            text: message.content,
+            citations: request.collectCitations ? parseCitations(raw) : [],
+            usage: usage(data.usage),
+          },
+        };
+      };
+      return hooks
+        ? runModelWithPolicy(
+            (control) => executeAttempt(control.signal, control, control.observe),
+            policy(request),
+            hooks,
+          )
+        : runModelWithPolicy(
+            executeAttempt,
+            policy(request),
+            options.logger,
+            options.policyTesting,
+          );
     },
   };
   async function safe<T>(call: Promise<T>): Promise<T> {
     try {
       return await call;
     } catch (error) {
-      if (error instanceof StandaloneError) throw error;
+      if (
+        error instanceof StandaloneError ||
+        (services &&
+          (error instanceof AdmissionError ||
+            error instanceof TypeError ||
+            (error instanceof Error && error.name === "AbortError")))
+      )
+        throw error;
       throw new StandaloneError(
         "PROVIDER",
         error instanceof Error ? error.message : "OpenRouter request failed",
@@ -359,6 +419,12 @@ export function createOpenRouterClient(
   }
   return {
     preflight: (bindings) => safe(client.preflight(bindings)),
-    complete: (request) => safe(client.complete(request)),
+    complete: (request: ModelRequest & { readonly scope?: ModelCallScope }) =>
+      safe(client.complete(request)),
   };
+}
+
+function requiredScope(scope: ModelCallScope | undefined): ModelCallScope {
+  if (!scope) throw new TypeError("Scoped inference requires a model call scope");
+  return scope;
 }

@@ -3,7 +3,16 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createAnnotationSink } from "./annotations.js";
-import type { ModelBinding, ModelClient, ModelUsage } from "./core/contracts.js";
+import type {
+  ModelBinding,
+  ModelClient,
+  ModelRequest,
+  ModelUsage,
+  PolicyHooks,
+  ScopedModelClient,
+} from "./core/contracts.js";
+import { createPolicyHooks, type ModelServices } from "./core/llm.js";
+import type { RegistryStreamSimple } from "./native-injection.js";
 import { callLlm } from "./llm.js";
 
 /** Existing native preflight semantics: model existence, not credential discovery. */
@@ -58,7 +67,10 @@ export function describeModelCatalog(
         distance: editDistance(id, excludeModel),
         sameVendor: id.split("/")[0] === vendor ? 0 : 1,
       }))
-      .sort((a, b) => a.sameVendor - b.sameVendor || a.distance - b.distance || a.id.localeCompare(b.id))
+      .sort(
+        (a, b) =>
+          a.sameVendor - b.sameVendor || a.distance - b.distance || a.id.localeCompare(b.id),
+      )
       .map((entry) => entry.id);
     const shown = ranked.slice(0, 8).join(", ");
     const extra = ranked.length > 8 ? ` (+${ranked.length - 8} more)` : "";
@@ -101,30 +113,63 @@ export function createNativeModelClient(
     async preflight(bindings) {
       return validateModelConfigs(ctx, bindings);
     },
-    async complete(request) {
-      const annotations = request.collectCitations ? createAnnotationSink() : undefined;
-      let usage: ModelUsage | undefined;
-      const text = await delegate(ctx, request.model, request.systemPrompt, request.userMessage, {
-        maxTokens: request.maxTokens,
-        signal: request.signal,
-        retry: request.retry,
-        timeoutMs: request.timeoutMs,
-        annotations,
-        payloadPatch: request.payloadPatch,
-        reasoning: request.reasoning,
-        // Always supply a native notice channel rather than depending on
-        // the shared policy's logger fallback. Native callLlm also uses a
-        // silent logger defensively.
-        onRetryNotice: request.onRetryNotice ?? (() => {}),
-        onUsage: (reported) => {
-          usage = { ...reported, ...(reported.cost ? { cost: { ...reported.cost } } : {}) };
-        },
-      });
-      return {
-        text,
-        citations: annotations?.citations ?? [],
-        ...(usage ? { usage } : {}),
-      };
+    complete: (request) => completeNative(ctx, request, delegate),
+  };
+}
+
+/** P4 operation-bound client. Runtime generations supply these services once. */
+export function createScopedNativeModelClient(
+  ctx: ExtensionContext,
+  services: ModelServices,
+  options: {
+    readonly random?: () => number;
+    readonly registryStreamSimple?: RegistryStreamSimple;
+  } = {},
+): ScopedModelClient {
+  const random = options.random ?? Math.random;
+  const transport = options.registryStreamSimple;
+  const logger = { error() {}, warn() {} };
+  return {
+    async preflight(bindings) {
+      return validateModelConfigs(ctx, bindings);
     },
+    async complete(request) {
+      const hooks = createPolicyHooks(services, request.scope, logger, random);
+      return completeNative(ctx, request, callLlm, hooks, transport);
+    },
+  };
+}
+
+async function completeNative(
+  ctx: ExtensionContext,
+  request: ModelRequest,
+  delegate: typeof callLlm,
+  policyHooks?: PolicyHooks,
+  registryStreamSimple?: RegistryStreamSimple,
+) {
+  const annotations = request.collectCitations ? createAnnotationSink() : undefined;
+  let usage: ModelUsage | undefined;
+  const text = await delegate(ctx, request.model, request.systemPrompt, request.userMessage, {
+    maxTokens: request.maxTokens,
+    signal: request.signal,
+    retry: request.retry,
+    timeoutMs: request.timeoutMs,
+    annotations,
+    payloadPatch: request.payloadPatch,
+    reasoning: request.reasoning,
+    // Always supply a native notice channel rather than depending on
+    // the shared policy's logger fallback. Native callLlm also uses a
+    // silent logger defensively.
+    onRetryNotice: request.onRetryNotice ?? (() => {}),
+    onUsage: (reported) => {
+      usage = { ...reported, ...(reported.cost ? { cost: { ...reported.cost } } : {}) };
+    },
+    ...(policyHooks ? { policyHooks } : {}),
+    ...(registryStreamSimple ? { registryStreamSimple } : {}),
+  });
+  return {
+    text,
+    citations: annotations?.citations ?? [],
+    ...(usage ? { usage } : {}),
   };
 }
