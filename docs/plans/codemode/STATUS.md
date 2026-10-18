@@ -1,6 +1,6 @@
 # Codemode Contract Status
 
-Specification revision: `P0-2`. Status: candidate, independent exact-revision review pending. This document records acceptance separately from the specification so a review can name an immutable contract commit without embedding its own hash in that commit.
+Specification revision: `P0-2`. Status: accepted contract freeze after independent exact-revision review. This document records acceptance separately from the specification so a review can name an immutable contract commit without embedding its own hash in that commit.
 
 ## Owner Decisions
 
@@ -23,17 +23,17 @@ The coordinator selected C03's capacity/configuration limits, C06's prespecified
 
 The earlier directory lock with manual-only crash release was blocked by review and is superseded. C25 now selects a pinned native kernel-lock primitive with automatic release on descriptor/process death and a permanent lockfile that is never replaced. [LOCK-EVIDENCE.md](LOCK-EVIDENCE.md) records source/primitive checks and remaining dependency/install/platform gates. Manual recovery concerns damaged allocation history, not ordinary crashed holders. No stale-age/PID fallback, history reset, policy cap or retention utility is introduced.
 
-The first review blocked P0-1; [REVIEW-DISPOSITIONS.md](REVIEW-DISPOSITIONS.md) records the P0-2 amendments. No blocker is called closed until the exact amended revision is reviewed.
+The first review blocked P0-1. The [final independent report](REVIEW.md) accepts P0-2 at `842c56fc539451c84b2cd8793a3265810a998058` and closes both blockers. [REVIEW-DISPOSITIONS.md](REVIEW-DISPOSITIONS.md) records amendments; [BUILDER-HANDOFF.md](BUILDER-HANDOFF.md) carries the binding non-network replay condition and later-stage notes. Acceptance covers specification only, not future implementation proofs.
 
 ## Acceptance Record
 
 `SPECIFICATION-SHA256SUMS` hashes the candidate contract/native API/consumer/acceptance/method/corpus/checker bundle before acceptance. `acceptance.json` records the accepted revision, exact reviewed commit, native reviewer model/report hash, coordinator decision and unchanged specification-file hashes; `REVIEW.md` retains the final independent report. They are acceptance evidence, not runtime test reports. `npm run check:codemode-plan` runs `--require-accepted` plus the compile-only consumer and is wired into CI; every builder runs it at the accepted base. A pending candidate intentionally fails that strict accepted-state command while the plain diagnostic checker remains runnable. CI fetches history so the reviewed commit can be checked. Later corpus/method expansions use new versioned files rather than rewriting the frozen P0 bundle.
 
-- Reviewed contract commit: pending.
-- Final contract content digest: pending.
-- Independent technical Reviewer/provenance/report digest: pending.
-- Coordinator acceptance: pending.
-- Accepted documentation commit for builder bases: pending.
+- Reviewed contract commit: `842c56fc539451c84b2cd8793a3265810a998058`.
+- Bundle/report digests and full frozen-file list: canonical values in `acceptance.json`.
+- Independent technical Reviewer: `claude-opus-5-5[1m]` through Claude Code; actual native provenance and 1M context variant verified.
+- Coordinator acceptance: recorded by `openai-codex/gpt-6.1-sol` on 2026-10-18, with final report N1 binding on replay briefs.
+- Accepted documentation commit for builder bases: recorded immediately after committing this acceptance record; builders require the subsequent matching type-seam descendant, not the bare pending-state review commit.
 
 The current orchestrator is `openai-codex/gpt-6.1-sol`. The standing prose rule exempts work orchestrated by that prose-review model from a self-review; the independent technical reviewer must still inspect readability, source fidelity and scope. No self-review is counted as an independent pass.
 
@@ -41,8 +41,8 @@ The current orchestrator is `openai-codex/gpt-6.1-sol`. The standing prose rule 
 
 The prior source checkpoint is `129114f14c081c614b357b6fc90b4a056a49a308`. Its encrypted source archive, lockfile/prompt/settings hashes and observed host record were preserved before runtime changes. Current native and MCP runtime source remains that baseline. No live A0, pilot, feature implementation, package staging or publication is claimed.
 
-P0 results will record the contract checker, compile-only consumer check, baseline build/tests/generators/audit, filesystem primitive probe and exact-revision review. Baseline regression success does not pass the future acceptance map. Runtime cancellation, complete replay through the actual bridge, native floor, packaging, protocol overlap, crash recovery and live suite remain P1–P8 gates.
+The contract checker and compile-only consumer passed, including the new native transport type guards. Baseline build/test-all/native-contract types, generator drift and audit checks passed; the selected native lock's source/integrity, isolated audit and Linux descriptor/process-death primitive checks are recorded. The final independent review accepted the exact revision. The strict accepted-state command is run after writing this metadata, and its successful exit is required before closing the checkpoint. Baseline regression success does not pass the future acceptance map. Runtime cancellation, complete replay through the actual bridge, native floor, packaging, protocol overlap, crash recovery and live suite remain P1–P8 gates.
 
 ## Next Stage
 
-After P0 acceptance, the coordinator first lands the matching central type/injection seams without pipeline implementation, then commissions library builders from that descendant carrying the accepted contract. Provide the exact accepted commit and relevant C/T clauses in each brief. P1/P2/P3 may then proceed in separate encrypted worktrees; shared pipeline/schema integration, paid drivers and release work remain coordinator-owned and sequential. Do not commission builders from this pending candidate.
+P0 is accepted. Before commissioning any builder, the coordinator first lands the matching central type/injection seams without pipeline implementation, then commissions library builders from that descendant carrying the accepted contract. Provide the exact accepted commit and relevant C/T clauses in each brief. P1/P2/P3 may then proceed in separate encrypted worktrees; shared pipeline/schema integration, paid drivers and release work remain coordinator-owned and sequential. Use the completed acceptance-record descendant and strict gate; do not commission builders from an old pending-state checkout.

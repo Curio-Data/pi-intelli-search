@@ -1,6 +1,6 @@
 # P0 Review Dispositions
 
-Specification revision: `P0-2`. This records amendments after the independent Opus 5.5 review blocked P0-1 commit `7fafa5275f4a38e236bf94a50069c50c29ca1eb2`. It does not claim the amended candidate has passed re-review. The final report and decision are recorded through STATUS/acceptance metadata only after review.
+Specification revision: `P0-2`. This records amendments after the independent Opus 5.5 review blocked P0-1 commit `7fafa5275f4a38e236bf94a50069c50c29ca1eb2`. The final independent report now accepts the amended exact revision at `842c56fc539451c84b2cd8793a3265810a998058`; [REVIEW.md](REVIEW.md) and `acceptance.json` record that decision. Both blockers are closed as specifications, not implemented runtime proofs.
 
 | Finding | Amendment | Remaining Proof |
 |---|---|---|
@@ -15,4 +15,4 @@ Specification revision: `P0-2`. This records amendments after the independent Op
 | L2–L5: Reason, jitter, per-call hooks and config path | Minimum reason added; scoped random injection; hooks once per policy invocation; MCP `tuning.execution` location explicit. | Deterministic type/behaviour tests at owning stages. |
 | L6–L8: Readability, small population and housekeeping | Add local stage/decision references, clarify diagnostics versus claims and disclose the small H1 population. Runtime source-tree/recovery documentation remains P4b. | No powered or confirmatory claim; later independent D6 design required. |
 
-Source review and model provenance are retained in the encrypted worktree evidence packet. No builder, runtime feature test, paid measurement or release is authorised merely by this amendment ledger.
+The final report's binding N1 condition and N2–N4/later-stage notes are carried in [BUILDER-HANDOFF.md](BUILDER-HANDOFF.md), including zero pipeline network during replay, fresh lock descriptors, separate owner diagnostics and distinct core-clock/native-wall-time populations. Source review and model provenance are retained in the encrypted worktree evidence packet. No builder, runtime feature test, paid measurement or release is authorised merely by this amendment ledger.
