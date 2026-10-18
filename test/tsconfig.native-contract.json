@@ -13,6 +13,8 @@
     "core-llm.test.ts",
     "core-scoped-policy.test.ts",
     "core-operation-runtime.test.ts",
+    "core-run-*.test.ts",
+    "helpers/run-store-worker.ts",
     "scoped-adapters.test.ts",
     "native-usage.test.ts",
     "core-cache.test.ts",

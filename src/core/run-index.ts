@@ -21,6 +21,7 @@ import {
   compatibilityKeyFor,
   isUtc,
   isValid,
+  utcDateOf,
   type AllocationRecord,
   type IndexEntry,
   type IndexRecord,
@@ -70,6 +71,8 @@ export async function readRunIndex(
   for (const entry of value.entries) {
     if (entry.sequence <= previous || runs.has(entry.runId) || !isUtc(entry.startedUtc))
       return { status: "corrupt", detail: "entries are not unique ascending admissions" };
+    if (entry.compatibilityKey !== compatibilityKeyFor(entry.query, utcDateOf(entry.startedUtc)))
+      return { status: "corrupt", detail: "entry compatibility key differs from its query/date" };
     previous = entry.sequence;
     runs.add(entry.runId);
   }

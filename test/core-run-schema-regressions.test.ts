@@ -219,7 +219,7 @@ it("accounting boundary: exact ceiling is readable; one byte more returns unavai
 });
 
 it("secondary index provenance cannot invent sequences, group identity or UTC ordering", async () => {
-  for (const field of ["sequence", "compatibilityKey", "startedUtc"] as const) {
+  for (const field of ["sequence", "compatibilityKey", "existingKey", "startedUtc"] as const) {
     const root = await scratchRoot(`schema-index-${field}`);
     const diagnostics: Diagnostic[] = [];
     const store = createRunStore(storeOptions(root, { diagnostics }));
@@ -234,16 +234,21 @@ it("secondary index provenance cannot invent sequences, group identity or UTC or
     }
     if (field === "compatibilityKey")
       index.entries[1].compatibilityKey = `sha256:${"f".repeat(64)}`;
-    if (field === "startedUtc") index.entries[1].startedUtc = "2030-01-01T00:00:00Z";
+    if (field === "existingKey")
+      index.entries[1].compatibilityKey = beta.reservation.compatibilityKey;
+    if (field === "startedUtc") index.entries[1].startedUtc = "2026-10-18T23:00:00Z";
     const damaged = encodeRecord(index);
     await writeFile(indexPath, damaged);
     const candidates = await store.candidates(undefined, "other", signal);
     assert.equal(
       candidates.find((c) => c.query === "alpha")?.admissionSequence,
-      older.reservation.sequence,
+      field === "compatibilityKey" || field === "existingKey"
+        ? newer.reservation.sequence
+        : older.reservation.sequence,
       field,
     );
-    assert.ok(!candidates.some((c) => c.reportPath.includes(newer.reservation.runId)));
+    if (field === "sequence" || field === "startedUtc")
+      assert.ok(!candidates.some((c) => c.reportPath.includes(newer.reservation.runId)));
     if (field === "sequence")
       assert.ok(
         !candidates.some((c) => c.query === "beta"),
@@ -255,7 +260,11 @@ it("secondary index provenance cannot invent sequences, group identity or UTC or
         beta.reservation.sequence,
       );
     assert.ok(
-      diagnostics.some((d) => d.code === "RUN_REJECTED" && d.message.includes("index provenance")),
+      diagnostics.some((d) =>
+        field === "compatibilityKey" || field === "existingKey"
+          ? d.code === "INDEX_CORRUPT" && d.message.includes("compatibility key")
+          : d.code === "RUN_REJECTED" && d.message.includes("index provenance"),
+      ),
     );
     assert.deepEqual(await readFile(indexPath), damaged, "reader leaves damaged input untouched");
   }
