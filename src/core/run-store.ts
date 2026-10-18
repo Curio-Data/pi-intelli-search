@@ -40,6 +40,7 @@ import {
   NAMESPACE_FILE,
   RESERVATION_FILE,
   RUNS_DIR,
+  STRUCTURAL_MAX_BYTES,
   ZERO_HASH,
   allocationHash,
   canonicalJson,
@@ -538,6 +539,15 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
         "INVALID_INPUT",
         "Allocation requires a query, a 1-256 character operation ID and a UTC ISO start time",
       );
+    if (Buffer.from(input.query, "utf8").toString("utf8") !== input.query)
+      return unavailable("INVALID_QUERY", "Allocation requires a well-formed Unicode query");
+    // The query alone cannot exceed the encoded marker ceiling. The complete
+    // marker is checked again at publication because its inventory adds bytes.
+    if (encodeRecord(input.query).byteLength > STRUCTURAL_MAX_BYTES)
+      return unavailable(
+        "QUERY_TOO_LARGE",
+        `Encoded query exceeds the ${STRUCTURAL_MAX_BYTES}-byte structural file ceiling; no run was allocated`,
+      );
     try {
       return await allocateLocked(input);
     } catch (error) {
@@ -649,7 +659,7 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
       artifacts.find((a) => a.kind === kind) as Artifact & { bytes: Uint8Array };
     if (byKind("report").bytes.byteLength === 0)
       return "the report is empty; only successful nonempty reports are published";
-    if (Buffer.from(byKind("query").bytes).toString("utf8") !== query)
+    if (!Buffer.from(byKind("query").bytes).equals(Buffer.from(query, "utf8")))
       return "query.txt does not match the allocated query";
     try {
       const run = JSON.parse(
@@ -708,6 +718,11 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
       nonEvidence,
     };
     const bytes = encodeRecord(marker);
+    if (bytes.byteLength > STRUCTURAL_MAX_BYTES)
+      throw new StoreError(
+        "MARKER_TOO_LARGE",
+        `Committed marker for ${runDir} would be ${bytes.byteLength} bytes, above the ${STRUCTURAL_MAX_BYTES}-byte reader ceiling; its directory is preserved without a marker`,
+      );
     const temp = join(runDir, `.${MARKER_FILE}.${tempNonce()}.tmp`);
     await writeNewFileDurable(temp, bytes);
     try {
@@ -951,11 +966,10 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
         summary: JSON.parse(canonicalJson(summary)),
       };
       const bytes = encodeRecord(accounting);
-      await writeNewFileDurable(join(runDir, ACCOUNTING_FILE), bytes);
-      if (signal.aborted)
+      if (bytes.byteLength > STRUCTURAL_MAX_BYTES)
         throw new StoreError(
-          "ABORTED",
-          "Cancelled before the accounting marker; accounting.json is not accepted without it",
+          "ACCOUNTING_TOO_LARGE",
+          `Accounting for ${runDir} would be ${bytes.byteLength} bytes, above the ${STRUCTURAL_MAX_BYTES}-byte reader ceiling; the report and returned usage are unaffected`,
         );
       const marker: AccountingMarker = {
         schema: "intelli-v1/accounting-committed",
@@ -965,8 +979,20 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
         manifestSha256: run.manifestSha256,
         file: { relativePath: ACCOUNTING_FILE, bytes: bytes.byteLength, sha256: sha256(bytes) },
       };
+      const markerBytes = encodeRecord(marker);
+      if (markerBytes.byteLength > STRUCTURAL_MAX_BYTES)
+        throw new StoreError(
+          "ACCOUNTING_MARKER_TOO_LARGE",
+          `Accounting marker for ${runDir} exceeds the ${STRUCTURAL_MAX_BYTES}-byte reader ceiling; the report and returned usage are unaffected`,
+        );
+      await writeNewFileDurable(join(runDir, ACCOUNTING_FILE), bytes);
+      if (signal.aborted)
+        throw new StoreError(
+          "ABORTED",
+          "Cancelled before the accounting marker; accounting.json is not accepted without it",
+        );
       const temp = join(runDir, `.${ACCOUNTING_MARKER_FILE}.${tempNonce()}.tmp`);
-      await writeNewFileDurable(temp, encodeRecord(marker));
+      await writeNewFileDurable(temp, markerBytes);
       try {
         await fault("before-accounting-marker-rename");
         if (signal.aborted)

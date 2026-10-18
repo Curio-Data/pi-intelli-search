@@ -21,6 +21,8 @@ export const MARKER_FILE = "committed.json";
 export const ACCOUNTING_FILE = "accounting.json";
 export const ACCOUNTING_MARKER_FILE = "accounting.committed.json";
 
+/** Shared reader/writer ceiling for structural JSON files, excluding the index. */
+export const STRUCTURAL_MAX_BYTES = 16 * 1024 * 1024;
 /** C23 bounds. */
 export const JOURNAL_RECORD_MAX_BYTES = 4_096;
 export const JOURNAL_MAX_BYTES = 67_108_864;
@@ -213,7 +215,13 @@ export function isValid<T extends TSchema>(schema: T, value: unknown): value is 
 }
 
 export function isUtc(value: unknown): value is string {
-  return typeof value === "string" && isValid(utc, value) && Number.isFinite(Date.parse(value));
+  if (typeof value !== "string" || !isValid(utc, value)) return false;
+  const instant = Date.parse(value);
+  // Date.parse normalises invalid days and 24:00. Preserve supported fractional
+  // precision, but require the calendar and whole-second fields to round-trip.
+  return (
+    Number.isFinite(instant) && new Date(instant).toISOString().slice(0, 19) === value.slice(0, 19)
+  );
 }
 
 /** Sorted-key JSON without whitespace; rejects values JSON cannot represent exactly. */

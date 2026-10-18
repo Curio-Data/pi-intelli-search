@@ -28,6 +28,7 @@ import {
   RESERVATION_FILE,
   ReservationSchema,
   RUNS_DIR,
+  STRUCTURAL_MAX_BYTES,
   ZERO_HASH,
   allocationHash,
   compatibilityKeyFor,
@@ -43,8 +44,8 @@ import {
   type ReservationRecord,
 } from "./run-format.js";
 
-/** Structural JSON files (markers, reservations, namespace, index) are bounded. */
-export const STRUCTURAL_MAX_BYTES = 16 * 1024 * 1024;
+// Retain this export for existing internal consumers.
+export { STRUCTURAL_MAX_BYTES } from "./run-format.js";
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 
 export class StoreError extends Error {

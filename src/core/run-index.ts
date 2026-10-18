@@ -257,10 +257,17 @@ export async function selectCandidates(options: SelectOptions): Promise<readonly
           journal.records.get(entry.runId),
           { expectedManifestSha256: entry.manifestSha256, signal: options.signal },
         );
-        if (verified.ok && verified.marker.query === entry.query) return true;
+        if (
+          verified.ok &&
+          verified.marker.query === entry.query &&
+          verified.marker.admissionSequence === entry.sequence &&
+          verified.marker.compatibilityKey === entry.compatibilityKey &&
+          verified.marker.startedUtc === entry.startedUtc
+        )
+          return true;
         options.onDiagnostic?.({
           code: "RUN_REJECTED",
-          message: `Run ${entry.runId} was not suggested: ${verified.ok ? "index query differs from marker" : verified.reason}`,
+          message: `Run ${entry.runId} was not suggested: ${verified.ok ? "index provenance differs from verified marker" : verified.reason}`,
         });
         return false;
       };
