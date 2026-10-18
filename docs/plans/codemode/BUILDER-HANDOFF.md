@@ -1,6 +1,6 @@
 # Builder Handoff
 
-This is an acceptance handoff for specification `P0-2`, reviewed at `842c56fc539451c84b2cd8793a3265810a998058`. It does not commission an agent, create a worktree or begin P1. Read [STATUS.md](STATUS.md), `acceptance.json`, [CONTRACT.md](CONTRACT.md) and [ACCEPTANCE.md](ACCEPTANCE.md). The coordinator must first land the matching central type/injection seam descendant; builders then use that descendant carrying the accepted specification.
+This is an acceptance handoff for specification `P0-2`, reviewed at `842c56fc539451c84b2cd8793a3265810a998058`. It does not commission an agent, create a worktree or begin P1. Read [STATUS.md](STATUS.md), `acceptance.json`, [CONTRACT.md](CONTRACT.md) and [ACCEPTANCE.md](ACCEPTANCE.md). The accepted documentation base is `c198b19c5dcbd76c551964686b3eb272e5fbc927`. The coordinator must first land the matching central type/injection seam descendant from that accepted base; builders then use that descendant carrying the accepted specification.
 
 ## Base and Review Integrity
 

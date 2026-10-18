@@ -3,6 +3,7 @@
   "revision": "P0-2",
   "status": "accepted",
   "reviewedCommit": "842c56fc539451c84b2cd8793a3265810a998058",
+  "acceptedDocumentationCommit": "c198b19c5dcbd76c551964686b3eb272e5fbc927",
   "reviewerModel": "claude-opus-5-5[1m]",
   "reviewReportSha256": "b70abc91ea7171ca44986b98429b222eb94ba41824d36eca89233619f692f620",
   "specificationManifestSha256": "b0e154ba7c6f097806302f5bd90f3e26cbfa07e0d769061cc0e9b9f148e778a3",

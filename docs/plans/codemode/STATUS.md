@@ -33,7 +33,7 @@ The first review blocked P0-1. The [final independent report](REVIEW.md) accepts
 - Bundle/report digests and full frozen-file list: canonical values in `acceptance.json`.
 - Independent technical Reviewer: `claude-opus-5-5[1m]` through Claude Code; actual native provenance and 1M context variant verified.
 - Coordinator acceptance: recorded by `openai-codex/gpt-6.1-sol` on 2026-10-18, with final report N1 binding on replay briefs.
-- Accepted documentation commit for builder bases: recorded immediately after committing this acceptance record; builders require the subsequent matching type-seam descendant, not the bare pending-state review commit.
+- Accepted documentation commit for builder bases: `c198b19c5dcbd76c551964686b3eb272e5fbc927`. Builders require its subsequent matching type-seam descendant, not the bare pending-state review commit.
 
 The current orchestrator is `openai-codex/gpt-6.1-sol`. The standing prose rule exempts work orchestrated by that prose-review model from a self-review; the independent technical reviewer must still inspect readability, source fidelity and scope. No self-review is counted as an independent pass.
 
@@ -41,7 +41,7 @@ The current orchestrator is `openai-codex/gpt-6.1-sol`. The standing prose rule 
 
 The prior source checkpoint is `129114f14c081c614b357b6fc90b4a056a49a308`. Its encrypted source archive, lockfile/prompt/settings hashes and observed host record were preserved before runtime changes. Current native and MCP runtime source remains that baseline. No live A0, pilot, feature implementation, package staging or publication is claimed.
 
-The contract checker and compile-only consumer passed, including the new native transport type guards. Baseline build/test-all/native-contract types, generator drift and audit checks passed; the selected native lock's source/integrity, isolated audit and Linux descriptor/process-death primitive checks are recorded. The final independent review accepted the exact revision. The strict accepted-state command is run after writing this metadata, and its successful exit is required before closing the checkpoint. Baseline regression success does not pass the future acceptance map. Runtime cancellation, complete replay through the actual bridge, native floor, packaging, protocol overlap, crash recovery and live suite remain P1–P8 gates.
+The contract checker and compile-only consumer passed, including the new native transport type guards. Baseline build/test-all/native-contract types, generator drift and audit checks passed; the selected native lock's source/integrity, isolated audit and Linux descriptor/process-death primitive checks are recorded. The final independent review accepted the exact revision. The strict `npm run check:codemode-plan` gate passed with the accepted metadata, alongside the plain checker, type consumer, baseline build/test-all/native-contract types, generator drift and audit gates. No live end-to-end or paid study gate was run or claimed. Baseline regression success does not pass the future acceptance map. Runtime cancellation, complete replay through the actual bridge, native floor, packaging, protocol overlap, crash recovery and live suite remain P1–P8 gates.
 
 ## Next Stage
 
