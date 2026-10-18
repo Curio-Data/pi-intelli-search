@@ -188,7 +188,29 @@ function utcMs(value: string): number {
 export async function selectCandidates(options: SelectOptions): Promise<readonly IndexCandidate[]> {
   const window = options.window ?? CANDIDATE_WINDOW;
   const fresh: IndexCandidate[] = [];
-  const claimedKeys = new Set<string>();
+  const byKey = new Map<string, IndexEntry[]>();
+  const resolved = new Map<string, IndexEntry | null>();
+  let verify: (entry: IndexEntry) => Promise<boolean> = async () => false;
+  /**
+   * Highest verified admission for a key, verifying lazily in descending
+   * sequence and memoising the outcome. A key whose every entry fails
+   * verification resolves to null and claims nothing (C26/C27).
+   */
+  const resolveKey = async (key: string): Promise<IndexEntry | null> => {
+    const known = resolved.get(key);
+    if (known !== undefined) return known;
+    let found: IndexEntry | null = null;
+    for (const entry of byKey.get(key) ?? []) {
+      if (options.signal.aborted)
+        throw new StoreError("ABORTED", "Cancelled while selecting candidates");
+      if (await verify(entry)) {
+        found = entry;
+        break;
+      }
+    }
+    resolved.set(key, found);
+    return found;
+  };
   try {
     const namespace = await readNamespace(options.namespaceDir);
     if (namespace) {
@@ -216,14 +238,7 @@ export async function selectCandidates(options: SelectOptions): Promise<readonly
           )
         ).entries;
       }
-      for (const entry of entries) claimedKeys.add(entry.compatibilityKey);
-      const selected = new Set<string>([options.currentKey]);
-      const ordered = [...entries].sort((a, b) => b.sequence - a.sequence);
-      for (const entry of ordered) {
-        if (fresh.length >= window) break;
-        if (selected.has(entry.compatibilityKey)) continue;
-        if (options.signal.aborted)
-          throw new StoreError("ABORTED", "Cancelled while selecting candidates");
+      verify = async (entry) => {
         const verified = await verifyCommittedRun(
           options.namespaceDir,
           namespace.namespaceId,
@@ -231,14 +246,31 @@ export async function selectCandidates(options: SelectOptions): Promise<readonly
           journal.records.get(entry.runId),
           { expectedManifestSha256: entry.manifestSha256, signal: options.signal },
         );
-        if (!verified.ok || verified.marker.query !== entry.query) {
-          options.onDiagnostic?.({
-            code: "RUN_REJECTED",
-            message: `Run ${entry.runId} was not suggested: ${verified.ok ? "index query differs from marker" : verified.reason}`,
-          });
+        if (verified.ok && verified.marker.query === entry.query) return true;
+        options.onDiagnostic?.({
+          code: "RUN_REJECTED",
+          message: `Run ${entry.runId} was not suggested: ${verified.ok ? "index query differs from marker" : verified.reason}`,
+        });
+        return false;
+      };
+      const ordered = [...entries].sort((a, b) => b.sequence - a.sequence);
+      for (const entry of ordered) {
+        const list = byKey.get(entry.compatibilityKey) ?? [];
+        list.push(entry);
+        byKey.set(entry.compatibilityKey, list);
+      }
+      const chosen: IndexEntry[] = [];
+      for (const entry of ordered) {
+        // A fallback admission may be lower than later keys' heads, so stop only
+        // once `window` chosen entries outrank every remaining entry.
+        if (chosen.filter((item) => item.sequence > entry.sequence).length >= window) break;
+        if (entry.compatibilityKey === options.currentKey || resolved.has(entry.compatibilityKey))
           continue;
-        }
-        selected.add(entry.compatibilityKey);
+        const best = await resolveKey(entry.compatibilityKey);
+        if (best) chosen.push(best);
+      }
+      chosen.sort((a, b) => b.sequence - a.sequence);
+      for (const entry of chosen.slice(0, window))
         fresh.push(
           Object.freeze({
             query: entry.query,
@@ -255,7 +287,6 @@ export async function selectCandidates(options: SelectOptions): Promise<readonly
             admissionSequence: entry.sequence,
           }),
         );
-      }
     }
   } catch (error) {
     if (options.signal.aborted) throw error;
@@ -264,13 +295,11 @@ export async function selectCandidates(options: SelectOptions): Promise<readonly
       message: `New-format candidates are unavailable: ${describe(error)}`,
     });
     fresh.length = 0;
+    byKey.clear();
   }
 
   const legacy = (await readLegacyCandidates(options.cacheRoot, options.onDiagnostic))
-    .filter(
-      (entry) =>
-        entry.compatibilityKey !== options.currentKey && !claimedKeys.has(entry.compatibilityKey),
-    )
+    .filter((entry) => entry.compatibilityKey !== options.currentKey)
     .sort(
       (a, b) =>
         utcMs(b.timestamp) - utcMs(a.timestamp) || (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0),
@@ -280,6 +309,8 @@ export async function selectCandidates(options: SelectOptions): Promise<readonly
     if (old.length >= window) break;
     if (options.signal.aborted)
       throw new StoreError("ABORTED", "Cancelled while selecting candidates");
+    // Prefer verified new evidence; an invalid new run never suppresses legacy.
+    if (byKey.has(entry.compatibilityKey) && (await resolveKey(entry.compatibilityKey))) continue;
     if (!(await legacyReportValid(options.cacheRoot, entry.slug))) continue;
     old.push(
       Object.freeze({

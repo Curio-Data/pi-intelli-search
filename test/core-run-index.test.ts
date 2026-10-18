@@ -29,7 +29,11 @@ import {
   compatibilityKeyFor,
   isValid,
 } from "../src/core/run-format.js";
-import { formatCandidatesForJudge, parseCandidateResponse } from "../src/core/run-index.js";
+import {
+  formatCandidatesForJudge,
+  parseCandidateResponse,
+  selectCandidates,
+} from "../src/core/run-index.js";
 import { artifactsFor, scratchRoot, storeOptions } from "./helpers/run-store-fixtures.js";
 
 const never = new AbortController().signal;
@@ -351,6 +355,93 @@ describe("C27 read-only legacy bridge and C26 merge", () => {
     );
     const noCurrent = await clockStore.candidates(undefined, "gamma", never);
     assert.ok(!noCurrent.some((c) => c.query === "gamma"));
+  });
+
+  it("an invalid new entry never suppresses a valid legacy candidate with that key", async () => {
+    const root = await scratchRoot("legacy-not-suppressed");
+    await legacyEntry(root, "2026-10-18-beta-bbbbbb", "beta", "2026-10-18T09:00:00.000Z");
+    await writeFile(
+      join(root, ".index.json"),
+      JSON.stringify({
+        searches: [
+          { slug: "2026-10-18-beta-bbbbbb", query: "beta", timestamp: "2026-10-18T09:00:00.000Z" },
+        ],
+      }),
+    );
+    const betaNew = await commitRun(root, "beta", "2026-10-18T10:00:00.000Z");
+    const store = createRunStore(storeOptions(root));
+    assert.deepEqual(
+      (await store.candidates(undefined, "other", never)).map((c) => c.namespace),
+      ["v1"],
+      "a verified new run is preferred over its legacy duplicate",
+    );
+    await writeFile(join(betaNew.reservation.physicalPath, "report.md"), "# tampered\n");
+    const after = await store.candidates(undefined, "other", never);
+    assert.deepEqual(
+      after.map((c) => `${c.namespace}:${c.query}`),
+      ["legacy:beta"],
+    );
+    // A damaged namespace yields no verified new evidence, so legacy survives too.
+    await writeFile(join(root, NAMESPACE_DIR, "allocations.ndjson"), "garbage\n");
+    const damaged = await createRunStore(storeOptions(root)).candidates(undefined, "other", never);
+    assert.deepEqual(
+      damaged.map((c) => `${c.namespace}:${c.query}`),
+      ["legacy:beta"],
+    );
+  });
+
+  it("a lower verified admission of the same key still prefers new over legacy, even outside the window", async () => {
+    const root = await scratchRoot("legacy-fallback");
+    await legacyEntry(root, "2026-10-18-alpha-aaaaaa", "alpha", "2026-10-18T08:00:00.000Z");
+    await writeFile(
+      join(root, ".index.json"),
+      JSON.stringify({
+        searches: [
+          {
+            slug: "2026-10-18-alpha-aaaaaa",
+            query: "alpha",
+            timestamp: "2026-10-18T08:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    const a1 = await commitRun(root, "alpha", "2026-10-18T09:00:00.000Z");
+    const b2 = await commitRun(root, "beta", "2026-10-18T09:30:00.000Z");
+    const a3 = await commitRun(root, "alpha", "2026-10-18T10:00:00.000Z");
+    await writeFile(join(a3.reservation.physicalPath, "report.md"), "# tampered\n");
+    const select = (window: number) =>
+      selectCandidates({
+        cacheRoot: root,
+        displayRoot: ".search",
+        namespaceDir: join(root, NAMESPACE_DIR),
+        currentKey: "sha256:" + "0".repeat(64),
+        signal: never,
+        window,
+      });
+    const two = await select(2);
+    assert.deepEqual(
+      two.map((c) => [c.namespace, c.admissionSequence]),
+      [
+        ["v1", b2.reservation.sequence],
+        ["v1", a1.reservation.sequence],
+      ],
+      "the fallback admission is ordered by its own sequence",
+    );
+    const one = await select(1);
+    assert.deepEqual(
+      one.map((c) => [c.namespace, c.admissionSequence]),
+      [["v1", b2.reservation.sequence]],
+    );
+    assert.ok(
+      !one.some((c) => c.namespace === "legacy"),
+      "verified new alpha outside the window still beats legacy alpha",
+    );
+    const three = await select(3);
+    assert.deepEqual(
+      three.map((c) => c.namespace),
+      ["v1", "v1"],
+      "legacy alpha dropped; no invented entries",
+    );
   });
 
   it("prompt and parser share one frozen candidate array", async () => {

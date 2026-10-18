@@ -471,20 +471,36 @@ describe("C21/C22 namespace, allocation and publication", () => {
     );
   });
 
-  it("unproven marker durability is not advertised; failed accounting is ignored by readers", async () => {
+  it("a post-rename directory-sync failure keeps the valid committed run and reports durability; failed accounting is ignored by readers", async () => {
     const root = await scratchRoot("store-durability");
-    const store = createRunStoreWithHooks(storeOptions(root), {
+    const diagnostics: Diagnostic[] = [];
+    const store = createRunStoreWithHooks(storeOptions(root, { diagnostics }), {
       fault: (p) => {
         if (p === "after-marker-rename") throw new Error("injected directory sync failure");
       },
     });
     const reservation = await allocated(store, "q");
     const result = await store.commit(reservation, artifactsFor("q"), never);
-    assert.equal(
-      result.status === "unavailable" && result.diagnostic.code,
-      "MARKER_DURABILITY_UNKNOWN",
+    assert.equal(result.status, "committed", "C22: publication is not rolled back or denied");
+    if (result.status !== "committed") return;
+    const durability = diagnostics.find((d) => d.code === "MARKER_DURABILITY_UNPROVEN");
+    assert.ok(durability, "durability is disclosed");
+    assert.ok(durability.message.includes(reservation.runId));
+    await lstat(join(reservation.physicalPath, MARKER_FILE));
+    const ns = await readNamespace(join(root, NAMESPACE_DIR));
+    const journal = await validateJournal(join(root, NAMESPACE_DIR), ns!.namespaceId, "writer");
+    const verified = await verifyCommittedRun(
+      join(root, NAMESPACE_DIR),
+      ns!.namespaceId,
+      reservation.runId,
+      journal.records.get(reservation.runId),
     );
-    assert.ok(!("run" in result));
+    assert.equal(verified.ok && verified.manifestSha256, result.run.manifestSha256);
+    assert.equal(
+      await store.updateIndex(result.run, "q", never),
+      "updated",
+      "index path still available",
+    );
 
     const store2 = createRunStoreWithHooks(storeOptions(root), {
       fault: (p) => {
@@ -661,6 +677,122 @@ describe("C23 journal validation fails closed", () => {
       "{}",
     );
     await expectUnavailable(root, "UNJOURNALLED_RUN");
+  });
+
+  it("conflicting journalled reservations or markers make allocation unavailable (C23)", async () => {
+    type Mutate = (runDir: string) => Promise<void>;
+    const rewrite =
+      (name: string, change: (value: Record<string, unknown>) => unknown): Mutate =>
+      async (runDir) => {
+        const value = JSON.parse(await readFile(join(runDir, name), "utf8"));
+        await writeFile(join(runDir, name), JSON.stringify(change(value)) + "\n");
+      };
+    const cases: [string, boolean, Mutate][] = [
+      ["reservation sequence", false, rewrite(RESERVATION_FILE, (v) => ({ ...v, sequence: 7 }))],
+      [
+        "reservation operation",
+        false,
+        rewrite(RESERVATION_FILE, (v) => ({ ...v, operationId: "forged" })),
+      ],
+      [
+        "reservation hash",
+        false,
+        rewrite(RESERVATION_FILE, (v) => ({ ...v, allocationHash: "e".repeat(64) })),
+      ],
+      ["reservation schema", false, rewrite(RESERVATION_FILE, (v) => ({ ...v, extra: 1 }))],
+      [
+        "reservation unreadable",
+        false,
+        async (d) => writeFile(join(d, RESERVATION_FILE), "{partial"),
+      ],
+      ["marker sequence", true, rewrite(MARKER_FILE, (v) => ({ ...v, admissionSequence: 9 }))],
+      [
+        "marker namespace",
+        true,
+        rewrite(MARKER_FILE, (v) => ({ ...v, namespaceId: "f".repeat(32) })),
+      ],
+      ["marker query/key", true, rewrite(MARKER_FILE, (v) => ({ ...v, query: "another query" }))],
+      ["marker unreadable", true, async (d) => writeFile(join(d, MARKER_FILE), "not json")],
+      [
+        "marker without reservation",
+        true,
+        async (d) => {
+          const { rename } = await import("node:fs/promises");
+          await rename(join(d, RESERVATION_FILE), join(d, "..", "..", "..", "moved-reservation"));
+        },
+      ],
+    ];
+    for (const [label, publish, mutate] of cases) {
+      const root = await scratchRoot(`identity-${label.replace(/[^a-z]+/g, "-")}`);
+      const store = createRunStore(storeOptions(root));
+      const reservation = await allocated(store, "victim");
+      if (publish)
+        assert.equal(
+          (await store.commit(reservation, artifactsFor("victim"), never)).status,
+          "committed",
+        );
+      await mutate(reservation.physicalPath);
+      const journal = join(root, NAMESPACE_DIR, JOURNAL_FILE);
+      const before = await readFile(journal);
+      const result = await createRunStore(storeOptions(root)).allocate({
+        operationId: "next",
+        query: "next",
+        startedUtc: START,
+        signal: never,
+      });
+      assert.equal(
+        result.status === "unavailable" && result.diagnostic.code,
+        "RUN_IDENTITY_CONFLICT",
+        label,
+      );
+      assert.ok(
+        result.status === "unavailable" && result.diagnostic.message.includes(reservation.runId),
+        label,
+      );
+      assert.deepEqual(await readFile(journal), before, `${label}: no admission consumed`);
+      await lstat(reservation.physicalPath);
+    }
+  });
+
+  it("allowed gaps pass the identity check: journalled without reservation, temp leftovers, valid published runs", async () => {
+    const root = await scratchRoot("identity-gaps");
+    const store = createRunStore(storeOptions(root));
+    const published = await allocated(store, "published");
+    assert.equal(
+      (await store.commit(published, artifactsFor("published"), never)).status,
+      "committed",
+    );
+    const gap = await allocated(createRunStore(storeOptions(root)), "gap");
+    const { rename } = await import("node:fs/promises");
+    await rename(join(gap.physicalPath, RESERVATION_FILE), join(root, "gap-reservation"));
+    await writeFile(join(gap.physicalPath, ".reservation.json.0123.tmp"), "{partial");
+    await writeFile(join(published.physicalPath, ".committed.json.4567.tmp"), "{partial");
+    const next = await allocated(createRunStore(storeOptions(root)), "next");
+    assert.equal(next.sequence, 3);
+  });
+
+  it("identity validation yields and observes cancellation across many runs", async () => {
+    const root = await scratchRoot("identity-yield");
+    await allocated(createRunStore(storeOptions(root)), "seed");
+    // Few journal records (no journal yield) but more than 128 run entries.
+    for (let i = 0; i < 200; i++) await mkdir(join(root, NAMESPACE_DIR, RUNS_DIR, `orphan-${i}`));
+    const controller = new AbortController();
+    const store = createRunStoreWithHooks(storeOptions(root), {
+      fault: (p) => void (p === "lock-acquired" && controller.abort()),
+    });
+    const result = await store.allocate({
+      operationId: "late",
+      query: "late",
+      startedUtc: START,
+      signal: controller.signal,
+    });
+    assert.equal(result.status === "unavailable" && result.diagnostic.code, "ABORTED");
+    assert.match(
+      result.status === "unavailable" ? result.diagnostic.message : "",
+      /validating run identities/,
+      "cancellation observed inside the identity scan",
+    );
+    assert.equal((await journalRecords(root)).length, 1, "no admission after cancellation");
   });
 
   it("streams long journals, yielding and checking cancellation every 128 records", async () => {

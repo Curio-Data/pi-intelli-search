@@ -12,6 +12,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { constants } from "node:fs";
 import { copyFile, lstat, mkdir, open, rename, unlink } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
+import { setImmediate as yieldTurn } from "node:timers/promises";
 import type {
   AccountingSummary,
   AllocateInput,
@@ -32,6 +33,7 @@ import {
   JOURNAL_FILE,
   JOURNAL_MAX_BYTES,
   JOURNAL_RECORD_MAX_BYTES,
+  JOURNAL_YIELD_RECORDS,
   MARKER_FILE,
   NAMESPACE_DIR,
   NAMESPACE_FILE,
@@ -60,6 +62,7 @@ import {
   StoreError,
   describe,
   errorCode,
+  checkRunIdentity,
   hasStructuralRecord,
   listRunNames,
   readNamespace,
@@ -116,7 +119,7 @@ interface OwnedRun {
   readonly query: string;
   readonly operationId: string;
   readonly allocationHash: string;
-  state: "allocated" | "committing" | "committed" | "unproven" | "failed";
+  state: "allocated" | "committing" | "committed" | "failed";
   run?: CommittedRun;
   accounting: "none" | "writing" | "recorded" | "failed";
 }
@@ -232,8 +235,29 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
     if (namespace) {
       const journal = await validateJournal(namespaceDir, namespace.namespaceId, "writer", signal);
       const names = (await listRunNames(namespaceDir)) ?? [];
+      let checked = 0;
       for (const name of names) {
-        if (journal.records.has(name)) continue;
+        if (++checked % JOURNAL_YIELD_RECORDS === 0) {
+          await yieldTurn();
+          if (signal.aborted)
+            throw new StoreError("ABORTED", "Cancelled while validating run identities");
+        }
+        const record = journal.records.get(name);
+        if (record) {
+          // C23: journal, reservation and committed identities are checked together.
+          const conflict = await checkRunIdentity(
+            namespaceDir,
+            namespace.namespaceId,
+            name,
+            record,
+          );
+          if (conflict)
+            throw new StoreError(
+              "RUN_IDENTITY_CONFLICT",
+              `Run ${join(runsDir, name)} conflicts with its allocation journal record (${conflict}); publication is unavailable until an operator stops all writers, preserves the namespace and validates it.`,
+            );
+          continue;
+        }
         if (await hasStructuralRecord(join(runsDir, name)))
           throw new StoreError(
             "UNJOURNALLED_RUN",
@@ -390,7 +414,11 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
         allocationHash: record.hash,
       };
       try {
-        await writeNewFileDurable(join(runDir, RESERVATION_FILE), encodeRecord(reservationRecord));
+        // Temporary file plus rename: a crash never leaves a partial
+        // reservation that later allocations would read as a conflict.
+        const temp = join(runDir, `.${RESERVATION_FILE}.${tempNonce()}.tmp`);
+        await writeNewFileDurable(temp, encodeRecord(reservationRecord));
+        await rename(temp, join(runDir, RESERVATION_FILE));
         await syncDirectory(runDir);
         await syncDirectory(runsDir);
       } catch (error) {
@@ -646,11 +674,13 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
       await fault("after-marker-rename");
       await syncDirectory(runDir);
     } catch (error) {
-      entry.state = "unproven";
-      return unavailable(
-        "MARKER_DURABILITY_UNKNOWN",
-        `The committed marker in ${runDir} was renamed into place but its directory sync failed (${describe(error)}); the report path is not advertised because durability is unproven. Readers may still verify it later.`,
-      );
+      // The rename already published a valid marker; C22 keeps that committed
+      // state. The frozen commit union has no diagnostic field, so durability
+      // is reported through onDiagnostic, keyed by run ID.
+      options.onDiagnostic({
+        code: "MARKER_DURABILITY_UNPROVEN",
+        message: `Run ${reservation.runId} is committed (its marker in ${runDir} is in place and valid), but the directory sync after publication failed (${describe(error)}); durability of the publication across power loss is unproven.`,
+      });
     }
     entry.state = "committed";
     entry.run = run;

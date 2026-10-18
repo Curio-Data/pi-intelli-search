@@ -307,6 +307,68 @@ export async function hasStructuralRecord(runDir: string): Promise<boolean> {
   }
 }
 
+/**
+ * C23 allocation-time identity check for one journalled run: an existing
+ * reservation and an existing committed marker must parse, match the schema
+ * and agree with the journal record. A missing reservation without a marker
+ * is an allowed gap. File contents are not hashed here; readers do that.
+ */
+export async function checkRunIdentity(
+  namespaceDir: string,
+  namespaceId: string,
+  runId: string,
+  record: AllocationRecord,
+): Promise<string | undefined> {
+  const runDir = join(namespaceDir, RUNS_DIR, runId);
+  const read = async (name: string): Promise<{ value: unknown } | undefined | string> => {
+    try {
+      return { value: (await readJson(join(runDir, name))).value };
+    } catch (error) {
+      if (errorCode(error) === "ENOENT") return undefined;
+      return `${name} is unreadable: ${describe(error)}`;
+    }
+  };
+  try {
+    const dir = await lstat(runDir);
+    if (!dir.isDirectory()) return "run path is not a directory";
+  } catch (error) {
+    return `run path cannot be inspected: ${describe(error)}`;
+  }
+  const reservation = await read(RESERVATION_FILE);
+  const marker = await read(MARKER_FILE);
+  if (typeof reservation === "string") return reservation;
+  if (typeof marker === "string") return marker;
+  if (reservation) {
+    const value = reservation.value;
+    if (!isValid(ReservationSchema, value)) return "reservation schema mismatch";
+    const agrees =
+      value.namespaceId === namespaceId &&
+      value.runId === runId &&
+      value.sequence === record.sequence &&
+      value.operationId === record.operationId &&
+      value.compatibilityKey === record.compatibilityKey &&
+      value.startedUtc === record.startedUtc &&
+      value.allocationHash === record.hash;
+    if (!agrees) return "reservation identity differs from the journal record";
+  }
+  if (marker) {
+    if (!reservation) return "committed marker without a reservation";
+    const value = marker.value;
+    if (!isValid(CommittedMarkerSchema, value) || !isUtc(value.startedUtc))
+      return "committed marker schema mismatch";
+    const agrees =
+      value.namespaceId === namespaceId &&
+      value.runId === runId &&
+      value.admissionSequence === record.sequence &&
+      value.allocationHash === record.hash &&
+      value.compatibilityKey === record.compatibilityKey &&
+      value.startedUtc === record.startedUtc &&
+      compatibilityKeyFor(value.query, utcDateOf(value.startedUtc)) === value.compatibilityKey;
+    if (!agrees) return "committed marker identity differs from the journal record";
+  }
+  return undefined;
+}
+
 export type RunVerification =
   | {
       readonly ok: true;
