@@ -26,6 +26,16 @@ export const JOURNAL_RECORD_MAX_BYTES = 4_096;
 export const JOURNAL_MAX_BYTES = 67_108_864;
 export const JOURNAL_YIELD_RECORDS = 128;
 export const ZERO_HASH = "0".repeat(64);
+/**
+ * Read/write ceiling for the secondary index, derived from the journal safety
+ * ceiling rather than a stored-entry cap (C26). Entries never outnumber journal
+ * records, and each entry's non-query fields (run ID, sequence, key, start,
+ * manifest hash) are no larger than its record's (run ID, sequence, key, start,
+ * operation ID and two hashes), so they total at most JOURNAL_MAX_BYTES; the
+ * second JOURNAL_MAX_BYTES budgets the escaped query text. Only histories whose
+ * queries average longer than about that share per record can exceed it.
+ */
+export const INDEX_MAX_BYTES = 2 * 67_108_864;
 /** Diagnostic owner metadata is bounded; it never decides ownership. */
 export const OWNER_MAX_BYTES = 1_024;
 /** Existing judge window (src/core/cache.ts MAX_JUDGE_ENTRIES), retained by C26. */

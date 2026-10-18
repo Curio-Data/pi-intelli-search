@@ -14,6 +14,7 @@ import type { Diagnostic, IndexCandidate } from "./execution-contracts.js";
 import {
   CANDIDATE_WINDOW,
   INDEX_FILE,
+  INDEX_MAX_BYTES,
   IndexSchema,
   JOURNAL_YIELD_RECORDS,
   RUNS_DIR,
@@ -40,7 +41,8 @@ export const LEGACY_INDEX_FILE = ".index.json";
 const LEGACY_SLUG = /^(\d{4}-\d{2}-\d{2})-[a-z0-9-]{1,200}$/;
 
 export interface IndexReadResult {
-  readonly status: "valid" | "missing" | "corrupt";
+  /** `oversized` is a valid-looking index above INDEX_MAX_BYTES; it is not corruption. */
+  readonly status: "valid" | "missing" | "corrupt" | "oversized";
   readonly index?: IndexRecord;
   readonly detail?: string;
 }
@@ -52,9 +54,11 @@ export async function readRunIndex(
 ): Promise<IndexReadResult> {
   let value: unknown;
   try {
-    value = (await readJson(join(namespaceDir, INDEX_FILE))).value;
+    value = (await readJson(join(namespaceDir, INDEX_FILE), INDEX_MAX_BYTES)).value;
   } catch (error) {
     if (errorCode(error) === "ENOENT") return { status: "missing" };
+    if (error instanceof StoreError && error.code === "TOO_LARGE")
+      return { status: "oversized", detail: describe(error) };
     return { status: "corrupt", detail: describe(error) };
   }
   if (!isValid(IndexSchema, value))
@@ -223,6 +227,13 @@ export async function selectCandidates(options: SelectOptions): Promise<readonly
       const read = await readRunIndex(options.namespaceDir, namespace.namespaceId);
       let entries: readonly IndexEntry[];
       if (read.status === "valid" && read.index) entries = read.index.entries;
+      else if (read.status === "oversized")
+        // Bounded cost: no in-memory rebuild that would hash every run on each
+        // call. New candidates are unavailable; legacy ones remain eligible.
+        throw new StoreError(
+          "INDEX_OVERSIZED",
+          `Run index ${join(options.namespaceDir, INDEX_FILE)} exceeds the ${INDEX_MAX_BYTES}-byte ceiling derived from the journal limit (${read.detail}); it is not corrupt and was left untouched. Archive history offline to restore new-format suggestions.`,
+        );
       else {
         if (read.status === "corrupt")
           options.onDiagnostic?.({

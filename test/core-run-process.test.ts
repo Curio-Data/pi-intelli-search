@@ -212,6 +212,38 @@ describe("independent processes", () => {
     });
   }
 
+  for (const point of [
+    "init-after-journal",
+    "init-after-runs",
+    "init-after-identity",
+  ] as FaultPoint[]) {
+    it(`SIGKILL during fresh initialisation at ${point} leaves persistence available`, async () => {
+      const root = await scratchRoot(`process-init-${point}`);
+      const crashed = await runWorker({
+        mode: "allocate",
+        cacheRoot: root,
+        count: 1,
+        crashAt: point,
+        query: "first",
+      });
+      assert.equal(crashed.signal, "SIGKILL", crashed.stderr);
+      assert.ok(lines(crashed.stdout).some((l) => l.fault === point));
+      const store = createRunStore(storeOptions(root));
+      for (let i = 1; i <= 2; i++) {
+        const next = await store.allocate({
+          operationId: `after-${i}`,
+          query: `after ${i}`,
+          startedUtc: new Date().toISOString(),
+          signal: never,
+        });
+        assert.equal(next.status, "allocated", JSON.stringify(next));
+        if (next.status === "allocated") assert.equal(next.reservation.sequence, i);
+      }
+      const { state } = await journal(root);
+      assert.equal(state.records.size, 2);
+    });
+  }
+
   it("old and new writers share one configured parent without touching each other's metadata", async () => {
     const root = await scratchRoot("process-old-new");
     const [legacy, fresh] = await Promise.all([

@@ -14,6 +14,7 @@ import {
   readFile,
   readdir,
   stat,
+  symlink,
   truncate,
   writeFile,
 } from "node:fs/promises";
@@ -526,6 +527,43 @@ describe("C21/C22 namespace, allocation and publication", () => {
     assert.ok(!(await readdir(reservation2.physicalPath)).includes(ACCOUNTING_MARKER_FILE));
   });
 
+  it("a post-rename directory-sync failure keeps accounting recorded, matching what readers accept", async () => {
+    const root = await scratchRoot("accounting-durability");
+    const diagnostics: Diagnostic[] = [];
+    const store = createRunStoreWithHooks(storeOptions(root, { diagnostics }), {
+      fault: (p) => {
+        if (p === "after-accounting-marker-rename")
+          throw new Error("injected directory sync failure");
+      },
+    });
+    const reservation = await allocated(store, "q");
+    const committed = await store.commit(reservation, artifactsFor("q"), never);
+    assert.equal(committed.status, "committed");
+    if (committed.status !== "committed") return;
+    const accounting = await store.recordAccounting(committed.run, [], summary, never);
+    assert.deepEqual(accounting, {
+      status: "recorded",
+      path: join(reservation.displayPath, ACCOUNTING_FILE),
+    });
+    const durability = diagnostics.find((d) => d.code === "ACCOUNTING_DURABILITY_UNPROVEN");
+    assert.ok(durability && durability.message.includes(reservation.runId));
+    const ns = await readNamespace(join(root, NAMESPACE_DIR));
+    assert.ok(
+      await verifyAccounting(
+        reservation.physicalPath,
+        ns!.namespaceId,
+        reservation.runId,
+        committed.run.manifestSha256,
+      ),
+      "readers accept the same accounting the store reported recorded",
+    );
+    assert.equal(
+      (await store.recordAccounting(committed.run, [], summary, never)).status,
+      "unavailable",
+      "still immutable",
+    );
+  });
+
   it("settle waits for its own writers only", async () => {
     const root = await scratchRoot("store-settle");
     let release!: () => void;
@@ -793,6 +831,65 @@ describe("C23 journal validation fails closed", () => {
       "cancellation observed inside the identity scan",
     );
     assert.equal((await journalRecords(root)).length, 1, "no admission after cancellation");
+  });
+
+  it("an identity with no admissions but no runs/ completes initialisation; with admissions it is damage", async () => {
+    const root = await scratchRoot("init-incomplete");
+    const dir = join(root, NAMESPACE_DIR);
+    await mkdir(dir);
+    await writeFile(join(dir, JOURNAL_FILE), "");
+    await writeFile(
+      join(dir, NAMESPACE_FILE),
+      encodeRecord({
+        schema: "intelli-v1/namespace",
+        schemaVersion: 1,
+        namespaceId: "a".repeat(32),
+        createdUtc: START,
+      }),
+    );
+    const diagnostics: Diagnostic[] = [];
+    const store = createRunStore(storeOptions(root, { diagnostics }));
+    for (const expected of [1, 2]) {
+      const result = await store.allocate({
+        operationId: `op${expected}`,
+        query: `q${expected}`,
+        startedUtc: START,
+        signal: never,
+      });
+      assert.equal(
+        result.status === "allocated" && result.reservation.sequence,
+        expected,
+        JSON.stringify(result),
+      );
+    }
+    assert.ok(diagnostics.some((d) => d.code === "NAMESPACE_INIT_COMPLETED"));
+    assert.equal((await readNamespace(dir))?.namespaceId, "a".repeat(32), "identity preserved");
+
+    const damaged = await damagedRoot("runs-removed");
+    const { rename } = await import("node:fs/promises");
+    await rename(join(damaged, NAMESPACE_DIR, RUNS_DIR), join(damaged, "moved-runs"));
+    await expectUnavailable(damaged, "RUNS_MISSING");
+
+    const linked = await damagedRoot("runs-linked");
+    await rename(join(linked, NAMESPACE_DIR, RUNS_DIR), join(linked, "real-runs"));
+    await symlink(join(linked, "real-runs"), join(linked, NAMESPACE_DIR, RUNS_DIR));
+    await expectUnavailable(linked, "RUNS_INVALID");
+  });
+
+  it("a stray file in runs/ fails closed with a not-a-run-directory diagnostic", async () => {
+    const root = await damagedRoot("stray-file");
+    await writeFile(join(root, NAMESPACE_DIR, RUNS_DIR, ".DS_Store"), "x");
+    const result = await createRunStore(storeOptions(root)).allocate({
+      operationId: "op",
+      query: "q",
+      startedUtc: START,
+      signal: never,
+    });
+    assert.equal(result.status === "unavailable" && result.diagnostic.code, "UNJOURNALLED_RUN");
+    assert.match(
+      result.status === "unavailable" ? result.diagnostic.message : "",
+      /is not a run directory/,
+    );
   });
 
   it("streams long journals, yielding and checking cancellation every 128 records", async () => {

@@ -369,6 +369,27 @@ export async function checkRunIdentity(
   return undefined;
 }
 
+/**
+ * Containment for artefact paths: every intermediate segment below `base`
+ * must be a real directory, because O_NOFOLLOW guards only the final
+ * component. This does not defend against concurrent hostile mutation.
+ */
+export async function intermediatesAreDirectories(
+  base: string,
+  relativePath: string,
+): Promise<boolean> {
+  let current = base;
+  for (const segment of relativePath.split("/").slice(0, -1)) {
+    current = join(current, segment);
+    try {
+      if (!(await lstat(current)).isDirectory()) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 export type RunVerification =
   | {
       readonly ok: true;
@@ -395,8 +416,9 @@ export async function verifyCommittedRun(
   if (!record) return fail("no journal record");
   const runDir = join(namespaceDir, RUNS_DIR, runId);
   try {
-    const dir = await lstat(runDir);
-    if (!dir.isDirectory()) return fail("run path is not a directory");
+    // lstat never follows the final component, so each check rejects a link.
+    for (const real of [namespaceDir, join(namespaceDir, RUNS_DIR), runDir])
+      if (!(await lstat(real)).isDirectory()) return fail(`${real} is not a real directory`);
     let markerRead;
     try {
       markerRead = await readJson(join(runDir, MARKER_FILE));
@@ -457,6 +479,8 @@ export async function verifyCommittedRun(
     if (query?.sha256 !== sha256(Buffer.from(marker.query, "utf8")))
       return fail("query.txt does not match the marker query");
     for (const file of [...marker.files, ...marker.nonEvidence]) {
+      if (!(await intermediatesAreDirectories(runDir, file.relativePath)))
+        return fail(`${file.relativePath} resolves through a linked or non-directory segment`);
       const actual = await hashFile(join(runDir, file.relativePath), options.signal);
       if (actual.bytes !== file.bytes || actual.sha256 !== file.sha256)
         return fail(`${file.relativePath} size or hash differs`);

@@ -22,6 +22,7 @@ import { createRunStore } from "../src/core/run-store.js";
 import {
   CANDIDATE_WINDOW,
   INDEX_FILE,
+  INDEX_MAX_BYTES,
   IndexSchema,
   MARKER_FILE,
   NAMESPACE_DIR,
@@ -223,6 +224,79 @@ describe("C27 verified new readers", () => {
       rebuilt.entries.map((e: { query: string }) => e.query),
       ["first", "second"],
     );
+  });
+
+  it("rejects a run whose artefact path crosses a symlinked intermediate directory", async () => {
+    const root = await scratchRoot("intermediate-link");
+    const run = await commitRun(root, "linked", "2026-10-18T10:00:00.000Z");
+    const { cp, rename } = await import("node:fs/promises");
+    // An identical copy outside the run: hashes match, containment does not.
+    await cp(join(run.reservation.physicalPath, "sources"), join(root, "outside-sources"), {
+      recursive: true,
+    });
+    await rename(join(run.reservation.physicalPath, "sources"), join(root, "original-sources"));
+    await symlink(join(root, "outside-sources"), join(run.reservation.physicalPath, "sources"));
+    const diagnostics: Diagnostic[] = [];
+    const candidates = await createRunStore(storeOptions(root, { diagnostics })).candidates(
+      undefined,
+      "other",
+      never,
+    );
+    assert.deepEqual(candidates, []);
+    assert.ok(diagnostics.some((d) => /linked or non-directory segment/.test(d.message)));
+  });
+
+  it("an oversized index is distinct from corruption: no preservation copy, no rebuild, untouched", async () => {
+    const root = await scratchRoot("index-oversized");
+    await legacyEntry(root, "2026-10-17-legacy-aaaaaa", "legacy", "2026-10-17T09:00:00.000Z");
+    await writeFile(
+      join(root, ".index.json"),
+      JSON.stringify({
+        searches: [
+          {
+            slug: "2026-10-17-legacy-aaaaaa",
+            query: "legacy",
+            timestamp: "2026-10-17T09:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    await commitRun(root, "first", "2026-10-18T10:00:00.000Z");
+    const indexPath = join(root, NAMESPACE_DIR, INDEX_FILE);
+    const { truncate } = await import("node:fs/promises");
+    await truncate(indexPath, INDEX_MAX_BYTES + 1); // sparse: size check precedes any read
+    const before = await stat(indexPath);
+    const diagnostics: Diagnostic[] = [];
+    const store = createRunStore(storeOptions(root, { diagnostics }));
+    const allocation = await store.allocate({
+      operationId: "o",
+      query: "second",
+      startedUtc: "2026-10-18T11:00:00.000Z",
+      signal: never,
+    });
+    assert.equal(allocation.status, "allocated");
+    if (allocation.status !== "allocated") return;
+    const committed = await store.commit(allocation.reservation, artifactsFor("second"), never);
+    assert.equal(committed.status, "committed");
+    if (committed.status !== "committed") return;
+    assert.equal(await store.updateIndex(committed.run, "second", never), "unavailable");
+    assert.ok(diagnostics.some((d) => d.code === "INDEX_OVERSIZED"));
+    assert.ok(!diagnostics.some((d) => d.code === "INDEX_REBUILT"));
+    const names = await readdir(join(root, NAMESPACE_DIR));
+    assert.ok(!names.some((n) => n.startsWith("index.corrupt-")), "no amplifying corrupt copy");
+    const after = await stat(indexPath);
+    assert.equal(after.size, before.size);
+    assert.equal(after.mtimeMs, before.mtimeMs, "index left untouched");
+    const readerDiagnostics: Diagnostic[] = [];
+    const candidates = await createRunStore(
+      storeOptions(root, { diagnostics: readerDiagnostics }),
+    ).candidates(undefined, "other", never);
+    assert.deepEqual(
+      candidates.map((c) => `${c.namespace}:${c.query}`),
+      ["legacy:legacy"],
+    );
+    assert.ok(readerDiagnostics.some((d) => d.code === "INDEX_OVERSIZED"));
+    assert.ok(!readerDiagnostics.some((d) => d.code === "INDEX_CORRUPT"));
   });
 
   it("stores every committed run (no new cap) while the candidate window stays 20", async () => {

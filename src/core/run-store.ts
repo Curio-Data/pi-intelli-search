@@ -30,6 +30,7 @@ import {
   ACCOUNTING_FILE,
   ACCOUNTING_MARKER_FILE,
   INDEX_FILE,
+  INDEX_MAX_BYTES,
   JOURNAL_FILE,
   JOURNAL_MAX_BYTES,
   JOURNAL_RECORD_MAX_BYTES,
@@ -92,6 +93,9 @@ const tempNonce = () => randomBytes(8).toString("hex");
 /** Named crash/fault boundaries for deterministic and independent-process tests. */
 export type FaultPoint =
   | "lock-acquired"
+  | "init-after-journal"
+  | "init-after-runs"
+  | "init-after-identity"
   | "after-run-mkdir"
   | "after-journal-write"
   | "after-journal-sync"
@@ -100,7 +104,8 @@ export type FaultPoint =
   | "before-marker-rename"
   | "after-marker-rename"
   | "before-index-rename"
-  | "before-accounting-marker-rename";
+  | "before-accounting-marker-rename"
+  | "after-accounting-marker-rename";
 
 export interface RunStoreHooks {
   readonly loadLockBinding?: LockBindingLoader;
@@ -223,10 +228,46 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
     }
   }
 
+  let parentSynced = false;
+  /** Sync the cache root once per store so the namespace entry itself is durable. */
+  async function syncParentOnce(): Promise<void> {
+    if (parentSynced) return;
+    try {
+      await syncDirectory(options.cacheRoot);
+    } catch (error) {
+      throw new StoreError(
+        "DURABILITY_UNAVAILABLE",
+        `Cannot sync ${options.cacheRoot} to make ${namespaceDir} durable: ${describe(error)}`,
+      );
+    }
+    parentSynced = true;
+  }
+
+  /** Finish an initialisation that published its identity before runs/ was durable. */
+  async function completeInitialisation(): Promise<void> {
+    try {
+      await mkdir(runsDir);
+      await syncDirectory(namespaceDir);
+      await syncDirectory(options.cacheRoot);
+      parentSynced = true;
+    } catch (error) {
+      throw new StoreError(
+        "DURABILITY_UNAVAILABLE",
+        `Cannot complete initialisation of ${namespaceDir} (creating runs/): ${describe(error)}`,
+      );
+    }
+    options.onDiagnostic({
+      code: "NAMESPACE_INIT_COMPLETED",
+      message: `${namespaceDir} had an identity and no admissions but no runs/ directory (an interrupted initialisation); runs/ was created and synced.`,
+    });
+  }
+
   /**
    * Validate identity and allocation history under the lock. A missing journal
    * is initialisable only when there is no namespace identity, no journalled
-   * history and no run directory at all; otherwise history is unknown.
+   * history and no run directory at all; otherwise history is unknown. An
+   * identity with an empty journal but no runs/ is an interrupted
+   * initialisation and is completed; with admissions it is damage.
    */
   async function openNamespace(
     signal: AbortSignal,
@@ -234,6 +275,27 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
     const namespace = await readNamespace(namespaceDir);
     if (namespace) {
       const journal = await validateJournal(namespaceDir, namespace.namespaceId, "writer", signal);
+      let runsInfo;
+      try {
+        runsInfo = await lstat(runsDir);
+      } catch (error) {
+        if (errorCode(error) !== "ENOENT") throw error;
+      }
+      if (!runsInfo) {
+        if (journal.records.size > 0)
+          throw new StoreError(
+            "RUNS_MISSING",
+            `${runsDir} is missing while the allocation journal records ${journal.records.size} admissions; run evidence was removed. Stop all writers, preserve the namespace and restore runs/ before publishing again.`,
+          );
+        // Identity was published but initialisation stopped before runs/
+        // became durable; with no admissions this completes initialisation.
+        await completeInitialisation();
+      } else if (!runsInfo.isDirectory())
+        throw new StoreError(
+          "RUNS_INVALID",
+          `${runsDir} is not a real directory (a symlink or file); publication is unavailable until an operator restores it.`,
+        );
+      else await syncParentOnce();
       const names = (await listRunNames(namespaceDir)) ?? [];
       let checked = 0;
       for (const name of names) {
@@ -258,6 +320,12 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
             );
           continue;
         }
+        const entryInfo = await lstat(join(runsDir, name));
+        if (!entryInfo.isDirectory())
+          throw new StoreError(
+            "UNJOURNALLED_RUN",
+            `${join(runsDir, name)} is not a run directory (a stray file or link) and has no allocation journal record; publication is unavailable until an operator moves it out of runs/ after checking it is not run evidence.`,
+          );
         if (await hasStructuralRecord(join(runsDir, name)))
           throw new StoreError(
             "UNJOURNALLED_RUN",
@@ -283,8 +351,10 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
         "NAMESPACE_MISSING",
         `Namespace identity is missing but ${runsDir} contains runs; it is not provably fresh.`,
       );
-    // Fresh namespace: empty journal first, then identity, then runs/. Every
-    // crash point leaves a state this function re-initialises or accepts.
+    // Fresh namespace: empty journal, then runs/, then identity, each made
+    // durable before the next. A crash before the identity rename leaves a
+    // provably fresh namespace (re-initialised); a crash after it leaves an
+    // identity with no admissions, which completeInitialisation() finishes.
     try {
       const handle = await open(
         journalPath,
@@ -297,6 +367,16 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
         await handle.close();
       }
       await syncDirectory(namespaceDir);
+      await fault("init-after-journal");
+      try {
+        await mkdir(runsDir);
+      } catch (error) {
+        if (errorCode(error) !== "EEXIST") throw error;
+        if (!(await lstat(runsDir)).isDirectory())
+          throw new StoreError("RUNS_INVALID", `${runsDir} is not a real directory`);
+      }
+      await syncDirectory(namespaceDir);
+      await fault("init-after-runs");
       const created: NamespaceRecord = {
         schema: "intelli-v1/namespace",
         schemaVersion: 1,
@@ -308,8 +388,12 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
       const temp = join(namespaceDir, `.${NAMESPACE_FILE}.${tempNonce()}.tmp`);
       await writeNewFileDurable(temp, encodeRecord(created));
       await rename(temp, join(namespaceDir, NAMESPACE_FILE));
-      await mkdir(runsDir, { recursive: true });
+      await fault("init-after-identity");
       await syncDirectory(namespaceDir);
+      // The namespace's own entry in its parent must be durable before any
+      // admission is granted (process-kill tests cannot prove power loss).
+      await syncDirectory(options.cacheRoot);
+      parentSynced = true;
       return { namespace: created, journal: { records: new Map(), bytes: 0 } };
     } catch (error) {
       if (error instanceof StoreError) throw error;
@@ -733,8 +817,14 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
       namespaceId,
       entries,
     };
+    const encoded = encodeRecord(index);
+    if (encoded.byteLength > INDEX_MAX_BYTES)
+      throw new StoreError(
+        "INDEX_OVERSIZED",
+        `A rebuilt run index would be ${encoded.byteLength} bytes, above the ${INDEX_MAX_BYTES}-byte ceiling; it was not written`,
+      );
     const temp = join(namespaceDir, `.${INDEX_FILE}.${tempNonce()}.tmp`);
-    await writeNewFileDurable(temp, encodeRecord(index));
+    await writeNewFileDurable(temp, encoded);
     try {
       await fault("before-index-rename");
       await rename(temp, join(namespaceDir, INDEX_FILE));
@@ -781,6 +871,13 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
         const read = await readRunIndex(namespaceDir, namespace.namespaceId);
         let entries: IndexEntry[];
         if (read.status === "valid" && read.index) entries = [...read.index.entries];
+        else if (read.status === "oversized")
+          // Not corruption: no preservation copy and no full rebuild under the
+          // lock on every update. The committed run itself is unaffected.
+          throw new StoreError(
+            "INDEX_OVERSIZED",
+            `Run index ${join(namespaceDir, INDEX_FILE)} exceeds the ${INDEX_MAX_BYTES}-byte ceiling derived from the journal limit (${read.detail}); it was left untouched and not updated`,
+          );
         else {
           if (read.status === "corrupt") {
             const preserved = await preserveCorruptIndex();
@@ -889,8 +986,18 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
         await unlink(temp).catch(() => undefined);
         throw error;
       }
-      await syncDirectory(runDir);
+      // The marker rename is the accounting linearisation point: readers accept
+      // it from here on, so a later sync failure cannot report it unrecorded.
       entry.accounting = "recorded";
+      try {
+        await fault("after-accounting-marker-rename");
+        await syncDirectory(runDir);
+      } catch (error) {
+        options.onDiagnostic({
+          code: "ACCOUNTING_DURABILITY_UNPROVEN",
+          message: `Accounting for run ${run.reservation.runId} is recorded (its marker in ${runDir} is in place and valid), but the directory sync after publication failed (${describe(error)}); durability across power loss is unproven.`,
+        });
+      }
       return { status: "recorded", path: join(run.reservation.displayPath, ACCOUNTING_FILE) };
     } catch (error) {
       entry.accounting = "failed";
@@ -1000,8 +1107,14 @@ export async function rebuildRunIndex(
       namespaceId: namespace.namespaceId,
       entries: rebuilt.entries,
     };
+    const encoded = encodeRecord(index);
+    if (encoded.byteLength > INDEX_MAX_BYTES)
+      return unavailable(
+        "INDEX_OVERSIZED",
+        `A rebuilt run index would be ${encoded.byteLength} bytes, above the ${INDEX_MAX_BYTES}-byte ceiling; the existing index was left in place`,
+      );
     const temp = join(namespaceDir, `.${INDEX_FILE}.${tempNonce()}.tmp`);
-    await writeNewFileDurable(temp, encodeRecord(index));
+    await writeNewFileDurable(temp, encoded);
     await rename(temp, join(namespaceDir, INDEX_FILE));
     await syncDirectory(namespaceDir);
     return {
