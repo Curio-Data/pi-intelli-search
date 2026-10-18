@@ -5,6 +5,9 @@ import type { HarvestedCitation } from "./annotations.js";
 import type { ModelConfig, ResearchSettings } from "./types.js";
 import type { WorkspacePaths } from "./paths.js";
 
+// Additive P0-2 seams; existing operations keep their current context until integration.
+export type * from "./execution-contracts.js";
+
 export type DeepReadonly<T> = T extends object
   ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
   : T;

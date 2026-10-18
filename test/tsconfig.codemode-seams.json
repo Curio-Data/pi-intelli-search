@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "composite": false,
+    "noEmit": true,
+    "declaration": false
+  },
+  "include": [
+    "fixtures/codemode-seams.typecheck.ts",
+    "../docs/plans/codemode/API.ts",
+    "../docs/plans/codemode/NATIVE-API.ts"
+  ],
+  "exclude": []
+}
