@@ -32,6 +32,7 @@ import {
   type AllocationRecord,
 } from "../src/core/run-format.js";
 import { validateJournal, verifyAccounting, verifyCommittedRun } from "../src/core/run-journal.js";
+import { TOKEN_FIELDS } from "../src/core/usage.js";
 import { createRunStore } from "../src/core/run-store.js";
 import { storeOptions } from "./helpers/run-store-fixtures.js";
 
@@ -177,7 +178,7 @@ function exampleNamespace(): Map<string, Buffer> {
       tokens: {},
       reportedCost: {},
       estimatedCost: {},
-      missingTokenFields: ["inputTotal"],
+      missingTokenFields: [...TOKEN_FIELDS],
       costComplete: false,
       parentDelivery: "unknown",
     },

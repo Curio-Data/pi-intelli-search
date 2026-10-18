@@ -32,6 +32,7 @@ import {
   type FaultPoint,
 } from "../src/core/run-store.js";
 import { acquireWriterLock, loadNativeLockBinding } from "../src/core/run-lock.js";
+import { createAttemptLedger } from "../src/core/usage.js";
 import {
   ACCOUNTING_FILE,
   ACCOUNTING_MARKER_FILE,
@@ -68,17 +69,7 @@ import {
 
 const never = new AbortController().signal;
 const START = "2026-10-18T12:00:00.000Z";
-const summary: AccountingSummary = {
-  attempts: 1,
-  observedAttempts: 1,
-  missingAttempts: 0,
-  tokens: { inputTotal: 10, outputTotal: 5 },
-  reportedCost: { total: 0.001 },
-  estimatedCost: {},
-  missingTokenFields: [],
-  costComplete: true,
-  parentDelivery: "available",
-};
+const summary: AccountingSummary = createAttemptLedger().summary("available");
 
 async function allocated(
   store: ReturnType<typeof createRunStore>,

@@ -8,6 +8,7 @@
 import { createHash } from "node:crypto";
 import { Type, type Static, type TSchema } from "typebox";
 import { Value } from "typebox/value";
+import { AccountingSummarySchema, AttemptRecordSchema } from "./accounting-schema.js";
 
 export const NAMESPACE_DIR = ".intelli-v1";
 export const NAMESPACE_FILE = "namespace.json";
@@ -140,8 +141,8 @@ export const AccountingSchema = Type.Object(
     runId,
     manifestSha256: sha256Hex,
     coverage: Type.Literal("all-model-work-settled"),
-    attempts: Type.Array(Type.Object({}, { additionalProperties: true })),
-    summary: Type.Object({}, { additionalProperties: true }),
+    attempts: Type.Array(AttemptRecordSchema),
+    summary: AccountingSummarySchema,
   },
   strict,
 );

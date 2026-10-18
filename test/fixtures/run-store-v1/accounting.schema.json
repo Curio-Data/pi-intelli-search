@@ -41,14 +41,397 @@
       "type": "array",
       "items": {
         "type": "object",
-        "properties": {},
-        "additionalProperties": true
+        "required": [
+          "operationId",
+          "callId",
+          "attempt",
+          "model",
+          "role",
+          "state",
+          "startedAtMs",
+          "settledAtMs",
+          "queueMs"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]+$"
+          },
+          "callId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]+$"
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "model": {
+            "type": "object",
+            "required": [
+              "provider",
+              "model"
+            ],
+            "properties": {
+              "provider": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "search"
+              },
+              {
+                "type": "string",
+                "const": "extract"
+              },
+              {
+                "type": "string",
+                "const": "collate"
+              },
+              {
+                "type": "string",
+                "const": "suggest"
+              }
+            ]
+          },
+          "pageId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]+$"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "succeeded"
+              },
+              {
+                "type": "string",
+                "const": "failed"
+              },
+              {
+                "type": "string",
+                "const": "aborted"
+              },
+              {
+                "type": "string",
+                "const": "timed-out"
+              }
+            ]
+          },
+          "startedAtMs": {
+            "type": "number"
+          },
+          "settledAtMs": {
+            "type": "number"
+          },
+          "queueMs": {
+            "type": "number",
+            "minimum": 0
+          },
+          "observation": {
+            "type": "object",
+            "required": [
+              "tokens",
+              "source",
+              "costBasis"
+            ],
+            "properties": {
+              "tokens": {
+                "type": "object",
+                "properties": {
+                  "inputTotal": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "inputUncached": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "outputTotal": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "cacheRead": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "cacheWrite": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "cacheWrite1h": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "reasoning": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "totalTokens": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              },
+              "cost": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "input": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "output": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "cacheRead": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "cacheWrite": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "provider-response"
+                  },
+                  {
+                    "type": "string",
+                    "const": "sdk-normalized"
+                  }
+                ]
+              },
+              "costBasis": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "reported"
+                  },
+                  {
+                    "type": "string",
+                    "const": "catalogue"
+                  },
+                  {
+                    "type": "string",
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "providerRequestId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
       }
     },
     "summary": {
       "type": "object",
-      "properties": {},
-      "additionalProperties": true
+      "required": [
+        "attempts",
+        "observedAttempts",
+        "missingAttempts",
+        "tokens",
+        "reportedCost",
+        "estimatedCost",
+        "missingTokenFields",
+        "costComplete",
+        "parentDelivery"
+      ],
+      "properties": {
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "observedAttempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "missingAttempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "tokens": {
+          "type": "object",
+          "properties": {
+            "inputTotal": {
+              "type": "number",
+              "minimum": 0
+            },
+            "inputUncached": {
+              "type": "number",
+              "minimum": 0
+            },
+            "outputTotal": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cacheRead": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cacheWrite": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cacheWrite1h": {
+              "type": "number",
+              "minimum": 0
+            },
+            "reasoning": {
+              "type": "number",
+              "minimum": 0
+            },
+            "totalTokens": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "reportedCost": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "number",
+              "minimum": 0
+            },
+            "input": {
+              "type": "number",
+              "minimum": 0
+            },
+            "output": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cacheRead": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cacheWrite": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "estimatedCost": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "number",
+              "minimum": 0
+            },
+            "input": {
+              "type": "number",
+              "minimum": 0
+            },
+            "output": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cacheRead": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cacheWrite": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "missingTokenFields": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "inputTotal"
+              },
+              {
+                "type": "string",
+                "const": "inputUncached"
+              },
+              {
+                "type": "string",
+                "const": "outputTotal"
+              },
+              {
+                "type": "string",
+                "const": "cacheRead"
+              },
+              {
+                "type": "string",
+                "const": "cacheWrite"
+              },
+              {
+                "type": "string",
+                "const": "cacheWrite1h"
+              },
+              {
+                "type": "string",
+                "const": "reasoning"
+              },
+              {
+                "type": "string",
+                "const": "totalTokens"
+              }
+            ]
+          },
+          "uniqueItems": true
+        },
+        "costComplete": {
+          "type": "boolean"
+        },
+        "parentDelivery": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "available"
+            },
+            {
+              "type": "string",
+              "const": "unavailable-after-parent-cancel"
+            },
+            {
+              "type": "string",
+              "const": "unknown"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

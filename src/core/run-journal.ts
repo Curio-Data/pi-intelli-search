@@ -11,6 +11,7 @@ import { lstat, open, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { setImmediate as yieldTurn } from "node:timers/promises";
 import type { Diagnostic } from "./execution-contracts.js";
+import { accountingBodyError } from "./accounting-validation.js";
 import {
   ACCOUNTING_FILE,
   ACCOUNTING_MARKER_FILE,
@@ -493,7 +494,10 @@ export async function verifyCommittedRun(
   }
 }
 
-/** Readers accept accounting only through its own valid hash marker. */
+/**
+ * Given an already verified report manifest, accept accounting only through its
+ * own valid hash marker, shared body schemas and consistent settled ledger.
+ */
 export async function verifyAccounting(
   runDir: string,
   namespaceId: string,
@@ -518,6 +522,14 @@ export async function verifyAccounting(
       value.namespaceId !== namespaceId ||
       value.runId !== runId ||
       value.manifestSha256 !== manifestSha256
+    )
+      return undefined;
+    const reservation = (await readJson(join(runDir, RESERVATION_FILE))).value;
+    if (
+      !isValid(ReservationSchema, reservation) ||
+      reservation.namespaceId !== namespaceId ||
+      reservation.runId !== runId ||
+      accountingBodyError(value.attempts, value.summary, reservation.operationId) !== undefined
     )
       return undefined;
     return value;

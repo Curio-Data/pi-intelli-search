@@ -54,6 +54,14 @@ Permanent regressions cover exact accepted/rejected marker and accounting byte b
 
 The coordinator passed `build:all`, `test:all`, the strict accepted-plan gate, native-contract types, generator drift and low-severity audit checks on the final candidate. Logs are retained under `.tmp/codemode-p4-schema/gates-final/`, using the same runtime and local dependency versions recorded for the preceding slice. No dependency, package version, schema definition or frozen fixture changed. No fresh-tarball, live, paid or publication gate ran. This closes the field-by-field wire-schema prerequisite only, not P4 or T16/T17/T21–T28 integration acceptance.
 
+## Accounting Body Prerequisite
+
+The next coordinator-owned P4 slice replaces opaque accounting items and summaries with strict shared schemas matching the frozen accounting interfaces. The writer and verified-accounting reader reconstruct the settled attempt ledger and compare derived summary fields, including missingness and cost provenance. They reject duplicate attempts, foreign operation ownership and reversed settlement times; the reader binds ownership to the reservation of an already verified report. `parentDelivery` remains a validated external observation, not a new delivery proof. Invalid bodies cannot publish an accounting marker or invalidate an existing report.
+
+The `accounting@1` fixture was deliberately regenerated before adapter integration. The constructed example's previously incomplete missing-token mask and its accounting hash marker were corrected. No journal, reservation, report-marker protocol, frozen P0 file, package version or dependency changed. [Persistence Format](PERSISTENCE-FORMAT.md#accounting-body-validation) records the exact rules and their limits. Schema types are mutually assignable with the frozen interfaces through a permanent CI compile-time test; deterministic tests also exercise the actual writer and reader, not only hand-built schema objects.
+
+Coordinator checks passed: `build:all`, `test:all`, native-contract types, strict P0, generator drift and the low-severity audit. Logs are under `.tmp/codemode-p4-accounting/gates/`, using Node.js 24.19.0 and the local `pi-ai` 1.1.0 development dependency. Independent review is pending. No fresh-tarball, live or paid call, staging or publication ran. The pipeline-owned `run.json` contract, full result/progress/configuration/fetch implementation and registered runtime wiring remain open. This slice does not pass P4, T16/T17 integration, installed persistence or replay gates.
+
 ## Next Stage
 
 The library candidates branched from seam commit `e1cfe62745631cabed26539c09225fae707fbd5d` and passed the strict accepted-plan gate before edits. Their final reviewed histories are merged without rewriting the P0 specification commit. Library landing does not pass the full T09–T32 rows: adapter and real-host portions remain open.

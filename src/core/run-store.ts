@@ -75,6 +75,7 @@ import {
   type JournalState,
 } from "./run-journal.js";
 import { readRunIndex, rebuildIndexEntries, selectCandidates } from "./run-index.js";
+import { accountingBodyError } from "./accounting-validation.js";
 import {
   acquireWriterLock,
   loadNativeLockBinding,
@@ -955,6 +956,8 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
     entry.accounting = "writing";
     const runDir = run.reservation.physicalPath;
     try {
+      const invalid = accountingBodyError(records, summary, entry.operationId);
+      if (invalid) throw new StoreError("INVALID_ACCOUNTING", `Accounting for ${runDir}: ${invalid}`);
       const accounting: AccountingRecord = {
         schema: "intelli-v1/accounting",
         schemaVersion: 1,

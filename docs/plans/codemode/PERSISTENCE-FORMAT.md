@@ -44,11 +44,19 @@ The following checks supplement the per-record schemas:
 
 The real writer and reader regression in `test/core-run-schema-regressions.test.ts` exercises all published record schemas, canonical output, a reserved gap, late non-evidence and accounting. The example fixture remains a deterministic constructed namespace, not a capture of production execution.
 
-## Body Validation and Remaining Gates
+## Accounting Body Validation
 
-The persistence library treats `run.json` as a UTF-8 JSON object and hashes its bytes. It does not yet prescribe a field-level schema for source state or provenance. The `accounting@1` schema constrains its envelope but treats attempt items and the summary as opaque objects. The typed writer accepts `AttemptRecord` and `AccountingSummary`; the file reader does not independently prove those shapes, completeness masks or ledger arithmetic.
+The pre-integration `accounting@1` schema now uses the shared `AttemptRecord` and `AccountingSummary` schemas in `src/core/accounting-schema.ts`. Unknown properties are rejected at every level. Attempt counters are safe integers; token and cost observations are finite non-negative numbers, retaining the ledger's numeric semantics rather than imposing integer token counts. Operation, call and optional page identifiers also pass the coordinator's control-character and encoded-byte checks.
 
-Before pipeline integration, validate these bodies against the shared result/accounting shapes and define the pipeline-owned `run.json` contract. A hash-valid accounting file is not by itself a trusted accounting observation. This remains an integration gate, not a pass for [acceptance-map rows T16 and T17](ACCEPTANCE.md#requirement-map) or final accounting fidelity. Later schema changes require deliberate fixture regeneration and review.
+The writer validates before creating `accounting.json`; invalid bodies return `INVALID_ACCOUNTING`, publish no accounting marker and leave the committed report intact. The reader validates after checking the accounting marker and exact body bytes. Both reconstruct the settled attempt ledger, reject duplicate attempt identities, mixed or foreign operation ownership and settlement before start, then compare every derived summary field. The missing-token mask is a set: its order is immaterial, but duplicates, omissions and invented fields reject. Attempt ownership must agree with the run's reservation. `verifyAccounting()` takes an already verified report manifest; it does not replace report/journal verification.
+
+This validation preserves unknown fields as absent, explicit observed zeros, provider-reported and catalogue cost separation, and the accepted zero-attempt completeness convention. `parentDelivery` is an external observation with a validated enum, not an independently verified delivery claim. Ledger consistency does not establish that provider usage was captured correctly or that every dispatched attempt reached the supplied ledger. The shared schema types are mutually assignable with the frozen accounting interfaces under the CI native-contract type check.
+
+The schema fixture was deliberately regenerated for this pre-integration refinement. The constructed example's missing-token mask now lists every unobserved token field, and its independent accounting marker hashes the corrected bytes. The envelope, report marker, journal, namespace and P0-2 bundle are unchanged. `test/core-run-accounting.test.ts` covers writer refusal, hash-valid reader tampering, unchanged report visibility, schema/type parity and settled-ledger round trips. Independent acceptance of this refinement is recorded separately in [Development](DEVELOPMENT.md).
+
+## Remaining Body and Integration Gates
+
+The persistence library still treats `run.json` as a UTF-8 JSON object and hashes its bytes. Define the pipeline-owned field-level source-state/provenance contract before pipeline integration. Accounting/result mapping, capture fidelity and full [acceptance-map rows T16 and T17](ACCEPTANCE.md#requirement-map) remain open; the body checks alone do not pass them. Later schema changes require deliberate fixture regeneration and review.
 
 A failed diagnostic-owner rename can leave a private temporary file. It is not run evidence and does not control ownership. No automatic cleanup of historical or orphan evidence is introduced here.
 
