@@ -1,0 +1,237 @@
+# Codemode Contract
+
+Specification revision: `P0-1`. This is an implementation contract, not an implementation or release claim. Acceptance, the reviewed commit and remaining gates are recorded separately in [STATUS.md](STATUS.md). Exact application programming interface (API) declarations are in [API.ts](API.ts); the requirement-to-test map is [ACCEPTANCE.md](ACCEPTANCE.md). Those declarations describe planned code, not shipped exports.
+
+The owner approved the streaming defaults, compact Model Context Protocol (MCP) projection, finite script-budget examples, subscription-backed main/two-judge roles and pre-configured encrypted worktrees with overrides. Research-history policy is deferred to [its separate plan](../research-history/PLAN.md). No paid tranche or publication is authorised by this specification. The source baseline is commit `129114f14c081c614b357b6fc90b4a056a49a308`.
+
+## Authority and Scope
+
+### C01 Release Boundaries
+
+R1 delivers shared execution, accounting, run publication, all five operation/result/progress shapes, bounded host-neutral fetch, streaming/deadline capability and bounded parallel MCP requests. It is a minor release of both packages. R2 is native-only Codemode wiring, gated fetch registration, widget and examples, released as a native patch. No omitted shared prerequisite may be repaired in R2. The core pipeline executes stages directly, not through registered host tools or newer nested-tool APIs, preserving the native floor. Within R1, MCP publication and registry-pin/plugin verification precede native staging. Candidate versions require current registry/primary-owner reconciliation; publication requires separate approval. No candidate version is selected here.
+
+### C02 P0 Acceptance and Ownership
+
+P0 requires this numbered contract, its exact interfaces, acceptance map, hashed corpus and experiment methods in a tracked commit; coordinator acceptance; and a fresh independent rostered technical review of that exact revision through [_Herdr_](https://herdr.dev). Earlier plan reviews do not satisfy this gate. The owner-approved deferral in C26 is a resolved scope decision, not a missing owner answer. Paid tranche approval, confirmatory margins and the optional ablation retain C31/C32's later gates and do not block unpaid P0 acceptance.
+
+The coordinator owns central `src/core/contracts.ts`, settings/schemas, native context/registration seams and pipeline wiring. P1 owns coordinator/ledger libraries, P2 owns run-store/index libraries and P3 owns recorder/parser/statistics libraries plus their isolated tests. They do not edit central files. After P0 acceptance and before commissioning builders, the coordinator lands matching central type/injection seams as the first type-only runtime descendant; the declarations must be mutually assignable with `API.ts`. Their worktrees branch from the accepted documentation commit or a descendant carrying it; briefs quote clause/test identifiers and absolute report paths. The library APIs in `API.ts` are frozen before those builders start.
+
+### C03 Defaults and Configuration
+
+These owner-accepted defaults are unmeasured, not performance claims:
+
+| Field | Default | Validated Range / Rule |
+|---|---|---|
+| `execution.pageExecution` | `streaming` | `streaming` or `barrier` |
+| `execution.modelConcurrency` | 5 | Integer 2–64 |
+| `execution.criticalReserve` | 1 | Exactly 1, within the total cap |
+| `execution.aggregateFetchConcurrency` | 4 | Integer 1–32; counts physical request chains, C19 |
+| `execution.lateDrainMs` | 0 | Integer 0–30,000; independent of cancellation target |
+| `execution.deadline` | `{ "enabled": false }` | Whole-object replacement; enabled form below |
+| MCP `admission.maxConcurrent` | 2 | Integer 1–16 |
+| MCP `admission.maxQueued` | 8 | Integer 0–256; zero still permits immediate active admission |
+
+The following coordinator-selected safety bounds require implementation tests, not tuning claims: `execution.fetchMaxResponseBytes` defaults to 8,388,608, range 65,536–16,777,216; `execution.docsMaxResponseBytes` defaults to 16,777,216, range 65,536–33,554,432; `execution.fetchMaxChars` defaults to 500,000, range 1–500,000. These bound accepted content, not an unconditional process resident-memory guarantee.
+
+An enabled deadline object must explicitly provide all of: `enabled: true`, `quorum` in `(0, 1]`, finite `factor` in `(0, 10]`, integer `floorMs` in `[0, 600000]`, integer `ceilingMs` in `[1, 600000]` with `floorMs <= ceilingMs`, and integer `minSources` in `[1, 100]`. There are no tuned or implicit enabled-policy numbers. Reject enabled deadlines with barrier execution in R1; the barrier control waits for the full fetch stage, then extraction stage. Streaming/deadline capability remains fully implemented in R1.
+
+Existing `fetchConcurrency` and `extractionConcurrency` remain per-run limits. Existing model/retry settings retain their ranges; `minRequestIntervalMs` becomes runtime-wide actual model-attempt start spacing, including retries and standalone calls. Disclose that changed scope. Native known `execution` fields and MCP tuning/admission are validated before inference; reject unknown fields inside the new blocks. Native unrelated legacy settings keep their current loading/trust behaviour. MCP adds adapter-only `admission` beside existing config fields, not to shared model defaults. A runtime captures validated coordinator settings once; changed settings take effect through runtime replacement, not conflicting per-operation cap values.
+
+No cap-one aggregate model mode is provided: use operation/extraction serial controls with aggregate capacity at least two. This removes the zero-page-capacity boundary rather than silently disabling the reserve.
+
+## Ownership and Timing
+
+### C04 Owned Work and Settlement
+
+Every operation owns its task registry, page chains, transport attempts, timer callbacks, temporary files and writers. It captures an operation lease before preflight. All normal, degraded and error returns occur after those owned resources settle. Abort from every state cancels and drains them. `settle()` is idempotent and awaits actual completion; a timeout race that abandons a dependency is forbidden. Runtime-owned shared catalogue work may continue for another live waiter, but a cancelled operation must remove its own waiter and have no remaining owned callbacks.
+
+State order is admission, preflight, search, page phase, immutable snapshot, collation, late drain, cache commit, suggestions, final accounting, settlement. No-links and all-failed branches use the same finalisation path. Summary-ready, return, all-work-settled and abort durations are distinct observations. No detached post-return mutation or persistent job handle is introduced.
+
+### C05 Cancelled Parent Accounting
+
+A Codemode host can return its cancelled parent before nested operations finish draining. The extension still settles its operations, but marks late usage delivery `unavailable-after-parent-cancel` when observed unable to reach the returned parent. If delivery cannot be established on cancellation, use `unknown`; do not default an aborted call to `available`. Do not claim complete session billing or manufacture zero charges. The operation-side ledger survives until its owned settlement and emits remaining observations to the local run record even with optional telemetry disabled when a benchmark observer is installed.
+
+### C06 Cancellation Target
+
+The prespecified abort-to-settled acceptance target is 5,000 milliseconds, including permit/pacing waits, model/fetch cancellation, annotation readers, staging cleanup, metadata writes already in progress and runtime-close work. This leaves five seconds before the current MCP ten-second emergency exit. The target was selected before feature timing tests: existing annotation settlement alone can use two seconds, and file/transport cleanup needs additional headroom. It is a test target under the enumerated verified environment, not a guarantee against an unresponsive filesystem or provider. A real adapter exceeding it blocks acceptance; do not exclude cleanup, shorten observations or abandon work to pass. Optional success-path late drain is C09's independent budget.
+
+### C07 Stable Source Identity
+
+Deduplicate/clamp candidates before page concurrency. Assign `S1`, `S2`, … from that order, not completion order. Only successful nonempty extractions recorded before snapshot freeze enter collation. Freeze one immutable array, including fixed identifiers, and use it for prompt construction, provenance validation and report evidence. Late completions cannot renumber or enlarge it. The model sees source identifiers and evidence, not promised future file paths; verified file inventory is appended deterministically after publication.
+
+### C08 Deadline State Machine
+
+Use the injectable monotonic clock/timers in `API.ts`; Coordinated Universal Time (UTC) is provenance/display only.
+
+1. Page entry is `t0`. Queue, pacing and retry waits count toward completion latency. With `N = 0`, use no-links without a page timer.
+2. Terminal pages include fetch failure and extraction success, empty or failure. Quorum is `ceil(N * quorum)` terminal pages. Arm the absolute ceiling at `t0` independently of quorum.
+3. At the first quorum with at least one nonempty success, compute the ordinary median of successful completion latencies, averaging the central pair for an even count. A quorum reached with zero successes remains unarmed until its first success.
+4. Compute once: `adaptive = clamp(tQuorum + factor * median, t0 + floorMs, t0 + ceilingMs)`. Do not recompute from later pages.
+5. All-terminal completion ends the phase immediately, even before the floor. If adaptive time arrives with fewer than `min(minSources, N)` successes, keep working until that minimum or the ceiling. Do not apply page cutoff while waiting for that minimum.
+6. At the ceiling, freeze whatever successes exist and record whether the minimum was met. Zero successes use the existing degraded outcome. The ceiling does not bound collation, suggestions or whole-tool duration.
+7. Scheduled cutoff wins over terminal completion at the same monotonic time. Every terminal callback checks due ceiling/adaptive conditions before changing evidence, so timer callback arrival order cannot reverse this rule. The adaptive check is eligible only when the minimum was already met. While waiting for minimum evidence, a success strictly before the ceiling is recorded first and may itself trigger freeze. All-terminal/minimum-triggered freezes include their triggering event; these are event-triggered, not equal-time timer cutoffs.
+8. Process each terminal/freeze transition atomically in the scheduler callback; test both callback delivery orders and the triggering-event exception. Disabled mode has no adaptive/ceiling timer. Historical proposal arithmetic is not an oracle.
+
+### C09 Cutoff and Late Work
+
+At actual freeze, prevent new page extraction and page retries, remove queued page/pacing tickets, and abort in-flight fetch chains. Do not admit a call merely because its page started earlier. Already-started extraction attempts may finish during collation and bounded late drain but cannot retry. Critical non-page work remains eligible. At drain expiry, cancel and settle remaining work before writing final artefacts. A zero drain still requires cancellation/settlement, not detached promises. Retained late extractions are labelled separately and excluded from report evidence. Raw late fetch retention is not included. Documentation discovery is operation-owned, separately bounded by C19, and cancelled at finalisation.
+
+## Coordination and Accounting
+
+### C10 Coordinator Lifetime
+
+Each adapter runtime owns one coordinator; no unresettable module singleton. Registration starts no timers/processes. Native factory/session-generation state is captured in a closure. On session replacement/reload, mark the old generation closed, stop admissions, abort/drain it, then enable the new coordinator. There is zero active-work overlap between generations. Calls arriving during replacement await that gate with their own abort signal. Shutdown acts only on its captured generation, is idempotent and cannot close the replacement. Stale callbacks cannot mutate a fresh widget/context. MCP creates the coordinator once in `createRuntime()` and closes it with the runtime/server.
+
+Hard implementation safety ceilings are 64 simultaneous operation leases and 512 pending model or fetch tickets per runtime. Page model tickets occupy at most 448 queued positions, leaving 64 for critical work; page floods cannot consume the entire critical queue headroom. Excess admission fails observably before that lease/ticket starts work. They are bounded-ownership safeguards, not measured throughput settings. P1 tests limits without changing the owner-accepted defaults.
+
+### C11 Attempt Admission Boundary
+
+Put model admission inside the sole `runModelWithPolicy()` retry owner, immediately around each transport attempt. Disable underlying software development kit (SDK) retries. A queued attempt has no active permit or usage start record until transport admission. The attempt timeout begins at dispatch, not while waiting for a permit; operation/deadline cancellation still bounds its wait. Release permits before backoff and reacquire on retry. Preflight catalogue requests are not inference and use C14's separate bounded loader.
+
+`ModelCallScope` identifies operation, role, call and optional page. Operations supply it on every model call. Role `extract` is always page-class admission, including standalone extract; search/collate/suggest are critical. A caller cannot obtain the critical reserve merely by omitting a page ID. Native and MCP adapters pass `PolicyHooks` once; native `callLlm()` adds optional hooks for the adapter while preserving its successful `onUsage` compatibility callback. Accounting is sourced from the attempt ledger, never that successful callback. The scoped policy combines operation, request and attempt-timeout signals; an omitted request signal cannot bypass operation cancellation. The attempt control reports usage before converting error-bearing responses into policy failures. Preserve the existing unscoped utility/catalogue overload in `API.ts` for bounded non-inference catalogue policy and direct legacy helper compatibility. Registered inference clients always use scoped hooks; source/parity tests reject using that overload to bypass tool admission/accounting. Retry diagnostics use the supplied hook logger when no callback exists; native supplies its silent/UI-safe sink. Native facade dispatch, authentication, endpoint normalisation and citation fallback remain intact.
+
+### C12 Capacity and Fairness
+
+Count all active attempts, including late work, inside `modelConcurrency`. Page attempts use at most `modelConcurrency - criticalReserve`; critical calls can use any free slot. Do not exempt late attempts. Effective page concurrency is the minimum of the per-run extraction limit and page-eligible aggregate capacity, reported in results.
+
+Dispatch uses a repeating three-critical/one-page opportunity cycle when both classes have eligible waiters, with round-robin selection between operations inside each class. Skip unavailable classes without banking unlimited priority. A reserved free slot can immediately serve critical work even while every page-eligible slot is held by late attempts. Fairness applies to available admissions; it cannot preempt active transports or guarantee latency while other critical calls occupy all capacity. Record queue delay and grant order. No model permit is held while waiting for fetch admission.
+
+### C13 Pacing
+
+Use one cancellable ticket queue. Advance the next allowed model-start time only when an actual attempt is dispatched, not when a future ticket is enqueued. Dispatch requires both capacity and a due pacing time; do not hold a model permit while sleeping for pacing. Removing an aborted/cutoff ticket leaves no future reservation. Backoff, permit waits and pacing waits independently honour cancellation. Only pending work creates a pacing timer; close clears it and settles waiters.
+
+### C14 MCP Operations and Catalogue
+
+MCP operation admission is distinct from model/fetch admission. The FIFO operation queue first uses an available active slot, then checks queued capacity; zero queued capacity still allows immediate starts. Remove abort listeners after queued/active settlement. Busy rejection, queued cancellation, active cancellation and close are explicit protocol outcomes. At least two real protocol requests overlap with the accepted parallel configuration; the serial control does not.
+
+Use a runtime-scoped catalogue single-flight with 60-second monotonic freshness and per-operation binding validation. There is at most one catalogue transport chain per runtime. Each waiter has its own abort listener/reference; cancelling one does not abort another's load. Last-waiter cancellation aborts/drains the loader; a new waiter arriving during its drain waits for settlement before a new load starts. Runtime close cancels it regardless of waiters. No credential, mutable citation sink or operation controller is shared. Catalogue response limit remains the adapter's current transport bound. Failure is not cached as success. Single-flight owns no model permit and no cache lock.
+
+### C15 Standalone and Script Policy
+
+Direct native standalone search/extract/collate retain one attempt and no application-level model timeout. They still use shared admission/pacing and publish their observations. MCP standalone calls retain its explicit configured policy. Research applies its configured retry/timeout policy. Do not add automatic nested-only model timeouts. Every supplied R2 manual example has a finite, workload-budgeted `timeout_ms`, bounded fan-out and error handling; document that arbitrary scripts may omit it and that script expiry can return before nested settlement. Stalled-body and parent-cancellation tests remain mandatory. No new shared option is deferred into R2.
+
+### C16 Usage Semantics
+
+`AttemptLedger` records one terminal observation per dispatched attempt, including error, empty, retryable, timeout and abort cases. `observe()` updates fields from the latest cumulative snapshot for that attempt, not an incremental sum. `finish()` is idempotent and rejects conflicting terminal updates in tests. Missing observations/fields remain unknown. SDK-normalised cost is labelled catalogue-based unless actual provider provenance establishes otherwise; raw provider cost and estimates are separate.
+
+Canonical `inputTotal` includes cached prompt tokens; `inputUncached` excludes them. Native SDK input/cache fields map into that canonical shape; MCP prompt totals subtract a reported cache subset only when known. Unknown cache subsets cannot establish uncached input. Output already includes reasoning, which is a subset, not an extra charge. Preserve available `cacheWrite1h` as a subset of cache write, never an additional total. Preserve reported total tokens without adding it to components. Report known component subtotals with missing-field/attempt masks rather than implying complete sums. `costComplete` means every dispatched attempt has provider-reported total cost; catalogue estimates alone cannot make it true.
+
+Numeric host usage uses observed uncached input/output/cache components, with zero placeholders only for unknown required host fields; completeness explains those placeholders. Use a reported total cost when supplied; otherwise use a known catalogue estimate and label its basis. Do not add reported totals and estimates or invent component allocations for an opaque total. Parent/nested usage is counted once: native wrappers report their own operation's ledger; host nested aggregation adds it to the parent. Emit usage even with telemetry disabled. Operational errors carry final partial data/usage through C17; host cancellation may still prevent delivery, C05.
+
+## Operations and Projection
+
+### C17 Full Results and Errors
+
+All existing operations plus `fetchPage()` return `CoreResult` and matching `FullData` in `API.ts`. Existing text/details/outcome remain; the new `data` and numeric `usage` are additive. `data.text/details/outcome` equal the legacy fields, not divergent summaries. R1 exports the full operation schemas and compact schema named in `API.ts`; its native details preserve existing keys and add `intelli: data` for reconstruction without recursive references. R2's native-only wrapper declares the full output schema and returns `structuredContent: data`, not the compact MCP projection. The temporary R1 dry run proves this mapping without requiring a later core repair. No raw fetched body is placed in research/search/collate text or full-data inventories; fetch alone has bounded `SourceRecord.content`, and standalone extract preserves its existing extraction.
+
+Add `error` and `aborted` outcomes for inspectable failure data; preserve the existing four outcomes. Core operational failures throw an `OperationFailure` carrying final partial `FullData` and numeric usage after settlement. Native/MCP adapters map it to error content/`isError: true` with structured partial data where the host allows delivery. Unrecognised pre-admission/config errors remain ordinary actionable errors, with no invented model usage. Empty standalone extraction preserves its legacy completed outcome but identifies the empty source state. Fetch failure is inspectable `fetch-failed`; collation with zero usable inputs remains an error.
+
+A valid summary with unavailable persistence remains a useful completed answer, not an operational failure. `candidates` is the deduplicated input/source count; `fetched` counts accepted logical network pages, not physical variants or caller-supplied pages; `extracted` counts nonempty successful extractions, including late successes; `used` counts the research/collate snapshot or returned standalone extraction; `late` counts successful post-freeze extractions; `failed` counts final fetch/extract failures and empty evidence; `cancelled` counts final cancelled sources. These overlapping counters are not a partition to sum. Search sources are `candidate` with no fetch claim; standalone fetch sources are `fetched` (or `empty`/`fetch-failed`) and have `used: 0`. Manual collate has no invented network-fetch count. Counts/timings/accounting always identify what happened. Unknown extras are rejected by output-schema tests. Optional fields are omitted rather than assigned `undefined` in serialised results.
+
+### C18 Compact MCP Projection
+
+Keep complete existing answer text and details in both existing MCP representations, once within each. `structuredContent` is `CompactData`; `content` remains the existing safe/redacted text. New metadata is limited to operation identity, persistence/report location, counts, elapsed time and compact usage completeness/cost fields. Inventory and detailed attempts remain in full native data and verified artefacts; do not imply every host can read local files.
+
+The additional encoded JavaScript Object Notation (JSON) size over matched legacy `{ outcome, text, details }` is at most 8,192 bytes, excluding unchanged text/details. Optional path must be verified and at most 4,096 encoded bytes; longer valid native paths remain in full data/text but are omitted from compact metadata. Do not truncate answer text or existing details to meet the budget. Maximum-size, non-ASCII, error and degraded fixtures exercise the bound. This is an engineering output-size limit, not measured token savings. Only a named tokenizer or actual main-request/usage capture establishes token overhead. Record what each claimed MCP host exposes to its main model.
+
+### C19 Fetch Operation and Bounds
+
+`fetchPage({ url, maxChars? }, context)` is a single-page core operation available in R1, not a new MCP tool. It uses the same dual-fetch/extraction-quality path as research and owns console scope, body readers, cancellation and progress. Support only validated `http:`/`https:` URLs without embedded credentials. Per-call `maxChars` is a positive integer clamped to the configured character limit; it cannot enlarge the transport limit. Existing browser/proxy settings remain context-owned.
+
+Every physical page variant, alternate probe and documentation download acquires an aggregate fetch permit for its entire request/redirect/body/cancel chain. Do not hold a second outer page permit while acquiring it. Per-run logical page concurrency also applies. Read response streams incrementally; reject oversized decoded bodies before accepting/parsing them, cancel/drain readers, and release permits only after settlement. A declared length can reject early but is not trusted as the sole check. The installed `wreq-js` response exposes `body`; unbounded `.text()` is not the new operation path. Default decoded page/document bounds are in C03. Truncating returned cleaned content is reported separately from rejecting an oversized response.
+
+Spool accepted research pages into owned private staging before releasing retained body buffers; `Artifact` can reference a staged file so commit does not load all bodies together. At most the per-run logical page limit awaits extraction; pause page admission rather than accumulate all candidates in memory. Documentation discovery is bounded by the same fetch coordinator and document-size limit. Inline/chunk/native decoder/DOM overhead can exceed accepted byte totals: measure actual dependency memory/cancellation under large and compressed responses, disclose that limitation and block acceptance if the path secretly buffers unbounded whole responses. Do not claim a hard whole-process heap cap from content limits alone.
+
+### C20 Progress and Native Baseline
+
+Every operation emits correlated start/update/retry/end progress with operation ID, monotonic sequence, generation-safe handling and optional page/work-stage identity. Existing stage/index/percentage/subprogress fields remain mapped deliberately. Search/extract/fetch are single-stage; collate adds cache; research retains its five labelled stages while interleaved page updates carry `workStage`. Global percentage never decreases; late page events do not rewind the displayed global phase. Completed/degraded finalisation reaches 100; abort/error ends with its last honest progress, not fake success.
+
+Routine diagnostics use the provided progress/user-interface channel, never raw terminal writes. MCP stdout remains protocol-only. Keep native registry facade dispatch and citation recovery on the supported `Pi` floor; additive fields and schema/exposure gating require floor tests. Research becomes parallel-capable only with this ownership contract; collate remains sequential in R1. Disclose mixed direct-batch and host-wide sequential controls. No unsupported-host fetch registration is permitted.
+
+## Persistence
+
+### C21 Platform and Namespace
+
+Keep existing package platform manifests unchanged. Portable control/model APIs remain host-neutral. The initial publication/durability verification target is [_Linux_](https://kernel.org) x86-64, [_Node.js_](https://nodejs.org) 24, local encrypted btrfs; preliminary primitive checks do not prove the complete protocol or macOS, Windows, network, overlay or remotely shared filesystem semantics. Do not claim those protocols verified until their tests pass. Where required durable filesystem operations are unavailable, return useful non-persisted answers with a diagnostic rather than silently weaken durability or block all research. Broader package support is not silently withdrawn.
+
+Write new runs only under `<cacheRoot>/.intelli-v1/`, containing `namespace.json`, `allocations.ndjson`, `writer.lock/`, `index.json` and `runs/`. This name is outside legacy date/archive patterns and reserved `.staging`/legacy metadata names. Old writers keep their original root untouched. Whole-parent MCP containment scans remain in force. Use portable path helpers. Private staging remains under the configured encrypted cache/workspace boundary and is not an index candidate.
+
+### C22 Exclusive Allocation and Publication
+
+Each operation has its own `RunStore` instance; its `settle()` waits only for that operation's filesystem work, not unrelated concurrent operations. Under C25's lock, create `runs/<display-label>-<nonce>/` using exclusive directory creation and collision retry, checking cancellation on each retry and returning persistence unavailable after 16 collisions. The default nonce is 16 random bytes encoded as hexadecimal; test injection can force collisions. The nonce is not the exclusivity proof. C23's durable admission record precedes granting the reservation. Run files have relative, traversal-free names; each is written/synced inside the operation's owned directory or streamed from its owned staging. No existing run is replaced or rotated.
+
+Required files are `report.md`, `query.txt`, `run.json` (source identity/state and non-secret provenance), and each source/extraction file named in the report inventory. Late files are labelled non-evidence. After all included files are complete and synced, publish `committed.json` by writing/syncing a private temporary file and renaming it into this uniquely owned run directory, then sync the directory. It contains schema/namespace/run IDs, admission sequence, query/start provenance, required file names/byte lengths/hashes and successful report outcome. It is structural, independent of optional `meta.json`. It validates that every advertised report/source path exists; late files are explicitly non-evidence. Contract-aware readers ignore runs without a valid marker. This gives reader visibility, not secrecy from arbitrary directory observers. Failure after marker publication but before index update preserves a committed run. After suggestions and final model accounting, `recordAccounting()` may append immutable `accounting.json` plus its separately atomic `accounting.committed.json` hash marker inside that same owned directory. This structural usage artefact is independent of optional telemetry. It covers all model attempts and is labelled `all-model-work-settled`, not a self-referential claim about the duration of its own write. The original report manifest remains immutable; readers accept accounting only through its own valid marker. Failure preserves the report/returned usage and omits `accountingPath`. No new accounting write starts after abort. Await this final writer before computing the returned all-work-settled time. No writer remains after settlement.
+
+### C23 Allocation Journal and Durability
+
+Select an append-only, checksum-chained allocation journal, not a rebuildable-index counter. Under the single writer lock, validate the complete journal and namespace identity; append the next safe integer sequence, run ID, operation ID, compatibility key, UTC start, previous-record hash and current-record hash as one newline-terminated record. Sync the journal and its parent when created before granting admission. Then write/sync the run's reservation record and directory before returning it. A crash after journal sync but before reservation/grant leaves an allowed gap, never a reused sequence.
+
+Journal records are at most 4,096 encoded bytes and the journal safety ceiling is 67,108,864 bytes. Validate it as a bounded stream, checking cancellation/yielding at least every 128 records; do not load the entire journal or run tree into one uninterruptible synchronous loop. A partial tail, invalid chain, duplicate/regressing/unsafe sequence, namespace mismatch or conflicting reservation/committed record makes publication unavailable. Never truncate a tail automatically. A missing journal is initialisable only in a provably fresh namespace with no prior namespace identity, run reservations or committed markers; otherwise treat it as damaged. Recovery checks journal, reservation and committed identities together, not just the index. A record without a published run is a valid allocated gap; an unjournalled nonempty reservation is not evidence to restart numbering.
+
+Durable non-reuse assumes a filesystem/device honouring completed file/directory syncs and exclusive directory creation. Journal growth is measured; no automatic compaction/reset is included. If size/I/O validation becomes impractical, fail publication with an actionable diagnostic rather than silently allocate from memory. UTC rollback/midnight never changes sequence order.
+
+### C24 Useful Answers on Persistence Failure
+
+Allocation, journal, marker or index failure cannot erase a valid computed answer. Before any inference, allocation can return `unavailable` instead of a reservation. Collation/provenance uses source IDs regardless of persistence availability; verified paths are appended only after successful publication. An unavailable run has no report/source path fields and names the damaged metadata in its diagnostic. An index failure after a valid marker returns committed persistence with `index: unavailable`. A failed/uncommitted directory is never advertised as a report. Preserve partial/orphan evidence; do not silently switch namespaces or delete it.
+
+Benchmark records retain these runs. Persistence/workflow validity and answer-quality scorable status are distinct; failure is not silently dropped or converted to zero cost. Recovery documentation instructs stopping all writers, preserving evidence, validating the journal/markers and explicitly rebuilding only secondary metadata. Unknown allocation history requires explicit operator recovery, not an automatic reset.
+
+### C25 Race-Safe Lock Without Eviction
+
+Use an exclusive `mkdir` lock on `.intelli-v1/writer.lock`. There is no automatic stale-lock eviction, age threshold, process-identifier liveness deletion or token-check-then-remove path. With no competing eviction/replacement, an owner cannot release a successor's lock: a successor cannot acquire until the owner's single idempotent release completes. A per-acquisition in-memory release promise prevents duplicate asynchronous removal. Owner metadata aids diagnosis only; it is not a compare-and-delete primitive.
+
+Acquisition is abortable, polling at 25 milliseconds up to a 2,000-millisecond monotonic wait. A busy/crashed lock makes persistence/index update unavailable, not the useful answer. A crash leaves a lock for manual recovery. Recovery requires all writers to be stopped, preservation/quarantine of the entire namespace and explicit operator action; never delete a supposedly stale live lock. Foreign filesystem mutation and multi-host locking are not supported guarantees. Initial metadata failure is cleaned by its acquiring owner if possible; failure to release leaves publication blocked with a diagnostic. No network/model call runs under this lock. Test independent-process contention, crash, release reentry and manual-stop recovery in P2; P0's proof is the protocol argument plus local primitive checks, not full runtime acceptance.
+
+### C26 Existing Suggestion Compatibility Only
+
+No new query/domain/focus grouping, configurable index cap, same-group relevance suppression or previous-report navigation is implemented here. Those candidates/tests are in the separate future plan.
+
+Characterise the baseline's date/query-derived slug deduplication, current-slug exclusion and final candidate window. New run directories are unique, so preserve that visible grouping through a compatibility key: exact query text plus the run's UTC date, with a full digest independent of the display label. Domains and focus are recorded, not new key inputs. This reproduces the old date/query identity while avoiding short-hash collisions; it is not the deferred domain/focus policy. New entries preserve each committed run, and the candidate view selects the highest-admitted successful sequence for each compatibility key. A slower older writer cannot displace it. Exclude the current key as the old slug was excluded. No new stored-index cap is added; retain the existing judge candidate-window size.
+
+Merging new and legacy candidates uses two ordered lists: new entries descending by admission sequence, legacy entries descending by validated timestamp and deterministic safe path tie-break. Prefer a new entry over a legacy duplicate of the same known date/query key. Stable head-merge compares the two current UTC starts, preferring new on equality, while preserving each list's internal order. Thus legacy unsequenced entries are never assigned invented sequences; cross-list UTC rollback limits are disclosed, not presented as global chronological truth. Freeze the selected array once for both judge numbering and response parsing. This is the narrow namespace-compatibility mapping; no relevance improvement is claimed.
+
+### C27 Readers and Legacy Bridge
+
+Validate new markers, required file hashes/paths and successful nonempty reports before suggesting them. Existing legacy entries use the old validated report path and stored query/timestamp; unknown filter/focus provenance remains unknown. Never mistake uncommitted new-format runs for legacy reports. The read-only bridge does not rewrite old indexes, metadata or directories. Corrupt index input is preserved before repair; the index is secondary and rebuildable from verified committed runs. Old/new simultaneous writers are isolated by namespace, not a false shared-lock guarantee. R1/R2 share the new protocol. Existing link/containment checks and their concurrent-hostile-mutation limitation remain unchanged.
+
+### C28 Retention and Documentation
+
+Do not delete historical or orphan directories automatically. Index selection is not disk retention. Measure whole-parent scan growth and the existing entry cap; temporary-file disappearance may be tolerated without tolerating root replacement or link escapes. P4b documents non-destructive lock/journal recovery, marker/age/live-owner orphan inspection, offline archival, changed layout and permission-hint rationale. Update archive promises only after the new layout is implemented and proved. Regenerate README/plugin guidance and record sanctioned native-contract deltas; internal contract documentation alone needs no user changelog entry.
+
+## Evidence and Delivery
+
+### C29 Baseline and Corpus
+
+Preserve old A0 source/lockfile/prompts/settings/host and external-observer plan before runtime changes. The existing encrypted source archive is preservation evidence, not a live run. [The corpus manifest](../../benchmarks/corpus/manifest.json) defines global IDs, exact inputs/expansions/rubrics, experiment membership and hashed development/pilot/held-out/confirmatory-reserve partitions. Judge calibration is separate. No partition is relabelled after tuning. Shared domains/topics are recorded and do not establish statistical independence. Confirmation reserve is not a selected sample size; C31's later decision can extend it with fresh inputs before an independent series.
+
+### C30 Recorder, Replay and Observer
+
+P3 implements `FixtureKey`, `ReplayStore` and `RunObservation` from `API.ts`. Freeze model, fetch, catalogue and suggestion responses, citations, per-attempt usage, errors and timing; complete replay is not fetch-only replay. Exact request hashing uses sorted-key serialisation without case-folding/string rewriting. Keys include scenario, operation node and occurrence, so repeated identical calls do not collapse. Submission order for identical calls is fixed by the forced workflow; ambiguous/mismatched occurrence invalidates the block. Normalise only declared generated identity/path fields through a recorded binding map, never arbitrary source/code strings. Source-ID-only collation avoids model-response path rewriting.
+
+Inject dependencies through explicit native registration/context factory seams (`NativeTestInjection`), not a mutable global `__harness`. Exercise actual registered wrappers and the real Codemode bridge with those dependencies. Prove compiled/source loader isolation and replay misses using credential-free scripted main responses before paid runs. A miss invalidates/stops that replay block and never falls back live. Unforced routing is a separate live population; non-Codemode selections remain in it.
+
+A read-only `before_provider_request` observer records sanitised actual main payloads and tool declarations, correlated with canonical message events; it does not return a payload replacement. Additional stage model calls are identified separately. Record main usage only from assistant messages, pipeline usage once from canonical tool results, and never repeat `turn_end.toolResults` or nested-parent totals. Mixed absent/direct/nested/error usage fixtures are mandatory. Actual payloads, not all transcript/event bytes, determine intermediate exposure. Preserve failures, incomplete observations, price provenance, subscription quota and technical-rerun reasons in append-only run manifests.
+
+### C31 Measurement Gates and Models
+
+The main for every measurement arm is subscription-backed `Pi` `openai-codex/gpt-6.1-sol`. Use pre-configured encrypted worktrees with supported overrides; that isolation approach is sufficient. Verify the effective tool catalogue, model/provenance and settings without building another isolation framework or copying operator credentials. Native arms load only the selected native extension/observer and allowed built-ins; explicitly enable built-in Codemode only in B/C. MCP checks explicitly load the selected MCP client/server and no duplicate native research extension. Confirm no unrelated global tools or skills enter requests. SDK in-memory settings/resource overrides or supported explicit CLI exclusions are acceptable; record the actual mechanism and host version.
+
+Deadlines, query expansion and Codemode have separate [methods](../../benchmarks/README.md), endpoints and populations. A0 is old direct; A is R1 direct; A2 is the R2 build with Codemode off; B/C are R2 on/only. B/A2 is activation; B/A is the whole intervention. Freeze A before R2 development; no host/main-model substitution across treatment arms.
+
+Only Sonar/M3 pipeline calls use the [_OpenRouter_](https://openrouter.ai) cash envelope. The owner offered approximately US$30 with phased forecasting, not blanket permission for every study. Exact first-tranche and later tranche ceilings remain separate execution approvals. Account for baseline/fixture, calibration if any pipeline is called, retries/failures, synthesis and required live-validation calls; keep subscription main/judge token/quota accounting separate. The first prescribed four-run canary has an assumption-based pipeline forecast under the private checkpoint, not measured cost evidence. Report actual spend/completeness before proposing the next tranche. No automatic rollover. D6 follows pilot variance/cost observations and precedes any independent confirmatory series: agree meaningful margins and sample size/precision then. No paid call is required for P0 acceptance.
+
+### C32 Judging and Claims
+
+Judges are subscription-backed `claude-opus-5-5[1m]` through [_Claude Code_](https://claude.com/product/claude-code) and `openai-codex/gpt-6.1-sol` through a separate fresh `Pi` session, coordinated by Herdr. Supply identical blinded evidence/rubrics, balance pairwise order, withhold the other judge's answers and preserve each score/disagreement. One judge is the same model as the main: disjoint human-checked calibration and separate per-judge analysis are required, not a claim that two judges remove self-preference. Prespecify adjudication before held-out scoring; never pick the favourable judge or force consensus. Two judges are not two independent query replications.
+
+H1 is the prespecified uncached-main-input saving threshold with query-clustered uncertainty; H2 is two-sided token equivalence only under a later agreed margin; H3 measures raw intermediate exposure in actual requests, separating justified quotations; H4 is one-sided quality non-inferiority under a meaningful-loss margin. Later-margin sensitivity is exploratory. An inconclusive result is not equivalence or harm. D7 funds a separate structured-output-off arm only before a study making that separate causal claim; otherwise omit it and limit attribution to activation/whole intervention. No frozen P0 method claims measured benefits or sufficient power.
+
+### C33 R1 and R2 Proofs
+
+Before R1 freezes, a temporary native fetch/schema/widget/manual-workflow wrapper must type-check and fixture-pass against the public R1 APIs with no core/MCP edits. All standalone/degraded/error result shapes and progress are prerequisites. Later deterministic, native floor/provider/cancellation, Unicode/widget, generator, fresh tarball install, security/embedded dependency, shellcheck and actual paced live gates remain blocking. New end-to-end scripts must actually complete. Final independent combined implementation/evidence review is separate from this P0 review and earlier plan reviews. Deferred studies stay incomplete with no associated claim. Staging/published/registry-verified are separate states.
+
+### C34 Native Widget and Exposure
+
+R2 registers `intelli_fetch` only when the host supports Codemode exposure, using the established capability sentinel; hosts without it register no fetch tool. Its exposure is script-only and read-only/open-world annotated, but those hints are not permission enforcement. Existing four tools retain direct availability in Codemode-off mode. `structuredContent`/output schemas match full C17 data on every branch. No core/MCP change is hidden in this patch.
+
+Widget rows are keyed by session generation, parent tool-call ID and operation ID. Starts/partials/ends interleave without sharing another parent's state. Prune missing ends at parent completion/abort, run settlement and session replacement/reload, without deleting another live parent's rows. Use the host's visible-column width helpers, not string length; test narrow/long/non-ASCII/combining/wide/resize cases and absence of raw console pollution. No unsupported-host UI or fetch capability is inferred from the existing synthetic host probe.

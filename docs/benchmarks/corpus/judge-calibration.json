@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "labelStatus": "proposed deterministic expectations; independent human checking required before judge calibration",
+  "items": [
+    {
+      "id": "J-01",
+      "partition": "judge-calibration",
+      "evidence": "Fixture A: the example service accepts at most two active jobs and queues at most three.",
+      "question": "State the active and queued limits.",
+      "answerA": "Two active jobs, three queued.",
+      "answerB": "Three active jobs, two queued.",
+      "proposedPreference": "A",
+      "rationale": "The values in B are reversed."
+    },
+    {
+      "id": "J-02",
+      "partition": "judge-calibration",
+      "evidence": "Fixture B: cancellation requests shutdown; completion is not confirmed until the worker has settled.",
+      "question": "Does requesting cancellation prove that work has settled?",
+      "answerA": "Yes. A cancellation request proves settlement.",
+      "answerB": "No. Wait for the worker settlement observation.",
+      "proposedPreference": "B",
+      "rationale": "Only B preserves the distinction stated in the evidence."
+    },
+    {
+      "id": "J-03",
+      "partition": "judge-calibration",
+      "evidence": "Fixture C: cost is unreported for the failed attempt.",
+      "question": "What was the failed attempt cost?",
+      "answerA": "Unknown from this evidence.",
+      "answerB": "Zero because the request failed.",
+      "proposedPreference": "A",
+      "rationale": "Failure does not establish zero cost."
+    },
+    {
+      "id": "J-04",
+      "partition": "judge-calibration",
+      "evidence": "Fixture D: report r2 exists; the referenced r1 file is absent.",
+      "question": "Which report path can be advertised as verified?",
+      "answerA": "Both r1 and r2.",
+      "answerB": "Only r2; r1 is not verified.",
+      "proposedPreference": "B",
+      "rationale": "B follows the provided existence facts."
+    }
+  ]
+}

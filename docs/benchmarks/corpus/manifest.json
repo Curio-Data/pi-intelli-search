@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "revision": "P0-1",
+  "purpose": "Frozen public inputs; no fixture capture, human gold acceptance, paid run or powered sample claimed",
+  "corpusSha256": "e9b3a96658ae0c11bfd39230212affc0789621d2a5191e258ba7d21228bfb1ef",
+  "inputFiles": [
+    {
+      "path": "deadline.json",
+      "sha256": "7c5910be960dd0f3446ecaba6f5b0ca47d14ad3a9a28bddec9ff755494356fc5"
+    },
+    {
+      "path": "query-expansion.json",
+      "sha256": "df27483a4c341005148eca0466c00dd79754fc66aebfb7cc9b2403c7c6b4db75"
+    },
+    {
+      "path": "codemode.json",
+      "sha256": "d762e00e79f8731704a8dceb522d25b4a8a22253a2c9157699b7754447a5eb01"
+    },
+    {
+      "path": "judge-calibration.json",
+      "sha256": "5dafc83692229846fbe377dec6320a1315e789f740dd13147c9a028359415189"
+    }
+  ],
+  "partitions": [
+    {
+      "experiment": "deadline",
+      "partition": "development",
+      "ids": [
+        "DL-D01",
+        "DL-D02"
+      ],
+      "sha256": "23d997d962482b557c8940f423a9930ce5a95b0510d9c1a4e5e38d998de5e786"
+    },
+    {
+      "experiment": "deadline",
+      "partition": "pilot",
+      "ids": [
+        "DL-P01",
+        "DL-P02",
+        "DL-P03",
+        "DL-P04"
+      ],
+      "sha256": "3b3279280092f5c145b5c7c97c327b713f84b8901fa7b64d38da180fed8c12bc"
+    },
+    {
+      "experiment": "deadline",
+      "partition": "held-out",
+      "ids": [
+        "DL-H01",
+        "DL-H02",
+        "DL-H03"
+      ],
+      "sha256": "cc179d3856c08d5413349e7931412fec3876ef93bc41834efa746c8be936476f"
+    },
+    {
+      "experiment": "deadline",
+      "partition": "confirmatory-reserve",
+      "ids": [
+        "DL-C01",
+        "DL-C02",
+        "DL-C03"
+      ],
+      "sha256": "7e8fd1b08e99f98a6fde27506e9beafa2ef5f59bb87b75f6529398decdfe1d49"
+    },
+    {
+      "experiment": "query-expansion",
+      "partition": "development",
+      "ids": [
+        "QE-D01",
+        "QE-D02"
+      ],
+      "sha256": "76077162854a1e4dedc5035c9b497bfea480a3fadee7455f43be13ac55636bda"
+    },
+    {
+      "experiment": "query-expansion",
+      "partition": "pilot",
+      "ids": [
+        "QE-P01",
+        "QE-P02",
+        "QE-P03",
+        "QE-P04"
+      ],
+      "sha256": "87952f42bfdbed30d9b712aee7b901a21027e04147a65ad82634a1080f51d230"
+    },
+    {
+      "experiment": "query-expansion",
+      "partition": "held-out",
+      "ids": [
+        "QE-H01",
+        "QE-H02",
+        "QE-H03"
+      ],
+      "sha256": "3db3e48318e37945e2575660fefa2d325b0b7cd60392402cba92119c377d81d0"
+    },
+    {
+      "experiment": "query-expansion",
+      "partition": "confirmatory-reserve",
+      "ids": [
+        "QE-C01",
+        "QE-C02",
+        "QE-C03"
+      ],
+      "sha256": "970a6ac751c5cacffb24d2650b8af267cac0a7de29087cb79171413f831aaba4"
+    },
+    {
+      "experiment": "codemode",
+      "partition": "development",
+      "ids": [
+        "CM-D01",
+        "CM-D02"
+      ],
+      "sha256": "c195d01acaf7898a0a6c21a32796110d90695b14229515227171f6e952db8d93"
+    },
+    {
+      "experiment": "codemode",
+      "partition": "pilot",
+      "ids": [
+        "CM-P01",
+        "CM-P02",
+        "CM-P03",
+        "CM-P04"
+      ],
+      "sha256": "62ff59ac751112aff8bffe5c574dd45adb98b905447247ff349584fff4155990"
+    },
+    {
+      "experiment": "codemode",
+      "partition": "held-out",
+      "ids": [
+        "CM-H01",
+        "CM-H02",
+        "CM-H03"
+      ],
+      "sha256": "8faa02102e2133f6a8a4bfe7c27b16908796012d394f68c91581de1e09665cc4"
+    },
+    {
+      "experiment": "codemode",
+      "partition": "confirmatory-reserve",
+      "ids": [
+        "CM-C01",
+        "CM-C02",
+        "CM-C03"
+      ],
+      "sha256": "110d6d5ac85e439a4c13dd53d6059eba1e05c3de0afbdcc21fbc09903e2a49c2"
+    }
+  ],
+  "judgeCalibration": {
+    "ids": [
+      "J-01",
+      "J-02",
+      "J-03",
+      "J-04"
+    ],
+    "sha256": "9f906cae8800f2c8da519c71677b5ac050be48bb6963d568f810a648f3c672e1",
+    "labelStatus": "proposed deterministic expectations; independent human checking required before judge calibration"
+  },
+  "methods": [
+    {
+      "path": "../README.md",
+      "sha256": "a688cf36dd9fae568f14365eb33312403dcc9f79dedd275f2d84eb6ae688a827"
+    },
+    {
+      "path": "../deadline/METHOD.md",
+      "sha256": "7e3d16901f9e804856200d62e1579e5287596a325d59383373d285f7d5e944b3"
+    },
+    {
+      "path": "../query-expansion/METHOD.md",
+      "sha256": "434f859edaa1c5f74e5ed6f3ddd3a1509c4883078e49d259a4d263f27d01b1c4"
+    },
+    {
+      "path": "../codemode/METHOD.md",
+      "sha256": "5f88ffff2ed433e675e4471b23d84dc91b4c41aa6449913c38030465d570a679"
+    }
+  ],
+  "crossExperimentExposureGroups": [
+    {
+      "id": "sql-storage",
+      "ids": [
+        "QE-D02",
+        "CM-P03"
+      ],
+      "rule": "Related acquisition tasks, both tuning partitions; record exposure together and never relabel as unseen confirmation."
+    },
+    {
+      "id": "node-http-cancellation",
+      "ids": [
+        "DL-D01",
+        "QE-D01",
+        "CM-D02"
+      ],
+      "rule": "Related development topics; share exposure provenance, not independent unseen evidence."
+    }
+  ],
+  "sharedDomains": {
+    "developer.mozilla.org": [
+      "CM-D02",
+      "DL-D01",
+      "DL-P02"
+    ],
+    "docs.python.org": [
+      "CM-P01",
+      "DL-D02"
+    ],
+    "docs.rs": [
+      "CM-P04",
+      "DL-P03"
+    ],
+    "duckdb.org": [
+      "CM-P03",
+      "QE-D02",
+      "QE-H02"
+    ],
+    "github.com": [
+      "DL-H02",
+      "QE-D01"
+    ],
+    "go.dev": [
+      "CM-C01",
+      "DL-P01"
+    ],
+    "nextjs.org": [
+      "CM-P02",
+      "QE-P01"
+    ],
+    "nodejs.org": [
+      "CM-D02",
+      "CM-H02",
+      "DL-D01",
+      "QE-D01"
+    ],
+    "pkg.go.dev": [
+      "CM-C01",
+      "DL-P01"
+    ],
+    "postgresql.org": [
+      "CM-P03",
+      "QE-D02"
+    ],
+    "redis.io": [
+      "QE-H03",
+      "QE-P02"
+    ],
+    "sqlite.org": [
+      "CM-P03",
+      "QE-D02"
+    ]
+  },
+  "confirmation": {
+    "status": "reserve-only; later D6 preregistration required",
+    "sampleSize": null,
+    "expansionRule": "Add fresh inputs in a new manifest revision before independent capture; never relabel exposed material."
+  }
+}

@@ -1,0 +1,500 @@
+{
+  "schemaVersion": 1,
+  "queries": [
+    {
+      "id": "CM-D01",
+      "experiment": "codemode",
+      "partition": "development",
+      "query": "What does satisfies check, and how does it differ from a type assertion?",
+      "domains": [
+        "typescriptlang.org"
+      ],
+      "focusPrompt": "Extract evidence about TypeScript satisfies: type checking; inferred type preservation. Preserve exact APIs and limitations.",
+      "taskClass": "single-research",
+      "expansions": [],
+      "workflowQueries": [
+        "What does satisfies check, and how does it differ from a type assertion?"
+      ],
+      "exposureFamily": "TypeScript satisfies",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "CM-D02",
+      "experiment": "codemode",
+      "partition": "development",
+      "query": "Design a bounded concurrent fetch workflow with cancellation, partial results and shutdown.",
+      "domains": [
+        "nodejs.org",
+        "developer.mozilla.org"
+      ],
+      "focusPrompt": "Extract evidence about Node.js concurrent fetch shutdown: bounded request admission; streaming-body cancellation; owned shutdown and partial evidence. Preserve exact APIs and limitations.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Node.js concurrent fetch shutdown: bounded request admission. Use primary documentation and preserve limitations.",
+        "Node.js concurrent fetch shutdown: streaming-body cancellation. Use primary documentation and preserve limitations.",
+        "Node.js concurrent fetch shutdown: owned shutdown and partial evidence. Use primary documentation and preserve limitations."
+      ],
+      "exposureFamily": "Node.js concurrent fetch shutdown",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "CM-P01",
+      "experiment": "codemode",
+      "partition": "pilot",
+      "query": "Show the documented way to create an aware UTC datetime and explain why naive values differ.",
+      "domains": [
+        "docs.python.org"
+      ],
+      "focusPrompt": "Extract evidence about Python aware UTC datetime: documented construction; timezone awareness. Preserve exact APIs and limitations.",
+      "taskClass": "single-research",
+      "expansions": [],
+      "workflowQueries": [
+        "Show the documented way to create an aware UTC datetime and explain why naive values differ."
+      ],
+      "exposureFamily": "Python aware UTC datetime",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "CM-P02",
+      "experiment": "codemode",
+      "partition": "pilot",
+      "query": "Explain component boundaries, data transfer and rendering/cache limitations.",
+      "domains": [
+        "react.dev",
+        "nextjs.org"
+      ],
+      "focusPrompt": "Extract evidence about React server and client components: component boundaries; serialisable data transfer; rendering and cache constraints. Preserve exact APIs and limitations.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "React server and client components: component boundaries. Use primary documentation and preserve limitations.",
+        "React server and client components: serialisable data transfer. Use primary documentation and preserve limitations.",
+        "React server and client components: rendering and cache constraints. Use primary documentation and preserve limitations."
+      ],
+      "exposureFamily": "React server and client components",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "CM-P03",
+      "experiment": "codemode",
+      "partition": "pilot",
+      "query": "Compare embedded/service operation, concurrency and analytical use for these databases.",
+      "domains": [
+        "sqlite.org",
+        "postgresql.org",
+        "duckdb.org"
+      ],
+      "focusPrompt": "Extract evidence about SQL storage selection: embedding and deployment; transaction and concurrency behaviour; analytical trade-offs. Preserve exact APIs and limitations.",
+      "taskClass": "breadth",
+      "expansions": [],
+      "workflowQueries": [
+        "SQL storage selection: embedding and deployment. Use primary documentation and preserve limitations.",
+        "SQL storage selection: transaction and concurrency behaviour. Use primary documentation and preserve limitations.",
+        "SQL storage selection: analytical trade-offs. Use primary documentation and preserve limitations."
+      ],
+      "exposureFamily": "SQL storage selection",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "CM-P04",
+      "experiment": "codemode",
+      "partition": "pilot",
+      "query": "Explain typed decoding, error reporting and limits when handling untrusted JSON.",
+      "domains": [
+        "serde.rs",
+        "docs.rs"
+      ],
+      "focusPrompt": "Extract evidence about Rust Serde JSON handling: typed decoding; errors and unknown fields; resource limits and ownership. Preserve exact APIs and limitations.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Rust Serde JSON handling: typed decoding. Use primary documentation and preserve limitations.",
+        "Rust Serde JSON handling: errors and unknown fields. Use primary documentation and preserve limitations.",
+        "Rust Serde JSON handling: resource limits and ownership. Use primary documentation and preserve limitations."
+      ],
+      "exposureFamily": "Rust Serde JSON handling",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "CM-H01",
+      "experiment": "codemode",
+      "partition": "held-out",
+      "query": "Explain how workspace installation and publishing differ, citing the documented commands.",
+      "domains": [
+        "docs.npmjs.com"
+      ],
+      "focusPrompt": "Extract evidence about npm workspaces publishing: workspace selection; install versus publish behaviour. Preserve exact APIs and limitations.",
+      "taskClass": "single-research",
+      "expansions": [],
+      "workflowQueries": [
+        "Explain how workspace installation and publishing differ, citing the documented commands."
+      ],
+      "exposureFamily": "npm workspaces publishing",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "CM-H02",
+      "experiment": "codemode",
+      "partition": "held-out",
+      "query": "Compare isolation, resource limits and graceful shutdown of worker threads and child processes.",
+      "domains": [
+        "nodejs.org"
+      ],
+      "focusPrompt": "Extract evidence about Node.js workers and child processes: isolation boundary; resource accounting; cancellation and shutdown. Preserve exact APIs and limitations.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Node.js workers and child processes: isolation boundary. Use primary documentation and preserve limitations.",
+        "Node.js workers and child processes: resource accounting. Use primary documentation and preserve limitations.",
+        "Node.js workers and child processes: cancellation and shutdown. Use primary documentation and preserve limitations."
+      ],
+      "exposureFamily": "Node.js workers and child processes",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "CM-H03",
+      "experiment": "codemode",
+      "partition": "held-out",
+      "query": "Compare their roles, schema evolution and interchange constraints for a data pipeline.",
+      "domains": [
+        "parquet.apache.org",
+        "arrow.apache.org",
+        "avro.apache.org"
+      ],
+      "focusPrompt": "Extract evidence about Parquet, Arrow and Avro: storage and memory representation; schema and evolution; interchange limits. Preserve exact APIs and limitations.",
+      "taskClass": "breadth",
+      "expansions": [],
+      "workflowQueries": [
+        "Parquet, Arrow and Avro: storage and memory representation. Use primary documentation and preserve limitations.",
+        "Parquet, Arrow and Avro: schema and evolution. Use primary documentation and preserve limitations.",
+        "Parquet, Arrow and Avro: interchange limits. Use primary documentation and preserve limitations."
+      ],
+      "exposureFamily": "Parquet, Arrow and Avro",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "CM-C01",
+      "experiment": "codemode",
+      "partition": "confirmatory-reserve",
+      "query": "Explain error-chain inspection with Is and As and give a minimal example.",
+      "domains": [
+        "go.dev",
+        "pkg.go.dev"
+      ],
+      "focusPrompt": "Extract evidence about Go errors.Is and errors.As: matching semantics; minimal typed example. Preserve exact APIs and limitations.",
+      "taskClass": "single-research",
+      "expansions": [],
+      "workflowQueries": [
+        "Explain error-chain inspection with Is and As and give a minimal example."
+      ],
+      "exposureFamily": "Go errors.Is and errors.As",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "CM-C02",
+      "experiment": "codemode",
+      "partition": "confirmatory-reserve",
+      "query": "Explain service stop/restart ordering, process termination and user-service lifetime.",
+      "domains": [
+        "freedesktop.org",
+        "man7.org"
+      ],
+      "focusPrompt": "Extract evidence about systemd user-service shutdown: unit ordering; termination and timeout; user-service lifecycle. Preserve exact APIs and limitations.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "systemd user-service shutdown: unit ordering. Use primary documentation and preserve limitations.",
+        "systemd user-service shutdown: termination and timeout. Use primary documentation and preserve limitations.",
+        "systemd user-service shutdown: user-service lifecycle. Use primary documentation and preserve limitations."
+      ],
+      "exposureFamily": "systemd user-service shutdown",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "CM-C03",
+      "experiment": "codemode",
+      "partition": "confirmatory-reserve",
+      "query": "Compare documented ETag/checksum, versioning and client-compatibility constraints without assuming identical semantics.",
+      "domains": [
+        "docs.aws.amazon.com",
+        "min.io",
+        "backblaze.com"
+      ],
+      "focusPrompt": "Extract evidence about S3-compatible object metadata: ETag and checksum meaning; versioning and retention; compatibility caveats. Preserve exact APIs and limitations.",
+      "taskClass": "breadth",
+      "expansions": [],
+      "workflowQueries": [
+        "S3-compatible object metadata: ETag and checksum meaning. Use primary documentation and preserve limitations.",
+        "S3-compatible object metadata: versioning and retention. Use primary documentation and preserve limitations.",
+        "S3-compatible object metadata: compatibility caveats. Use primary documentation and preserve limitations."
+      ],
+      "exposureFamily": "S3-compatible object metadata",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    }
+  ]
+}

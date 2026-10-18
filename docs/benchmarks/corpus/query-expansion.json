@@ -1,0 +1,533 @@
+{
+  "schemaVersion": 1,
+  "queries": [
+    {
+      "id": "QE-D01",
+      "experiment": "query-expansion",
+      "partition": "development",
+      "query": "Compare Undici, Axios and Got for a server-side HTTP client: streaming and cancellation APIs; retry and timeout policy; connection reuse and concurrency. Use primary documentation.",
+      "domains": [
+        "nodejs.org",
+        "axios-http.com",
+        "github.com"
+      ],
+      "focusPrompt": "Keep evidence on streaming and cancellation APIs; retry and timeout policy; connection reuse and concurrency for Undici, Axios and Got. Separate documented guarantees, optional configuration and unknowns.",
+      "taskClass": "breadth",
+      "expansions": [
+        "Undici, Axios and Got: streaming and cancellation APIs. Find primary documentation and explicit limitations.",
+        "Undici, Axios and Got: retry and timeout policy. Find primary documentation and explicit limitations.",
+        "Undici, Axios and Got: connection reuse and concurrency. Find primary documentation and explicit limitations."
+      ],
+      "expansionOrigin": "coordinator-authored and frozen, not model-generated",
+      "workflowQueries": [],
+      "exposureFamily": "Undici, Axios and Got",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "QE-D02",
+      "experiment": "query-expansion",
+      "partition": "development",
+      "query": "Compare SQLite, PostgreSQL and DuckDB for an embedded or service-backed analytical application: deployment and transaction model; concurrent readers and writers; analytical access and operational limits. Use primary documentation.",
+      "domains": [
+        "sqlite.org",
+        "postgresql.org",
+        "duckdb.org"
+      ],
+      "focusPrompt": "Keep evidence on deployment and transaction model; concurrent readers and writers; analytical access and operational limits for SQLite, PostgreSQL and DuckDB. Separate documented guarantees, optional configuration and unknowns.",
+      "taskClass": "breadth",
+      "expansions": [
+        "SQLite, PostgreSQL and DuckDB: deployment and transaction model. Find primary documentation and explicit limitations.",
+        "SQLite, PostgreSQL and DuckDB: concurrent readers and writers. Find primary documentation and explicit limitations.",
+        "SQLite, PostgreSQL and DuckDB: analytical access and operational limits. Find primary documentation and explicit limitations."
+      ],
+      "expansionOrigin": "coordinator-authored and frozen, not model-generated",
+      "workflowQueries": [],
+      "exposureFamily": "SQLite, PostgreSQL and DuckDB",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "QE-P01",
+      "experiment": "query-expansion",
+      "partition": "pilot",
+      "query": "Compare Vite, Next.js and Astro for a documentation and application frontend: rendering and build model; server deployment and routing; data loading and caching boundaries. Use primary documentation.",
+      "domains": [
+        "vite.dev",
+        "nextjs.org",
+        "docs.astro.build"
+      ],
+      "focusPrompt": "Keep evidence on rendering and build model; server deployment and routing; data loading and caching boundaries for Vite, Next.js and Astro. Separate documented guarantees, optional configuration and unknowns.",
+      "taskClass": "breadth",
+      "expansions": [
+        "Vite, Next.js and Astro: rendering and build model. Find primary documentation and explicit limitations.",
+        "Vite, Next.js and Astro: server deployment and routing. Find primary documentation and explicit limitations.",
+        "Vite, Next.js and Astro: data loading and caching boundaries. Find primary documentation and explicit limitations."
+      ],
+      "expansionOrigin": "coordinator-authored and frozen, not model-generated",
+      "workflowQueries": [],
+      "exposureFamily": "Vite, Next.js and Astro",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "QE-P02",
+      "experiment": "query-expansion",
+      "partition": "pilot",
+      "query": "Compare Redis, Valkey and KeyDB for a Redis-protocol service: documented protocol and command compatibility; persistence and failover; concurrency and deployment trade-offs. Use primary documentation.",
+      "domains": [
+        "redis.io",
+        "valkey.io",
+        "docs.keydb.dev"
+      ],
+      "focusPrompt": "Keep evidence on documented protocol and command compatibility; persistence and failover; concurrency and deployment trade-offs for Redis, Valkey and KeyDB. Separate documented guarantees, optional configuration and unknowns.",
+      "taskClass": "breadth",
+      "expansions": [
+        "Redis, Valkey and KeyDB: documented protocol and command compatibility. Find primary documentation and explicit limitations.",
+        "Redis, Valkey and KeyDB: persistence and failover. Find primary documentation and explicit limitations.",
+        "Redis, Valkey and KeyDB: concurrency and deployment trade-offs. Find primary documentation and explicit limitations."
+      ],
+      "expansionOrigin": "coordinator-authored and frozen, not model-generated",
+      "workflowQueries": [],
+      "exposureFamily": "Redis, Valkey and KeyDB",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "QE-P03",
+      "experiment": "query-expansion",
+      "partition": "pilot",
+      "query": "Compare Playwright, Puppeteer and Selenium for browser automation: browser and protocol support; waiting and isolation model; remote execution and operational limits. Use primary documentation.",
+      "domains": [
+        "playwright.dev",
+        "pptr.dev",
+        "selenium.dev"
+      ],
+      "focusPrompt": "Keep evidence on browser and protocol support; waiting and isolation model; remote execution and operational limits for Playwright, Puppeteer and Selenium. Separate documented guarantees, optional configuration and unknowns.",
+      "taskClass": "breadth",
+      "expansions": [
+        "Playwright, Puppeteer and Selenium: browser and protocol support. Find primary documentation and explicit limitations.",
+        "Playwright, Puppeteer and Selenium: waiting and isolation model. Find primary documentation and explicit limitations.",
+        "Playwright, Puppeteer and Selenium: remote execution and operational limits. Find primary documentation and explicit limitations."
+      ],
+      "expansionOrigin": "coordinator-authored and frozen, not model-generated",
+      "workflowQueries": [],
+      "exposureFamily": "Playwright, Puppeteer and Selenium",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "QE-P04",
+      "experiment": "query-expansion",
+      "partition": "pilot",
+      "query": "Compare uv, Poetry and PDM for Python dependency management: project and environment model; lockfiles and resolution; publishing and workspace support. Use primary documentation.",
+      "domains": [
+        "docs.astral.sh",
+        "python-poetry.org",
+        "pdm-project.org"
+      ],
+      "focusPrompt": "Keep evidence on project and environment model; lockfiles and resolution; publishing and workspace support for uv, Poetry and PDM. Separate documented guarantees, optional configuration and unknowns.",
+      "taskClass": "breadth",
+      "expansions": [
+        "uv, Poetry and PDM: project and environment model. Find primary documentation and explicit limitations.",
+        "uv, Poetry and PDM: lockfiles and resolution. Find primary documentation and explicit limitations.",
+        "uv, Poetry and PDM: publishing and workspace support. Find primary documentation and explicit limitations."
+      ],
+      "expansionOrigin": "coordinator-authored and frozen, not model-generated",
+      "workflowQueries": [],
+      "exposureFamily": "uv, Poetry and PDM",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "QE-H01",
+      "experiment": "query-expansion",
+      "partition": "held-out",
+      "query": "Compare FastAPI, Django Ninja and Litestar for a typed Python web API: schema and validation integration; async and dependency lifetimes; deployment and compatibility constraints. Use primary documentation.",
+      "domains": [
+        "fastapi.tiangolo.com",
+        "django-ninja.dev",
+        "docs.litestar.dev"
+      ],
+      "focusPrompt": "Keep evidence on schema and validation integration; async and dependency lifetimes; deployment and compatibility constraints for FastAPI, Django Ninja and Litestar. Separate documented guarantees, optional configuration and unknowns.",
+      "taskClass": "breadth",
+      "expansions": [
+        "FastAPI, Django Ninja and Litestar: schema and validation integration. Find primary documentation and explicit limitations.",
+        "FastAPI, Django Ninja and Litestar: async and dependency lifetimes. Find primary documentation and explicit limitations.",
+        "FastAPI, Django Ninja and Litestar: deployment and compatibility constraints. Find primary documentation and explicit limitations."
+      ],
+      "expansionOrigin": "coordinator-authored and frozen, not model-generated",
+      "workflowQueries": [],
+      "exposureFamily": "FastAPI, Django Ninja and Litestar",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "QE-H02",
+      "experiment": "query-expansion",
+      "partition": "held-out",
+      "query": "Compare pandas, Polars and DuckDB for a large tabular analysis workflow: execution and memory model; file formats and pushdown; interoperability and operational limits. Use primary documentation.",
+      "domains": [
+        "pandas.pydata.org",
+        "docs.pola.rs",
+        "duckdb.org"
+      ],
+      "focusPrompt": "Keep evidence on execution and memory model; file formats and pushdown; interoperability and operational limits for pandas, Polars and DuckDB. Separate documented guarantees, optional configuration and unknowns.",
+      "taskClass": "breadth",
+      "expansions": [
+        "pandas, Polars and DuckDB: execution and memory model. Find primary documentation and explicit limitations.",
+        "pandas, Polars and DuckDB: file formats and pushdown. Find primary documentation and explicit limitations.",
+        "pandas, Polars and DuckDB: interoperability and operational limits. Find primary documentation and explicit limitations."
+      ],
+      "expansionOrigin": "coordinator-authored and frozen, not model-generated",
+      "workflowQueries": [],
+      "exposureFamily": "pandas, Polars and DuckDB",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "QE-H03",
+      "experiment": "query-expansion",
+      "partition": "held-out",
+      "query": "Compare NATS JetStream, Redis Streams and RabbitMQ for a durable messaging workflow: delivery and acknowledgement semantics; ordering and replay; deployment and failure recovery. Use primary documentation.",
+      "domains": [
+        "docs.nats.io",
+        "redis.io",
+        "rabbitmq.com"
+      ],
+      "focusPrompt": "Keep evidence on delivery and acknowledgement semantics; ordering and replay; deployment and failure recovery for NATS JetStream, Redis Streams and RabbitMQ. Separate documented guarantees, optional configuration and unknowns.",
+      "taskClass": "breadth",
+      "expansions": [
+        "NATS JetStream, Redis Streams and RabbitMQ: delivery and acknowledgement semantics. Find primary documentation and explicit limitations.",
+        "NATS JetStream, Redis Streams and RabbitMQ: ordering and replay. Find primary documentation and explicit limitations.",
+        "NATS JetStream, Redis Streams and RabbitMQ: deployment and failure recovery. Find primary documentation and explicit limitations."
+      ],
+      "expansionOrigin": "coordinator-authored and frozen, not model-generated",
+      "workflowQueries": [],
+      "exposureFamily": "NATS JetStream, Redis Streams and RabbitMQ",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "QE-C01",
+      "experiment": "query-expansion",
+      "partition": "confirmatory-reserve",
+      "query": "Compare Traefik, Caddy and NGINX for an application reverse proxy: configuration and service discovery; TLS certificate operation; routing and graceful reload behaviour. Use primary documentation.",
+      "domains": [
+        "doc.traefik.io",
+        "caddyserver.com",
+        "nginx.org"
+      ],
+      "focusPrompt": "Keep evidence on configuration and service discovery; TLS certificate operation; routing and graceful reload behaviour for Traefik, Caddy and NGINX. Separate documented guarantees, optional configuration and unknowns.",
+      "taskClass": "breadth",
+      "expansions": [
+        "Traefik, Caddy and NGINX: configuration and service discovery. Find primary documentation and explicit limitations.",
+        "Traefik, Caddy and NGINX: TLS certificate operation. Find primary documentation and explicit limitations.",
+        "Traefik, Caddy and NGINX: routing and graceful reload behaviour. Find primary documentation and explicit limitations."
+      ],
+      "expansionOrigin": "coordinator-authored and frozen, not model-generated",
+      "workflowQueries": [],
+      "exposureFamily": "Traefik, Caddy and NGINX",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "QE-C02",
+      "experiment": "query-expansion",
+      "partition": "confirmatory-reserve",
+      "query": "Compare Tailscale, WireGuard and ZeroTier for private service access: identity and network model; routing and access-control configuration; deployment and recovery constraints. Use primary documentation.",
+      "domains": [
+        "tailscale.com",
+        "wireguard.com",
+        "docs.zerotier.com"
+      ],
+      "focusPrompt": "Keep evidence on identity and network model; routing and access-control configuration; deployment and recovery constraints for Tailscale, WireGuard and ZeroTier. Separate documented guarantees, optional configuration and unknowns.",
+      "taskClass": "breadth",
+      "expansions": [
+        "Tailscale, WireGuard and ZeroTier: identity and network model. Find primary documentation and explicit limitations.",
+        "Tailscale, WireGuard and ZeroTier: routing and access-control configuration. Find primary documentation and explicit limitations.",
+        "Tailscale, WireGuard and ZeroTier: deployment and recovery constraints. Find primary documentation and explicit limitations."
+      ],
+      "expansionOrigin": "coordinator-authored and frozen, not model-generated",
+      "workflowQueries": [],
+      "exposureFamily": "Tailscale, WireGuard and ZeroTier",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "QE-C03",
+      "experiment": "query-expansion",
+      "partition": "confirmatory-reserve",
+      "query": "Compare OpenTelemetry, Prometheus and Grafana for service observability: instrumentation and collection boundaries; storage and querying roles; deployment and interoperability limits. Use primary documentation.",
+      "domains": [
+        "opentelemetry.io",
+        "prometheus.io",
+        "grafana.com"
+      ],
+      "focusPrompt": "Keep evidence on instrumentation and collection boundaries; storage and querying roles; deployment and interoperability limits for OpenTelemetry, Prometheus and Grafana. Separate documented guarantees, optional configuration and unknowns.",
+      "taskClass": "breadth",
+      "expansions": [
+        "OpenTelemetry, Prometheus and Grafana: instrumentation and collection boundaries. Find primary documentation and explicit limitations.",
+        "OpenTelemetry, Prometheus and Grafana: storage and querying roles. Find primary documentation and explicit limitations.",
+        "OpenTelemetry, Prometheus and Grafana: deployment and interoperability limits. Find primary documentation and explicit limitations."
+      ],
+      "expansionOrigin": "coordinator-authored and frozen, not model-generated",
+      "workflowQueries": [],
+      "exposureFamily": "OpenTelemetry, Prometheus and Grafana",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    }
+  ]
+}

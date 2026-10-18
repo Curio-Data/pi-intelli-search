@@ -1,0 +1,480 @@
+{
+  "schemaVersion": 1,
+  "queries": [
+    {
+      "id": "DL-D01",
+      "experiment": "deadline",
+      "partition": "development",
+      "query": "Node.js fetch and AbortSignal: Explain cancellation of a streaming fetch response, timeout composition and reader cleanup.",
+      "domains": [
+        "nodejs.org",
+        "developer.mozilla.org"
+      ],
+      "focusPrompt": "Extract primary documentation on Node.js fetch and AbortSignal, with exact APIs, ownership, failures and limitations. Explain cancellation of a streaming fetch response, timeout composition and reader cleanup.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Node.js fetch and AbortSignal: Explain cancellation of a streaming fetch response, timeout composition and reader cleanup."
+      ],
+      "exposureFamily": "Node.js fetch and AbortSignal",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "DL-D02",
+      "experiment": "deadline",
+      "partition": "development",
+      "query": "Python asyncio TaskGroup and timeout: Explain sibling cancellation, timeout handling and structured cleanup with a small example.",
+      "domains": [
+        "docs.python.org"
+      ],
+      "focusPrompt": "Extract primary documentation on Python asyncio TaskGroup and timeout, with exact APIs, ownership, failures and limitations. Explain sibling cancellation, timeout handling and structured cleanup with a small example.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Python asyncio TaskGroup and timeout: Explain sibling cancellation, timeout handling and structured cleanup with a small example."
+      ],
+      "exposureFamily": "Python asyncio TaskGroup and timeout",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "DL-P01",
+      "experiment": "deadline",
+      "partition": "pilot",
+      "query": "Go context and HTTP requests: Explain cancellation propagation and response-body ownership in concurrent requests.",
+      "domains": [
+        "go.dev",
+        "pkg.go.dev"
+      ],
+      "focusPrompt": "Extract primary documentation on Go context and HTTP requests, with exact APIs, ownership, failures and limitations. Explain cancellation propagation and response-body ownership in concurrent requests.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Go context and HTTP requests: Explain cancellation propagation and response-body ownership in concurrent requests."
+      ],
+      "exposureFamily": "Go context and HTTP requests",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "DL-P02",
+      "experiment": "deadline",
+      "partition": "pilot",
+      "query": "JavaScript Promise.all and allSettled: Explain failure aggregation, cancellation limitations and bounded fan-out.",
+      "domains": [
+        "developer.mozilla.org"
+      ],
+      "focusPrompt": "Extract primary documentation on JavaScript Promise.all and allSettled, with exact APIs, ownership, failures and limitations. Explain failure aggregation, cancellation limitations and bounded fan-out.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "JavaScript Promise.all and allSettled: Explain failure aggregation, cancellation limitations and bounded fan-out."
+      ],
+      "exposureFamily": "JavaScript Promise.all and allSettled",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "DL-P03",
+      "experiment": "deadline",
+      "partition": "pilot",
+      "query": "Rust Tokio JoinSet: Explain task ownership, cancellation, timeout and draining outstanding tasks.",
+      "domains": [
+        "docs.rs",
+        "tokio.rs"
+      ],
+      "focusPrompt": "Extract primary documentation on Rust Tokio JoinSet, with exact APIs, ownership, failures and limitations. Explain task ownership, cancellation, timeout and draining outstanding tasks.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Rust Tokio JoinSet: Explain task ownership, cancellation, timeout and draining outstanding tasks."
+      ],
+      "exposureFamily": "Rust Tokio JoinSet",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "DL-P04",
+      "experiment": "deadline",
+      "partition": "pilot",
+      "query": ".NET HttpClient streaming cancellation: Explain timeout and cancellation-token behaviour across headers and streamed bodies.",
+      "domains": [
+        "learn.microsoft.com"
+      ],
+      "focusPrompt": "Extract primary documentation on .NET HttpClient streaming cancellation, with exact APIs, ownership, failures and limitations. Explain timeout and cancellation-token behaviour across headers and streamed bodies.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        ".NET HttpClient streaming cancellation: Explain timeout and cancellation-token behaviour across headers and streamed bodies."
+      ],
+      "exposureFamily": ".NET HttpClient streaming cancellation",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "DL-H01",
+      "experiment": "deadline",
+      "partition": "held-out",
+      "query": "Java StructuredTaskScope: Explain scope lifetime, deadline handling and failure propagation; identify version constraints.",
+      "domains": [
+        "docs.oracle.com",
+        "openjdk.org"
+      ],
+      "focusPrompt": "Extract primary documentation on Java StructuredTaskScope, with exact APIs, ownership, failures and limitations. Explain scope lifetime, deadline handling and failure propagation; identify version constraints.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Java StructuredTaskScope: Explain scope lifetime, deadline handling and failure propagation; identify version constraints."
+      ],
+      "exposureFamily": "Java StructuredTaskScope",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "DL-H02",
+      "experiment": "deadline",
+      "partition": "held-out",
+      "query": "Ruby Async task cancellation: Explain parent/child task lifetime, timeout and cleanup using the documented API.",
+      "domains": [
+        "socketry.github.io",
+        "github.com"
+      ],
+      "focusPrompt": "Extract primary documentation on Ruby Async task cancellation, with exact APIs, ownership, failures and limitations. Explain parent/child task lifetime, timeout and cleanup using the documented API.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Ruby Async task cancellation: Explain parent/child task lifetime, timeout and cleanup using the documented API."
+      ],
+      "exposureFamily": "Ruby Async task cancellation",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "DL-H03",
+      "experiment": "deadline",
+      "partition": "held-out",
+      "query": "Elixir Task.async_stream: Explain concurrency bounds, timeouts, ordered results and failure handling.",
+      "domains": [
+        "hexdocs.pm"
+      ],
+      "focusPrompt": "Extract primary documentation on Elixir Task.async_stream, with exact APIs, ownership, failures and limitations. Explain concurrency bounds, timeouts, ordered results and failure handling.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Elixir Task.async_stream: Explain concurrency bounds, timeouts, ordered results and failure handling."
+      ],
+      "exposureFamily": "Elixir Task.async_stream",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "DL-C01",
+      "experiment": "deadline",
+      "partition": "confirmatory-reserve",
+      "query": "Kotlin coroutineScope and supervisorScope: Explain child failure/cancellation, timeout and structured ownership.",
+      "domains": [
+        "kotlinlang.org"
+      ],
+      "focusPrompt": "Extract primary documentation on Kotlin coroutineScope and supervisorScope, with exact APIs, ownership, failures and limitations. Explain child failure/cancellation, timeout and structured ownership.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Kotlin coroutineScope and supervisorScope: Explain child failure/cancellation, timeout and structured ownership."
+      ],
+      "exposureFamily": "Kotlin coroutineScope and supervisorScope",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "DL-C02",
+      "experiment": "deadline",
+      "partition": "confirmatory-reserve",
+      "query": "Swift task groups: Explain cancellation, child lifetime and collection of partial results.",
+      "domains": [
+        "docs.swift.org",
+        "developer.apple.com"
+      ],
+      "focusPrompt": "Extract primary documentation on Swift task groups, with exact APIs, ownership, failures and limitations. Explain cancellation, child lifetime and collection of partial results.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Swift task groups: Explain cancellation, child lifetime and collection of partial results."
+      ],
+      "exposureFamily": "Swift task groups",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    },
+    {
+      "id": "DL-C03",
+      "experiment": "deadline",
+      "partition": "confirmatory-reserve",
+      "query": "Dart Future.timeout and cancellation: Explain what timeout does and does not cancel, and how cleanup is owned.",
+      "domains": [
+        "dart.dev",
+        "api.dart.dev"
+      ],
+      "focusPrompt": "Extract primary documentation on Dart Future.timeout and cancellation, with exact APIs, ownership, failures and limitations. Explain what timeout does and does not cancel, and how cleanup is owned.",
+      "taskClass": "multi-angle",
+      "expansions": [],
+      "workflowQueries": [
+        "Dart Future.timeout and cancellation: Explain what timeout does and does not cancel, and how cleanup is owned."
+      ],
+      "exposureFamily": "Dart Future.timeout and cancellation",
+      "rubric": [
+        {
+          "id": "coverage",
+          "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.",
+          "critical": true
+        },
+        {
+          "id": "provenance",
+          "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.",
+          "critical": true
+        },
+        {
+          "id": "limitations",
+          "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.",
+          "critical": true
+        },
+        {
+          "id": "usefulness",
+          "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.",
+          "critical": false
+        }
+      ],
+      "goldStatus": "captured-source checking and any human labels are later pre-scoring gates; no gold answer claimed here"
+    }
+  ]
+}
