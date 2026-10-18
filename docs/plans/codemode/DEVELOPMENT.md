@@ -1,6 +1,6 @@
 # Codemode Development
 
-The owner authorised development after P0 acceptance. The coordinator has added type-only implementation seams for P0-2. No execution, accounting, persistence or native factory implementation is activated by this change.
+The owner authorised development after P0 acceptance. The coordinator committed the type-only P0-2 seams, then merged independently accepted P1 coordinator/accounting, P2 persistence/index and P3 benchmark libraries. [Library Review Record](LIBRARY-REVIEWS.md) identifies the exact accepted commits, resolved findings and binding integration conditions. The libraries are not wired into existing operations; native factory and pipeline behaviour remain unchanged.
 
 ## Central Seams
 
@@ -10,10 +10,12 @@ The owner authorised development after P0 acceptance. The coordinator has added 
 
 ## Verification
 
-The strict accepted-plan gate, `build:all`, `test:all`, native-contract type check, generated-document drift checks and low-severity dependency audit passed. Logs are retained locally under `.tmp/codemode-development/gates/` in the coordinator worktree; they are not part of the commit and do not travel to builder worktrees. These checks establish baseline regressions and type compatibility, not future runtime acceptance. No live end-to-end or paid measurement was run.
+The strict accepted-plan gate, `build:all`, `test:all`, native-contract and library type checks, generated-document drift checks and low-severity dependency audit passed on the combined library tree. Final logs are retained locally under `.tmp/codemode-development/final-gates/` in the coordinator worktree; earlier combined and seam-only runs remain under `combined-gates/` and `gates/` in the same parent directory. Native and standalone fresh-tarball install gates also passed. Native plain-node registration resolved `pi-ai` 1.3.0; the standalone gate exercised isolated native fetch assets and protocol framing with injected models. These prove the existing entry points install and load, not that the unactivated run store works through either adapter. These artefacts are not part of the commit and do not travel to builder worktrees. No live research end-to-end or paid measurement was run.
 
-## Library Entry
+## Next Stage
 
-This descendant commits the required central seams. Library builders start from it or a later descendant carrying the same accepted bundle and must pass `npm run check:codemode-plan` there. P1 owns coordinator/accounting libraries; P2 owns run-store/index libraries and reviewed disk schemas; P3 owns recorder/replay/parser/statistics libraries. Central schemas, settings, adapters, injection wiring and research integration remain coordinator-owned. [BUILDER-HANDOFF.md](BUILDER-HANDOFF.md) carries the binding review conditions.
+The library candidates branched from seam commit `e1cfe62745631cabed26539c09225fae707fbd5d` and passed the strict accepted-plan gate before edits. Their final reviewed histories are merged without rewriting the P0 specification commit. Library landing does not pass the full T09–T32 rows: adapter and real-host portions remain open.
+
+Next is coordinator-owned P4: integrate the scoped policy and runtime lifetimes, full results/progress, validated configuration, bounded fetch, native/MCP adapters and protocol admission. P2's field-by-field wire-schema review precedes persistence integration. Actual native transport injection and wrapper/bridge replay still require proof. P5 alone wires streaming/deadline/snapshot/drain into research; no library merge activates it. Keep P4b archive/guidance changes behind proved replacement behaviour, as the contract requires. [BUILDER-HANDOFF.md](BUILDER-HANDOFF.md) carries the binding review conditions.
 
 Exact paid tranches, live quota-consuming gates and publication remain unapproved. R1, the shared dual-package minor, and R2, the native-only patch, retain the boundaries in [C01](CONTRACT.md#c01-release-boundaries). No research-history policy work is included.

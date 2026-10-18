@@ -4,13 +4,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import ts from "typescript";
 
 const repo = fileURLToPath(new URL("../", import.meta.url));
-const runtimePackages = new Set(["wreq-js", "defuddle/node", "linkedom", "typebox"]);
+const runtimePackages = new Set([
+  "wreq-js",
+  "defuddle/node",
+  "linkedom",
+  "typebox",
+  "typebox/value",
+  "fs-native-extensions",
+]);
 
 /** Walk type imports and re-exports too, not just executable imports. */
 async function auditGraph(
@@ -48,7 +55,16 @@ describe("shared engine dependency boundary", () => {
     await mkdir(scratch, { recursive: true });
     const temp = await mkdtemp(join(scratch, "core-boundary-"));
     try {
-      const entries = [join(repo, "src/core/index.ts"), join(repo, "src/cache.ts")];
+      // P1/P2 are intentionally unwired until coordinator integration. Audit
+      // their graphs now rather than waiting for exports from core/index.ts.
+      const entries = [
+        "core/index.ts",
+        "cache.ts",
+        "core/execution-coordinator.ts",
+        "core/usage.ts",
+        "core/run-store.ts",
+        "core/run-index.ts",
+      ].map((path) => join(repo, "src", path));
       const visited = new Set<string>();
       for (const entry of entries) await auditGraph(entry, false, visited);
       assert.ok(visited.size >= 17, "audit must traverse all operations, schemas and helpers");
@@ -78,8 +94,12 @@ describe("shared engine dependency boundary", () => {
         }),
       );
       assert.equal(program.emit().emitSkipped, false);
-      await auditGraph(join(outDir, "core/index.d.ts"), true);
-      await auditGraph(join(outDir, "cache.d.ts"), true);
+      for (const entry of entries) {
+        await auditGraph(
+          join(outDir, relative(join(repo, "src"), entry).replace(/\.ts$/, ".d.ts")),
+          true,
+        );
+      }
       await writeFile(join(outDir, "package.json"), '{"type":"module"}');
       // Only declared non-host packages may resolve from the checkout. Deny host
       // packages at every depth, including from dependencies; no ancestor fallback.
@@ -120,6 +140,14 @@ describe("shared engine dependency boundary", () => {
         }
         const core = await import('./core/index.js');
         const cache = await import('./cache.js');
+        // Imports remain host-free; lazy persistence loading starts no work.
+        const coordinator = await import('./core/execution-coordinator.js');
+        const usage = await import('./core/usage.js');
+        const runs = await import('./core/run-store.js');
+        await import('./core/run-index.js');
+        assert.equal(typeof coordinator.createExecutionCoordinator, 'function');
+        assert.equal(typeof usage.createAttemptLedger, 'function');
+        assert.equal(typeof runs.createRunStore, 'function');
         assert.equal(core.resolveWorkspacePaths('/workspace', '.search').cacheRoot, '/workspace/.search');
         assert.equal(core.truncateContent('abc', 2), 'ab\\n\\n[TRUNCATED]');
         assert.deepEqual(core.parseCitations('{}'), []);

@@ -25,6 +25,7 @@ The map distinguishes shared dependencies from native-only peers and MCP-only ru
 | Browser-grade TLS / HTTP fingerprinting for page fetching | Wreq-js | Shared | Preserve browser-signature fetching and native-asset installation checks. |
 | HTML to Markdown content extraction | Defuddle | Shared | Preserve cleaned Markdown and dual-fetch quality comparison. |
 | DOM for content extraction | Linkedom | Shared | Supply the document consumed by Defuddle in `src/core/fetch.ts`; verify conversion, metadata handling and fallback behaviour. Replacement effort has not been measured. |
+| Kernel-released run-store writer lock | Fs Native Extensions | Shared | Preserve the permanent lock inode, descriptor-scoped ownership, crash release and native asset checks. The library is not yet wired into operations. |
 | LLM dispatch and native authentication | Pi AI | Native-Only Peer | Native authentication uses `Pi`'s system; standalone inference has a separate adapter. |
 | Extension API surface | Pi Coding Agent | Native-Only Peer | Preserve the native tool and event contract. |
 | Tool-output progress rendering | Pi TUI | Native-Only Peer | Preserve native rendering. |
@@ -56,6 +57,18 @@ These packages are installed via `npm` and distributed with the extension.
 - **Author:** Andrea Giammarchi
 - **Licence:** ISC
 - **Usage:** [_Linkedom_](https://github.com/WebReflection/linkedom) supplies the `document` object consumed by Defuddle's Node.js mode in `src/core/fetch.ts`.
+
+### `fs-native-extensions`
+
+- **Repository:** https://github.com/holepunchto/fs-native-extensions
+- **Author:** Kasper Isager Dalsgarð
+- **Licence:** Apache-2.0
+- **Usage:** The new run-store library lazy-loads [_fs-native-extensions_](https://github.com/holepunchto/fs-native-extensions) for nonblocking `tryLock` and `unlock` in `src/core/run-lock.ts`. Each acquisition opens a separate descriptor on a permanent lockfile. Operation wiring is pending; the existing cache path is unchanged.
+- **Distribution:** Both package manifests pin the selected version. The standalone build leaves the package external because native addon resolution is module-relative, and checks the lockfile closure's licence files.
+
+The audited resolver closure consists of [`require-addon`](https://github.com/holepunchto/require-addon), [`which-runtime`](https://github.com/holepunchto/which-runtime), [`bare-addon-resolve`](https://github.com/holepunchto/bare-addon-resolve), [`bare-module-resolve`](https://github.com/holepunchto/bare-module-resolve) and [`bare-semver`](https://github.com/holepunchto/bare-semver). All declare Apache-2.0 and ship a `LICENSE`; none ships a `NOTICE`. Their installed author metadata is recorded in the root `NOTICE`. The repository lockfile pins the inspected versions, but downstream installations resolve the dependency's transitive ranges afresh; production-install gates must record those resolved versions.
+
+Library process/crash tests cover [_Linux_](https://kernel.org) x86-64, [_Node.js_](https://nodejs.org) 24 and local encrypted [_Btrfs_](https://btrfs.readthedocs.io/). No musl prebuild ships: the lazy backend load therefore fails on [_Alpine_](https://alpinelinux.org), and allocation returns a persistence diagnostic without preventing module import. Other platforms, installed run-store execution and the native floor remain integration gates, not verified support claims. Fresh tarball checks of the existing entry points passed; they do not exercise the unactivated store through either adapter. See [Development](plans/codemode/DEVELOPMENT.md) for the unactivated library status.
 
 ## Peer Dependencies
 

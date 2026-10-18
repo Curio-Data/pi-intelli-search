@@ -24,6 +24,30 @@ typebox (https://github.com/sinclairzx81/typebox)
 Copyright Sinclair
 License: MIT
 
+fs-native-extensions (https://github.com/holepunchto/fs-native-extensions)
+Author: Kasper Isager Dalsgarð
+License: Apache-2.0
+
+require-addon (https://github.com/holepunchto/require-addon)
+Author: Holepunch
+License: Apache-2.0
+
+which-runtime (https://github.com/holepunchto/which-runtime)
+Author: Holepunch Inc.
+License: Apache-2.0
+
+bare-addon-resolve (https://github.com/holepunchto/bare-addon-resolve)
+Author: Holepunch
+License: Apache-2.0
+
+bare-module-resolve (https://github.com/holepunchto/bare-module-resolve)
+Author: Holepunch
+License: Apache-2.0
+
+bare-semver (https://github.com/holepunchto/bare-semver)
+Author: Holepunch
+License: Apache-2.0
+
 @modelcontextprotocol/server (https://github.com/modelcontextprotocol/typescript-sdk)
 Copyright Anthropic, PBC and contributors
 License: Apache-2.0
