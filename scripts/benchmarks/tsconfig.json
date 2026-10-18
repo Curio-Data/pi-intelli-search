@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "composite": false,
+    "declaration": false,
+    "noEmit": true
+  },
+  "include": [
+    "*.ts",
+    "../../test/benchmark-*.test.ts",
+    "../../docs/plans/codemode/API.ts",
+    "../../docs/plans/codemode/NATIVE-API.ts"
+  ],
+  "exclude": []
+}

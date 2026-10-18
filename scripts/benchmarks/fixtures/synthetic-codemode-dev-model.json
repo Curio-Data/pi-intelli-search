@@ -1,0 +1,332 @@
+{
+  "schemaVersion": 1,
+  "kind": "intelli-benchmark-fixtures",
+  "scenario": "synthetic-codemode-dev",
+  "fixtures": [
+    {
+      "key": {
+        "boundary": "model",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "research.search",
+        "requestSha256": "cd164b661d7d633d5112b68e5494d08251ab5d23ea7f857e113e05dfcf1a9ce7",
+        "occurrence": 1
+      },
+      "request": {
+        "model": {
+          "provider": "fixture-openrouter",
+          "model": "perplexity/sonar"
+        },
+        "role": "search",
+        "systemPrompt": "You are the synthetic search stage.",
+        "userMessage": "public fixture query about streaming schedulers",
+        "maxTokens": 2048,
+        "reasoning": "low",
+        "effectivePayloadPatch": {
+          "plugins": [
+            {
+              "name": "web_search"
+            }
+          ]
+        }
+      },
+      "response": {
+        "text": "Synthetic search answer with [source one](https://example.com/one).",
+        "providerStreamEvents": [
+          {
+            "id": "chunk-1",
+            "object": "chat.completion.chunk",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "annotations": [
+                    {
+                      "type": "url_citation",
+                      "url_citation": {
+                        "url": "https://example.com/one",
+                        "title": "One"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "chunk-2",
+            "object": "chat.completion.chunk",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "annotations": [
+                    {
+                      "type": "url_citation",
+                      "url_citation": {
+                        "url": "https://example.com/two",
+                        "title": "Two"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "providerResponse": {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          }
+        },
+        "responseId": "gen-search-1"
+      },
+      "usage": {
+        "tokens": {
+          "inputTotal": 1147,
+          "inputUncached": 1147,
+          "outputTotal": 210,
+          "totalTokens": 1357
+        },
+        "cost": {
+          "total": 0.0011
+        },
+        "source": "provider-response",
+        "costBasis": "reported",
+        "providerRequestId": "req-search-1"
+      },
+      "delayMs": 2,
+      "contentSha256": "6ce902bc9905c4aa3fcd85704738f3c70657a19e68d72f9ec6dc72c88769bb4b"
+    },
+    {
+      "key": {
+        "boundary": "model",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "research.extract/S1",
+        "requestSha256": "02ef0e46eea8f67d3d185841b1072ec58bbd84e9bdf1c8574bcfa0757de069cd",
+        "occurrence": 1
+      },
+      "request": {
+        "model": {
+          "provider": "fixture-openrouter",
+          "model": "perplexity/sonar"
+        },
+        "role": "extract",
+        "systemPrompt": "You are the synthetic extraction stage.",
+        "userMessage": "Extract the scheduling guarantees from source S1.",
+        "maxTokens": 2048,
+        "reasoning": "low",
+        "effectivePayloadPatch": null
+      },
+      "response": {
+        "text": "S1: The scheduler must release permits before backoff.",
+        "providerResponse": {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          }
+        },
+        "responseId": "gen-extract-1"
+      },
+      "usage": {
+        "tokens": {
+          "inputTotal": 40010,
+          "inputUncached": 40010,
+          "outputTotal": 320,
+          "totalTokens": 40330
+        },
+        "cost": {
+          "total": 0.0044
+        },
+        "source": "provider-response",
+        "costBasis": "reported",
+        "providerRequestId": "req-extract-1"
+      },
+      "delayMs": 1,
+      "contentSha256": "a63d1c47b22964bff934acf4011a71a3d37b38e0d27dc760c1a2142075fdabe9"
+    },
+    {
+      "key": {
+        "boundary": "model",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "research.extract/S2",
+        "requestSha256": "34a4215e87158c75a933ac6cc3069beb9771c36446ebe2e49f508300f86cbb0b",
+        "occurrence": 1
+      },
+      "request": {
+        "model": {
+          "provider": "fixture-openrouter",
+          "model": "perplexity/sonar"
+        },
+        "role": "extract",
+        "systemPrompt": "You are the synthetic extraction stage.",
+        "userMessage": "Extract the scheduling guarantees from source S2.",
+        "maxTokens": 2048,
+        "reasoning": "low",
+        "effectivePayloadPatch": null
+      },
+      "response": {
+        "providerResponse": {
+          "status": 429,
+          "headers": {
+            "retry-after": "1"
+          }
+        }
+      },
+      "error": {
+        "kind": "rate-limit",
+        "message": "429 Too Many Requests: retry after 1s"
+      },
+      "usage": {
+        "tokens": {
+          "inputTotal": 0,
+          "outputTotal": 0
+        },
+        "source": "provider-response",
+        "costBasis": "unknown"
+      },
+      "delayMs": 1,
+      "contentSha256": "f58fbff43db9537f9913b6b9d7a8a3594487b6e5a1d6bc7ddf7452f7c3a6ee96"
+    },
+    {
+      "key": {
+        "boundary": "model",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "research.extract/S2",
+        "requestSha256": "34a4215e87158c75a933ac6cc3069beb9771c36446ebe2e49f508300f86cbb0b",
+        "occurrence": 2
+      },
+      "request": {
+        "model": {
+          "provider": "fixture-openrouter",
+          "model": "perplexity/sonar"
+        },
+        "role": "extract",
+        "systemPrompt": "You are the synthetic extraction stage.",
+        "userMessage": "Extract the scheduling guarantees from source S2.",
+        "maxTokens": 2048,
+        "reasoning": "low",
+        "effectivePayloadPatch": null
+      },
+      "response": {
+        "text": "S2: Late extractions are labelled and excluded from evidence.",
+        "providerResponse": {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          }
+        },
+        "responseId": "gen-extract-2"
+      },
+      "usage": {
+        "tokens": {
+          "inputTotal": 39880,
+          "inputUncached": 39880,
+          "outputTotal": 290,
+          "totalTokens": 40170
+        },
+        "cost": {
+          "total": 0.0043
+        },
+        "source": "provider-response",
+        "costBasis": "reported",
+        "providerRequestId": "req-extract-2"
+      },
+      "delayMs": 1,
+      "contentSha256": "9ce4eb62cb71245801455204a136d8472af122e9f3af15bba06ff6d454b8797b"
+    },
+    {
+      "key": {
+        "boundary": "model",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "research.collate",
+        "requestSha256": "b7c04bd57afdd7abb076455594e099f217b6174d83ce4784c320ccfb9dcd93e6",
+        "occurrence": 1
+      },
+      "request": {
+        "model": {
+          "provider": "fixture-openrouter",
+          "model": "perplexity/sonar"
+        },
+        "role": "collate",
+        "systemPrompt": "You are the synthetic collation stage.",
+        "userMessage": "Collate S1 and S2 into the synthetic report.",
+        "maxTokens": 2048,
+        "reasoning": "low",
+        "effectivePayloadPatch": null
+      },
+      "response": {
+        "text": "Synthetic collated report.",
+        "providerResponse": {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          }
+        },
+        "responseId": "gen-collate-1"
+      },
+      "usage": {
+        "tokens": {
+          "inputTotal": 900,
+          "inputUncached": 900,
+          "outputTotal": 450,
+          "totalTokens": 1350
+        },
+        "cost": {
+          "total": 0.0009
+        },
+        "source": "provider-response",
+        "costBasis": "reported",
+        "providerRequestId": "req-collate-1"
+      },
+      "delayMs": 0,
+      "contentSha256": "f9119c8613320a6f9668a473ef0d98f7d17854d0bdb3614c02f1acf2b61114f1"
+    },
+    {
+      "key": {
+        "boundary": "model",
+        "scenario": "synthetic-codemode-dev",
+        "operationNode": "suggest.judge",
+        "requestSha256": "17fe63392c529251b0008d2f1c31a5ee93a4c52f685abd2a1b3e7f9cdad4c7b1",
+        "occurrence": 1
+      },
+      "request": {
+        "model": {
+          "provider": "fixture-openrouter",
+          "model": "perplexity/sonar"
+        },
+        "role": "suggest",
+        "systemPrompt": "You are the synthetic cache-suggestion stage.",
+        "userMessage": "Suggest related cached searches for the synthetic query.",
+        "maxTokens": 2048,
+        "reasoning": "low",
+        "effectivePayloadPatch": null
+      },
+      "response": {
+        "text": "No related cached searches.",
+        "providerResponse": {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          }
+        },
+        "responseId": "gen-suggest-1"
+      },
+      "usage": {
+        "tokens": {
+          "inputTotal": 220,
+          "inputUncached": 220,
+          "outputTotal": 20,
+          "totalTokens": 240
+        },
+        "cost": {
+          "total": 0.0001
+        },
+        "source": "provider-response",
+        "costBasis": "reported"
+      },
+      "delayMs": 0,
+      "contentSha256": "24a18505965a600561f47538e2436c8b81906f45dc2f06103cd0d7c2c7af8778"
+    }
+  ]
+}
