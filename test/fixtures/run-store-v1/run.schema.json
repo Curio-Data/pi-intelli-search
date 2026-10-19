@@ -9,6 +9,7 @@
     "sources",
     "evidenceSourceIds",
     "documents",
+    "suppliedPages",
     "provenance"
   ],
   "properties": {
@@ -124,6 +125,25 @@
       "uniqueItems": true
     },
     "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "url",
+          "relativePath"
+        ],
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "relativePath": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "suppliedPages": {
       "type": "array",
       "items": {
         "type": "object",

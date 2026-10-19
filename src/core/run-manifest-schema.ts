@@ -39,6 +39,9 @@ export const RunManifestSchema = Type.Object(
     sources: Type.Array(RunSourceSchema, { minItems: 1 }),
     evidenceSourceIds: Type.Array(sourceId, { minItems: 1, uniqueItems: true }),
     documents: Type.Array(Type.Object({ url: Type.String(), relativePath: Type.String() }, strict)),
+    suppliedPages: Type.Array(
+      Type.Object({ url: Type.String(), relativePath: Type.String() }, strict),
+    ),
     provenance: Type.Object(
       {
         domains: Type.Array(Type.String()),

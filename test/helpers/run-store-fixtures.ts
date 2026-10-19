@@ -122,6 +122,7 @@ export function manifestFor(extra: readonly Artifact[] = []): RunManifest {
         url: `https://example.com/doc/${i}`,
         relativePath: a.relativePath,
       })),
+    suppliedPages: [],
     provenance: {
       domains: [],
       models: {

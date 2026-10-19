@@ -90,17 +90,66 @@ it("report manifest separates frozen evidence, late extractions and documentatio
   assert.equal(manifest.documents[0].relativePath, "sources/docs.md");
 });
 
-it("manual collation records supplied provenance without a network-fetch claim", () => {
-  const manifest = manifestFor();
-  manifest.operation = "intelli_collate";
-  manifest.sources[0].input = "supplied";
-  delete manifest.sources[0].fullPagePath;
-  delete manifest.provenance.models.search;
-  delete manifest.provenance.models.extract;
-  const supplied = artifactsFor(query).filter((a) => a.kind !== "source");
-  assert.equal(runManifestError(manifest, supplied), undefined);
-  manifest.sources[0].input = "network";
-  assert.match(runManifestError(manifest, supplied)!, /input disagrees/);
+it("manual collation persists supplied labels, repeated URLs and unpaired full pages without network claims", async () => {
+  const root = await scratchRoot("manifest-supplied");
+  const store = createRunStore(storeOptions(root));
+  for (const label of [
+    "",
+    "notes/local-section-1",
+    "https://example.com/x",
+    "ftp://example.com/x",
+  ]) {
+    const manifest = manifestFor();
+    manifest.operation = "intelli_collate";
+    manifest.sources[0].input = "supplied";
+    manifest.sources[0].url = label;
+    manifest.sources.push({
+      ...manifest.sources[0],
+      id: "S2",
+      extractionPath: "extractions/S2.md",
+    });
+    delete manifest.sources[1].fullPagePath;
+    manifest.evidenceSourceIds.push("S2");
+    delete manifest.provenance.models.search;
+    delete manifest.provenance.models.extract;
+    manifest.suppliedPages = [{ url: label, relativePath: "sources/unpaired.md" }];
+    const supplied = [
+      ...artifactsFor(query),
+      {
+        relativePath: "sources/unpaired.md",
+        kind: "source" as const,
+        bytes: Buffer.from("supplied page"),
+      },
+      {
+        relativePath: "extractions/S2.md",
+        kind: "extraction" as const,
+        bytes: Buffer.from("second supplied extraction"),
+      },
+    ];
+    assert.equal(runManifestError(manifest, supplied), undefined, label);
+    const reservation = await allocated(store);
+    assert.equal(
+      (await store.commit(reservation, withManifest(manifest, supplied), signal)).status,
+      "committed",
+      label,
+    );
+    assert.equal((await verify(root, reservation.runId)).ok, true, label);
+    manifest.sources[0].input = "network";
+    assert.match(runManifestError(manifest, supplied)!, /input disagrees/);
+    manifest.sources[0].input = "supplied";
+    manifest.sources[0].url = "https://user:secret@example.com/";
+    assert.match(runManifestError(manifest, supplied)!, /supplied source labels/);
+    manifest.sources[0].url = label;
+    manifest.suppliedPages[0].url = "https://user:secret@example.com/";
+    assert.match(runManifestError(manifest, supplied)!, /supplied page labels/);
+    manifest.suppliedPages[0].url = label;
+    manifest.provenance.models.search = { provider: "fixture", model: "s" };
+    assert.match(runManifestError(manifest, supplied)!, /cannot select search or extract/);
+    delete manifest.provenance.models.search;
+    manifest.provenance.models.extract = { provider: "fixture", model: "e" };
+    assert.match(runManifestError(manifest, supplied)!, /cannot select search or extract/);
+  }
+  await store.settle();
 });
 
 const mutations: readonly [string, (m: RunManifest) => void][] = [
@@ -250,13 +299,41 @@ const mutations: readonly [string, (m: RunManifest) => void][] = [
   ],
 ];
 
+const expectedErrors: Record<string, string> = {
+  "invented ID": "source IDs must follow candidate order from S1",
+  "nonterminal state": "run.json schema mismatch",
+  "raw page body": "run.json schema mismatch",
+  "inline extraction": "run.json schema mismatch",
+  "unknown top-level key": "run.json schema mismatch",
+  "secret-bearing configuration key": "run.json schema mismatch",
+  "missing research model": "research provenance must name search and extract models",
+  "late admitted as evidence": "evidence IDs must equal used sources in candidate order",
+  "empty evidence": "run.json schema mismatch",
+  "duplicate URL": "network source URLs must be unique HTTP(S) URLs without user information",
+  "credential URL": "network source URLs must be unique HTTP(S) URLs without user information",
+  "non-HTTP URL": "network source URLs must be unique HTTP(S) URLs without user information",
+  "wrong extraction kind": 'run.json path "sources/S1.md" has no matching extraction artefact',
+  "invented extraction":
+    'run.json path "extractions/missing.md" has no matching extraction artefact',
+  "traversal path": 'run.json path "../source.md" has no matching source artefact',
+  "absolute path": 'run.json path "/source.md" has no matching source artefact',
+  "late evidence path": 'run.json path "extractions/S1.md" has no matching late artefact',
+  "raw late page": "late extractions and failed fetches cannot retain raw pages",
+  "missing extraction": "only used and late sources must name an extraction",
+  "failed source extraction": "only used and late sources must name an extraction",
+  "unmapped document": 'run.json omits artefact "sources/docs.md"',
+  "double-owned source path": 'run.json repeats path "sources/S1.md"',
+  "credential document URL": "document URLs must be unique HTTP(S) URLs without user information",
+  "document schema extra": "run.json schema mismatch",
+};
+
 it("state, provenance and file identity defects refuse publication before any artefact write", async () => {
   const root = await scratchRoot("manifest-writer");
   const store = createRunStore(storeOptions(root));
   for (const [label, mutate] of mutations) {
     const manifest = manifestFor(extras);
     mutate(manifest);
-    assert.notEqual(runManifestError(manifest, files), undefined, label);
+    assert.equal(runManifestError(manifest, files), expectedErrors[label], label);
     const reservation = await allocated(store);
     const result = await store.commit(reservation, withManifest(manifest), signal);
     assert.equal(
@@ -290,6 +367,8 @@ it("a hash-valid run.json does not bypass field-level verified-reader checks", a
     await writeFile(markerPath, encodeRecord(marker));
     const result = await verify(root, reservation.runId);
     assert.equal(result.ok, false, label);
+    if (!result.ok)
+      assert.ok(result.reason.endsWith(expectedErrors[label]), `${label}: ${result.reason}`);
     assert.equal((await store.candidates(undefined, "other", signal)).length, 0, label);
   }
   await store.settle();
