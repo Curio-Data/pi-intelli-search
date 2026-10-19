@@ -2,6 +2,7 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
 import { COLLATION_SYSTEM_PROMPT } from "../prompts.js";
+import { completeOperationModel } from "../operation-model.js";
 import type { CollateParams } from "../contracts.js";
 import { displayCachePath } from "../paths.js";
 import {
@@ -25,7 +26,7 @@ export async function collate(
   params: CollateParams,
   context: OperationContext,
 ): Promise<OperationResult> {
-  const { settings, models, signal } = context;
+  const { settings, signal } = context;
   throwIfAborted(signal);
   const collateConfig = settings.collateModel;
 
@@ -70,7 +71,7 @@ export async function collate(
   );
 
   // Call LLM for collation (no lock — never hold locks across LLM calls)
-  const { text } = await models.complete({
+  const { text } = await completeOperationModel(context, "collate", {
     model: collateConfig,
     systemPrompt: COLLATION_SYSTEM_PROMPT,
     userMessage,

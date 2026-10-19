@@ -58,6 +58,7 @@ import {
   formatCacheAppendix,
 } from "../messages.js";
 import { progress } from "../progress.js";
+import { completeOperationModel } from "../operation-model.js";
 import { finalizeCollation } from "../provenance.js";
 
 /** Per-run I/O injection; no mutable global engine harness. */
@@ -108,7 +109,8 @@ export async function research(
       baseDelayMs: settings.retryBaseDelayMs,
       maxDelayMs: settings.retryMaxDelayMs,
     },
-    gate: createRateLimiter(settings.minRequestIntervalMs),
+    // Scoped policy owns runtime-wide actual-start pacing, including retries.
+    gate: context.services ? async () => throwIfAborted(context.signal) : createRateLimiter(settings.minRequestIntervalMs),
     tel: settings.disableTelemetry
       ? null
       : await TelemetryBuilder.create(params.query, context.identity, context.now),
@@ -320,7 +322,7 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     throwIfAborted(p.signal);
     attemptsUsed = attempt;
-    const completion = await p.models.complete({
+    const completion = await completeOperationModel(p, "search", {
       model: p.searchConfig,
       systemPrompt: SEARCH_SYSTEM_PROMPT,
       userMessage: searchQuery,
@@ -340,7 +342,7 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
     p.onProgress?.(
       progress("search", `Search returned no links — retrying (${attempt}/${maxAttempts - 1})...`),
     );
-    await sleep(p.settings.retryBaseDelayMs, p.signal);
+    await (p.services?.clock.sleep(p.settings.retryBaseDelayMs, p.signal) ?? sleep(p.settings.retryBaseDelayMs, p.signal));
   }
 
   // User cancel during search: propagate abort rather than returning a
@@ -442,7 +444,7 @@ async function runExtractStage(
     async (page) => {
       // Space out concurrent extract calls when a throttle is configured.
       await p.gate(p.signal);
-      return extractPage(p, page);
+      return extractPage(p, page, `S${pages.findIndex((candidate) => candidate.url === page.url) + 1}`);
     },
     {
       signal: p.signal,
@@ -528,7 +530,7 @@ async function runCollateStage(
   );
 
   throwIfAborted(p.signal);
-  const { text } = await p.models.complete({
+  const { text } = await completeOperationModel(p, "collate", {
     model: p.collateConfig,
     systemPrompt: COLLATION_SYSTEM_PROMPT,
     userMessage: collationUserMsg,
@@ -717,7 +719,7 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
     if (index.searches.some((e) => e.slug !== currentSlug)) {
       const indexText = formatIndexForJudge(index, currentSlug);
       const judgeUserMsg = `Current query: "${p.params.query}"\n\nPrevious searches:\n${indexText}`;
-      const { text: judgeResponse } = await p.models.complete({
+      const { text: judgeResponse } = await completeOperationModel(p, "suggest", {
         model: p.extractConfig,
         systemPrompt: CACHE_SUGGEST_PROMPT,
         userMessage: judgeUserMsg,
@@ -878,7 +880,7 @@ async function writeTelemetrySidecar(
 /**
  * Extract query-relevant content from a single page.
  */
-async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractResult> {
+async function extractPage(p: PipelineCtx, page: FetchedPage, pageId: string): Promise<ExtractResult> {
   throwIfAborted(p.signal);
   try {
     const userMessage = buildExtractionMessage(
@@ -888,7 +890,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       p.settings.extractMaxChars,
     );
 
-    const { text: extraction } = await p.models.complete({
+    const { text: extraction } = await completeOperationModel(p, "extract", {
       model: p.extractConfig,
       systemPrompt: EXTRACTION_SYSTEM_PROMPT,
       userMessage,
@@ -897,7 +899,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       retry: p.retry,
       timeoutMs: p.settings.llmTimeoutMs,
       onRetryNotice: (msg) => p.onProgress?.(progress("extract", msg)),
-    });
+    }, pageId);
 
     if (!extraction.trim()) throw new Error("Extraction returned no visible evidence");
     const firstLine = extraction.split("\n")[0] ?? "";

@@ -30,7 +30,9 @@ const skillGuidance =
   "If the host has no such skill, use the tool descriptions without blocking.";
 
 const serverInstructions =
-  "Use intelli-search for current web information. " + skillGuidance + " " +
+  "Use intelli-search for current web information. " +
+  skillGuidance +
+  " " +
   "Start with intelli_search for factual questions, latest versions, release " +
   "dates and brief lookups. It returns an answer with sources without the " +
   "multi-page fetch, extraction and collation pipeline. If a search answer " +
@@ -59,7 +61,8 @@ const toolDefinitions: Array<{
       "with source URLs without fetching and extracting each page. A request " +
       "for current information or sources alone does not need intelli_research. " +
       "Escalate to intelli_research only for detailed analysis, comparisons " +
-      "or a specific evidence gap requiring multiple pages. " + skillGuidance,
+      "or a specific evidence gap requiring multiple pages. " +
+      skillGuidance,
     schema: searchSchema,
     annotations: {
       title: "Intelli Search",
@@ -76,7 +79,8 @@ const toolDefinitions: Array<{
       "page to the parts that matter for a given query. Always provide " +
       "focusPrompt to guide extraction; without it the extraction is generic. " +
       "Use this for individual pages you already have; for end-to-end " +
-      "research, use intelli_research. " + skillGuidance,
+      "research, use intelli_research. " +
+      skillGuidance,
     schema: extractSchema,
     annotations: {
       title: "Intelli Extract",
@@ -97,7 +101,8 @@ const toolDefinitions: Array<{
       "extractions and numbered sources to the lowest free numbered sibling " +
       "folder (.1, then .2 and so on); archiving is best-effort and a " +
       "failure lets the completed run replace files in place, so copy a " +
-      "report elsewhere if it must be retained. " + skillGuidance,
+      "report elsewhere if it must be retained. " +
+      skillGuidance,
     schema: collateSchema,
     annotations: {
       title: "Intelli Collate",
@@ -117,7 +122,9 @@ const toolDefinitions: Array<{
       "this tool. Do not expand a simple lookup into unrequested research. " +
       "This longer-running pipeline searches, fetches pages, extracts each " +
       "page and collates the results; it can take minutes and incurs more " +
-      "provider calls than intelli_search. " + skillGuidance + " " +
+      "provider calls than intelli_search. " +
+      skillGuidance +
+      " " +
       "Writes results to the workspace cache; use the returned summary " +
       "directly and read cached pages only when it is insufficient. " +
       "Use maxUrls to control breadth: 3 for targeted, 10 (default) " +
@@ -171,18 +178,36 @@ const recoveryHint =
  * load is not cached, so a repaired file takes effect on the next call; a
  * successful load is kept for the life of the process, as at startup.
  */
-export function lazyRuntime(load: ConfigLoader, options: RuntimeOptions): () => Promise<Runtime> {
+export interface RuntimeLoader {
+  (): Promise<Runtime>;
+  close(reason?: string): Promise<void>;
+}
+
+export function lazyRuntime(load: ConfigLoader, options: RuntimeOptions): RuntimeLoader {
   let ready: Promise<Runtime> | undefined;
-  return () => {
+  let stopped = false;
+  let activeRuntime: Runtime | undefined;
+  let closing: Promise<void> | undefined;
+  const resolve = () => {
+    if (stopped) return Promise.reject(new StandaloneError("CANCELLED", "Runtime closed"));
     if (!ready) {
       const attempt = load()
-        .then((config) => createRuntime(config, options))
+        .then((config) => {
+          if (stopped) throw new StandaloneError("CANCELLED", "Runtime closed");
+          return createRuntime(config, options);
+        })
         .then(
-          (runtime) => {
+          async (runtime) => {
+            if (stopped) {
+              await runtime.close("Runtime closed during construction");
+              throw new StandaloneError("CANCELLED", "Runtime closed");
+            }
+            activeRuntime = runtime;
             process.stderr.write("[mcp-intelli-search] Configuration loaded\n");
             return runtime;
           },
           (error: unknown) => {
+            if (error instanceof StandaloneError) throw error;
             if (error instanceof ConfigurationError)
               throw new StandaloneError("CONFIGURATION", `${error.message}. ${recoveryHint}`);
             throw new StandaloneError(
@@ -198,6 +223,20 @@ export function lazyRuntime(load: ConfigLoader, options: RuntimeOptions): () => 
     }
     return ready;
   };
+  return Object.assign(resolve, {
+    close(reason?: string) {
+      stopped = true;
+      const stoppedRuntime = activeRuntime?.close(reason);
+      closing ??= (async () => {
+        await stoppedRuntime;
+        // Do not initialise a never-used runtime merely to close it. A failed
+        // load owns no runtime, but an in-flight construction must settle.
+        const runtime = await ready?.catch(() => undefined);
+        await runtime?.close(reason);
+      })();
+      return closing;
+    },
+  });
 }
 
 export interface ProtocolServer {
@@ -205,6 +244,8 @@ export interface ProtocolServer {
   readonly queue: OperationQueue<CallToolResult>;
   /** Aborts every active and queued operation. */
   readonly shutdown: AbortController;
+  /** Stops runtime admissions synchronously, then drains queue and runtime. */
+  close(): Promise<void>;
 }
 
 /**
@@ -212,7 +253,7 @@ export interface ProtocolServer {
  * deliberately separate from CLI startup and transport wiring for testing.
  */
 export function createProtocolServer(
-  runtime: Runtime | (() => Promise<Runtime>),
+  runtime: Runtime | RuntimeLoader,
   limits: QueueLimits = defaultQueueLimits,
   onEnqueue?: () => void,
 ): ProtocolServer {
@@ -301,7 +342,18 @@ export function createProtocolServer(
       },
     );
   }
-  return { server, queue, shutdown };
+  let closing: Promise<void> | undefined;
+  const close = () => {
+    if (!closing) {
+      shutdown.abort();
+      const runtimeClosing = runtime.close("Protocol server closed");
+      // queue.close() also waits for a request resolving a lazy runtime. Neither
+      // path may abandon work just because the transport has disappeared.
+      closing = Promise.all([runtimeClosing, queue.close()]).then(() => undefined);
+    }
+    return closing;
+  };
+  return { server, queue, shutdown, close };
 }
 
 export interface ServeOptions extends RuntimeOptions {
@@ -334,7 +386,7 @@ export async function startServer(
     typeof config === "function"
       ? lazyRuntime(config, runtimeOptions)
       : await createRuntime(config, runtimeOptions);
-  const { server, queue, shutdown } = createProtocolServer(
+  const { server, close: drain } = createProtocolServer(
     runtime,
     {
       ...defaultQueueLimits,
@@ -350,12 +402,7 @@ export async function startServer(
   });
   const close = () => {
     closing ??= (async () => {
-      shutdown.abort();
-      try {
-        await queue.close();
-      } catch {
-        // Drain is best-effort during shutdown; never stall the close.
-      }
+      await drain();
       try {
         await server.close();
       } catch {
@@ -373,7 +420,12 @@ export async function startServer(
     })();
     return closing;
   };
-  await server.connect(transport);
+  try {
+    await server.connect(transport);
+  } catch (error) {
+    await close();
+    throw error;
+  }
   // server.connect() takes ownership of the transport's callbacks; stdin
   // closure reaches us through the protocol-level close notification.
   server.server.onclose = () => void close();

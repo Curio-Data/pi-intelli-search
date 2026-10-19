@@ -3,6 +3,7 @@
 
 import type { SearchResult } from "../types.js";
 import { SEARCH_SYSTEM_PROMPT } from "../prompts.js";
+import { completeOperationModel } from "../operation-model.js";
 import type { SearchParams } from "../contracts.js";
 import { mergeCitations } from "../annotations.js";
 import { extractSourceUrls, stripTrailingSourcesSection, throwIfAborted } from "../util.js";
@@ -13,7 +14,7 @@ export async function search(
   params: SearchParams,
   context: OperationContext,
 ): Promise<OperationResult> {
-  const { settings, models, signal } = context;
+  const { settings, signal } = context;
   throwIfAborted(signal);
   const searchConfig = settings.searchModel;
 
@@ -26,7 +27,7 @@ export async function search(
   const payloadPatch = buildSearchPayloadPatch(settings, searchConfig.provider, params.domains);
 
   try {
-    const { text: responseText, citations } = await models.complete({
+    const { text: responseText, citations } = await completeOperationModel(context, "search", {
       model: searchConfig,
       systemPrompt: SEARCH_SYSTEM_PROMPT,
       userMessage: searchQuery,

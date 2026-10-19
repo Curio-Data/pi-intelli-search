@@ -2,6 +2,12 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
 import { Check } from "typebox/value";
+import { randomBytes, randomUUID } from "node:crypto";
+import { createOperationRuntime } from "../../../src/core/operation-runtime.js";
+import { AdmissionError } from "../../../src/core/execution-coordinator.js";
+import { createSystemClock } from "../../../src/core/clock.js";
+import { createRunStore } from "../../../src/core/run-store.js";
+import { executionReceipt, type ExecutionReceipt } from "./execution-receipt.js";
 import type { TSchema } from "typebox";
 import {
   search,
@@ -20,6 +26,9 @@ import type {
   OperationLogger,
   OperationProgress,
   OperationResult,
+  OperationServices,
+  Clock,
+  FetchClient,
 } from "../../../src/core/contracts.js";
 import type { ResearchDependencies } from "../../../src/core/operations/research.js";
 import type { FetchFunction } from "../../../src/core/annotations.js";
@@ -96,31 +105,79 @@ export interface RuntimeOptions {
   env?: Readonly<Record<string, string | undefined>>;
   logger?: OperationLogger;
   researchDependencies?: ResearchDependencies;
+  /** Deterministic runtime clock; never an operation-owned replacement. */
+  clock?: Clock;
 }
 export interface ExecuteOptions {
   signal?: AbortSignal;
   onProgress?: (progress: OperationProgress) => void;
 }
-/** Direct engine boundary for Phase 3. Protocol scheduling is a separate adapter. */
+/** Registered operation lifetime. Protocol admission remains a separate adapter. */
 export async function createRuntime(config: StandaloneConfig, options: RuntimeOptions = {}) {
+  // Capture the caller's settings once, before constructing the coordinator.
+  config = structuredClone(config);
+  options = {
+    ...options,
+    researchDependencies: options.researchDependencies
+      ? { ...options.researchDependencies }
+      : undefined,
+  };
   const paths = await workspacePaths(config.workspace, config.settings.cacheDir);
   const env = { ...(options.env ?? process.env) };
   const secret = env[config.apiKeyEnv];
   const redact = (message: string) => (secret ? message.split(secret).join("[REDACTED]") : message);
   const sink = options.logger ?? stderrLogger;
-  const logger: OperationLogger = {
-    error: (message) => sink.error(redact(message)),
-    warn: (message) => sink.warn(redact(message)),
+  const deliver = (level: "error" | "warn", message: string) => {
+    try {
+      sink[level](redact(message));
+    } catch {
+      /* A diagnostic cannot replace a result. */
+    }
   };
+  const logger: OperationLogger = {
+    error: (message) => deliver("error", message),
+    warn: (message) => deliver("warn", message),
+  };
+  const clock = options.clock ?? createSystemClock();
+  // Fetch/persistence production is a later slice. Never silently substitute the
+  // unbounded legacy fetch implementation behind the new FetchClient contract.
+  const unwiredFetch: FetchClient = Object.freeze({
+    async fetch() {
+      throw new Error("Coordinated fetch is not installed");
+    },
+    async discover() {
+      throw new Error("Coordinated discovery is not installed");
+    },
+  });
+  const lifetime = createOperationRuntime({
+    modelConcurrency: 5,
+    criticalReserve: 1,
+    fetchConcurrency: 4,
+    minRequestIntervalMs: config.settings.minRequestIntervalMs,
+    clock,
+    generation: 0,
+    createFetch: () => unwiredFetch,
+    createRuns: () =>
+      createRunStore({
+        workspaceRoot: paths.workspaceRoot,
+        cacheRoot: paths.cacheRoot,
+        displayRoot: paths.cacheDisplayRoot,
+        clock,
+        randomId: () => randomBytes(16).toString("hex"),
+        onDiagnostic: (diagnostic) => logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
+      }),
+  });
   return {
     identity,
     paths,
+    close: (reason?: string) => lifetime.close(reason),
     async execute<Name extends keyof OperationInputs>(
       name: Name,
       params: OperationInputs[Name],
       execution: ExecuteOptions = {},
-    ): Promise<OperationResult> {
-      let category: StandaloneErrorCode = "INVALID_ARGUMENTS";
+    ): Promise<OperationResult & { readonly execution: ExecutionReceipt }> {
+      const state: { category: StandaloneErrorCode } = { category: "INVALID_ARGUMENTS" };
+      let owned: OperationServices | undefined;
       try {
         validate(name, params);
         if ("domains" in params && params.domains !== undefined) {
@@ -136,90 +193,132 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
               "This search engine cannot combine per-call domains and excludedDomains",
             );
         }
-        throwIfAborted(execution.signal);
-        category = "WORKSPACE";
-        await assertWorkspaceSafe(paths, execution.signal);
-        // Per-operation credentials/catalogue/citation state, never a shared mutable host context.
-        const models = createOpenRouterClient(config, {
-          fetch: options.fetch,
-          env,
-          logger,
-          signal: execution.signal,
-        });
-        const settings = config.settings;
-        const bindings =
-          name === "intelli_research"
-            ? [
-                { role: "search", config: settings.searchModel },
-                { role: "extract", config: settings.extractModel },
-                { role: "collate", config: settings.collateModel },
-              ]
-            : [
-                {
-                  role: name.slice("intelli_".length),
-                  config:
-                    name === "intelli_search"
-                      ? settings.searchModel
-                      : name === "intelli_extract"
-                        ? settings.extractModel
-                        : settings.collateModel,
-                },
-              ];
-        category = "CONFIGURATION";
-        const missing = await models.preflight(bindings);
-        if (missing.length)
-          throw new Error(
-            `Configured model unavailable for role(s): ${missing.map((item) => item.role).join(", ")}`,
-          );
-        throwIfAborted(execution.signal);
-        category = "WORKSPACE";
-        await assertWorkspaceSafe(paths, execution.signal);
-        category = "OPERATION";
-        const context: OperationContext = {
-          settings,
-          models,
-          paths,
-          identity,
-          logger,
-          ...execution,
-        };
-        const result = await withStandaloneStdout(logger, async () => {
-          switch (name) {
-            case "intelli_search":
-              return search(params as OperationInputs["intelli_search"], context);
-            case "intelli_extract":
-              return extract(params as OperationInputs["intelli_extract"], context);
-            case "intelli_collate":
-              return collate(params as OperationInputs["intelli_collate"], context);
-            case "intelli_research":
-              return research(
-                params as OperationInputs["intelli_research"],
-                context,
-                options.researchDependencies,
+        const result = await lifetime.run(
+          {
+            operationId: randomUUID(),
+            signal: execution.signal,
+            onProgress: execution.onProgress,
+            onDiagnostic: (diagnostic) => logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
+          },
+          async (services) => {
+            owned = services;
+            const signal = services.operation.signal;
+            throwIfAborted(signal);
+            state.category = "WORKSPACE";
+            await assertWorkspaceSafe(paths, signal);
+            // Per-operation credentials/catalogue/citation state, never a shared mutable host context.
+            const models = createOpenRouterClient(config, {
+              fetch: options.fetch,
+              env,
+              logger,
+              signal,
+              services,
+              random: Math.random,
+            });
+            const settings = config.settings;
+            const bindings =
+              name === "intelli_research"
+                ? [
+                    { role: "search", config: settings.searchModel },
+                    { role: "extract", config: settings.extractModel },
+                    { role: "collate", config: settings.collateModel },
+                  ]
+                : [
+                    {
+                      role: name.slice("intelli_".length),
+                      config:
+                        name === "intelli_search"
+                          ? settings.searchModel
+                          : name === "intelli_extract"
+                            ? settings.extractModel
+                            : settings.collateModel,
+                    },
+                  ];
+            state.category = "CONFIGURATION";
+            const missing = await models.preflight(bindings);
+            if (missing.length)
+              throw new Error(
+                `Configured model unavailable for role(s): ${missing.map((item) => item.role).join(", ")}`,
               );
-            default:
-              throw new Error("Unknown operation");
-          }
-        });
-        return {
-          ...result,
-          text: redact(
-            result.text
-              .replace(
-                /(^- Read (?:the extraction|the full page|the report): )`read ([^`]+)`/gm,
-                "$1`$2` (use the host's file-reading capability)",
-              )
-              .replace(
-                /Read a report with `read ([^`]+)`/g,
-                "Read `$1` with the host's file-reading capability",
+            throwIfAborted(signal);
+            state.category = "WORKSPACE";
+            await assertWorkspaceSafe(paths, signal);
+            state.category = "OPERATION";
+            let sequence = 0;
+            const started = clock.monotonicMs();
+            const context: OperationContext = {
+              settings,
+              models,
+              paths,
+              identity,
+              logger,
+              services,
+              signal,
+              now: () => clock.monotonicMs(),
+              onProgress: (progress) =>
+                services.onProgress?.({
+                  ...progress,
+                  operationId: services.operation.id,
+                  sequence: ++sequence,
+                  event: "update",
+                  state: "running",
+                  elapsedMs: clock.monotonicMs() - started,
+                }),
+            };
+            const result = await withStandaloneStdout(logger, async () => {
+              switch (name) {
+                case "intelli_search":
+                  return search(params as OperationInputs["intelli_search"], context);
+                case "intelli_extract":
+                  return extract(params as OperationInputs["intelli_extract"], context);
+                case "intelli_collate":
+                  return collate(params as OperationInputs["intelli_collate"], context);
+                case "intelli_research":
+                  return research(
+                    params as OperationInputs["intelli_research"],
+                    context,
+                    options.researchDependencies,
+                  );
+                default:
+                  throw new Error("Unknown operation");
+              }
+            });
+            return {
+              ...result,
+              text: redact(
+                result.text
+                  .replace(
+                    /(^- Read (?:the extraction|the full page|the report): )`read ([^`]+)`/gm,
+                    "$1`$2` (use the host's file-reading capability)",
+                  )
+                  .replace(
+                    /Read a report with `read ([^`]+)`/g,
+                    "Read `$1` with the host's file-reading capability",
+                  ),
               ),
-          ),
-        };
+            };
+          },
+        );
+        return { ...result, execution: executionReceipt(owned!) };
       } catch (error) {
-        if (execution.signal?.aborted) throw new StandaloneError("CANCELLED", "Operation aborted");
+        // The runtime has settled before this boundary reads any ledger state.
+        const receipt =
+          owned && state.category === "OPERATION" ? executionReceipt(owned) : undefined;
+        if (
+          execution.signal?.aborted ||
+          (error instanceof Error &&
+            (error.name === "AbortError" ||
+              ("code" in error && (error.code === "ABORTED" || error.code === "CLOSED"))))
+        )
+          throw new StandaloneError("CANCELLED", "Operation aborted", receipt);
         throw new StandaloneError(
-          error instanceof StandaloneError ? error.code : category,
+          error instanceof StandaloneError
+            ? error.code
+            : error instanceof AdmissionError
+              ? "OPERATION"
+              : state.category,
           redact(error instanceof Error ? error.message : "Standalone operation failed"),
+          receipt,
         );
       }
     },

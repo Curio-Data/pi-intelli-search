@@ -4,6 +4,7 @@
 import type { HarvestedCitation } from "./annotations.js";
 import type { ModelConfig, ResearchSettings } from "./types.js";
 import type { WorkspacePaths } from "./paths.js";
+import type { OperationServices } from "./execution-contracts.js";
 
 // Additive P0-2 seams; existing operations keep their current context until integration.
 export type * from "./execution-contracts.js";
@@ -154,6 +155,8 @@ export interface OperationLogger {
 export interface OperationContext {
   readonly settings: DeepReadonly<ResearchSettings>;
   readonly models: ModelClient;
+  /** Transitional registered-runtime wiring; native legacy callers omit this. */
+  readonly services?: OperationServices;
   readonly paths: WorkspacePaths;
   readonly identity: PackageIdentity;
   readonly signal?: AbortSignal;

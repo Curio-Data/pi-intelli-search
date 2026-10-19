@@ -2,6 +2,7 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
 import { EXTRACTION_SYSTEM_PROMPT } from "../prompts.js";
+import { completeOperationModel } from "../operation-model.js";
 import type { ExtractParams } from "../contracts.js";
 import { inferSourceType, inferCurrentness, throwIfAborted } from "../util.js";
 import { buildExtractionMessage } from "../messages.js";
@@ -11,7 +12,7 @@ export async function extract(
   params: ExtractParams,
   context: OperationContext,
 ): Promise<OperationResult> {
-  const { settings, models, signal } = context;
+  const { settings, signal } = context;
   throwIfAborted(signal);
   const extractConfig = settings.extractModel;
 
@@ -22,13 +23,13 @@ export async function extract(
     settings.extractMaxChars,
   );
 
-  const { text: extraction } = await models.complete({
+  const { text: extraction } = await completeOperationModel(context, "extract", {
     model: extractConfig,
     systemPrompt: EXTRACTION_SYSTEM_PROMPT,
     userMessage,
     maxTokens: settings.extractionMaxTokens,
     signal,
-  });
+  }, "S1");
 
   throwIfAborted(signal);
   const firstLine = extraction.split("\n")[0] ?? "";
