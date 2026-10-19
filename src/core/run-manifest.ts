@@ -49,8 +49,12 @@ export function runManifestError(
   )
     return "research provenance must name search and extract models";
   if (value.operation === "intelli_collate") {
-    if (value.provenance.models.search || value.provenance.models.extract)
-      return "manual collation cannot select search or extract models";
+    if (
+      value.provenance.models.search ||
+      value.provenance.models.extract ||
+      value.provenance.models.suggest
+    )
+      return "manual collation can select only a collate model";
     if (value.documents.length) return "manual collation cannot claim documentation discovery";
   } else if (value.suppliedPages.length) return "research cannot claim supplied pages";
   const inventory = new Map(files.map((file) => [file.relativePath, file.kind]));
@@ -75,6 +79,8 @@ export function runManifestError(
       urls.add(source.url);
     } else if (hasUserInfo(source.url))
       return "supplied source labels cannot contain URL user information";
+    if (source.input === "supplied" && !["used", "empty", "extract-failed"].includes(source.state))
+      return "supplied source states must be used, empty or extract-failed";
     const extracted = source.state === "used" || source.state === "late";
     if (extracted !== (source.extractionPath !== undefined))
       return "only used and late sources must name an extraction";

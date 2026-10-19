@@ -88,6 +88,8 @@ it("report manifest separates frozen evidence, late extractions and documentatio
   assert.deepEqual(manifest.evidenceSourceIds, ["S1"]);
   assert.equal(manifest.sources[1].state, "late");
   assert.equal(manifest.documents[0].relativePath, "sources/docs.md");
+  manifest.suppliedPages.push({ url: "notes", relativePath: "sources/supplied.md" });
+  assert.equal(runManifestError(manifest, files), "research cannot claim supplied pages");
 });
 
 it("manual collation persists supplied labels, repeated URLs and unpaired full pages without network claims", async () => {
@@ -143,11 +145,39 @@ it("manual collation persists supplied labels, repeated URLs and unpaired full p
     manifest.suppliedPages[0].url = "https://user:secret@example.com/";
     assert.match(runManifestError(manifest, supplied)!, /supplied page labels/);
     manifest.suppliedPages[0].url = label;
-    manifest.provenance.models.search = { provider: "fixture", model: "s" };
-    assert.match(runManifestError(manifest, supplied)!, /cannot select search or extract/);
-    delete manifest.provenance.models.search;
-    manifest.provenance.models.extract = { provider: "fixture", model: "e" };
-    assert.match(runManifestError(manifest, supplied)!, /cannot select search or extract/);
+    for (const role of ["search", "extract", "suggest"] as const) {
+      manifest.provenance.models[role] = { provider: "fixture", model: role };
+      assert.equal(
+        runManifestError(manifest, supplied),
+        "manual collation can select only a collate model",
+      );
+      delete manifest.provenance.models[role];
+    }
+    manifest.documents.push({ url: "https://example.com/docs", relativePath: "sources/docs.md" });
+    assert.equal(
+      runManifestError(manifest, supplied),
+      "manual collation cannot claim documentation discovery",
+    );
+    manifest.documents = [];
+    for (const state of ["fetch-failed", "cancelled", "late"] as const) {
+      manifest.sources[1].state = state;
+      assert.equal(
+        runManifestError(manifest, supplied),
+        "supplied source states must be used, empty or extract-failed",
+      );
+    }
+    for (const state of ["empty", "extract-failed"] as const) {
+      manifest.sources[1].state = state;
+      delete manifest.sources[1].extractionPath;
+      manifest.evidenceSourceIds = ["S1"];
+      assert.equal(
+        runManifestError(
+          manifest,
+          supplied.filter((a) => a.relativePath !== "extractions/S2.md"),
+        ),
+        undefined,
+      );
+    }
   }
   await store.settle();
 });
