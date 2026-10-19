@@ -17,12 +17,13 @@ export interface ExecutionReceipt {
 }
 
 /** Called only after the operation runtime has drained, including error paths. */
-export function executionReceipt(services: OperationServices): ExecutionReceipt {
+export function executionReceipt(
+  services: OperationServices,
+  parentDelivery: AccountingSummary["parentDelivery"] = "available",
+): ExecutionReceipt {
   return Object.freeze({
     operationId: services.operation.id,
-    accounting: services.ledger.summary(
-      services.operation.signal.aborted ? "unknown" : "available",
-    ),
+    accounting: services.ledger.summary(parentDelivery),
     attempts: services.ledger.records(),
     usage: services.ledger.hostUsage(),
   });

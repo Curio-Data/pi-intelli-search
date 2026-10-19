@@ -21,9 +21,10 @@ const extraction = {
 
 test("all shared operations run outside the host with standalone policy and cache identity", async () => {
   const f = await fixture();
+  let runtime: Awaited<ReturnType<typeof createRuntime>> | undefined;
   try {
     const calls: Record<string, number> = {};
-    const runtime = await createRuntime(f.config, {
+    runtime = await createRuntime(f.config, {
       env: { FIXTURE_KEY: "fixture-secret" },
       logger,
       fetch: fakeTransport((body) => {
@@ -49,14 +50,23 @@ test("all shared operations run outside the host with standalone policy and cach
     });
     const search = await runtime.execute("intelli_search", { query: "search" });
     assert.deepEqual(search.details.sources, [{ url: page.url, title: "Docs" }]);
-    assert.deepEqual(search.execution.attempts.map((item) => [item.role, item.state]), [["search", "failed"], ["search", "succeeded"]]);
+    assert.deepEqual(
+      search.execution.attempts.map((item) => [item.role, item.state]),
+      [
+        ["search", "failed"],
+        ["search", "succeeded"],
+      ],
+    );
     const extract = await runtime.execute("intelli_extract", {
       ...page,
       query: "extract",
       focusPrompt: "Facts only",
     });
     assert.match(extract.text, /Official documentation/);
-    assert(extract.execution.attempts.every((item) => item.role === "extract" && item.pageId === "S1"));
+    assert.equal(extract.execution.attempts.length, 2);
+    assert(
+      extract.execution.attempts.every((item) => item.role === "extract" && item.pageId === "S1"),
+    );
     const collate = await runtime.execute("intelli_collate", {
       query: "collate",
       extractions: [extraction],
@@ -64,6 +74,7 @@ test("all shared operations run outside the host with standalone policy and cach
     });
     assert.match(collate.text, /host's file-reading capability/);
     assert(!collate.text.includes("`read "));
+    assert.equal(collate.execution.attempts.length, 2);
     assert(collate.execution.attempts.every((item) => item.role === "collate"));
     const progress: string[] = [];
     const research = await runtime.execute(
@@ -72,8 +83,15 @@ test("all shared operations run outside the host with standalone policy and cach
       { onProgress: (p) => progress.push(p.stage) },
     );
     assert.equal(research.outcome, "completed");
-    assert.deepEqual([...new Set(research.execution.attempts.map((item) => item.role))], ["search", "extract", "collate", "suggest"]);
-    assert(research.execution.attempts.every((item) => item.operationId === research.execution.operationId));
+    assert.deepEqual(
+      [...new Set(research.execution.attempts.map((item) => item.role))],
+      ["search", "extract", "collate", "suggest"],
+    );
+    assert(
+      research.execution.attempts.every(
+        (item) => item.operationId === research.execution.operationId,
+      ),
+    );
     assert.equal(research.execution.accounting.attempts, research.execution.attempts.length);
     assert.match(research.text, /Related cached searches/);
     assert(!research.text.includes("`read "));
@@ -88,8 +106,8 @@ test("all shared operations run outside the host with standalone policy and cach
     assert.equal(calls["perplexity/sonar"], 4);
     assert.equal(calls["fixture/collate"], 4);
     assert((calls["fixture/extract"] ?? 0) >= 4);
-    await runtime.close();
   } finally {
+    await runtime?.close();
     await f.cleanup();
   }
 });

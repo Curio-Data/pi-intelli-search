@@ -80,6 +80,11 @@ test("registered MCP runtime retains settled telemetry-off retry and error accou
         assert.equal(error.execution?.accounting.reportedCost.total, 0.001);
         assert.equal(error.execution?.attempts[0].state, "failed");
         assert.equal(error.execution?.attempts[0].role, "extract");
+        assert.equal(
+          error.execution?.accounting.parentDelivery,
+          "available",
+          "ordinary failure is not parent cancellation",
+        );
         assert.equal(error.cause, undefined);
         return true;
       },

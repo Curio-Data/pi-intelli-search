@@ -23,13 +23,18 @@ export async function extract(
     settings.extractMaxChars,
   );
 
-  const { text: extraction } = await completeOperationModel(context, "extract", {
-    model: extractConfig,
-    systemPrompt: EXTRACTION_SYSTEM_PROMPT,
-    userMessage,
-    maxTokens: settings.extractionMaxTokens,
-    signal,
-  }, "S1");
+  const { text: extraction } = await completeOperationModel(
+    context,
+    "extract",
+    {
+      model: extractConfig,
+      systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+      userMessage,
+      maxTokens: settings.extractionMaxTokens,
+      signal,
+    },
+    "S1",
+  );
 
   throwIfAborted(signal);
   const firstLine = extraction.split("\n")[0] ?? "";

@@ -167,10 +167,14 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
         onDiagnostic: (diagnostic) => logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
       }),
   });
+  let closed = false;
   return {
     identity,
     paths,
-    close: (reason?: string) => lifetime.close(reason),
+    close: (reason?: string) => {
+      closed = true;
+      return lifetime.close(reason);
+    },
     async execute<Name extends keyof OperationInputs>(
       name: Name,
       params: OperationInputs[Name],
@@ -303,7 +307,9 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
       } catch (error) {
         // The runtime has settled before this boundary reads any ledger state.
         const receipt =
-          owned && state.category === "OPERATION" ? executionReceipt(owned) : undefined;
+          owned && state.category === "OPERATION"
+            ? executionReceipt(owned, execution.signal?.aborted || closed ? "unknown" : "available")
+            : undefined;
         if (
           execution.signal?.aborted ||
           (error instanceof Error &&
