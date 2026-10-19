@@ -76,6 +76,7 @@ import {
 } from "./run-journal.js";
 import { readRunIndex, rebuildIndexEntries, selectCandidates } from "./run-index.js";
 import { accountingBodyError } from "./accounting-validation.js";
+import { runManifestError } from "./run-manifest.js";
 import {
   acquireWriterLock,
   loadNativeLockBinding,
@@ -662,12 +663,14 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
       return "the report is empty; only successful nonempty reports are published";
     if (!Buffer.from(byKind("query").bytes).equals(Buffer.from(query, "utf8")))
       return "query.txt does not match the allocated query";
+    if (byKind("manifest-data").bytes.byteLength > STRUCTURAL_MAX_BYTES)
+      return "run.json exceeds the structural reader ceiling";
     try {
       const run = JSON.parse(
         new TextDecoder("utf-8", { fatal: true }).decode(byKind("manifest-data").bytes),
       );
-      if (typeof run !== "object" || run === null || Array.isArray(run))
-        return "run.json must be a JSON object";
+      const invalid = runManifestError(run, artifacts);
+      if (invalid) return invalid;
     } catch {
       return "run.json must be UTF-8 JSON";
     }
@@ -692,6 +695,8 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
         );
       await ensureDirectory(runDir, artifact.relativePath, created);
       const digest = await writeArtifact(join(runDir, artifact.relativePath), artifact, signal);
+      if ((artifact.kind === "extraction" || artifact.kind === "late") && digest.bytes === 0)
+        throw new StoreError("INVALID_ARTIFACTS", "Successful extractions cannot be empty files");
       if (artifact.kind === "late")
         nonEvidence.push({ relativePath: artifact.relativePath, ...digest });
       else files.push({ relativePath: artifact.relativePath, kind: artifact.kind, ...digest });

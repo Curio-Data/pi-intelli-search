@@ -277,11 +277,13 @@ it("real writer output is canonical and validates against every published wire s
   const reservation = await allocate(store, "writer");
   const result = await store.commit(
     reservation,
-    artifacts("writer").concat({
-      relativePath: "late/S2.md",
-      kind: "late",
-      bytes: Buffer.from("not evidence"),
-    }),
+    artifactsFor("writer", [
+      {
+        relativePath: "late/S2.md",
+        kind: "late",
+        bytes: Buffer.from("not evidence"),
+      },
+    ]),
     signal,
   );
   assert.equal(result.status, "committed");
@@ -300,6 +302,7 @@ it("real writer output is canonical and validates against every published wire s
     ["reservation", join(gap.physicalPath, RESERVATION_FILE)],
     ["reservation", join(reservation.physicalPath, RESERVATION_FILE)],
     ["committed", join(reservation.physicalPath, MARKER_FILE)],
+    ["run", join(reservation.physicalPath, "run.json")],
     ["accounting", join(reservation.physicalPath, ACCOUNTING_FILE)],
     ["accounting-committed", join(reservation.physicalPath, ACCOUNTING_MARKER_FILE)],
   ];

@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { setImmediate as yieldTurn } from "node:timers/promises";
 import type { Diagnostic } from "./execution-contracts.js";
 import { accountingBodyError } from "./accounting-validation.js";
+import { runManifestError } from "./run-manifest.js";
 import {
   ACCOUNTING_FILE,
   ACCOUNTING_MARKER_FILE,
@@ -483,9 +484,22 @@ export async function verifyCommittedRun(
     for (const file of [...marker.files, ...marker.nonEvidence]) {
       if (!(await intermediatesAreDirectories(runDir, file.relativePath)))
         return fail(`${file.relativePath} resolves through a linked or non-directory segment`);
-      const actual = await hashFile(join(runDir, file.relativePath), options.signal);
-      if (actual.bytes !== file.bytes || actual.sha256 !== file.sha256)
-        return fail(`${file.relativePath} size or hash differs`);
+      if (options.signal?.aborted)
+        throw new StoreError("ABORTED", "Cancelled while verifying runs");
+      if (file.relativePath === "run.json") {
+        const body = await readJson(join(runDir, file.relativePath));
+        if (body.bytes.byteLength !== file.bytes || sha256(body.bytes) !== file.sha256)
+          return fail("run.json size or hash differs");
+        const invalid = runManifestError(body.value, [
+          ...marker.files,
+          ...marker.nonEvidence.map((entry) => ({ ...entry, kind: "late" as const })),
+        ]);
+        if (invalid) return fail(invalid);
+      } else {
+        const actual = await hashFile(join(runDir, file.relativePath), options.signal);
+        if (actual.bytes !== file.bytes || actual.sha256 !== file.sha256)
+          return fail(`${file.relativePath} size or hash differs`);
+      }
     }
     return { ok: true, marker, manifestSha256, reservation };
   } catch (error) {

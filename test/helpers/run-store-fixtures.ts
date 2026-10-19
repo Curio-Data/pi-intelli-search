@@ -9,6 +9,8 @@ import { randomBytes } from "node:crypto";
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { RunManifest } from "../../src/core/run-manifest-schema.js";
+import { encodeRecord } from "../../src/core/run-format.js";
 import type {
   Artifact,
   Clock,
@@ -87,6 +89,50 @@ export function storeOptions(
   };
 }
 
+export function manifestFor(extra: readonly Artifact[] = []): RunManifest {
+  return {
+    schema: "intelli-v1/run",
+    schemaVersion: 1,
+    operation: "intelli_research",
+    sources: [
+      {
+        id: "S1",
+        url: "https://example.com/",
+        title: "Example",
+        state: "used",
+        input: "network",
+        extractionPath: "extractions/S1.md",
+        fullPagePath: "sources/S1.md",
+      },
+      ...extra
+        .filter((a) => a.kind === "late")
+        .map((a, i) => ({
+          id: `S${i + 2}`,
+          url: `https://example.com/late/${i}`,
+          title: "Late",
+          state: "late" as const,
+          input: "network" as const,
+          extractionPath: a.relativePath,
+        })),
+    ],
+    evidenceSourceIds: ["S1"],
+    documents: extra
+      .filter((a) => a.kind === "source")
+      .map((a, i) => ({
+        url: `https://example.com/doc/${i}`,
+        relativePath: a.relativePath,
+      })),
+    provenance: {
+      domains: [],
+      models: {
+        search: { provider: "fixture", model: "s" },
+        extract: { provider: "fixture", model: "e" },
+        collate: { provider: "fixture", model: "c" },
+      },
+    },
+  };
+}
+
 export function artifactsFor(query: string, extra: Artifact[] = []): Artifact[] {
   const text = (value: string) => new TextEncoder().encode(value);
   return [
@@ -99,7 +145,7 @@ export function artifactsFor(query: string, extra: Artifact[] = []): Artifact[] 
     {
       relativePath: "run.json",
       kind: "manifest-data",
-      bytes: text(JSON.stringify({ sources: [{ id: "S1", state: "used" }] })),
+      bytes: encodeRecord(manifestFor(extra)),
     },
     { relativePath: "sources/S1.md", kind: "source", bytes: text("source one") },
     { relativePath: "extractions/S1.md", kind: "extraction", bytes: text("extraction one") },

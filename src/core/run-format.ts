@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { Type, type Static, type TSchema } from "typebox";
 import { Value } from "typebox/value";
 import { AccountingSummarySchema, AttemptRecordSchema } from "./accounting-schema.js";
+import { RunManifestSchema } from "./run-manifest-schema.js";
 
 export const NAMESPACE_DIR = ".intelli-v1";
 export const NAMESPACE_FILE = "namespace.json";
@@ -205,6 +206,7 @@ export const wireSchemas: Readonly<Record<string, TSchema>> = Object.freeze({
   allocation: AllocationRecordSchema,
   reservation: ReservationSchema,
   committed: CommittedMarkerSchema,
+  run: RunManifestSchema,
   accounting: AccountingSchema,
   "accounting-committed": AccountingMarkerSchema,
   index: IndexSchema,

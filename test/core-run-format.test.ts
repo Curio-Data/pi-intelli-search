@@ -34,7 +34,7 @@ import {
 import { validateJournal, verifyAccounting, verifyCommittedRun } from "../src/core/run-journal.js";
 import { TOKEN_FIELDS } from "../src/core/usage.js";
 import { createRunStore } from "../src/core/run-store.js";
-import { storeOptions } from "./helpers/run-store-fixtures.js";
+import { manifestFor, storeOptions } from "./helpers/run-store-fixtures.js";
 
 const fixtures = fileURLToPath(new URL("./fixtures/run-store-v1/", import.meta.url));
 const update = process.env.UPDATE_RUN_STORE_FIXTURES === "1";
@@ -117,7 +117,15 @@ function exampleNamespace(): Map<string, Buffer> {
     [
       "run.json",
       "manifest-data",
-      encodeRecord({ sources: [{ id: "S1", state: "used", url: "https://example.com/" }] }),
+      encodeRecord(
+        manifestFor([
+          {
+            relativePath: "late/S2.md",
+            kind: "late",
+            bytes: text("Late extraction, not evidence.\n"),
+          },
+        ]),
+      ),
     ],
     ["sources/S1.md", "source", text("Example source page.\n")],
     ["extractions/S1.md", "extraction", text("Example extraction.\n")],
@@ -286,6 +294,7 @@ describe("run-store-v1 wire schemas and fixtures", () => {
       await check("reservation", join(RUNS_DIR, runId, "reservation.json"));
     const published = (await readdir(join(root, RUNS_DIR))).sort()[1];
     await check("committed", join(RUNS_DIR, published, "committed.json"));
+    await check("run", join(RUNS_DIR, published, "run.json"));
     await check("accounting", join(RUNS_DIR, published, "accounting.json"));
     await check("accounting-committed", join(RUNS_DIR, published, "accounting.committed.json"));
     // Schemas are strict: an unknown field is rejected.

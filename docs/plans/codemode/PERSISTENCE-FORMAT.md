@@ -12,6 +12,7 @@ This document records the implementation of [C21–C27](CONTRACT.md#persistence)
 | `allocation@1` | Each line of `allocations.ndjson` | Durable admission identity, sequence and checksum chain |
 | `reservation@1` | `runs/<runId>/reservation.json` | Owned reservation agreeing with one admission |
 | `committed@1` | `runs/<runId>/committed.json` | Successful report identity and hashed file inventory |
+| `run@1` | `runs/<runId>/run.json` | Report-time source states, evidence snapshot and provenance |
 | `accounting@1` | `runs/<runId>/accounting.json` | Settled attempt records and accounting summary |
 | `accounting-committed@1` | `runs/<runId>/accounting.committed.json` | Independent hash marker for accounting |
 | `index@1` | `index.json` | Secondary, rebuildable catalogue of committed runs |
@@ -54,9 +55,29 @@ This validation preserves unobserved token fields as absent, explicit observed z
 
 The schema fixture was deliberately regenerated for this pre-integration refinement. The constructed example's missing-token mask now lists every unobserved token field, and its independent accounting marker hashes the corrected bytes. The envelope, report marker, journal, namespace and P0-2 bundle are unchanged. `test/core-run-accounting.test.ts` covers writer refusal, hash-valid reader tampering, unchanged report visibility, schema/type parity and settled-ledger round trips. Independent acceptance of this refinement is recorded separately in [Development](DEVELOPMENT.md).
 
-## Remaining Body and Integration Gates
+## Report Manifest Body
 
-The persistence library still treats `run.json` as a UTF-8 JSON object and hashes its bytes. Define the pipeline-owned field-level source-state/provenance contract before pipeline integration. Accounting/result mapping must carry `INVALID_ACCOUNTING` alongside size/input and report/accounting durability diagnostics into useful operation results. Capture fidelity and full [acceptance-map rows T16 and T17](ACCEPTANCE.md#requirement-map) remain open; the body checks alone do not pass them. Later schema changes require deliberate fixture regeneration and review.
+The pipeline-owned `run@1` schema is defined in `src/core/run-manifest-schema.ts` and published as `run.schema.json` beside the other wire schemas. It refines the previously opaque `run.json` before registered adapter integration. Its identity is `intelli-v1/run`, with `schemaVersion: 1`. Unknown properties reject at every object level. The report marker and journal remain the authority for query, start time, operation identifier and namespace/run identity; the body does not duplicate those fields.
+
+| Field | Meaning |
+|---|---|
+| `operation` | `intelli_research` or `intelli_collate`, the two report-producing operations |
+| `sources` | Complete candidate-order inventory after page work settles, with stable `S1`, `S2`, … identifiers and terminal states |
+| `evidenceSourceIds` | The immutable collation snapshot, exactly the `used` sources in candidate order |
+| `documents` | Completed documentation downloads, with their URLs and relative stored paths; these are not additional collation evidence |
+| `provenance` | Exact domain filters, optional extraction focus and selected model identities; no credentials, endpoints or arbitrary configuration objects |
+
+Each source records `id`, `url`, `title`, terminal `state` and `input`. Optional fields are `sourceType`, `truncated`, `diagnostic`, `extractionPath` and `fullPagePath`. No raw `content` or inline `extraction` is allowed. `input: network` identifies research candidates; it does not assert a successful fetch. `input: supplied` identifies manual collation inputs and makes no operation-side network claim. Models record only `provider` and `model`; research requires search, extract and collate identities, while manual collation requires collate. The optional suggest identity records configuration, not an assertion that a suggestion call ran. Final attempts and usage remain in independently published accounting, after suggestions settle.
+
+Only `used`, `late`, `empty`, `fetch-failed`, `extract-failed` and `cancelled` are persisted source states. Every `used` source names an `extraction` artefact; every `late` source names a `late` artefact in the marker's `nonEvidence` inventory. Other states name no successful extraction. An optional `fullPagePath` names a `source` artefact; late and failed fetches cannot retain a raw page through this field. Documentation paths also name `source` artefacts. Every source, extraction and late file belongs to exactly one source or documentation record. Paths are safe run-relative names, never future display or absolute paths. Source URLs and documentation URLs are separately unique, credential-free HTTP(S) URLs. Extraction files cannot have zero bytes. These checks do not establish factual grounding, truthful producer labels or absence of secrets inside caller-authored focus, title or diagnostic text.
+
+`runManifestError()` applies the same field/state/inventory rules before publication and during verified reading. Writer refusal returns `INVALID_ARTIFACTS` without publishing a marker. Inline invalid manifests reject before artefact writes; an empty staged extraction is detected after its bytes are copied and leaves the directory uncommitted. The body shares `STRUCTURAL_MAX_BYTES`; exact-limit and one-byte-over regressions cover writer/reader agreement. Readers validate the same bytes whose length and hash are checked, alongside the existing journal, reservation and complete file inventory checks. A valid hash alone cannot admit an invalid body.
+
+The report body is a post-page-drain, pre-suggestion snapshot, not a final returned result. It deliberately omits final accounting, suggestion results and all-work-settled timing. Pipeline integration must construct it only after late page/discovery work settles, preserve the exact frozen evidence array, and map relative paths to advertised display paths only after successful commit. Registered operations still use legacy persistence; these body checks do not prove that future producers construct the manifest correctly.
+
+## Remaining Integration Gates
+
+Result mapping must carry `INVALID_ARTIFACTS` and `INVALID_ACCOUNTING` alongside size/input and report/accounting durability diagnostics into useful operation results. Capture fidelity and full [acceptance-map rows T16 and T17](ACCEPTANCE.md#requirement-map) remain open; the body checks alone do not pass them. Later schema changes require deliberate fixture regeneration and review.
 
 A failed diagnostic-owner rename can leave a private temporary file. It is not run evidence and does not control ownership. No automatic cleanup of historical or orphan evidence is introduced here.
 

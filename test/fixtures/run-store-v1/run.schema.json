@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "intelli-v1/run@1",
+  "type": "object",
+  "required": [
+    "schema",
+    "schemaVersion",
+    "operation",
+    "sources",
+    "evidenceSourceIds",
+    "documents",
+    "provenance"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "intelli-v1/run"
+    },
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "operation": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "intelli_research"
+        },
+        {
+          "type": "string",
+          "const": "intelli_collate"
+        }
+      ]
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "url",
+          "title",
+          "state",
+          "input"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^S[1-9][0-9]*$"
+          },
+          "url": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "used"
+              },
+              {
+                "type": "string",
+                "const": "late"
+              },
+              {
+                "type": "string",
+                "const": "empty"
+              },
+              {
+                "type": "string",
+                "const": "fetch-failed"
+              },
+              {
+                "type": "string",
+                "const": "extract-failed"
+              },
+              {
+                "type": "string",
+                "const": "cancelled"
+              }
+            ]
+          },
+          "input": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "network"
+              },
+              {
+                "type": "string",
+                "const": "supplied"
+              }
+            ]
+          },
+          "sourceType": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "extractionPath": {
+            "type": "string"
+          },
+          "fullPagePath": {
+            "type": "string"
+          },
+          "diagnostic": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "evidenceSourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^S[1-9][0-9]*$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "url",
+          "relativePath"
+        ],
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "relativePath": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "domains",
+        "models"
+      ],
+      "properties": {
+        "domains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "focusPrompt": {
+          "type": "string"
+        },
+        "models": {
+          "type": "object",
+          "required": [
+            "collate"
+          ],
+          "properties": {
+            "search": {
+              "type": "object",
+              "required": [
+                "provider",
+                "model"
+              ],
+              "properties": {
+                "provider": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "extract": {
+              "type": "object",
+              "required": [
+                "provider",
+                "model"
+              ],
+              "properties": {
+                "provider": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "collate": {
+              "type": "object",
+              "required": [
+                "provider",
+                "model"
+              ],
+              "properties": {
+                "provider": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "suggest": {
+              "type": "object",
+              "required": [
+                "provider",
+                "model"
+              ],
+              "properties": {
+                "provider": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
