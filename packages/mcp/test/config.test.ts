@@ -121,6 +121,68 @@ test("configuration file defects are distinct, located and never quote the file 
   }
 });
 
+test("shared execution validates before runtime/provider work and captures immutable defaults (T03)", async () => {
+  const f = await fixture();
+  let calls = 0;
+  try {
+    const cfg = await parseConfig(
+      {
+        ...document(),
+        tuning: { execution: { modelConcurrency: 2, deadline: { enabled: false } } },
+      },
+      f.dir,
+    );
+    assert.equal(cfg.settings.execution?.modelConcurrency, 2);
+    assert.equal(cfg.settings.execution?.aggregateFetchConcurrency, 4);
+    assert(Object.isFrozen(cfg.settings.execution));
+    assert(Object.isFrozen(cfg.settings.execution?.deadline));
+    for (const execution of [
+      null,
+      [],
+      "secret",
+      { modelConcurrency: 1 },
+      { lateDrainMs: 30_001 },
+      { deadline: { enabled: true } },
+      { deadline: { enabled: false, quorum: 0.5 } },
+      { unknown: "secret" },
+    ]) {
+      const invalid = { ...document(), tuning: { execution } };
+      await assert.rejects(parseConfig(invalid, f.dir), /tuning.execution/);
+      const path = join(f.dir, "invalid-execution.json");
+      await writeFile(path, JSON.stringify(invalid));
+      await assert.rejects(
+        loadConfig(path, f.dir),
+        (error: unknown) =>
+          error instanceof ConfigurationError &&
+          error.reason === "invalid" &&
+          /tuning.execution/.test(error.message) &&
+          !error.message.includes("secret"),
+      );
+    }
+    // The experimental runtime export is callable without parseConfig().
+    for (const settings of [
+      { ...cfg.settings, execution: { ...cfg.settings.execution!, modelConcurrency: 1 } },
+      { ...cfg.settings, minRequestIntervalMs: 0.5 },
+    ]) {
+      await assert.rejects(
+        createRuntime(
+          { ...cfg, settings },
+          {
+            fetch: async () => {
+              calls++;
+              throw new Error("unexpected transport");
+            },
+          },
+        ),
+        /tuning.(execution|minRequestIntervalMs)/,
+      );
+    }
+    assert.equal(calls, 0);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("cache rejects ancestor, nested, dangling symlinks and hardlinked files", async () => {
   const f = await fixture();
   try {

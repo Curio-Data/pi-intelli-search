@@ -5,6 +5,7 @@ import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { ModelConfig, ResearchSettings } from "./types.js";
 import { getAgentDir } from "./agent-dir.js";
 import { tuningDefaults } from "./core/defaults.js";
+import { parseExecutionSettings } from "./core/execution-settings.js";
 
 export interface SettingsContext {
   cwd: string;
@@ -408,6 +409,12 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
     }
   }
 
+  // New strict block: preserve explicit null/empty values for validation rather
+  // than applying the permissive legacy presence filter. No flat alias exists.
+  if (ns && Object.hasOwn(ns, "execution")) {
+    overrides.execution = ns.execution as ResearchSettings["execution"];
+  }
+
   // Flat intelli* keys (deprecated fallback: nested namespace wins when both present).
   for (const [flatKey, key] of Object.entries(FLAT_KEY_MAP)) {
     const value = parsed[flatKey];
@@ -465,15 +472,18 @@ export async function loadSettings(context: SettingsContext): Promise<ResearchSe
       const dirOverrides = extractOverrides(parsed);
       Object.assign(overrides, dirOverrides);
     } catch {
-      // File doesn't exist or is invalid: skip
+      // File doesn't exist or is invalid: preserve the legacy read fallback.
     }
   }
 
-  // Note: overrides use shallow Object.assign. Today every key in
-  // ResearchSettings is either a scalar or a complete ModelConfig
-  // object, so partial nested overrides don't arise. A future field
-  // that is a non-trivial nested object would need deep merging.
-  let settings = { ...DEFAULT_SETTINGS, ...overrides };
+  // Top-level overrides keep existing global/trusted-project precedence.
+  // Validate the selected execution block outside the permissive file catch:
+  // an invalid new block must fail before inference, not silently use defaults.
+  let settings: ResearchSettings = {
+    ...DEFAULT_SETTINGS,
+    ...overrides,
+    execution: parseExecutionSettings(overrides.execution, "pi-intelli-search.execution"),
+  };
 
   // Apply default migration in-memory when upgrading between versions.
   // If the user's model config matches a previous version's default,

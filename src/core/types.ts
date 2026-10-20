@@ -57,6 +57,8 @@ export interface SearchWebSearchSettings {
 }
 
 export interface ResearchSettings {
+  /** Validated per runtime; optional for direct legacy helper compatibility. */
+  execution?: import("./execution-contracts.js").ResearchExecutionSettings;
   searchModel: ModelConfig;
   extractModel: ModelConfig;
   collateModel: ModelConfig;

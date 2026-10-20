@@ -715,22 +715,111 @@ for (const modern of [false, true]) {
 test("invalid generation pacing stays fail-closed with an actionable cause on every registered call (T03/T10)", async () => {
   const f = await fixture(async () => response("answer"));
   try {
-    for (const value of [-1, "250", true]) {
+    for (const value of [-1, "250", true, 0.5, 120_001]) {
       await f.saveSettings({ minRequestIntervalMs: value });
       const ctx = f.makeContext(String(value));
       await assert.rejects(
         f.runtime.start(ctx),
-        /pi-intelli-search.minRequestIntervalMs.*finite non-negative.*reload/,
+        /pi-intelli-search.minRequestIntervalMs.*intelliMinRequestIntervalMs.*integer between 0 and 120000.*reload/,
       );
       await assert.rejects(
         f.run("intelli_search", { query: "bad pacing" }, undefined, ctx),
-        /pi-intelli-search.minRequestIntervalMs.*finite non-negative.*reload/,
+        /pi-intelli-search.minRequestIntervalMs.*intelliMinRequestIntervalMs.*integer between 0 and 120000.*reload/,
       );
     }
     await f.saveSettings({ minRequestIntervalMs: 0 });
     const valid = f.makeContext("valid");
     await f.runtime.start(valid);
     assert(!(await f.run("intelli_search", { query: "recovered" }, undefined, valid)).isError);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("configured native capacity is captured per generation and retains the critical reserve (T03/T10/T12)", async () => {
+  const entered = deferred();
+  const release = deferred();
+  let pages = 0;
+  const f = await fixture(
+    async (context) => {
+      if (context.systemPrompt === EXTRACTION_SYSTEM_PROMPT) {
+        if (++pages === 1) entered.resolve();
+        await release.promise;
+        return response("extracted");
+      }
+      return response("critical");
+    },
+    {},
+    { execution: { modelConcurrency: 2, aggregateFetchConcurrency: 1 } },
+  );
+  let pending: Promise<Result>[] = [];
+  try {
+    await f.runtime.start(f.ctx);
+    await f.saveSettings({ execution: { modelConcurrency: 64, aggregateFetchConcurrency: 32 } });
+    pending = Array.from({ length: 3 }, () =>
+      f.run("intelli_extract", { ...page, query: "capacity" }),
+    );
+    await entered.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(pages, 1, "current generation does not reload coordinator settings per operation");
+    const critical = await f.run("intelli_search", { query: "reserved" });
+    assert.equal(
+      receipt(critical).accounting.attempts,
+      1,
+      "critical work can use the reserved slot",
+    );
+    release.resolve();
+    const results = await Promise.all(pending);
+    assert.equal(pages, 3);
+    assert(results.every((result) => receipt(result).attempts.length === 1));
+    assert.equal(new Set(results.map((result) => receipt(result).operationId)).size, 3);
+    const successor = f.makeContext("larger");
+    await f.runtime.start(successor);
+    assert(!(await f.run("intelli_search", { query: "successor" }, undefined, successor)).isError);
+  } finally {
+    release.resolve();
+    await Promise.allSettled(pending);
+    await f.cleanup();
+  }
+});
+
+test("invalid native execution and deprecated pacing fail before registry work, then recover (T03/T10)", async () => {
+  let calls = 0;
+  const f = await fixture(async () => {
+    calls++;
+    return response("answer");
+  });
+  try {
+    for (const execution of [
+      { modelConcurrency: 1 },
+      { criticalReserve: 2 },
+      { deadline: { enabled: true } },
+      { secret: "not-echoed" },
+    ]) {
+      await f.saveSettings({ execution });
+      const ctx = f.makeContext(JSON.stringify(execution));
+      await assert.rejects(f.runtime.start(ctx), /pi-intelli-search.execution/);
+      await assert.rejects(
+        f.run("intelli_search", { query: "invalid" }, undefined, ctx),
+        /pi-intelli-search.execution/,
+      );
+    }
+    await writeFile(
+      join(f.agent, "settings.json"),
+      JSON.stringify({ intelliMinRequestIntervalMs: 0.5 }),
+    );
+    invalidateSettingsCache();
+    const flat = f.makeContext("flat");
+    await assert.rejects(
+      f.runtime.start(flat),
+      /pi-intelli-search.minRequestIntervalMs.*intelliMinRequestIntervalMs.*integer between 0 and 120000.*reload/,
+    );
+    assert.equal(calls, 0);
+    await f.saveSettings({ execution: { modelConcurrency: 2 }, minRequestIntervalMs: 0 });
+    const recovered = f.makeContext("recovered");
+    await f.runtime.start(recovered);
+    assert(!(await f.run("intelli_search", { query: "valid" }, undefined, recovered)).isError);
+    assert.equal(calls, 1);
   } finally {
     await f.cleanup();
   }
@@ -750,6 +839,9 @@ test("registered native inference source gate excludes legacy context/client/har
     new URL("../src/native-operation-runtime.ts", import.meta.url),
     "utf8",
   );
+  assert.match(source, /modelConcurrency: execution\.modelConcurrency/);
+  assert.match(source, /criticalReserve: execution\.criticalReserve/);
+  assert.match(source, /fetchConcurrency: execution\.aggregateFetchConcurrency/);
   assert.match(source, /createScopedNativeModelClient\(modelContext, services/);
   assert.match(source, /captured\.runtime!\.run\(/);
   assert(

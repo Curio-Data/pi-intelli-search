@@ -4,6 +4,7 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { tuningDefaults } from "../../../src/core/defaults.js";
+import { parseExecutionSettings } from "../../../src/core/execution-settings.js";
 import type { DeepReadonly } from "../../../src/core/contracts.js";
 import type { ModelConfig, ResearchSettings } from "../../../src/core/types.js";
 
@@ -269,11 +270,13 @@ function parseDocument(value: unknown): { apiKeyEnv: string; settings: ResearchS
       "disableTelemetry",
       "disableLlmsFullDiscovery",
       "searchWebSearch",
+      "execution",
     ],
     "tuning",
   );
   const settings: ResearchSettings = {
     ...tuningDefaults(),
+    execution: parseExecutionSettings(tuning.execution, "tuning.execution"),
     searchModel: model(models.search, "search"),
     extractModel: model(models.extract, "extract"),
     collateModel: model(models.collate, "collate"),

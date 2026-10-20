@@ -19,6 +19,7 @@ import type {
 import { createRuntimeGenerations, type OperationRuntime } from "./core/operation-runtime.js";
 import { AdmissionError } from "./core/execution-coordinator.js";
 import { createSystemClock } from "./core/clock.js";
+import { parseExecutionSettings, validateRequestInterval } from "./core/execution-settings.js";
 import { createRunStore } from "./core/run-store.js";
 import { resolveWorkspacePaths } from "./core/paths.js";
 import { search } from "./core/operations/search.js";
@@ -160,24 +161,26 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
         if (!active(state)) throw new AdmissionError("CLOSED", "Native session superseded");
         await prepare();
         if (!active(state)) throw new AdmissionError("CLOSED", "Native session superseded");
-        const settings = structuredClone(await loadSettings({ cwd, projectTrusted }));
-        if (
-          typeof settings.minRequestIntervalMs !== "number" ||
-          !Number.isFinite(settings.minRequestIntervalMs) ||
-          settings.minRequestIntervalMs < 0
-        ) {
-          throw new Error(
-            "Invalid pi-intelli-search.minRequestIntervalMs: expected a finite non-negative number. Correct settings.json and reload the session.",
+        let settings: Awaited<ReturnType<typeof loadSettings>>;
+        let execution;
+        try {
+          settings = structuredClone(await loadSettings({ cwd, projectTrusted }));
+          execution = parseExecutionSettings(settings.execution, "pi-intelli-search.execution");
+          validateRequestInterval(
+            settings.minRequestIntervalMs,
+            "pi-intelli-search.minRequestIntervalMs (deprecated intelliMinRequestIntervalMs)",
           );
+        } catch (error) {
+          throw new Error(`${errMsg(error)}. Correct settings.json and reload the session.`);
         }
         if (!active(state)) throw new AdmissionError("CLOSED", "Native session superseded");
         const paths = resolveWorkspacePaths(cwd, settings.cacheDir);
         const runtime = await generations.replace({
           generation: state.generation,
           clock,
-          modelConcurrency: 5,
-          criticalReserve: 1,
-          fetchConcurrency: 4,
+          modelConcurrency: execution.modelConcurrency,
+          criticalReserve: execution.criticalReserve,
+          fetchConcurrency: execution.aggregateFetchConcurrency,
           minRequestIntervalMs: settings.minRequestIntervalMs,
           createFetch: () => unwiredFetch,
           createRuns: (operation) =>

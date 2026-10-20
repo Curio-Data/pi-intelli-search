@@ -6,6 +6,10 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { createOperationRuntime } from "../../../src/core/operation-runtime.js";
 import { AdmissionError } from "../../../src/core/execution-coordinator.js";
 import { createSystemClock } from "../../../src/core/clock.js";
+import {
+  parseExecutionSettings,
+  validateRequestInterval,
+} from "../../../src/core/execution-settings.js";
 import { createRunStore } from "../../../src/core/run-store.js";
 import { executionReceipt, type ExecutionReceipt } from "./execution-receipt.js";
 import type { TSchema } from "typebox";
@@ -122,6 +126,10 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
       ? { ...options.researchDependencies }
       : undefined,
   };
+  // Public runtime callers may supply an object without using parseConfig().
+  // Revalidate captured execution/pacing before any workspace or provider work.
+  const executionSettings = parseExecutionSettings(config.settings.execution, "tuning.execution");
+  validateRequestInterval(config.settings.minRequestIntervalMs, "tuning.minRequestIntervalMs");
   const paths = await workspacePaths(config.workspace, config.settings.cacheDir);
   const env = { ...(options.env ?? process.env) };
   const secret = env[config.apiKeyEnv];
@@ -150,9 +158,9 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
     },
   });
   const lifetime = createOperationRuntime({
-    modelConcurrency: 5,
-    criticalReserve: 1,
-    fetchConcurrency: 4,
+    modelConcurrency: executionSettings.modelConcurrency,
+    criticalReserve: executionSettings.criticalReserve,
+    fetchConcurrency: executionSettings.aggregateFetchConcurrency,
     minRequestIntervalMs: config.settings.minRequestIntervalMs,
     clock,
     generation: 0,

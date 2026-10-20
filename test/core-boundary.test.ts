@@ -62,6 +62,7 @@ describe("shared engine dependency boundary", () => {
         "cache.ts",
         "core/execution-coordinator.ts",
         "core/operation-runtime.ts",
+        "core/execution-settings.ts",
         "core/usage.ts",
         "core/run-store.ts",
         "core/run-index.ts",

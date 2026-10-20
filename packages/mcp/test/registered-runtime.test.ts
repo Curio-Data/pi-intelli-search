@@ -8,6 +8,7 @@ import ts from "typescript";
 import { createRuntime, StandaloneError } from "../src/runtime.js";
 import { createProtocolServer, lazyRuntime } from "../src/server.js";
 import { createSystemClock } from "../../../src/core/clock.js";
+import { executionDefaults } from "../../../src/core/execution-settings.js";
 import { completion, fakeTransport, fixture, json, logger, catalogue } from "./helpers.js";
 
 function deferred<T = void>() {
@@ -208,7 +209,11 @@ test("registered standalone attempts respect aggregate reserve and leave no queu
       assert(error instanceof StandaloneError);
       assert.equal(error.code, "CANCELLED");
       assert(error.execution);
-      assert.equal(error.execution.accounting.parentDelivery, "unknown", "caller cancellation on an open runtime cannot claim parent delivery");
+      assert.equal(
+        error.execution.accounting.parentDelivery,
+        "unknown",
+        "caller cancellation on an open runtime cannot claim parent delivery",
+      );
       return error.execution;
     });
     assert.equal(
@@ -344,8 +349,64 @@ test("registered pacing uses one captured clock across standalone calls and retr
   }
 });
 
+test("configured MCP capacity is captured once and retains critical admission (T03/T12)", async () => {
+  const f = await fixture();
+  const entered = deferred();
+  const release = deferred();
+  let starts = 0;
+  const config = {
+    ...f.config,
+    settings: {
+      ...f.config.settings,
+      execution: {
+        ...executionDefaults(),
+        modelConcurrency: 2,
+        aggregateFetchConcurrency: 1,
+      },
+    },
+  };
+  const runtime = await createRuntime(config, {
+    env: { FIXTURE_KEY: "fixture-secret" },
+    logger,
+    fetch: fakeTransport(async (body) => {
+      if (body.model === "fixture/extract") {
+        if (++starts === 1) entered.resolve();
+        await release.promise;
+      }
+      return json(completion("Answer", { usage: reported }));
+    }),
+  });
+  const pending: Array<ReturnType<typeof runtime.execute>> = [];
+  try {
+    config.settings.execution.modelConcurrency = 64;
+    pending.push(
+      ...Array.from({ length: 3 }, () =>
+        runtime.execute("intelli_extract", { ...page, query: "capacity" }),
+      ),
+    );
+    await entered.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(starts, 1);
+    const critical = await runtime.execute("intelli_search", { query: "reserve" });
+    assert.equal(critical.execution.accounting.attempts, 1);
+    release.resolve();
+    const results = await Promise.all(pending);
+    assert.equal(starts, 3);
+    assert(results.every((result) => result.execution.attempts.length === 1));
+    assert.equal(new Set(results.map((result) => result.execution.operationId)).size, 3);
+  } finally {
+    release.resolve();
+    await Promise.allSettled(pending);
+    await runtime.close();
+    await f.cleanup();
+  }
+});
+
 test("registered MCP inference cannot use the legacy unscoped bypass (source gate)", async () => {
   const runtime = await readFile(new URL("../src/runtime.ts", import.meta.url), "utf8");
+  assert.match(runtime, /modelConcurrency: executionSettings\.modelConcurrency/);
+  assert.match(runtime, /criticalReserve: executionSettings\.criticalReserve/);
+  assert.match(runtime, /fetchConcurrency: executionSettings\.aggregateFetchConcurrency/);
   const tree = ts.createSourceFile("runtime.ts", runtime, ts.ScriptTarget.Latest, true);
   let clients = 0;
   function visit(node: ts.Node) {
