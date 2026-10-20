@@ -10,6 +10,7 @@ import type {
   ModelUsage,
   PolicyHooks,
   ScopedModelClient,
+  OperationLogger,
 } from "./core/contracts.js";
 import { createPolicyHooks, type ModelServices } from "./core/llm.js";
 import type { RegistryStreamSimple } from "./native-injection.js";
@@ -17,7 +18,7 @@ import { callLlm } from "./llm.js";
 
 /** Existing native preflight semantics: model existence, not credential discovery. */
 export function validateModelConfigs(
-  ctx: ExtensionContext,
+  ctx: Pick<ExtensionContext, "modelRegistry">,
   configs: readonly ModelBinding[],
 ): ModelBinding[] {
   return configs.filter(({ config }) => !ctx.modelRegistry.find(config.provider, config.model));
@@ -39,7 +40,7 @@ export function validateModelConfigs(
  * of an alphabetical slice of unrelated vendors.
  */
 export function describeModelCatalog(
-  ctx: ExtensionContext,
+  ctx: Pick<ExtensionContext, "modelRegistry">,
   provider: string,
   excludeModel: string,
 ): string {
@@ -119,16 +120,20 @@ export function createNativeModelClient(
 
 /** P4 operation-bound client. Runtime generations supply these services once. */
 export function createScopedNativeModelClient(
-  ctx: ExtensionContext,
+  ctx: Pick<ExtensionContext, "modelRegistry">,
   services: ModelServices,
   options: {
     readonly random?: () => number;
     readonly registryStreamSimple?: RegistryStreamSimple;
+    readonly logger?: OperationLogger;
   } = {},
 ): ScopedModelClient {
   const random = options.random ?? Math.random;
-  const transport = options.registryStreamSimple;
-  const logger = { error() {}, warn() {} };
+  const transport: RegistryStreamSimple =
+    options.registryStreamSimple ??
+    ((registry, model, context, streamOptions) =>
+      registry.streamSimple(model, context, streamOptions).result());
+  const logger = options.logger ?? { error() {}, warn() {} };
   return {
     async preflight(bindings) {
       return validateModelConfigs(ctx, bindings);
@@ -141,7 +146,7 @@ export function createScopedNativeModelClient(
 }
 
 async function completeNative(
-  ctx: ExtensionContext,
+  ctx: Pick<ExtensionContext, "modelRegistry">,
   request: ModelRequest,
   delegate: typeof callLlm,
   policyHooks?: PolicyHooks,

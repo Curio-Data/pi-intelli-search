@@ -208,6 +208,7 @@ test("registered standalone attempts respect aggregate reserve and leave no queu
       assert(error instanceof StandaloneError);
       assert.equal(error.code, "CANCELLED");
       assert(error.execution);
+      assert.equal(error.execution.accounting.parentDelivery, "unknown", "caller cancellation on an open runtime cannot claim parent delivery");
       return error.execution;
     });
     assert.equal(

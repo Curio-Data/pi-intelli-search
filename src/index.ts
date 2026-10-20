@@ -6,10 +6,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { intelliSearchTool } from "./tools/intelli-search.js";
-import { intelliExtractTool } from "./tools/intelli-extract.js";
-import { intelliCollateTool } from "./tools/intelli-collate.js";
-import { intelliResearchTool } from "./tools/intelli-research.js";
+import { createNativeOperationRuntime } from "./native-operation-runtime.js";
+import { createRegisteredNativeTools } from "./native-registered-tools.js";
 import { ensureCustomModels as defaultEnsureCustomModels } from "./providers.js";
 import {
   invalidateSettingsCache,
@@ -19,7 +17,7 @@ import {
   setMigrationContext,
 } from "./settings.js";
 import { getAgentDir } from "./agent-dir.js";
-import { errMsg, logErr } from "./util.js";
+import { errMsg } from "./util.js";
 import { getExtensionVersion } from "./telemetry.js";
 
 /** Narrow injectable seam for deterministic model-registry refresh tests. */
@@ -56,10 +54,12 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
   // ═══════════════════════════════════════════════
   // Tool registration
   // ═══════════════════════════════════════════════
-  pi.registerTool(intelliSearchTool);
-  pi.registerTool(intelliExtractTool);
-  pi.registerTool(intelliCollateTool);
-  pi.registerTool(intelliResearchTool);
+  const native = createNativeOperationRuntime();
+  const [searchTool, extractTool, collateTool, researchTool] = createRegisteredNativeTools(native);
+  pi.registerTool(searchTool);
+  pi.registerTool(extractTool);
+  pi.registerTool(collateTool);
+  pi.registerTool(researchTool);
 
   // ═══════════════════════════════════════════════
   // Provider-response monitoring
@@ -75,10 +75,9 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
   // /resume, /fork). In-flight requests from the old session can still fire
   // after_provider_response through the invalidated runtime, and touching
   // ctx.ui on a stale runtime throws.
-  let sessionActive = true;
   let lastRateLimitNotified = 0;
   pi.on("after_provider_response", (event, ctx) => {
-    if (!sessionActive) return;
+    if (!native.isCurrent(ctx)) return;
     // ctx.hasUI is false in print/json mode, where setStatus is a no-op.
     // Skip the work entirely so pi -p / --mode json runs stay clean.
     if (!ctx.hasUI) return;
@@ -100,7 +99,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
       }
     } catch {
       // ctx is stale — session was replaced while request was in-flight
-      sessionActive = false;
+      // Invalidated host context; never resolve a replacement UI here.
     }
   });
 
@@ -118,157 +117,173 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
   // and shows a non-blocking notification suggesting migration to the
   // nested pi-intelli-search namespace.
   let modelsChecked = false;
-  pi.on("session_start", async (_event, ctx) => {
-    sessionActive = true;
-    invalidateSettingsCache();
+  pi.on("session_start", async (_event, ctx) =>
+    native.start(ctx, async () => {
+      invalidateSettingsCache();
+      const cwd = ctx.cwd;
+      const projectTrusted = ctx.isProjectTrusted();
+      const registry = ctx.modelRegistry;
+      const ui = ctx.ui;
+      const hasUI = ctx.hasUI;
 
-    // ctx.hasUI is false in print/json mode, where notify is a no-op.
-    // Route every user-facing notice through this guard so non-interactive
-    // runs (pi -p, --mode json) skip the TUI call cleanly.
-    const notify = (message: string, level: "info" | "warning") => {
-      if (ctx.hasUI) ctx.ui.notify(message, level);
-    };
-
-    if (!modelsChecked) {
-      modelsChecked = true;
-
-      try {
-        const added = await __harness.ensureCustomModels();
-        if (added.length > 0) {
-          // We wrote new models to models.json. Refresh the registry so they're
-          // available immediately without restarting pi. refresh() has been public
-          // on ModelRegistry throughout the package's history; Pi 0.84.0 widened
-          // it from (): Promise<void> to (options?: ModelsRefreshOptions):
-          // Promise<ModelsRefreshResult>, which is what invalidated the local
-          // cast this code used to carry. The direct call is compatible with the
-          // whole peer range (>=0.80.8). The return value is intentionally
-          // ignored: a provider catalog failure should not block session startup.
+      // ctx.hasUI is false in print/json mode, where notify is a no-op.
+      // Route every user-facing notice through this guard so non-interactive
+      // runs (pi -p, --mode json) skip the TUI call cleanly.
+      const notify = (message: string, level: "info" | "warning") => {
+        if (native.isCurrent(ctx) && hasUI) {
           try {
-            await ctx.modelRegistry.refresh();
-          } catch (refreshErr: unknown) {
-            logErr(`Model registry refresh failed: ${errMsg(refreshErr)}`);
+            ui.notify(message, level);
+          } catch {
+            /* Stale UI cannot fail startup. */
           }
-          notify(
-            `[pi-intelli-search] Added models: ${added.join(", ")}. Use /model to select them.`,
-            "info",
-          );
         }
-      } catch (err: unknown) {
-        const message = errMsg(err);
-        notify(`[pi-intelli-search] Warning: could not update models.json: ${message}`, "warning");
-      }
-    }
+      };
 
-    // Auth pre-flight: warn if OpenRouter has no configured key.
-    // With default settings, all three pipeline stages need OpenRouter.
-    // This is a best-effort early warning. The tool itself will throw
-    // a clearer error at execution time if the key is truly missing.
-    try {
-      const authMissing = await isOpenRouterAuthMissing();
-      if (authMissing) {
-        notify(
-          `[pi-intelli-search] No OpenRouter API key found. ` +
-            `This extension requires one. Run /login or add 'openrouter' to auth.json.`,
-          "warning",
-        );
-      }
-    } catch (err: unknown) {
-      // Auth check is best-effort; never block session startup
-      logErr("Auth check failed:", err);
-    }
+      if (!modelsChecked) {
+        modelsChecked = true;
 
-    // Version tracking, default migration, and settings deprecation notice
-    try {
-      // Version file lives in the agent directory (global to the extension
-      // installation), not in the project-relative .search/ cache. This
-      // ensures version tracking works regardless of which directory the
-      // user runs pi from.
-      const agentDir = getAgentDir();
-      const versionPath = join(agentDir, ".pi-intelli-search-version.json");
-      const currentVersion = await getExtensionVersion();
-      let previousVersion: string | undefined;
-
-      try {
-        const raw = await readFile(versionPath, "utf-8");
-        const meta = JSON.parse(raw);
-        previousVersion = meta.version;
-      } catch {
-        // No previous version file — fresh install or cleared state
-      }
-
-      if (previousVersion && previousVersion !== currentVersion) {
-        // Check for migration changes BEFORE setting the migration
-        // context. loadSettings() applies pendingMigration in-memory,
-        // so we must detect changes on the raw (unmigrated) settings.
         try {
-          const userSettings = await loadSettings({
-            cwd: ctx.cwd,
-            projectTrusted: ctx.isProjectTrusted(),
-          });
-          const { changes } = migrateDefaults(previousVersion, currentVersion, userSettings);
-          if (changes.length > 0) {
+          const added = await __harness.ensureCustomModels();
+          if (added.length > 0) {
+            // We wrote new models to models.json. Refresh the registry so they're
+            // available immediately without restarting pi. refresh() has been public
+            // on ModelRegistry throughout the package's history; Pi 0.84.0 widened
+            // it from (): Promise<void> to (options?: ModelsRefreshOptions):
+            // Promise<ModelsRefreshResult>, which is what invalidated the local
+            // cast this code used to carry. The direct call is compatible with the
+            // whole peer range (>=0.80.8). The return value is intentionally
+            // ignored: a provider catalog failure should not block session startup.
+            try {
+              await registry.refresh();
+            } catch (refreshErr: unknown) {
+              notify(`Model registry refresh failed: ${errMsg(refreshErr)}`, "warning");
+            }
             notify(
-              `[pi-intelli-search] Default models updated:\n` +
-                changes.map((c) => `  ${c}`).join("\n") +
-                "\n" +
-                `Update your settings.json to make these permanent.`,
-              "warning",
+              `[pi-intelli-search] Added models: ${added.join(", ")}. Use /model to select them.`,
+              "info",
             );
           }
         } catch (err: unknown) {
-          // Migration is best-effort; never block session startup
-          logErr("Default migration error:", err);
-        }
-
-        // Set migration context so subsequent loadSettings() calls
-        // (from tools) get the migrated defaults in-memory.
-        // Invalidate the cache so loadSettings() rebuilds with
-        // pendingMigration applied (the earlier call for notification
-        // populated the cache without migration).
-        setMigrationContext(previousVersion, currentVersion);
-        invalidateSettingsCache();
-      }
-
-      // Write current version AFTER migration succeeds, so a failed
-      // migration doesn't permanently strand the user on stale defaults.
-      await mkdir(agentDir, { recursive: true });
-      await writeFile(
-        versionPath,
-        JSON.stringify({ version: currentVersion, settingsFormat: "nested" }, null, 2) + "\n",
-      );
-
-      // Flat key deprecation notice — check on every session_start,
-      // not just on upgrade, to catch fresh-install users who
-      // copy-paste deprecated flat keys from old docs/blog posts.
-      try {
-        const flatKeysExist = await hasFlatKeys({
-          cwd: ctx.cwd,
-          projectTrusted: ctx.isProjectTrusted(),
-        });
-        if (flatKeysExist) {
+          const message = errMsg(err);
           notify(
-            `[pi-intelli-search] Flat 'intelli*' settings keys are deprecated. ` +
-              `Nest them under 'pi-intelli-search' in settings.json. ` +
-              `See CHANGELOG.md for details.`,
+            `[pi-intelli-search] Warning: could not update models.json: ${message}`,
             "warning",
           );
         }
-      } catch {
-        // Flat key check is best-effort; never block session startup
       }
-    } catch (err: unknown) {
-      // Version tracking is best-effort; never break session startup
-      logErr("Version tracking error:", err);
-    }
-  });
+
+      // Auth pre-flight: warn if OpenRouter has no configured key.
+      // With default settings, all three pipeline stages need OpenRouter.
+      // This is a best-effort early warning. The tool itself will throw
+      // a clearer error at execution time if the key is truly missing.
+      try {
+        const authMissing = await isOpenRouterAuthMissing();
+        if (authMissing) {
+          notify(
+            `[pi-intelli-search] No OpenRouter API key found. ` +
+              `This extension requires one. Run /login or add 'openrouter' to auth.json.`,
+            "warning",
+          );
+        }
+      } catch (err: unknown) {
+        // Auth check is best-effort; never block session startup
+        notify(`Auth check failed: ${errMsg(err)}`, "warning");
+      }
+
+      // Version tracking, default migration, and settings deprecation notice
+      try {
+        // Version file lives in the agent directory (global to the extension
+        // installation), not in the project-relative .search/ cache. This
+        // ensures version tracking works regardless of which directory the
+        // user runs pi from.
+        const agentDir = getAgentDir();
+        const versionPath = join(agentDir, ".pi-intelli-search-version.json");
+        const currentVersion = await getExtensionVersion();
+        let previousVersion: string | undefined;
+
+        try {
+          const raw = await readFile(versionPath, "utf-8");
+          const meta = JSON.parse(raw);
+          previousVersion = meta.version;
+        } catch {
+          // No previous version file — fresh install or cleared state
+        }
+
+        if (previousVersion && previousVersion !== currentVersion) {
+          // Check for migration changes BEFORE setting the migration
+          // context. loadSettings() applies pendingMigration in-memory,
+          // so we must detect changes on the raw (unmigrated) settings.
+          try {
+            const userSettings = await loadSettings({
+              cwd,
+              projectTrusted,
+            });
+            const { changes } = migrateDefaults(previousVersion, currentVersion, userSettings);
+            if (changes.length > 0) {
+              notify(
+                `[pi-intelli-search] Default models updated:\n` +
+                  changes.map((c) => `  ${c}`).join("\n") +
+                  "\n" +
+                  `Update your settings.json to make these permanent.`,
+                "warning",
+              );
+            }
+          } catch (err: unknown) {
+            // Migration is best-effort; never block session startup
+            notify(`Default migration error: ${errMsg(err)}`, "warning");
+          }
+
+          // Set migration context so subsequent loadSettings() calls
+          // (from tools) get the migrated defaults in-memory.
+          // Invalidate the cache so loadSettings() rebuilds with
+          // pendingMigration applied (the earlier call for notification
+          // populated the cache without migration).
+          if (!native.isCurrent(ctx)) return;
+          setMigrationContext(previousVersion, currentVersion);
+          invalidateSettingsCache();
+        }
+
+        // Write current version AFTER migration succeeds, so a failed
+        // migration doesn't permanently strand the user on stale defaults.
+        await mkdir(agentDir, { recursive: true });
+        await writeFile(
+          versionPath,
+          JSON.stringify({ version: currentVersion, settingsFormat: "nested" }, null, 2) + "\n",
+        );
+
+        // Flat key deprecation notice — check on every session_start,
+        // not just on upgrade, to catch fresh-install users who
+        // copy-paste deprecated flat keys from old docs/blog posts.
+        try {
+          const flatKeysExist = await hasFlatKeys({
+            cwd,
+            projectTrusted,
+          });
+          if (flatKeysExist) {
+            notify(
+              `[pi-intelli-search] Flat 'intelli*' settings keys are deprecated. ` +
+                `Nest them under 'pi-intelli-search' in settings.json. ` +
+                `See CHANGELOG.md for details.`,
+              "warning",
+            );
+          }
+        } catch {
+          // Flat key check is best-effort; never block session startup
+        }
+      } catch (err: unknown) {
+        // Version tracking is best-effort; never break session startup
+        notify(`Version tracking error: ${errMsg(err)}`, "warning");
+      }
+    }),
+  );
 
   // ═══════════════════════════════════════════════
   // Session shutdown
   // ═══════════════════════════════════════════════
   // Prevent after_provider_response handlers from touching ctx.ui after
   // the session runtime is torn down (e.g. /new leaves in-flight requests).
-  pi.on("session_shutdown", () => {
-    sessionActive = false;
-    modelsChecked = false;
+  pi.on("session_shutdown", (_event, ctx) => {
+    if (native.isCurrent(ctx)) modelsChecked = false;
+    return native.shutdown(ctx);
   });
 }

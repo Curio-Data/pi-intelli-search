@@ -17,6 +17,7 @@
     "helpers/run-store-worker.ts",
     "scoped-adapters.test.ts",
     "native-usage.test.ts",
+    "native-registered-runtime.test.ts",
     "core-cache.test.ts",
     "core-console.test.ts",
     "native-model-client.test.ts",

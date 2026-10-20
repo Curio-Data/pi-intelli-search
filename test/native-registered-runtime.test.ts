@@ -1,0 +1,664 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
+
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  Api,
+  Model,
+  AssistantMessage,
+  Context,
+  SimpleStreamOptions,
+} from "@earendil-works/pi-ai";
+import type {
+  AccountingSummary,
+  AttemptRecord,
+  Clock,
+  OperationInputs,
+} from "../src/core/contracts.js";
+import extension from "../src/index.js";
+import { getEventListeners } from "node:events";
+import { __harness as indexHarness } from "../src/index.js";
+import { __harness as llmHarness } from "../src/llm.js";
+import { __harness as researchHarness } from "../src/tools/intelli-research.js";
+import {
+  createNativeOperationRuntime,
+  type NativeRuntimeOptions,
+} from "../src/native-operation-runtime.js";
+import { createRegisteredNativeTools } from "../src/native-registered-tools.js";
+import { invalidateSettingsCache, clearMigrationContext } from "../src/settings.js";
+import {
+  SEARCH_SYSTEM_PROMPT,
+  EXTRACTION_SYSTEM_PROMPT,
+  COLLATION_SYSTEM_PROMPT,
+} from "../src/prompts.js";
+
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+const page = { url: "https://docs.example/page", title: "Docs", content: "Facts" };
+const wireUsage = {
+  prompt_tokens: 12,
+  completion_tokens: 3,
+  total_tokens: 15,
+  cost: 0.001,
+  prompt_tokens_details: { cached_tokens: 2, cache_write_tokens: 1 },
+};
+function response(text: string, error?: string): AssistantMessage {
+  return {
+    role: "assistant",
+    api: "openai-completions",
+    provider: "openrouter",
+    model: "fixture",
+    timestamp: 0,
+    content: [{ type: "text", text }],
+    stopReason: error ? "error" : "stop",
+    ...(error ? { errorMessage: error } : {}),
+    usage: {
+      input: 9,
+      output: 3,
+      cacheRead: 2,
+      cacheWrite: 1,
+      totalTokens: 15,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+  } as AssistantMessage;
+}
+type Transport = (context: Context, options: SimpleStreamOptions) => Promise<AssistantMessage>;
+type Result = Awaited<ReturnType<ReturnType<typeof createNativeOperationRuntime>["execute"]>>;
+function receipt(result: Result) {
+  return result.details!.execution as {
+    operationId: string;
+    accounting: AccountingSummary;
+    attempts: AttemptRecord[];
+    diagnostics: { code: string; message: string }[];
+  };
+}
+async function fixture(transport: Transport, options: NativeRuntimeOptions = {}, settings = {}) {
+  const root = await mkdtemp(join(tmpdir(), "native-registered-"));
+  const agent = join(root, "agent");
+  await mkdir(agent);
+  const saved = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = agent;
+  invalidateSettingsCache();
+  clearMigrationContext();
+  const saveSettings = async (extra = {}) => {
+    await writeFile(
+      join(agent, "settings.json"),
+      JSON.stringify({
+        "pi-intelli-search": {
+          searchModel: { provider: "openrouter", model: "same-model" },
+          extractModel: { provider: "openrouter", model: "same-model" },
+          collateModel: { provider: "openrouter", model: "same-model" },
+          llmRetryAttempts: 2,
+          retryBaseDelayMs: 0,
+          retryMaxDelayMs: 0,
+          searchRetryAttempts: 1,
+          disableLlmsFullDiscovery: true,
+          disableTelemetry: true,
+          ...settings,
+          ...extra,
+        },
+      }),
+    );
+    invalidateSettingsCache();
+  };
+  await saveSettings();
+  const runtime = createNativeOperationRuntime(options);
+  const updates: unknown[] = [];
+  const indicators: unknown[] = [];
+  const notices: string[] = [];
+  const registry = {
+    find: (_provider: string, id: string) => ({ provider: "openrouter", id }),
+    getApiKeyAndHeaders: async () => ({ ok: true, apiKey: "synthetic" }),
+    refresh: async () => {},
+    streamSimple: (_model: unknown, context: Context, options: SimpleStreamOptions) => ({
+      result: async () => {
+        assert.equal(options.maxRetries, 0);
+        options.onProviderStreamEvent?.(
+          { usage: wireUsage },
+          registry.find("openrouter", "same-model") as Model<Api>,
+        );
+        return transport(context, options);
+      },
+    }),
+  };
+  const makeContext = (id: string): ExtensionContext =>
+    ({
+      cwd: root,
+      hasUI: true,
+      isProjectTrusted: () => false,
+      sessionManager: { getSessionId: () => id },
+      modelRegistry: registry,
+      ui: {
+        notify: (message: string) => notices.push(message),
+        setWorkingIndicator: (value?: unknown) => indicators.push(value ?? null),
+      },
+    }) as unknown as ExtensionContext;
+  const ctx = makeContext("first");
+  const tools = createRegisteredNativeTools(runtime);
+  const run = <Name extends keyof OperationInputs>(
+    name: Name,
+    params: OperationInputs[Name],
+    signal?: AbortSignal,
+    context = ctx,
+  ) => runtime.execute(name, params, signal, (value) => updates.push(value), context);
+  return {
+    root,
+    agent,
+    runtime,
+    ctx,
+    makeContext,
+    tools,
+    run,
+    indicators,
+    updates,
+    notices,
+    saveSettings,
+    async cleanup() {
+      await runtime.close();
+      if (saved === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = saved;
+      invalidateSettingsCache();
+      clearMigrationContext();
+      await rm(root, { recursive: true, force: true });
+    },
+  };
+}
+
+test("registered entry uses scoped standalone inference, numeric usage and no mutable transport harness (T11/T15/T16)", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("network forbidden");
+  });
+  const old = llmHarness.registryStreamSimple;
+  llmHarness.registryStreamSimple = async () => {
+    throw new Error("legacy harness bypass");
+  };
+  let attempts = 0;
+  const f = await fixture(async () => {
+    attempts++;
+    return response("answer", "503 retryable");
+  });
+  const registered: Record<string, unknown> = {};
+  let shutdown: ((event: unknown, ctx: ExtensionContext) => Promise<void>) | undefined;
+  extension({
+    registerTool(tool: (typeof f.tools)[0]) {
+      registered[tool.name] = tool;
+    },
+    on(name: string, handler: typeof shutdown) {
+      if (name === "session_shutdown") shutdown = handler;
+    },
+  } as unknown as ExtensionAPI);
+  try {
+    for (const [name, params] of [
+      ["intelli_search", { query: "standalone" }],
+      ["intelli_extract", { ...page, query: "standalone" }],
+      [
+        "intelli_collate",
+        {
+          query: "standalone",
+          extractions: [{ ...page, extraction: "facts", sourceType: "docs", status: "success" }],
+        },
+      ],
+    ] as const) {
+      const tool = registered[name] as {
+        execute(
+          id: string,
+          params: unknown,
+          signal: undefined,
+          update: undefined,
+          ctx: ExtensionContext,
+        ): Promise<Result>;
+      };
+      const result = await tool.execute("host-id", params, undefined, undefined, f.ctx);
+      assert.equal(result.isError, true);
+      assert.equal(receipt(result).accounting.attempts, 1, "standalone never retries");
+      assert.equal(receipt(result).accounting.parentDelivery, "available");
+      assert.equal(receipt(result).accounting.costComplete, true);
+      assert.equal(result.usage.input, 9);
+      assert.equal(result.usage.cost.total, 0.001);
+    }
+    assert.equal(attempts, 3);
+    // The actual default-registered research path also uses scoped accounting.
+    const researchTool = registered.intelli_research as {
+      execute(
+        id: string,
+        params: unknown,
+        signal: undefined,
+        update: undefined,
+        ctx: ExtensionContext,
+      ): Promise<Result>;
+    };
+    const result = await researchTool.execute(
+      "host-research",
+      { query: "no links" },
+      undefined,
+      undefined,
+      f.ctx,
+    );
+    assert(result.isError);
+    assert.equal(receipt(result).accounting.attempts, 2, "research retains configured retries");
+  } finally {
+    await shutdown?.({}, f.ctx);
+    llmHarness.registryStreamSimple = old;
+    await f.cleanup();
+  }
+});
+
+test("native research/suggest roles share a settled operation, retry accounting and immutable registered dependencies (T04/T11/T16)", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("network forbidden");
+  });
+  let searchCalls = 0;
+  const old = researchHarness.fetchPages;
+  researchHarness.fetchPages = async () => {
+    throw new Error("legacy page harness bypass");
+  };
+  const f = await fixture(
+    async (context) => {
+      if (context.systemPrompt === SEARCH_SYSTEM_PROMPT) {
+        searchCalls++;
+        return response(`[Docs](${page.url})`, searchCalls === 1 ? "503 transient" : undefined);
+      }
+      if (context.systemPrompt === EXTRACTION_SYSTEM_PROMPT)
+        return response("Official docs, current.\nFacts");
+      if (context.systemPrompt === COLLATION_SYSTEM_PROMPT) return response("Answer [S1]");
+      return response("[]");
+    },
+    {
+      researchDependencies: {
+        async fetchPages() {
+          return [{ ...page, status: "success" }];
+        },
+        async downloadLlmsFullToCache() {
+          return null;
+        },
+      },
+    },
+  );
+  try {
+    await mkdir(join(f.root, ".search"));
+    await writeFile(
+      join(f.root, ".search/.index.json"),
+      JSON.stringify({
+        searches: [
+          {
+            slug: "2026-01-01-prior-abcdef",
+            query: "prior",
+            timestamp: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    const result = await f.tools[3].execute(
+      "host-research",
+      { query: "scoped research" },
+      undefined,
+      (value) => f.updates.push(value),
+      f.ctx,
+    );
+    assert(!result.isError);
+    const execution = receipt(result);
+    assert.deepEqual(
+      execution.attempts.map((item) => item.role),
+      ["search", "search", "extract", "collate", "suggest"],
+    );
+    assert.equal(new Set(execution.attempts.map((item) => item.operationId)).size, 1);
+    assert.equal(execution.attempts[0].callId, execution.attempts[1].callId);
+    assert.equal(execution.attempts[2].pageId, "S1");
+    assert.equal(execution.accounting.attempts, 5);
+    assert.equal(execution.accounting.tokens.inputTotal, 60);
+    assert.equal(execution.accounting.reportedCost.total, 0.005);
+    assert(f.updates.length > 0);
+    assert.equal(f.indicators.at(-1), null);
+  } finally {
+    researchHarness.fetchPages = old;
+    await f.cleanup();
+  }
+});
+
+test("replacement owns stage-gap drain; old shutdown, late progress and UI failures cannot touch successor (T04/T10/T20)", async () => {
+  const entered = deferred();
+  const abortSeen = deferred();
+  const cleanup = deferred();
+  const f = await fixture(async () => response(`[Docs](${page.url})`), {
+    researchDependencies: {
+      async fetchPages(_urls, signal) {
+        entered.resolve();
+        if (!signal?.aborted)
+          await new Promise<void>((resolve) =>
+            signal?.addEventListener("abort", () => resolve(), { once: true }),
+          );
+        abortSeen.resolve();
+        await cleanup.promise;
+        return [{ ...page, status: "success" }];
+      },
+      async downloadLlmsFullToCache() {
+        return null;
+      },
+    },
+  });
+  try {
+    const pending = f.run("intelli_research", { query: "old gap" });
+    await entered.promise;
+    const before = f.updates.length;
+    const next = f.makeContext("next");
+    let ready = false;
+    const replacing = f.runtime.start(next).then(() => {
+      ready = true;
+    });
+    await abortSeen.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(ready, false);
+    assert.equal(f.runtime.isCurrent(f.ctx), false);
+    const queued = new AbortController();
+    const waiting = f.run("intelli_search", { query: "waiting" }, queued.signal, next);
+    queued.abort();
+    await assert.rejects(waiting, (error: Error) => error.name === "AdmissionError");
+    await assert.rejects(f.run("intelli_search", { query: "old" }));
+    // Closing the captured old session cannot dispose the manager/successor.
+    const shutdown = f.runtime.shutdown(f.ctx);
+    assert.equal(f.runtime.shutdown(f.ctx), shutdown);
+    assert.equal(getEventListeners(queued.signal, "abort").length, 0);
+    cleanup.resolve();
+    await replacing;
+    await shutdown;
+    const result = await pending;
+    assert(result.isError);
+    assert.equal(receipt(result).accounting.parentDelivery, "unknown");
+    assert.equal(f.updates.length, before);
+    assert.equal(f.indicators.at(-1), null);
+    assert(f.runtime.isCurrent(next));
+    const after = await f.run("intelli_search", { query: "new" }, undefined, next);
+    assert(!after.isError);
+    await f.runtime.shutdown(f.ctx);
+    assert(!(await f.run("intelli_search", { query: "still new" }, undefined, next)).isError);
+  } finally {
+    cleanup.resolve();
+    await f.cleanup();
+  }
+});
+
+test("native caller cancellation on open runtime retains only dispatched attempts and unknown parent delivery (T05/T12/T16)", async () => {
+  const four = deferred();
+  const release = deferred();
+  let starts = 0;
+  const f = await fixture(async () => {
+    if (++starts === 4) four.resolve();
+    await release.promise;
+    return response("extract");
+  });
+  const controllers = Array.from({ length: 6 }, () => new AbortController());
+  const pending = controllers.map((controller) =>
+    f.run("intelli_extract", { ...page, query: "reserve" }, controller.signal),
+  );
+  try {
+    await four.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(starts, 4);
+    controllers.forEach((controller) => controller.abort());
+    release.resolve();
+    const results = await Promise.all(pending);
+    assert.equal(
+      results.reduce((count, result) => count + receipt(result).accounting.attempts, 0),
+      4,
+    );
+    for (const result of results) {
+      assert(result.isError);
+      assert.equal(receipt(result).accounting.parentDelivery, "unknown");
+    }
+    assert.equal(new Set(results.map((result) => receipt(result).operationId)).size, 6);
+    assert(!(await f.run("intelli_search", { query: "still open" })).isError);
+  } finally {
+    release.resolve();
+    await f.cleanup();
+  }
+});
+
+test("captured native settings and runtime-wide clock/pacing preserve standalone no-timeout policy (T10/T13/T15)", async () => {
+  let now = 0;
+  let timers = 0;
+  const starts: number[] = [];
+  const clock: Clock = {
+    monotonicMs: () => now,
+    utcIso: () => "2026-10-20T00:00:00.000Z",
+    schedule(ms, callback) {
+      timers++;
+      let pending = true;
+      const timer = setImmediate(() => {
+        pending = false;
+        timers--;
+        now += ms;
+        callback();
+      });
+      return () => {
+        if (pending) {
+          pending = false;
+          timers--;
+          clearImmediate(timer);
+        }
+      };
+    },
+    async sleep(ms) {
+      now += ms;
+    },
+  };
+  const f = await fixture(
+    async () => {
+      starts.push(now);
+      return response("Answer");
+    },
+    { clock },
+    { minRequestIntervalMs: 17, llmTimeoutMs: 1_000 },
+  );
+  try {
+    assert.equal(timers, 0);
+    await f.runtime.start(f.ctx);
+    await f.saveSettings({ minRequestIntervalMs: 100 });
+    await Promise.all([
+      f.run("intelli_search", { query: "one" }),
+      f.run("intelli_extract", { ...page, query: "two" }),
+    ]);
+    assert.deepEqual(starts, [0, 17], "generation retains captured pacing despite settings reload");
+    assert.equal(timers, 0, "standalone did not schedule configured model timeout");
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("close-safe operation diagnostics survive cleanup failure without raw console writes (T04/T16/T20)", async (t) => {
+  t.mock.method(console, "warn", () => {
+    throw new Error("raw console forbidden");
+  });
+  t.mock.method(console, "error", () => {
+    throw new Error("raw console forbidden");
+  });
+  const entered = deferred();
+  const release = deferred();
+  const f = await fixture(async () => response("", "401 primary failure"), {
+    createRuns() {
+      return {
+        async settle() {
+          entered.resolve();
+          await release.promise;
+          throw new Error("cleanup diagnostic");
+        },
+      } as unknown as import("../src/core/contracts.js").RunStore;
+    },
+  });
+  try {
+    f.ctx.ui.notify = () => {
+      throw new Error("renderer gone");
+    };
+    const pending = f.run("intelli_search", { query: "failure" });
+    await entered.promise;
+    let done = false;
+    const closing = f.runtime.shutdown(f.ctx).then(() => {
+      done = true;
+    });
+    await Promise.resolve();
+    assert.equal(done, false);
+    release.resolve();
+    await closing;
+    const result = await pending;
+    assert(result.isError);
+    assert.match(result.content[0].text, /401 primary failure/);
+    assert.equal(receipt(result).attempts[0].state, "failed");
+    assert(
+      receipt(result).diagnostics.some(
+        (item) => item.code === "OPERATION_CLEANUP_FAILED" && item.message === "cleanup diagnostic",
+      ),
+    );
+    assert.equal(receipt(result).accounting.parentDelivery, "unknown");
+    assert.equal(f.runtime.close(), f.runtime.close());
+  } finally {
+    release.resolve();
+    await f.cleanup();
+  }
+});
+
+test("failed/superseded preparation cannot resurrect admission or enable a disposed generation (T10)", async () => {
+  const preparing = deferred();
+  const f = await fixture(async () => response("answer"));
+  try {
+    await f.runtime.start(f.ctx);
+    const next = f.makeContext("pending");
+    const start = f.runtime.start(next, () => preparing.promise).catch((error: unknown) => error);
+    const newest = f.makeContext("newest");
+    const final = f.runtime.start(newest);
+    const controller = new AbortController();
+    const waiting = f.run("intelli_search", { query: "pending" }, controller.signal, newest);
+    controller.abort();
+    await assert.rejects(waiting);
+    assert.equal(getEventListeners(controller.signal, "abort").length, 0);
+    preparing.resolve();
+    assert((await start) instanceof Error);
+    await final;
+    assert(!(await f.run("intelli_search", { query: "latest" }, undefined, newest)).isError);
+    const invalid = f.makeContext("invalid");
+    await assert.rejects(
+      f.runtime.start(invalid, async () => {
+        throw new Error("invalid preparation");
+      }),
+      /invalid preparation/,
+    );
+    await assert.rejects(f.run("intelli_search", { query: "failed" }, undefined, invalid));
+    await assert.rejects(f.run("intelli_search", { query: "old" }, undefined, newest));
+    const disposed = f.makeContext("disposed");
+    const held = deferred();
+    const pending = f.runtime.start(disposed, () => held.promise).catch((error: unknown) => error);
+    const close = f.runtime.close();
+    held.resolve();
+    await close;
+    assert((await pending) instanceof Error);
+    await assert.rejects(f.runtime.start(f.makeContext("after disposal")), /disposed/);
+  } finally {
+    preparing.resolve();
+    await f.cleanup();
+  }
+});
+
+test("entry lifecycle suppresses stale startup/provider callbacks and captured shutdown leaves successor open (T10/T20)", async () => {
+  const entered = deferred();
+  const release = deferred();
+  const f = await fixture(async () => response("answer"));
+  const old = indexHarness.ensureCustomModels;
+  indexHarness.ensureCustomModels = async () => {
+    entered.resolve();
+    await release.promise;
+    return ["fixture"];
+  };
+  const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
+  const registered: Record<string, unknown> = {};
+  extension({
+    registerTool(tool: { name: string }) {
+      registered[tool.name] = tool;
+    },
+    on(name: string, handler: (event: unknown, ctx: ExtensionContext) => unknown) {
+      handlers.set(name, handler);
+    },
+  } as unknown as ExtensionAPI);
+  const next = f.makeContext("entry-next");
+  let oldUi = 0;
+  let newUi = 0;
+  f.ctx.ui.notify = () => {
+    oldUi++;
+  };
+  f.ctx.ui.setStatus = () => {
+    oldUi++;
+  };
+  next.ui.notify = () => {
+    newUi++;
+  };
+  next.ui.setStatus = () => {
+    newUi++;
+  };
+  try {
+    const first = Promise.resolve(handlers.get("session_start")!({}, f.ctx)).catch(
+      (error: unknown) => error,
+    );
+    await entered.promise;
+    const replacing = Promise.resolve(handlers.get("session_start")!({}, next));
+    handlers.get("after_provider_response")!({ status: 429, headers: {} }, f.ctx);
+    assert.equal(oldUi, 0);
+    release.resolve();
+    await replacing;
+    assert((await first) instanceof Error);
+    assert.equal(oldUi, 0, "late startup notification never reaches old UI");
+    await handlers.get("session_shutdown")!({}, f.ctx);
+    handlers.get("after_provider_response")!({ status: 200, headers: {} }, next);
+    assert(newUi > 0);
+    const tool = registered.intelli_search as {
+      execute(
+        id: string,
+        params: unknown,
+        signal: undefined,
+        update: undefined,
+        ctx: ExtensionContext,
+      ): Promise<Result>;
+    };
+    assert(!(await tool.execute("next", { query: "next" }, undefined, undefined, next)).isError);
+  } finally {
+    release.resolve();
+    await handlers.get("session_shutdown")!({}, next);
+    indexHarness.ensureCustomModels = old;
+    await f.cleanup();
+  }
+});
+
+test("registered native inference source gate excludes legacy context/client/harness construction", async () => {
+  const entry = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  assert.match(entry, /createRegisteredNativeTools\(native\)/);
+  const registered = await readFile(
+    new URL("../src/native-registered-tools.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(registered, /runtime\.execute\(name, params, signal, onUpdate, ctx\)/);
+  for (const name of ["search", "extract", "collate", "research"])
+    assert(registered.includes(`execute("intelli_${name}")`));
+  const source = await readFile(
+    new URL("../src/native-operation-runtime.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /createScopedNativeModelClient\(modelContext, services/);
+  assert.match(source, /captured\.runtime!\.run\(/);
+  assert(
+    !/\b(createNativeOperationContext|createNativeModelClient|__harness|callLlm)\b/.test(source),
+  );
+  for (const name of ["search", "extract", "collate", "research"]) {
+    const operation = await readFile(
+      new URL(`../src/core/operations/${name}.ts`, import.meta.url),
+      "utf8",
+    );
+    assert(!/\bmodels\.complete\s*\(/.test(operation));
+    assert(operation.includes("completeOperationModel("));
+  }
+});

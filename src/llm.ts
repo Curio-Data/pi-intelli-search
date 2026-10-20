@@ -108,7 +108,7 @@ export type LlmRetryConfig = ModelRetryConfig;
  * attempts, surfaces as an actionable thrown error.
  */
 export async function callLlm(
-  ctx: ExtensionContext,
+  ctx: Pick<ExtensionContext, "modelRegistry">,
   config: ModelConfig,
   systemPrompt: string,
   userMessage: string,
