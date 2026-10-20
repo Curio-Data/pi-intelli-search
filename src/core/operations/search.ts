@@ -34,6 +34,18 @@ export async function search(
       maxTokens: 2000,
       signal,
       collectCitations: true,
+      ...(context.services
+        ? {
+            onRetryNotice: (message: string) =>
+              context.onProgress?.({
+                stage: "search",
+                stageIdx: 0,
+                totalStages: 1,
+                message,
+                pct: 0,
+              }),
+          }
+        : {}),
       payloadPatch,
       reasoning: payloadPatch ? (settings.searchWebSearch.reasoning ?? "low") : undefined,
     });

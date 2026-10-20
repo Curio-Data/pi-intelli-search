@@ -6,6 +6,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { createOperationRuntime } from "../../../src/core/operation-runtime.js";
 import { AdmissionError } from "../../../src/core/execution-coordinator.js";
 import { createSystemClock } from "../../../src/core/clock.js";
+import { createStandaloneResult } from "../../../src/core/standalone-result.js";
 import {
   parseExecutionSettings,
   validateRequestInterval,
@@ -28,11 +29,12 @@ import type {
   OperationContext,
   OperationInputs,
   OperationLogger,
-  OperationProgress,
+  Progress,
   OperationResult,
   OperationServices,
   Clock,
   FetchClient,
+  FullData,
 } from "../../../src/core/contracts.js";
 import type { ResearchDependencies } from "../../../src/core/operations/research.js";
 import type { FetchFunction } from "../../../src/core/annotations.js";
@@ -114,7 +116,7 @@ export interface RuntimeOptions {
 }
 export interface ExecuteOptions {
   signal?: AbortSignal;
-  onProgress?: (progress: OperationProgress) => void;
+  onProgress?: (progress: Progress) => void;
 }
 /** Registered operation lifetime. Protocol admission remains a separate adapter. */
 export async function createRuntime(config: StandaloneConfig, options: RuntimeOptions = {}) {
@@ -191,6 +193,24 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
     ): Promise<OperationResult & { readonly execution: ExecutionReceipt }> {
       const state: { category: StandaloneErrorCode } = { category: "INVALID_ARGUMENTS" };
       let owned: OperationServices | undefined;
+      const projection =
+        name === "intelli_search" || name === "intelli_extract"
+          ? createStandaloneResult(
+              name,
+              params,
+              clock,
+              (event) => {
+                if (!closed) execution.onProgress?.({ ...event, message: redact(event.message) });
+              },
+              (diagnostic) => logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
+            )
+          : undefined;
+      const safeData = (data: FullData): FullData =>
+        JSON.parse(
+          JSON.stringify(data, (_key, value: unknown) =>
+            typeof value === "string" ? redact(value) : value,
+          ),
+        );
       try {
         validate(name, params);
         if ("domains" in params && params.domains !== undefined) {
@@ -281,9 +301,13 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
             const result = await withStandaloneStdout(logger, async () => {
               switch (name) {
                 case "intelli_search":
-                  return search(params as OperationInputs["intelli_search"], context);
+                  return projection!.run(context, (scoped) =>
+                    search(params as OperationInputs["intelli_search"], scoped),
+                  );
                 case "intelli_extract":
-                  return extract(params as OperationInputs["intelli_extract"], context);
+                  return projection!.run(context, (scoped) =>
+                    extract(params as OperationInputs["intelli_extract"], scoped),
+                  );
                 case "intelli_collate":
                   return collate(params as OperationInputs["intelli_collate"], context);
                 case "intelli_research":
@@ -312,20 +336,49 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
             };
           },
         );
-        return { ...result, execution: executionReceipt(owned!) };
+        const full = projection?.settled(result);
+        const data = full ? safeData(full.data) : undefined;
+        return {
+          ...result,
+          ...(data ? { text: data.text, details: data.details, data, usage: full!.usage } : {}),
+          execution: executionReceipt(owned!),
+        };
       } catch (error) {
         // The runtime has settled before this boundary reads any ledger state.
         const receipt =
           owned && state.category === "OPERATION"
             ? executionReceipt(owned, execution.signal?.aborted || closed ? "unknown" : "available")
             : undefined;
+        const aborted = Boolean(
+          execution.signal?.aborted ||
+          closed ||
+          (error instanceof AdmissionError && ["ABORTED", "CLOSED"].includes(error.code)),
+        );
+        const full = projection?.active
+          ? projection.settled(
+              undefined,
+              {
+                message: redact(
+                  error instanceof Error ? error.message : "Standalone operation failed",
+                ),
+                aborted,
+              },
+              aborted ? "unknown" : "available",
+            )
+          : undefined;
         if (
           execution.signal?.aborted ||
           (error instanceof Error &&
             (error.name === "AbortError" ||
               ("code" in error && (error.code === "ABORTED" || error.code === "CLOSED"))))
         )
-          throw new StandaloneError("CANCELLED", "Operation aborted", receipt);
+          throw new StandaloneError(
+            "CANCELLED",
+            "Operation aborted",
+            receipt,
+            full ? safeData(full.data) : undefined,
+            full?.usage,
+          );
         throw new StandaloneError(
           error instanceof StandaloneError
             ? error.code
@@ -334,7 +387,11 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
               : state.category,
           redact(error instanceof Error ? error.message : "Standalone operation failed"),
           receipt,
+          full ? safeData(full.data) : undefined,
+          full?.usage,
         );
+      } finally {
+        projection?.dispose();
       }
     },
   };

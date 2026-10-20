@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
+import type { FullData, NumericHostUsage } from "../../../src/core/contracts.js";
 import type { ExecutionReceipt } from "./execution-receipt.js";
 
 export type StandaloneErrorCode =
@@ -12,6 +13,8 @@ export class StandaloneError extends Error {
     readonly code: StandaloneErrorCode,
     message: string,
     readonly execution?: ExecutionReceipt,
+    readonly data?: FullData,
+    readonly usage?: NumericHostUsage,
   ) {
     super(message);
     this.name = code === "CANCELLED" ? "AbortError" : "StandaloneError";

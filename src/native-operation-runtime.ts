@@ -8,6 +8,7 @@ import type {
   AttemptRecord,
   NumericHostUsage,
   Clock,
+  FullData,
   Diagnostic,
   FetchClient,
   OperationContext,
@@ -19,6 +20,7 @@ import type {
 import { createRuntimeGenerations, type OperationRuntime } from "./core/operation-runtime.js";
 import { AdmissionError } from "./core/execution-coordinator.js";
 import { createSystemClock } from "./core/clock.js";
+import { createStandaloneResult } from "./core/standalone-result.js";
 import { parseExecutionSettings, validateRequestInterval } from "./core/execution-settings.js";
 import { createRunStore } from "./core/run-store.js";
 import { resolveWorkspacePaths } from "./core/paths.js";
@@ -78,6 +80,7 @@ export class NativeExecutionError extends Error {
     message: string,
     readonly execution: NativeExecutionReceipt,
     readonly usage: NumericHostUsage,
+    readonly data?: FullData,
   ) {
     super(message);
     this.name = "NativeExecutionError";
@@ -294,6 +297,18 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
         warn: (message: string) => diagnose({ code: "OPERATION_DIAGNOSTIC", message }),
       };
       const operationId = randomUUID();
+      const projection =
+        name === "intelli_search" || name === "intelli_extract"
+          ? createStandaloneResult(
+              name,
+              params,
+              clock,
+              (event) => {
+                if (active(captured)) onUpdate?.(nativeProgress(event));
+              },
+              diagnose,
+            )
+          : undefined;
       diagnostics.set(operationId, diagnose);
       let owned: OperationServices | undefined;
       const receipt = (
@@ -338,9 +353,13 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
             };
             switch (name) {
               case "intelli_search":
-                return search(params as OperationInputs["intelli_search"], context);
+                return projection!.run(context, (scoped) =>
+                  search(params as OperationInputs["intelli_search"], scoped),
+                );
               case "intelli_extract":
-                return extract(params as OperationInputs["intelli_extract"], context);
+                return projection!.run(context, (scoped) =>
+                  extract(params as OperationInputs["intelli_extract"], scoped),
+                );
               case "intelli_collate":
                 return collate(params as OperationInputs["intelli_collate"], context);
               case "intelli_research": {
@@ -414,15 +433,34 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
             }
           },
         );
+        const full = projection?.settled(result);
         return {
           ...nativeResult(result as OperationResult),
-          details: { ...result.details, execution: receipt() },
-          usage: owned!.ledger.hostUsage(),
+          details: {
+            ...result.details,
+            ...(full ? { intelli: full.data } : {}),
+            execution: receipt(),
+          },
+          usage: full?.usage ?? owned!.ledger.hostUsage(),
         };
       } catch (error) {
         // Runtime.run has drained before any ledger projection, including errors.
-        if (!owned || (!owned.ledger.records().length && !signal?.aborted && !captured.closed))
+        if (
+          !owned ||
+          (!owned.ledger.records().length &&
+            !signal?.aborted &&
+            !captured.closed &&
+            !(error instanceof AdmissionError && error.code === "BUSY"))
+        )
           throw error;
+        const aborted = Boolean(signal?.aborted || captured.closed);
+        const full = projection?.active
+          ? projection.settled(
+              undefined,
+              { message: errMsg(error), aborted },
+              !options.supportsErrorResults || aborted ? "unknown" : "available",
+            )
+          : undefined;
         if (!options.supportsErrorResults) {
           // The floor agent loop ignores returned isError. Preserve its throwing
           // error signal; partial fields remain local, not claimed as delivered.
@@ -430,17 +468,20 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
             errMsg(error),
             receipt("unknown"),
             owned.ledger.hostUsage(),
+            full?.data,
           );
         }
         return {
           content: [textContent(errMsg(error))],
           isError: true,
           details: {
-            execution: receipt(signal?.aborted || captured.closed ? "unknown" : "available"),
+            ...(full ? { intelli: full.data } : {}),
+            execution: receipt(aborted ? "unknown" : "available"),
           },
           usage: owned.ledger.hostUsage(),
         };
       } finally {
+        projection?.dispose();
         diagnostics.delete(operationId);
       }
     },

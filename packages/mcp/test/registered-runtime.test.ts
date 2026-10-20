@@ -411,6 +411,8 @@ test("registered MCP inference cannot use the legacy unscoped bypass (source gat
   );
   assert.match(runtime, /const settings = config\.settings/);
   assert.match(runtime, /modelConcurrency: executionSettings\.modelConcurrency/);
+  assert.match(runtime, /projection!\.run\(context,/);
+  assert.match(runtime, /projection\?\.settled\(result\)/);
   assert.match(runtime, /criticalReserve: executionSettings\.criticalReserve/);
   assert.match(runtime, /fetchConcurrency: executionSettings\.aggregateFetchConcurrency/);
   const tree = ts.createSourceFile("runtime.ts", runtime, ts.ScriptTarget.Latest, true);

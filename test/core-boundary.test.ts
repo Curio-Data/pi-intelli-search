@@ -63,6 +63,7 @@ describe("shared engine dependency boundary", () => {
         "core/execution-coordinator.ts",
         "core/operation-runtime.ts",
         "core/execution-settings.ts",
+        "core/standalone-result.ts",
         "core/usage.ts",
         "core/run-store.ts",
         "core/run-index.ts",
@@ -148,6 +149,11 @@ describe("shared engine dependency boundary", () => {
         const runtime = await import('./core/operation-runtime.js');
         assert.equal(typeof runtime.createOperationRuntime, 'function');
         assert.equal(typeof runtime.createRuntimeGenerations, 'function');
+        const standalone = await import('./core/standalone-result.js');
+        assert.equal(typeof standalone.createStandaloneResult, 'function');
+        assert.equal(typeof core.compactResult, 'function');
+        assert.ok(core.standaloneOutputSchemas.intelli_search);
+        assert.ok(core.compactOutputSchema);
         const runs = await import('./core/run-store.js');
         await import('./core/run-index.js');
         assert.equal(typeof coordinator.createExecutionCoordinator, 'function');

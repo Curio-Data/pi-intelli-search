@@ -22,6 +22,9 @@ import type {
 } from "../src/core/contracts.js";
 import extension from "../src/index.js";
 import { getEventListeners } from "node:events";
+import { Check } from "typebox/value";
+import { standaloneOutputSchemas } from "../src/core/output-schemas.js";
+import type { FullData, Progress } from "../src/core/contracts.js";
 import { __harness as indexHarness } from "../src/index.js";
 import { __harness as llmHarness } from "../src/llm.js";
 import { __harness as researchHarness } from "../src/tools/intelli-research.js";
@@ -225,6 +228,17 @@ test("registered entry uses scoped standalone inference, numeric usage and no mu
       assert.equal(receipt(result).accounting.attempts, 1, "standalone never retries");
       assert.equal(receipt(result).accounting.parentDelivery, "available");
       assert.equal(receipt(result).accounting.costComplete, true);
+      if (name !== "intelli_collate") {
+        const data = result.details!.intelli as FullData;
+        assert(Check(standaloneOutputSchemas[name], data));
+        assert.equal(data.outcome, "error");
+        assert.deepEqual(data.accounting, receipt(result).accounting);
+        assert.equal(data.accounting.parentDelivery, "available");
+        assert(
+          !JSON.stringify(data).includes('"intelli"'),
+          "no recursive native reconstruction field",
+        );
+      }
       assert.equal(result.usage.input, 9);
       assert.equal(result.usage.cost.total, 0.001);
     }
@@ -416,6 +430,12 @@ test("native caller cancellation on open runtime retains only dispatched attempt
     for (const result of results) {
       assert(result.isError);
       assert.equal(receipt(result).accounting.parentDelivery, "unknown");
+      const data = result.details!.intelli as FullData;
+      assert(Check(standaloneOutputSchemas.intelli_extract, data));
+      assert.equal(data.outcome, "aborted");
+      assert.equal(data.counts.cancelled, 1);
+      assert.equal(data.accounting.parentDelivery, "unknown");
+      assert.deepEqual(data.attempts, receipt(result).attempts);
     }
     assert.equal(new Set(results.map((result) => receipt(result).operationId)).size, 6);
     assert(!(await f.run("intelli_search", { query: "still open" })).isError);
@@ -703,6 +723,10 @@ for (const modern of [false, true]) {
           );
           assert.equal(verdict.error.execution.accounting.attempts, 1);
           assert.equal(verdict.error.usage.input, 9);
+          assert(verdict.error.data);
+          assert(Check(standaloneOutputSchemas.intelli_search, verdict.error.data));
+          assert.equal(verdict.error.data.accounting.parentDelivery, "unknown");
+          assert.equal(verdict.error.data.outcome, aborted ? "aborted" : "error");
         }
       }
     } finally {
@@ -825,6 +849,133 @@ test("invalid native execution and deprecated pacing fail before inference, then
   }
 });
 
+test("registered standalone full data and correlated progress consume captured capacity without leaking supplied bodies (T12/T17/T20)", async () => {
+  const f = await fixture(
+    async () => response("Facts [Docs](https://docs.example/page)"),
+    {},
+    {
+      execution: { modelConcurrency: 3 },
+      extractionConcurrency: 9,
+    },
+  );
+  try {
+    await f.runtime.start(f.ctx);
+    await f.saveSettings({ execution: { modelConcurrency: 64 } });
+    for (const name of ["intelli_search", "intelli_extract"] as const) {
+      const before = f.updates.length;
+      const result = await f.run(name, { ...page, query: "full", content: "RAW_PAGE_SENTINEL" });
+      const data = result.details!.intelli as FullData;
+      assert(Check(standaloneOutputSchemas[name], data));
+      assert.equal(
+        data.counts.effectivePageConcurrency,
+        2,
+        "captured generation, not reloaded settings",
+      );
+      assert.equal(data.text, result.content[0].text);
+      assert.equal(data.counts.fetched, 0);
+      assert.equal(data.accounting.attempts, 1);
+      assert.deepEqual(data.attempts, receipt(result).attempts);
+      assert.deepEqual(data.accounting, receipt(result).accounting);
+      assert(!JSON.stringify(data).includes("RAW_PAGE_SENTINEL"));
+      assert.equal(data.details.intelli, undefined);
+      const updates = f.updates
+        .slice(before)
+        .map((update) => (update as { details: Progress }).details);
+      assert.deepEqual(
+        updates.map((event) => [event.sequence, event.event, event.pct]),
+        [
+          [1, "start", 0],
+          [2, "end", 100],
+        ],
+      );
+      assert(updates.every((event) => event.operationId === data.operationId));
+    }
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("standalone final data waits for cleanup and contains progress renderer failures (T04/T17/T20)", async () => {
+  let now = 0;
+  const clock: Clock = {
+    monotonicMs: () => now,
+    utcIso: () => "2026-10-20T00:00:00.000Z",
+    schedule() {
+      throw new Error("no standalone timeout");
+    },
+    async sleep() {},
+  };
+  const entered = deferred();
+  const release = deferred();
+  const f = await fixture(async () => response("Answer"), {
+    clock,
+    createRuns: () =>
+      ({
+        async settle() {
+          entered.resolve();
+          await release.promise;
+          now = 71;
+        },
+      }) as import("../src/core/contracts.js").RunStore,
+  });
+  try {
+    const pending = f.runtime.execute(
+      "intelli_search",
+      { query: "settlement" },
+      undefined,
+      () => {
+        throw new Error("renderer gone");
+      },
+      f.ctx,
+    );
+    await entered.promise;
+    let done = false;
+    void pending.then(() => {
+      done = true;
+    });
+    await Promise.resolve();
+    assert.equal(done, false);
+    release.resolve();
+    const result = await pending;
+    const data = result.details!.intelli as FullData;
+    assert.equal(data.timing.allWorkSettledMs, 71);
+    assert.equal(
+      receipt(result).diagnostics.filter((d) => d.code === "PROGRESS_DELIVERY_FAILED").length,
+      2,
+    );
+    assert.equal(result.isError, undefined);
+  } finally {
+    release.resolve();
+    await f.cleanup();
+  }
+});
+
+test("cleanup failure preserves completed standalone evidence in settled partial data (T17)", async () => {
+  const f = await fixture(async () => response("Successful extraction"), {
+    createRuns: () =>
+      ({
+        async settle() {
+          throw new Error("cleanup failed");
+        },
+      }) as unknown as import("../src/core/contracts.js").RunStore,
+  });
+  try {
+    const result = await f.run("intelli_extract", { ...page, query: "partial" });
+    assert(result.isError);
+    const data = result.details!.intelli as FullData;
+    assert(Check(standaloneOutputSchemas.intelli_extract, data));
+    assert.equal(data.outcome, "error");
+    assert.equal(data.sources[0].extraction, "Successful extraction");
+    assert.equal(data.sources[0].state, "used");
+    assert.equal(data.counts.extracted, 1);
+    assert.equal(data.counts.failed, 0);
+    assert.equal(data.attempts[0].state, "succeeded");
+    assert.equal(data.details.extraction, "Successful extraction");
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("registered native inference source gate excludes legacy context/client/harness construction", async () => {
   const entry = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   assert.match(entry, /createRegisteredNativeTools\(native\)/);
@@ -844,6 +995,8 @@ test("registered native inference source gate excludes legacy context/client/har
   assert.match(source, /fetchConcurrency: execution\.aggregateFetchConcurrency/);
   assert.match(source, /createScopedNativeModelClient\(modelContext, services/);
   assert.match(source, /captured\.runtime!\.run\(/);
+  assert.match(source, /projection!\.run\(context,/);
+  assert.match(source, /projection\?\.settled\(result\)/);
   assert(
     !/\b(createNativeOperationContext|createNativeModelClient|__harness|callLlm)\b/.test(source),
   );

@@ -9,9 +9,10 @@ import {
   extractSchema,
   researchSchema,
   searchSchema,
+  compactResult,
 } from "../../../src/core/index.js";
 import type { JsonSchemaType } from "@modelcontextprotocol/server";
-import type { OperationInputs, OperationResult } from "../../../src/core/contracts.js";
+import type { FullData, OperationInputs, OperationResult } from "../../../src/core/contracts.js";
 import { createRuntime, type RuntimeOptions } from "./runtime.js";
 import { ConfigurationError, type StandaloneConfig } from "./config.js";
 import { StandaloneError, type StandaloneErrorCode } from "./errors.js";
@@ -147,10 +148,21 @@ const toolDefinitions: Array<{
   },
 ];
 
-function errorResult(name: string, code: StandaloneErrorCode, message: string): CallToolResult {
+export function errorResult(
+  name: string,
+  code: StandaloneErrorCode,
+  message: string,
+  data?: FullData,
+): CallToolResult {
+  const text = `${name} failed (${code}): ${message}`;
   return {
     isError: true,
-    content: [{ type: "text", text: `${name} failed (${code}): ${message}` }],
+    content: [{ type: "text", text }],
+    ...(data
+      ? {
+          structuredContent: compactResult({ ...data, text }) as unknown as Record<string, unknown>,
+        }
+      : {}),
   };
 }
 
@@ -163,7 +175,9 @@ function errorResult(name: string, code: StandaloneErrorCode, message: string): 
 export function successResult(result: OperationResult): CallToolResult {
   return {
     content: [{ type: "text", text: result.text }],
-    structuredContent: { outcome: result.outcome, text: result.text, details: result.details },
+    structuredContent: result.data
+      ? (compactResult(result.data) as unknown as Record<string, unknown>)
+      : { outcome: result.outcome, text: result.text, details: result.details },
   };
 }
 
@@ -325,7 +339,7 @@ export function createProtocolServer(
                 (result) => successResult(result),
                 (error: unknown) => {
                   if (error instanceof StandaloneError)
-                    return errorResult(tool.name, error.code, error.message);
+                    return errorResult(tool.name, error.code, error.message, error.data);
                   // Contractually unreachable (the runtime wraps every failure
                   // in a StandaloneError); never forward a raw message.
                   process.stderr.write(

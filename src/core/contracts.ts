@@ -76,6 +76,9 @@ export interface OperationResult<Details = Record<string, unknown>> {
   text: string;
   details: Details;
   outcome: OperationOutcome;
+  /** Additive registered standalone projection; other operations remain legacy. */
+  data?: import("./execution-contracts.js").FullData;
+  usage?: import("./execution-contracts.js").NumericHostUsage;
 }
 
 export interface ModelBinding {

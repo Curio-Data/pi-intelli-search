@@ -31,6 +31,18 @@ export async function extract(
       systemPrompt: EXTRACTION_SYSTEM_PROMPT,
       userMessage,
       maxTokens: settings.extractionMaxTokens,
+      ...(context.services
+        ? {
+            onRetryNotice: (message: string) =>
+              context.onProgress?.({
+                stage: "extract",
+                stageIdx: 0,
+                totalStages: 1,
+                message,
+                pct: 0,
+              }),
+          }
+        : {}),
       signal,
     },
     "S1",
