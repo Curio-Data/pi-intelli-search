@@ -54,7 +54,11 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
   // ═══════════════════════════════════════════════
   // Tool registration
   // ═══════════════════════════════════════════════
-  const native = createNativeOperationRuntime();
+  // Returned error results and this host method arrived together in 0.99.
+  // Do not read VERSION from a potentially different local peer installation.
+  const native = createNativeOperationRuntime({
+    supportsErrorResults: typeof pi.registerMcpServer === "function",
+  });
   const [searchTool, extractTool, collateTool, researchTool] = createRegisteredNativeTools(native);
   pi.registerTool(searchTool);
   pi.registerTool(extractTool);
@@ -71,7 +75,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
   // tools, or when a 429 arrives on a streaming response that our onResponse
   // hook didn't catch.
   //
-  // sessionActive guards against stale ctx after session replacement (/new,
+  // The captured generation guards stale ctx after session replacement (/new,
   // /resume, /fork). In-flight requests from the old session can still fire
   // after_provider_response through the invalidated runtime, and touching
   // ctx.ui on a stale runtime throws.
@@ -151,12 +155,15 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
             // it from (): Promise<void> to (options?: ModelsRefreshOptions):
             // Promise<ModelsRefreshResult>, which is what invalidated the local
             // cast this code used to carry. The direct call is compatible with the
-            // whole peer range (>=0.80.8). The return value is intentionally
+            // whole peer range (>=0.86.0). The return value is intentionally
             // ignored: a provider catalog failure should not block session startup.
             try {
               await registry.refresh();
             } catch (refreshErr: unknown) {
-              notify(`Model registry refresh failed: ${errMsg(refreshErr)}`, "warning");
+              notify(
+                `[pi-intelli-search] Model registry refresh failed: ${errMsg(refreshErr)}`,
+                "warning",
+              );
             }
             notify(
               `[pi-intelli-search] Added models: ${added.join(", ")}. Use /model to select them.`,
@@ -187,7 +194,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
         }
       } catch (err: unknown) {
         // Auth check is best-effort; never block session startup
-        notify(`Auth check failed: ${errMsg(err)}`, "warning");
+        notify(`[pi-intelli-search] Auth check failed: ${errMsg(err)}`, "warning");
       }
 
       // Version tracking, default migration, and settings deprecation notice
@@ -230,7 +237,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
             }
           } catch (err: unknown) {
             // Migration is best-effort; never block session startup
-            notify(`Default migration error: ${errMsg(err)}`, "warning");
+            notify(`[pi-intelli-search] Default migration error: ${errMsg(err)}`, "warning");
           }
 
           // Set migration context so subsequent loadSettings() calls
@@ -272,7 +279,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
         }
       } catch (err: unknown) {
         // Version tracking is best-effort; never break session startup
-        notify(`Version tracking error: ${errMsg(err)}`, "warning");
+        notify(`[pi-intelli-search] Version tracking error: ${errMsg(err)}`, "warning");
       }
     }),
   );

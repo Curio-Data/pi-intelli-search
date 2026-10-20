@@ -5,6 +5,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type {
   AccountingSummary,
+  AttemptRecord,
+  NumericHostUsage,
   Clock,
   Diagnostic,
   FetchClient,
@@ -42,6 +44,7 @@ interface SessionState {
   readonly key: SessionKey;
   readonly generation: number;
   closed: boolean;
+  failure?: { readonly error: unknown };
   ready: Promise<OperationRuntime>;
   runtime?: OperationRuntime;
   stop?: Promise<void>;
@@ -55,8 +58,29 @@ interface SessionState {
 /** Internal unit seam, not the frozen complete transport-replay factory. */
 export interface NativeRuntimeOptions {
   readonly clock?: Clock;
+  /** Detected on the host API, never inferred from the extension's peer install. */
+  readonly supportsErrorResults?: boolean;
   readonly researchDependencies?: ResearchDependencies;
   readonly createRuns?: (services: { operationId: string; clock: Clock }) => RunStore;
+}
+
+export interface NativeExecutionReceipt {
+  readonly operationId: string;
+  readonly accounting: AccountingSummary;
+  readonly attempts: readonly AttemptRecord[];
+  readonly diagnostics: readonly Diagnostic[];
+}
+
+/** Older hosts only recognise thrown failures and cannot deliver these fields. */
+export class NativeExecutionError extends Error {
+  constructor(
+    message: string,
+    readonly execution: NativeExecutionReceipt,
+    readonly usage: NumericHostUsage,
+  ) {
+    super(message);
+    this.name = "NativeExecutionError";
+  }
 }
 
 const unwiredFetch: FetchClient = Object.freeze({
@@ -137,6 +161,15 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
         await prepare();
         if (!active(state)) throw new AdmissionError("CLOSED", "Native session superseded");
         const settings = structuredClone(await loadSettings({ cwd, projectTrusted }));
+        if (
+          typeof settings.minRequestIntervalMs !== "number" ||
+          !Number.isFinite(settings.minRequestIntervalMs) ||
+          settings.minRequestIntervalMs < 0
+        ) {
+          throw new Error(
+            "Invalid pi-intelli-search.minRequestIntervalMs: expected a finite non-negative number. Correct settings.json and reload the session.",
+          );
+        }
         if (!active(state)) throw new AdmissionError("CLOSED", "Native session superseded");
         const paths = resolveWorkspacePaths(cwd, settings.cacheDir);
         const runtime = await generations.replace({
@@ -168,6 +201,7 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
         return runtime;
       } catch (error) {
         state.closed = true;
+        state.failure = { error };
         throw error;
       }
     })();
@@ -228,6 +262,7 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
         state = lookup(key)!;
       }
       const captured = state;
+      if (!disposed && current === captured && captured.failure) throw captured.failure.error;
       if (!active(captured)) throw new AdmissionError("CLOSED", "Native session is closed");
       // Waiters cancel without retaining an abort listener or reaction per call.
       await waitReady(captured, signal);
@@ -258,7 +293,9 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
       const operationId = randomUUID();
       diagnostics.set(operationId, diagnose);
       let owned: OperationServices | undefined;
-      const receipt = (parentDelivery: AccountingSummary["parentDelivery"] = "available") => ({
+      const receipt = (
+        parentDelivery: AccountingSummary["parentDelivery"] = "available",
+      ): NativeExecutionReceipt => ({
         operationId,
         accounting: owned!.ledger.summary(parentDelivery),
         attempts: owned!.ledger.records(),
@@ -383,6 +420,15 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
         // Runtime.run has drained before any ledger projection, including errors.
         if (!owned || (!owned.ledger.records().length && !signal?.aborted && !captured.closed))
           throw error;
+        if (!options.supportsErrorResults) {
+          // The floor agent loop ignores returned isError. Preserve its throwing
+          // error signal; partial fields remain local, not claimed as delivered.
+          throw new NativeExecutionError(
+            errMsg(error),
+            receipt("unknown"),
+            owned.ledger.hostUsage(),
+          );
+        }
         return {
           content: [textContent(errMsg(error))],
           isError: true,

@@ -27,6 +27,7 @@ import { __harness as llmHarness } from "../src/llm.js";
 import { __harness as researchHarness } from "../src/tools/intelli-research.js";
 import {
   createNativeOperationRuntime,
+  NativeExecutionError,
   type NativeRuntimeOptions,
 } from "../src/native-operation-runtime.js";
 import { createRegisteredNativeTools } from "../src/native-registered-tools.js";
@@ -112,7 +113,7 @@ async function fixture(transport: Transport, options: NativeRuntimeOptions = {},
     invalidateSettingsCache();
   };
   await saveSettings();
-  const runtime = createNativeOperationRuntime(options);
+  const runtime = createNativeOperationRuntime({ supportsErrorResults: true, ...options });
   const updates: unknown[] = [];
   const indicators: unknown[] = [];
   const notices: string[] = [];
@@ -193,6 +194,7 @@ test("registered entry uses scoped standalone inference, numeric usage and no mu
     registerTool(tool: (typeof f.tools)[0]) {
       registered[tool.name] = tool;
     },
+    registerMcpServer() {},
     on(name: string, handler: typeof shutdown) {
       if (name === "session_shutdown") shutdown = handler;
     },
@@ -630,6 +632,106 @@ test("entry lifecycle suppresses stale startup/provider callbacks and captured s
     release.resolve();
     await handlers.get("session_shutdown")!({}, next);
     indexHarness.ensureCustomModels = old;
+    await f.cleanup();
+  }
+});
+
+// Source-level semantic fixture of pi-agent-core 0.86.0 executePreparedToolCall:
+// a returned result always becomes isError:false; only a throw marks failure.
+// The newer loop uses result.isError === true. This is not a live-floor gate.
+async function hostToolBoundary(execute: () => Promise<Result>, returnedErrors: boolean) {
+  try {
+    const result = await execute();
+    return { result, isError: returnedErrors && result.isError === true };
+  } catch (error) {
+    return { error, isError: true };
+  }
+}
+
+for (const modern of [false, true]) {
+  test(`registered failures/cancellation keep host error semantics with returned-error capability ${modern} (T15/T16/T20)`, async () => {
+    let cancel: AbortController | undefined;
+    const f = await fixture(async () => {
+      cancel?.abort();
+      return response("", "401 rejected");
+    });
+    const registered: Record<string, unknown> = {};
+    let shutdown: ((event: unknown, ctx: ExtensionContext) => Promise<void>) | undefined;
+    extension({
+      registerTool(tool: { name: string }) {
+        registered[tool.name] = tool;
+      },
+      ...(modern ? { registerMcpServer() {} } : {}),
+      on(name: string, handler: typeof shutdown) {
+        if (name === "session_shutdown") shutdown = handler;
+      },
+    } as unknown as ExtensionAPI);
+    const tool = registered.intelli_search as {
+      execute(
+        id: string,
+        params: unknown,
+        signal: AbortSignal | undefined,
+        update: undefined,
+        ctx: ExtensionContext,
+      ): Promise<Result>;
+    };
+    try {
+      for (const aborted of [false, true]) {
+        cancel = aborted ? new AbortController() : undefined;
+        const verdict = await hostToolBoundary(
+          () => tool.execute("host", { query: "error" }, cancel?.signal, undefined, f.ctx),
+          modern,
+        );
+        assert.equal(
+          verdict.isError,
+          true,
+          "the host never records a failure/cancellation as success",
+        );
+        if (modern) {
+          assert(verdict.result);
+          assert.equal(
+            receipt(verdict.result).accounting.parentDelivery,
+            aborted ? "unknown" : "available",
+          );
+          assert.equal(verdict.result.usage.input, 9);
+        } else {
+          assert(verdict.error instanceof NativeExecutionError);
+          assert.equal(
+            verdict.error.execution.accounting.parentDelivery,
+            "unknown",
+            "thrown partial fields are local, not proven host delivery",
+          );
+          assert.equal(verdict.error.execution.accounting.attempts, 1);
+          assert.equal(verdict.error.usage.input, 9);
+        }
+      }
+    } finally {
+      await shutdown?.({}, f.ctx);
+      await f.cleanup();
+    }
+  });
+}
+
+test("invalid generation pacing stays fail-closed with an actionable cause on every registered call (T03/T10)", async () => {
+  const f = await fixture(async () => response("answer"));
+  try {
+    for (const value of [-1, "250", true]) {
+      await f.saveSettings({ minRequestIntervalMs: value });
+      const ctx = f.makeContext(String(value));
+      await assert.rejects(
+        f.runtime.start(ctx),
+        /pi-intelli-search.minRequestIntervalMs.*finite non-negative.*reload/,
+      );
+      await assert.rejects(
+        f.run("intelli_search", { query: "bad pacing" }, undefined, ctx),
+        /pi-intelli-search.minRequestIntervalMs.*finite non-negative.*reload/,
+      );
+    }
+    await f.saveSettings({ minRequestIntervalMs: 0 });
+    const valid = f.makeContext("valid");
+    await f.runtime.start(valid);
+    assert(!(await f.run("intelli_search", { query: "recovered" }, undefined, valid)).isError);
+  } finally {
     await f.cleanup();
   }
 });
