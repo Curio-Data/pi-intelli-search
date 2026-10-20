@@ -129,6 +129,7 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
   // Public runtime callers may supply an object without using parseConfig().
   // Revalidate captured execution/pacing before any workspace or provider work.
   const executionSettings = parseExecutionSettings(config.settings.execution, "tuning.execution");
+  config = { ...config, settings: { ...config.settings, execution: executionSettings } };
   validateRequestInterval(config.settings.minRequestIntervalMs, "tuning.minRequestIntervalMs");
   const paths = await workspacePaths(config.workspace, config.settings.cacheDir);
   const env = { ...(options.env ?? process.env) };

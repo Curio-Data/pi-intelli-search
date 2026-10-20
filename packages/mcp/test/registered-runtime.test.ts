@@ -404,6 +404,12 @@ test("configured MCP capacity is captured once and retains critical admission (T
 
 test("registered MCP inference cannot use the legacy unscoped bypass (source gate)", async () => {
   const runtime = await readFile(new URL("../src/runtime.ts", import.meta.url), "utf8");
+  assert.match(
+    runtime,
+    /settings: \{ \.\.\.config\.settings, execution: executionSettings \}/,
+    "direct callers' omitted/partial block must be replaced by the frozen validated block",
+  );
+  assert.match(runtime, /const settings = config\.settings/);
   assert.match(runtime, /modelConcurrency: executionSettings\.modelConcurrency/);
   assert.match(runtime, /criticalReserve: executionSettings\.criticalReserve/);
   assert.match(runtime, /fetchConcurrency: executionSettings\.aggregateFetchConcurrency/);
