@@ -317,9 +317,9 @@ function compareVersions(a: number[], b: number[]): number {
 }
 
 /**
- * Keys accepted inside the nested `pi-intelli-search` settings namespace.
- * Every key must appear here exactly once; the parametric round-trip test
- * asserts each one independently.
+ * Legacy keys accepted inside the nested `pi-intelli-search` namespace.
+ * The strict execution block is handled separately below. The parametric
+ * round-trip test asserts each legacy key independently.
  */
 const NESTED_KEYS = [
   "searchModel",

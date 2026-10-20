@@ -783,7 +783,7 @@ test("configured native capacity is captured per generation and retains the crit
   }
 });
 
-test("invalid native execution and deprecated pacing fail before registry work, then recover (T03/T10)", async () => {
+test("invalid native execution and deprecated pacing fail before inference, then recover (T03/T10)", async () => {
   let calls = 0;
   const f = await fixture(async () => {
     calls++;
