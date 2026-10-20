@@ -28,12 +28,17 @@ if (process.env.FIXTURE_NOISE === "1") {
 const stallMs = Number(process.env.FIXTURE_STALL_MS ?? 0);
 const pageUrl = process.env.FIXTURE_PAGE_URL ?? "http://127.0.0.1:1/absent";
 const models = document().models;
+const attempts = new Map<string, number>();
 const transport: FetchFunction = async (url, init = {}) => {
   if (String(url) === "https://openrouter.ai/api/v1/models") return json(catalogue());
   if (String(url) !== "https://openrouter.ai/api/v1/chat/completions")
     throw new Error("Unexpected network access");
   const body = JSON.parse(String(init.body)) as { model: string };
   process.stderr.write(`FIXTURE_COMPLETION_STARTED ${body.model}\n`);
+  const attempt = (attempts.get(body.model) ?? 0) + 1;
+  attempts.set(body.model, attempt);
+  if (attempt <= Number(process.env.FIXTURE_FAILURES ?? 0))
+    return json({ error: { code: 503, message: "fixture transient" } }, 503);
   if (stallMs > 0) {
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(resolve, stallMs);

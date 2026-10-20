@@ -240,7 +240,10 @@ test("lists the four canonical tools with truthful annotations", { timeout: 60_0
     assert.equal(byName.intelli_research.annotations?.destructiveHint, true);
     assert.match(byName.intelli_research.description ?? "", /degraded repeat preserves/);
     assert.match(byName.intelli_search.description ?? "", /Start here for quick factual questions/);
-    assert.match(byName.intelli_research.description ?? "", /call intelli_search first, not this tool/);
+    assert.match(
+      byName.intelli_research.description ?? "",
+      /call intelli_search first, not this tool/,
+    );
     assert.doesNotMatch(byName.intelli_research.description ?? "", /primary research tool/);
     for (const tool of tools) {
       assert.match(tool.description ?? "", /load the intelli-search skill if available/);
@@ -266,10 +269,7 @@ test(
       );
       assert.equal(search.isError, undefined);
       assert.match(textInBoth(search), /### Sources/);
-      assert.equal(
-        (search.structuredContent as { outcome: string }).outcome,
-        "completed",
-      );
+      assert.equal((search.structuredContent as { outcome: string }).outcome, "completed");
       const extract = await fixture.client.callTool(
         {
           name: "intelli_extract",
@@ -283,10 +283,7 @@ test(
         },
         { timeout: 30_000 },
       );
-      assert.equal(
-        (extract.structuredContent as { outcome: string }).outcome,
-        "completed",
-      );
+      assert.equal((extract.structuredContent as { outcome: string }).outcome, "completed");
       assert.match(textInBoth(extract), /Fixture extraction facts/);
       const collate = await fixture.client.callTool(
         {
@@ -321,6 +318,45 @@ test(
 );
 
 test(
+  "standalone protocol progress strictly increases while retry diagnostics remain on stderr",
+  { timeout: 90_000 },
+  async () => {
+    for (const failures of [1, 2]) {
+      const fixture = await connect({ FIXTURE_FAILURES: String(failures) });
+      try {
+        const progress: number[] = [];
+        const result = await fixture.client.callTool(
+          {
+            name: "intelli_extract",
+            arguments: {
+              url: "https://example.invalid/page",
+              title: "Fixture",
+              content: "Page",
+              query: "progress",
+            },
+          },
+          {
+            timeout: 30_000,
+            onprogress: (event) => {
+              progress.push(event.progress);
+            },
+          },
+        );
+        assert.deepEqual(progress, failures === 1 ? [0, 100] : [0]);
+        assert.match(fixture.stderr(), /attempt 1, retrying/);
+        assert.equal(
+          (result.structuredContent as { outcome: string }).outcome,
+          failures === 1 ? "completed" : "error",
+        );
+        if (failures === 2) assert.equal(result.isError, true);
+      } finally {
+        await fixture.close();
+      }
+    }
+  },
+);
+
+test(
   "executes research with progress notifications and writes the workspace cache",
   { timeout: 120_000 },
   async () => {
@@ -343,10 +379,7 @@ test(
       // The summary reaches a host that shows the model structuredContent only.
       const text = textInBoth(result);
       assert.match(text, /Fixture collated summary/);
-      assert.equal(
-        Object.keys(result.structuredContent ?? {}).join(","),
-        "outcome,text,details",
-      );
+      assert.equal(Object.keys(result.structuredContent ?? {}).join(","), "outcome,text,details");
       assert.ok(progress > 0, "progress notifications reach the client");
       assert.ok(structured.details.cachePath.includes(`.search${sep}`));
       const cacheEntries = readdirSync(structured.details.cachePath);
@@ -401,7 +434,10 @@ test(
       );
       writeFileSync(fixture.config, '{\n  "providers": {\n    "openrouter": "sk-or-x"\n');
       const truncated = errorText(await call());
-      assert.match(truncated, /CONFIGURATION\): Configuration file is not valid JSON at end of input/);
+      assert.match(
+        truncated,
+        /CONFIGURATION\): Configuration file is not valid JSON at end of input/,
+      );
       assert.doesNotMatch(truncated, /sk-or-x/);
       writeFileSync(fixture.config, '{\n  "providers": {},\n}');
       assert.match(errorText(await call()), /not valid JSON at line 3, column 1/);
@@ -450,47 +486,48 @@ test(
   },
 );
 
-test("reports invalid arguments as tool errors, not protocol errors", { timeout: 60_000 }, async () => {
-  const fixture = await connect();
-  try {
-    const wrongType = await fixture.client.callTool(
-      { name: "intelli_search", arguments: { query: 42 } },
-      { timeout: 15_000 },
-    );
-    assert.equal(wrongType.isError, true);
-    const empty = await fixture.client.callTool(
-      { name: "intelli_search", arguments: { query: "   " } },
-      { timeout: 15_000 },
-    );
-    assert.equal(empty.isError, true);
-    assert.match(
-      (empty.content as Array<{ text: string }>)[0].text,
-      /INVALID_ARGUMENTS|query/i,
-    );
-    const badStatus = await fixture.client.callTool(
-      {
-        name: "intelli_collate",
-        arguments: {
-          query: "fixture",
-          extractions: [
-            {
-              url: "https://example.invalid/page",
-              title: "Fixture",
-              extraction: "Facts",
-              sourceType: "official",
-              status: "unknown",
-            },
-          ],
+test(
+  "reports invalid arguments as tool errors, not protocol errors",
+  { timeout: 60_000 },
+  async () => {
+    const fixture = await connect();
+    try {
+      const wrongType = await fixture.client.callTool(
+        { name: "intelli_search", arguments: { query: 42 } },
+        { timeout: 15_000 },
+      );
+      assert.equal(wrongType.isError, true);
+      const empty = await fixture.client.callTool(
+        { name: "intelli_search", arguments: { query: "   " } },
+        { timeout: 15_000 },
+      );
+      assert.equal(empty.isError, true);
+      assert.match((empty.content as Array<{ text: string }>)[0].text, /INVALID_ARGUMENTS|query/i);
+      const badStatus = await fixture.client.callTool(
+        {
+          name: "intelli_collate",
+          arguments: {
+            query: "fixture",
+            extractions: [
+              {
+                url: "https://example.invalid/page",
+                title: "Fixture",
+                extraction: "Facts",
+                sourceType: "official",
+                status: "unknown",
+              },
+            ],
+          },
         },
-      },
-      { timeout: 15_000 },
-    );
-    assert.equal(badStatus.isError, true);
-    assert.match((badStatus.content as Array<{ text: string }>)[0].text, /INVALID_ARGUMENTS/);
-  } finally {
-    await fixture.close();
-  }
-});
+        { timeout: 15_000 },
+      );
+      assert.equal(badStatus.isError, true);
+      assert.match((badStatus.content as Array<{ text: string }>)[0].text, /INVALID_ARGUMENTS/);
+    } finally {
+      await fixture.close();
+    }
+  },
+);
 
 test("client cancellation aborts the running operation", { timeout: 60_000 }, async () => {
   const fixture = await connect({ FIXTURE_STALL_MS: "8000" });
@@ -533,9 +570,7 @@ test(
       // the hook fires for the first request too, so wait for the second
       // marker. An abort that never left the client would satisfy the final
       // assertions without exercising the server-side queue path.
-      await waitFor(
-        () => (fixture.stderr().match(/FIXTURE_QUEUE_QUEUED/g) ?? []).length >= 2,
-      );
+      await waitFor(() => (fixture.stderr().match(/FIXTURE_QUEUE_QUEUED/g) ?? []).length >= 2);
       controller.abort(new Error("fixture queued cancellation"));
       await assert.rejects(queued);
       const result = await first;
@@ -603,15 +638,7 @@ test(
   { timeout: 60_000 },
   async () => {
     const { dir, config } = workspace();
-    const raw = spawnRaw([
-      "--import",
-      "tsx",
-      childPath,
-      "--config",
-      config,
-      "--workspace",
-      dir,
-    ]);
+    const raw = spawnRaw(["--import", "tsx", childPath, "--config", config, "--workspace", dir]);
     raw.send(initialize);
     raw.send({ jsonrpc: "2.0", method: "notifications/initialized" });
     raw.send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
@@ -628,10 +655,9 @@ test(
 
 test("aborts in-flight work when stdin closes mid-operation", { timeout: 60_000 }, async () => {
   const { dir, config } = workspace();
-  const raw = spawnRaw(
-    ["--import", "tsx", childPath, "--config", config, "--workspace", dir],
-    { FIXTURE_STALL_MS: "8000" },
-  );
+  const raw = spawnRaw(["--import", "tsx", childPath, "--config", config, "--workspace", dir], {
+    FIXTURE_STALL_MS: "8000",
+  });
   raw.send(initialize);
   raw.send({ jsonrpc: "2.0", method: "notifications/initialized" });
   raw.send({
@@ -651,15 +677,7 @@ test(
   { timeout: 60_000 },
   async () => {
     const { dir, config } = workspace();
-    const raw = spawnRaw([
-      "--import",
-      "tsx",
-      childPath,
-      "--config",
-      config,
-      "--workspace",
-      dir,
-    ]);
+    const raw = spawnRaw(["--import", "tsx", childPath, "--config", config, "--workspace", dir]);
     raw.send(initialize);
     await waitFor(() => raw.lines().length >= 1);
     // Destroy the read end: the next protocol write raises EPIPE on the
@@ -677,9 +695,13 @@ test(
   },
 );
 
-test("fails startup without explicit configuration, keeping stdout empty", { timeout: 60_000 }, async () => {
-  const raw = spawnRaw(["--import", "tsx", cliPath]);
-  assert.notEqual(await exitWithin(raw.child, 15_000), 0);
-  assert.deepEqual(raw.lines(), []);
-  assert.match(raw.stderr(), /--config/);
-});
+test(
+  "fails startup without explicit configuration, keeping stdout empty",
+  { timeout: 60_000 },
+  async () => {
+    const raw = spawnRaw(["--import", "tsx", cliPath]);
+    assert.notEqual(await exitWithin(raw.child, 15_000), 0);
+    assert.deepEqual(raw.lines(), []);
+    assert.match(raw.stderr(), /--config/);
+  },
+);

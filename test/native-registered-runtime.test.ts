@@ -971,8 +971,130 @@ test("cleanup failure preserves completed standalone evidence in settled partial
     assert.equal(data.counts.failed, 0);
     assert.equal(data.attempts[0].state, "succeeded");
     assert.equal(data.details.extraction, "Successful extraction");
+    assert.equal((result.details as Record<string, unknown>).extraction, data.details.extraction);
   } finally {
     await f.cleanup();
+  }
+});
+
+test("superseded standalone projection cannot deliver a late end into the successor (T10/T20)", async () => {
+  const started = deferred();
+  const release = deferred();
+  let first = true;
+  const f = await fixture(async () => {
+    if (first) {
+      first = false;
+      started.resolve();
+      await release.promise;
+    }
+    return response("Facts");
+  });
+  try {
+    const old = f.run("intelli_extract", { ...page, query: "old" });
+    await started.promise;
+    const next = f.makeContext("successor");
+    const replacement = f.runtime.start(next);
+    release.resolve();
+    const result = await old;
+    await replacement;
+    const oldId = receipt(result).operationId;
+    await f.run("intelli_search", { query: "new" }, undefined, next);
+    const events = f.updates.map((value) => (value as { details: Progress }).details);
+    assert.deepEqual(
+      events.filter((event) => event.operationId === oldId).map((event) => event.event),
+      ["start"],
+    );
+    assert.deepEqual(
+      events.filter((event) => event.operationId !== oldId).map((event) => event.event),
+      ["start", "end"],
+    );
+    assert.equal((result.details!.intelli as FullData).outcome, "aborted");
+  } finally {
+    release.resolve();
+    await f.cleanup();
+  }
+});
+
+test("registered standalone page-queue BUSY has zero-attempt full error data on capable and older hosts (T12/T17)", async () => {
+  for (const modern of [true, false]) {
+    const release = deferred();
+    let extractions = 0;
+    const f = await fixture(
+      async (context) => {
+        if (context.systemPrompt === SEARCH_SYSTEM_PROMPT)
+          return response(
+            Array.from({ length: 80 }, (_, i) => `[Page ${i}](https://docs.example/${i})`).join(
+              " ",
+            ),
+          );
+        extractions++;
+        await release.promise;
+        return response("Facts");
+      },
+      {
+        supportsErrorResults: modern,
+        researchDependencies: {
+          fetchPages: async (urls) =>
+            urls.map((url) => ({
+              url,
+              title: url,
+              content: "Page",
+              status: "success",
+              source: "markdown",
+            })),
+          downloadLlmsFullToCache: async () => null,
+        },
+      },
+      {
+        maxUrls: 80,
+        defaultUrls: 80,
+        extractionConcurrency: 63,
+        execution: { modelConcurrency: 64 },
+      },
+    );
+    await f.runtime.start(f.ctx);
+    const controllers = Array.from({ length: 9 }, () => new AbortController());
+    const floods = controllers.map((controller, i) =>
+      f
+        .run("intelli_research", { query: `queue ${i}`, maxUrls: 80 }, controller.signal)
+        .catch((error: unknown) => error),
+    );
+    try {
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(extractions, 63);
+      assert(
+        f.notices.some((notice) => notice.includes("Model admission queue is full")),
+        "real scoped queue is saturated",
+      );
+      const result = await f
+        .run("intelli_extract", { ...page, query: "busy" })
+        .catch((error: unknown) => error);
+      const data =
+        result instanceof NativeExecutionError
+          ? result.data
+          : ((result as Result).details!.intelli as FullData);
+      assert(data);
+      assert(Check(standaloneOutputSchemas.intelli_extract, data));
+      assert.equal(data.outcome, "error");
+      assert.equal(data.accounting.attempts, 0);
+      assert.deepEqual(data.attempts, []);
+      assert.equal(data.accounting.observedAttempts, 0);
+      assert.equal(data.accounting.missingAttempts, 0);
+      assert(
+        Object.values(data.accounting.tokens).every((value) => value === 0),
+        "accepted ledger zero-attempt summary, not a provider observation",
+      );
+      assert.equal(data.accounting.parentDelivery, modern ? "available" : "unknown");
+      assert.equal(extractions, 63, "rejected standalone ticket never dispatched");
+      if (modern) assert((result as Result).isError);
+      else assert(result instanceof NativeExecutionError);
+    } finally {
+      controllers.forEach((controller) => controller.abort());
+      release.resolve();
+      await Promise.all(floods);
+      await f.cleanup();
+    }
   }
 });
 

@@ -71,6 +71,30 @@ test("MCP omitted/partial direct execution blocks reach the standalone capacity 
   }
 });
 
+test("MCP standalone retries retain stderr notices without a progress consumer (T20)", async () => {
+  for (const name of ["intelli_search", "intelli_extract"] as const) {
+    const f = await fixture();
+    const notices: string[] = [];
+    let calls = 0;
+    const runtime = await createRuntime(f.config, {
+      env: { FIXTURE_KEY: "fixture-secret" },
+      logger: { warn() {}, error: (message) => notices.push(message) },
+      fetch: fakeTransport(() =>
+        ++calls === 1 ? json({ error: { code: 503 } }, 503) : json(completion("Answer")),
+      ),
+    });
+    try {
+      await runtime.execute(name, name === "intelli_search" ? { query: "Q" } : page);
+      assert.equal(calls, 2);
+      assert.equal(notices.length, 1);
+      assert.match(notices[0], /attempt 1, retrying/);
+    } finally {
+      await runtime.close();
+      await f.cleanup();
+    }
+  }
+});
+
 test("MCP retry/error projection carries final partial usage safely, with honest progress (T16/T17/T18/T20)", async () => {
   const f = await fixture();
   let attempts = 0;
@@ -133,6 +157,31 @@ test("MCP retry/error projection carries final partial usage safely, with honest
   }
 });
 
+test("MCP abort-shaped transport failure without caller cancellation retains provider-error accounting (T05/T17)", async () => {
+  const f = await fixture();
+  const runtime = await createRuntime(f.config, {
+    env: { FIXTURE_KEY: "fixture-secret" },
+    logger,
+    fetch: fakeTransport(() => {
+      throw new DOMException("transport interrupted", "AbortError");
+    }),
+  });
+  try {
+    await assert.rejects(runtime.execute("intelli_extract", page), (error: unknown) => {
+      assert(error instanceof StandaloneError && error.data);
+      assert.equal(error.code, "PROVIDER");
+      assert.equal(error.data.outcome, "error");
+      assert.equal(error.data.text, error.message);
+      assert.equal(error.execution!.accounting.parentDelivery, "available");
+      assert.equal(error.data.accounting.parentDelivery, "available");
+      return true;
+    });
+  } finally {
+    await runtime.close();
+    await f.cleanup();
+  }
+});
+
 test("MCP cancellation projects unknown delivery only after active attempt settlement (T05/T17/T20)", async () => {
   const f = await fixture();
   let entered!: () => void;
@@ -172,6 +221,7 @@ test("MCP cancellation projects unknown delivery only after active attempt settl
     const error = await verdict;
     assert(error instanceof StandaloneError && error.data);
     assert.equal(error.code, "CANCELLED");
+    assert.equal(error.data.text, error.message);
     assert.equal(error.data.outcome, "aborted");
     assert.equal(error.data.counts.cancelled, 1);
     assert.equal(error.data.accounting.parentDelivery, "unknown");

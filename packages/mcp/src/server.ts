@@ -302,6 +302,9 @@ export function createProtocolServer(
       async (args, ctx) => {
         const token = ctx.mcpReq._meta?.progressToken;
         const signal = AbortSignal.any([ctx.mcpReq.signal, shutdown.signal]);
+        // MCP requires a strict increase, not merely a non-decreasing display
+        // percentage. Repeated stage/retry/end percentages remain local events.
+        let lastProgress = -1;
         const factories = {
           cancelled: () => errorResult(tool.name, "CANCELLED", "Operation cancelled"),
           busy: () =>
@@ -321,6 +324,8 @@ export function createProtocolServer(
                     token === undefined
                       ? undefined
                       : (progress) => {
+                          if (progress.pct <= lastProgress) return;
+                          lastProgress = progress.pct;
                           void ctx.mcpReq
                             .notify({
                               method: "notifications/progress",

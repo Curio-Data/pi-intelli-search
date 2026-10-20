@@ -450,7 +450,7 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
           (!owned.ledger.records().length &&
             !signal?.aborted &&
             !captured.closed &&
-            !(error instanceof AdmissionError && error.code === "BUSY"))
+            !(projection?.active && error instanceof AdmissionError && error.code === "BUSY"))
         )
           throw error;
         const aborted = Boolean(signal?.aborted || captured.closed);
@@ -475,7 +475,7 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
           content: [textContent(errMsg(error))],
           isError: true,
           details: {
-            ...(full ? { intelli: full.data } : {}),
+            ...(full ? { ...full.data.details, intelli: full.data } : {}),
             execution: receipt(aborted ? "unknown" : "available"),
           },
           usage: owned.ledger.hostUsage(),

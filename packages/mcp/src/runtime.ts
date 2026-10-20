@@ -200,6 +200,9 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
               params,
               clock,
               (event) => {
+                // Retain the existing stderr retry channel even when a host
+                // does not request progress or suppresses repeated percentages.
+                if (event.event === "retry") logger.error(event.message);
                 if (!closed) execution.onProgress?.({ ...event, message: redact(event.message) });
               },
               (diagnostic) => logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
@@ -345,33 +348,30 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
         };
       } catch (error) {
         // The runtime has settled before this boundary reads any ledger state.
-        const receipt =
-          owned && state.category === "OPERATION"
-            ? executionReceipt(owned, execution.signal?.aborted || closed ? "unknown" : "available")
-            : undefined;
         const aborted = Boolean(
           execution.signal?.aborted ||
           closed ||
-          (error instanceof AdmissionError && ["ABORTED", "CLOSED"].includes(error.code)),
+          (error instanceof Error &&
+            (error.name === "AbortError" ||
+              ("code" in error && (error.code === "ABORTED" || error.code === "CLOSED")))),
         );
+        const receipt =
+          owned && state.category === "OPERATION"
+            ? executionReceipt(owned, aborted ? "unknown" : "available")
+            : undefined;
         const full = projection?.active
           ? projection.settled(
               undefined,
               {
-                message: redact(
-                  error instanceof Error ? error.message : "Standalone operation failed",
-                ),
+                message: aborted
+                  ? "Operation aborted"
+                  : redact(error instanceof Error ? error.message : "Standalone operation failed"),
                 aborted,
               },
               aborted ? "unknown" : "available",
             )
           : undefined;
-        if (
-          execution.signal?.aborted ||
-          (error instanceof Error &&
-            (error.name === "AbortError" ||
-              ("code" in error && (error.code === "ABORTED" || error.code === "CLOSED"))))
-        )
+        if (aborted)
           throw new StandaloneError(
             "CANCELLED",
             "Operation aborted",
