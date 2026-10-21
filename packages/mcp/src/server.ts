@@ -17,7 +17,8 @@ import { createRuntime, type RuntimeOptions } from "./runtime.js";
 import { ConfigurationError, type StandaloneConfig } from "./config.js";
 import { StandaloneError, type StandaloneErrorCode } from "./errors.js";
 import { identity } from "./identity.js";
-import { OperationQueue, defaultQueueLimits, type QueueLimits } from "./queue.js";
+import { OperationQueue, type QueueLimits } from "./queue.js";
+import { parseAdmission } from "./admission.js";
 import { installStdoutGuard } from "./stdout-guard.js";
 
 type OperationName = keyof OperationInputs;
@@ -268,12 +269,16 @@ export interface ProtocolServer {
  */
 export function createProtocolServer(
   runtime: Runtime | RuntimeLoader,
-  limits: QueueLimits = defaultQueueLimits,
+  limits?: QueueLimits | (() => Promise<QueueLimits>),
   onEnqueue?: () => void,
 ): ProtocolServer {
   const shutdown = new AbortController();
+  const resolveRuntime = typeof runtime === "function" ? runtime : () => Promise.resolve(runtime);
   const queue = new OperationQueue<CallToolResult>(
-    limits,
+    limits ??
+      (typeof runtime === "function"
+        ? () => resolveRuntime().then((ready) => ready.admission)
+        : runtime.admission),
     {
       cancelled: () => errorResult("operation", "CANCELLED", "Operation cancelled"),
       busy: () =>
@@ -285,7 +290,6 @@ export function createProtocolServer(
     },
     onEnqueue,
   );
-  const resolveRuntime = typeof runtime === "function" ? runtime : () => Promise.resolve(runtime);
   const server = new McpServer(
     { name: identity.name, version: identity.version },
     { instructions: serverInstructions },
@@ -306,7 +310,14 @@ export function createProtocolServer(
         // percentage. Repeated stage/retry/end percentages remain local events.
         let lastProgress = -1;
         const factories = {
-          cancelled: () => errorResult(tool.name, "CANCELLED", "Operation cancelled"),
+          failed: (error: unknown) =>
+            error instanceof StandaloneError
+              ? errorResult(tool.name, error.code, error.message, error.data)
+              : errorResult(tool.name, "OPERATION", "Operation failed"),
+          // A settled runtime cancellation can carry final partial accounting.
+          // Do not replace that error envelope with a zero-data queue response.
+          cancelled: (settled?: CallToolResult) =>
+            settled?.isError ? settled : errorResult(tool.name, "CANCELLED", "Operation cancelled"),
           busy: () =>
             errorResult(
               tool.name,
@@ -315,11 +326,11 @@ export function createProtocolServer(
             ),
         };
         return queue.submit(
-          () =>
+          (ownedSignal) =>
             resolveRuntime()
               .then((ready) =>
                 ready.execute(tool.name, args as OperationInputs[OperationName], {
-                  signal,
+                  signal: ownedSignal,
                   onProgress:
                     token === undefined
                       ? undefined
@@ -398,6 +409,8 @@ export async function startServer(
   options: ServeOptions = {},
 ): Promise<ServeHandle> {
   const protocol = installStdoutGuard();
+  const queueOverrides = options.queue ? Object.freeze({ ...options.queue }) : undefined;
+  if (queueOverrides) parseAdmission(queueOverrides);
   // Credentials are snapshotted at startup in both modes; a lazily loaded
   // configuration selects its key variable from this snapshot.
   const runtimeOptions: RuntimeOptions = { ...options, env: { ...(options.env ?? process.env) } };
@@ -407,10 +420,12 @@ export async function startServer(
       : await createRuntime(config, runtimeOptions);
   const { server, close: drain } = createProtocolServer(
     runtime,
-    {
-      ...defaultQueueLimits,
-      ...options.queue,
-    },
+    queueOverrides
+      ? () =>
+          (typeof runtime === "function" ? runtime() : Promise.resolve(runtime)).then((ready) =>
+            parseAdmission({ ...ready.admission, ...queueOverrides }),
+          )
+      : undefined,
     options.onEnqueue,
   );
   const transport = new StdioServerTransport(process.stdin, protocol);

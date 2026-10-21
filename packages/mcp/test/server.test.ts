@@ -20,7 +20,10 @@ const scratchParent =
   process.env.TMPDIR ?? fileURLToPath(new URL("../../../.tmp/mcp-tests/", import.meta.url));
 mkdirSync(scratchParent, { recursive: true });
 
-function workspace(): { dir: string; config: string } {
+function workspace(admission?: { maxConcurrent: number; maxQueued: number }): {
+  dir: string;
+  config: string;
+} {
   const dir = mkdtempSync(join(scratchParent, "protocol-"));
   const config = join(dir, "config.json");
   // Stalled fixtures must outlive the model timeout; the shared policy's own
@@ -29,6 +32,7 @@ function workspace(): { dir: string; config: string } {
     config,
     JSON.stringify({
       ...document(),
+      ...(admission ? { admission } : {}),
       tuning: { ...document().tuning, llmTimeoutMs: 30_000 },
     }),
   );
@@ -44,9 +48,12 @@ interface FixtureClient {
 
 async function connect(
   extraEnv: Record<string, string> = {},
-  { configured = true } = {},
+  {
+    configured = true,
+    admission,
+  }: { configured?: boolean; admission?: { maxConcurrent: number; maxQueued: number } } = {},
 ): Promise<FixtureClient & { config: string }> {
-  const { dir, config } = workspace();
+  const { dir, config } = workspace(admission);
   if (!configured) rmSync(config);
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -547,6 +554,106 @@ test(
   },
 );
 
+test(
+  "T14 real stdio requests overlap only at captured parallel admission, sharing catalogue",
+  { timeout: 60_000 },
+  async () => {
+    for (const maxConcurrent of [undefined, 2, 1]) {
+      const fixture = await connect(
+        { FIXTURE_STALL_MS: "1000", FIXTURE_USE_CONFIG_ADMISSION: "1" },
+        {
+          ...(maxConcurrent
+            ? { admission: { maxConcurrent, maxQueued: 0 + (maxConcurrent === 1 ? 1 : 0) } }
+            : {}),
+        },
+      );
+      try {
+        const one = fixture.client.callTool(
+          { name: "intelli_search", arguments: { query: "one" } },
+          { timeout: 30_000 },
+        );
+        const two = fixture.client.callTool(
+          { name: "intelli_search", arguments: { query: "two" } },
+          { timeout: 30_000 },
+        );
+        await waitFor(() => (fixture.stderr().match(/FIXTURE_QUEUE_QUEUED/g) ?? []).length === 2);
+        if (maxConcurrent !== 1) {
+          await waitFor(
+            () => (fixture.stderr().match(/FIXTURE_COMPLETION_STARTED/g) ?? []).length === 2,
+          );
+          assert.doesNotMatch(
+            fixture.stderr(),
+            /FIXTURE_COMPLETION_SETTLED/,
+            "both inference chains start before either settles",
+          );
+        }
+        const results = await Promise.all([one, two]);
+        assert(results.every((r) => !r.isError));
+        const events = fixture.stderr().match(/FIXTURE_COMPLETION_(?:STARTED|SETTLED)/g);
+        assert.deepEqual(
+          events,
+          maxConcurrent === 1
+            ? [
+                "FIXTURE_COMPLETION_STARTED",
+                "FIXTURE_COMPLETION_SETTLED",
+                "FIXTURE_COMPLETION_STARTED",
+                "FIXTURE_COMPLETION_SETTLED",
+              ]
+            : [
+                "FIXTURE_COMPLETION_STARTED",
+                "FIXTURE_COMPLETION_STARTED",
+                "FIXTURE_COMPLETION_SETTLED",
+                "FIXTURE_COMPLETION_SETTLED",
+              ],
+        );
+        assert.equal((fixture.stderr().match(/FIXTURE_CATALOGUE_STARTED/g) ?? []).length, 1);
+      } finally {
+        await fixture.close();
+      }
+    }
+  },
+);
+
+test(
+  "T14 repaired lazy configuration applies zero-queue admission before inference",
+  { timeout: 60_000 },
+  async () => {
+    const fixture = await connect(
+      { FIXTURE_STALL_MS: "1000", FIXTURE_USE_CONFIG_ADMISSION: "1" },
+      { configured: false },
+    );
+    try {
+      const bad = await fixture.client.callTool({
+        name: "intelli_search",
+        arguments: { query: "bad config" },
+      });
+      assert.match(errorText(bad), /CONFIGURATION/);
+      writeFileSync(
+        fixture.config,
+        JSON.stringify({
+          ...document(),
+          admission: { maxConcurrent: 1, maxQueued: 0 },
+          tuning: { ...document().tuning, llmTimeoutMs: 30_000 },
+        }),
+      );
+      const one = fixture.client.callTool({
+        name: "intelli_search",
+        arguments: { query: "active" },
+      });
+      await waitFor(() => fixture.stderr().includes("FIXTURE_COMPLETION_STARTED"));
+      const two = await fixture.client.callTool({
+        name: "intelli_search",
+        arguments: { query: "busy" },
+      });
+      assert.match(errorText(two), /busy/);
+      assert.equal((await one).isError, undefined);
+      assert.equal((fixture.stderr().match(/FIXTURE_COMPLETION_STARTED/g) ?? []).length, 1);
+    } finally {
+      await fixture.close();
+    }
+  },
+);
+
 test("client cancellation aborts the running operation", { timeout: 60_000 }, async () => {
   const fixture = await connect({ FIXTURE_STALL_MS: "8000" });
   try {
@@ -668,6 +775,36 @@ test(
     raw.child.stdin?.end();
     assert.equal(await exitWithin(raw.child, 15_000), 0);
     assert.doesNotMatch(raw.stderr(), /panic|unhandled/i);
+  },
+);
+
+test(
+  "T14 input closure aborts parallel operations and never starts the queued request",
+  { timeout: 60_000 },
+  async () => {
+    const { dir, config } = workspace({ maxConcurrent: 2, maxQueued: 1 });
+    const raw = spawnRaw(["--import", "tsx", childPath, "--config", config, "--workspace", dir], {
+      FIXTURE_STALL_MS: "8000",
+      FIXTURE_USE_CONFIG_ADMISSION: "1",
+    });
+    raw.send(initialize);
+    raw.send({ jsonrpc: "2.0", method: "notifications/initialized" });
+    for (const id of [2, 3, 4])
+      raw.send({
+        jsonrpc: "2.0",
+        id,
+        method: "tools/call",
+        params: { name: "intelli_search", arguments: { query: `close-${id}` } },
+      });
+    await waitFor(
+      () =>
+        (raw.stderr().match(/FIXTURE_COMPLETION_STARTED/g) ?? []).length === 2 &&
+        (raw.stderr().match(/FIXTURE_QUEUE_QUEUED/g) ?? []).length === 3,
+    );
+    raw.child.stdin?.end();
+    assert.equal(await exitWithin(raw.child, 15_000), 0);
+    assert.equal((raw.stderr().match(/FIXTURE_ABORT_OBSERVED/g) ?? []).length, 2);
+    assert.equal((raw.stderr().match(/FIXTURE_COMPLETION_STARTED/g) ?? []).length, 2);
   },
 );
 

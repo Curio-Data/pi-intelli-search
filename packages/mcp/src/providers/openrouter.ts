@@ -24,6 +24,10 @@ import { normalizeMcpUsage } from "../../../../src/core/usage.js";
 import { throwIfAborted } from "../../../../src/core/util.js";
 import type { StandaloneConfig } from "../config.js";
 import { StandaloneError } from "../errors.js";
+import { createCatalogue, type Catalogue } from "../catalogue.js";
+import type { Clock } from "../../../../src/core/contracts.js";
+
+type ModelCatalogue = readonly Record<string, unknown>[];
 
 const endpoint = "https://openrouter.ai/api/v1";
 const record = (value: unknown): Record<string, unknown> =>
@@ -141,6 +145,7 @@ export interface OpenRouterOptions {
   env?: Readonly<Record<string, string | undefined>>;
   logger: OperationLogger;
   signal?: AbortSignal;
+  catalogue?: Catalogue<ModelCatalogue>;
   policyTesting?: {
     sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
     random?: () => number;
@@ -162,13 +167,30 @@ export function createOpenRouterClient(
   config: StandaloneConfig,
   options: OpenRouterOptions | ScopedOpenRouterOptions,
 ): ModelClient | ScopedModelClient {
+  return buildOpenRouterClient(config, options).client;
+}
+
+/** Only catalogue data/loader state is shared, never an operation or citation sink. */
+export function createOpenRouterCatalogue(
+  config: StandaloneConfig,
+  options: OpenRouterOptions,
+  clock: Clock,
+) {
+  const { loadCatalogue } = buildOpenRouterClient(config, options);
+  return createCatalogue(loadCatalogue, clock);
+}
+
+function buildOpenRouterClient(
+  config: StandaloneConfig,
+  options: OpenRouterOptions | ScopedOpenRouterOptions,
+) {
   const services = "services" in options ? options.services : undefined;
   const random = "random" in options ? options.random : Math.random;
   const transport = options.fetch ?? globalThis.fetch;
   const env = { ...(options.env ?? process.env) };
   const settings = config.settings;
   const configured = [settings.searchModel, settings.extractModel, settings.collateModel];
-  let catalogue: Record<string, unknown>[] | undefined;
+  let catalogue: ModelCatalogue | undefined;
   function key(): string {
     const value = env[config.apiKeyEnv];
     if (!value || !value.trim() || /\s/.test(value))
@@ -273,29 +295,37 @@ export function createOpenRouterClient(
       throw new Error("Configured search model does not advertise tool support");
     return true;
   }
+  async function loadCatalogue(signal?: AbortSignal): Promise<ModelCatalogue> {
+    key();
+    // Utility policy: catalogue loading never consumes an inference permit.
+    return runModelWithPolicy(
+      async (signal, hints) => {
+        const { data } = await send("/models", { method: "GET" }, signal, hints);
+        if (!Array.isArray(data.data))
+          throw new Error("OpenRouter returned an invalid model catalogue");
+        const entries = data.data.map(record);
+        const freeze = (value: unknown): void => {
+          if (value && typeof value === "object") {
+            for (const child of Object.values(value)) freeze(child);
+            Object.freeze(value);
+          }
+        };
+        freeze(entries);
+        return { value: entries };
+      },
+      policy({ model: settings.searchModel, systemPrompt: "", userMessage: "", signal }),
+      options.logger,
+      options.policyTesting,
+    );
+  }
   const client = {
     async preflight(bindings: readonly ModelBinding[]) {
       key();
-      // No inference is billed by catalogue validation. Its transport is bounded by the same policy.
-      if (!catalogue) {
-        const data = await runModelWithPolicy(
-          async (signal, hints) => {
-            const { data } = await send("/models", { method: "GET" }, signal, hints);
-            if (!Array.isArray(data.data))
-              throw new Error("OpenRouter returned an invalid model catalogue");
-            return { value: data.data.map(record) };
-          },
-          policy({
-            model: settings.searchModel,
-            systemPrompt: "",
-            userMessage: "",
-            signal: services?.operation.signal ?? options.signal,
-          }),
-          options.logger,
-          options.policyTesting,
-        );
-        catalogue = data;
-      }
+      const signal = services?.operation.signal ?? options.signal;
+      throwIfAborted(signal);
+      if (options.catalogue) catalogue = await options.catalogue.read(signal);
+      else catalogue ??= await loadCatalogue(signal);
+      throwIfAborted(signal);
       return bindings.filter((binding) => !capabilities(binding));
     },
     async complete(request: ModelRequest & { readonly scope?: ModelCallScope }) {
@@ -418,9 +448,12 @@ export function createOpenRouterClient(
     }
   }
   return {
-    preflight: (bindings) => safe(client.preflight(bindings)),
-    complete: (request: ModelRequest & { readonly scope?: ModelCallScope }) =>
-      safe(client.complete(request)),
+    loadCatalogue,
+    client: {
+      preflight: (bindings: readonly ModelBinding[]) => safe(client.preflight(bindings)),
+      complete: (request: ModelRequest & { readonly scope?: ModelCallScope }) =>
+        safe(client.complete(request)),
+    },
   };
 }
 

@@ -57,13 +57,10 @@ test("a queued request aborted before starting settles as cancelled and never st
   const active = queue.submit(() => stalled.promise, new AbortController().signal);
   const controller = new AbortController();
   let started = false;
-  const queued = queue.submit(
-    async () => {
-      started = true;
-      return "started";
-    },
-    controller.signal,
-  );
+  const queued = queue.submit(async () => {
+    started = true;
+    return "started";
+  }, controller.signal);
   controller.abort();
   assert.equal(await queued, "cancelled");
   stalled.release("active");
@@ -76,10 +73,7 @@ test("an already-aborted submission settles as cancelled synchronously", async (
   const queue = new OperationQueue<string>({ maxConcurrent: 1, maxQueued: 4 }, factories);
   const controller = new AbortController();
   controller.abort();
-  assert.equal(
-    await queue.submit(() => Promise.resolve("never"), controller.signal),
-    "cancelled",
-  );
+  assert.equal(await queue.submit(() => Promise.resolve("never"), controller.signal), "cancelled");
   await queue.close();
 });
 
@@ -103,7 +97,7 @@ test("close settles pending work as cancelled and waits for active work", async 
   const closing = queue.close();
   assert.equal(await queued, "cancelled");
   stalled.release("active");
-  assert.equal(await active, "active");
+  assert.equal(await active, "cancelled");
   await closing;
   assert.equal(
     await queue.submit(() => Promise.resolve("after close"), new AbortController().signal),

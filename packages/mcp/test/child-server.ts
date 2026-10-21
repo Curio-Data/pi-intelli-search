@@ -30,7 +30,10 @@ const pageUrl = process.env.FIXTURE_PAGE_URL ?? "http://127.0.0.1:1/absent";
 const models = document().models;
 const attempts = new Map<string, number>();
 const transport: FetchFunction = async (url, init = {}) => {
-  if (String(url) === "https://openrouter.ai/api/v1/models") return json(catalogue());
+  if (String(url) === "https://openrouter.ai/api/v1/models") {
+    process.stderr.write("FIXTURE_CATALOGUE_STARTED\n");
+    return json(catalogue());
+  }
   if (String(url) !== "https://openrouter.ai/api/v1/chat/completions")
     throw new Error("Unexpected network access");
   const body = JSON.parse(String(init.body)) as { model: string };
@@ -53,6 +56,7 @@ const transport: FetchFunction = async (url, init = {}) => {
       );
     });
   }
+  process.stderr.write(`FIXTURE_COMPLETION_SETTLED ${body.model}\n`);
   const content =
     process.env.FIXTURE_NOLINKS === "1" && body.model === models.search.model
       ? "A grounded answer without any usable links."
@@ -81,10 +85,13 @@ const { startServer } = await import("../src/server.js");
 const handle = await startServer(config, {
   fetch: transport,
   env: processEnv ? undefined : { FIXTURE_KEY: "synthetic-protocol-credential" },
-  queue: {
-    maxConcurrent: Number(process.env.FIXTURE_MAX_CONCURRENT ?? 1),
-    maxQueued: Number(process.env.FIXTURE_MAX_QUEUED ?? 8),
-  },
+  queue:
+    process.env.FIXTURE_USE_CONFIG_ADMISSION === "1"
+      ? undefined
+      : {
+          maxConcurrent: Number(process.env.FIXTURE_MAX_CONCURRENT ?? 1),
+          maxQueued: Number(process.env.FIXTURE_MAX_QUEUED ?? 8),
+        },
   onEnqueue: () => process.stderr.write("FIXTURE_QUEUE_QUEUED\n"),
 });
 if (processEnv) delete process.env.FIXTURE_KEY;

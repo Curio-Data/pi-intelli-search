@@ -46,7 +46,8 @@ import {
   validateDomains,
   type StandaloneConfig,
 } from "./config.js";
-import { createOpenRouterClient } from "./providers/openrouter.js";
+import { createOpenRouterClient, createOpenRouterCatalogue } from "./providers/openrouter.js";
+import { parseAdmission } from "./admission.js";
 import { assertWorkspaceSafe, workspacePaths } from "./workspace.js";
 import { identity } from "./identity.js";
 import { withStandaloneStdout } from "./console.js";
@@ -131,6 +132,7 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
   };
   // Public runtime callers may supply an object without using parseConfig().
   // Revalidate captured execution/pacing before any workspace or provider work.
+  const admission = parseAdmission(config.admission);
   const executionSettings = parseExecutionSettings(config.settings.execution, "tuning.execution");
   config = { ...config, settings: { ...config.settings, execution: executionSettings } };
   validateRequestInterval(config.settings.minRequestIntervalMs, "tuning.minRequestIntervalMs");
@@ -155,6 +157,7 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
     warn: (message) => deliver("warn", message),
   };
   const clock = options.clock ?? createSystemClock();
+  const catalogue = createOpenRouterCatalogue(config, { fetch: options.fetch, env, logger }, clock);
   // Install the bounded service without changing legacy research scheduling.
   const createFetch = capturePageFetchFactory(config.settings, clock, pagePolicy);
   const diagnostics = new Map<string, (diagnostic: Diagnostic) => void>();
@@ -180,12 +183,15 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
       }),
   });
   let closed = false;
+  let closing: Promise<void> | undefined;
   return {
     identity,
     paths,
+    admission,
     close: (reason?: string) => {
       closed = true;
-      return lifetime.close(reason);
+      closing ??= Promise.all([lifetime.close(reason), catalogue.close()]).then(() => undefined);
+      return closing;
     },
     async execute<Name extends keyof OperationInputs>(
       name: Name,
@@ -259,13 +265,14 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
             throwIfAborted(signal);
             state.category = "WORKSPACE";
             await assertWorkspaceSafe(paths, signal);
-            // Per-operation credentials/catalogue/citation state, never a shared mutable host context.
+            // Per-operation credentials/binding validation/citations; only catalogue loading is shared.
             const models = createOpenRouterClient(config, {
               fetch: options.fetch,
               env,
               logger,
               signal,
               services,
+              catalogue,
               random: Math.random,
             });
             const settings = config.settings;

@@ -7,11 +7,14 @@ import { tuningDefaults } from "../../../src/core/defaults.js";
 import { parseExecutionSettings } from "../../../src/core/execution-settings.js";
 import type { DeepReadonly } from "../../../src/core/contracts.js";
 import type { ModelConfig, ResearchSettings } from "../../../src/core/types.js";
+import { parseAdmission } from "./admission.js";
+import type { ProtocolQueueSettings } from "../../../src/core/contracts.js";
 
 export interface StandaloneConfig {
   readonly workspace: string;
   readonly apiKeyEnv: string;
   readonly settings: DeepReadonly<ResearchSettings>;
+  readonly admission?: ProtocolQueueSettings;
 }
 
 export function object(value: unknown, label: string): Record<string, unknown> {
@@ -245,12 +248,17 @@ export async function resolveWorkspace(workspace: string): Promise<string> {
 
 /** No credential or host-file discovery. Workspace must already exist. */
 export async function parseConfig(value: unknown, workspace: string): Promise<StandaloneConfig> {
-  const { apiKeyEnv, settings } = parseDocument(value);
-  return freeze({ workspace: await resolveWorkspace(workspace), apiKeyEnv, settings });
+  const parsed = parseDocument(value);
+  return freeze({ workspace: await resolveWorkspace(workspace), ...parsed });
 }
-function parseDocument(value: unknown): { apiKeyEnv: string; settings: ResearchSettings } {
+function parseDocument(value: unknown): {
+  apiKeyEnv: string;
+  settings: ResearchSettings;
+  admission: ProtocolQueueSettings;
+} {
   const root = object(value, "configuration");
-  keys(root, ["providers", "models", "tuning"], "configuration");
+  keys(root, ["providers", "models", "tuning", "admission"], "configuration");
+  const admission = parseAdmission(root.admission);
   const providers = object(root.providers, "providers");
   keys(providers, ["openrouter"], "providers");
   const provider = object(providers.openrouter, "providers.openrouter");
@@ -311,7 +319,7 @@ function parseDocument(value: unknown): { apiKeyEnv: string; settings: ResearchS
     throw new Error(
       "Search requires an explicitly enabled searchWebSearch tool or a supported Sonar search model",
     );
-  return { apiKeyEnv, settings };
+  return { apiKeyEnv, settings, admission };
 }
 /**
  * Reads and validates the selected file. File defects (missing, unreadable,
@@ -361,7 +369,6 @@ export async function loadConfig(file: string, workspace: string): Promise<Stand
   }
   return freeze({
     workspace: await resolveWorkspace(workspace),
-    apiKeyEnv: parsed.apiKeyEnv,
-    settings: parsed.settings,
+    ...parsed,
   });
 }
