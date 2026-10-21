@@ -14,7 +14,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const scratch = join(root, ".tmp/mcp-install");
@@ -132,7 +132,8 @@ try {
     join(dir, "isolation.mjs"),
     `
     import Module, { register } from 'node:module';
-    import { realpathSync } from 'node:fs';
+    import assert from 'node:assert/strict';
+    import { appendFileSync, realpathSync } from 'node:fs';
     import { isAbsolute } from 'node:path';
     register('./isolation-loader.mjs', import.meta.url);
     const original = Module._resolveFilename;
@@ -141,6 +142,10 @@ try {
       if (isAbsolute(result) && !realpathSync(result).startsWith(${JSON.stringify(dir + sep)})) throw new Error('Outside independent installation: ' + args[0]);
       return result;
     };
+    if (process.execArgv.includes('--eval')) {
+      await assert.rejects(import(${JSON.stringify(pathToFileURL(join(root, "README.md")).href)}), /Outside independent installation/);
+      appendFileSync(${JSON.stringify(join(dir, "page-transport-isolation.ndjson"))}, JSON.stringify({ pid: process.pid, outsideImportDenied: true }) + '\\n');
+    }
   `,
   );
   const cli = join(dir, "node_modules/.bin/mcp-intelli-search");
@@ -168,6 +173,11 @@ try {
   evidence.pageTransport = JSON.parse(transportProbe.stdout);
   assert.equal(evidence.pageTransport.cancellation, "process-settled");
   assert.equal(evidence.pageTransport.childrenClosed, 3);
+  const childIsolation = (await readFile(join(dir, "page-transport-isolation.ndjson"), "utf8"))
+    .trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(childIsolation.length, evidence.pageTransport.childrenClosed);
+  assert(childIsolation.every((item) => item.outsideImportDenied === true));
+  evidence.pageTransport.ancestorIsolation = "verified-in-every-child";
   assert(!(await readdir(dir)).includes("forbidden-agent"));
   // Protocol smoke against the installed executable, without the SDK or any
   // network: initialize, list, invalid-argument rejection and clean shutdown.

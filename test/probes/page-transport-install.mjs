@@ -27,8 +27,11 @@ const server = createServer((req, res) => {
     res.writeHead(200, { "content-type": "text/plain" });
     res.write("first");
   } else if (req.url === "/redirect") {
-    res.writeHead(302, { location: "/content" });
+    res.writeHead(302, { location: "/content?redirect=1", "set-cookie": "installed=ok; Path=/" });
     res.end();
+  } else if (req.url === "/content?redirect=1" && req.headers.cookie !== "installed=ok") {
+    res.writeHead(503);
+    res.end("Redirect cookie was not preserved");
   } else {
     res.writeHead(200, { "content-type": "text/markdown", "x-install-fixture": "process" });
     res.end(body);
@@ -63,7 +66,7 @@ const make = createProcessPageTransport({
 try {
   const root = `http://127.0.0.1:${port}`;
   const response = await make(`${root}/redirect`, request(controller.signal));
-  assert.equal(response.url, `${root}/content`);
+  assert.equal(response.url, `${root}/content?redirect=1`);
   assert.equal(response.headers.get("x-install-fixture"), "process");
   const reader = response.body.getReader();
   const parts = [];

@@ -24,11 +24,15 @@ const validUrl = (value) => {
 let started = false;
 let busy = false;
 let reader;
+let session;
 let complete = false;
 const finish = async (message, code) => {
   if (complete) return;
   complete = true;
-  try { await send(message); } finally { process.exit(code); }
+  try {
+    await session?.close();
+    await send(message);
+  } finally { process.exit(code); }
 };
 process.on('disconnect', () => process.exit(1));
 process.on('message', async (message) => {
@@ -37,21 +41,20 @@ process.on('message', async (message) => {
     if (message?.type === 'start' && !started) {
       started = true;
       busy = true;
-      let fetch;
-      try { ({ fetch } = await import(process.argv[1])); }
+      let createSession;
+      try { ({ createSession } = await import(process.argv[1])); }
       catch { await finish({ type: 'failure', code: 'DEPENDENCY_UNAVAILABLE' }, 1); return; }
+      session = await createSession({ browser: message.browser, os: 'windows',
+        ...(message.proxy === undefined ? {} : { proxy: message.proxy }) });
       let url = validUrl(message.url);
       const headers = { ...message.headers };
       let response;
       // Match wreq's ten-redirect chain limit. Manual following allows URL
       // validation before each hop, including relative Location values.
       for (let redirects = 0; ; redirects++) {
-        response = await fetch(url, {
+        response = await session.fetch(url, {
           method: message.method,
           headers,
-          browser: message.browser,
-          os: 'windows',
-          ...(message.proxy === undefined ? {} : { proxy: message.proxy }),
           redirect: 'manual',
         });
         const location = response.headers.get('location');
@@ -64,6 +67,17 @@ process.on('message', async (message) => {
             if (['authorization', 'cookie', 'proxy-authorization'].includes(name.toLowerCase())) delete headers[name];
           }
         }
+        // Match installed follow mode, not an assumed browser referrer policy:
+        // replace even an explicit Referer with the preceding full URL, omit
+        // fragments and suppress HTTPS-to-HTTP downgrade disclosure.
+        for (const name of Object.keys(headers)) {
+          if (name.toLowerCase() === 'referer') delete headers[name];
+        }
+        if (!(new URL(url).protocol === 'https:' && new URL(next).protocol === 'http:')) {
+          const referer = new URL(url);
+          referer.hash = '';
+          headers.Referer = referer.href;
+        }
         url = next;
         // Native reads/cache entries can outlive this JS cancellation. They
         // remain inside this same owned child until its mandatory exit.
@@ -71,9 +85,9 @@ process.on('message', async (message) => {
       }
       const body = response.body;
       reader = body?.getReader();
+      busy = false;
       await send({ type: 'headers', status: response.status, url: validUrl(response.url),
         headers: Array.from(response.headers), hasBody: body !== null });
-      busy = false;
       if (!reader) await finish({ type: 'end' }, 0);
     } else if (message?.type === 'read' && started && !busy && reader) {
       busy = true;
@@ -81,10 +95,12 @@ process.on('message', async (message) => {
         const { value, done } = await reader.read();
         if (done) { await finish({ type: 'end' }, 0); return; }
         if (value.byteLength === 0) continue;
+        // A reply can arrive before this IPC callback completes. The native
+        // read is already finished; do not reject that legitimate next pull.
+        busy = false;
         await send({ type: 'chunk', value });
         break;
       }
-      busy = false;
     } else {
       throw new Error('Protocol');
     }

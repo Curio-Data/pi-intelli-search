@@ -49,6 +49,14 @@ for (const output of Object.values(result.metafile.outputs))
 // closure carries a permissive licence file for the legal inventory.
 const nativeExternal = { "fs-native-extensions": "1.5.1" };
 const rootManifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+// require.resolve() in the disposable worker transport is deliberately lazy;
+// esbuild's import graph cannot see that runtime dependency.
+for (const [label, dependencies] of [
+  ["native", rootManifest.dependencies],
+  ["standalone", manifest.dependencies],
+])
+  if (!Object.hasOwn(dependencies ?? {}, "wreq-js"))
+    throw new Error(`The ${label} manifest must declare the process transport's wreq-js dependency`);
 const lockfile = JSON.parse(await readFile(join(root, "package-lock.json"), "utf8"));
 const closure = new Set();
 const queue = [];

@@ -10,7 +10,10 @@ import { fetch as baselineFetch } from "wreq-js";
 import { once } from "node:events";
 import { gzipSync } from "node:zlib";
 import { performance } from "node:perf_hooks";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { createProcessPageTransport } from "../src/core/page-transport.js";
 import type { PageTransportRequest, PageTransportResponse } from "../src/core/contracts.js";
 
@@ -311,6 +314,37 @@ describe("owned process page transport (C04/C06/C19 prerequisite)", () => {
     );
   });
 
+  it("accepts the next pull before the preceding child send callback finishes", async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "process-ipc-order-"));
+    const bootstrap = join(scratch, "delayed-send.mjs");
+    await writeFile(
+      bootstrap,
+      `
+      const original = process.send.bind(process);
+      process.send = (message, callback) => original(message, (error) => setTimeout(() => callback(error), 25));
+    `,
+    );
+    try {
+      await fixture(
+        (_req, res) => {
+          res.writeHead(200);
+          res.end(Buffer.alloc(3 * 1024 * 1024, 42));
+        },
+        async (url) => {
+          const fetch = createProcessPageTransport({
+            executable: process.execPath,
+            environment: { NODE_OPTIONS: `--import=${pathToFileURL(bootstrap).href}` },
+          });
+          const result = await fetch(url, request(new AbortController().signal));
+          assert.deepEqual(await bytes(result), Buffer.alloc(3 * 1024 * 1024, 42));
+          allClosed();
+        },
+      );
+    } finally {
+      await rm(scratch, { recursive: true, force: true });
+    }
+  });
+
   it("streams decoded gzip bytes and can kill a stalled oversized decoded response", async () => {
     const payload = Buffer.alloc(2 * 1024 * 1024, 120);
     await fixture(
@@ -372,6 +406,149 @@ describe("owned process page transport (C04/C06/C19 prerequisite)", () => {
         );
         assert.deepEqual(requests, ["/start", "/done", "/unsafe"]);
         allClosed();
+      },
+    );
+  });
+
+  it("preserves redirect cookies in one chain without leaking them to later chains", async () => {
+    let requests = 0;
+    await fixture(
+      (req, res) => {
+        requests++;
+        if (!req.headers.cookie?.includes("gate=ok")) {
+          res.writeHead(302, { "set-cookie": "gate=ok; Path=/", location: "/gate" });
+          res.end();
+        } else res.end("article after cookie gate");
+      },
+      async (url) => {
+        const baseline = await baselineFetch(`${url}/gate`, {
+          browser: "chrome_145",
+          os: "windows",
+        });
+        assert.equal(await baseline.text(), "article after cookie gate");
+        assert.equal(requests, 2);
+        const fetch = transport();
+        for (let chain = 0; chain < 2; chain++) {
+          const result = await fetch(`${url}/gate`, request(new AbortController().signal));
+          assert.equal(await text(result), "article after cookie gate");
+          assert.equal(requests, 4 + chain * 2, "cookies remain private to each physical chain");
+          allClosed();
+        }
+      },
+    );
+  });
+
+  it("uses the native session jar's cookie path and Secure scopes across redirects", async () => {
+    const seen: Array<string | undefined> = [];
+    await fixture(
+      (req, res) => {
+        if (req.url === "/start") {
+          res.writeHead(302, {
+            "set-cookie": [
+              "public=ok; Path=/",
+              "private=hidden; Path=/private",
+              "secure=hidden; Path=/; Secure",
+            ],
+            location: "/public",
+          });
+          res.end();
+        } else {
+          seen.push(req.headers.cookie);
+          res.end("scoped cookies");
+        }
+      },
+      async (url) => {
+        await (
+          await baselineFetch(`${url}/start`, { browser: "chrome_145", os: "windows" })
+        ).text();
+        assert.equal(
+          await text(await transport()(`${url}/start`, request(new AbortController().signal))),
+          "scoped cookies",
+        );
+        assert.deepEqual(seen, ["public=ok", "public=ok"]);
+        allClosed();
+      },
+    );
+  });
+
+  it("matches installed follow-mode Referer replacement for same and cross-origin hops", async () => {
+    for (const method of ["GET", "HEAD"] as const) {
+      for (const explicit of [false, true]) {
+        const seen: Array<string | undefined> = [];
+        await fixture(
+          (req, res) => {
+            seen.push(req.headers.referer);
+            res.end("landing");
+          },
+          async (destination) => {
+            await fixture(
+              (req, res) => {
+                if (req.url?.startsWith("/start")) {
+                  res.writeHead(303, {
+                    location: req.url.includes("cross=1") ? destination : "/landing",
+                  });
+                  res.end();
+                } else {
+                  seen.push(req.headers.referer);
+                  res.end("landing");
+                }
+              },
+              async (url) => {
+                for (const cross of [false, true]) {
+                  const start = `${url}/start?cross=${cross ? 1 : 0}&query=fixture#fragment`;
+                  const headers: Record<string, string> = explicit
+                    ? { Referer: "https://caller.example/path" }
+                    : {};
+                  await (
+                    await baselineFetch(start, {
+                      browser: "chrome_145",
+                      os: "windows",
+                      method,
+                      headers,
+                    })
+                  ).text();
+                  await text(
+                    await transport()(
+                      start,
+                      request(new AbortController().signal, { method, headers }),
+                    ),
+                  );
+                  assert.deepEqual(seen.splice(0), [start.split("#")[0], start.split("#")[0]]);
+                  allClosed();
+                }
+              },
+            );
+          },
+        );
+      }
+    }
+  });
+
+  it("preserves an HTTP_PROXY selected only in the captured child environment", async () => {
+    let target: string | undefined;
+    await fixture(
+      (req, res) => {
+        target = req.url;
+        res.end("captured environment proxy");
+      },
+      async (proxy) => {
+        const fetch = createProcessPageTransport({
+          executable: process.execPath,
+          environment: { HTTP_PROXY: proxy, NO_PROXY: "" },
+        });
+        const abort = new AbortController();
+        const timer = setTimeout(() => abort.abort(), 3000);
+        try {
+          assert.equal(
+            await text(await fetch("http://127.0.0.1:1/environment-proxy", request(abort.signal))),
+            "captured environment proxy",
+          );
+          assert.equal(target, "http://127.0.0.1:1/environment-proxy");
+          allClosed();
+        } finally {
+          clearTimeout(timer);
+          abort.abort();
+        }
       },
     );
   });
