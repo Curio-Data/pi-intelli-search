@@ -132,6 +132,10 @@ describe("page deadline: lifecycle", () => {
     assert.equal(clock.pending, 0);
     clock.advanceTo(5000);
     assert.equal(at(5000, "S2", true), false);
+    assert.equal(deadline.terminal("S2", true), false, "repeat after dispose is not accepted");
+    assert.equal(deadline.terminal("S1", false), false, "already-terminal page after dispose");
+    assert.throws(() => deadline.terminal("S9", true), /unknown/);
+    assert.throws(() => deadline.terminal("S3", 1 as unknown as boolean), /boolean/);
     assert.equal(deadline.snapshot(), undefined);
     assert.equal(frozen.length, 0);
     assert.throws(() => deadline.start(), /disposed/);
@@ -252,6 +256,16 @@ describe("page deadline: C08 enabled matrix", () => {
     clock.advanceTo(80);
     assert.deepEqual(frozen[0].terminalIds, ["S1", "S2", "S3"]);
     assert.deepEqual(frozen[0].successIds, ["S3"]);
+  });
+
+  it("the state machine uses the literal quorum (N = 100, quorum 0.07 needs 8 pages)", () => {
+    const { clock, deadline, at } = harness(enabled({ quorum: 0.07 }), ids(100));
+    deadline.start();
+    for (let i = 1; i <= 7; i++) at(i * 10, `S${i}`, true);
+    assert.deepEqual(clock.dueTimes, [1000], "seven terminal pages do not reach quorum");
+    at(80, "S8", true);
+    // Latencies 10..80 -> median 45; 80 + 45.
+    assert.deepEqual(clock.dueTimes, [125, 1000]);
   });
 
   it("adaptive time is computed once and later pages do not move it", () => {
@@ -465,6 +479,8 @@ describe("page deadline: equal-time ordering", () => {
     const { clock, deadline, frozen, at } = harness(enabled(), ids(3));
     deadline.start();
     assert.equal(at(1500, "S1", true), false);
+    assert.equal(deadline.terminal("S1", true), false, "the excluded event is not a duplicate error");
+    assert.equal(frozen.length, 1);
     assert.equal(frozen[0].reason, "ceiling");
     assert.equal(frozen[0].frozenAtMs, 1500);
     assert.deepEqual(frozen[0].terminalIds, []);
@@ -488,7 +504,7 @@ describe("page deadline: events, snapshots and validation", () => {
     assert.deepEqual(frozen[0].successIds, ["S2", "S3"], "duplicate success did not overwrite the failure");
   });
 
-  it("later events after freeze return false and duplicates still reject", () => {
+  it("valid events after freeze return false, including duplicates; invalid ones still throw", () => {
     const { clock, deadline, frozen, at } = harness(enabled(), ids(4));
     deadline.start();
     at(10, "S1", true);
@@ -496,9 +512,11 @@ describe("page deadline: events, snapshots and validation", () => {
     clock.advanceTo(40);
     assert.equal(frozen.length, 1);
     assert.equal(at(50, "S3", true), false);
-    assert.throws(() => deadline.terminal("S3", true), /duplicate/);
-    assert.throws(() => deadline.terminal("S1", true), /duplicate/);
+    assert.equal(deadline.terminal("S3", true), false, "repeat of a late page");
+    assert.equal(deadline.terminal("S1", true), false, "repeat of a page recorded before freeze");
     assert.equal(at(60, "S4", false), false);
+    assert.throws(() => deadline.terminal("S9", true), /unknown/);
+    assert.throws(() => deadline.terminal("S4", "no" as unknown as boolean), /boolean/);
     assert.equal(frozen.length, 1);
     assert.deepEqual(deadline.snapshot()!.terminalIds, ["S1", "S2"]);
   });
@@ -606,11 +624,14 @@ describe("page deadline: events, snapshots and validation", () => {
 });
 
 describe("page deadline: helpers", () => {
-  it("quorum uses the decimal ceiling and stays within [1, N]", () => {
+  it("quorum is the literal Math.ceil(N * quorum) on the binary product", () => {
     assert.equal(quorumCount(0, 0.5), 0);
-    assert.equal(quorumCount(100, 0.07), 7);
-    assert.equal(quorumCount(100, 0.14), 14);
+    // Binary products are not snapped: 100 * 0.07 === 7.000000000000001.
+    assert.equal(quorumCount(100, 0.07), 8);
+    assert.equal(quorumCount(100, 0.14), 15);
     assert.equal(quorumCount(100, 0.57), 57);
+    assert.equal(quorumCount(10, 0.3), 3);
+    assert.equal(quorumCount(10, 0.1 + 0.2), 4, "a representable quorum just above 3/10 needs 4 pages");
     assert.equal(quorumCount(3, 0.5), 2);
     assert.equal(quorumCount(5, 0.01), 1);
     assert.equal(quorumCount(7, 1), 7);

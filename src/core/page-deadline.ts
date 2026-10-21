@@ -43,13 +43,12 @@ export interface PageDeadline {
   dispose(): void;
 }
 
-/** `ceil(n * quorum)` on the decimal value, so 0.07 * 100 is 7, not 8. */
+/**
+ * Literal C08 `ceil(n * quorum)` on the binary product. Floating-point products are not
+ * snapped: `100 * 0.07` is `7.000000000000001`, so that quorum is 8 pages, not 7.
+ */
 export function quorumCount(n: number, quorum: number): number {
-  if (n === 0) return 0;
-  const product = n * quorum;
-  const nearest = Math.round(product);
-  const count = Math.abs(product - nearest) <= Number.EPSILON * 16 * Math.max(1, n) ? nearest : Math.ceil(product);
-  return Math.min(n, Math.max(1, count));
+  return Math.ceil(n * quorum);
 }
 
 /** Ordinary median; an even count averages the central pair. */
@@ -88,7 +87,6 @@ export function createPageDeadline(options: PageDeadlineOptions): PageDeadline {
 
   const terminalAt = new Map<string, number>();
   const successes = new Set<string>();
-  const unrecorded = new Set<string>();
   const latencies: number[] = [];
   const cancels: Array<() => void> = [];
   let t0: number | undefined;
@@ -162,18 +160,14 @@ export function createPageDeadline(options: PageDeadlineOptions): PageDeadline {
         throw new RangeError(`unknown page deadline candidate: ${String(pageId)}`);
       if (typeof nonemptySuccess !== "boolean") throw new TypeError("nonemptySuccess must be boolean");
       if (t0 === undefined) throw new Error("page deadline has not started");
-      if (terminalAt.has(pageId) || unrecorded.has(pageId))
-        throw new Error(`duplicate terminal event for page: ${pageId}`);
-      if (!live()) {
-        unrecorded.add(pageId);
-        return false;
-      }
+      // Sticky after freeze or dispose: any valid page event, even a repeat, is not accepted.
+      if (!live()) return false;
+      if (terminalAt.has(pageId)) throw new Error(`duplicate terminal event for page: ${pageId}`);
 
       const now = clock.monotonicMs();
       // Equal-time scheduled cutoff wins, whatever order timer callbacks arrive in.
       const due = dueCutoff(now);
       if (due) {
-        unrecorded.add(pageId);
         freeze(due);
         return false;
       }
