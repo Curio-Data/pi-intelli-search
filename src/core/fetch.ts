@@ -108,7 +108,7 @@ function compareAndPick(a: FetchedPage, b: FetchedPage): FetchedPage {
 }
 
 /** Score markdown content quality. Higher = cleaner and more useful. */
-function scoreContent(content: string): number {
+export function scoreContent(content: string): number {
   let score = content.length;
 
   // Bonus for code blocks (high-value technical content)
@@ -172,6 +172,15 @@ async function fetchViaDefuddle(
   }
 
   const body = await response.text();
+  return cleanFetchedHtml(url, body, opts.maxChars);
+}
+
+/** Shared HTML cleaning; bounded clients supply an already byte-limited body. */
+export async function cleanFetchedHtml(
+  url: string,
+  body: string,
+  maxChars: number,
+): Promise<FetchedPage> {
   const { document } = parseHTML(body);
   cleanBrokenMetadata(document, url);
 
@@ -217,7 +226,7 @@ async function fetchViaDefuddle(
     return {
       url,
       title,
-      content: truncateContent(content, opts.maxChars),
+      content: truncateContent(content, maxChars),
       status: "success",
       source: "defuddle-fallback",
     };
@@ -228,7 +237,7 @@ async function fetchViaDefuddle(
   return {
     url,
     title,
-    content: truncateContent(content, opts.maxChars),
+    content: truncateContent(content, maxChars),
     status: "success",
     source: "defuddle",
   };
@@ -455,7 +464,7 @@ async function rawFetch(url: string, opts: FetchOptions, signal?: AbortSignal) {
 // Utilities
 // ---------------------------------------------------------------------------
 
-function guessTitleFromMarkdown(content: string): string {
+export function guessTitleFromMarkdown(content: string): string {
   const frontmatter = content.match(/^---\n([\s\S]*?)\n---/);
   if (frontmatter) {
     const titleMatch = frontmatter[1].match(/^title:\s*(.+)$/m);
@@ -467,7 +476,7 @@ function guessTitleFromMarkdown(content: string): string {
 }
 
 /** Strip nav chrome and frontmatter from markdown exports. */
-function sanitizeMarkdown(content: string): string {
+export function sanitizeMarkdown(content: string): string {
   content = content.replace(/^---\n[\s\S]*?\n---\s*\n/, "");
   content = content.replace(/\[Skip to content\].*?\n/g, "");
   content = content.replace(/Was this helpful\?\s*\n\s*YesNo\s*\n/g, "");

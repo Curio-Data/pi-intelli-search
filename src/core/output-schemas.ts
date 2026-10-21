@@ -93,7 +93,22 @@ const collateSource = Type.Object(
   },
   strict,
 );
-const full = (name: "intelli_search" | "intelli_extract" | "intelli_collate"): TSchema =>
+const fetchSource = Type.Object(
+  {
+    id: Type.String(),
+    url: Type.String(),
+    title: Type.String(),
+    state: literals(["fetched", "empty", "fetch-failed", "cancelled"]),
+    sourceType: Type.Optional(Type.String()),
+    content: Type.Optional(Type.String({ maxLength: 500_000 })),
+    truncated: Type.Optional(Type.Boolean()),
+    diagnostic: Type.Optional(Type.String()),
+  },
+  strict,
+);
+const full = (
+  name: "intelli_search" | "intelli_extract" | "intelli_collate" | "intelli_fetch",
+): TSchema =>
   Type.Object(
     {
       schemaVersion: Type.Literal(1),
@@ -103,7 +118,13 @@ const full = (name: "intelli_search" | "intelli_extract" | "intelli_collate"): T
       text: Type.String(),
       details,
       summary: Type.String(),
-      sources: Type.Array(name === "intelli_collate" ? collateSource : standaloneSource),
+      sources: Type.Array(
+        name === "intelli_collate"
+          ? collateSource
+          : name === "intelli_fetch"
+            ? fetchSource
+            : standaloneSource,
+      ),
       cache: persistence,
       related: Type.Array(
         Type.Object(
@@ -156,6 +177,8 @@ export const standaloneOutputSchemas = Object.freeze({
 });
 /** Registered supplied-input collation only; not the five-operation schema map. */
 export const collateOutputSchema = full("intelli_collate");
+/** Host-neutral fetch only; no native or MCP registration. */
+export const fetchOutputSchema = full("intelli_fetch");
 export const compactOutputSchema = Type.Object(
   {
     outcome,

@@ -13,6 +13,7 @@ import {
   validateRequestInterval,
 } from "../../../src/core/execution-settings.js";
 import { createRunStore } from "../../../src/core/run-store.js";
+import { capturePageFetchFactory } from "../../../src/core/page-runtime.js";
 import { executionReceipt, type ExecutionReceipt } from "./execution-receipt.js";
 import type { TSchema } from "typebox";
 import {
@@ -33,7 +34,6 @@ import type {
   OperationResult,
   OperationServices,
   Clock,
-  FetchClient,
   FullData,
   Diagnostic,
 } from "../../../src/core/contracts.js";
@@ -134,8 +134,9 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
   const executionSettings = parseExecutionSettings(config.settings.execution, "tuning.execution");
   config = { ...config, settings: { ...config.settings, execution: executionSettings } };
   validateRequestInterval(config.settings.minRequestIntervalMs, "tuning.minRequestIntervalMs");
-  const paths = await workspacePaths(config.workspace, config.settings.cacheDir);
   const env = { ...(options.env ?? process.env) };
+  const pagePolicy = { executable: process.execPath, environment: env };
+  const paths = await workspacePaths(config.workspace, config.settings.cacheDir);
   const secret = env[config.apiKeyEnv];
   const redact = (message: string) => (secret ? message.split(secret).join("[REDACTED]") : message);
   const sink = options.logger ?? stderrLogger;
@@ -151,16 +152,8 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
     warn: (message) => deliver("warn", message),
   };
   const clock = options.clock ?? createSystemClock();
-  // Coordinated fetch remains a later slice; supplied collation uses the run
-  // store below. Never substitute legacy fetch behind the FetchClient contract.
-  const unwiredFetch: FetchClient = Object.freeze({
-    async fetch() {
-      throw new Error("Coordinated fetch is not installed");
-    },
-    async discover() {
-      throw new Error("Coordinated discovery is not installed");
-    },
-  });
+  // Install the bounded service without changing legacy research scheduling.
+  const createFetch = capturePageFetchFactory(config.settings, clock, pagePolicy);
   const diagnostics = new Map<string, (diagnostic: Diagnostic) => void>();
   const lifetime = createOperationRuntime({
     modelConcurrency: executionSettings.modelConcurrency,
@@ -169,7 +162,7 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
     minRequestIntervalMs: config.settings.minRequestIntervalMs,
     clock,
     generation: 0,
-    createFetch: () => unwiredFetch,
+    createFetch,
     createRuns: (operation) =>
       createRunStore({
         workspaceRoot: paths.workspaceRoot,

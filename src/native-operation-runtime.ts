@@ -10,7 +10,6 @@ import type {
   Clock,
   FullData,
   Diagnostic,
-  FetchClient,
   OperationContext,
   OperationInputs,
   OperationResult,
@@ -24,6 +23,7 @@ import { createStandaloneResult } from "./core/standalone-result.js";
 import { createCollateResult } from "./core/collate-result.js";
 import { parseExecutionSettings, validateRequestInterval } from "./core/execution-settings.js";
 import { createRunStore } from "./core/run-store.js";
+import { capturePageFetchFactory } from "./core/page-runtime.js";
 import { resolveWorkspacePaths } from "./core/paths.js";
 import { search } from "./core/operations/search.js";
 import { extract } from "./core/operations/extract.js";
@@ -87,15 +87,6 @@ export class NativeExecutionError extends Error {
   }
 }
 
-const unwiredFetch: FetchClient = Object.freeze({
-  async fetch() {
-    throw new Error("Coordinated fetch is not installed");
-  },
-  async discover() {
-    throw new Error("Coordinated discovery is not installed");
-  },
-});
-
 /** One closure per extension registration. Construction starts no work. */
 export function createNativeOperationRuntime(options: NativeRuntimeOptions = {}) {
   options = {
@@ -150,6 +141,7 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
     const drained = previous ? stop(previous, "Native session replaced") : Promise.resolve();
     // Capture guarded host properties before the first await.
     const cwd = ctx.cwd;
+    const pagePolicy = { executable: process.execPath, environment: { ...process.env } };
     const projectTrusted = ctx.isProjectTrusted();
     const state: SessionState = { key, generation: ++generation, closed: false, ready: undefined! };
     current = state;
@@ -185,7 +177,7 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
           criticalReserve: execution.criticalReserve,
           fetchConcurrency: execution.aggregateFetchConcurrency,
           minRequestIntervalMs: settings.minRequestIntervalMs,
-          createFetch: () => unwiredFetch,
+          createFetch: capturePageFetchFactory(settings, clock, pagePolicy),
           createRuns: (operation) =>
             options.createRuns?.({ operationId: operation.id, clock }) ??
             createRunStore({

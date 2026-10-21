@@ -73,7 +73,7 @@ describe("shared engine dependency boundary", () => {
       const visited = new Set<string>();
       for (const entry of entries) await auditGraph(entry, false, visited);
       assert.ok(visited.size >= 17, "audit must traverse all operations, schemas and helpers");
-      assert.ok([...visited].filter((p) => p.includes("/operations/")).length === 4);
+      assert.ok([...visited].filter((p) => p.includes("/operations/")).length === 5);
       assert.ok(
         ![...visited].some((p) => /\/(settings|native-.+|host-types|agent-dir)\.ts$/.test(p)),
       );
