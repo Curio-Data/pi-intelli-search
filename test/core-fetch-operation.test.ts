@@ -7,6 +7,7 @@ import { Check } from "typebox/value";
 import { fetchPage, FetchOperationFailure } from "../src/core/operations/fetch.js";
 import { fetchOutputSchema } from "../src/core/output-schemas.js";
 import { createOperationRuntime } from "../src/core/operation-runtime.js";
+import { AdmissionError } from "../src/core/execution-coordinator.js";
 import { createSystemClock } from "../src/core/clock.js";
 import { parseExecutionSettings } from "../src/core/execution-settings.js";
 import { coreContext } from "./helpers/core-context.js";
@@ -130,6 +131,25 @@ it("fetchPage operational error and caller abort retain schema-valid settled par
       return true;
     },
   );
+});
+it("fetchPage preserves resource and input diagnostic classes without provider text", async () => {
+  for (const [error, diagnostic] of [
+    [new AdmissionError("BUSY", "private queue message"), "BUSY"],
+    [new TypeError("private settings"), "INVALID_FETCH_ARGUMENTS"],
+  ] as const) {
+    await assert.rejects(
+      run(async () => {
+        throw error;
+      }),
+      (failure: unknown) => {
+        assert(failure instanceof FetchOperationFailure);
+        assert.equal(failure.data.sources[0].diagnostic, diagnostic);
+        assert.equal(failure.data.accounting.attempts, 0);
+        assert(!JSON.stringify(failure).includes("private"));
+        return true;
+      },
+    );
+  }
 });
 it("fetchPage rejects unsupported inputs without inventing operation usage", async () => {
   const context = {} as Context;

@@ -1307,3 +1307,53 @@ test("native collate zero-input and BUSY-coded allocation faults retain zero-att
     }
   }
 });
+
+test("installing bounded fetch preserves all four registered tools with permissive legacy native fetch settings", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("network forbidden");
+  });
+  const f = await fixture(
+    async (context) => {
+      if (context.systemPrompt === SEARCH_SYSTEM_PROMPT) return response(`[Docs](${page.url})`);
+      if (context.systemPrompt === EXTRACTION_SYSTEM_PROMPT)
+        return response("Official docs, current.\nFacts");
+      if (context.systemPrompt === COLLATION_SYSTEM_PROMPT) return response("Answer [S1]");
+      return response("[]");
+    },
+    {
+      researchDependencies: {
+        fetchPages: async () => [{ ...page, status: "success" }],
+        downloadLlmsFullToCache: async () => null,
+      },
+    },
+    { fetchTimeoutMs: 900_000, fetchConcurrency: 1.5 },
+  );
+  try {
+    for (const [name, params] of [
+      ["intelli_search", { query: "Search" }],
+      ["intelli_extract", { ...page, query: "Extract" }],
+      [
+        "intelli_collate",
+        {
+          query: "Collate",
+          extractions: [
+            {
+              url: page.url,
+              title: page.title,
+              extraction: "Facts",
+              sourceType: "docs",
+              status: "success",
+            },
+          ],
+        },
+      ],
+      ["intelli_research", { query: "Research", maxUrls: 1 }],
+    ] as const) {
+      const result = await f.run(name, params);
+      assert(!result.isError, `${name} remains unaffected by unused fetch settings`);
+      assert(receipt(result).accounting.attempts > 0);
+    }
+  } finally {
+    await f.cleanup();
+  }
+});

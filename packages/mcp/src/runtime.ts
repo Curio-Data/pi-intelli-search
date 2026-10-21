@@ -13,7 +13,7 @@ import {
   validateRequestInterval,
 } from "../../../src/core/execution-settings.js";
 import { createRunStore } from "../../../src/core/run-store.js";
-import { capturePageFetchFactory } from "../../../src/core/page-runtime.js";
+import { capturePageFetchFactory, capturePageEnvironment } from "../../../src/core/page-runtime.js";
 import { executionReceipt, type ExecutionReceipt } from "./execution-receipt.js";
 import type { TSchema } from "typebox";
 import {
@@ -135,7 +135,10 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
   config = { ...config, settings: { ...config.settings, execution: executionSettings } };
   validateRequestInterval(config.settings.minRequestIntervalMs, "tuning.minRequestIntervalMs");
   const env = { ...(options.env ?? process.env) };
-  const pagePolicy = { executable: process.execPath, environment: env };
+  const pagePolicy = {
+    executable: process.execPath,
+    environment: capturePageEnvironment(env, config.apiKeyEnv),
+  };
   const paths = await workspacePaths(config.workspace, config.settings.cacheDir);
   const secret = env[config.apiKeyEnv];
   const redact = (message: string) => (secret ? message.split(secret).join("[REDACTED]") : message);

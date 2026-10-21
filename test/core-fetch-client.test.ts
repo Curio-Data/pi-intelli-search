@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { it } from "node:test";
+import childProcess from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { gzipSync } from "node:zlib";
@@ -11,9 +12,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createFetchClient, type FetchClientOptions } from "../src/core/fetch-client.js";
 import { createExecutionCoordinator } from "../src/core/execution-coordinator.js";
+import { createAttemptLedger } from "../src/core/usage.js";
+import { fetchPage } from "../src/core/operations/fetch.js";
 import { createSystemClock } from "../src/core/clock.js";
 import { createProcessPageTransport } from "../src/core/page-transport.js";
-import { capturePageFetchFactory } from "../src/core/page-runtime.js";
+import { capturePageFetchFactory, capturePageEnvironment } from "../src/core/page-runtime.js";
 import { parseExecutionSettings } from "../src/core/execution-settings.js";
 import { coreContext } from "./helpers/core-context.js";
 import type { PageTransport, PageTransportResponse } from "../src/core/contracts.js";
@@ -294,7 +297,7 @@ it("discovery validates the full population and preserves completed documents on
     return response("documentation", "text/plain");
   });
   try {
-    assert.throws(() =>
+    await assert.rejects(() =>
       s.client.discover(
         ["https://example.com", "https://user:secret@example.com"],
         temp,
@@ -327,10 +330,12 @@ it("foreign identity and invalid URL/maxChars never start transports; diagnostic
     throw new Error("secret-proxy/password");
   });
   for (const url of ["file:///private", "https://u:p@example.com", "https://example.com/a b"])
-    assert.throws(() => s.client.fetch({ url }, s.operation));
+    await assert.rejects(() => s.client.fetch({ url }, s.operation));
   for (const maxChars of [0, -1, 1.5, NaN])
-    assert.throws(() => s.client.fetch({ url: "https://example.com", maxChars }, s.operation));
-  assert.throws(() => s.client.fetch({ url: "https://example.com" }, { ...s.operation }));
+    await assert.rejects(() =>
+      s.client.fetch({ url: "https://example.com", maxChars }, s.operation),
+    );
+  await assert.rejects(() => s.client.fetch({ url: "https://example.com" }, { ...s.operation }));
   assert.equal(calls, 0);
   const result = await s.client.fetch({ url: "https://example.com" }, s.operation);
   assert.equal(result.page.diagnostic, "TRANSPORT_FAILED");
@@ -424,7 +429,20 @@ it("real owned-process transport rejects decoded gzip overflow and settles activ
   }
 });
 
-it("captured adapter fetch factory freezes settings and uses the selected executable", async () => {
+it("captured adapter fetch factory freezes settings and uses the selected executable", async (t) => {
+  const spawn = childProcess.spawn;
+  const commands: string[] = [];
+  t.mock.method(
+    childProcess,
+    "spawn",
+    (
+      command: string,
+      ...args: Parameters<typeof spawn> extends [string, ...infer Rest] ? Rest : never
+    ) => {
+      commands.push(command);
+      return spawn(command, ...args);
+    },
+  );
   const settings = coreContext("/workspace").context.settings;
   const mutable = structuredClone(settings) as import("../src/core/types.js").ResearchSettings;
   mutable.execution = parseExecutionSettings({ fetchMaxChars: 4 });
@@ -439,8 +457,10 @@ it("captured adapter fetch factory freezes settings and uses the selected execut
   env.HTTP_PROXY = "changed";
   const s = setup(async () => response("unused"));
   const client = make(s.operation);
-  const result = await client.fetch({ url: "https://example.com" }, s.operation);
+  const result = await client.fetch({ url: "http://127.0.0.1:1/page" }, s.operation);
   assert.equal(result.page.diagnostic, "TRANSPORT_FAILED");
+  assert(commands.length > 0);
+  assert(commands.every((command) => command === "/nonexistent/node-fetch-fixture"));
   await s.operation.settle();
 });
 
@@ -540,6 +560,27 @@ it("adapter factory consumes captured proxy environment and character settings t
     assert.equal(result.page.truncated, true);
     assert(targets.every((url) => url === "http://fixture.invalid/page"));
     assert.equal(targets.length, 2);
+    const context = coreContext("/workspace").context;
+    const full = await fetchPage(
+      { url: "http://fixture.invalid/page" },
+      {
+        ...context,
+        settings: { ...context.settings, execution: parseExecutionSettings({}) },
+        services: {
+          operation: s.operation,
+          coordinator: s.coordinator,
+          clock,
+          ledger: createAttemptLedger(),
+          fetch: make(s.operation),
+          runs: {} as import("../src/core/contracts.js").RunStore,
+        },
+      },
+    );
+    assert.equal(full.data.sources[0].content, "# fr");
+    assert.equal(full.data.accounting.attempts, 0);
+    assert.equal(full.data.counts.fetched, 1);
+    assert(!full.text.includes("# fr"));
+    assert.equal(targets.length, 4);
     await s.operation.settle();
   } finally {
     await s.coordinator.close();
@@ -554,9 +595,9 @@ it("all registered factories select the captured bounded service without adding 
   );
   const mcp = await readFile(new URL("../packages/mcp/src/runtime.ts", import.meta.url), "utf8");
   assert.match(native, /createFetch: capturePageFetchFactory\(settings, clock, pagePolicy\)/);
-  assert.match(native, /executable: process.execPath, environment: \{ \.\.\.process.env \}/);
+  assert.match(native, /environment: capturePageEnvironment\(process.env\)/);
   assert.match(mcp, /capturePageFetchFactory\(config.settings, clock, pagePolicy\)/);
-  assert.match(mcp, /const pagePolicy = \{ executable: process.execPath, environment: env \}/);
+  assert.match(mcp, /environment: capturePageEnvironment\(env, config.apiKeyEnv\)/);
   assert(!native.includes("Coordinated fetch is not installed"));
   assert(!mcp.includes('case "intelli_fetch"'));
   const registrations = await readFile(
@@ -564,4 +605,76 @@ it("all registered factories select the captured bounded service without adding 
     "utf8",
   );
   assert(!registrations.includes('"intelli_fetch"'));
+});
+
+it("unsupported content is cancelled at headers without reading binary or discarded Accept bodies", async () => {
+  for (const type of ["application/pdf", "text/html"]) {
+    let pulls = 0,
+      cancels = 0;
+    const s = setup(async () => {
+      let sent = false;
+      return response("", type, {
+        body: new ReadableStream(
+          {
+            pull(c) {
+              pulls++;
+              if (sent) c.close();
+              else {
+                sent = true;
+                c.enqueue(
+                  new TextEncoder().encode("<html><body><p>Accepted text</p></body></html>"),
+                );
+              }
+            },
+            cancel() {
+              cancels++;
+            },
+          },
+          { highWaterMark: 0 },
+        ),
+      });
+    });
+    const result = await s.client.fetch({ url: "https://example.com" }, s.operation);
+    if (type === "application/pdf") {
+      assert.equal(pulls, 0);
+      assert.equal(cancels, 3);
+      assert.equal(result.transferredBytes, 0);
+      assert.equal(result.page.diagnostic, "UNSUPPORTED_CONTENT");
+    } else {
+      assert.equal(pulls, 4);
+      assert.equal(cancels, 1);
+      assert.equal(result.page.state, "fetched");
+    }
+    await s.operation.settle();
+  }
+});
+
+it("page environment retains transport policy but excludes credentials and implicit debug loaders", () => {
+  const env = {
+    HTTP_PROXY: "http://proxy",
+    SSL_CERT_FILE: "/test/ca",
+    NODE_EXTRA_CA_CERTS: "/test/node-ca",
+    NODE_OPTIONS: "--inspect",
+    OPENROUTER_API_KEY: "secret",
+    CUSTOM_KEY: "secret",
+    LANG: "en_GB.UTF-8",
+  };
+  const captured = capturePageEnvironment(env);
+  env.HTTP_PROXY = "changed";
+  assert.deepEqual(captured, {
+    HTTP_PROXY: "http://proxy",
+    SSL_CERT_FILE: "/test/ca",
+    NODE_EXTRA_CA_CERTS: "/test/node-ca",
+    LANG: "en_GB.UTF-8",
+  });
+  assert.equal(capturePageEnvironment(env, "HTTP_PROXY").HTTP_PROXY, undefined);
+  assert(Object.isFrozen(captured));
+});
+
+it("character truncation does not return a lone UTF-16 surrogate", async () => {
+  const s = setup(async () => response("😀abc"), { maxChars: 1 });
+  const result = await s.client.fetch({ url: "https://example.com" }, s.operation);
+  assert.equal(result.page.content, "");
+  assert.equal(result.page.truncated, true);
+  await s.operation.settle();
 });

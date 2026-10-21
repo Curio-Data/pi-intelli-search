@@ -59,8 +59,8 @@ const boundedInteger = (value: number, min: number, max: number, name: string) =
 /** One captured operation. No timers, network or files are created by construction. */
 export function createFetchClient(options: FetchClientOptions): FetchClient {
   const o = Object.freeze({ ...options });
-  boundedInteger(o.concurrency, 1, 512, "concurrency");
-  boundedInteger(o.timeoutMs, 1, 600_000, "timeout");
+  boundedInteger(o.concurrency, 1, 512, "fetchConcurrency");
+  boundedInteger(o.timeoutMs, 1, 600_000, "fetchTimeoutMs");
   boundedInteger(o.maxResponseBytes, 65_536, 16_777_216, "byte limit");
   boundedInteger(o.docsMaxResponseBytes, 65_536, 33_554_432, "documentation byte limit");
   boundedInteger(o.maxChars, 1, 500_000, "character limit");
@@ -143,6 +143,7 @@ export function createFetchClient(options: FetchClientOptions): FetchClient {
     scope: FetchScope | undefined,
     transferred: (bytes: number) => void,
     timeoutMs = o.timeoutMs,
+    accepts: (contentType: string) => boolean = () => true,
   ) => {
     validatePageTransportUrl(url);
     const permit = await o.operation.acquireFetch(scope);
@@ -171,6 +172,8 @@ export function createFetchClient(options: FetchClientOptions): FetchClient {
       check(signal);
       validatePageTransportUrl(response.url);
       if (response.status < 200 || response.status >= 300) throw new FetchFault("HTTP_STATUS");
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!accepts(contentType)) throw new FetchFault("UNSUPPORTED_CONTENT");
       const length = response.headers.get("content-length");
       const encoding = response.headers.get("content-encoding");
       if (
@@ -223,7 +226,7 @@ export function createFetchClient(options: FetchClientOptions): FetchClient {
     const content = sanitizeMarkdown(text);
     return { title: guessTitleFromMarkdown(content), content, sourceType: "markdown" };
   };
-  const fetch = (params: FetchParams, operation: OperationLease, scope?: FetchScope) => {
+  const fetch = async (params: FetchParams, operation: OperationLease, scope?: FetchScope) => {
     validatePageTransportUrl(params.url);
     if (params.maxChars !== undefined)
       boundedInteger(params.maxChars, 1, Number.MAX_SAFE_INTEGER, "maxChars");
@@ -234,15 +237,27 @@ export function createFetchClient(options: FetchClientOptions): FetchClient {
       logical(signalOf(scope), async () => {
         let transferredBytes = 0;
         const pageSignals: AbortSignal[] = [];
-        const physical = async (target: string, accept: string) => {
-          const result = await read(target, accept, o.maxResponseBytes, scope, (bytes) => {
-            transferredBytes += bytes;
-          });
+        const physical = async (
+          target: string,
+          accept: string,
+          accepts: (type: string) => boolean = () => true,
+        ) => {
+          const result = await read(
+            target,
+            accept,
+            o.maxResponseBytes,
+            scope,
+            (bytes) => {
+              transferredBytes += bytes;
+            },
+            o.timeoutMs,
+            accepts,
+          );
           pageSignals.push(result.signal);
           return result;
         };
         const html = async () => {
-          const response = await physical(url, "text/html");
+          const response = await physical(url, "text/html", isHtml);
           if (!/text\/html|application\/xhtml/i.test(response.contentType))
             throw new FetchFault("UNSUPPORTED_CONTENT");
           const page = await cleanFetchedHtml(response.url, response.text, Number.MAX_SAFE_INTEGER);
@@ -252,22 +267,24 @@ export function createFetchClient(options: FetchClientOptions): FetchClient {
             sourceType: page.source ?? "defuddle",
           };
         };
+        const variantFaults: FetchFault[] = [];
         const variant = async () => {
           try {
-            const accepted = await physical(url, "text/markdown");
+            const accepted = await physical(url, "text/markdown", isMarkdown);
             if (/text\/markdown/i.test(accepted.contentType)) return markdown(accepted.text);
           } catch (error) {
             if (!(error instanceof FetchFault)) throw error;
+            variantFaults.push(error);
             // A refused Accept variant does not withdraw a valid alternate link.
           }
-          const probe = await physical(url, "text/html");
+          const probe = await physical(url, "text/html", isHtml);
           if (!/text\/html|application\/xhtml/i.test(probe.contentType))
             throw new FetchFault("UNSUPPORTED_CONTENT");
           // Parse only an already bounded body; use the same alternate-link path.
           const { parseHTML } = await import("linkedom");
           const { document } = parseHTML(probe.text);
           const href = document
-            .querySelector('link[rel="alternate"][type="text/markdown"]')
+            .querySelector('link[rel="alternate"][type="text/markdown"][href]')
             ?.getAttribute("href");
           if (!href) throw new FetchFault("UNSUPPORTED_CONTENT");
           let target: string;
@@ -294,11 +311,24 @@ export function createFetchClient(options: FetchClientOptions): FetchClient {
         );
         const page = successes.sort((a, b) => scoreContent(b.content) - scoreContent(a.content))[0];
         if (!page) {
-          const reasons = results.flatMap((r) => (r.status === "rejected" ? [r.reason] : []));
+          const reasons = [
+            ...variantFaults,
+            ...results.flatMap((r) => (r.status === "rejected" ? [r.reason] : [])),
+          ];
           const admission = reasons.find((e) => e instanceof AdmissionError);
           if (admission) throw admission;
+          const priority: FetchDiagnosticCode[] = [
+            "RESPONSE_TOO_LARGE",
+            "FETCH_TIMEOUT",
+            "HTTP_STATUS",
+            "INVALID_ALTERNATE",
+            "UNSUPPORTED_CONTENT",
+            "TRANSPORT_FAILED",
+          ];
           const diagnostic =
-            reasons.find((e) => e instanceof FetchFault)?.code ?? "TRANSPORT_FAILED";
+            priority.find((code) =>
+              reasons.some((e) => e instanceof FetchFault && e.code === code),
+            ) ?? "TRANSPORT_FAILED";
           return {
             page: {
               id: scope?.pageId ?? "S1",
@@ -310,7 +340,9 @@ export function createFetchClient(options: FetchClientOptions): FetchClient {
             transferredBytes,
           };
         }
-        const content = page.content.slice(0, maxChars);
+        let content = page.content.slice(0, maxChars);
+        if (/[\uD800-\uDBFF]$/.test(content) && page.content.length > content.length)
+          content = content.slice(0, -1);
         return {
           page: {
             id: scope?.pageId ?? "S1",
@@ -328,7 +360,7 @@ export function createFetchClient(options: FetchClientOptions): FetchClient {
   };
   return Object.freeze({
     fetch,
-    discover(
+    async discover(
       urls: readonly string[],
       stagingRoot: string,
       operation: OperationLease,
@@ -386,6 +418,9 @@ export function createFetchClient(options: FetchClientOptions): FetchClient {
     },
   });
 }
+
+const isHtml = (type: string) => /text\/html|application\/xhtml/i.test(type);
+const isMarkdown = (type: string) => /text\/markdown/i.test(type);
 
 function documentationUrl(value: string): string {
   const url = new URL(value);

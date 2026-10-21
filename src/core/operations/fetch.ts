@@ -11,6 +11,7 @@ import type {
   Progress,
   SourceRecord,
 } from "../contracts.js";
+import { AdmissionError } from "../execution-coordinator.js";
 import { validatePageTransportUrl } from "../page-transport.js";
 
 export class FetchOperationFailure extends Error implements OperationFailure {
@@ -86,7 +87,13 @@ export async function fetchPage(params: FetchParams, context: Context): Promise<
       url: input.url,
       title: "",
       state: cancelled ? "cancelled" : "fetch-failed",
-      diagnostic: cancelled ? "FETCH_CANCELLED" : "TRANSPORT_FAILED",
+      diagnostic: cancelled
+        ? "FETCH_CANCELLED"
+        : error instanceof AdmissionError && error.code === "BUSY"
+          ? "BUSY"
+          : error instanceof TypeError
+            ? "INVALID_FETCH_ARGUMENTS"
+            : "TRANSPORT_FAILED",
     };
   } finally {
     operation.signal.removeEventListener("abort", onAbort);
