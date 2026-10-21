@@ -1344,7 +1344,7 @@ test("installing bounded fetch preserves all four registered tools with permissi
               sourceType: "docs",
               status: "success",
             },
-          ],
+          ] as OperationInputs["intelli_collate"]["extractions"],
         },
       ],
       ["intelli_research", { query: "Research", maxUrls: 1 }],
