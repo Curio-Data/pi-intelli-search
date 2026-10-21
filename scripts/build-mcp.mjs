@@ -17,6 +17,7 @@ const result = await build({
     cli: "packages/mcp/src/cli.ts",
     runtime: "packages/mcp/src/runtime.ts",
     server: "packages/mcp/src/server.ts",
+    "page-transport": "src/core/page-transport.ts",
   },
   outdir: "packages/mcp/dist",
   bundle: true,

@@ -13,6 +13,7 @@
     "core-llm.test.ts",
     "core-scoped-policy.test.ts",
     "core-operation-runtime.test.ts",
+    "core-page-transport.test.ts",
     "core-execution-settings.test.ts",
     "core-standalone-result.test.ts",
     "core-collate-result.test.ts",

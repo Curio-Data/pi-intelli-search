@@ -82,6 +82,7 @@ try {
     "dist/cli.js",
     "dist/runtime.js",
     "dist/server.js",
+    "dist/page-transport.js",
     "README.md",
     "LICENSE",
     "NOTICE",
@@ -153,6 +154,20 @@ try {
   assert.equal(result.stderr, "", "installed runtime emitted unexpected diagnostics");
   const evidence = JSON.parse(result.stdout);
   assert.equal(evidence.outcome, "completed");
+  await copyFile(
+    join(root, "test/probes/page-transport-install.mjs"),
+    join(dir, "page-transport-probe.mjs"),
+  );
+  const transportProbe = await run(
+    process.execPath,
+    ["page-transport-probe.mjs", join(pkg, "dist/page-transport.js")],
+    dir,
+    isolated,
+  );
+  assert.equal(transportProbe.stderr, "", "installed process transport polluted stderr");
+  evidence.pageTransport = JSON.parse(transportProbe.stdout);
+  assert.equal(evidence.pageTransport.cancellation, "process-settled");
+  assert.equal(evidence.pageTransport.childrenClosed, 3);
   assert(!(await readdir(dir)).includes("forbidden-agent"));
   // Protocol smoke against the installed executable, without the SDK or any
   // network: initialize, list, invalid-argument rejection and clean shutdown.

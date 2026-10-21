@@ -109,4 +109,9 @@ if ! node "$SMOKE_FILE"; then
 fi
 
 echo ""
+echo "── Installed process fetch transport ─────────────────────────────"
+cp "$PROJECT_DIR/test/probes/page-transport-install.mjs" "$TEST_DIR/_page-transport.mjs"
+node "$TEST_DIR/_page-transport.mjs" "$PKG_ROOT/dist/core/page-transport.js"
+
+echo ""
 echo "✅ Local publish smoke test passed — package is loadable with peer deps resolved to latest"

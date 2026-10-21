@@ -62,6 +62,7 @@ describe("shared engine dependency boundary", () => {
         "cache.ts",
         "core/execution-coordinator.ts",
         "core/operation-runtime.ts",
+        "core/page-transport.ts",
         "core/execution-settings.ts",
         "core/standalone-result.ts",
         "core/collate-result.ts",
@@ -150,6 +151,9 @@ describe("shared engine dependency boundary", () => {
         const runtime = await import('./core/operation-runtime.js');
         assert.equal(typeof runtime.createOperationRuntime, 'function');
         assert.equal(typeof runtime.createRuntimeGenerations, 'function');
+        const pages = await import('./core/page-transport.js');
+        assert.equal(typeof pages.createProcessPageTransport, 'function');
+        pages.createProcessPageTransport({ executable: process.execPath, environment: {} });
         const standalone = await import('./core/standalone-result.js');
         assert.equal(typeof standalone.createStandaloneResult, 'function');
         const collateProjection = await import('./core/collate-result.js');
