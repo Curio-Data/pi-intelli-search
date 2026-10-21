@@ -285,6 +285,7 @@ test(
       );
       assert.equal((extract.structuredContent as { outcome: string }).outcome, "completed");
       assert.match(textInBoth(extract), /Fixture extraction facts/);
+      const collateProgress: number[] = [];
       const collate = await fixture.client.callTool(
         {
           name: "intelli_collate",
@@ -301,16 +302,33 @@ test(
             ],
           },
         },
-        { timeout: 30_000 },
+        {
+          timeout: 30_000,
+          onprogress: (event) => {
+            collateProgress.push(event.progress);
+          },
+        },
       );
       const collated = collate.structuredContent as {
         outcome: string;
         details: { cachePath: string };
+        meta: {
+          operation: string;
+          persistence: string;
+          reportPath: string;
+          counts: { fetched: number; used: number };
+        };
       };
       assert.equal(collated.outcome, "completed");
       assert.match(textInBoth(collate), /file-reading capability/);
       assert.match(textInBoth(collate), /Fixture collated summary/);
       assert.ok(collated.details.cachePath.includes(`.search${sep}`));
+      assert.equal(collated.meta.operation, "intelli_collate");
+      assert.equal(collated.meta.persistence, "committed");
+      assert(collated.meta.reportPath.endsWith("report.md"));
+      assert.equal(collated.meta.counts.fetched, 0);
+      assert.equal(collated.meta.counts.used, 1);
+      assert.deepEqual(collateProgress, [0, 50, 100]);
     } finally {
       await fixture.close();
     }

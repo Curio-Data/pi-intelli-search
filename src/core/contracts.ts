@@ -76,7 +76,7 @@ export interface OperationResult<Details = Record<string, unknown>> {
   text: string;
   details: Details;
   outcome: OperationOutcome;
-  /** Additive registered standalone projection; other operations remain legacy. */
+  /** Additive registered projection; direct legacy helpers omit these fields. */
   data?: import("./execution-contracts.js").FullData;
   usage?: import("./execution-contracts.js").NumericHostUsage;
 }

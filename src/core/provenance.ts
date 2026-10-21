@@ -85,12 +85,11 @@ function pageUrl(value: string): string {
  * Validate prose references before callers rotate or write cache artefacts.
  * This validates references, not factual truth or claim-level grounding.
  */
-export function finalizeCollation(
+export function collationSynthesis(
   text: string,
   cachePath: string,
   extractions: readonly ExtractResult[],
-  identity: SourceIdentity,
-  evidence: "fetched" | "supplied",
+  sourceIds?: readonly string[],
 ): string {
   if (!text.trim()) {
     throw new Error(
@@ -111,6 +110,13 @@ export function finalizeCollation(
     );
   };
   if (!sources.length) invalid("no successful extraction evidence");
+  const ids = sourceIds ?? sources.map((_, index) => `S${index + 1}`);
+  if (
+    ids.length !== sources.length ||
+    new Set(ids).size !== ids.length ||
+    ids.some((id) => !/^S[1-9][0-9]*$/.test(id))
+  )
+    invalid("invalid evidence source IDs");
   if (!summary) invalid("empty synthesis");
   if (
     /^#{1,6}\s+(?:source assessment|source index|sources?(?: used)?|references|citations)\s*$/im.test(
@@ -128,9 +134,18 @@ export function finalizeCollation(
     )
       continue;
     for (const match of bracket[1].matchAll(/\bS(\d+)\b/gi)) {
-      const index = Number(match[1]);
-      if (index < 1 || index > sources.length || match[1] !== String(index))
-        invalid("unknown source ID");
+      if (!ids.includes(`S${match[1]}`)) invalid("unknown source ID");
+    }
+    if (sourceIds) {
+      for (const range of bracket[1].matchAll(/S(\d+)\s*[–-]\s*S(\d+)/gi)) {
+        const first = Number(range[1]);
+        const last = Number(range[2]);
+        const present = ids.filter(
+          (id) => Number(id.slice(1)) >= first && Number(id.slice(1)) <= last,
+        ).length;
+        if (first > last || present !== last - first + 1)
+          invalid("unknown source ID in citation range");
+      }
     }
   }
   // Cross-links present in an extraction are evidence CONTENT, not extra
@@ -145,11 +160,25 @@ export function finalizeCollation(
   // Ordinary project filenames such as report.md are not cache declarations.
   if (
     /(?:sources|extractions)[/\\]\d+-[^\s`<>"\]\)]+\.md\b/i.test(outsideBlocks) ||
-    outsideBlocks.includes(`${cachePath}/report.md`)
+    outsideBlocks.includes(`${cachePath}/report.md`) ||
+    (sourceIds !== undefined &&
+      /(?:sources[/\\]P\d+|extractions[/\\]S\d+)\.md\b/.test(outsideBlocks))
   ) {
     invalid("the model generated a cache-file reference");
   }
 
+  return summary;
+}
+
+export function finalizeCollation(
+  text: string,
+  cachePath: string,
+  extractions: readonly ExtractResult[],
+  identity: SourceIdentity,
+  evidence: "fetched" | "supplied",
+): string {
+  const sources = evidenceExtractions(extractions);
+  const summary = collationSynthesis(text, cachePath, sources);
   let result = `## Summary\n\n${summary}\n\n## Source assessment\n\n`;
   result +=
     "Source inventory is generated from this run's successful, non-empty extractions, not from search citations. Cross-links in synthesis are not additional fetched sources. Types are extraction metadata, not independent quality ratings.\n\n";
@@ -157,7 +186,10 @@ export function finalizeCollation(
   result += "|---|---|---|---|---|---|\n";
   for (const [index, source] of sources.entries()) {
     const extractionFile = identity.extractionFileFor(source.url);
-    if (!extractionFile) invalid("an evidence source has no extraction file");
+    if (!extractionFile)
+      throw new Error(
+        "Collation provenance validation failed: an evidence source has no extraction file. No report was committed; rerun the operation.",
+      );
     const fullPage = identity.sourceFileFor(source.url);
     result += `| S${index + 1} | ${cell(source.url)} | ${cell(source.sourceType)} | ${evidence === "fetched" ? "Fetched and extracted" : "Caller-supplied extraction"} | ${cell(`${cachePath}/extractions/${extractionFile}`)} | ${fullPage ? cell(`${cachePath}/sources/${fullPage}`) : "Not cached"} |\n`;
   }

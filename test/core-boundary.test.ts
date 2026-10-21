@@ -64,6 +64,7 @@ describe("shared engine dependency boundary", () => {
         "core/operation-runtime.ts",
         "core/execution-settings.ts",
         "core/standalone-result.ts",
+        "core/collate-result.ts",
         "core/usage.ts",
         "core/run-store.ts",
         "core/run-index.ts",
@@ -151,6 +152,9 @@ describe("shared engine dependency boundary", () => {
         assert.equal(typeof runtime.createRuntimeGenerations, 'function');
         const standalone = await import('./core/standalone-result.js');
         assert.equal(typeof standalone.createStandaloneResult, 'function');
+        const collateProjection = await import('./core/collate-result.js');
+        assert.equal(typeof collateProjection.createCollateResult, 'function');
+        assert.ok(core.collateOutputSchema);
         assert.equal(typeof core.compactResult, 'function');
         assert.ok(core.standaloneOutputSchemas.intelli_search);
         assert.ok(core.compactOutputSchema);

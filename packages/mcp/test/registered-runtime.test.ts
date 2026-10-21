@@ -411,7 +411,14 @@ test("registered MCP inference cannot use the legacy unscoped bypass (source gat
   );
   assert.match(runtime, /const settings = config\.settings/);
   assert.match(runtime, /modelConcurrency: executionSettings\.modelConcurrency/);
-  assert.match(runtime, /projection!\.run\(context,/);
+  assert.match(runtime, /standaloneProjection!\.run\(context,/);
+  assert.match(runtime, /return collation!\.run\(context\)/);
+  const collateSource = await readFile(
+    new URL("../../../src/core/collate-result.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(collateSource, /completeOperationModel\(context, "collate",/);
+  assert(!/\bmodels\.complete\s*\(/.test(collateSource));
   assert.match(runtime, /projection\?\.settled\(result\)/);
   assert.match(runtime, /criticalReserve: executionSettings\.criticalReserve/);
   assert.match(runtime, /fetchConcurrency: executionSettings\.aggregateFetchConcurrency/);

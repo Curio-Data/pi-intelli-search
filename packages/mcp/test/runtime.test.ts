@@ -76,6 +76,9 @@ test("all shared operations run outside the host with standalone policy and cach
     assert(!collate.text.includes("`read "));
     assert.equal(collate.execution.attempts.length, 2);
     assert(collate.execution.attempts.every((item) => item.role === "collate"));
+    assert(collate.data?.cache.status === "committed");
+    const collateReport = collate.data.cache.reportPath;
+    await assert.rejects(readFile(join(f.dir, ".search/.index.json")), /ENOENT/);
     const progress: string[] = [];
     const research = await runtime.execute(
       "intelli_research",
@@ -94,6 +97,10 @@ test("all shared operations run outside the host with standalone policy and cach
     );
     assert.equal(research.execution.accounting.attempts, research.execution.attempts.length);
     assert.match(research.text, /Related cached searches/);
+    assert(
+      research.text.includes(collateReport),
+      "registered research reads the verified collate namespace",
+    );
     assert(!research.text.includes("`read "));
     assert(progress.includes("search") && progress.includes("collate"));
     const path = research.details.cachePath as string;

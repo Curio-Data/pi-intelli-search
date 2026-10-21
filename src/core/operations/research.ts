@@ -48,7 +48,7 @@ import {
 } from "../util.js";
 import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "../telemetry.js";
 import { mkdir, writeFile, rm, readdir, readFile, mkdtemp, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import type { FetchedPage, ExtractResult, ModelConfig } from "../types.js";
 import {
   appendDomainFilter,
@@ -714,7 +714,20 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
   let cacheSuggestSurfaced = 0;
   let cacheSuggestSlugs: string[] = [];
   try {
-    const index = await readIndex(p.paths.cacheRoot);
+    // Registered readers use the accepted verified new/legacy compatibility
+    // view. Freeze one bounded array for the existing prompt and parser. The
+    // legacy direct helper retains its characterised reader and ordering.
+    const index = p.services
+      ? {
+          searches: (await p.services.runs.candidates(undefined, p.params.query, p.services.operation.signal))
+            .filter((entry) => entry.reportPath !== join(p.cachePath, "report.md"))
+            .map((entry) => ({
+              slug: relative(p.paths.cacheDisplayRoot, dirname(entry.reportPath)),
+              query: entry.query,
+              timestamp: entry.startedUtc,
+            })),
+        }
+      : await readIndex(p.paths.cacheRoot);
     // Only run judge if there are other searches to compare against
     if (index.searches.some((e) => e.slug !== currentSlug)) {
       const indexText = formatIndexForJudge(index, currentSlug);

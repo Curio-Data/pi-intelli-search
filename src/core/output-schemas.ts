@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
-import { Type } from "typebox";
+import { Type, type TSchema } from "typebox";
 import { AccountingSummarySchema, AttemptRecordSchema } from "./accounting-schema.js";
 
 const strict = { additionalProperties: false } as const;
@@ -80,7 +80,20 @@ const standaloneSource = Type.Object(
   },
   strict,
 );
-const full = (name: "intelli_search" | "intelli_extract") =>
+const collateSource = Type.Object(
+  {
+    id: Type.String(),
+    url: Type.String(),
+    title: Type.String(),
+    state: literals(["used", "empty", "extract-failed"]),
+    sourceType: Type.Optional(Type.String()),
+    extractionPath: Type.Optional(Type.String()),
+    fullPagePath: Type.Optional(Type.String()),
+    diagnostic: Type.Optional(Type.String()),
+  },
+  strict,
+);
+const full = (name: "intelli_search" | "intelli_extract" | "intelli_collate"): TSchema =>
   Type.Object(
     {
       schemaVersion: Type.Literal(1),
@@ -90,7 +103,7 @@ const full = (name: "intelli_search" | "intelli_extract") =>
       text: Type.String(),
       details,
       summary: Type.String(),
-      sources: Type.Array(standaloneSource),
+      sources: Type.Array(name === "intelli_collate" ? collateSource : standaloneSource),
       cache: persistence,
       related: Type.Array(
         Type.Object(
@@ -141,6 +154,8 @@ export const standaloneOutputSchemas = Object.freeze({
   intelli_search: full("intelli_search"),
   intelli_extract: full("intelli_extract"),
 });
+/** Registered supplied-input collation only; not the five-operation schema map. */
+export const collateOutputSchema = full("intelli_collate");
 export const compactOutputSchema = Type.Object(
   {
     outcome,

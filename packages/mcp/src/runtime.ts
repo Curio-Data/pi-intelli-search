@@ -7,6 +7,7 @@ import { createOperationRuntime } from "../../../src/core/operation-runtime.js";
 import { AdmissionError } from "../../../src/core/execution-coordinator.js";
 import { createSystemClock } from "../../../src/core/clock.js";
 import { createStandaloneResult } from "../../../src/core/standalone-result.js";
+import { createCollateResult } from "../../../src/core/collate-result.js";
 import {
   parseExecutionSettings,
   validateRequestInterval,
@@ -17,7 +18,6 @@ import type { TSchema } from "typebox";
 import {
   search,
   extract,
-  collate,
   research,
   searchSchema,
   extractSchema,
@@ -35,6 +35,7 @@ import type {
   Clock,
   FetchClient,
   FullData,
+  Diagnostic,
 } from "../../../src/core/contracts.js";
 import type { ResearchDependencies } from "../../../src/core/operations/research.js";
 import type { FetchFunction } from "../../../src/core/annotations.js";
@@ -150,8 +151,8 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
     warn: (message) => deliver("warn", message),
   };
   const clock = options.clock ?? createSystemClock();
-  // Fetch/persistence production is a later slice. Never silently substitute the
-  // unbounded legacy fetch implementation behind the new FetchClient contract.
+  // Coordinated fetch remains a later slice; supplied collation uses the run
+  // store below. Never substitute legacy fetch behind the FetchClient contract.
   const unwiredFetch: FetchClient = Object.freeze({
     async fetch() {
       throw new Error("Coordinated fetch is not installed");
@@ -160,6 +161,7 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
       throw new Error("Coordinated discovery is not installed");
     },
   });
+  const diagnostics = new Map<string, (diagnostic: Diagnostic) => void>();
   const lifetime = createOperationRuntime({
     modelConcurrency: executionSettings.modelConcurrency,
     criticalReserve: executionSettings.criticalReserve,
@@ -168,14 +170,17 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
     clock,
     generation: 0,
     createFetch: () => unwiredFetch,
-    createRuns: () =>
+    createRuns: (operation) =>
       createRunStore({
         workspaceRoot: paths.workspaceRoot,
         cacheRoot: paths.cacheRoot,
         displayRoot: paths.cacheDisplayRoot,
         clock,
         randomId: () => randomBytes(16).toString("hex"),
-        onDiagnostic: (diagnostic) => logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
+        onDiagnostic: (diagnostic) => {
+          diagnostics.get(operation.id)?.(diagnostic);
+          logger.warn(`${diagnostic.code}: ${diagnostic.message}`);
+        },
       }),
   });
   let closed = false;
@@ -193,7 +198,7 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
     ): Promise<OperationResult & { readonly execution: ExecutionReceipt }> {
       const state: { category: StandaloneErrorCode } = { category: "INVALID_ARGUMENTS" };
       let owned: OperationServices | undefined;
-      const projection =
+      const standaloneProjection =
         name === "intelli_search" || name === "intelli_extract"
           ? createStandaloneResult(
               name,
@@ -208,6 +213,9 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
               (diagnostic) => logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
             )
           : undefined;
+      const operationId = randomUUID();
+      let collation: ReturnType<typeof createCollateResult> | undefined;
+      let projection: typeof standaloneProjection | typeof collation = standaloneProjection;
       const safeData = (data: FullData): FullData =>
         JSON.parse(
           JSON.stringify(data, (_key, value: unknown) =>
@@ -216,6 +224,19 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
         );
       try {
         validate(name, params);
+        if (name === "intelli_collate") {
+          collation = createCollateResult(
+            params as OperationInputs["intelli_collate"],
+            clock,
+            (event) => {
+              if (event.event === "retry") logger.error(event.message);
+              if (!closed) execution.onProgress?.({ ...event, message: redact(event.message) });
+            },
+            (diagnostic) => logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
+          );
+          projection = collation;
+          diagnostics.set(operationId, collation.diagnostic);
+        }
         if ("domains" in params && params.domains !== undefined) {
           validateDomains(params.domains, "domains");
           const search = config.settings.searchWebSearch;
@@ -231,7 +252,7 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
         }
         const result = await lifetime.run(
           {
-            operationId: randomUUID(),
+            operationId,
             signal: execution.signal,
             onProgress: execution.onProgress,
             onDiagnostic: (diagnostic) => logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
@@ -304,15 +325,15 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
             const result = await withStandaloneStdout(logger, async () => {
               switch (name) {
                 case "intelli_search":
-                  return projection!.run(context, (scoped) =>
+                  return standaloneProjection!.run(context, (scoped) =>
                     search(params as OperationInputs["intelli_search"], scoped),
                   );
                 case "intelli_extract":
-                  return projection!.run(context, (scoped) =>
+                  return standaloneProjection!.run(context, (scoped) =>
                     extract(params as OperationInputs["intelli_extract"], scoped),
                   );
                 case "intelli_collate":
-                  return collate(params as OperationInputs["intelli_collate"], context);
+                  return collation!.run(context);
                 case "intelli_research":
                   return research(
                     params as OperationInputs["intelli_research"],
@@ -392,6 +413,7 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
         );
       } finally {
         projection?.dispose();
+        diagnostics.delete(operationId);
       }
     },
   };

@@ -23,7 +23,8 @@ import type {
 import extension from "../src/index.js";
 import { getEventListeners } from "node:events";
 import { Check } from "typebox/value";
-import { standaloneOutputSchemas } from "../src/core/output-schemas.js";
+import { standaloneOutputSchemas, collateOutputSchema } from "../src/core/output-schemas.js";
+import { suppliedCollation, verifyCollateData } from "./helpers/collate-fixtures.js";
 import type { FullData, Progress } from "../src/core/contracts.js";
 import { __harness as indexHarness } from "../src/index.js";
 import { __harness as llmHarness } from "../src/llm.js";
@@ -301,7 +302,11 @@ test("native research/suggest roles share a settled operation, retry accounting 
     },
   );
   try {
-    await mkdir(join(f.root, ".search"));
+    await mkdir(join(f.root, ".search/2026-01-01-prior-abcdef"), { recursive: true });
+    await writeFile(
+      join(f.root, ".search/2026-01-01-prior-abcdef/report.md"),
+      "Prior verified legacy report",
+    );
     await writeFile(
       join(f.root, ".search/.index.json"),
       JSON.stringify({
@@ -1117,7 +1122,14 @@ test("registered native inference source gate excludes legacy context/client/har
   assert.match(source, /fetchConcurrency: execution\.aggregateFetchConcurrency/);
   assert.match(source, /createScopedNativeModelClient\(modelContext, services/);
   assert.match(source, /captured\.runtime!\.run\(/);
-  assert.match(source, /projection!\.run\(context,/);
+  assert.match(source, /standaloneProjection!\.run\(context,/);
+  assert.match(source, /return collation!\.run\(context\)/);
+  const collateSource = await readFile(
+    new URL("../src/core/collate-result.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(collateSource, /completeOperationModel\(context, "collate",/);
+  assert(!/\bmodels\.complete\s*\(/.test(collateSource));
   assert.match(source, /projection\?\.settled\(result\)/);
   assert(
     !/\b(createNativeOperationContext|createNativeModelClient|__harness|callLlm)\b/.test(source),
@@ -1129,5 +1141,115 @@ test("registered native inference source gate excludes legacy context/client/har
     );
     assert(!/\bmodels\.complete\s*\(/.test(operation));
     assert(operation.includes("completeOperationModel("));
+  }
+});
+
+test("registered native collate publishes supplied identities and settled full data without touching legacy research (T07/T17/T20/T22)", async () => {
+  const f = await fixture(async (context, options) => {
+    assert.equal(context.systemPrompt, COLLATION_SYSTEM_PROMPT);
+    assert.equal(options.maxRetries, 0);
+    assert(
+      !JSON.stringify(context).includes("RAW_") && !JSON.stringify(context).includes("password"),
+    );
+    return response("Facts [S2] and [S4].");
+  });
+  try {
+    const result = await f.run("intelli_collate", suppliedCollation());
+    const data = result.details!.intelli as FullData;
+    assert(Check(collateOutputSchema, data));
+    assert.equal(data.text, result.content[0].text);
+    assert.equal(data.accounting.attempts, 1);
+    assert.deepEqual(data.attempts, receipt(result).attempts);
+    assert.equal(data.counts.fetched, 0);
+    assert.equal(data.counts.used, 2);
+    assert(!JSON.stringify(data).includes("RAW_"));
+    await verifyCollateData(f.root, data);
+    assert(!("intelli" in data.details));
+    assert.equal(f.updates.length, 4);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("native collate replacement drains its active attempt and suppresses stale completion (T05/T10/T17/T20)", async () => {
+  const entered = deferred();
+  const release = deferred();
+  const f = await fixture(async () => {
+    entered.resolve();
+    await release.promise;
+    return response("Facts [S2] and [S4].");
+  });
+  try {
+    const pending = f.run("intelli_collate", suppliedCollation());
+    await entered.promise;
+    const successor = f.makeContext("replacement");
+    let enabled = false;
+    const replacing = f.runtime.start(successor).then(() => {
+      enabled = true;
+    });
+    await Promise.resolve();
+    assert.equal(enabled, false);
+    const before = f.updates.length;
+    release.resolve();
+    const old = await pending;
+    await replacing;
+    const data = old.details!.intelli as FullData;
+    assert(Check(collateOutputSchema, data));
+    assert.equal(data.outcome, "aborted");
+    assert.equal(data.accounting.parentDelivery, "unknown");
+    assert.equal(data.accounting.attempts, 1);
+    assert.equal(f.updates.length, before);
+    await f.runtime.shutdown(f.ctx);
+    const fresh = await f.run("intelli_collate", suppliedCollation(), undefined, successor);
+    assert.equal((fresh.details!.intelli as FullData).outcome, "completed");
+  } finally {
+    release.resolve();
+    await f.cleanup();
+  }
+});
+
+test("native collate zero-input and pre-dispatch BUSY retain zero-attempt errors on capable and older hosts (T17)", async () => {
+  for (const modern of [true, false]) {
+    for (const busy of [false, true]) {
+      let attempts = 0;
+      const f = await fixture(
+        async () => {
+          attempts++;
+          return response("Unexpected");
+        },
+        {
+          supportsErrorResults: modern,
+          ...(busy
+            ? {
+                createRuns: () =>
+                  ({
+                    async allocate() {
+                      throw Object.assign(new Error("Resource busy"), { code: "BUSY" });
+                    },
+                    async settle() {},
+                  }) as unknown as import("../src/core/contracts.js").RunStore,
+              }
+            : {}),
+        },
+      );
+      try {
+        const result = await f
+          .run("intelli_collate", busy ? suppliedCollation() : { query: "Empty", extractions: [] })
+          .catch((e: unknown) => e);
+        const data =
+          result instanceof NativeExecutionError
+            ? result.data
+            : ((result as Result).details!.intelli as FullData);
+        assert(data && Check(collateOutputSchema, data));
+        assert.equal(data.outcome, "error");
+        assert.equal(data.accounting.attempts, 0);
+        assert.equal(data.accounting.parentDelivery, modern ? "available" : "unknown");
+        assert.equal(attempts, 0);
+        if (modern) assert((result as Result).isError);
+        else assert(result instanceof NativeExecutionError);
+      } finally {
+        await f.cleanup();
+      }
+    }
   }
 });

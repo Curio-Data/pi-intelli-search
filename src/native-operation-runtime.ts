@@ -21,12 +21,12 @@ import { createRuntimeGenerations, type OperationRuntime } from "./core/operatio
 import { AdmissionError } from "./core/execution-coordinator.js";
 import { createSystemClock } from "./core/clock.js";
 import { createStandaloneResult } from "./core/standalone-result.js";
+import { createCollateResult } from "./core/collate-result.js";
 import { parseExecutionSettings, validateRequestInterval } from "./core/execution-settings.js";
 import { createRunStore } from "./core/run-store.js";
 import { resolveWorkspacePaths } from "./core/paths.js";
 import { search } from "./core/operations/search.js";
 import { extract } from "./core/operations/extract.js";
-import { collate } from "./core/operations/collate.js";
 import {
   research,
   MissingModelsError,
@@ -280,6 +280,11 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
       const notices: Diagnostic[] = [];
       const diagnose = (diagnostic: Diagnostic) => {
         notices.push({ ...diagnostic });
+        if (
+          diagnostic.code !== "OPERATION_DIAGNOSTIC" &&
+          diagnostic.code !== "PROGRESS_DELIVERY_FAILED"
+        )
+          collation?.diagnostic(diagnostic);
         if (active(captured) && hasUI) {
           try {
             ui.notify(`[pi-intelli-search] ${diagnostic.message}`, "warning");
@@ -297,7 +302,7 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
         warn: (message: string) => diagnose({ code: "OPERATION_DIAGNOSTIC", message }),
       };
       const operationId = randomUUID();
-      const projection =
+      const standaloneProjection =
         name === "intelli_search" || name === "intelli_extract"
           ? createStandaloneResult(
               name,
@@ -309,6 +314,18 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
               diagnose,
             )
           : undefined;
+      const collation =
+        name === "intelli_collate"
+          ? createCollateResult(
+              params as OperationInputs["intelli_collate"],
+              clock,
+              (event) => {
+                if (active(captured)) onUpdate?.(nativeProgress(event));
+              },
+              diagnose,
+            )
+          : undefined;
+      const projection = standaloneProjection ?? collation;
       diagnostics.set(operationId, diagnose);
       let owned: OperationServices | undefined;
       const receipt = (
@@ -353,15 +370,15 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
             };
             switch (name) {
               case "intelli_search":
-                return projection!.run(context, (scoped) =>
+                return standaloneProjection!.run(context, (scoped) =>
                   search(params as OperationInputs["intelli_search"], scoped),
                 );
               case "intelli_extract":
-                return projection!.run(context, (scoped) =>
+                return standaloneProjection!.run(context, (scoped) =>
                   extract(params as OperationInputs["intelli_extract"], scoped),
                 );
               case "intelli_collate":
-                return collate(params as OperationInputs["intelli_collate"], context);
+                return collation!.run(context);
               case "intelli_research": {
                 const originalPreflight = models.preflight;
                 const withIndicator: OperationContext = {
@@ -435,9 +452,9 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
         );
         const full = projection?.settled(result);
         return {
-          ...nativeResult(result as OperationResult),
+          ...nativeResult({ ...result, text: full?.text ?? result.text } as OperationResult),
           details: {
-            ...result.details,
+            ...(full?.details ?? result.details),
             ...(full ? { intelli: full.data } : {}),
             execution: receipt(),
           },
@@ -450,7 +467,10 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
           (!owned.ledger.records().length &&
             !signal?.aborted &&
             !captured.closed &&
-            !(projection?.active && error instanceof AdmissionError && error.code === "BUSY"))
+            !(
+              collation?.active ||
+              (projection?.active && error instanceof AdmissionError && error.code === "BUSY")
+            ))
         )
           throw error;
         const aborted = Boolean(signal?.aborted || captured.closed);
