@@ -280,11 +280,6 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
       const notices: Diagnostic[] = [];
       const diagnose = (diagnostic: Diagnostic) => {
         notices.push({ ...diagnostic });
-        if (
-          diagnostic.code !== "OPERATION_DIAGNOSTIC" &&
-          diagnostic.code !== "PROGRESS_DELIVERY_FAILED"
-        )
-          collation?.diagnostic(diagnostic);
         if (active(captured) && hasUI) {
           try {
             ui.notify(`[pi-intelli-search] ${diagnostic.message}`, "warning");
@@ -326,7 +321,10 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
             )
           : undefined;
       const projection = standaloneProjection ?? collation;
-      diagnostics.set(operationId, diagnose);
+      diagnostics.set(operationId, (diagnostic) => {
+        collation?.diagnostic(diagnostic);
+        diagnose(diagnostic);
+      });
       let owned: OperationServices | undefined;
       const receipt = (
         parentDelivery: AccountingSummary["parentDelivery"] = "available",

@@ -304,11 +304,17 @@ test("persistence faults retain useful completed collation and explicit publicat
     "before-index-rename",
     "before-accounting-marker-rename",
     "after-accounting-marker-rename",
+    "combined",
   ] as const) {
     const f = await fixture({
       hooks: {
         fault: (at) => {
-          if (at === point) throw new Error(`injected ${point}`);
+          if (
+            at === point ||
+            (point === "combined" &&
+              ["before-index-rename", "before-accounting-marker-rename"].includes(at))
+          )
+            throw new Error(`injected ${point}`);
         },
       },
     });
@@ -331,6 +337,14 @@ test("persistence faults retain useful completed collation and explicit publicat
           assert.equal(final.data.cache.diagnostic.code, "MARKER_DURABILITY_UNPROVEN");
         if (point === "after-accounting-marker-rename")
           assert.equal(final.data.cache.diagnostic.code, "ACCOUNTING_DURABILITY_UNPROVEN");
+        if (point === "combined") {
+          assert.equal(final.data.cache.index, "unavailable");
+          assert.equal(proof.accounting, undefined);
+          assert.match(final.data.cache.diagnostic.message, /INDEX_IO/);
+          assert.match(final.data.cache.diagnostic.message, /ACCOUNTING_IO/);
+          assert.match(final.text, /INDEX_IO/);
+          assert.match(final.text, /ACCOUNTING_IO/);
+        }
       }
     } finally {
       await f.cleanup();

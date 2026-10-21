@@ -69,6 +69,7 @@ export function createCollateResult(
   let details: FullData["details"] = {};
   let cache: Persistence = { status: "not-requested" };
   let persistenceDiagnostic: Diagnostic | undefined;
+  const persistenceDiagnostics: Diagnostic[] = [];
   let sources: SourceRecord[] = [];
 
   const emit = (event: Progress["event"], state: Progress["state"], message: string) => {
@@ -95,12 +96,26 @@ export function createCollateResult(
     }
   };
   const diagnostic = (value: Diagnostic) => {
-    persistenceDiagnostic = { ...value };
+    if (
+      !persistenceDiagnostics.some(
+        (prior) => prior.code === value.code && prior.message === value.message,
+      )
+    )
+      persistenceDiagnostics.push({ ...value });
+    persistenceDiagnostic =
+      persistenceDiagnostics.length === 1
+        ? persistenceDiagnostics[0]
+        : {
+            code: value.code,
+            message: persistenceDiagnostics
+              .map((prior) => `${prior.code}: ${prior.message}`)
+              .join("\n"),
+          };
     if (cache.status === "committed") cache = { ...cache, diagnostic: persistenceDiagnostic };
   };
   const unavailable = (value: Diagnostic) => {
     diagnostic(value);
-    cache = { status: "unavailable", diagnostic: value };
+    cache = { status: "unavailable", diagnostic: persistenceDiagnostic! };
     try {
       onDiagnostic?.(value);
     } catch {
@@ -260,7 +275,15 @@ export function createCollateResult(
           evidenceSourceIds: evidenceSources.map((source) => source.id),
           documents: [],
           suppliedPages,
-          provenance: { domains: [], models: { collate: { ...context.settings.collateModel } } },
+          provenance: {
+            domains: [],
+            models: {
+              collate: {
+                provider: context.settings.collateModel.provider,
+                model: context.settings.collateModel.model,
+              },
+            },
+          },
         };
         const report = `# ${params.query}\n\n## Summary\n\n${summary}${inventory(manifestSources)}`;
         artifacts.push(

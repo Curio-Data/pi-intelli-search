@@ -25,6 +25,7 @@ import { getEventListeners } from "node:events";
 import { Check } from "typebox/value";
 import { standaloneOutputSchemas, collateOutputSchema } from "../src/core/output-schemas.js";
 import { suppliedCollation, verifyCollateData } from "./helpers/collate-fixtures.js";
+import { createRunStore } from "../src/core/run-store.js";
 import type { FullData, Progress } from "../src/core/contracts.js";
 import { __harness as indexHarness } from "../src/index.js";
 import { __harness as llmHarness } from "../src/llm.js";
@@ -1145,14 +1146,25 @@ test("registered native inference source gate excludes legacy context/client/har
 });
 
 test("registered native collate publishes supplied identities and settled full data without touching legacy research (T07/T17/T20/T22)", async () => {
-  const f = await fixture(async (context, options) => {
-    assert.equal(context.systemPrompt, COLLATION_SYSTEM_PROMPT);
-    assert.equal(options.maxRetries, 0);
-    assert(
-      !JSON.stringify(context).includes("RAW_") && !JSON.stringify(context).includes("password"),
-    );
-    return response("Facts [S2] and [S4].");
-  });
+  const f = await fixture(
+    async (context, options) => {
+      assert.equal(context.systemPrompt, COLLATION_SYSTEM_PROMPT);
+      assert.equal(options.maxRetries, 0);
+      assert(
+        !JSON.stringify(context).includes("RAW_") && !JSON.stringify(context).includes("password"),
+      );
+      return response("Facts [S2] and [S4].");
+    },
+    {},
+    {
+      collateModel: {
+        provider: "openrouter",
+        model: "same-model",
+        comment: "cheap",
+        apiKey: "DO_NOT_PERSIST_SENTINEL",
+      },
+    },
+  );
   try {
     const result = await f.run("intelli_collate", suppliedCollation());
     const data = result.details!.intelli as FullData;
@@ -1163,9 +1175,51 @@ test("registered native collate publishes supplied identities and settled full d
     assert.equal(data.counts.fetched, 0);
     assert.equal(data.counts.used, 2);
     assert(!JSON.stringify(data).includes("RAW_"));
-    await verifyCollateData(f.root, data);
+    const proof = await verifyCollateData(f.root, data);
+    assert.deepEqual(proof.manifest.provenance.models.collate, {
+      provider: "openrouter",
+      model: "same-model",
+    });
+    assert(!JSON.stringify(proof.manifest).includes("DO_NOT_PERSIST_SENTINEL"));
     assert(!("intelli" in data.details));
     assert.equal(f.updates.length, 4);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("native collate cleanup diagnostics stay separate from persistence diagnostics (T04/T17)", async () => {
+  let root = "";
+  const f = await fixture(async () => response("Facts [S2] and [S4]."), {
+    createRuns: ({ clock }) => {
+      const store = createRunStore({
+        workspaceRoot: root,
+        cacheRoot: join(root, ".search"),
+        displayRoot: ".search",
+        clock,
+        randomId: () => "0123456789abcdef",
+        onDiagnostic() {},
+      });
+      return {
+        ...store,
+        async settle() {
+          await store.settle();
+          throw new Error("cleanup fault");
+        },
+      };
+    },
+  });
+  root = f.root;
+  try {
+    const result = await f.run("intelli_collate", suppliedCollation());
+    assert(result.isError);
+    const data = result.details!.intelli as FullData;
+    assert(Check(collateOutputSchema, data));
+    assert.equal(data.outcome, "error");
+    assert(data.cache.status === "committed");
+    assert.equal(data.cache.diagnostic, undefined);
+    assert(receipt(result).diagnostics.some((d) => d.code === "OPERATION_CLEANUP_FAILED"));
+    await verifyCollateData(f.root, data);
   } finally {
     await f.cleanup();
   }
@@ -1208,7 +1262,7 @@ test("native collate replacement drains its active attempt and suppresses stale 
   }
 });
 
-test("native collate zero-input and pre-dispatch BUSY retain zero-attempt errors on capable and older hosts (T17)", async () => {
+test("native collate zero-input and BUSY-coded allocation faults retain zero-attempt errors on capable and older hosts (T17)", async () => {
   for (const modern of [true, false]) {
     for (const busy of [false, true]) {
       let attempts = 0;

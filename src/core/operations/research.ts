@@ -728,6 +728,7 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
             })),
         }
       : await readIndex(p.paths.cacheRoot);
+    if (p.services) Object.freeze(index.searches);
     // Only run judge if there are other searches to compare against
     if (index.searches.some((e) => e.slug !== currentSlug)) {
       const indexText = formatIndexForJudge(index, currentSlug);
