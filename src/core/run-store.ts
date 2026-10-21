@@ -77,6 +77,7 @@ import {
 import { readRunIndex, rebuildIndexEntries, selectCandidates } from "./run-index.js";
 import { accountingBodyError } from "./accounting-validation.js";
 import { runManifestError } from "./run-manifest.js";
+import { observeOperationDiagnostic } from "./operation-diagnostics.js";
 import {
   acquireWriterLock,
   loadNativeLockBinding,
@@ -150,6 +151,14 @@ export function createRunStore(options: RunStoreOptions): RunStore {
 
 /** Test seam: inject the lock backend loader and named fault boundaries. */
 export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStoreHooks): RunStore {
+  const notify = options.onDiagnostic;
+  options = {
+    ...options,
+    onDiagnostic(diagnostic) {
+      observeOperationDiagnostic(diagnostic);
+      notify(diagnostic);
+    },
+  };
   const namespaceDir = join(options.cacheRoot, NAMESPACE_DIR);
   const runsDir = join(namespaceDir, RUNS_DIR);
   const displayNamespace = join(options.displayRoot, NAMESPACE_DIR);
@@ -962,7 +971,8 @@ export function createRunStoreWithHooks(options: RunStoreOptions, hooks: RunStor
     const runDir = run.reservation.physicalPath;
     try {
       const invalid = accountingBodyError(records, summary, entry.operationId);
-      if (invalid) throw new StoreError("INVALID_ACCOUNTING", `Accounting for ${runDir}: ${invalid}`);
+      if (invalid)
+        throw new StoreError("INVALID_ACCOUNTING", `Accounting for ${runDir}: ${invalid}`);
       const accounting: AccountingRecord = {
         schema: "intelli-v1/accounting",
         schemaVersion: 1,

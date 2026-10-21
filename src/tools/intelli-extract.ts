@@ -5,7 +5,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { OnUpdate } from "../host-types.js";
 import type { ExtractParams } from "../core/contracts.js";
 import { extractSchema } from "../core/schemas.js";
-import { extract } from "../core/operations/extract.js";
+import { legacyExtract as extract } from "../core/operations/extract.js";
 import { createNativeOperationContext, nativeResult } from "../native-operation-context.js";
 
 export const intelliExtractTool = {

@@ -19,8 +19,8 @@ import type {
 import { createRuntimeGenerations, type OperationRuntime } from "./core/operation-runtime.js";
 import { AdmissionError } from "./core/execution-coordinator.js";
 import { createSystemClock } from "./core/clock.js";
-import { createStandaloneResult } from "./core/standalone-result.js";
-import { createCollateResult } from "./core/collate-result.js";
+import { createOperationResultBoundary, isOperationFailure } from "./core/operation-result.js";
+import { collate } from "./core/operations/collate.js";
 import { parseExecutionSettings, validateRequestInterval } from "./core/execution-settings.js";
 import { createRunStore } from "./core/run-store.js";
 import { capturePageFetchFactory, capturePageEnvironment } from "./core/page-runtime.js";
@@ -292,11 +292,9 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
         warn: (message: string) => diagnose({ code: "OPERATION_DIAGNOSTIC", message }),
       };
       const operationId = randomUUID();
-      const standaloneProjection =
-        name === "intelli_search" || name === "intelli_extract"
-          ? createStandaloneResult(
-              name,
-              params,
+      const boundary =
+        name !== "intelli_research"
+          ? createOperationResultBoundary(
               clock,
               (event) => {
                 if (active(captured)) onUpdate?.(nativeProgress(event));
@@ -304,22 +302,7 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
               diagnose,
             )
           : undefined;
-      const collation =
-        name === "intelli_collate"
-          ? createCollateResult(
-              params as OperationInputs["intelli_collate"],
-              clock,
-              (event) => {
-                if (active(captured)) onUpdate?.(nativeProgress(event));
-              },
-              diagnose,
-            )
-          : undefined;
-      const projection = standaloneProjection ?? collation;
-      diagnostics.set(operationId, (diagnostic) => {
-        collation?.diagnostic(diagnostic);
-        diagnose(diagnostic);
-      });
+      diagnostics.set(operationId, diagnose);
       let owned: OperationServices | undefined;
       const receipt = (
         parentDelivery: AccountingSummary["parentDelivery"] = "available",
@@ -363,15 +346,17 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
             };
             switch (name) {
               case "intelli_search":
-                return standaloneProjection!.run(context, (scoped) =>
-                  search(params as OperationInputs["intelli_search"], scoped),
+                return boundary!.run(() =>
+                  search(params as OperationInputs["intelli_search"], boundary!.context(context)),
                 );
               case "intelli_extract":
-                return standaloneProjection!.run(context, (scoped) =>
-                  extract(params as OperationInputs["intelli_extract"], scoped),
+                return boundary!.run(() =>
+                  extract(params as OperationInputs["intelli_extract"], boundary!.context(context)),
                 );
               case "intelli_collate":
-                return collation!.run(context);
+                return boundary!.run(() =>
+                  collate(params as OperationInputs["intelli_collate"], boundary!.context(context)),
+                );
               case "intelli_research": {
                 const originalPreflight = models.preflight;
                 const withIndicator: OperationContext = {
@@ -443,7 +428,7 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
             }
           },
         );
-        const full = projection?.settled(result);
+        const full = boundary?.settled();
         return {
           ...nativeResult({ ...result, text: full?.text ?? result.text } as OperationResult),
           details: {
@@ -460,20 +445,18 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
           (!owned.ledger.records().length &&
             !signal?.aborted &&
             !captured.closed &&
-            !(
-              collation?.active ||
-              (projection?.active && error instanceof AdmissionError && error.code === "BUSY")
-            ))
+            !boundary?.hasResult)
         )
           throw error;
-        const aborted = Boolean(signal?.aborted || captured.closed);
-        const full = projection?.active
-          ? projection.settled(
-              undefined,
-              { message: errMsg(error), aborted },
-              !options.supportsErrorResults || aborted ? "unknown" : "available",
-            )
-          : undefined;
+        const aborted = Boolean(
+          signal?.aborted ||
+          captured.closed ||
+          (isOperationFailure(error) && error.data.outcome === "aborted"),
+        );
+        const full = boundary?.settled(
+          { message: errMsg(error), aborted },
+          !options.supportsErrorResults || aborted ? "unknown" : "available",
+        );
         if (!options.supportsErrorResults) {
           // The floor agent loop ignores returned isError. Preserve its throwing
           // error signal; partial fields remain local, not claimed as delivered.
@@ -494,7 +477,7 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
           usage: owned.ledger.hostUsage(),
         };
       } finally {
-        projection?.dispose();
+        boundary?.dispose();
         diagnostics.delete(operationId);
       }
     },

@@ -6,7 +6,7 @@ import type { ModelConfig, ResearchSettings } from "./types.js";
 import type { WorkspacePaths } from "./paths.js";
 import type { OperationServices } from "./execution-contracts.js";
 
-// Additive P0-2 seams; existing operations keep their current context until integration.
+// Frozen P0-2 seams. Explicit legacy helpers retain OperationContext during cutover.
 export type * from "./execution-contracts.js";
 
 export type DeepReadonly<T> = T extends object
@@ -69,7 +69,7 @@ export interface OperationInputs {
   intelli_research: ResearchParams;
 }
 
-export type OperationOutcome = "completed" | "no-links" | "fetch-failed" | "extraction-failed";
+export type OperationOutcome = import("./execution-contracts.js").Outcome;
 
 /** Execution failures throw; degraded research remains a usable result. */
 export interface OperationResult<Details = Record<string, unknown>> {

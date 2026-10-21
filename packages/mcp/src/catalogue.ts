@@ -25,6 +25,7 @@ const aborted = () => new DOMException("Catalogue request cancelled", "AbortErro
 export function createCatalogue<T>(
   load: (signal: AbortSignal) => Promise<T>,
   clock: Clock,
+  onWaiterJoined?: (activeWaiters: number) => void,
 ): Catalogue<T> {
   let cached: { value: T; at: number } | undefined;
   let flight: Flight<T> | undefined;
@@ -94,6 +95,13 @@ export function createCatalogue<T>(
         else {
           next.add(waiter);
           start();
+        }
+        if (flight && !flight.draining) {
+          try {
+            onWaiterJoined?.(flight.waiters.size);
+          } catch {
+            /* Read-only instrumentation. */
+          }
         }
       });
     },

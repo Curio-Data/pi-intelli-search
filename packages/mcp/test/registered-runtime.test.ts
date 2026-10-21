@@ -411,15 +411,16 @@ test("registered MCP inference cannot use the legacy unscoped bypass (source gat
   );
   assert.match(runtime, /const settings = config\.settings/);
   assert.match(runtime, /modelConcurrency: executionSettings\.modelConcurrency/);
-  assert.match(runtime, /standaloneProjection!\.run\(context,/);
-  assert.match(runtime, /return collation!\.run\(context\)/);
+  for (const operation of ["search", "extract", "collate"])
+    assert.match(runtime, new RegExp(`boundary!\\.run\\(\\s*\\(\\) =>\\s*${operation}\\(`));
+  assert(!/createStandaloneResult|createCollateResult|legacySearch|legacyExtract|legacyCollate/.test(runtime));
   const collateSource = await readFile(
     new URL("../../../src/core/collate-result.ts", import.meta.url),
     "utf8",
   );
   assert.match(collateSource, /completeOperationModel\(context, "collate",/);
   assert(!/\bmodels\.complete\s*\(/.test(collateSource));
-  assert.match(runtime, /projection\?\.settled\(result\)/);
+  assert.match(runtime, /boundary\?\.settled\(\)/);
   assert.match(runtime, /criticalReserve: executionSettings\.criticalReserve/);
   assert.match(runtime, /fetchConcurrency: executionSettings\.aggregateFetchConcurrency/);
   const tree = ts.createSourceFile("runtime.ts", runtime, ts.ScriptTarget.Latest, true);
@@ -442,6 +443,7 @@ test("registered MCP inference cannot use the legacy unscoped bypass (source gat
     );
     assert(!/\bmodels\.complete\s*\(/.test(source), `${name}: direct dispatch bypasses role scope`);
     assert(source.includes("completeOperationModel("), `${name}: missing explicit role dispatch`);
+    if (name !== "research") assert(source.includes("produceCoreResult("));
   }
   const helper = await readFile(
     new URL("../../../src/core/operation-model.ts", import.meta.url),

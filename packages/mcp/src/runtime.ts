@@ -6,8 +6,12 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { createOperationRuntime } from "../../../src/core/operation-runtime.js";
 import { AdmissionError } from "../../../src/core/execution-coordinator.js";
 import { createSystemClock } from "../../../src/core/clock.js";
-import { createStandaloneResult } from "../../../src/core/standalone-result.js";
-import { createCollateResult } from "../../../src/core/collate-result.js";
+import {
+  createOperationResultBoundary,
+  isOperationFailure,
+  CoreConfigurationError,
+} from "../../../src/core/operation-result.js";
+import { redactFullData } from "./redaction.js";
 import {
   parseExecutionSettings,
   validateRequestInterval,
@@ -19,6 +23,7 @@ import type { TSchema } from "typebox";
 import {
   search,
   extract,
+  collate,
   research,
   searchSchema,
   extractSchema,
@@ -115,6 +120,8 @@ export interface RuntimeOptions {
   researchDependencies?: ResearchDependencies;
   /** Deterministic runtime clock; never an operation-owned replacement. */
   clock?: Clock;
+  /** Read-only witness after a waiter joins the shared catalogue flight. */
+  onCatalogueWaiterJoined?: (activeWaiters: number) => void;
 }
 export interface ExecuteOptions {
   signal?: AbortSignal;
@@ -157,10 +164,13 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
     warn: (message) => deliver("warn", message),
   };
   const clock = options.clock ?? createSystemClock();
-  const catalogue = createOpenRouterCatalogue(config, { fetch: options.fetch, env, logger }, clock);
+  const catalogue = createOpenRouterCatalogue(
+    config,
+    { fetch: options.fetch, env, logger, onCatalogueWaiterJoined: options.onCatalogueWaiterJoined },
+    clock,
+  );
   // Install the bounded service without changing legacy research scheduling.
   const createFetch = capturePageFetchFactory(config.settings, clock, pagePolicy);
-  const diagnostics = new Map<string, (diagnostic: Diagnostic) => void>();
   const lifetime = createOperationRuntime({
     modelConcurrency: executionSettings.modelConcurrency,
     criticalReserve: executionSettings.criticalReserve,
@@ -177,7 +187,6 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
         clock,
         randomId: () => randomBytes(16).toString("hex"),
         onDiagnostic: (diagnostic) => {
-          diagnostics.get(operation.id)?.(diagnostic);
           logger.warn(`${diagnostic.code}: ${diagnostic.message}`);
         },
       }),
@@ -200,15 +209,11 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
     ): Promise<OperationResult & { readonly execution: ExecutionReceipt }> {
       const state: { category: StandaloneErrorCode } = { category: "INVALID_ARGUMENTS" };
       let owned: OperationServices | undefined;
-      const standaloneProjection =
-        name === "intelli_search" || name === "intelli_extract"
-          ? createStandaloneResult(
-              name,
-              params,
+      const boundary =
+        name !== "intelli_research"
+          ? createOperationResultBoundary(
               clock,
               (event) => {
-                // Retain the existing stderr retry channel even when a host
-                // does not request progress or suppresses repeated percentages.
                 if (event.event === "retry") logger.error(event.message);
                 if (!closed) execution.onProgress?.({ ...event, message: redact(event.message) });
               },
@@ -216,29 +221,9 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
             )
           : undefined;
       const operationId = randomUUID();
-      let collation: ReturnType<typeof createCollateResult> | undefined;
-      let projection: typeof standaloneProjection | typeof collation = standaloneProjection;
-      const safeData = (data: FullData): FullData =>
-        JSON.parse(
-          JSON.stringify(data, (_key, value: unknown) =>
-            typeof value === "string" ? redact(value) : value,
-          ),
-        );
+      const safeData = (data: FullData): FullData => redactFullData(data, redact);
       try {
         validate(name, params);
-        if (name === "intelli_collate") {
-          collation = createCollateResult(
-            params as OperationInputs["intelli_collate"],
-            clock,
-            (event) => {
-              if (event.event === "retry") logger.error(event.message);
-              if (!closed) execution.onProgress?.({ ...event, message: redact(event.message) });
-            },
-            (diagnostic) => logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
-          );
-          projection = collation;
-          diagnostics.set(operationId, collation.diagnostic);
-        }
         if ("domains" in params && params.domains !== undefined) {
           validateDomains(params.domains, "domains");
           const search = config.settings.searchWebSearch;
@@ -328,15 +313,23 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
             const result = await withStandaloneStdout(logger, async () => {
               switch (name) {
                 case "intelli_search":
-                  return standaloneProjection!.run(context, (scoped) =>
-                    search(params as OperationInputs["intelli_search"], scoped),
+                  return boundary!.run(() =>
+                    search(params as OperationInputs["intelli_search"], boundary!.context(context)),
                   );
                 case "intelli_extract":
-                  return standaloneProjection!.run(context, (scoped) =>
-                    extract(params as OperationInputs["intelli_extract"], scoped),
+                  return boundary!.run(() =>
+                    extract(
+                      params as OperationInputs["intelli_extract"],
+                      boundary!.context(context),
+                    ),
                   );
                 case "intelli_collate":
-                  return collation!.run(context);
+                  return boundary!.run(() =>
+                    collate(
+                      params as OperationInputs["intelli_collate"],
+                      boundary!.context(context),
+                    ),
+                  );
                 case "intelli_research":
                   return research(
                     params as OperationInputs["intelli_research"],
@@ -363,7 +356,7 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
             };
           },
         );
-        const full = projection?.settled(result);
+        const full = boundary?.settled();
         const data = full ? safeData(full.data) : undefined;
         return {
           ...result,
@@ -372,9 +365,13 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
         };
       } catch (error) {
         // The runtime has settled before this boundary reads any ledger state.
+        if (error instanceof CoreConfigurationError) state.category = "CONFIGURATION";
+        const cause =
+          isOperationFailure(error) && error.cause instanceof StandaloneError ? error.cause : error;
         const aborted = Boolean(
           execution.signal?.aborted ||
           closed ||
+          (isOperationFailure(error) && error.data.outcome === "aborted") ||
           (error instanceof Error &&
             (error.name === "AbortError" ||
               ("code" in error && (error.code === "ABORTED" || error.code === "CLOSED")))),
@@ -383,18 +380,15 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
           owned && state.category === "OPERATION"
             ? executionReceipt(owned, aborted ? "unknown" : "available")
             : undefined;
-        const full = projection?.active
-          ? projection.settled(
-              undefined,
-              {
-                message: aborted
-                  ? "Operation aborted"
-                  : redact(error instanceof Error ? error.message : "Standalone operation failed"),
-                aborted,
-              },
-              aborted ? "unknown" : "available",
-            )
-          : undefined;
+        const full = boundary?.settled(
+          {
+            message: aborted
+              ? "Operation aborted"
+              : redact(error instanceof Error ? error.message : "Standalone operation failed"),
+            aborted,
+          },
+          aborted ? "unknown" : "available",
+        );
         if (aborted)
           throw new StandaloneError(
             "CANCELLED",
@@ -404,8 +398,8 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
             full?.usage,
           );
         throw new StandaloneError(
-          error instanceof StandaloneError
-            ? error.code
+          cause instanceof StandaloneError
+            ? cause.code
             : error instanceof AdmissionError
               ? "OPERATION"
               : state.category,
@@ -415,8 +409,7 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
           full?.usage,
         );
       } finally {
-        projection?.dispose();
-        diagnostics.delete(operationId);
+        boundary?.dispose();
       }
     },
   };

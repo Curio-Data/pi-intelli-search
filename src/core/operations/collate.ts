@@ -3,7 +3,9 @@
 
 import { COLLATION_SYSTEM_PROMPT } from "../prompts.js";
 import { completeOperationModel } from "../operation-model.js";
-import type { CollateParams } from "../contracts.js";
+import type { CollateParams, Context, CoreResult } from "../contracts.js";
+import { createCollateResult } from "../collate-result.js";
+import { produceCoreResult } from "../operation-result.js";
 import { displayCachePath } from "../paths.js";
 import {
   makeCachePath,
@@ -22,7 +24,23 @@ import type { ExtractResult } from "../types.js";
 import { errMsg, throwIfAborted } from "../util.js";
 import type { OperationContext, OperationResult } from "../contracts.js";
 
-export async function collate(
+export function collate(params: CollateParams, context: Context): Promise<CoreResult> {
+  const input = structuredClone(params);
+  return produceCoreResult(
+    context,
+    (legacy) =>
+      createCollateResult(
+        input,
+        context.services.clock,
+        context.services.onProgress,
+        (diagnostic) => legacy.logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
+      ),
+    "collate",
+  );
+}
+
+/** Explicit compatibility entrypoint; not used by registered execution. */
+export async function legacyCollate(
   params: CollateParams,
   context: OperationContext,
 ): Promise<OperationResult> {
@@ -40,12 +58,15 @@ export async function collate(
     extraction: e.extraction,
     sourceType: e.sourceType,
     currentness: "undated",
-    status: e.status === "success" && !e.extraction.trim()
-      ? "failed" : e.status as ExtractResult["status"],
+    status:
+      e.status === "success" && !e.extraction.trim()
+        ? "failed"
+        : (e.status as ExtractResult["status"]),
   }));
   const succeeded = evidenceExtractions(extractResults);
   const blocked = extractResults.filter((e) => e.status !== "success");
-  if (succeeded.length === 0) throw new Error("Collation requires at least one successful, non-empty extraction");
+  if (succeeded.length === 0)
+    throw new Error("Collation requires at least one successful, non-empty extraction");
 
   const fetchedPages = (params.fullPages ?? []).map((p) => ({
     url: p.url,

@@ -18,3 +18,4 @@ export * from "./telemetry.js";
 export * from "./progress.js";
 export * from "./output-schemas.js";
 export * from "./compact-result.js";
+export * from "./operation-result.js";

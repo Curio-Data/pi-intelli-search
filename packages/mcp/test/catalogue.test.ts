@@ -104,6 +104,67 @@ test("T14 last waiter abort waits for loader drain; arrivals cannot overlap its 
   await loader.close();
 });
 
+test(
+  "T14 actual runtime cancellation preserves an explicitly joined second catalogue waiter",
+  { timeout: 15_000 },
+  async () => {
+    const f = await fixture();
+    const held = deferred<void>();
+    const joined = deferred<void>();
+    let loads = 0;
+    let completions = 0;
+    let transportSignal: AbortSignal | undefined;
+    const runtime = await createRuntime(f.config, {
+      env: { FIXTURE_KEY: "synthetic-credential" },
+      onCatalogueWaiterJoined: (count) => {
+        if (count === 2) joined.resolve();
+      },
+      fetch: async (url, init) => {
+        if (String(url).endsWith("/models")) {
+          loads++;
+          transportSignal = init?.signal ?? undefined;
+          await held.promise;
+          return json(catalogue());
+        }
+        completions++;
+        return json({ choices: [{ message: { content: "Useful facts" }, finish_reason: "stop" }] });
+      },
+    });
+    const caller = new AbortController();
+    const one = runtime.execute(
+      "intelli_search",
+      { query: "cancel me" },
+      { signal: caller.signal },
+    );
+    const cancelled = assert.rejects(one, /aborted/);
+    const two = runtime.execute("intelli_search", { query: "keep working" });
+    try {
+      await joined.promise;
+      assert.equal(loads, 1);
+      caller.abort();
+      await cancelled;
+      assert.equal(transportSignal?.aborted, false, "joined survivor still owns the shared loader");
+      assert.equal(completions, 0);
+      held.resolve();
+      const result = await two;
+      assert.equal(result.outcome, "completed");
+      assert.equal(result.data?.accounting.attempts, 1);
+      assert.equal(completions, 1);
+      await runtime.execute("intelli_search", { query: "cached catalogue" });
+      assert.equal(
+        loads,
+        1,
+        "cancelled operation neither poisons nor reloads the survivor's cache",
+      );
+    } finally {
+      held.resolve();
+      await Promise.allSettled([one, two]);
+      await runtime.close();
+      await f.cleanup();
+    }
+  },
+);
+
 test("T14 runtime shares loader, validates every binding and drains last cancellation/close", async () => {
   const f = await fixture();
   let now = 0;

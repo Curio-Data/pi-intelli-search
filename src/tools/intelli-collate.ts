@@ -5,7 +5,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { OnUpdate } from "../host-types.js";
 import type { CollateParams } from "../core/contracts.js";
 import { collateSchema } from "../core/schemas.js";
-import { collate } from "../core/operations/collate.js";
+import { legacyCollate as collate } from "../core/operations/collate.js";
 import { createNativeOperationContext, nativeResult } from "../native-operation-context.js";
 
 export const intelliCollateTool = {

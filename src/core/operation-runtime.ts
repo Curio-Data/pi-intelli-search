@@ -85,7 +85,7 @@ export function createOperationRuntime(options: OperationRuntimeOptions): Operat
         const ledger = createAttemptLedger();
         // Capture the store before the other factory so a later factory failure
         // still awaits its cleanup. Factories must not start detached work.
-        runs = captured.createRuns(operation);
+        runs = memoizedSettlement(captured.createRuns(operation));
         const services: OperationServices = Object.freeze({
           operation,
           coordinator,
@@ -145,6 +145,38 @@ export function createOperationRuntime(options: OperationRuntimeOptions): Operat
       return closing;
     },
   });
+}
+
+/** Public operations may settle their writers before the outer lifetime drains.
+ * Reuse that settlement unless new store work starts; never cache across waves.
+ */
+function memoizedSettlement(store: RunStore): RunStore {
+  let settled: Promise<void> | undefined;
+  return {
+    allocate(input) {
+      settled = undefined;
+      return store.allocate(input);
+    },
+    commit(reservation, artifacts, signal) {
+      settled = undefined;
+      return store.commit(reservation, artifacts, signal);
+    },
+    updateIndex(run, query, signal) {
+      settled = undefined;
+      return store.updateIndex(run, query, signal);
+    },
+    recordAccounting(run, records, summary, signal) {
+      settled = undefined;
+      return store.recordAccounting(run, records, summary, signal);
+    },
+    candidates(current, query, signal) {
+      settled = undefined;
+      return store.candidates(current, query, signal);
+    },
+    settle() {
+      return (settled ??= Promise.resolve().then(() => store.settle()));
+    },
+  };
 }
 
 export interface RuntimeGenerations {

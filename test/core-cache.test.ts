@@ -46,7 +46,7 @@ it("serialises same-query and distinct-query cache writes across independent pro
   const coreUrl = new URL("../src/core/index.ts", import.meta.url).href;
   const helperUrl = new URL("./helpers/core-context.ts", import.meta.url).href;
   const program = `
-    import { collate } from ${JSON.stringify(coreUrl)};
+    import { legacyCollate as collate } from ${JSON.stringify(coreUrl)};
     import { coreContext } from ${JSON.stringify(helperUrl)};
     const [root, query, marker] = process.argv.slice(1);
     const { context } = coreContext(root);

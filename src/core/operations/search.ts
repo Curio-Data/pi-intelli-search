@@ -4,13 +4,41 @@
 import type { SearchResult } from "../types.js";
 import { SEARCH_SYSTEM_PROMPT } from "../prompts.js";
 import { completeOperationModel } from "../operation-model.js";
-import type { SearchParams } from "../contracts.js";
+import type { SearchParams, Context, CoreResult } from "../contracts.js";
+import { createStandaloneResult } from "../standalone-result.js";
+import { produceCoreResult } from "../operation-result.js";
 import { mergeCitations } from "../annotations.js";
 import { extractSourceUrls, stripTrailingSourcesSection, throwIfAborted } from "../util.js";
 import { appendDomainFilter, buildSearchPayloadPatch } from "../messages.js";
 import type { OperationContext, OperationResult } from "../contracts.js";
 
-export async function search(
+export function search(params: SearchParams, context: Context): Promise<CoreResult> {
+  const input = structuredClone(params);
+  return produceCoreResult(
+    context,
+    (legacy) => {
+      const producer = createStandaloneResult(
+        "intelli_search",
+        input,
+        context.services.clock,
+        context.services.onProgress,
+        (diagnostic) => legacy.logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
+      );
+      return {
+        get active() {
+          return producer.active;
+        },
+        settled: producer.settled,
+        dispose: producer.dispose,
+        run: (scoped) => producer.run(scoped, (ctx) => legacySearch(input, ctx)),
+      };
+    },
+    "search",
+  );
+}
+
+/** Explicit compatibility entrypoint; not used by registered execution. */
+export async function legacySearch(
   params: SearchParams,
   context: OperationContext,
 ): Promise<OperationResult> {

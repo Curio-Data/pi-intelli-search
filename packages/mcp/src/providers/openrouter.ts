@@ -146,6 +146,7 @@ export interface OpenRouterOptions {
   logger: OperationLogger;
   signal?: AbortSignal;
   catalogue?: Catalogue<ModelCatalogue>;
+  onCatalogueWaiterJoined?: (activeWaiters: number) => void;
   policyTesting?: {
     sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
     random?: () => number;
@@ -177,7 +178,7 @@ export function createOpenRouterCatalogue(
   clock: Clock,
 ) {
   const { loadCatalogue } = buildOpenRouterClient(config, options);
-  return createCatalogue(loadCatalogue, clock);
+  return createCatalogue(loadCatalogue, clock, options.onCatalogueWaiterJoined);
 }
 
 function buildOpenRouterClient(

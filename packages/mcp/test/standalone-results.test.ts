@@ -71,6 +71,38 @@ test("MCP omitted/partial direct execution blocks reach the standalone capacity 
   }
 });
 
+test("MCP redacts authored text without changing generated schema literals (T17/T18)", async () => {
+  for (const secret of ["completed", "search", "provider-response", "candidate"]) {
+    const f = await fixture();
+    const runtime = await createRuntime(f.config, {
+      env: { FIXTURE_KEY: secret },
+      logger,
+      fetch: fakeTransport(() =>
+        json(
+          completion(`Answer ${secret} [Docs](https://docs.example/${secret})`, {
+            usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5, cost: 0.01 },
+          }),
+        ),
+      ),
+    });
+    try {
+      const result = await runtime.execute("intelli_search", { query: "Q" });
+      assert(result.data);
+      assert(Check(standaloneOutputSchemas.intelli_search, result.data));
+      assert.equal(result.data.outcome, "completed");
+      assert.equal(result.data.sources[0].state, "candidate");
+      assert.equal(result.data.attempts[0].role, "search");
+      assert.equal(result.data.attempts[0].observation?.source, "provider-response");
+      assert(result.data.sources[0].url.includes("[REDACTED]"));
+      assert(!result.text.includes(`Answer ${secret}`));
+      assert(Check(compactOutputSchema, successResult(result).structuredContent));
+    } finally {
+      await runtime.close();
+      await f.cleanup();
+    }
+  }
+});
+
 test("MCP standalone retries retain stderr notices without a progress consumer (T20)", async () => {
   for (const name of ["intelli_search", "intelli_extract"] as const) {
     const f = await fixture();

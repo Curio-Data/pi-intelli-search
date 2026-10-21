@@ -1123,15 +1123,16 @@ test("registered native inference source gate excludes legacy context/client/har
   assert.match(source, /fetchConcurrency: execution\.aggregateFetchConcurrency/);
   assert.match(source, /createScopedNativeModelClient\(modelContext, services/);
   assert.match(source, /captured\.runtime!\.run\(/);
-  assert.match(source, /standaloneProjection!\.run\(context,/);
-  assert.match(source, /return collation!\.run\(context\)/);
+  for (const operation of ["search", "extract", "collate"])
+    assert.match(source, new RegExp(`boundary!\\.run\\(\\s*\\(\\) =>\\s*${operation}\\(`));
+  assert(!/createStandaloneResult|createCollateResult/.test(source));
   const collateSource = await readFile(
     new URL("../src/core/collate-result.ts", import.meta.url),
     "utf8",
   );
   assert.match(collateSource, /completeOperationModel\(context, "collate",/);
   assert(!/\bmodels\.complete\s*\(/.test(collateSource));
-  assert.match(source, /projection\?\.settled\(result\)/);
+  assert.match(source, /boundary\?\.settled\(\)/);
   assert(
     !/\b(createNativeOperationContext|createNativeModelClient|__harness|callLlm)\b/.test(source),
   );
@@ -1142,6 +1143,7 @@ test("registered native inference source gate excludes legacy context/client/har
     );
     assert(!/\bmodels\.complete\s*\(/.test(operation));
     assert(operation.includes("completeOperationModel("));
+    if (name !== "research") assert(operation.includes("produceCoreResult("));
   }
 });
 
@@ -1183,6 +1185,41 @@ test("registered native collate publishes supplied identities and settled full d
     assert(!JSON.stringify(proof.manifest).includes("DO_NOT_PERSIST_SENTINEL"));
     assert(!("intelli" in data.details));
     assert.equal(f.updates.length, 4);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("native collate forwards real store diagnostics once into full data and the UI", async () => {
+  const f = await fixture(async () => response("Useful summary [S1]."));
+  try {
+    const namespace = join(f.root, ".search", ".intelli-v1");
+    await mkdir(namespace, { recursive: true });
+    await writeFile(join(namespace, "namespace.json"), "{}");
+    const result = await f.run("intelli_collate", {
+      query: "Q",
+      extractions: [
+        {
+          url: "label",
+          title: "Docs",
+          extraction: "Useful facts",
+          sourceType: "official",
+          status: "success",
+        },
+      ],
+    });
+    const data = result.details!.intelli as FullData;
+    assert.equal(data.outcome, "completed");
+    assert.equal(data.cache.status, "unavailable");
+    if (data.cache.status === "unavailable") {
+      const diagnostic = data.cache.diagnostic;
+      assert(
+        receipt(result).diagnostics.some(
+          (item) => item.code === diagnostic.code && item.message === diagnostic.message,
+        ),
+      );
+      assert.equal(f.notices.filter((message) => message.includes(diagnostic.message)).length, 1);
+    }
   } finally {
     await f.cleanup();
   }

@@ -114,10 +114,13 @@ export function createCollateResult(
     if (cache.status === "committed") cache = { ...cache, diagnostic: persistenceDiagnostic };
   };
   const unavailable = (value: Diagnostic) => {
+    const observed = persistenceDiagnostics.some(
+      (prior) => prior.code === value.code && prior.message === value.message,
+    );
     diagnostic(value);
     cache = { status: "unavailable", diagnostic: persistenceDiagnostic! };
     try {
-      onDiagnostic?.(value);
+      if (!observed) onDiagnostic?.(value);
     } catch {
       /* Keep the diagnostic in the result. */
     }

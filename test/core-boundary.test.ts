@@ -171,12 +171,23 @@ describe("shared engine dependency boundary", () => {
         assert.equal(core.truncateContent('abc', 2), 'ab\\n\\n[TRUNCATED]');
         assert.deepEqual(core.parseCitations('{}'), []);
         for (const name of ['search', 'extract', 'collate', 'research']) assert.equal(typeof core[name], 'function');
-        const settings = { searchModel: { provider: 'fixture', model: 'chosen' }, searchWebSearch: { enabled: false }, defaultUrls: 1 };
-        const result = await core.search({ query: 'independent' }, {
-          settings, models: { complete: async () => ({ text: '[Doc](https://example.com)', citations: [] }) },
-        });
+        const clock = { monotonicMs: () => performance.now(), utcIso: () => new Date().toISOString(), schedule() { throw new Error('Unexpected timer'); }, async sleep() {} };
+        const settings = { searchModel: { provider: 'fixture', model: 'chosen' }, searchWebSearch: { enabled: false }, defaultUrls: 1, extractionConcurrency: 1 };
+        const owned = runtime.createOperationRuntime({ clock, generation: 0, modelConcurrency: 5, criticalReserve: 1, fetchConcurrency: 1, minRequestIntervalMs: 0, createRuns: () => ({ settle: async () => {} }), createFetch: () => ({}) });
+        const result = await owned.run({ operationId: 'isolated-public' }, services => core.search({ query: 'independent' }, {
+          settings, services, paths: core.resolveWorkspacePaths('/workspace', '.search'), identity: { name: 'fixture', version: '1.0.0', adapter: 'mcp' }, logger: { warn() {}, error() {} },
+          models: { preflight: async () => [], complete: async request => {
+            assert.equal(request.scope.operation, services.operation);
+            assert.equal(request.scope.ledger, services.ledger);
+            return { text: '[Doc](https://example.com)', citations: [] };
+          } },
+        }));
+        await owned.close();
         assert.equal(result.outcome, 'completed');
         assert.equal(result.details.sources[0].url, 'https://example.com');
+        assert.equal(result.data.operation, 'intelli_search');
+        assert.equal(result.data.operationId, 'isolated-public');
+        assert.equal(result.data.text, result.text);
         assert.ok(cache.makeCachePath('query', '/workspace', '.search').startsWith('/workspace/.search/'));
         process.stdout.write('isolated core import passed');
       `,

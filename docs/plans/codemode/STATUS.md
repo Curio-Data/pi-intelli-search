@@ -2,6 +2,12 @@
 
 Specification revision: `P0-2`. Status: accepted contract freeze after independent exact-revision review. This document records acceptance separately from the specification so a review can name an immutable contract commit without embedding its own hash in that commit.
 
+## Current Implementation Checkpoint
+
+M1 is in progress with a committed, unreviewed public manual-workflow prototype, not an accepted milestone. `.tmp/codemode-m1/CHECKPOINT.md` records actual source changes, deterministic checks/failures and remaining acceptance work. The first-upgrade migration notice, source review, fresh installs and mandatory native regression are still pending for these bytes. No new live run was made.
+
+Approved helper branches remain separate: deadline `3eef294` has passing focused checks but no integration/independent acceptance; staging `5932457` is WIP with an unresolved writer-cancellation test hang. Retain both worktrees and evidence; neither is merged. The active resume names the next concrete M1 actions and safe recommissioning points. Earlier accepted slices and their live regressions remain revision-specific history, not evidence that this prototype passes.
+
 ## Owner Decisions
 
 | Decision | Current Disposition |

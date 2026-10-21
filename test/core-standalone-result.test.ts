@@ -9,8 +9,8 @@ import { createStandaloneResult } from "../src/core/standalone-result.js";
 import { compactResult } from "../src/core/compact-result.js";
 import { standaloneOutputSchemas, compactOutputSchema } from "../src/core/output-schemas.js";
 import { executionDefaults } from "../src/core/execution-settings.js";
-import { search } from "../src/core/operations/search.js";
-import { extract } from "../src/core/operations/extract.js";
+import { legacySearch as search } from "../src/core/operations/search.js";
+import { legacyExtract as extract } from "../src/core/operations/extract.js";
 import { coreContext } from "./helpers/core-context.js";
 import type { Clock, FullData, Progress, RunStore, FetchClient } from "../src/core/contracts.js";
 

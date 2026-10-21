@@ -5,7 +5,13 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { search, extract, collate, research, MissingModelsError } from "../src/core/index.js";
+import {
+  legacySearch as search,
+  legacyExtract as extract,
+  legacyCollate as collate,
+  research,
+  MissingModelsError,
+} from "../src/core/index.js";
 import { cacheLockDir, makeCachePath, readIndex } from "../src/core/cache.js";
 import { coreContext } from "./helpers/core-context.js";
 import type { OperationProgress } from "../src/core/contracts.js";
@@ -82,12 +88,30 @@ it("rejects empty collation instead of reporting a completed cache", async (t) =
   const root = await workspace(t);
   const { context, dependencies } = coreContext(root);
   const complete = context.models.complete;
-  context.models.complete = async (request) => request.model.model === "collate"
-    ? { text: " \n", citations: [] } : complete(request);
-  await assert.rejects(research({ query: "empty synthesis" }, context, dependencies), /no visible text.*collationMaxTokens/);
-  await assert.rejects(collate({ query: "empty manual", extractions: [{
-    url: "https://one.example", title: "One", extraction: "body", sourceType: "docs", status: "success",
-  }] }, context), /no visible text.*collationMaxTokens/);
+  context.models.complete = async (request) =>
+    request.model.model === "collate" ? { text: " \n", citations: [] } : complete(request);
+  await assert.rejects(
+    research({ query: "empty synthesis" }, context, dependencies),
+    /no visible text.*collationMaxTokens/,
+  );
+  await assert.rejects(
+    collate(
+      {
+        query: "empty manual",
+        extractions: [
+          {
+            url: "https://one.example",
+            title: "One",
+            extraction: "body",
+            sourceType: "docs",
+            status: "success",
+          },
+        ],
+      },
+      context,
+    ),
+    /no visible text.*collationMaxTokens/,
+  );
   assert.deepEqual(await readdir(root), [], "empty synthesis must not create success artefacts");
 });
 
@@ -294,11 +318,7 @@ it("archives a degraded-only folder when a later run succeeds", async (t) => {
     assert.deepEqual(await readdir(cachePath), ["meta.json"]);
 
     context.models.complete = original;
-    const completed = await research(
-      { query: "degraded then success" },
-      context,
-      dependencies,
-    );
+    const completed = await research({ query: "degraded then success" }, context, dependencies);
     assert.equal(completed.outcome, "completed");
     await readFile(join(cachePath, "report.md"), "utf8");
     // The degraded attempt's sidecar is retained in the .1 archive.
@@ -543,13 +563,30 @@ for (const operation of ["research", "collate"] as const) {
     const root = await workspace(t);
     const { context, dependencies, requests } = coreContext(root);
     const query = `provenance ${operation}`;
-    const params = { query, searchSummary: "UNFETCHED CLAIM https://unfetched.example/", extractions: [{
-      url: "https://one.example/page", title: "One", extraction: "Evidence", sourceType: "docs", status: "success",
-    }] };
-    const run = () => operation === "research" ? research({ query, maxUrls: 1 }, context, dependencies) : collate(params, context);
+    const params = {
+      query,
+      searchSummary: "UNFETCHED CLAIM https://unfetched.example/",
+      extractions: [
+        {
+          url: "https://one.example/page",
+          title: "One",
+          extraction: "Evidence",
+          sourceType: "docs",
+          status: "success",
+        },
+      ],
+    };
+    const run = () =>
+      operation === "research"
+        ? research({ query, maxUrls: 1 }, context, dependencies)
+        : collate(params, context);
     const complete = context.models.complete;
     context.models.complete = async (request) => {
-      if (request.model.model === "search") return { text: "UNFETCHED CLAIM. [One](https://one.example/page) [Other](https://unfetched.example/)", citations: [] };
+      if (request.model.model === "search")
+        return {
+          text: "UNFETCHED CLAIM. [One](https://one.example/page) [Other](https://unfetched.example/)",
+          citations: [],
+        };
       return complete(request);
     };
     const successful = await run();
@@ -566,8 +603,10 @@ for (const operation of ["research", "collate"] as const) {
       const meta = JSON.parse(await readFile(join(path, "meta.json"), "utf8"));
       assert.equal(meta.stages.collate.summaryChars, "Summary.".length);
     }
-    context.models.complete = async (request) => request.model.model === "collate"
-      ? { text: "Read `sources/17-fiction.md`. [S17]", citations: [] } : complete(request);
+    context.models.complete = async (request) =>
+      request.model.model === "collate"
+        ? { text: "Read `sources/17-fiction.md`. [S17]", citations: [] }
+        : complete(request);
     await assert.rejects(run(), /provenance validation failed/);
     assert.equal(await readFile(join(path, "report.md"), "utf8"), report);
     assert.equal(await readFile(join(context.paths.cacheRoot, ".index.json"), "utf8"), index);
@@ -579,13 +618,28 @@ for (const operation of ["research", "collate"] as const) {
 it("does not collate empty or failed caller evidence, and treats empty research extractions as failed", async (t) => {
   const root = await workspace(t);
   const { context, dependencies, requests } = coreContext(root);
-  await assert.rejects(collate({ query: "empty", extractions: [{
-    url: "https://one.example", title: "Empty", extraction: " \n", sourceType: "docs", status: "success",
-  }] }, context), /successful, non-empty extraction/);
+  await assert.rejects(
+    collate(
+      {
+        query: "empty",
+        extractions: [
+          {
+            url: "https://one.example",
+            title: "Empty",
+            extraction: " \n",
+            sourceType: "docs",
+            status: "success",
+          },
+        ],
+      },
+      context,
+    ),
+    /successful, non-empty extraction/,
+  );
   assert.equal(requests.length, 0, "invalid caller evidence must fail before cost");
   const complete = context.models.complete;
-  context.models.complete = async (request) => request.model.model === "extract"
-    ? { text: " \n", citations: [] } : complete(request);
+  context.models.complete = async (request) =>
+    request.model.model === "extract" ? { text: " \n", citations: [] } : complete(request);
   const result = await research({ query: "no extracted evidence" }, context, dependencies);
   assert.equal(result.outcome, "extraction-failed");
   assert.equal(requests.filter((request) => request.model.model === "collate").length, 0);
