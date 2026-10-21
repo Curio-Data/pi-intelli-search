@@ -18,7 +18,7 @@ import { ConfigurationError, type StandaloneConfig } from "./config.js";
 import { StandaloneError, type StandaloneErrorCode } from "./errors.js";
 import { identity } from "./identity.js";
 import { OperationQueue, type QueueLimits } from "./queue.js";
-import { parseAdmission } from "./admission.js";
+import { mergeAdmission, parseAdmission } from "./admission.js";
 import { installStdoutGuard } from "./stdout-guard.js";
 
 type OperationName = keyof OperationInputs;
@@ -423,7 +423,7 @@ export async function startServer(
     queueOverrides
       ? () =>
           (typeof runtime === "function" ? runtime() : Promise.resolve(runtime)).then((ready) =>
-            parseAdmission({ ...ready.admission, ...queueOverrides }),
+            mergeAdmission(ready.admission, queueOverrides),
           )
       : undefined,
     options.onEnqueue,

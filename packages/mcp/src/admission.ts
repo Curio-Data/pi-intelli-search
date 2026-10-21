@@ -9,6 +9,18 @@ export const defaultAdmission: ProtocolQueueSettings = Object.freeze({
 });
 export const maximumPendingConfiguration = 16 + 256;
 
+/** Undefined partial overrides are omissions, not requests to reset configuration. */
+export function mergeAdmission(
+  base: ProtocolQueueSettings,
+  overrides: Partial<ProtocolQueueSettings>,
+): ProtocolQueueSettings {
+  parseAdmission(overrides);
+  return parseAdmission({
+    ...base,
+    ...Object.fromEntries(Object.entries(overrides).filter(([, value]) => value !== undefined)),
+  });
+}
+
 /** Adapter-only settings, deliberately separate from shared execution tuning. */
 export function parseAdmission(value: unknown): ProtocolQueueSettings {
   if (value === undefined) return defaultAdmission;

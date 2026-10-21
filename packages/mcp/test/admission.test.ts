@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { getEventListeners } from "node:events";
-import { parseAdmission } from "../src/admission.js";
+import { mergeAdmission, parseAdmission } from "../src/admission.js";
 import { OperationQueue } from "../src/queue.js";
 import { parseConfig } from "../src/config.js";
 import { createRuntime } from "../src/runtime.js";
@@ -73,6 +73,19 @@ test("T03 admission validates every bound, strict keys and direct callers before
   } finally {
     await f.cleanup();
   }
+});
+
+test("partial server overrides omit undefined without resetting configured admission", () => {
+  const configured = { maxConcurrent: 4, maxQueued: 3 };
+  assert.deepEqual(mergeAdmission(configured, { maxConcurrent: undefined, maxQueued: 0 }), {
+    maxConcurrent: 4,
+    maxQueued: 0,
+  });
+  assert.deepEqual(configured, { maxConcurrent: 4, maxQueued: 3 });
+  assert.throws(
+    () => mergeAdmission(configured, { maxConcurrent: null } as unknown as typeof configured),
+    /admission/,
+  );
 });
 
 test("T14 zero queue admits all free active slots and releases listeners before result", async () => {
