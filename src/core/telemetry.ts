@@ -43,6 +43,17 @@ export interface TelemetryMeta {
   query: string;
   timestamp: string; // ISO 8601, mirrors query.txt / report.md
   durationMs: number;
+  /** Optional local-only deadline observations; never added to legacy tool details. */
+  pageDeadline?: {
+    timebase: "runtime-monotonic-ms";
+    enabled: boolean;
+    reason: string;
+    minimumMet: boolean;
+    startedAtMs: number;
+    frozenAtMs: number;
+    adaptiveAtMs?: number;
+    ceilingAtMs?: number;
+  };
   outcome: TelemetryOutcome; // which exit path produced this sidecar
   stages: {
     search: {
@@ -139,6 +150,10 @@ export class TelemetryBuilder {
     now: () => number = Date.now,
   ): Promise<TelemetryBuilder> {
     return new TelemetryBuilder(identity, query, now);
+  }
+
+  recordPageDeadline(input: Omit<NonNullable<TelemetryMeta["pageDeadline"]>, "timebase">): void {
+    this.meta.pageDeadline = { timebase: "runtime-monotonic-ms", ...input };
   }
 
   recordSearch(input: {

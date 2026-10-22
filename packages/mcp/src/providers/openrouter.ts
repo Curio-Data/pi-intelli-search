@@ -98,8 +98,10 @@ async function bodyText(
 ): Promise<string> {
   if (!response.body) throw new Error("OpenRouter returned an empty response body");
   const reader = response.body.getReader();
+  let cancellation: Promise<void> | undefined;
+  const cancel = () => (cancellation ??= reader.cancel().catch(() => {}));
   const abort = () => {
-    void reader.cancel().catch(() => {});
+    void cancel();
   };
   signal?.addEventListener("abort", abort, { once: true });
   const chunks: Uint8Array[] = [];
@@ -118,7 +120,9 @@ async function bodyText(
     return Buffer.concat(chunks).toString("utf8");
   } finally {
     signal?.removeEventListener("abort", abort);
-    await reader.cancel().catch(() => {});
+    // A second cancel can resolve before an earlier cancellation. Await the
+    // exact first promise, independently of read() becoming done on abort.
+    await cancel();
     reader.releaseLock();
   }
 }

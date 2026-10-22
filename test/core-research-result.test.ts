@@ -246,6 +246,12 @@ for (const pageExecution of ["streaming", "barrier"] as const) {
       "intelli_search",
     ]);
     assert.equal(result.outcome, "completed");
+    assert.deepEqual(Object.keys(result.details).sort(), [
+      "cachePath",
+      "pagesFailed",
+      "pagesFetched",
+      "urlsSearched",
+    ]);
     const compact = compactResult(result.data);
     assert(Check(compactOutputSchema, compact));
     assert.equal(compact.text, result.text);
@@ -415,6 +421,7 @@ test("ceiling cutoff preserves started extraction as late, cancels queued pages 
   const collationStarted = deferred();
   const finishCollation = deferred();
   const f = await fixture(t, {
+    settings: { disableTelemetry: false },
     clock,
     execution: {
       deadline: { enabled: true, quorum: 1, factor: 1, floorMs: 0, ceilingMs: 100, minSources: 1 },
@@ -473,6 +480,17 @@ test("ceiling cutoff preserves started extraction as late, cancels queued pages 
   assert.equal(result.data.sources[1].fullPagePath, undefined);
   const path = join(f.root, result.details.cachePath as string);
   const manifest = JSON.parse(await readFile(join(path, "run.json"), "utf8"));
+  const meta = JSON.parse(await readFile(join(path, "meta.json"), "utf8"));
+  assert.equal(meta.pageDeadline.timebase, "runtime-monotonic-ms");
+  assert.equal(meta.pageDeadline.ceilingAtMs, 100);
+  assert.equal(meta.pageDeadline.frozenAtMs, 100);
+  assert.deepEqual(Object.keys(result.details).sort(), [
+    "cachePath",
+    "pagesFailed",
+    "pagesFetched",
+    "urlsSearched",
+  ]);
+  assert.deepEqual(Object.keys(meta.stages.fetch.winners), ["markdown"]);
   assert.deepEqual(manifest.evidenceSourceIds, ["S1"]);
   assert.equal(manifest.sources[1].extractionPath, "late/S2.md");
   assert.equal(clock.timers.size, 0);

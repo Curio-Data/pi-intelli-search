@@ -56,6 +56,7 @@ import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "./telem
 interface Page {
   source: SourceRecord;
   fetched: boolean;
+  variant?: string;
   stagedPath?: string;
   extraction?: Readonly<ExtractResult>;
 }
@@ -225,17 +226,6 @@ export function createResearchResult(
     urlsSearched: pages.length,
     pagesFetched: counts().fetched,
     pagesFailed: pages.filter((page) => page.source.state === "fetch-failed").length,
-    ...(snapshot
-      ? {
-          pageDeadline: {
-            timebase: "runtime-monotonic-ms",
-            startedAtMs: snapshot.startedAtMs,
-            frozenAtMs: snapshot.frozenAtMs,
-            ...(snapshot.adaptiveAtMs === undefined ? {} : { adaptiveAtMs: snapshot.adaptiveAtMs }),
-            ...(snapshot.ceilingAtMs === undefined ? {} : { ceilingAtMs: snapshot.ceilingAtMs }),
-          },
-        }
-      : {}),
   });
 
   const search = async () => {
@@ -369,6 +359,7 @@ export function createResearchResult(
     };
     if (source.state === "fetch-failed") return;
     page.fetched = true;
+    page.variant = source.sourceType ?? "unknown";
     if (source.state === "empty" || !content?.trim()) {
       page.source = { ...page.source, state: "empty" };
       return;
@@ -414,6 +405,15 @@ export function createResearchResult(
         );
         // Validate the whole snapshot before mutating any source state.
         snapshot = value;
+        telemetry?.recordPageDeadline({
+          enabled: execution.deadline.enabled,
+          reason: value.reason,
+          minimumMet: value.minimumMet,
+          startedAtMs: value.startedAtMs,
+          frozenAtMs: value.frozenAtMs,
+          ...(value.adaptiveAtMs === undefined ? {} : { adaptiveAtMs: value.adaptiveAtMs }),
+          ...(value.ceilingAtMs === undefined ? {} : { ceilingAtMs: value.ceilingAtMs }),
+        });
         evidence = frozenEvidence;
         for (const id of value.successIds) {
           const page = pages.find((page) => page.source.id === id)!;
@@ -866,10 +866,11 @@ export function createResearchResult(
             cache = { ...cache, accountingPath: accounting.path };
           else if (accounting.status === "unavailable") notice(accounting.diagnostic);
         }
+        throwIfAborted(signal);
         if (telemetry && reservation) {
           const winners: Record<string, number> = {};
           for (const page of pages.filter((page) => page.fetched)) {
-            const type = page.source.sourceType ?? "unknown";
+            const type = page.variant ?? "unknown";
             winners[type] = (winners[type] ?? 0) + 1;
           }
           telemetry.recordFetch({
@@ -951,7 +952,11 @@ export function createResearchResult(
         attempts: services.ledger.records(),
         deadline: {
           enabled: context.settings.execution!.deadline.enabled,
-          reason: snapshot?.reason ?? "not-applicable",
+          reason:
+            snapshot?.reason ??
+            (pages.length && !context.settings.execution!.deadline.enabled
+              ? "disabled"
+              : "not-applicable"),
           minimumMet: snapshot?.minimumMet ?? !context.settings.execution!.deadline.enabled,
         },
       };
