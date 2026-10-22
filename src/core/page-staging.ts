@@ -108,6 +108,17 @@ interface Waiter {
 
 const STAGING_DIR = ".staging";
 
+/**
+ * Stable create-time filesystem identity of an owned directory. Shape checks
+ * (directory, not a symlink) cannot prove ownership: a renamed-away original
+ * replaced by a fresh ordinary directory passes them all. Device and inode are
+ * compared at cleanup so only the instance-created object is ever removed.
+ */
+interface DirectoryIdentity {
+  readonly dev: number;
+  readonly ino: number;
+}
+
 async function defaultWriteStagedFile(path: string, content: string): Promise<void> {
   // Exclusive creation and private mode; a staged file is temporary spool, so
   // durability belongs to RunStore.commit, which re-reads and syncs it.
@@ -141,6 +152,8 @@ export function createPageStaging(options: PageStagingOptions): PageStaging {
   let state: "open" | "settling" | "settled" = "open";
   let directoryPath: string | undefined;
   let directoryPromise: Promise<string> | undefined;
+  let stagingRootIdentity: DirectoryIdentity | undefined;
+  let ownedIdentity: DirectoryIdentity | undefined;
   let settlePromise: Promise<void> | undefined;
   let sequence = 0;
   const active = new Set<SlotRecord>();
@@ -241,8 +254,13 @@ export function createPageStaging(options: PageStagingOptions): PageStaging {
         "STAGING_FAULT",
         `Staging root ${stagingRoot} is not a real directory`,
       );
+    stagingRootIdentity = { dev: rootInfo.dev, ino: rootInfo.ino };
     // mkdtemp is exclusive and private (0o700), so no collision retry is needed.
     const dir = await mkdtemp(join(stagingRoot, "pages-"));
+    // Capture the created directory's identity immediately; the pair is only
+    // complete together, so cleanup never runs against a half-captured state.
+    const dirInfo = await lstat(dir);
+    ownedIdentity = { dev: dirInfo.dev, ino: dirInfo.ino };
     directoryPath = dir;
     return dir;
   }
@@ -361,6 +379,17 @@ export function createPageStaging(options: PageStagingOptions): PageStaging {
         "STAGING_FAULT",
         `Staging root ${stagingRoot} is missing or was replaced; refusing cleanup`,
       );
+    // A real directory at the expected path is not proof of ownership: only
+    // the create-time device/inode identity is. Fail closed when the identity
+    // was never captured.
+    if (
+      rootInfo.dev !== stagingRootIdentity?.dev ||
+      rootInfo.ino !== stagingRootIdentity?.ino
+    )
+      throw new PageStagingError(
+        "STAGING_FAULT",
+        `Staging root ${stagingRoot} was replaced by a different directory; refusing cleanup`,
+      );
     if (dirname(path) !== stagingRoot)
       throw new PageStagingError("STAGING_FAULT", `Refusing to clean a path outside ${stagingRoot}`);
     const info = await lstat(path).catch(() => undefined);
@@ -369,6 +398,11 @@ export function createPageStaging(options: PageStagingOptions): PageStaging {
       throw new PageStagingError(
         "STAGING_FAULT",
         `Owned staging directory ${path} was replaced; refusing cleanup`,
+      );
+    if (info.dev !== ownedIdentity?.dev || info.ino !== ownedIdentity?.ino)
+      throw new PageStagingError(
+        "STAGING_FAULT",
+        `Owned staging directory ${path} was replaced by a different directory; refusing cleanup`,
       );
     await rm(path, { recursive: true, force: true }).catch((error: unknown) => {
       throw new PageStagingError("STAGING_FAULT", `Failed to remove staging directory ${path}`, {

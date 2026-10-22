@@ -21,7 +21,7 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createPageStaging,
@@ -862,6 +862,36 @@ describe("page staging containment", () => {
     assert.equal(await pathKind(moved), "directory");
   });
 
+  it("refuses cleanup when the staging root was replaced by an ordinary directory", async () => {
+    const root = await cacheRootFor("contain-root-replaced-dir");
+    const harness = leaseHarness();
+    const pages = stagingOf(root, harness);
+    const slot = await pages.acquire("p1");
+    const result = await slot.write("body");
+    const stagingRoot = join(root, ".staging");
+    const moved = join(root, "moved-staging");
+    const movedResult = join(moved, ...result.stagedPath.split("/").slice(-2));
+    await rename(stagingRoot, moved);
+    // An ordinary real replacement root with a same-basename owned child has
+    // the right shape but a different filesystem identity; it must survive.
+    await mkdir(stagingRoot);
+    const replacement = join(stagingRoot, basename(dirname(result.stagedPath)));
+    await mkdir(replacement);
+    const sentinel = join(replacement, "not-owned.txt");
+    await writeFile(sentinel, "replacement tree, not owned by this staging instance");
+    await slot.release();
+    await assert.rejects(
+      pages.settle(),
+      (error: unknown) => errorCodeOf(error) === "STAGING_FAULT",
+    );
+    assert.equal(
+      await readFile(sentinel, "utf-8"),
+      "replacement tree, not owned by this staging instance",
+    );
+    assert.equal(await readFile(movedResult, "utf-8"), "body"); // moved tree intact
+    assert.equal(await pathKind(moved), "directory");
+  });
+
   it("refuses cleanup when the owned directory itself was replaced", async () => {
     const root = await cacheRootFor("contain-dir-replaced");
     const harness = leaseHarness();
@@ -880,6 +910,33 @@ describe("page staging containment", () => {
     );
     assert.equal(await pathKind(directory), "symlink");
     assert.equal(await readFile(target, "utf-8"), "precious");
+  });
+
+  it("refuses cleanup when the owned directory was replaced by an ordinary directory", async () => {
+    const root = await cacheRootFor("contain-dir-replaced-dir");
+    const harness = leaseHarness();
+    const pages = stagingOf(root, harness);
+    const slot = await pages.acquire("p1");
+    const result = await slot.write("body");
+    const owned = await pages.directory();
+    const moved = join(root, "moved-owned");
+    await rename(owned, moved);
+    // The replacement is a real directory with the right name but a different
+    // inode; the staging root itself is untouched and still the original.
+    await mkdir(owned);
+    const sentinel = join(owned, "not-owned.txt");
+    await writeFile(sentinel, "replacement tree, not owned by this staging instance");
+    await slot.release();
+    await assert.rejects(
+      pages.settle(),
+      (error: unknown) => errorCodeOf(error) === "STAGING_FAULT",
+    );
+    assert.equal(
+      await readFile(sentinel, "utf-8"),
+      "replacement tree, not owned by this staging instance",
+    );
+    assert.equal(await readFile(join(moved, basename(result.stagedPath)), "utf-8"), "body");
+    assert.equal(await pathKind(moved), "directory");
   });
 
   it("refuses a cache root that is itself a symlink", async () => {
