@@ -371,17 +371,30 @@ describe("page staging listener hygiene", () => {
   it("removes the write abort listener after the write settles", async () => {
     const root = await cacheRootFor("listeners-write");
     const harness = leaseHarness();
-    const pages = stagingOf(root, harness);
+    const entered = deferred();
+    const gate = deferred();
+    const pages = stagingOf(root, harness, {
+      writeStagedFile: async () => {
+        entered.resolve();
+        await gate.promise;
+      },
+    });
     const baseline = abortListeners(harness.controller.signal);
     const slot = await pages.acquire("p1");
-    await pages.directory(); // let the write reach its facing stage deterministically
     const write = slot.write("body");
-    await tick();
-    assert.equal(abortListeners(harness.controller.signal), baseline + 1);
-    await write;
-    assert.equal(abortListeners(harness.controller.signal), baseline);
-    await slot.release();
-    await pages.settle();
+    try {
+      // A real write can finish before an arbitrary tick budget. Observe a held
+      // writer instead, so this asserts both listener attachment and removal.
+      await entered.promise;
+      assert.equal(abortListeners(harness.controller.signal), baseline + 1);
+      gate.resolve();
+      await write;
+      assert.equal(abortListeners(harness.controller.signal), baseline);
+    } finally {
+      gate.resolve();
+      await slot.release();
+      await pages.settle();
+    }
   });
 
   it("removes the write abort listener after a mid-write cancellation", async () => {
