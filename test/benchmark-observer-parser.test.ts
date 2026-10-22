@@ -418,3 +418,159 @@ describe("pipeline population restriction and unknown preservation (R2)", () => 
     assert.equal(tokens?.inputTotal, 0);
   });
 });
+
+// Pi 1.3.0 registers MCP tools as `mcp__<server>__<tool>` sanitised to
+// [A-Za-z0-9_], truncated to 64 characters with an 8-hex sha256 suffix when
+// too long, and hash-suffixed again when two registrations sanitise to the
+// same name (Observed in the host's dist/extensions/mcp/tools.js
+// createMcpToolName and index.js assignName). A long server name cuts the
+// intelli suffix out of the registered name, so the strict
+// `mcp__<server>__intelli_*` shape no longer identifies the execution. The
+// host's MCP client records the explicit identity on every result:
+// details: { server, tool } with the raw server-side tool name (Observed in
+// convertMcpResult). Integration condition 7: handle shortened/colliding
+// MCP tool names through that identity when their marker is lost.
+function shortenedIntelliRegistration(): { toolName: string; server: string } {
+  const server = "intelli-search-benchmark-registry-instance-two"; // mcp__<server>__intelli_research = 67 chars > 64
+  const full = `mcp__${server}__intelli_research`.replace(/[^A-Za-z0-9_]/g, "_");
+  const hash = "3f2a1b9c"; // deterministic stand-in for the host's sha256 suffix
+  const toolName = `${full.slice(0, 64 - hash.length - 1)}_${hash}`;
+  assert.ok(!/^mcp__(.+)__(intelli_[a-z0-9_]+)$/.test(toolName), "test fixture must model a shortened registration");
+  return { toolName, server };
+}
+
+const mcpDetailsEnd = (toolCallId: string, toolName: string, server: string, tool: string, parent?: string): Json =>
+  ({
+    type: "tool_execution_end",
+    toolCallId,
+    toolName,
+    ...(parent !== undefined ? { parentToolCallId: parent } : {}),
+    result: { content: [{ type: "text", text: "degraded" }], details: { server, tool } },
+    isError: false,
+  }) as unknown as Json;
+
+describe("shortened/colliding MCP registrations through explicit host details.tool identity", () => {
+  it("retains a shortened intelli registration with a lost marker as missing, never dropping it", () => {
+    const { toolName, server } = shortenedIntelliRegistration();
+    const parsed = parseUsageEvents([mcpDetailsEnd("short-1", toolName, server, "intelli_research")], "json");
+    assert.equal(parsed.toolMessages.length, 1);
+    assert.equal(parsed.toolMessages[0]?.toolCallId, "short-1");
+    assert.equal(parsed.toolMessages[0]?.accounting, null); // no marker: expected observation missing, not excluded
+    assert.deepEqual(parsed.missing, ["short-1"]);
+  });
+
+  it("retains a hash-suffixed collision registration through details.tool identity", () => {
+    // `intelli research` and `intelli_research` sanitise to the same name, so
+    // the host hash-suffixes both; the script calls the intelli one by its
+    // suffixed name.
+    const toolName = "mcp__intelli-search__intelli_research_a1b2c3d4";
+    const parsed = parseUsageEvents([mcpDetailsEnd("coll-1", toolName, "intelli-search", "intelli_research")], "json");
+    assert.equal(parsed.toolMessages.length, 1);
+    assert.deepEqual(parsed.missing, ["coll-1"]);
+  });
+
+  it("excludes foreign MCP tools whose details.tool is not an intelli operation", () => {
+    const parsed = parseUsageEvents(
+      [mcpDetailsEnd("foreign-mcp", "mcp__weather__get_forecast_9f8e7d6c", "weather", "get_forecast")],
+      "json",
+    );
+    assert.equal(parsed.toolMessages.length, 0);
+    assert.equal(parsed.missing.length, 0);
+  });
+
+  it("ignores details.tool when the toolName is not an MCP registration", () => {
+    // A native tool reporting a `tool` detail for unrelated reasons must not
+    // enter the pipeline population through the MCP identity channel.
+    const parsed = parseUsageEvents(
+      [
+        mcpDetailsEnd("native-1", "bash", "runner", "intelli_research"),
+        mcpDetailsEnd("native-2", "some_extension_tool", "runner", "intelli_search"),
+      ],
+      "json",
+    );
+    assert.equal(parsed.toolMessages.length, 0);
+    assert.equal(parsed.missing.length, 0);
+  });
+
+  it("prefers structured markers for accounting when both identity channels are present", () => {
+    const { toolName, server } = shortenedIntelliRegistration();
+    const parsed = parseUsageEvents(
+      [
+        {
+          type: "tool_execution_end",
+          toolCallId: "both-1",
+          toolName,
+          result: {
+            content: [],
+            details: { server, tool: "intelli_research" },
+            structuredContent: {
+              structuredContent: {
+                meta: { schemaVersion: 1, operation: "intelli_research", attempts: 3, missingAttempts: 0, costComplete: true },
+              },
+            },
+          },
+          isError: false,
+        } as unknown as Json,
+      ],
+      "json",
+    );
+    assert.equal(parsed.toolMessages.length, 1);
+    assert.equal(parsed.toolMessages[0]?.accounting?.attempts, 3); // compact envelope marker supplies the summary
+    assert.equal(parsed.missing.length, 0);
+  });
+
+  it("ignores non-object details and non-string tool values", () => {
+    const { toolName, server } = shortenedIntelliRegistration();
+    const parsed = parseUsageEvents(
+      [
+        { type: "tool_execution_end", toolCallId: "d1", toolName, result: { content: [], details: "not-an-object" }, isError: false } as Json,
+        { type: "tool_execution_end", toolCallId: "d2", toolName, result: { content: [], details: { server, tool: 42 } }, isError: false } as Json,
+        { type: "tool_execution_end", toolCallId: "d3", toolName, result: { content: [] }, isError: false } as Json,
+      ],
+      "json",
+    );
+    assert.equal(parsed.toolMessages.length, 0);
+    assert.equal(parsed.missing.length, 0);
+  });
+
+  it("counts nested details.tool-identified executions once each; the codemode parent stays outside", () => {
+    const { toolName, server } = shortenedIntelliRegistration();
+    const events: Json[] = [
+      {
+        type: "tool_execution_end",
+        toolCallId: "cm9",
+        toolName: "codemode",
+        result: { content: [{ type: "text", text: "Script completed" }], details: { calls: [{ id: "cm9/1", name: toolName, status: "ok" }] } },
+        isError: false,
+      },
+      mcpDetailsEnd("cm9/1", toolName, server, "intelli_research", "cm9"),
+      mcpDetailsEnd("cm9/2", toolName, server, "intelli_extract", "cm9"),
+      mcpDetailsEnd("direct-1", toolName, server, "intelli_search"),
+    ];
+    const parsed = parseUsageEvents(events, "json");
+    assert.deepEqual(parsed.toolMessages.map((tool) => tool.toolCallId), ["cm9/1", "cm9/2", "direct-1"]);
+    assert.equal(parsed.toolMessages[0]?.parentToolCallId, "cm9"); // nested execution counted once under its own id
+    assert.deepEqual(parsed.missing, ["cm9/1", "cm9/2", "direct-1"]);
+  });
+
+  it("never parses the pi-ai usage field on tool results into pipeline accounting", () => {
+    // The host's tool-execution usage field is execution overhead, not an
+    // intelli accounting summary: an intelli result carrying it without a
+    // marker stays missing rather than inventing an accounting from it.
+    const parsed = parseUsageEvents(
+      [
+        {
+          type: "tool_execution_end",
+          toolCallId: "u1",
+          toolName: "intelli_research",
+          result: { content: [], usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 15, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } },
+          isError: false,
+        } as Json,
+      ],
+      "json",
+    );
+    assert.equal(parsed.toolMessages.length, 1);
+    assert.equal(parsed.toolMessages[0]?.accounting, null);
+    assert.deepEqual(parsed.missing, ["u1"]);
+  });
+});
