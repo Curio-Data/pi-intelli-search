@@ -28,6 +28,10 @@ Reports, earlier blocked candidates, builder dispositions and provenance are ret
 
 Quota-stopped K3, Qwen and GLM attempts remain preserved and are not counted as completed reports. Only eligible native-provider fallbacks were used. The coordinator completed the final P3 parser delta after the GLM quota stop; the independent reviewer accepted that exact commit afterwards. At library landing, no paid pipeline or study run had occurred. The subsequent approved native regression is recorded separately in [Development](DEVELOPMENT.md#approved-native-regression-gate).
 
+## Public Manual Workflow
+
+M1 is accepted at technical source `2640672`, with its mandatory native regression passed at acknowledgement `d140514`. [Development](DEVELOPMENT.md#m1-manual-workflow-candidate) records the fresh Opus review, blocking delta, independently reproduced eleven-gate lanes and credential-safe regression. This closes the manual search/extract/collate public-result boundary, migration-notice preservation, literal-redaction schema/correlation edge, diagnostic forwarding/consolidation and actual-runtime joined-waiter witness described as pending at the earlier slice checkpoints below. Those earlier reports remain revision-specific evidence. Research's producer, complete schema map, bounded activation, progress qualification, replay and all release/guidance/platform conditions remain open; no P4 exit follows from M1.
+
 ## Integration Conditions
 
 These conditions remain open and bind the next coordinator work:
