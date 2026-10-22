@@ -13,13 +13,18 @@ import type { NativeTestInjection, RegistryStreamSimple } from "../../src/native
 import type * as Specification from "../../docs/plans/codemode/API.js";
 import type * as NativeSpecification from "../../docs/plans/codemode/NATIVE-API.js";
 import type * as PublicCore from "../../src/core/index.js";
+import type * as NativeEntry from "../../src/index.js";
 
 // Check actual exported functions, not only the prospective EngineOperations type.
-// Research joins this assertion when M2 replaces its legacy implementation.
+// Public research and the native factory are implemented, not prospective seams.
 type PublicSearch = Assert<Equal<typeof PublicCore.search, typeof Specification.search>>;
 type PublicExtract = Assert<Equal<typeof PublicCore.extract, typeof Specification.extract>>;
 type PublicCollate = Assert<Equal<typeof PublicCore.collate, typeof Specification.collate>>;
 type PublicFetch = Assert<Equal<typeof PublicCore.fetchPage, typeof Specification.fetchPage>>;
+type PublicResearch = Assert<Equal<typeof PublicCore.research, typeof Specification.research>>;
+type PublicNativeFactory = Assert<
+  Equal<typeof NativeEntry.createNativeExtension, typeof NativeSpecification.createNativeExtension>
+>;
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;

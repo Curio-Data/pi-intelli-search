@@ -19,6 +19,7 @@ import {
 import { getAgentDir } from "./agent-dir.js";
 import { errMsg } from "./util.js";
 import { getExtensionVersion } from "./telemetry.js";
+import { captureNativeInjection, type NativeTestInjection } from "./native-injection.js";
 
 /** Narrow injectable seam for deterministic model-registry refresh tests. */
 export const __harness: {
@@ -50,7 +51,14 @@ export async function isOpenRouterAuthMissing(): Promise<boolean> {
   return true;
 }
 
-export default function piWebResearchExtension(pi: ExtensionAPI) {
+export function createNativeExtension(injection?: NativeTestInjection): (pi: ExtensionAPI) => void {
+  const captured = captureNativeInjection(injection);
+  return (pi) => piWebResearchExtension(pi, captured);
+}
+
+export default createNativeExtension();
+
+function piWebResearchExtension(pi: ExtensionAPI, injection: NativeTestInjection) {
   // ═══════════════════════════════════════════════
   // Tool registration
   // ═══════════════════════════════════════════════
@@ -58,6 +66,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
   // Do not read VERSION from a potentially different local peer installation.
   const native = createNativeOperationRuntime({
     supportsErrorResults: typeof pi.registerMcpServer === "function",
+    ...injection,
   });
   const [searchTool, extractTool, collateTool, researchTool] = createRegisteredNativeTools(native);
   pi.registerTool(searchTool);

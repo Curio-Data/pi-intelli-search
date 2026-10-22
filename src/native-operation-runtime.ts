@@ -17,6 +17,8 @@ import type {
   OperationServices,
   RunStore,
   PageTransport,
+  Context,
+  EngineOperations,
 } from "./core/contracts.js";
 import { createRuntimeGenerations, type OperationRuntime } from "./core/operation-runtime.js";
 import { AdmissionError } from "./core/execution-coordinator.js";
@@ -40,6 +42,7 @@ import { loadSettings } from "./settings.js";
 import { nativeProgress, nativeResult } from "./native-operation-context.js";
 import type { OnUpdate } from "./host-types.js";
 import { errMsg, textContent } from "./util.js";
+import type { RegistryStreamSimple } from "./native-injection.js";
 
 interface SessionKey {
   readonly owner: object;
@@ -60,12 +63,15 @@ interface SessionState {
   };
 }
 
-/** Internal unit seam, not the frozen complete transport-replay factory. */
+/** Internal runtime options; the public factory captures and validates its injection. */
 export interface NativeRuntimeOptions {
   readonly clock?: Clock;
   /** Detected on the host API, never inferred from the extension's peer install. */
   readonly supportsErrorResults?: boolean;
   readonly pageTransport?: PageTransport;
+  readonly registryStreamSimple?: RegistryStreamSimple;
+  readonly operations?: Partial<EngineOperations>;
+  readonly transformContext?: (context: Context) => Context;
   readonly createRuns?: (services: { operationId: string; clock: Clock }) => RunStore;
 }
 
@@ -92,6 +98,7 @@ export class NativeExecutionError extends Error {
 /** One closure per extension registration. Construction starts no work. */
 export function createNativeOperationRuntime(options: NativeRuntimeOptions = {}) {
   options = { ...options };
+  const operations = Object.freeze({ search, extract, collate, research, ...options.operations });
   const generations = createRuntimeGenerations();
   const sessions = new WeakMap<object, Map<string | undefined, SessionState>>();
   const diagnostics = new Map<string, (diagnostic: Diagnostic) => void>();
@@ -329,7 +336,14 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
           },
           async (services) => {
             owned = services;
-            const models = createScopedNativeModelClient(modelContext, services, { logger });
+            const models = createScopedNativeModelClient(modelContext, services, {
+              logger,
+              registryStreamSimple: options.registryStreamSimple,
+            });
+            const operationContext = (context: OperationContext): Context => {
+              const captured = boundary.context(context);
+              return options.transformContext?.(captured) ?? captured;
+            };
             let sequence = 0;
             const started = clock.monotonicMs();
             const context: OperationContext = {
@@ -354,15 +368,24 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
             switch (name) {
               case "intelli_search":
                 return boundary!.run(() =>
-                  search(params as OperationInputs["intelli_search"], boundary!.context(context)),
+                  operations.search(
+                    params as OperationInputs["intelli_search"],
+                    operationContext(context),
+                  ),
                 );
               case "intelli_extract":
                 return boundary!.run(() =>
-                  extract(params as OperationInputs["intelli_extract"], boundary!.context(context)),
+                  operations.extract(
+                    params as OperationInputs["intelli_extract"],
+                    operationContext(context),
+                  ),
                 );
               case "intelli_collate":
                 return boundary!.run(() =>
-                  collate(params as OperationInputs["intelli_collate"], boundary!.context(context)),
+                  operations.collate(
+                    params as OperationInputs["intelli_collate"],
+                    operationContext(context),
+                  ),
                 );
               case "intelli_research": {
                 const originalPreflight = models.preflight;
@@ -398,9 +421,9 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
                 };
                 try {
                   return await boundary.run(() =>
-                    research(
+                    operations.research(
                       params as OperationInputs["intelli_research"],
-                      boundary.context(withIndicator),
+                      operationContext(withIndicator),
                     ),
                   );
                 } finally {

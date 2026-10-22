@@ -37,6 +37,7 @@
     "core-cache.test.ts",
     "core-console.test.ts",
     "native-model-client.test.ts",
+    "native-factory.test.ts",
     "workspace-paths.test.ts",
     "../scripts/capture-native-contract.mts"
   ],

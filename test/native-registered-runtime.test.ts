@@ -1192,7 +1192,10 @@ test("registered native inference source gate excludes legacy context/client/har
   assert.match(source, /createScopedNativeModelClient\(modelContext, services/);
   assert.match(source, /captured\.runtime!\.run\(/);
   for (const operation of ["search", "extract", "collate"])
-    assert.match(source, new RegExp(`boundary!\\.run\\(\\s*\\(\\) =>\\s*${operation}\\(`));
+    assert.match(
+      source,
+      new RegExp(`boundary!\\.run\\(\\s*\\(\\) =>\\s*operations\\.${operation}\\(`),
+    );
   assert(!/createStandaloneResult|createCollateResult/.test(source));
   const collateSource = await readFile(
     new URL("../src/core/collate-result.ts", import.meta.url),

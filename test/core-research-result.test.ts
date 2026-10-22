@@ -218,6 +218,71 @@ async function fixture(
   return { root, runtime, run, requests, events, storeEvents, clock, settings };
 }
 
+test("abort before freeze preserves disabled policy and does not invent an enabled cutoff (M2 F4/T08)", async (t) => {
+  for (const enabled of [false, true]) {
+    const controller = new AbortController();
+    const started = deferred();
+    const f = await fixture(t, {
+      execution: {
+        deadline: enabled
+          ? { enabled: true, quorum: 1, factor: 1, floorMs: 0, ceilingMs: 10_000, minSources: 1 }
+          : { enabled: false },
+      },
+      extract: async (_request, signal) => {
+        started.resolve();
+        await new Promise<void>((_resolve, reject) => {
+          const abort = () => reject(signal.reason);
+          if (signal.aborted) abort();
+          else signal.addEventListener("abort", abort, { once: true });
+        });
+        return "unreachable";
+      },
+    });
+    const pending = f.run(controller.signal).catch((error: unknown) => error);
+    await started.promise;
+    controller.abort();
+    const error = await pending;
+    assert(error instanceof CoreOperationFailure);
+    assert.equal(error.data.outcome, "aborted");
+    assert.deepEqual(error.data.deadline, {
+      enabled,
+      reason: enabled ? "not-applicable" : "disabled",
+      minimumMet: !enabled,
+    });
+    assert.equal(error.data.timing.cutoffMs, undefined);
+    assert.equal(error.data.accounting.parentDelivery, "unknown");
+  }
+});
+
+test("abort observed after accounting suppresses telemetry without removing the committed report (M2 F4/T04/T22)", async (t) => {
+  const controller = new AbortController();
+  let recorded = false;
+  const f = await fixture(t, {
+    settings: { disableTelemetry: false },
+    store: (runs) => ({
+      ...runs,
+      async recordAccounting(...args) {
+        const result = await runs.recordAccounting(...args);
+        recorded = result.status === "recorded";
+        controller.abort();
+        return result;
+      },
+    }),
+  });
+  const error = await f.run(controller.signal).catch((error: unknown) => error);
+  assert(error instanceof CoreOperationFailure);
+  assert.equal(error.data.outcome, "aborted");
+  assert.equal(recorded, true, "the abort occurs after an actual accounting write");
+  assert.equal(error.data.cache.status, "committed");
+  const runs = join(f.root, ".search/.intelli-v1/runs");
+  const names = await readdir(runs);
+  assert.equal(names.length, 1);
+  const files = await readdir(join(runs, names[0]));
+  assert(files.includes("committed.json"));
+  assert(files.includes("accounting.committed.json"));
+  assert(!files.includes("meta.json"), "telemetry must not begin after cancellation is observed");
+});
+
 test("research compact projection preserves frozen legacy payloads and worst-case Unicode/error/degraded envelopes (T18)", async (t) => {
   const f = await fixture(t);
   const base = (await f.run()).data;
