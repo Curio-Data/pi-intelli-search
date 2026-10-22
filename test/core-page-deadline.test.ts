@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { createSystemClock } from "../src/core/clock.js";
 import type { Clock, ResearchExecutionSettings } from "../src/core/contracts.js";
 import {
   createPageDeadline,
@@ -615,11 +616,313 @@ describe("page deadline: events, snapshots and validation", () => {
       [{ candidateIds: [""] }, /nonempty/],
       [{ candidateIds: "S1" }, /array/],
       [{ onFreeze: undefined }, /onFreeze/],
+      [{ onCallbackError: "log" }, /onCallbackError/],
+      [{ onCallbackError: null }, /onCallbackError/],
       [{ clock: {} }, /clock/],
     ];
     for (const [patch, pattern] of bad) {
       assert.throws(() => createPageDeadline({ ...valid(), ...patch } as PageDeadlineOptions), pattern);
     }
+  });
+});
+
+describe("page deadline: onFreeze faults", () => {
+  /** onFreeze that records each call and then throws its own error. */
+  function faulty(policy: Policy, candidates: readonly string[], observe = true) {
+    const clock = new ManualClock();
+    const calls: PageDeadlineSnapshot[] = [];
+    const observed: unknown[] = [];
+    const fault = new Error("onFreeze fault");
+    const deadline = createPageDeadline({
+      clock,
+      policy,
+      candidateIds: candidates,
+      onFreeze: (snapshot) => {
+        calls.push(snapshot);
+        throw fault;
+      },
+      ...(observe ? { onCallbackError: (error: unknown) => observed.push(error) } : {}),
+    });
+    const at = (time: number, id: string, success: boolean) => {
+      clock.set(time);
+      return deadline.terminal(id, success);
+    };
+    return { clock, deadline, calls, observed, fault, at };
+  }
+
+  it("a throwing onFreeze on the accepting terminal event still returns true", () => {
+    const { clock, deadline, calls, observed, fault, at } = faulty(enabled(), ids(2));
+    deadline.start();
+    assert.equal(at(10, "S1", false), true);
+    assert.equal(at(20, "S2", true), true, "the event that froze the phase was accepted");
+    assert.deepEqual(observed, [fault]);
+    assert.equal(calls.length, 1);
+    assert.equal(deadline.snapshot(), calls[0]);
+    assert.equal(calls[0].reason, "all-terminal");
+    assert.deepEqual(calls[0].successIds, ["S2"]);
+    assert.equal(clock.pending, 0);
+    assert.equal(at(30, "S1", true), false, "sticky after a faulted freeze");
+    assert.equal(calls.length, 1);
+  });
+
+  it("a throwing onFreeze on a due-cutoff terminal event still returns false", () => {
+    const { clock, deadline, calls, observed, fault, at } = faulty(enabled(), ids(3));
+    deadline.start();
+    assert.equal(at(1000, "S1", true), false);
+    assert.deepEqual(observed, [fault]);
+    assert.equal(calls[0].reason, "ceiling");
+    assert.deepEqual(calls[0].terminalIds, []);
+    assert.equal(clock.pending, 0);
+    assert.equal(deadline.terminal("S1", true), false, "the excluded page stays excluded");
+  });
+
+  it("a throwing onFreeze on the minimum and freshly-armed adaptive paths keeps acceptance", () => {
+    const minimum = faulty(enabled({ quorum: 0.4, minSources: 2 }), ids(5));
+    minimum.deadline.start();
+    minimum.at(10, "S1", true);
+    minimum.at(20, "S2", false);
+    minimum.clock.advanceTo(30);
+    assert.equal(minimum.at(40, "S3", true), true);
+    assert.equal(minimum.calls[0].reason, "minimum");
+    assert.deepEqual(minimum.observed, [minimum.fault]);
+
+    const armed = faulty(enabled(), ids(2));
+    armed.deadline.start();
+    assert.equal(armed.at(0, "S1", true), true);
+    assert.equal(armed.calls[0].reason, "adaptive");
+    assert.deepEqual(armed.observed, [armed.fault]);
+    assert.equal(armed.clock.pending, 0);
+  });
+
+  for (const [label, policy, advance, reason] of [
+    ["ceiling", enabled({ quorum: 1 }), 1000, "ceiling"],
+    ["adaptive", enabled({ quorum: 0.5 }), 20, "adaptive"],
+  ] as const) {
+    it(`a throwing onFreeze does not escape the ${label} timer callback`, () => {
+      const { clock, deadline, calls, observed, fault, at } = faulty(policy, ids(2));
+      deadline.start();
+      at(10, "S1", true);
+      assert.doesNotThrow(() => clock.advanceTo(advance));
+      assert.deepEqual(observed, [fault]);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].reason, reason);
+      assert.equal(calls[0].frozenAtMs, advance);
+      assert.equal(clock.pending, 0, "the other timer was cleared before notification");
+      assert.equal(at(advance + 1, "S2", true), false);
+      clock.advanceTo(100_000);
+      assert.equal(calls.length, 1);
+    });
+  }
+
+  it("a throwing onFreeze at the N = 0 start is contained", () => {
+    const { clock, deadline, calls, observed, fault } = faulty(enabled(), []);
+    assert.doesNotThrow(() => deadline.start());
+    assert.deepEqual(observed, [fault]);
+    assert.equal(deadline.snapshot()?.reason, "not-applicable");
+    assert.equal(clock.scheduled, 0);
+    assert.equal(calls.length, 1);
+  });
+
+  it("without an observer the fault is still contained", () => {
+    const { clock, deadline, calls, at } = faulty(enabled({ quorum: 1 }), ids(2), false);
+    deadline.start();
+    at(10, "S1", true);
+    assert.doesNotThrow(() => clock.advanceTo(1000));
+    assert.equal(calls.length, 1);
+    assert.equal(at(1001, "S2", true), false);
+    const terminalPath = faulty(enabled(), ids(1), false);
+    terminalPath.deadline.start();
+    assert.equal(terminalPath.at(5, "S1", true), true);
+  });
+
+  it("a throwing error observer is contained on terminal and timer paths", () => {
+    for (const trigger of ["terminal", "timer"] as const) {
+      const clock = new ManualClock();
+      let observerCalls = 0;
+      const deadline = createPageDeadline({
+        clock,
+        policy: enabled({ quorum: 1 }),
+        candidateIds: ids(2),
+        onFreeze: () => {
+          throw new Error("onFreeze fault");
+        },
+        onCallbackError: () => {
+          observerCalls++;
+          throw new Error("observer fault");
+        },
+      });
+      deadline.start();
+      clock.set(10);
+      assert.equal(deadline.terminal("S1", true), true);
+      if (trigger === "terminal") {
+        clock.set(20);
+        assert.equal(deadline.terminal("S2", true), true, trigger);
+      } else {
+        assert.doesNotThrow(() => clock.advanceTo(1000), trigger);
+      }
+      assert.equal(observerCalls, 1, trigger);
+      assert.ok(deadline.snapshot(), trigger);
+      assert.equal(clock.pending, 0, trigger);
+    }
+  });
+
+  it("captures onFreeze and the observer at construction", () => {
+    const clock = new ManualClock();
+    const observed: unknown[] = [];
+    const fault = new Error("captured onFreeze");
+    const options = {
+      clock,
+      policy: enabled({ quorum: 1 }),
+      candidateIds: ids(1),
+      onFreeze: (): void => {
+        throw fault;
+      },
+      onCallbackError: (error: unknown): void => {
+        observed.push(error);
+      },
+    };
+    const deadline = createPageDeadline(options);
+    options.onFreeze = () => assert.fail("replaced onFreeze must not run");
+    options.onCallbackError = () => assert.fail("replaced observer must not run");
+    deadline.start();
+    clock.set(5);
+    assert.equal(deadline.terminal("S1", true), true);
+    assert.deepEqual(observed, [fault]);
+  });
+
+  it("reads each option once, so validation and use cannot diverge", () => {
+    const reads: Record<string, number> = {};
+    const values: Record<string, unknown> = {
+      clock: new ManualClock(),
+      policy: enabled(),
+      candidateIds: ids(2),
+      onFreeze: () => {},
+      onCallbackError: () => {},
+    };
+    const options = {} as PageDeadlineOptions;
+    for (const key of Object.keys(values)) {
+      Object.defineProperty(options, key, {
+        enumerable: true,
+        get: () => {
+          reads[key] = (reads[key] ?? 0) + 1;
+          return values[key];
+        },
+      });
+    }
+    createPageDeadline(options);
+    assert.deepEqual(reads, { clock: 1, policy: 1, candidateIds: 1, onFreeze: 1, onCallbackError: 1 });
+  });
+
+  it("a non-throwing onFreeze never calls the observer", () => {
+    const observed: unknown[] = [];
+    const { clock, deadline, frozen, at } = harness(enabled({ quorum: 0.5 }), ids(3), {
+      onCallbackError: (error) => observed.push(error),
+    });
+    deadline.start();
+    at(10, "S1", true);
+    at(20, "S2", true);
+    clock.advanceTo(1000);
+    assert.equal(frozen.length, 1);
+    assert.deepEqual(observed, []);
+  });
+
+  it("an observer that disposes or reports again cannot refreeze the phase", () => {
+    const clock = new ManualClock();
+    let deadline!: PageDeadline;
+    const seen: unknown[] = [];
+    let freezes = 0;
+    deadline = createPageDeadline({
+      clock,
+      policy: enabled({ quorum: 0.3 }),
+      candidateIds: ids(3),
+      onFreeze: () => {
+        freezes++;
+        throw new Error("fault");
+      },
+      onCallbackError: () => {
+        seen.push(deadline.terminal("S3", true));
+        deadline.dispose();
+      },
+    });
+    deadline.start();
+    clock.set(10);
+    deadline.terminal("S1", true);
+    clock.advanceTo(1000);
+    assert.equal(freezes, 1);
+    assert.deepEqual(seen, [false]);
+    assert.equal(deadline.snapshot()?.reason, "adaptive");
+    assert.equal(clock.pending, 0);
+  });
+});
+
+describe("page deadline: real system clock", () => {
+  /** Collect process-level uncaught exceptions for the duration of one test. */
+  async function withUncaught<T>(run: (uncaught: unknown[]) => Promise<T>): Promise<T> {
+    const uncaught: unknown[] = [];
+    const listener = (error: unknown) => uncaught.push(error);
+    process.on("uncaughtException", listener);
+    try {
+      return await run(uncaught);
+    } finally {
+      process.off("uncaughtException", listener);
+    }
+  }
+
+  const settle = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  for (const [label, policy, reason] of [
+    ["ceiling", enabled({ quorum: 1, ceilingMs: 15 }), "ceiling"],
+    ["adaptive", enabled({ quorum: 0.5, floorMs: 15, ceilingMs: 5000 }), "adaptive"],
+  ] as const) {
+    it(`a throwing onFreeze in a real ${label} timer reaches only the observer`, { timeout: 5000 }, async () => {
+      await withUncaught(async (uncaught) => {
+        const fault = new Error(`real ${label} fault`);
+        let notify!: (error: unknown) => void;
+        const observed = new Promise<unknown>((resolve) => (notify = resolve));
+        let freezes = 0;
+        const deadline = createPageDeadline({
+          clock: createSystemClock(),
+          policy,
+          candidateIds: ids(2),
+          onFreeze: () => {
+            freezes++;
+            throw fault;
+          },
+          onCallbackError: notify,
+        });
+        deadline.start();
+        assert.equal(deadline.terminal("S1", true), true);
+        assert.equal(await observed, fault);
+        await settle(30);
+        assert.deepEqual(uncaught, []);
+        assert.equal(freezes, 1);
+        assert.equal(deadline.snapshot()?.reason, reason);
+        assert.deepEqual(deadline.snapshot()?.successIds, ["S1"]);
+        assert.equal(deadline.terminal("S2", true), false);
+        deadline.dispose();
+      });
+    });
+  }
+
+  it("dispose clears real timers so no callback or freeze follows", { timeout: 5000 }, async () => {
+    await withUncaught(async (uncaught) => {
+      let freezes = 0;
+      const deadline = createPageDeadline({
+        clock: createSystemClock(),
+        policy: enabled({ quorum: 0.5, floorMs: 10, ceilingMs: 20 }),
+        candidateIds: ids(3),
+        onFreeze: () => {
+          freezes++;
+        },
+      });
+      deadline.start();
+      assert.equal(deadline.terminal("S1", true), true);
+      deadline.dispose();
+      await settle(50);
+      assert.equal(freezes, 0);
+      assert.equal(deadline.snapshot(), undefined);
+      assert.deepEqual(uncaught, []);
+    });
   });
 });
 

@@ -32,7 +32,10 @@ export interface PageDeadlineOptions {
   readonly clock: Clock;
   readonly policy: ResearchExecutionSettings["deadline"];
   readonly candidateIds: readonly string[];
+  /** Notification of an already committed snapshot; a throw is contained, never rethrown. */
   readonly onFreeze: (snapshot: PageDeadlineSnapshot) => void;
+  /** Observes an `onFreeze` exception; its own exceptions are also contained. */
+  readonly onCallbackError?: (error: unknown) => void;
 }
 
 export interface PageDeadline {
@@ -59,27 +62,35 @@ export function medianMs(values: readonly number[]): number {
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-function validateOptions(options: PageDeadlineOptions): ResearchExecutionSettings["deadline"] {
+/** Reads each option exactly once, so validation and later use see the same values. */
+function captureOptions(options: PageDeadlineOptions): PageDeadlineOptions {
   if (!options || typeof options !== "object") throw new TypeError("page deadline options must be an object");
-  const { clock, candidateIds, onFreeze } = options;
+  const { clock, candidateIds, onFreeze, onCallbackError, policy } = options;
   if (!clock || typeof clock.monotonicMs !== "function" || typeof clock.schedule !== "function")
     throw new TypeError("page deadline clock must provide monotonicMs and schedule");
   if (typeof onFreeze !== "function") throw new TypeError("page deadline onFreeze must be a function");
+  if (onCallbackError !== undefined && typeof onCallbackError !== "function")
+    throw new TypeError("page deadline onCallbackError must be a function");
   if (!Array.isArray(candidateIds)) throw new TypeError("page deadline candidateIds must be an array");
+  const order = Object.freeze([...candidateIds]);
   const seen = new Set<string>();
-  for (const id of candidateIds) {
+  for (const id of order) {
     if (typeof id !== "string" || id.length === 0)
       throw new TypeError("page deadline candidate identifiers must be nonempty strings");
     if (seen.has(id)) throw new RangeError(`duplicate page deadline candidate: ${id}`);
     seen.add(id);
   }
-  return parseExecutionSettings({ deadline: options.policy }, "pageDeadline").deadline;
+  return {
+    clock,
+    candidateIds: order,
+    onFreeze,
+    onCallbackError,
+    policy: parseExecutionSettings({ deadline: policy }, "pageDeadline").deadline,
+  };
 }
 
 export function createPageDeadline(options: PageDeadlineOptions): PageDeadline {
-  const policy = validateOptions(options);
-  const { clock, onFreeze } = options;
-  const order = Object.freeze([...options.candidateIds]);
+  const { clock, candidateIds: order, onFreeze, onCallbackError, policy } = captureOptions(options);
   const index = new Map(order.map((id, position) => [id, position]));
   const n = order.length;
   const required = policy.enabled ? Math.min(policy.minSources, n) : 0;
@@ -114,7 +125,17 @@ export function createPageDeadline(options: PageDeadlineOptions): PageDeadline {
       ...(ceilingAt === undefined ? {} : { ceilingAtMs: ceilingAt }),
     });
     clearTimers();
-    onFreeze(frozen);
+    // The freeze is already committed: a throwing notification must not escape a timer
+    // callback or replace the terminal() verdict, so it goes only to the captured observer.
+    try {
+      onFreeze(frozen);
+    } catch (error) {
+      try {
+        onCallbackError?.(error);
+      } catch {
+        // The observer is the last report channel; nothing remains to tell.
+      }
+    }
   };
 
   const live = () => frozen === undefined && !disposed;
