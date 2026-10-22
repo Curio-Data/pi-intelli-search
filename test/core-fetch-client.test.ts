@@ -597,9 +597,9 @@ it("all registered factories select the captured bounded service without adding 
     "utf8",
   );
   const mcp = await readFile(new URL("../packages/mcp/src/runtime.ts", import.meta.url), "utf8");
-  assert.match(native, /createFetch: capturePageFetchFactory\(settings, clock, pagePolicy\)/);
+  assert.match(native, /createFetch: capturePageFetchFactory\(settings, clock, pagePolicy, options.pageTransport\)/);
   assert.match(native, /environment: capturePageEnvironment\(process.env\)/);
-  assert.match(mcp, /capturePageFetchFactory\(config.settings, clock, pagePolicy\)/);
+  assert.match(mcp, /capturePageFetchFactory\(\s*config.settings,\s*clock,\s*pagePolicy,\s*options.pageTransport,?\s*\)/);
   assert.match(mcp, /environment: capturePageEnvironment\(env, config.apiKeyEnv\)/);
   assert(!native.includes("Coordinated fetch is not installed"));
   assert(!mcp.includes('case "intelli_fetch"'));

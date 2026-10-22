@@ -41,8 +41,8 @@ import type {
   Clock,
   FullData,
   Diagnostic,
+  PageTransport,
 } from "../../../src/core/contracts.js";
-import type { ResearchDependencies } from "../../../src/core/operations/research.js";
 import type { FetchFunction } from "../../../src/core/annotations.js";
 import {
   ConfigurationError,
@@ -117,7 +117,7 @@ export interface RuntimeOptions {
   fetch?: FetchFunction;
   env?: Readonly<Record<string, string | undefined>>;
   logger?: OperationLogger;
-  researchDependencies?: ResearchDependencies;
+  pageTransport?: PageTransport;
   /** Deterministic runtime clock; never an operation-owned replacement. */
   clock?: Clock;
   /** Read-only witness after a waiter joins the shared catalogue flight. */
@@ -131,12 +131,7 @@ export interface ExecuteOptions {
 export async function createRuntime(config: StandaloneConfig, options: RuntimeOptions = {}) {
   // Capture the caller's settings once, before constructing the coordinator.
   config = structuredClone(config);
-  options = {
-    ...options,
-    researchDependencies: options.researchDependencies
-      ? { ...options.researchDependencies }
-      : undefined,
-  };
+  options = { ...options };
   // Public runtime callers may supply an object without using parseConfig().
   // Revalidate captured execution/pacing before any workspace or provider work.
   const admission = parseAdmission(config.admission);
@@ -169,8 +164,12 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
     { fetch: options.fetch, env, logger, onCatalogueWaiterJoined: options.onCatalogueWaiterJoined },
     clock,
   );
-  // Install the bounded service without changing legacy research scheduling.
-  const createFetch = capturePageFetchFactory(config.settings, clock, pagePolicy);
+  const createFetch = capturePageFetchFactory(
+    config.settings,
+    clock,
+    pagePolicy,
+    options.pageTransport,
+  );
   const lifetime = createOperationRuntime({
     modelConcurrency: executionSettings.modelConcurrency,
     criticalReserve: executionSettings.criticalReserve,
@@ -209,17 +208,14 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
     ): Promise<OperationResult & { readonly execution: ExecutionReceipt }> {
       const state: { category: StandaloneErrorCode } = { category: "INVALID_ARGUMENTS" };
       let owned: OperationServices | undefined;
-      const boundary =
-        name !== "intelli_research"
-          ? createOperationResultBoundary(
-              clock,
-              (event) => {
-                if (event.event === "retry") logger.error(event.message);
-                if (!closed) execution.onProgress?.({ ...event, message: redact(event.message) });
-              },
-              (diagnostic) => logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
-            )
-          : undefined;
+      const boundary = createOperationResultBoundary(
+        clock,
+        (event) => {
+          if (event.event === "retry") logger.error(event.message);
+          if (!closed) execution.onProgress?.({ ...event, message: redact(event.message) });
+        },
+        (diagnostic) => logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
+      );
       const operationId = randomUUID();
       const safeText = (text: string) =>
         redact(
@@ -346,10 +342,11 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
                     ),
                   );
                 case "intelli_research":
-                  return research(
-                    params as OperationInputs["intelli_research"],
-                    context,
-                    options.researchDependencies,
+                  return boundary.run(() =>
+                    research(
+                      params as OperationInputs["intelli_research"],
+                      boundary.context(context),
+                    ),
                   );
                 default:
                   throw new Error("Unknown operation");

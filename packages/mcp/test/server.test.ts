@@ -12,6 +12,8 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { document } from "./helpers.js";
+import { Check } from "typebox/value";
+import { compactOutputSchema } from "../../../src/core/output-schemas.js";
 
 const packageDir = fileURLToPath(new URL("..", import.meta.url));
 const childPath = fileURLToPath(new URL("./child-server.ts", import.meta.url));
@@ -388,13 +390,20 @@ test(
     const url = await pages();
     const fixture = await connect({ FIXTURE_PAGE_URL: url });
     try {
-      let progress = 0;
+      const callbacks: number[] = [];
+      const wire: number[] = [];
+      const receive = fixture.transport.onmessage;
+      fixture.transport.onmessage = (message) => {
+        if ("method" in message && message.method === "notifications/progress")
+          wire.push((message.params as { progress: number }).progress);
+        receive?.(message);
+      };
       const result = await fixture.client.callTool(
         {
           name: "intelli_research",
           arguments: { query: "fixture research", maxUrls: 1, focusPrompt: "Fixture facts" },
         },
-        { timeout: 90_000, onprogress: () => progress++ },
+        { timeout: 90_000, onprogress: (event) => callbacks.push(event.progress) },
       );
       const structured = result.structuredContent as {
         outcome: string;
@@ -404,8 +413,14 @@ test(
       // The summary reaches a host that shows the model structuredContent only.
       const text = textInBoth(result);
       assert.match(text, /Fixture collated summary/);
-      assert.equal(Object.keys(result.structuredContent ?? {}).join(","), "outcome,text,details");
-      assert.ok(progress > 0, "progress notifications reach the client");
+      assert.equal(
+        Object.keys(result.structuredContent ?? {}).join(","),
+        "outcome,text,details,meta",
+      );
+      assert(Check(compactOutputSchema, result.structuredContent));
+      assert(wire.includes(100), "terminal progress is written before the response");
+      assert(callbacks.includes(100), "the SDK callback observes the owned terminal send");
+      assert(wire.every((value, i) => !i || value > wire[i - 1]));
       assert.ok(structured.details.cachePath.includes(`.search${sep}`));
       const cacheEntries = readdirSync(structured.details.cachePath);
       assert.ok(cacheEntries.includes("meta.json"));

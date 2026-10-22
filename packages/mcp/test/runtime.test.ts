@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createRuntime, identity, StandaloneError } from "../src/runtime.js";
+import { markdownPage } from "../../../test/helpers/page-fixtures.js";
 import { CACHE_SUGGEST_PROMPT } from "../../../src/core/prompts.js";
 import { completion, fakeTransport, fixture, json, logger } from "./helpers.js";
 import type { OperationInputs } from "../../../src/core/contracts.js";
@@ -43,10 +44,7 @@ test("all shared operations run outside the host with standalone policy and cach
           ),
         );
       }),
-      researchDependencies: {
-        fetchPages: async () => [{ ...page, status: "success", source: "markdown" }],
-        downloadLlmsFullToCache: async () => null,
-      },
+      pageTransport: markdownPage(page.content),
     });
     const search = await runtime.execute("intelli_search", { query: "search" });
     assert.deepEqual(search.details.sources, [{ url: page.url, title: "Docs" }]);

@@ -25,6 +25,7 @@ import { getEventListeners } from "node:events";
 import { Check } from "typebox/value";
 import { standaloneOutputSchemas, collateOutputSchema } from "../src/core/output-schemas.js";
 import { suppliedCollation, verifyCollateData } from "./helpers/collate-fixtures.js";
+import { markdownPage } from "./helpers/page-fixtures.js";
 import { createRunStore } from "../src/core/run-store.js";
 import type { FullData, Progress } from "../src/core/contracts.js";
 import { __harness as indexHarness } from "../src/index.js";
@@ -342,14 +343,7 @@ test("native research/suggest roles share a settled operation, retry accounting 
       return response("[]");
     },
     {
-      researchDependencies: {
-        async fetchPages() {
-          return [{ ...page, status: "success" }];
-        },
-        async downloadLlmsFullToCache() {
-          return null;
-        },
-      },
+      pageTransport: markdownPage(page.content),
     },
   );
   try {
@@ -402,20 +396,17 @@ test("replacement owns stage-gap drain; old shutdown, late progress and UI failu
   const abortSeen = deferred();
   const cleanup = deferred();
   const f = await fixture(async () => response(`[Docs](${page.url})`), {
-    researchDependencies: {
-      async fetchPages(_urls, signal) {
-        entered.resolve();
-        if (!signal?.aborted)
-          await new Promise<void>((resolve) =>
-            signal?.addEventListener("abort", () => resolve(), { once: true }),
-          );
-        abortSeen.resolve();
-        await cleanup.promise;
-        return [{ ...page, status: "success" }];
-      },
-      async downloadLlmsFullToCache() {
-        return null;
-      },
+    async pageTransport(url, request) {
+      const signal = request.signal;
+      entered.resolve();
+      if (!signal.aborted)
+        await new Promise<void>((resolve) =>
+          signal.addEventListener("abort", () => resolve(), { once: true }),
+        );
+      abortSeen.resolve();
+      await cleanup.promise;
+      signal.throwIfAborted();
+      return markdownPage(page.content)(url, request);
     },
   });
   try {
@@ -1089,40 +1080,48 @@ test("registered standalone page-queue BUSY has zero-attempt full error data on 
       },
       {
         supportsErrorResults: modern,
-        researchDependencies: {
-          fetchPages: async (urls) =>
-            urls.map((url) => ({
-              url,
-              title: url,
-              content: "Page",
-              status: "success",
-              source: "markdown",
-            })),
-          downloadLlmsFullToCache: async () => null,
-        },
+        pageTransport: markdownPage(),
       },
       {
         maxUrls: 80,
         defaultUrls: 80,
+        fetchConcurrency: 80,
         extractionConcurrency: 63,
         execution: { modelConcurrency: 64 },
       },
     );
     await f.runtime.start(f.ctx);
+    // Exactly 511 page attempts: 63 active and the 448 permitted queued
+    // positions. Unlike the former whole-page injection, real spooling is async.
+    const allSubmitted = deferred();
+    let submitted = 0;
+    const push = f.updates.push.bind(f.updates);
+    f.updates.push = (...values) => {
+      for (const value of values) {
+        const event = (value as { details?: Progress }).details;
+        if (event?.workStage === "extract" && /^Extracting S/.test(event.message)) {
+          if (++submitted === 511) allSubmitted.resolve();
+        }
+      }
+      return push(...values);
+    };
     const controllers = Array.from({ length: 9 }, () => new AbortController());
     const floods = controllers.map((controller, i) =>
       f
-        .run("intelli_research", { query: `queue ${i}`, maxUrls: 80 }, controller.signal)
+        .run(
+          "intelli_research",
+          { query: `queue ${i}`, maxUrls: i < 8 ? 63 : 7 },
+          controller.signal,
+        )
         .catch((error: unknown) => error),
     );
     try {
-      await new Promise((resolve) => setImmediate(resolve));
+      await allSubmitted.promise;
+      // Auth is an already-fulfilled fixture promise. Drain its finite microtask
+      // population after the explicit submission witness, not a wall-time guess.
       await new Promise((resolve) => setImmediate(resolve));
       assert.equal(extractions, 63);
-      assert(
-        f.notices.some((notice) => notice.includes("Model admission queue is full")),
-        "real scoped queue is saturated",
-      );
+      assert.equal(submitted, 511);
       const result = await f
         .run("intelli_extract", { ...page, query: "busy" })
         .catch((error: unknown) => error);
@@ -1395,7 +1394,7 @@ test("native collate zero-input and BUSY-coded allocation faults retain zero-att
   }
 });
 
-test("installing bounded fetch preserves all four registered tools with permissive legacy native fetch settings", async (t) => {
+test("unused legacy fetch settings preserve manual tools; research rejects invalid consumed settings before inference", async (t) => {
   t.mock.method(globalThis, "fetch", async () => {
     throw new Error("network forbidden");
   });
@@ -1408,10 +1407,7 @@ test("installing bounded fetch preserves all four registered tools with permissi
       return response("[]");
     },
     {
-      researchDependencies: {
-        fetchPages: async () => [{ ...page, status: "success" }],
-        downloadLlmsFullToCache: async () => null,
-      },
+      pageTransport: markdownPage(page.content),
     },
     { fetchTimeoutMs: 900_000, fetchConcurrency: 1.5 },
   );
@@ -1434,12 +1430,15 @@ test("installing bounded fetch preserves all four registered tools with permissi
           ] as OperationInputs["intelli_collate"]["extractions"],
         },
       ],
-      ["intelli_research", { query: "Research", maxUrls: 1 }],
     ] as const) {
       const result = await f.run(name, params);
       assert(!result.isError, `${name} remains unaffected by unused fetch settings`);
       assert(receipt(result).accounting.attempts > 0);
     }
+    await assert.rejects(
+      f.run("intelli_research", { query: "Research", maxUrls: 1 }),
+      /pi-intelli-search.fetchConcurrency/,
+    );
   } finally {
     await f.cleanup();
   }

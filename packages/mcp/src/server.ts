@@ -309,6 +309,9 @@ export function createProtocolServer(
         // MCP requires a strict increase, not merely a non-decreasing display
         // percentage. Repeated stage/retry/end percentages remain local events.
         let lastProgress = -1;
+        // Notification writes belong to this request, including terminal progress.
+        // Await the chain before publishing its response or releasing queue ownership.
+        let notifications: Promise<void> = Promise.resolve();
         const factories = {
           failed: (error: unknown) =>
             error instanceof StandaloneError
@@ -337,16 +340,18 @@ export function createProtocolServer(
                       : (progress) => {
                           if (progress.pct <= lastProgress) return;
                           lastProgress = progress.pct;
-                          void ctx.mcpReq
-                            .notify({
-                              method: "notifications/progress",
-                              params: {
-                                progressToken: token,
-                                progress: progress.pct,
-                                total: 100,
-                                message: progress.message,
-                              },
-                            })
+                          notifications = notifications
+                            .then(() =>
+                              ctx.mcpReq.notify({
+                                method: "notifications/progress",
+                                params: {
+                                  progressToken: token,
+                                  progress: progress.pct,
+                                  total: 100,
+                                  message: progress.message,
+                                },
+                              }),
+                            )
                             .catch(() => {});
                         },
                 }),
@@ -365,7 +370,10 @@ export function createProtocolServer(
                   );
                   return errorResult(tool.name, "OPERATION", "Operation failed");
                 },
-              ),
+              )
+              .finally(async () => {
+                await notifications;
+              }),
           signal,
           factories,
         );

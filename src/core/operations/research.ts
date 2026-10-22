@@ -13,6 +13,8 @@ import type {
   OperationContext,
   OperationResult,
   ResearchParams,
+  Context,
+  CoreResult,
   ModelRetryConfig as LlmRetryConfig,
 } from "../contracts.js";
 import { displayCachePath, type WorkspacePaths } from "../paths.js";
@@ -60,6 +62,8 @@ import {
 import { progress } from "../progress.js";
 import { completeOperationModel } from "../operation-model.js";
 import { finalizeCollation } from "../provenance.js";
+import { produceCoreResult } from "../operation-result.js";
+import { createResearchResult } from "../research-result.js";
 
 /** Per-run I/O injection; no mutable global engine harness. */
 export interface ResearchDependencies {
@@ -86,7 +90,23 @@ export async function preflightResearch(context: OperationContext): Promise<void
   if (missing.length) throw new MissingModelsError(missing);
 }
 
-export async function research(
+export function research(params: ResearchParams, context: Context): Promise<CoreResult> {
+  const input = structuredClone(params);
+  return produceCoreResult(
+    context,
+    (legacy) =>
+      createResearchResult(
+        input,
+        context.services.clock,
+        context.services.onProgress,
+        (diagnostic) => legacy.logger.warn(`${diagnostic.code}: ${diagnostic.message}`),
+      ),
+    ["search", "extract", "collate"],
+  );
+}
+
+/** Explicit compatibility entrypoint; registered research uses the bounded engine. */
+export async function legacyResearch(
   params: ResearchParams,
   context: OperationContext,
   dependencies: ResearchDependencies = { fetchPages, downloadLlmsFullToCache },
@@ -110,7 +130,9 @@ export async function research(
       maxDelayMs: settings.retryMaxDelayMs,
     },
     // Scoped policy owns runtime-wide actual-start pacing, including retries.
-    gate: context.services ? async () => throwIfAborted(context.signal) : createRateLimiter(settings.minRequestIntervalMs),
+    gate: context.services
+      ? async () => throwIfAborted(context.signal)
+      : createRateLimiter(settings.minRequestIntervalMs),
     tel: settings.disableTelemetry
       ? null
       : await TelemetryBuilder.create(params.query, context.identity, context.now),
@@ -230,7 +252,15 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   throwIfAborted(p.signal);
   const llms = await startLlmsFullDownloads(p, fetched.successPages);
   try {
-    await writeCacheArtifacts(p, allExtractions, fetched, search.searchResult, collation, llms, identity);
+    await writeCacheArtifacts(
+      p,
+      allExtractions,
+      fetched,
+      search.searchResult,
+      collation,
+      llms,
+      identity,
+    );
   } finally {
     // Settle writers before removing their directory, even on cache failure or cancellation.
     llms.abort.abort();
@@ -264,7 +294,11 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   const failedCount = fetched.pages.length - fetched.successPages.length;
   const result =
     collation +
-    formatCacheAppendix(p.cachePath, succeededExtractions.length, allExtractions.length - succeededExtractions.length) +
+    formatCacheAppendix(
+      p.cachePath,
+      succeededExtractions.length,
+      allExtractions.length - succeededExtractions.length,
+    ) +
     suggestionsAppendix;
 
   return {
@@ -342,7 +376,8 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
     p.onProgress?.(
       progress("search", `Search returned no links — retrying (${attempt}/${maxAttempts - 1})...`),
     );
-    await (p.services?.clock.sleep(p.settings.retryBaseDelayMs, p.signal) ?? sleep(p.settings.retryBaseDelayMs, p.signal));
+    await (p.services?.clock.sleep(p.settings.retryBaseDelayMs, p.signal) ??
+      sleep(p.settings.retryBaseDelayMs, p.signal));
   }
 
   // User cancel during search: propagate abort rather than returning a
@@ -444,7 +479,11 @@ async function runExtractStage(
     async (page) => {
       // Space out concurrent extract calls when a throttle is configured.
       await p.gate(p.signal);
-      return extractPage(p, page, `S${pages.findIndex((candidate) => candidate.url === page.url) + 1}`);
+      return extractPage(
+        p,
+        page,
+        `S${pages.findIndex((candidate) => candidate.url === page.url) + 1}`,
+      );
     },
     {
       signal: p.signal,
@@ -719,7 +758,9 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
     // legacy direct helper retains its characterised reader and ordering.
     const index = p.services
       ? {
-          searches: (await p.services.runs.candidates(undefined, p.params.query, p.services.operation.signal))
+          searches: (
+            await p.services.runs.candidates(undefined, p.params.query, p.services.operation.signal)
+          )
             .filter((entry) => entry.reportPath !== join(p.cachePath, "report.md"))
             .map((entry) => ({
               slug: relative(p.paths.cacheDisplayRoot, dirname(entry.reportPath)),
@@ -894,7 +935,11 @@ async function writeTelemetrySidecar(
 /**
  * Extract query-relevant content from a single page.
  */
-async function extractPage(p: PipelineCtx, page: FetchedPage, pageId: string): Promise<ExtractResult> {
+async function extractPage(
+  p: PipelineCtx,
+  page: FetchedPage,
+  pageId: string,
+): Promise<ExtractResult> {
   throwIfAborted(p.signal);
   try {
     const userMessage = buildExtractionMessage(
@@ -904,16 +949,21 @@ async function extractPage(p: PipelineCtx, page: FetchedPage, pageId: string): P
       p.settings.extractMaxChars,
     );
 
-    const { text: extraction } = await completeOperationModel(p, "extract", {
-      model: p.extractConfig,
-      systemPrompt: EXTRACTION_SYSTEM_PROMPT,
-      userMessage,
-      maxTokens: p.settings.extractionMaxTokens,
-      signal: p.signal,
-      retry: p.retry,
-      timeoutMs: p.settings.llmTimeoutMs,
-      onRetryNotice: (msg) => p.onProgress?.(progress("extract", msg)),
-    }, pageId);
+    const { text: extraction } = await completeOperationModel(
+      p,
+      "extract",
+      {
+        model: p.extractConfig,
+        systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+        userMessage,
+        maxTokens: p.settings.extractionMaxTokens,
+        signal: p.signal,
+        retry: p.retry,
+        timeoutMs: p.settings.llmTimeoutMs,
+        onRetryNotice: (msg) => p.onProgress?.(progress("extract", msg)),
+      },
+      pageId,
+    );
 
     if (!extraction.trim()) throw new Error("Extraction returned no visible evidence");
     const firstLine = extraction.split("\n")[0] ?? "";

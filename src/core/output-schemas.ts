@@ -2,6 +2,7 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
 import { Type, type TSchema } from "typebox";
+import type { OperationName } from "./contracts.js";
 import { AccountingSummarySchema, AttemptRecordSchema } from "./accounting-schema.js";
 
 const strict = { additionalProperties: false } as const;
@@ -106,9 +107,30 @@ const fetchSource = Type.Object(
   },
   strict,
 );
-const full = (
-  name: "intelli_search" | "intelli_extract" | "intelli_collate" | "intelli_fetch",
-): TSchema =>
+const researchSource = Type.Object(
+  {
+    id: Type.String(),
+    url: Type.String(),
+    title: Type.String(),
+    state: literals([
+      "candidate",
+      "fetched",
+      "used",
+      "late",
+      "empty",
+      "fetch-failed",
+      "extract-failed",
+      "cancelled",
+    ]),
+    sourceType: Type.Optional(Type.String()),
+    truncated: Type.Optional(Type.Boolean()),
+    extractionPath: Type.Optional(Type.String()),
+    fullPagePath: Type.Optional(Type.String()),
+    diagnostic: Type.Optional(Type.String()),
+  },
+  strict,
+);
+const full = (name: OperationName): TSchema =>
   Type.Object(
     {
       schemaVersion: Type.Literal(1),
@@ -119,11 +141,13 @@ const full = (
       details,
       summary: Type.String(),
       sources: Type.Array(
-        name === "intelli_collate"
-          ? collateSource
-          : name === "intelli_fetch"
-            ? fetchSource
-            : standaloneSource,
+        name === "intelli_research"
+          ? researchSource
+          : name === "intelli_collate"
+            ? collateSource
+            : name === "intelli_fetch"
+              ? fetchSource
+              : standaloneSource,
       ),
       cache: persistence,
       related: Type.Array(
@@ -170,15 +194,22 @@ const full = (
     strict,
   );
 
-/** Only implemented registered projections. The five-operation map remains pending. */
+/** Full manual-operation schemas retained as named compatibility exports. */
 export const standaloneOutputSchemas = Object.freeze({
   intelli_search: full("intelli_search"),
   intelli_extract: full("intelli_extract"),
 });
-/** Registered supplied-input collation only; not the five-operation schema map. */
+/** Registered supplied-input collation. */
 export const collateOutputSchema = full("intelli_collate");
 /** Host-neutral fetch only; no native or MCP registration. */
 export const fetchOutputSchema = full("intelli_fetch");
+export const researchOutputSchema = full("intelli_research");
+export const operationOutputSchemas: Readonly<Record<OperationName, TSchema>> = Object.freeze({
+  ...standaloneOutputSchemas,
+  intelli_collate: collateOutputSchema,
+  intelli_research: researchOutputSchema,
+  intelli_fetch: fetchOutputSchema,
+});
 export const compactOutputSchema = Type.Object(
   {
     outcome,

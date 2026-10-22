@@ -4,7 +4,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import type { OperationProgress, ResearchParams, ResearchStage } from "../core/contracts.js";
-import { research, MissingModelsError } from "../core/operations/research.js";
+import { legacyResearch as research, MissingModelsError } from "../core/operations/research.js";
 import { researchSchema } from "../core/schemas.js";
 import { STAGES, progress } from "../core/progress.js";
 import {

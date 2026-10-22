@@ -7,6 +7,7 @@ import { test } from "node:test";
 import ts from "typescript";
 import { createRuntime, StandaloneError } from "../src/runtime.js";
 import { createProtocolServer, lazyRuntime } from "../src/server.js";
+import { markdownPage } from "../../../test/helpers/page-fixtures.js";
 import { createSystemClock } from "../../../src/core/clock.js";
 import { executionDefaults } from "../../../src/core/execution-settings.js";
 import { completion, fakeTransport, fixture, json, logger, catalogue } from "./helpers.js";
@@ -115,20 +116,17 @@ test("registered runtime close owns stage gaps and delayed cleanup, suppressing 
       },
     },
     fetch: fakeTransport(() => json(completion(`[Docs](${page.url})`))),
-    researchDependencies: {
-      async fetchPages(_urls, signal) {
-        entered.resolve();
-        if (!signal?.aborted)
-          await new Promise<void>((resolve) =>
-            signal?.addEventListener("abort", () => resolve(), { once: true }),
-          );
-        abortSeen.resolve();
-        await cleanup.promise;
-        return [{ ...page, status: "success" }];
-      },
-      async downloadLlmsFullToCache() {
-        return null;
-      },
+    async pageTransport(url, request) {
+      const signal = request.signal;
+      entered.resolve();
+      if (!signal.aborted)
+        await new Promise<void>((resolve) =>
+          signal.addEventListener("abort", () => resolve(), { once: true }),
+        );
+      abortSeen.resolve();
+      await cleanup.promise;
+      signal.throwIfAborted();
+      return markdownPage(page.content)(url, request);
     },
   });
   const execution = runtime.execute(
@@ -413,7 +411,11 @@ test("registered MCP inference cannot use the legacy unscoped bypass (source gat
   assert.match(runtime, /modelConcurrency: executionSettings\.modelConcurrency/);
   for (const operation of ["search", "extract", "collate"])
     assert.match(runtime, new RegExp(`boundary!\\.run\\(\\s*\\(\\) =>\\s*${operation}\\(`));
-  assert(!/createStandaloneResult|createCollateResult|legacySearch|legacyExtract|legacyCollate/.test(runtime));
+  assert(
+    !/createStandaloneResult|createCollateResult|legacySearch|legacyExtract|legacyCollate/.test(
+      runtime,
+    ),
+  );
   const collateSource = await readFile(
     new URL("../../../src/core/collate-result.ts", import.meta.url),
     "utf8",

@@ -9,7 +9,7 @@ import {
   legacySearch as search,
   legacyExtract as extract,
   legacyCollate as collate,
-  research,
+  legacyResearch as research,
   MissingModelsError,
 } from "../src/core/index.js";
 import { cacheLockDir, makeCachePath, readIndex } from "../src/core/cache.js";

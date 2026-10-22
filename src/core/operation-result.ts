@@ -79,16 +79,17 @@ export function legacyOperationContext(context: Context): OperationContext {
 export async function produceCoreResult(
   context: Context,
   create: (legacy: OperationContext) => Producer,
-  role: "search" | "extract" | "collate",
+  role: "search" | "extract" | "collate" | readonly ("search" | "extract" | "collate")[],
 ): Promise<CoreResult> {
   const clock = context.services.clock;
   const started = clock.monotonicMs();
   const startedUtc = clock.utcIso();
   const legacy = legacyOperationContext(context);
   legacy.signal?.throwIfAborted();
-  const missing = await legacy.models.preflight([
-    { role, config: legacy.settings[`${role}Model`] },
-  ]);
+  const roles = typeof role === "string" ? [role] : role;
+  const missing = await legacy.models.preflight(
+    roles.map((role) => ({ role, config: legacy.settings[`${role}Model`] })),
+  );
   legacy.signal?.throwIfAborted();
   if (missing.length)
     throw new CoreConfigurationError(
@@ -149,6 +150,9 @@ export async function produceCoreResult(
           startedUtc,
           elapsedMs,
           allWorkSettledMs: elapsedMs,
+          ...(produced.data.timing.cutoffMs === undefined
+            ? {}
+            : { cutoffMs: producerOffset + produced.data.timing.cutoffMs }),
           ...(produced.data.timing.summaryReadyMs === undefined
             ? {}
             : {
@@ -264,6 +268,9 @@ export function createOperationResultBoundary(
           startedUtc,
           elapsedMs,
           allWorkSettledMs: elapsedMs,
+          ...(value.data.timing.cutoffMs === undefined
+            ? {}
+            : { cutoffMs: coreOffset + value.data.timing.cutoffMs }),
           ...(value.data.timing.summaryReadyMs === undefined
             ? {}
             : {

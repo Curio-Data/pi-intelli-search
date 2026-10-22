@@ -1,18 +1,47 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
-import type { Clock, DeepReadonly, FetchClient, OperationLease } from "./contracts.js";
+import type {
+  Clock,
+  DeepReadonly,
+  FetchClient,
+  OperationLease,
+  PageTransport,
+} from "./contracts.js";
 import type { ResearchSettings } from "./types.js";
 import { createFetchClient } from "./fetch-client.js";
 import { createProcessPageTransport, type ProcessPageTransportOptions } from "./page-transport.js";
+
+export class FetchConfigurationError extends TypeError {
+  constructor(message: string) {
+    super(message);
+    this.name = "FetchConfigurationError";
+  }
+}
+
+/** Legacy per-run fetch settings become strict only when bounded fetch is consumed. */
+export function validatePageFetchSettings(settings: DeepReadonly<ResearchSettings>): void {
+  for (const [name, min, max] of [
+    ["fetchConcurrency", 1, 512],
+    ["fetchTimeoutMs", 1, 600_000],
+  ] as const) {
+    const value = settings[name];
+    if (!Number.isSafeInteger(value) || value < min || value > max)
+      throw new FetchConfigurationError(
+        `pi-intelli-search.${name} must be an integer from ${min} to ${max}`,
+      );
+  }
+}
 
 /** Adapter-owned environment/executable policy, captured before operation work. */
 export function capturePageFetchFactory(
   settings: DeepReadonly<ResearchSettings>,
   clock: Clock,
   policy: ProcessPageTransportOptions,
+  pageTransport?: PageTransport,
 ) {
   if (!settings.execution) throw new TypeError("Fetch requires captured execution settings");
+  const capturedSettings = structuredClone(settings);
   const captured = {
     browser: settings.browserFingerprint,
     timeoutMs: settings.fetchTimeoutMs,
@@ -22,12 +51,15 @@ export function capturePageFetchFactory(
     maxChars: settings.execution.fetchMaxChars,
     ...(settings.httpProxy === undefined ? {} : { proxy: settings.httpProxy }),
   };
-  const transport = createProcessPageTransport(policy);
+  const transport = pageTransport ?? createProcessPageTransport(policy);
   return (operation: OperationLease): FetchClient => {
     // Legacy native fetch keys remain permissive until bounded fetch is used.
     // Installing this service must not disable unrelated registered operations.
     let client: FetchClient | undefined;
-    const get = () => (client ??= createFetchClient({ ...captured, operation, clock, transport }));
+    const get = () => {
+      validatePageFetchSettings(capturedSettings);
+      return (client ??= createFetchClient({ ...captured, operation, clock, transport }));
+    };
     return Object.freeze({
       async fetch(...args: Parameters<FetchClient["fetch"]>) {
         return get().fetch(...args);

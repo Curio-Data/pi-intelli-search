@@ -21,6 +21,7 @@
     "core-execution-settings.test.ts",
     "core-standalone-result.test.ts",
     "core-public-results.test.ts",
+    "core-research-result.test.ts",
     "core-collate-result.test.ts",
     "core-run-*.test.ts",
     "helpers/run-store-worker.ts",

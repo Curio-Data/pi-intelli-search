@@ -16,6 +16,7 @@ import type {
   OperationResult,
   OperationServices,
   RunStore,
+  PageTransport,
 } from "./core/contracts.js";
 import { createRuntimeGenerations, type OperationRuntime } from "./core/operation-runtime.js";
 import { AdmissionError } from "./core/execution-coordinator.js";
@@ -32,11 +33,7 @@ import { capturePageFetchFactory, capturePageEnvironment } from "./core/page-run
 import { resolveWorkspacePaths } from "./core/paths.js";
 import { search } from "./core/operations/search.js";
 import { extract } from "./core/operations/extract.js";
-import {
-  research,
-  MissingModelsError,
-  type ResearchDependencies,
-} from "./core/operations/research.js";
+import { research } from "./core/operations/research.js";
 import { createScopedNativeModelClient, describeModelCatalog } from "./native-model-client.js";
 import { getNativeIdentity } from "./native-identity.js";
 import { loadSettings } from "./settings.js";
@@ -68,7 +65,7 @@ export interface NativeRuntimeOptions {
   readonly clock?: Clock;
   /** Detected on the host API, never inferred from the extension's peer install. */
   readonly supportsErrorResults?: boolean;
-  readonly researchDependencies?: ResearchDependencies;
+  readonly pageTransport?: PageTransport;
   readonly createRuns?: (services: { operationId: string; clock: Clock }) => RunStore;
 }
 
@@ -94,12 +91,7 @@ export class NativeExecutionError extends Error {
 
 /** One closure per extension registration. Construction starts no work. */
 export function createNativeOperationRuntime(options: NativeRuntimeOptions = {}) {
-  options = {
-    ...options,
-    researchDependencies: options.researchDependencies
-      ? { ...options.researchDependencies }
-      : undefined,
-  };
+  options = { ...options };
   const generations = createRuntimeGenerations();
   const sessions = new WeakMap<object, Map<string | undefined, SessionState>>();
   const diagnostics = new Map<string, (diagnostic: Diagnostic) => void>();
@@ -185,7 +177,7 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
           criticalReserve: execution.criticalReserve,
           fetchConcurrency: execution.aggregateFetchConcurrency,
           minRequestIntervalMs: settings.minRequestIntervalMs,
-          createFetch: capturePageFetchFactory(settings, clock, pagePolicy),
+          createFetch: capturePageFetchFactory(settings, clock, pagePolicy, options.pageTransport),
           createRuns: (operation) =>
             options.createRuns?.({ operationId: operation.id, clock }) ??
             createRunStore({
@@ -310,16 +302,13 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
         );
       };
       const operationId = randomUUID();
-      const boundary =
-        name !== "intelli_research"
-          ? createOperationResultBoundary(
-              clock,
-              (event) => {
-                if (active(captured)) onUpdate?.(nativeProgress(event));
-              },
-              diagnose,
-            )
-          : undefined;
+      const boundary = createOperationResultBoundary(
+        clock,
+        (event) => {
+          if (active(captured)) onUpdate?.(nativeProgress(event));
+        },
+        diagnose,
+      );
       diagnostics.set(operationId, diagnose);
       let owned: OperationServices | undefined;
       const receipt = (
@@ -408,14 +397,12 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
                   },
                 };
                 try {
-                  return await research(
-                    params as OperationInputs["intelli_research"],
-                    withIndicator,
-                    options.researchDependencies,
+                  return await boundary.run(() =>
+                    research(
+                      params as OperationInputs["intelli_research"],
+                      boundary.context(withIndicator),
+                    ),
                   );
-                } catch (error) {
-                  if (error instanceof MissingModelsError) throw missingModels(error.bindings);
-                  throw error;
                 } finally {
                   if (captured.indicator?.operationId === operationId) {
                     if (active(captured)) {
