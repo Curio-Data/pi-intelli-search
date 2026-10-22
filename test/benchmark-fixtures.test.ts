@@ -5,10 +5,14 @@ import { describe, it } from "node:test";
 import type { Api, Context, Model } from "@earendil-works/pi-ai";
 import * as proofs from "../scripts/benchmarks/contracts.js";
 import { fixtureFileSha256FromPath, loadReplayStore } from "../scripts/benchmarks/replay-store.js";
-import { createModelTransportReplay, createPageTransportReplay } from "../scripts/benchmarks/transport-replay.js";
+import {
+  createModelTransportReplay,
+  createPageTransportReplay,
+} from "../scripts/benchmarks/transport-replay.js";
 import { createAnnotationSink, harvestChunkAnnotations } from "../src/annotations.js";
 import { syntheticModelResolver, syntheticPageResolver } from "../scripts/benchmarks/testing.js";
 import { forbidNetwork } from "../scripts/benchmarks/testing.js";
+import { createNativeUsageCapture } from "../src/native-usage.js";
 
 // The compile-time assignability proofs in scripts/benchmarks/contracts.ts
 // must each hold `true`; this runtime smoke keeps the linkage visible in test
@@ -23,17 +27,22 @@ describe("frozen API assignability proofs", () => {
   });
 });
 
+const MODEL_FIXTURE = "scripts/benchmarks/fixtures/synthetic-codemode-dev-model-v2.json";
 const MODEL = { provider: "fixture-openrouter", id: "perplexity/sonar" } as unknown as Model<Api>;
 
 function userContext(systemPrompt: string, text: string): Context {
-  return { systemPrompt, messages: [{ role: "user", content: [{ type: "text", text }], timestamp: 1733234401000 }] };
+  return {
+    systemPrompt,
+    messages: [{ role: "user", content: [{ type: "text", text }], timestamp: 1733234401000 }],
+  };
 }
 
 describe("whole committed model fixture workflow through one shared instance", () => {
   it("replays search, both extracts (with retry), collate and suggest in forced-workflow order", async () => {
     const guard = forbidNetwork({ fail: (message) => assert.fail(message) });
     try {
-      const store = await loadReplayStore("scripts/benchmarks/fixtures/synthetic-codemode-dev-model.json");
+      const store = await loadReplayStore(MODEL_FIXTURE);
+      const capture = createNativeUsageCapture();
       // ONE shared instance for every stage, as the single frozen
       // NativeTestInjection seam requires.
       const replay = createModelTransportReplay({
@@ -41,12 +50,27 @@ describe("whole committed model fixture workflow through one shared instance", (
         scenario: "synthetic-codemode-dev",
         resolveNode: syntheticModelResolver(),
       });
-      const searchPatch = (payload: Record<string, unknown>) => ({ ...payload, plugins: [{ name: "web_search" }] });
+      const searchPatch = (payload: Record<string, unknown>) => ({
+        ...payload,
+        plugins: [{ name: "web_search" }],
+      });
       const search = await replay(
-        { streamSimple: () => { throw new Error("live registry"); } } as never,
+        {
+          streamSimple: () => {
+            throw new Error("live registry");
+          },
+        } as never,
         MODEL,
-        userContext("You are the synthetic search stage.", "public fixture query about streaming schedulers"),
-        { maxTokens: 2048, reasoning: "low", onPayload: searchPatch as never },
+        userContext(
+          "You are the synthetic search stage.",
+          "public fixture query about streaming schedulers",
+        ),
+        {
+          maxTokens: 2048,
+          reasoning: "low",
+          onPayload: searchPatch as never,
+          onProviderStreamEvent: (event) => capture.chunk(event),
+        },
       );
       assert.equal(search.stopReason, "stop");
       const searchText = search.content
@@ -54,12 +78,27 @@ describe("whole committed model fixture workflow through one shared instance", (
         .map((block) => block.text)
         .join("");
       assert.match(searchText, /source one/);
-      assert.equal(search.usage.input, 1147);
+      assert.equal(
+        search.usage.input,
+        0,
+        "SDK placeholder cannot establish unknown uncached input",
+      );
+      const observed = capture.observation(search.usage);
+      assert.deepEqual(observed, store.records()[0].usage);
+      assert.equal(observed?.tokens.inputTotal, 1147);
+      assert.equal(observed?.tokens.inputUncached, undefined);
 
       const extractS1 = await replay(
-        { streamSimple: () => { throw new Error("live registry"); } } as never,
+        {
+          streamSimple: () => {
+            throw new Error("live registry");
+          },
+        } as never,
         MODEL,
-        userContext("You are the synthetic extraction stage.", "Extract the scheduling guarantees from source S1."),
+        userContext(
+          "You are the synthetic extraction stage.",
+          "Extract the scheduling guarantees from source S1.",
+        ),
         { maxTokens: 2048, reasoning: "low" },
       );
       assert.equal(extractS1.stopReason, "stop");
@@ -67,33 +106,61 @@ describe("whole committed model fixture workflow through one shared instance", (
       // S2 retries once: occurrence 1 is the recorded 429, occurrence 2 the
       // recorded success. Same node, same request bytes, distinct occurrences.
       const retry = await replay(
-        { streamSimple: () => { throw new Error("live registry"); } } as never,
+        {
+          streamSimple: () => {
+            throw new Error("live registry");
+          },
+        } as never,
         MODEL,
-        userContext("You are the synthetic extraction stage.", "Extract the scheduling guarantees from source S2."),
+        userContext(
+          "You are the synthetic extraction stage.",
+          "Extract the scheduling guarantees from source S2.",
+        ),
         { maxTokens: 2048, reasoning: "low" },
       );
       assert.equal(retry.stopReason, "error");
       assert.match(retry.errorMessage ?? "", /429/);
       const success = await replay(
-        { streamSimple: () => { throw new Error("live registry"); } } as never,
+        {
+          streamSimple: () => {
+            throw new Error("live registry");
+          },
+        } as never,
         MODEL,
-        userContext("You are the synthetic extraction stage.", "Extract the scheduling guarantees from source S2."),
+        userContext(
+          "You are the synthetic extraction stage.",
+          "Extract the scheduling guarantees from source S2.",
+        ),
         { maxTokens: 2048, reasoning: "low" },
       );
       assert.equal(success.stopReason, "stop");
 
       const collate = await replay(
-        { streamSimple: () => { throw new Error("live registry"); } } as never,
+        {
+          streamSimple: () => {
+            throw new Error("live registry");
+          },
+        } as never,
         MODEL,
-        userContext("You are the synthetic collation stage.", "Collate S1 and S2 into the synthetic report."),
+        userContext(
+          "You are the synthetic collation stage.",
+          "Collate S1 and S2 into the synthetic report.",
+        ),
         { maxTokens: 2048, reasoning: "low" },
       );
       assert.equal(collate.stopReason, "stop");
 
       const suggest = await replay(
-        { streamSimple: () => { throw new Error("live registry"); } } as never,
+        {
+          streamSimple: () => {
+            throw new Error("live registry");
+          },
+        } as never,
         MODEL,
-        userContext("You are the synthetic cache-suggestion stage.", "Suggest related cached searches for the synthetic query."),
+        userContext(
+          "You are the synthetic cache-suggestion stage.",
+          "Suggest related cached searches for the synthetic query.",
+        ),
         { maxTokens: 2048, reasoning: "low" },
       );
       assert.equal(suggest.stopReason, "stop");
@@ -107,11 +174,29 @@ describe("whole committed model fixture workflow through one shared instance", (
     }
   });
 
+  it("preserves the historical synthetic fixture but refuses its unreachable accounting", async () => {
+    const historical = await loadReplayStore(
+      "scripts/benchmarks/fixtures/synthetic-codemode-dev-model.json",
+    );
+    assert.throws(
+      () =>
+        createModelTransportReplay({
+          store: historical,
+          scenario: "synthetic-codemode-dev",
+          resolveNode: syntheticModelResolver(),
+        }),
+      /differing paths:.*inputUncached/,
+    );
+  });
+
   it("delivers recorded citations the real annotation harvester can parse", async () => {
-    const store = await loadReplayStore("scripts/benchmarks/fixtures/synthetic-codemode-dev-model.json");
-    const searchRecord = store.records().find((record) => record.key.operationNode === "research.search");
+    const store = await loadReplayStore(MODEL_FIXTURE);
+    const searchRecord = store
+      .records()
+      .find((record) => record.key.operationNode === "research.search");
     assert.ok(searchRecord?.response);
-    const events = (searchRecord.response as { providerStreamEvents?: unknown[] }).providerStreamEvents ?? [];
+    const events =
+      (searchRecord.response as { providerStreamEvents?: unknown[] }).providerStreamEvents ?? [];
     assert.equal(events.length, 2);
     const sink = createAnnotationSink();
     for (const event of events) harvestChunkAnnotations(event, sink);
@@ -122,7 +207,7 @@ describe("whole committed model fixture workflow through one shared instance", (
   });
 
   it("replays the recorded 429 provider metadata through onResponse", async () => {
-    const store = await loadReplayStore("scripts/benchmarks/fixtures/synthetic-codemode-dev-model.json");
+    const store = await loadReplayStore(MODEL_FIXTURE);
     const replay = createModelTransportReplay({
       store,
       scenario: "synthetic-codemode-dev",
@@ -130,9 +215,16 @@ describe("whole committed model fixture workflow through one shared instance", (
     });
     const seen: Array<{ status: number; retryAfter: string | undefined }> = [];
     const message = await replay(
-      { streamSimple: () => { throw new Error("live registry"); } } as never,
+      {
+        streamSimple: () => {
+          throw new Error("live registry");
+        },
+      } as never,
       MODEL,
-      userContext("You are the synthetic extraction stage.", "Extract the scheduling guarantees from source S2."),
+      userContext(
+        "You are the synthetic extraction stage.",
+        "Extract the scheduling guarantees from source S2.",
+      ),
       {
         maxTokens: 2048,
         reasoning: "low",
@@ -147,9 +239,9 @@ describe("whole committed model fixture workflow through one shared instance", (
   });
 
   it("exposes a verified whole-file digest for fixtureSha256", async () => {
-    const digest = await fixtureFileSha256FromPath("scripts/benchmarks/fixtures/synthetic-codemode-dev-model.json");
+    const digest = await fixtureFileSha256FromPath(MODEL_FIXTURE);
     assert.match(digest, /^[0-9a-f]{64}$/);
-    const again = await fixtureFileSha256FromPath("scripts/benchmarks/fixtures/synthetic-codemode-dev-model.json");
+    const again = await fixtureFileSha256FromPath(MODEL_FIXTURE);
     assert.equal(digest, again);
   });
 });
@@ -158,7 +250,9 @@ describe("whole committed fetch fixture workflow through one shared instance", (
   it("replays the html variant, markdown variant and discovery probe in workflow order", async () => {
     const guard = forbidNetwork({ fail: (message) => assert.fail(message) });
     try {
-      const store = await loadReplayStore("scripts/benchmarks/fixtures/synthetic-codemode-dev-fetch.json");
+      const store = await loadReplayStore(
+        "scripts/benchmarks/fixtures/synthetic-codemode-dev-fetch.json",
+      );
       // ONE shared page instance below the real FetchClient.
       const transport = createPageTransportReplay({
         store,
