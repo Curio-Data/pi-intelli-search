@@ -15,6 +15,8 @@ import {
   userMessageFromContext,
 } from "../scripts/benchmarks/transport-replay.js";
 import type { PageTransportRequest } from "../src/core/execution-contracts.js";
+import { createNativeUsageCapture } from "../src/native-usage.js";
+import type { Json, UsageObservation } from "../scripts/benchmarks/contracts.js";
 import { forbidNetwork } from "../scripts/benchmarks/testing.js";
 
 // N1 (verbatim from the binding report): a transport-replay implementation
@@ -139,7 +141,17 @@ describe("model transport replay through one shared instance", () => {
       assert.equal(message.responseId, "gen-1");
       assert.equal(message.usage.input, 300);
       assert.equal(message.usage.input + message.usage.cacheRead, 1100);
-      assert.equal(citations.length, 1);
+      // Recorded citation chunk plus the reconstructed usage provider event:
+      // the recorded provider-response observation is delivered through the
+      // same channel the native usage capture reads (never options.fetch).
+      assert.equal(citations.length, 2);
+      assert.deepEqual(citations[0], {
+        choices: [{ delta: { annotations: [{ type: "url_citation", url_citation: { url: "https://example.com/a", title: "A" } }] } }],
+      });
+      const usageEvent = citations[1] as { usage: Record<string, unknown> };
+      assert.equal(usageEvent.usage.prompt_tokens, 1100);
+      assert.equal(usageEvent.usage.completion_tokens, 100);
+      assert.equal(usageEvent.usage.cost, 0.001);
       assert.deepEqual(responses, [{ status: 200, headers: { "x-request-id": "req-9" } }]);
       assert.equal(guard.calls(), 0);
       assert.equal(store.misses().length, 0);
@@ -174,7 +186,7 @@ describe("model transport replay through one shared instance", () => {
       effectivePayloadPatch: null,
     }, {
       response: { text: "extracted", providerResponse: { status: 200, headers: {} } },
-      usage: { tokens: { inputTotal: 10, outputTotal: 5 }, source: "provider-response", costBasis: "reported" },
+      usage: { tokens: { inputTotal: 10, outputTotal: 5 }, cost: { total: 0.0001 }, source: "provider-response", costBasis: "reported" },
       delayMs: 0,
     });
     const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
@@ -526,5 +538,385 @@ describe("page transport replay below the FetchClient", () => {
         }),
       (error: unknown) => error instanceof ReplayMissError && error.reason === "ambiguous-node",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Recorded usage-event fidelity against the ACTUAL native usage-capture
+// semantics (src/native-usage.ts and src/llm.ts executeAttempt, Observed).
+// The harness replicates executeAttempt's exact wiring: every provider event
+// feeds capture.chunk(); a transport rejection observes from raw only
+// (observation(undefined)) and rethrows; a resolved message observes with the
+// message's SDK usage (observation(value.usage)). The assertion is that the
+// capture reproduces the RECORDED observation exactly, with no field the
+// record does not carry (SDK zero placeholders never become observations).
+// ---------------------------------------------------------------------------
+
+interface CaptureOutcome {
+  readonly thrown: boolean;
+  readonly observation: UsageObservation | undefined;
+  readonly message?: AssistantMessage;
+  readonly error?: Error;
+  readonly events: unknown[];
+  readonly order: string[];
+}
+
+function searchFixtureRequest(userMessage: string): Json {
+  return {
+    model: { provider: MODEL.provider, model: MODEL.id },
+    role: "search",
+    systemPrompt: PROMPTS.search,
+    userMessage,
+    maxTokens: null,
+    reasoning: null,
+    effectivePayloadPatch: null,
+  };
+}
+
+const CITATION_CHUNK = {
+  choices: [{ delta: { annotations: [{ type: "url_citation", url_citation: { url: "https://example.com/a", title: "A" } }] } }],
+} as const;
+
+async function captureAttempt(
+  replay: ReturnType<typeof createModelTransportReplay>,
+  context: Context,
+  options: SimpleStreamOptions = {},
+): Promise<CaptureOutcome> {
+  const capture = createNativeUsageCapture();
+  const events: unknown[] = [];
+  const order: string[] = [];
+  const callerOnResponse = options.onResponse;
+  const streamOptions: SimpleStreamOptions = {
+    ...options,
+    // executeAttempt always supplies onResponse (retry-after hints); mirror that.
+    onResponse: (response, model) => {
+      order.push("response");
+      callerOnResponse?.(response, model);
+    },
+    onProviderStreamEvent: (data) => {
+      order.push("event");
+      events.push(data);
+      capture.chunk(data);
+    },
+  };
+  try {
+    const message = await replay(poisonRegistry() as never, MODEL, context, streamOptions);
+    order.push("resolved");
+    return { thrown: false, observation: capture.observation(message.usage), message, events, order };
+  } catch (error) {
+    order.push("thrown");
+    return { thrown: true, observation: capture.observation(undefined), error: error as Error, events, order };
+  }
+}
+
+describe("recorded usage fidelity against the actual native usage capture", () => {
+  it("reproduces a recorded provider-response observation exactly through the provider-event channel", async () => {
+    const guard = forbidNetwork({ fail: (message) => assert.fail(message) });
+    const poisoned = poisonFetch();
+    try {
+      const recordedUsage: UsageObservation = {
+        tokens: { inputTotal: 1100, inputUncached: 300, outputTotal: 100, cacheRead: 800, cacheWrite: 0, totalTokens: 1200 },
+        cost: { total: 0.0011 },
+        source: "provider-response",
+        costBasis: "reported",
+        providerRequestId: "req-9",
+      };
+      const recorder = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
+      recorder.record("research.search", searchFixtureRequest("qualified query"), {
+        response: { text: "answer", providerStreamEvents: [{ ...CITATION_CHUNK }], providerResponse: { status: 200, headers: {} } },
+        usage: recordedUsage,
+        delayMs: 0,
+      });
+      const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
+      const replay = createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: (r) => resolveSyntheticNode(r) });
+      const outcome = await captureAttempt(replay, userContext("qualified query"));
+      assert.equal(outcome.thrown, false);
+      // The capture reproduces the recorded observation byte-for-field:
+      // source, provenance, explicit zeros, providerRequestId.
+      assert.deepEqual(outcome.observation, recordedUsage);
+      // Recorded citation chunk first, then the reconstructed usage event.
+      assert.equal(outcome.events.length, 2);
+      assert.deepEqual(outcome.events[0], CITATION_CHUNK);
+      const usageEvent = outcome.events[1] as { id?: string; usage: Record<string, unknown> };
+      assert.equal(usageEvent.id, "req-9");
+      assert.equal(usageEvent.usage.prompt_tokens, 1100);
+      assert.equal(usageEvent.usage.completion_tokens, 100);
+      assert.equal(usageEvent.usage.total_tokens, 1200);
+      assert.equal(usageEvent.usage.cost, 0.0011);
+      assert.deepEqual((usageEvent.usage.prompt_tokens_details as Record<string, number>), { cached_tokens: 800, cache_write_tokens: 0 });
+      // Metadata precedes events, events precede the resolved message.
+      assert.deepEqual(outcome.order, ["response", "event", "event", "resolved"]);
+      // The SDK mirror stays a placeholder view; the raw channel wins.
+      assert.equal(outcome.message?.usage.input, 300);
+      assert.equal(guard.calls(), 0);
+    } finally {
+      poisoned.restore();
+      guard.restore();
+    }
+  });
+
+  it("delivers recorded provider events and the observation on error/retry attempts", async () => {
+    const guard = forbidNetwork({ fail: (message) => assert.fail(message) });
+    try {
+      // Occurrence 1: retryable failure whose response still streamed a
+      // citation and a provider usage event with explicit zeros, and whose
+      // SDK had no catalogue estimate (live: zero-filled catalogue basis).
+      const errorUsage: UsageObservation = {
+        tokens: { inputTotal: 0, outputTotal: 0 },
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        source: "provider-response",
+        costBasis: "catalogue",
+      };
+      const successUsage: UsageObservation = {
+        tokens: { inputTotal: 900, inputUncached: 900, outputTotal: 90, cacheRead: 0, cacheWrite: 0, totalTokens: 990 },
+        cost: { total: 0.0009 },
+        source: "provider-response",
+        costBasis: "reported",
+        providerRequestId: "req-ok",
+      };
+      const recorder = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
+      recorder.record("research.search", searchFixtureRequest("retry query"), {
+        error: { kind: "rate-limit", message: "429 Too Many Requests" },
+        response: {
+          providerStreamEvents: [{ ...CITATION_CHUNK }],
+          providerResponse: { status: 429, headers: { "retry-after": "1" } },
+        },
+        usage: errorUsage,
+        delayMs: 0,
+      });
+      recorder.record("research.search", searchFixtureRequest("retry query"), {
+        response: { text: "after retry" },
+        usage: successUsage,
+        delayMs: 0,
+      });
+      const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
+      const replay = createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: (r) => resolveSyntheticNode(r) });
+      const context = userContext("retry query");
+      const first = await captureAttempt(replay, context, {
+        onResponse: () => {},
+      });
+      assert.equal(first.thrown, false);
+      assert.equal(first.message?.stopReason, "error");
+      // The citation chunk AND the recorded zero-token observation survive the
+      // failed attempt instead of being dropped.
+      assert.deepEqual(first.observation, errorUsage);
+      assert.deepEqual(first.events[0], CITATION_CHUNK);
+      const second = await captureAttempt(replay, context);
+      assert.equal(second.thrown, false);
+      assert.deepEqual(second.observation, successUsage);
+      // Two attempts, two distinct recorded observations: cumulative per
+      // attempt, never summed into one (C16).
+      assert.equal(store.consumed().length, 2);
+      assert.equal(guard.calls(), 0);
+    } finally {
+      guard.restore();
+    }
+  });
+
+  it("replays kind 'throw' error records as transport rejections reproducing an unknown cost basis from raw only", async () => {
+    const guard = forbidNetwork({ fail: (message) => assert.fail(message) });
+    try {
+      // The only live path whose observation call is raw-only (the capture
+      // never sees an SDK usage) is a transport rejection after a usage event:
+      // costBasis stays "unknown" because no SDK estimate exists.
+      const thrownUsage: UsageObservation = {
+        tokens: { inputTotal: 0, outputTotal: 0 },
+        source: "provider-response",
+        costBasis: "unknown",
+      };
+      const recorder = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
+      recorder.record("research.search", searchFixtureRequest("throwing query"), {
+        error: { kind: "throw", message: "429 Too Many Requests: retry after 1s" },
+        response: { providerResponse: { status: 429, headers: { "retry-after": "1" } } },
+        usage: thrownUsage,
+        delayMs: 0,
+      });
+      const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
+      const replay = createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: (r) => resolveSyntheticNode(r) });
+      const statuses: number[] = [];
+      const outcome = await captureAttempt(replay, userContext("throwing query"), {
+        onResponse: (response) => { statuses.push(response.status); },
+      });
+      assert.equal(outcome.thrown, true);
+      assert.equal(outcome.error?.message, "429 Too Many Requests: retry after 1s");
+      assert.deepEqual(outcome.observation, thrownUsage);
+      assert.deepEqual(statuses, [429]); // retry-after metadata still reaches the hint channel
+      assert.deepEqual(outcome.order, ["response", "event", "thrown"]);
+      assert.equal(guard.calls(), 0);
+    } finally {
+      guard.restore();
+    }
+  });
+
+  it("keeps an attempt without recorded usage unobserved; placeholders never become observations", async () => {
+    const recorder = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
+    recorder.record("research.search", searchFixtureRequest("no usage"), {
+      error: { kind: "rate-limit", message: "500 Internal Server Error" },
+      delayMs: 0,
+    });
+    const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
+    const replay = createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: (r) => resolveSyntheticNode(r) });
+    const outcome = await captureAttempt(replay, userContext("no usage"));
+    assert.equal(outcome.thrown, false);
+    assert.equal(outcome.message?.stopReason, "error");
+    assert.equal(outcome.observation, undefined); // SDK zero placeholders are unobserved, exactly like the live error path
+  });
+
+  it("reproduces a recorded sdk-normalized observation through the SDK usage channel", async () => {
+    const recordedUsage: UsageObservation = {
+      tokens: { outputTotal: 320 },
+      cost: { input: 0.0001, output: 0.0002, cacheRead: 0, cacheWrite: 0, total: 0.0003 },
+      source: "sdk-normalized",
+      costBasis: "catalogue",
+    };
+    const recorder = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
+    recorder.record("research.search", searchFixtureRequest("sdk channel"), {
+      response: { text: "sdk answer" },
+      usage: recordedUsage,
+      delayMs: 0,
+    });
+    const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
+    const replay = createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: (r) => resolveSyntheticNode(r) });
+    const outcome = await captureAttempt(replay, userContext("sdk channel"));
+    assert.equal(outcome.thrown, false);
+    assert.deepEqual(outcome.observation, recordedUsage);
+    assert.equal(outcome.events.length, 0); // no provider event reconstructed for the SDK channel
+  });
+
+  it("takes the last cumulative usage snapshot when a record carries multiple usage events (C16)", async () => {
+    const recordedUsage: UsageObservation = {
+      tokens: { inputTotal: 1100, inputUncached: 300, outputTotal: 100, cacheRead: 800, cacheWrite: 0, totalTokens: 1200 },
+      cost: { total: 0.0011 },
+      source: "provider-response",
+      costBasis: "reported",
+      providerRequestId: "req-cumulative",
+    };
+    const recorder = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
+    recorder.record("research.search", searchFixtureRequest("cumulative"), {
+      response: {
+        text: "cumulative",
+        providerStreamEvents: [
+          { id: "req-cumulative", usage: { prompt_tokens: 500, completion_tokens: 10 } },
+          { id: "req-cumulative", usage: { prompt_tokens: 1100, completion_tokens: 100, total_tokens: 1200, cost: 0.0011, prompt_tokens_details: { cached_tokens: 800, cache_write_tokens: 0 } } },
+        ],
+      },
+      usage: recordedUsage,
+      delayMs: 0,
+    });
+    const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
+    const replay = createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: (r) => resolveSyntheticNode(r) });
+    const outcome = await captureAttempt(replay, userContext("cumulative"));
+    assert.equal(outcome.thrown, false);
+    assert.deepEqual(outcome.observation, recordedUsage); // latest snapshot replaces, never summed
+    // Both recorded events delivered verbatim, no reconstructed duplicate appended.
+    const usageEvents = outcome.events.filter((event) => {
+      const candidate = event as { usage?: unknown };
+      return candidate !== null && typeof candidate === "object" && "usage" in candidate;
+    });
+    assert.equal(usageEvents.length, 2);
+  });
+
+  it("fails closed at construction on provider-response shapes no live capture path can produce", () => {
+    const invalid = [
+      // A resolved success whose recorded basis is "unknown": the resolved
+      // path would manufacture a catalogue estimate the record does not carry.
+      {
+        usage: { tokens: { outputTotal: 5 }, source: "provider-response", costBasis: "unknown" } as UsageObservation,
+        outcome: { response: { text: "x" }, delayMs: 0 },
+        why: "success with unknown basis",
+      },
+      // cacheWrite1h is SDK-channel only; the provider-event channel cannot
+      // express it, so replaying would silently drop an observed field.
+      {
+        usage: { tokens: { outputTotal: 5, cacheWrite1h: 2 }, source: "provider-response", costBasis: "reported", cost: { total: 1 } } as unknown as UsageObservation,
+        outcome: { response: { text: "x" }, delayMs: 0 },
+        why: "provider-response cacheWrite1h",
+      },
+      // An observation with no representable field at all: the capture would
+      // treat it as unobserved, dropping an observed claim.
+      {
+        usage: { tokens: {}, source: "provider-response", costBasis: "unknown" } as UsageObservation,
+        outcome: { error: { kind: "throw", message: "boom" }, delayMs: 0 },
+        why: "empty observation",
+      },
+      // Provider-reported cost subfields other than total never come from the
+      // provider-event channel (normalizeMcpUsage maps totalCost only).
+      {
+        usage: { tokens: { outputTotal: 5 }, cost: { total: 1, input: 0.5 }, source: "provider-response", costBasis: "reported" } as UsageObservation,
+        outcome: { response: { text: "x" }, delayMs: 0 },
+        why: "cost subfields beyond total",
+      },
+    ];
+    for (const { usage, outcome, why } of invalid) {
+      const recorder = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
+      recorder.record("research.search", searchFixtureRequest(`invalid ${why}`), { ...outcome, usage });
+      const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
+      assert.throws(
+        () => createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: (r) => resolveSyntheticNode(r) }),
+        (error: unknown) => error instanceof ReplayMissError && error.reason === "invalid-file",
+        `must fail closed: ${why}`,
+      );
+    }
+  });
+
+  it("preserves a subset-less recorded inputUncached as unknown instead of inventing cache zeros (documented residual)", async () => {
+    // The committed synthetic fixtures record inputUncached without both
+    // cache subsets. That value is not expressible on the usage-event wire:
+    // the capture's normalisation derives uncached input only when both
+    // subsets are reported, so the replayed observation keeps every other
+    // recorded field and leaves inputUncached unknown rather than inventing
+    // explicit-zero cache subsets. This pins the documented residual.
+    const recorder = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
+    recorder.record("research.search", searchFixtureRequest("residual query"), {
+      response: { text: "residual" },
+      usage: {
+        tokens: { inputTotal: 500, inputUncached: 500, outputTotal: 10, totalTokens: 510 },
+        cost: { total: 0.0005 },
+        source: "provider-response",
+        costBasis: "reported",
+        providerRequestId: "req-residual",
+      },
+      delayMs: 0,
+    });
+    const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
+    const replay = createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: (r) => resolveSyntheticNode(r) });
+    const outcome = await captureAttempt(replay, userContext("residual query"));
+    assert.equal(outcome.thrown, false);
+    assert.deepEqual(outcome.observation, {
+      tokens: { inputTotal: 500, outputTotal: 10, totalTokens: 510 },
+      cost: { total: 0.0005 },
+      source: "provider-response",
+      costBasis: "reported",
+      providerRequestId: "req-residual",
+    });
+    // The reconstructed event carries no invented cache subsets.
+    const usageEvent = outcome.events[0] as { usage: Record<string, unknown> };
+    assert.equal("prompt_tokens_details" in usageEvent.usage, false);
+  });
+
+  it("skips event delivery when the host supplies no provider-event hook", async () => {
+    const guard = forbidNetwork({ fail: (message) => assert.fail(message) });
+    try {
+      const recorder = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
+      recorder.record("research.search", searchFixtureRequest("no hook"), {
+        response: { text: "plain", providerStreamEvents: [{ ...CITATION_CHUNK }] },
+        usage: {
+          tokens: { inputTotal: 10, inputUncached: 10, outputTotal: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 15 },
+          cost: { total: 0.0001 },
+          source: "provider-response",
+          costBasis: "reported",
+        },
+        delayMs: 0,
+      });
+      const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
+      const replay = createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: (r) => resolveSyntheticNode(r) });
+      // No onProviderStreamEvent: nowhere to deliver events; the message resolves.
+      const message = await replay(poisonRegistry() as never, MODEL, userContext("no hook"), undefined);
+      assert.equal(message.stopReason, "stop");
+      assert.equal(await textOf(message), "plain");
+      assert.equal(guard.calls(), 0);
+    } finally {
+      guard.restore();
+    }
   });
 });

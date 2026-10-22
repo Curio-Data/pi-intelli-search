@@ -240,6 +240,31 @@ function isMcpIntelliToolName(toolName: unknown): boolean {
   return match !== null && INTELLI_TOOL_NAMES.has(match[2]!);
 }
 
+/**
+ * True when the host result carries Pi's MCP execution identity naming an
+ * intelli operation. Pi registers MCP tools as `mcp__<server>__<tool>`
+ * sanitised to `[A-Za-z0-9_]`, truncated to 64 characters with a hash suffix
+ * when too long, and hash-suffixed again when two registrations sanitise to
+ * the same name (Observed in the installed Pi 1.3.0
+ * `dist/extensions/mcp/tools.js` `createMcpToolName` and `index.js`
+ * `assignName`), so a long or colliding server name cuts the intelli suffix
+ * out of the registered name and the strict `mcp__<server>__intelli_*`
+ * shape no longer identifies the execution. The host's MCP client records
+ * the explicit identity on every result instead: `details: { server, tool }`
+ * with the raw server-side tool name (Observed in `convertMcpResult`).
+ * Recognition through that identity is gated on the `mcp__` registration
+ * prefix (every MCP registration carries it; native tools never do), so a
+ * native tool reporting a `tool` detail for unrelated reasons cannot enter
+ * the pipeline population through this channel.
+ */
+function isMcpDetailsIntelliExecution(toolName: unknown, result: unknown): boolean {
+  if (typeof toolName !== "string" || !toolName.startsWith("mcp__")) return false;
+  if (!isJsonObject(result)) return false;
+  const details = result["details"];
+  if (!isJsonObject(details)) return false;
+  return isIntelliOperation(details["tool"]);
+}
+
 /** True when a tool execution belongs to the intelli pipeline population. */
 export function isIntelliToolExecution(toolName: unknown, result: unknown): boolean {
   if (typeof toolName === "string" && INTELLI_TOOL_NAMES.has(toolName)) return true;
@@ -248,11 +273,18 @@ export function isIntelliToolExecution(toolName: unknown, result: unknown): bool
   // change, degraded result): it enters the population with a null summary
   // and is listed missing rather than silently dropped (review D1).
   if (isMcpIntelliToolName(toolName)) return true;
+  // A shortened or collision-hash-suffixed MCP registration that lost its
+  // intelli suffix is recognised through the host's explicit
+  // `details.tool` identity when structured markers are absent (integration
+  // condition 7). Accounting still comes only from explicit markers, so such
+  // an execution is retained as missing, never dropped and never summed from
+  // the host's tool-execution usage field.
+  if (isMcpDetailsIntelliExecution(toolName, result)) return true;
   // Renamed registrations and codemode-script calls are recognised by their
   // explicit intelli identity marker (including the MCP CallToolResult
   // envelope nesting); the codemode parent tool itself carries none (its
-  // usage field is host aggregation, not an intelli result). Shape
-  // resemblance alone never admits a foreign tool.
+  // `details.calls` aggregation and usage field are host bookkeeping, not an
+  // intelli result). Shape resemblance alone never admits a foreign tool.
   return intelliResultMarker(result) !== null;
 }
 
