@@ -185,7 +185,7 @@ async function fixture(transport: Transport, options: NativeRuntimeOptions = {},
   };
 }
 
-test("registered manual model preflight errors retain native recovery hints without dispatch (T15/T17)", async (t) => {
+test("all registered model preflight errors retain native recovery hints without dispatch (T15/T17)", async (t) => {
   for (const supportsErrorResults of [false, true]) {
     const f = await fixture(
       async () => {
@@ -201,11 +201,16 @@ test("registered manual model preflight errors retain native recovery hints with
       ],
     });
     try {
-      for (const name of ["intelli_search", "intelli_extract", "intelli_collate"] as const) {
+      for (const name of [
+        "intelli_search",
+        "intelli_extract",
+        "intelli_collate",
+        "intelli_research",
+      ] as const) {
         await assert.rejects(
           f.run(
             name,
-            name === "intelli_search"
+            name === "intelli_search" || name === "intelli_research"
               ? { query: "Q" }
               : name === "intelli_extract"
                 ? { ...page, query: "Q" }
@@ -213,7 +218,12 @@ test("registered manual model preflight errors retain native recovery hints with
           ),
           (error: unknown) => {
             assert(error instanceof Error && !(error instanceof NativeExecutionError));
-            assert.match(error.message, new RegExp(`${name.slice(8)}: openrouter/same-model`));
+            assert.match(
+              error.message,
+              new RegExp(
+                `${name === "intelli_research" ? "search" : name.slice(8)}: openrouter/same-model`,
+              ),
+            );
             assert.match(error.message, /Available openrouter models: same-model-corrected/);
             assert.match(error.message, /settings.json/);
             assert.match(error.message, /Run \/login to add API keys/);

@@ -335,6 +335,7 @@ for (const phase of phases)
 
 interface McpPhase {
   readonly name: string;
+  readonly tuning?: Record<string, unknown>;
   readonly routes: (reached: () => void) => Record<string, Route>;
   readonly script: (
     reached: () => void,
@@ -356,6 +357,7 @@ async function qualifyMcpAbort(t: TestContext, phase: McpPhase) {
   try {
     server = await startFixtureServer(phase.routes(() => reached.resolve()));
     h = await mcpHarness({
+      tuning: phase.tuning,
       script: phase.script(
         () => reached.resolve(),
         server.origin,
@@ -460,6 +462,18 @@ const mcpAnswer =
   };
 
 const mcpPhases: McpPhase[] = [
+  ...phases
+    .filter((phase) =>
+      [
+        "barrier-fetch-body",
+        "barrier-extract-model",
+        "collate-model",
+        "queued-fetch-admission",
+        "pacing-wait",
+        "late-drain",
+      ].includes(phase.name),
+    )
+    .map((phase) => ({ ...phase, tuning: phase.settings })),
   {
     name: "search-model",
     routes: () => ({ "/a": pageRoute("Alpha") }),
@@ -1306,6 +1320,85 @@ test("abort at the publication edge and during post-commit suggestions settles w
     }
   }
   await recordObservation("publication-edges", { observations });
+  t.diagnostic(JSON.stringify(observations));
+});
+
+test("MCP publication and post-commit suggestion cancellation settle within 5,000 ms (C06/C22, T06)", async (t) => {
+  const observations: Record<string, unknown>[] = [];
+  for (const edge of ["publication-start", "suggest-model"] as const) {
+    const controller = new AbortController();
+    let h: Awaited<ReturnType<typeof mcpHarness>> | undefined;
+    let server: FixtureServer | undefined;
+    let abortedAt: number | undefined;
+    let holdSuggest = false;
+    try {
+      server = await startFixtureServer({ "/a": pageRoute("Alpha") });
+      const origin = server.origin;
+      h = await mcpHarness({
+        script: async ({ role, signal }) => {
+          if (role === "search") return links([`${origin}/a`]);
+          if (role === "extract") return "Official docs, current.\nFacts";
+          if (role === "collate") return "Answer [S1]";
+          if (holdSuggest) {
+            abortedAt = performance.now();
+            controller.abort();
+            return untilAborted(signal);
+          }
+          return "[]";
+        },
+      });
+      if (edge === "suggest-model") await h.research({ query: "earlier committed query" });
+      holdSuggest = edge === "suggest-model";
+      const error = await h.runtime
+        .execute(
+          "intelli_research",
+          { query: `edge ${edge}` },
+          {
+            signal: controller.signal,
+            onProgress(event) {
+              if (
+                edge === "publication-start" &&
+                !controller.signal.aborted &&
+                event.stage === "cache" &&
+                event.event === "start"
+              ) {
+                abortedAt = performance.now();
+                controller.abort();
+              }
+            },
+          },
+        )
+        .then(
+          () => undefined,
+          (error: { code: string; data: FullData }) => error,
+        );
+      const settledMs = performance.now() - abortedAt!;
+      assert(error, "cancelled MCP call must not succeed");
+      const data = error.data;
+      const runDirectory = await findRunDirectory(h.cacheRoot, data.operationId);
+      const files = runDirectory ? (await readdir(runDirectory)).sort() : [];
+      assert.equal(error.code, "CANCELLED");
+      assert.equal(data.outcome, "aborted");
+      assert.equal(data.accounting.parentDelivery, "unknown");
+      assert(settledMs < CANCELLATION_TARGET_MS);
+      assert.deepEqual(await stagingDirectories(h.cacheRoot), []);
+      assert(!files.includes("accounting.json"));
+      assert.equal(files.includes("committed.json"), edge === "suggest-model");
+      const liveChildren = linux ? await liveTransportChildren() : [];
+      assert.deepEqual(liveChildren, []);
+      observations.push({
+        edge,
+        abortToSettledMs: Math.round(settledMs),
+        outcome: data.outcome,
+        runFiles: files,
+      });
+    } finally {
+      controller.abort();
+      await h?.cleanup();
+      await server?.close();
+    }
+  }
+  await recordObservation("mcp-publication-edges", { observations });
   t.diagnostic(JSON.stringify(observations));
 });
 

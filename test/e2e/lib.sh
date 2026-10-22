@@ -25,23 +25,29 @@
 # Requires: OPENROUTER_API_KEY, jq, E2E_EXTENSION_PATH (set by the
 # caller before e2e_run_pi).
 
+# e2e_find_completed_run <cache_root> [freshness_reference]
+# Returns verified immutable-run paths as JSON. Requires a current native build.
+e2e_find_completed_run() {
+  node "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cache-verdict.mjs" "$@"
+}
+
 # Fail closed: the cap scenario must actually request 12; the default scenario
 # must supply no page override. Pi normalises optional nulls to omission, but
 # tool_execution_start records the raw arguments. Extractions alone cannot
 # prove the number of fetched URLs.
 e2e_verify_page_budget() {
-  local cache=$1 trace=$2 scenario=$3 slug entry count
+  local cache=$1 trace=$2 scenario=$3 verdict entry count
   jq -se --arg mode "$scenario" '
     [.[] | select(.type == "tool_execution_start" and .toolName == "intelli_research") | .args] as $calls |
     ($calls | length) == 1 and
     (if $mode == "cap" then $calls[0].maxUrls == 12 else $calls[0].maxUrls == null end)
   ' "$trace" >/dev/null || { echo "❌ incorrect/missing research arguments"; return 1; }
-  slug="$(jq -er '.searches | if length == 1 then .[0].slug else error("expected one cache entry") end' "$cache/.index.json")" || return 1
-  entry="$cache/$slug"
-  [[ -s "$entry/report.md" && -d "$entry/extractions" && -d "$entry/sources" ]] || {
-    echo "❌ missing research artefacts"; return 1;
+  verdict="$(e2e_find_completed_run "$cache")" || return 1
+  jq -e '.indexVerified and (.sourceFiles | length > 0)' <<< "$verdict" >/dev/null || {
+    echo "❌ missing verified research index or sources"; return 1;
   }
-  count="$(find "$entry/extractions" -type f -name '*.md' | wc -l)"
+  entry="$(jq -er '.runPath' <<< "$verdict")" || return 1
+  count="$(jq '.extractionFiles | length' <<< "$verdict")"
   [[ "$count" -gt 0 && "$count" -le 3 ]] || { echo "❌ invalid extraction count"; return 1; }
   jq -e '.outcome == "completed" and .stages.fetch.requested > 0 and
     .stages.fetch.requested <= 3 and .stages.fetch.succeeded > 0 and
@@ -98,7 +104,8 @@ e2e_write_auth() {
 # output. Returns 0 only when a fresh completed sidecar records useful work.
 e2e_run_pi() {
   local agent="$1" cwd="$2" prompt="$3" tmo="${4:-${E2E_TIMEOUT_SECONDS:-360}}"
-  local attempt out ec ran ref
+  local attempt out ec ran ref verdict
+  E2E_LAST_RUN_JSON=""
   local mode_args=()
   if [[ -n "${E2E_TRACE_FILE:-}" ]]; then mode_args=(--mode json); fi
   ref="$(mktemp)"
@@ -112,15 +119,17 @@ e2e_run_pi() {
           -e "${E2E_EXTENSION_PATH}" "${mode_args[@]}" \
           -p "${prompt}" 2>&1
     )" && ec=0 || ec=$?
-    if [[ -n "${E2E_TRACE_FILE:-}" ]]; then printf '%s\n' "$out" > "$E2E_TRACE_FILE"; fi
+    if [[ -n "${E2E_TRACE_FILE:-}" ]]; then
+      printf '%s\n' "$out" > "${E2E_TRACE_FILE}.attempt-${attempt}"
+      printf '%s\n' "$out" > "$E2E_TRACE_FILE"
+    fi
     ran=0
     # The fresh completed sidecar decides, not the exit code: `Pi`
     # 1.2.0 exits 1 when the final summary is truncated at the output
     # token limit, even when the research completed.
-    if find "${cwd}" -maxdepth 4 -name meta.json -newer "${ref}" \
-      -exec jq -e 'select(.outcome == "completed" and .stages.fetch.succeeded > 0 and .stages.collate.summaryChars > 0)' {} \; \
-      -print -quit 2>/dev/null | grep -q '^/'; then
+    if verdict="$(e2e_find_completed_run "${cwd}/.search" "${ref}")"; then
       ran=1
+      E2E_LAST_RUN_JSON="${verdict}"
     fi
     if [[ "${ran}" -eq 1 ]]; then
       rm -f "${ref}"

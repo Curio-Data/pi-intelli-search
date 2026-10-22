@@ -218,6 +218,96 @@ async function fixture(
   return { root, runtime, run, requests, events, storeEvents, clock, settings };
 }
 
+test("research compact projection preserves frozen legacy payloads and worst-case Unicode/error/degraded envelopes (T18)", async (t) => {
+  const f = await fixture(t);
+  const base = (await f.run()).data;
+  for (const scenario of ["research", "no-links", "fetch-failed", "extraction-failed"] as const) {
+    const frozen = JSON.parse(
+      await readFile(resolve(`test/fixtures/native-contract/${scenario}.json`), "utf8"),
+    ).result;
+    const legacy: Pick<CoreResult, "outcome" | "text" | "details"> = {
+      outcome: scenario === "research" ? "completed" : scenario,
+      text: frozen.content.map((part: { text: string }) => part.text).join("\n"),
+      details: frozen.details,
+    };
+    const compact = compactResult({ ...base, ...legacy });
+    assert(Check(compactOutputSchema, compact));
+    assert.equal(compact.text, legacy.text);
+    assert.deepEqual(compact.details, legacy.details);
+    assert(
+      Buffer.byteLength(JSON.stringify(compact)) - Buffer.byteLength(JSON.stringify(legacy)) <=
+        8192,
+    );
+  }
+  for (const outcome of [
+    "completed",
+    "no-links",
+    "fetch-failed",
+    "extraction-failed",
+    "error",
+    "aborted",
+  ] as const) {
+    for (const path of ["界".repeat(1364), "\\".repeat(4096), "p".repeat(4094), "p".repeat(4095)]) {
+      const legacy = {
+        outcome,
+        text: "完整答案 é".repeat(10_000),
+        details: { cachePath: path, urlsSearched: 100, pagesFetched: 100, pagesFailed: 100 },
+      };
+      const data = {
+        ...base,
+        ...legacy,
+        operationId: "界".repeat(42),
+        counts: Object.fromEntries(
+          Object.keys(base.counts).map((key) => [key, Number.MAX_SAFE_INTEGER]),
+        ) as unknown as typeof base.counts,
+        timing: { ...base.timing, elapsedMs: Number.MAX_VALUE },
+        accounting: {
+          ...base.accounting,
+          attempts: Number.MAX_SAFE_INTEGER,
+          missingAttempts: Number.MAX_SAFE_INTEGER,
+          reportedCost: { total: Number.MAX_VALUE },
+          estimatedCost: { total: Number.MAX_VALUE },
+        },
+        cache: {
+          status: "committed" as const,
+          reportPath: path,
+          index: "unavailable" as const,
+          runId: "not-exposed",
+        },
+      };
+      const compact = compactResult(data);
+      assert(Check(compactOutputSchema, compact));
+      assert.equal(compact.text, legacy.text);
+      assert.deepEqual(compact.details, legacy.details);
+      assert(
+        Buffer.byteLength(JSON.stringify(compact)) - Buffer.byteLength(JSON.stringify(legacy)) <=
+          8192,
+      );
+      assert.equal(
+        compact.meta.reportPath,
+        Buffer.byteLength(JSON.stringify(path)) <= 4096 ? path : undefined,
+      );
+      assert(!("sources" in compact) && !("attempts" in compact));
+    }
+  }
+  // Actual operational failures, not just constructed projection envelopes.
+  const failed = await fixture(t, {
+    search: async () => {
+      throw new Error("Permanent failure");
+    },
+  });
+  const error = await failed.run().then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+  assert(error instanceof CoreOperationFailure);
+  const compact = compactResult(error.data);
+  assert.equal(compact.outcome, "error");
+  assert.equal(compact.text, error.data.text);
+  assert.deepEqual(compact.details, error.data.details);
+  assert(Check(compactOutputSchema, compact));
+});
+
 for (const pageExecution of ["streaming", "barrier"] as const) {
   test(`${pageExecution}: public research publishes verified frozen evidence and all-five schemas (T07/T17/T19/T22)`, async (t) => {
     const f = await fixture(t, {

@@ -186,8 +186,8 @@ else
 fi
 
 # ── Verify .search cache artifacts ──────────────────────────────────
-# intelli_research writes .search/<date>-<slug>/ with report.md,
-# query.txt, extractions/, sources/, and updates .search/.index.json.
+# Registered research writes unique immutable runs below .intelli-v1/runs/.
+# The shared verdict already verified journal/marker identities and file hashes.
 CACHE_DIR="$E2E_CWD/.search"
 
 if [ -d "$CACHE_DIR" ]; then
@@ -198,21 +198,16 @@ else
 fi
 
 INDEX_MISSING=false
-if [ -f "$CACHE_DIR/.index.json" ]; then
-  echo "✅ .search/.index.json exists"
-  INDEX_ENTRIES=$(jq '.searches | length' "$CACHE_DIR/.index.json" 2>/dev/null || echo "0")
-  if [ "$INDEX_ENTRIES" -gt 0 ]; then
-    echo "   📂 $INDEX_ENTRIES cache entry/entries recorded"
-  fi
+if jq -e '.indexVerified == true' <<< "$E2E_LAST_RUN_JSON" >/dev/null; then
+  echo "✅ .search/.intelli-v1/index.json references the verified committed run"
 else
-  echo "⚠️  .search/.index.json not found yet"
+  echo "❌ .search/.intelli-v1/index.json missing, invalid or inconsistent with the committed run"
   INDEX_MISSING=true
 fi
 
-# Find the most recently modified cache subdirectory. Uses mtime, not
-# lexicographic order, so a stale dir whose name sorts later cannot mask the
-# dir the live run just created.
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.*' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+# Reuse the exact fresh committed run selected by e2e_run_pi, not a later
+# directory or orphan selected by mtime.
+LATEST_CACHE=$(jq -er '.runPath' <<< "$E2E_LAST_RUN_JSON")
 if [ -n "$LATEST_CACHE" ]; then
   echo "✅ Cache entry directory: $(basename "$LATEST_CACHE")"
 
@@ -222,7 +217,7 @@ if [ -n "$LATEST_CACHE" ]; then
     echo "   This is a provider degradation, not a successful full-pipeline run."
     ERRORS=$((ERRORS + 1))
   elif [ "$INDEX_MISSING" = true ]; then
-    echo "❌ .search/.index.json not found after a completed run"
+    echo "❌ No verified namespace index entry after a completed run"
     ERRORS=$((ERRORS + 1))
   elif [ -f "$LATEST_CACHE/report.md" ]; then
     echo "✅ report.md exists ($(wc -c < "$LATEST_CACHE/report.md") bytes)"
@@ -239,14 +234,14 @@ if [ -n "$LATEST_CACHE" ]; then
   fi
 
   if [ -d "$LATEST_CACHE/extractions" ]; then
-    EXTRACTION_COUNT=$(find "$LATEST_CACHE/extractions" -type f | wc -l)
+    EXTRACTION_COUNT=$(jq '.extractionFiles | length' <<< "$E2E_LAST_RUN_JSON")
     echo "✅ extractions/ exists ($EXTRACTION_COUNT file(s))"
   else
     echo "⚠️  extractions/ not found (may be empty for some queries)"
   fi
 
   if [ -d "$LATEST_CACHE/sources" ]; then
-    SOURCE_COUNT=$(find "$LATEST_CACHE/sources" -type f | wc -l)
+    SOURCE_COUNT=$(jq '.sourceFiles | length' <<< "$E2E_LAST_RUN_JSON")
     echo "✅ sources/ exists ($SOURCE_COUNT file(s))"
   else
     echo "⚠️  sources/ not found (may be empty for some queries)"
@@ -325,7 +320,7 @@ if [ -n "$LATEST_CACHE" ]; then
     ERRORS=$((ERRORS + 1))
   fi
 else
-  echo "❌ No cache entry subdirectory found under .search/"
+  echo "❌ No fresh verified committed run found under .search/.intelli-v1/runs/"
   ERRORS=$((ERRORS + 1))
 fi
 
