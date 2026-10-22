@@ -113,7 +113,7 @@ describe("model transport replay through one shared instance", () => {
           responseId: "gen-1",
         },
         usage: {
-          tokens: { inputTotal: 1100, inputUncached: 300, outputTotal: 100, cacheRead: 800 },
+          tokens: { inputTotal: 1100, inputUncached: 300, outputTotal: 100, cacheRead: 800, cacheWrite: 0 },
           cost: { total: 0.001 },
           source: "provider-response",
           costBasis: "reported",
@@ -816,40 +816,119 @@ describe("recorded usage fidelity against the actual native usage capture", () =
     assert.equal(usageEvents.length, 2);
   });
 
-  it("fails closed at construction on provider-response shapes no live capture path can produce", () => {
-    const invalid = [
-      // A resolved success whose recorded basis is "unknown": the resolved
-      // path would manufacture a catalogue estimate the record does not carry.
+  it("fails closed at construction when the actual capture cannot reproduce the frozen observation exactly", () => {
+    type InvalidOutcome = { response?: Json; error?: { kind: string; message: string }; usage?: UsageObservation; delayMs: number };
+    const invalid: Array<{ outcome: InvalidOutcome; why: string }> = [
       {
-        usage: { tokens: { outputTotal: 5 }, source: "provider-response", costBasis: "unknown" } as UsageObservation,
-        outcome: { response: { text: "x" }, delayMs: 0 },
-        why: "success with unknown basis",
+        // inputUncached without BOTH cache subsets is not wire-expressible;
+        // replaying would silently drop the field (the committed synthetic
+        // fixtures carry this unreachable shape).
+        outcome: {
+          response: { text: "x" },
+          usage: { tokens: { inputTotal: 500, inputUncached: 500, outputTotal: 10 }, source: "provider-response", costBasis: "reported", cost: { total: 1 } },
+          delayMs: 0,
+        },
+        why: "inputUncached without both cache subsets",
       },
-      // cacheWrite1h is SDK-channel only; the provider-event channel cannot
-      // express it, so replaying would silently drop an observed field.
       {
-        usage: { tokens: { outputTotal: 5, cacheWrite1h: 2 }, source: "provider-response", costBasis: "reported", cost: { total: 1 } } as unknown as UsageObservation,
-        outcome: { response: { text: "x" }, delayMs: 0 },
+        // A resolved success whose recorded basis is "unknown": the resolved
+        // path always supplies an SDK usage whose cost estimate the capture
+        // labels catalogue.
+        outcome: {
+          response: { text: "x" },
+          usage: { tokens: { outputTotal: 5 }, source: "provider-response", costBasis: "unknown" },
+          delayMs: 0,
+        },
+        why: "resolved success with unknown basis",
+      },
+      {
+        // Unknown basis is raw-only: a RESOLVED error record also supplies an
+        // SDK usage, so only kind "throw" reproduces it.
+        outcome: {
+          error: { kind: "rate-limit", message: "429" },
+          usage: { tokens: { inputTotal: 0, outputTotal: 0 }, source: "provider-response", costBasis: "unknown" },
+          delayMs: 0,
+        },
+        why: "resolved error record with unknown basis",
+      },
+      {
+        // cacheWrite1h is SDK-channel only; the provider-event channel cannot
+        // express it, so replaying would silently drop an observed field.
+        outcome: {
+          response: { text: "x" },
+          usage: { tokens: { outputTotal: 5, cacheWrite1h: 2 }, source: "provider-response", costBasis: "reported", cost: { total: 1 } } as unknown as UsageObservation,
+          delayMs: 0,
+        },
         why: "provider-response cacheWrite1h",
       },
-      // An observation with no representable field at all: the capture would
-      // treat it as unobserved, dropping an observed claim.
       {
-        usage: { tokens: {}, source: "provider-response", costBasis: "unknown" } as UsageObservation,
-        outcome: { error: { kind: "throw", message: "boom" }, delayMs: 0 },
+        // An observation with no representable field at all: the capture
+        // would treat it as unobserved, dropping an observed claim.
+        outcome: {
+          error: { kind: "throw", message: "boom" },
+          usage: { tokens: {}, source: "provider-response", costBasis: "unknown" },
+          delayMs: 0,
+        },
         why: "empty observation",
       },
-      // Provider-reported cost subfields other than total never come from the
-      // provider-event channel (normalizeMcpUsage maps totalCost only).
       {
-        usage: { tokens: { outputTotal: 5 }, cost: { total: 1, input: 0.5 }, source: "provider-response", costBasis: "reported" } as UsageObservation,
-        outcome: { response: { text: "x" }, delayMs: 0 },
-        why: "cost subfields beyond total",
+        // Provider-reported cost subfields other than total never come from
+        // the provider-event channel (normalizeMcpUsage maps totalCost only).
+        outcome: {
+          response: { text: "x" },
+          usage: { tokens: { outputTotal: 5 }, cost: { total: 1, input: 0.5 }, source: "provider-response", costBasis: "reported" },
+          delayMs: 0,
+        },
+        why: "reported cost subfields beyond total",
+      },
+      {
+        // A usage-bearing provider event that DISAGREES with the frozen
+        // observation would silently replay different accounting; the
+        // capture derives from the latest cumulative event snapshot.
+        outcome: {
+          response: {
+            text: "x",
+            providerStreamEvents: [{ id: "req-x", usage: { prompt_tokens: 999, completion_tokens: 50, total_tokens: 1049, cost: 0.0009 } }],
+          },
+          usage: { tokens: { inputTotal: 1100, inputUncached: 300, outputTotal: 100, cacheRead: 800, cacheWrite: 0 }, cost: { total: 0.0011 }, source: "provider-response", costBasis: "reported" },
+          delayMs: 0,
+        },
+        why: "recorded usage event disagrees with the frozen observation",
+      },
+      {
+        // A usage-bearing event without a frozen observation would make the
+        // live ledger observe usage the fixture never froze.
+        outcome: {
+          response: { text: "x", providerStreamEvents: [{ id: "req-y", usage: { prompt_tokens: 10, completion_tokens: 5 } }] },
+          delayMs: 0,
+        },
+        why: "usage event without a frozen observation",
+      },
+      {
+        // An sdk-normalized observation cannot coexist with wire usage
+        // events: the raw channel takes precedence over the SDK channel.
+        outcome: {
+          response: { text: "x", providerStreamEvents: [{ id: "req-z", usage: { prompt_tokens: 10, completion_tokens: 5 } }] },
+          usage: { tokens: { outputTotal: 5 }, source: "sdk-normalized", costBasis: "catalogue", cost: { input: 0, output: 0.0001, cacheRead: 0, cacheWrite: 0, total: 0.0001 } },
+          delayMs: 0,
+        },
+        why: "sdk-normalized observation beside a wire usage event",
+      },
+      {
+        // An sdk-normalized observation the conservative SDK fallback cannot
+        // re-admit exactly (input without positive cache subsets) would lose
+        // the recorded input silently.
+        outcome: {
+          response: { text: "x" },
+          usage: { tokens: { inputUncached: 300, outputTotal: 5 }, source: "sdk-normalized", costBasis: "unknown" },
+          delayMs: 0,
+        },
+        why: "sdk-normalized input without positive cache subsets",
       },
     ];
-    for (const { usage, outcome, why } of invalid) {
+    for (const { outcome, why } of invalid) {
       const recorder = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
-      recorder.record("research.search", searchFixtureRequest(`invalid ${why}`), { ...outcome, usage });
+      recorder.record("research.search", searchFixtureRequest(`invalid ${why}`), outcome);
       const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
       assert.throws(
         () => createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: (r) => resolveSyntheticNode(r) }),
@@ -859,13 +938,13 @@ describe("recorded usage fidelity against the actual native usage capture", () =
     }
   });
 
-  it("preserves a subset-less recorded inputUncached as unknown instead of inventing cache zeros (documented residual)", async () => {
-    // The committed synthetic fixtures record inputUncached without both
-    // cache subsets. That value is not expressible on the usage-event wire:
-    // the capture's normalisation derives uncached input only when both
-    // subsets are reported, so the replayed observation keeps every other
-    // recorded field and leaves inputUncached unknown rather than inventing
-    // explicit-zero cache subsets. This pins the documented residual.
+  it("invalidates a subset-less recorded inputUncached instead of silently losing it", () => {
+    // A recorded inputUncached without BOTH cache subsets is not expressible
+    // on the usage-event wire: the capture's normalisation derives uncached
+    // input only when both subsets are reported. The committed synthetic
+    // fixtures carry this unreachable shape; replaying it would silently
+    // drop the field, so the block fails closed and the fixture's
+    // incompatibility is exposed rather than waived (C16/C30 exact-or-fail).
     const recorder = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
     recorder.record("research.search", searchFixtureRequest("residual query"), {
       response: { text: "residual" },
@@ -879,19 +958,10 @@ describe("recorded usage fidelity against the actual native usage capture", () =
       delayMs: 0,
     });
     const store = createReplayStore({ fixtures: recorder.records(), scenario: SCENARIO });
-    const replay = createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: (r) => resolveSyntheticNode(r) });
-    const outcome = await captureAttempt(replay, userContext("residual query"));
-    assert.equal(outcome.thrown, false);
-    assert.deepEqual(outcome.observation, {
-      tokens: { inputTotal: 500, outputTotal: 10, totalTokens: 510 },
-      cost: { total: 0.0005 },
-      source: "provider-response",
-      costBasis: "reported",
-      providerRequestId: "req-residual",
-    });
-    // The reconstructed event carries no invented cache subsets.
-    const usageEvent = outcome.events[0] as { usage: Record<string, unknown> };
-    assert.equal("prompt_tokens_details" in usageEvent.usage, false);
+    assert.throws(
+      () => createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: (r) => resolveSyntheticNode(r) }),
+      (error: unknown) => error instanceof ReplayMissError && error.reason === "invalid-file",
+    );
   });
 
   it("skips event delivery when the host supplies no provider-event hook", async () => {

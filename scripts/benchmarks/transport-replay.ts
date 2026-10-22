@@ -31,8 +31,9 @@
 // recorded sdk-normalized observation rides the resolved message's SDK usage
 // (the capture's conservative fallback re-admits exactly its positive
 // fields). SDK zero placeholders never become observations, and construction
-// fails closed on provider-response shapes no live capture path can produce
-// (see providerResponseUsageInvalidReason). Error records replay as resolved
+// simulates the actual capture over the exact inputs the replay will deliver
+// and fails closed when the frozen observation is not reproduced exactly
+// (see usageReplayInvalidReason). Error records replay as resolved
 // provider-failure messages by default (the adapter's behaviour for provider
 // errors, Observed in pi-ai 1.1.0 api/openai-completions.js); `kind: "throw"`
 // reproduces a transport rejection, the only live path whose observation is
@@ -53,9 +54,10 @@
 import type { Api, AssistantMessage, Context, Model, SimpleStreamOptions, Usage } from "@earendil-works/pi-ai";
 import type { RegistryStreamSimple } from "../../docs/plans/codemode/NATIVE-API.js";
 import type { PageTransport, PageTransportRequest, PageTransportResponse } from "../../src/core/execution-contracts.js";
+import { createNativeUsageCapture } from "../../src/native-usage.js";
 import { asJson, canonicalJson, requestSha256, sha256Canonical, type RequestBinding } from "./canonical.js";
 import { ReplayMissError, type BenchmarkReplayStore } from "./replay-store.js";
-import type { FetchFixtureRequest, FixtureKey, Json, ModelFixtureRequest, ModelRole, UsageObservation } from "./contracts.js";
+import type { FetchFixtureRequest, FixtureKey, FixtureRecord, Json, ModelFixtureRequest, ModelRole, UsageObservation } from "./contracts.js";
 
 /** Recorded wire shape of a model fixture response (inside FixtureRecord.response). */
 export interface ModelFixtureResponse {
@@ -165,14 +167,15 @@ export function usageFromObservation(observation: UsageObservation | undefined):
   const cacheRead = tokens.cacheRead ?? 0;
   const cacheWrite = tokens.cacheWrite ?? 0;
   // The pi-ai SDK input field is the UNCACHED count. Derive it from the
-  // recorded prompt total only when both cache subsets are known: unknown
-  // subsets cannot establish uncached input (C16). The zeros in unrecorded
-  // fields are the SDK's own initialised placeholders (pi-ai 1.1.0 requires
-  // every Usage field and initialises them to zero, Observed in
-  // api/openai-completions.js); the native usage capture deliberately
-  // ignores non-positive SDK fields, so they never become observations.
+  // recorded prompt total ONLY when both cache subsets are known: unknown
+  // subsets cannot establish uncached input (C16), and defaulting an absent
+  // subset to zero would invent one. Otherwise the field keeps the SDK's
+  // zero placeholder, which the native usage capture deliberately ignores,
+  // so it never becomes an observation.
   const input = tokens.inputUncached ??
-    (tokens.inputTotal !== undefined ? Math.max(0, tokens.inputTotal - cacheRead - cacheWrite) : 0);
+    (tokens.inputTotal !== undefined && tokens.cacheRead !== undefined && tokens.cacheWrite !== undefined
+      ? Math.max(0, tokens.inputTotal - cacheRead - cacheWrite)
+      : 0);
   const output = tokens.outputTotal ?? 0;
   const cost = observation?.cost ?? {};
   return {
@@ -246,63 +249,99 @@ export function usageProviderEventFromObservation(observation: UsageObservation)
   };
 }
 
+/** Wire usage events carried by a recorded response, in recorded order. */
+function recordedUsageEvents(response: ModelFixtureResponse | null): readonly Json[] {
+  return (response?.providerStreamEvents ?? []).filter(eventCarriesUsage);
+}
+
+/** Canonical-equality diff of two JSON values as a short list of differing paths. */
+function differingJsonPaths(derived: unknown, recorded: unknown, prefix = "$"): readonly string[] {
+  if (derived === undefined || recorded === undefined) {
+    // A key present on one side only: canonical serialisation omits
+    // undefined object values, so compare presence directly.
+    return derived === recorded ? [] : [prefix];
+  }
+  if (canonicalJson(derived) === canonicalJson(recorded)) return [];
+  if (isJsonObject(derived) && isJsonObject(recorded)) {
+    const paths: string[] = [];
+    for (const key of new Set([...Object.keys(derived), ...Object.keys(recorded)])) {
+      paths.push(...differingJsonPaths(derived[key], recorded[key], `${prefix}.${key}`));
+    }
+    return paths;
+  }
+  return [prefix];
+}
+
 /**
- * Construction-time qualification of recorded provider-response usage
- * against the actual native capture paths (Observed in src/native-usage.ts
- * and src/llm.ts `executeAttempt`). Returns a reason string when replaying
- * the record would NOT reproduce the recorded observation, so the block
- * fails closed instead of silently inventing or dropping fields:
+ * Construction-time qualification of a record's frozen usage against the
+ * ACTUAL native capture (`createNativeUsageCapture`, the same module
+ * `src/llm.ts` `executeAttempt` wires per attempt): the exact event/sdk
+ * inputs the replay will deliver are simulated, and the derived observation
+ * must equal the recorded observation field-for-field. Anything else fails
+ * the block closed (ReplayMissError "invalid-file") rather than silently
+ * replaying different accounting: C16/C30 require exact observations or
+ * invalidation, never silent field loss, invented provenance or an
+ * observation the record does not freeze.
  *
- * - `cacheWrite1h` is an SDK-channel value; the provider-event channel
- *   cannot express it (a live provider-response observation never carries
- *   it), so replay would silently drop an observed field.
- * - A `reported` cost is the event channel's `totalCost` only
- *   (`normalizeMcpUsage` maps `{ total }`), so a reported basis without a
- *   total, or with other subfields, is unreachable.
- * - An `unknown` basis never carries a cost (the estimate branch would have
- *   supplied one and relabelled the basis `catalogue`); replaying a cost
- *   under it would drop or relabel a recorded field.
- * - A `catalogue` basis may carry any SDK mirror cost shape, because the
- *   capture's estimate branch copies the resolved message's SDK cost; its
- *   cost is not encoded into the event.
- * - An observation with no event-representable field (a token field, or a
- *   reported total) would be read back as unobserved or sdk-normalized,
- *   dropping the recorded source; the reconstruction must be able to set
- *   the capture's raw snapshot.
- * - A RESOLVED success whose recorded basis is `unknown` is unreachable: a
- *   resolved message always supplies an SDK usage object, whose (possibly
- *   zero-valued) cost the capture's estimate branch turns into a
- *   `catalogue` basis. Replaying it would manufacture an estimate the
- *   record does not contain. Error records may keep `unknown`: the transport
- *   rejection path observes from raw events only.
- *
- * A recorded `inputUncached` without both cache subsets is live-unreachable
- * in this direction too, but is not rejected: the committed synthetic
- * fixtures carry that shape, and the replay preserves every other recorded
- * field while the capture keeps the subset-less uncached input unknown,
- * matching the conservative live normalisation. This residual is reported,
- * not silently dropped: see the module note on channel limits.
+ * Consequences the simulation enforces (all Observed in src/native-usage.ts
+ * and src/core/usage.ts):
+ * - A `provider-response` observation must be exactly representable on the
+ *   usage-event wire: `inputUncached` without BOTH cache subsets, a
+ *   `cacheWrite1h` field, reported cost subfields beyond `total`, or an
+ *   empty observation all derive differently and invalidate the block.
+ * - An `unknown` cost basis is raw-only: only a transport-rejection record
+ *   (`error.kind === "throw"`, observed from raw events alone) reproduces
+ *   it; a resolved success or error record always supplies an SDK usage
+ *   whose cost estimate the capture labels `catalogue`.
+ * - Recorded provider events carrying usage must AGREE with the frozen
+ *   observation: the capture derives from the latest cumulative event
+ *   snapshot, so a disagreeing `record.usage` would silently replay
+ *   different accounting and instead invalidates the block.
+ * - A usage-bearing event without a frozen observation would make the live
+ *   ledger observe usage the fixture never froze.
+ * - An `sdk-normalized` observation must survive the capture's conservative
+ *   SDK fallback exactly and cannot coexist with wire usage events (raw
+ *   takes precedence over the SDK channel).
  */
-function providerResponseUsageInvalidReason(usage: UsageObservation, isErrorRecord: boolean): string | null {
-  if (usage.source !== "provider-response") return null;
-  if (usage.tokens.cacheWrite1h !== undefined) {
-    return "cacheWrite1h cannot be replayed through the provider-event channel";
+function usageReplayInvalidReason(record: {
+  readonly key: FixtureKey;
+  readonly response?: Json;
+  readonly error?: { readonly kind: string; readonly message: string };
+  readonly usage?: FixtureRecord["usage"];
+}): string | null {
+  const usage = record.usage;
+  const response = (record.response ?? null) as ModelFixtureResponse | null;
+  const wireUsageEvents = recordedUsageEvents(response);
+  if (usage === undefined) {
+    if (wireUsageEvents.length > 0) {
+      return "the recorded provider events carry a usage object but the record freezes no observation";
+    }
+    return null;
   }
-  if (usage.costBasis === "reported" && (usage.cost?.total === undefined || Object.keys(usage.cost).some((key) => key !== "total"))) {
-    return "a reported cost is the usage event's totalCost only; reported observations carry cost: { total } and nothing else";
+  const throwRecord = record.error?.kind === "throw";
+  const capture = createNativeUsageCapture();
+  for (const event of wireUsageEvents) capture.chunk(event);
+  if (usage.source === "provider-response") {
+    if (wireUsageEvents.length === 0) {
+      const reconstructed = usageProviderEventFromObservation(usage);
+      if (reconstructed === null) {
+        return "the provider-response observation has no usage-event-representable field";
+      }
+      capture.chunk(reconstructed);
+    }
+  } else if (wireUsageEvents.length > 0) {
+    return "an sdk-normalized observation cannot coexist with recorded wire usage events; the raw channel takes precedence";
   }
-  if (usage.costBasis === "unknown" && usage.cost !== undefined) {
-    return "an unknown basis never carries a cost; the estimate branch would have relabelled it catalogue";
+  // A throw record observes from raw events only (no SDK usage exists); a
+  // resolved record observes with the SDK mirror the replay will attach.
+  const sdk = throwRecord ? undefined : usageFromObservation(usage);
+  const derived = capture.observation(sdk);
+  if (derived === undefined) {
+    return "the capture derives no observation, but the record freezes one";
   }
-  const representableTokens =
-    usage.tokens.inputTotal !== undefined || usage.tokens.outputTotal !== undefined ||
-    usage.tokens.totalTokens !== undefined || usage.tokens.cacheRead !== undefined ||
-    usage.tokens.cacheWrite !== undefined || usage.tokens.reasoning !== undefined;
-  if (!representableTokens && !(usage.costBasis === "reported" && usage.cost?.total !== undefined)) {
-    return "no usage-event-representable observed field; the capture would read it back as unobserved or sdk-normalized";
-  }
-  if (!isErrorRecord && usage.costBasis === "unknown") {
-    return "a resolved success always yields a catalogue estimate or a reported cost, never an unknown basis";
+  if (canonicalJson(asJson(derived)) !== canonicalJson(asJson(usage))) {
+    const paths = differingJsonPaths(asJson(derived), asJson(usage));
+    return `the capture would derive a different observation than the recorded one (differing paths: ${paths.slice(0, 8).join(", ")}${paths.length > 8 ? ", …" : ""})`;
   }
   return null;
 }
@@ -396,17 +435,17 @@ export function createModelTransportReplay(options: ModelTransportReplayOptions)
   const bindings = options.bindings ?? [];
   const groups = groupRecordsByRequest(options.store, bindings, "model");
   assertNoAmbiguousNodes(groups, options.scenario, "model");
-  // Construction-time usage qualification (see providerResponseUsageInvalidReason):
-  // records whose provider-response observation no live capture path can
-  // reproduce invalidate the block instead of replaying an invented or
-  // silently reduced observation.
+  // Construction-time usage qualification (see usageReplayInvalidReason):
+  // the frozen observation must be exactly reproducible through the actual
+  // capture channels, or the block fails closed instead of silently
+  // replaying different accounting.
   for (const record of options.store.records()) {
-    if (record.key.boundary !== "model" || record.usage === undefined) continue;
-    const reason = providerResponseUsageInvalidReason(record.usage, record.error !== undefined);
+    if (record.key.boundary !== "model") continue;
+    const reason = usageReplayInvalidReason(record);
     if (reason !== null) {
       throw new ReplayMissError(
         "invalid-file",
-        `Invalid model fixture usage for scenario "${options.scenario}" (${record.key.operationNode} occurrence ${record.key.occurrence}): ${reason}; no live capture path produces this observation, so replay must fail closed`,
+        `Invalid model fixture usage for scenario "${options.scenario}" (${record.key.operationNode} occurrence ${record.key.occurrence}): ${reason}; no live capture path reproduces the frozen observation, so replay must fail closed`,
         record.key,
       );
     }
