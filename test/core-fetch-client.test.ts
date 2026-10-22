@@ -542,6 +542,9 @@ it("adapter factory consumes captured proxy environment and character settings t
     coreContext("/workspace").context.settings,
   ) as import("../src/core/types.js").ResearchSettings;
   settings.execution = parseExecutionSettings({ fetchMaxChars: 4 });
+  // This is an environment/capture test over real child startup, not a 100 ms
+  // timeout test. Use the production budget rather than the model-only fixture's.
+  settings.fetchTimeoutMs = 20_000;
   const env = { HTTP_PROXY: `http://127.0.0.1:${port}` };
   const clock = createSystemClock();
   const make = capturePageFetchFactory(settings, clock, {

@@ -77,6 +77,9 @@ export async function produceCoreResult(
   create: (legacy: OperationContext) => Producer,
   role: "search" | "extract" | "collate",
 ): Promise<CoreResult> {
+  const clock = context.services.clock;
+  const started = clock.monotonicMs();
+  const startedUtc = clock.utcIso();
   const legacy = legacyOperationContext(context);
   legacy.signal?.throwIfAborted();
   const missing = await legacy.models.preflight([
@@ -87,6 +90,7 @@ export async function produceCoreResult(
     throw new CoreConfigurationError(
       `Configured model unavailable for role(s): ${missing.map((item) => `${item.role}: ${item.config.provider}/${item.config.model}`).join(", ")}`,
     );
+  const producerOffset = Math.max(0, clock.monotonicMs() - started);
   const producer = create(legacy);
   let result: OperationResult | undefined;
   let failure: unknown;
@@ -116,7 +120,7 @@ export async function produceCoreResult(
       throw new TypeError("Core result producer was not started");
     }
     const aborted = context.services.operation.signal.aborted;
-    const final = producer.settled(
+    const produced = producer.settled(
       result,
       failed || aborted
         ? {
@@ -130,6 +134,24 @@ export async function produceCoreResult(
         : undefined,
       aborted ? "unknown" : "available",
     );
+    const elapsedMs = Math.max(0, clock.monotonicMs() - started);
+    const final: CoreResult = {
+      ...produced,
+      data: {
+        ...produced.data,
+        timing: {
+          ...produced.data.timing,
+          startedUtc,
+          elapsedMs,
+          allWorkSettledMs: elapsedMs,
+          ...(produced.data.timing.summaryReadyMs === undefined
+            ? {}
+            : {
+                summaryReadyMs: producerOffset + produced.data.timing.summaryReadyMs,
+              }),
+        },
+      },
+    };
     if (failed || aborted)
       throw new CoreOperationFailure(final.text, final.data, final.usage, { cause: failure });
     return final;
@@ -147,8 +169,10 @@ export function createOperationResultBoundary(
   const started = clock.monotonicMs();
   const startedUtc = clock.utcIso();
   let services: OperationServices | undefined;
+  let coreOffset = 0;
   let value: CoreResult | undefined;
   let terminal: Progress | undefined;
+  let lastPct = 0;
   let abortAt: number | undefined;
   let removeAbort: (() => void) | undefined;
   const send = (event: Progress) => {
@@ -171,7 +195,10 @@ export function createOperationResultBoundary(
       (event.state !== "succeeded" || event.stageIdx === event.totalStages - 1)
     )
       terminal = event;
-    else send(event);
+    else {
+      lastPct = event.pct;
+      send(event);
+    }
   };
   return {
     get hasResult() {
@@ -180,6 +207,7 @@ export function createOperationResultBoundary(
     context(context: OperationContext): Context {
       if (!context.services) throw new TypeError("Registered core operation requires services");
       services = context.services;
+      coreOffset = Math.max(0, clock.monotonicMs() - started);
       const signal = services.operation.signal;
       const aborted = () => {
         abortAt ??= clock.monotonicMs();
@@ -231,6 +259,11 @@ export function createOperationResultBoundary(
           startedUtc,
           elapsedMs,
           allWorkSettledMs: elapsedMs,
+          ...(value.data.timing.summaryReadyMs === undefined
+            ? {}
+            : {
+                summaryReadyMs: coreOffset + value.data.timing.summaryReadyMs,
+              }),
           ...(failure?.aborted && abortAt !== undefined
             ? { abortToSettledMs: Math.max(0, clock.monotonicMs() - abortAt) }
             : {}),
@@ -245,6 +278,7 @@ export function createOperationResultBoundary(
           ...(failure
             ? {
                 state: failure.aborted ? ("cancelled" as const) : ("failed" as const),
+                pct: terminal.state === "succeeded" ? lastPct : terminal.pct,
                 message: text,
               }
             : {}),

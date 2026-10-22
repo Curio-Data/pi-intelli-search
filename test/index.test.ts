@@ -637,6 +637,89 @@ describe("auth pre-flight check", () => {
     }
   });
 
+  it("failed first-upgrade execution settings preserve the migration notice after repair", async () => {
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    const { clearMigrationContext, invalidateSettingsCache } = await import("../src/settings.js");
+    const mod = await import("../src/index.js");
+    const savedEnsure = mod.__harness.ensureCustomModels;
+    const agentDir = tempAgentDir();
+    const versionPath = join(agentDir, ".pi-intelli-search-version.json");
+    const settingsPath = join(agentDir, "settings.json");
+    const settings = {
+      "pi-intelli-search": {
+        extractModel: { provider: "minimax", model: "MiniMax-M2.7" },
+        collateModel: { provider: "minimax", model: "MiniMax-M2.7" },
+      },
+    };
+    const notices: string[] = [];
+    let start!: (event: unknown, ctx: unknown) => Promise<void>;
+    let stop!: (event: unknown, ctx: unknown) => Promise<void>;
+    const ctx = {
+      cwd: agentDir,
+      hasUI: true,
+      isProjectTrusted: () => false,
+      modelRegistry: { refresh() {} },
+      ui: { notify: (message: string) => notices.push(message), setStatus() {} },
+    };
+    try {
+      process.env.PI_CODING_AGENT_DIR = agentDir;
+      clearMigrationContext();
+      invalidateSettingsCache();
+      mod.__harness.ensureCustomModels = async () => [];
+      writeFileSync(versionPath, JSON.stringify({ version: "0.7.0" }));
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          "pi-intelli-search": {
+            ...settings["pi-intelli-search"],
+            execution: { modelConcurrency: 1 },
+          },
+        }),
+      );
+      mod.default({
+        registerTool() {},
+        on(event: string, handler: typeof start) {
+          if (event === "session_start") start = handler;
+          if (event === "session_shutdown") stop = handler;
+        },
+      } as unknown as Parameters<typeof mod.default>[0]);
+      await assert.rejects(start({}, ctx), /modelConcurrency/);
+      assert.equal(JSON.parse(await readFile(versionPath, "utf8")).version, "0.7.0");
+      assert.equal(
+        notices.filter((message) => message.includes("Default models updated")).length,
+        0,
+      );
+      writeFileSync(settingsPath, JSON.stringify(settings));
+      await start({}, ctx);
+      const migrations = notices.filter((message) => message.includes("Default models updated"));
+      assert.equal(migrations.length, 1);
+      assert.match(migrations[0], /extract: minimax\/MiniMax-M2.7/);
+      assert.match(migrations[0], /collate: minimax\/MiniMax-M2.7/);
+      const { loadSettings } = await import("../src/settings.js");
+      assert.equal(
+        (await loadSettings({ cwd: agentDir, projectTrusted: false })).extractModel.provider,
+        "openrouter",
+      );
+      const { getExtensionVersion } = await import("../src/telemetry.js");
+      assert.equal(
+        JSON.parse(await readFile(versionPath, "utf8")).version,
+        await getExtensionVersion(),
+      );
+      await start({}, ctx);
+      assert.equal(
+        notices.filter((message) => message.includes("Default models updated")).length,
+        1,
+      );
+    } finally {
+      await stop?.({}, ctx);
+      mod.__harness.ensureCustomModels = savedEnsure;
+      clearMigrationContext();
+      invalidateSettingsCache();
+      if (savedDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = savedDir;
+    }
+  });
+
   it("session_start does NOT fire migration when user customized models", async () => {
     // Simulate upgrade from 0.7.0, but user customized extract model.
     // The handler should NOT migrate customized models.

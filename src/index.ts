@@ -216,6 +216,7 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
           // No previous version file — fresh install or cleared state
         }
 
+        let migrationChecked = true;
         if (previousVersion && previousVersion !== currentVersion) {
           // Check for migration changes BEFORE setting the migration
           // context. loadSettings() applies pendingMigration in-memory,
@@ -236,7 +237,8 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
               );
             }
           } catch (err: unknown) {
-            // Migration is best-effort; never block session startup
+            // Keep the prior marker so a repaired configuration gets its notice.
+            migrationChecked = false;
             notify(`[pi-intelli-search] Default migration error: ${errMsg(err)}`, "warning");
           }
 
@@ -246,17 +248,18 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
           // pendingMigration applied (the earlier call for notification
           // populated the cache without migration).
           if (!native.isCurrent(ctx)) return;
-          setMigrationContext(previousVersion, currentVersion);
+          if (migrationChecked) setMigrationContext(previousVersion, currentVersion);
           invalidateSettingsCache();
         }
 
-        // Write current version AFTER migration succeeds, so a failed
-        // migration doesn't permanently strand the user on stale defaults.
-        await mkdir(agentDir, { recursive: true });
-        await writeFile(
-          versionPath,
-          JSON.stringify({ version: currentVersion, settingsFormat: "nested" }, null, 2) + "\n",
-        );
+        // A failed settings load must not consume the one-time upgrade notice.
+        if (migrationChecked && native.isCurrent(ctx)) {
+          await mkdir(agentDir, { recursive: true });
+          await writeFile(
+            versionPath,
+            JSON.stringify({ version: currentVersion, settingsFormat: "nested" }, null, 2) + "\n",
+          );
+        }
 
         // Flat key deprecation notice — check on every session_start,
         // not just on upgrade, to catch fresh-install users who

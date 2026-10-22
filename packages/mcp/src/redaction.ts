@@ -29,6 +29,7 @@ export function redactFullData(data: FullData, redact: (value: string) => string
             }
           : { status: "not-requested" },
     deadline: { ...data.deadline },
+    timing: { ...data.timing },
     sources: safe.sources.map((source, i) => ({
       ...source,
       id: data.sources[i].id,
@@ -46,6 +47,7 @@ export function redactFullData(data: FullData, redact: (value: string) => string
         ...attempt,
         operationId: original.operationId,
         callId: original.callId,
+        ...(original.pageId === undefined ? {} : { pageId: original.pageId }),
         state: original.state,
         role: original.role,
         ...(attempt.observation && original.observation

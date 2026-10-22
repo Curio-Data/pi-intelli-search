@@ -10,6 +10,15 @@ import { search, extract, collate, CoreOperationFailure } from "../src/core/inde
 import { createOperationRuntime } from "../src/core/operation-runtime.js";
 import { createRunStore } from "../src/core/run-store.js";
 import { createPolicyHooks, runModelWithPolicy } from "../src/core/llm.js";
+import {
+  createOperationResultBoundary,
+  legacyOperationContext,
+} from "../src/core/operation-result.js";
+import {
+  withOperationDiagnostics,
+  observeOperationDiagnostic,
+} from "../src/core/operation-diagnostics.js";
+import { AsyncResource } from "node:async_hooks";
 import { standaloneOutputSchemas, collateOutputSchema } from "../src/core/output-schemas.js";
 import { coreContext } from "./helpers/core-context.js";
 import type {
@@ -30,6 +39,7 @@ async function fixture(
     fail?: boolean;
     cleanupFail?: boolean;
     preflightFail?: boolean;
+    preflightMs?: number;
     held?: (signal: AbortSignal) => Promise<void>;
   } = {},
 ) {
@@ -85,6 +95,7 @@ async function fixture(
     services,
     models: {
       async preflight(bindings) {
+        now += options.preflightMs ?? 0;
         return options.preflightFail ? [...bindings] : [];
       },
       async complete(request) {
@@ -129,7 +140,7 @@ async function fixture(
       { operationId: `public-${++sequence}`, signal, onProgress: (event) => events.push(event) },
       (services) => execute(make(services)),
     );
-  return { root, runtime, make, run, calls, events, cleanups: () => cleanups };
+  return { root, runtime, make, run, calls, events, clock, cleanups: () => cleanups };
 }
 const input = { url: "supplied-label", title: "Title", content: "RAW_PAGE_SENTINEL", query: "Q" };
 const supplied = {
@@ -296,6 +307,101 @@ test("runtime invalidates a cached writer settlement when a later store wave sta
   });
   assert.equal(f.cleanups(), 2, "later store work is not hidden by the earlier settled promise");
   assert.equal(f.runtime.coordinator.snapshot().activeOperations, 0);
+});
+
+test("public timing includes preflight and rebases summary readiness (T17)", async (t) => {
+  const f = await fixture(t, { preflightMs: 17 });
+  const final = await f.run((ctx) => collate(supplied, ctx));
+  assert.equal(final.data.timing.elapsedMs, 22);
+  assert.equal(final.data.timing.allWorkSettledMs, 22);
+  assert.equal(final.data.timing.summaryReadyMs, 17);
+});
+
+test("buffered success becomes honest cancellation if the outer lifetime aborts (T04/T20)", async (t) => {
+  const f = await fixture(t);
+  const controller = new AbortController();
+  let ready!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    ready = resolve;
+  });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const events: Progress[] = [];
+  const boundary = createOperationResultBoundary(f.clock, (event) => events.push(event));
+  try {
+    const pending = f.runtime.run(
+      { operationId: "outer-abort", signal: controller.signal },
+      async (services) => {
+        await boundary.run(() =>
+          extract(input, boundary.context(legacyOperationContext(f.make(services)))),
+        );
+        ready();
+        await held;
+      },
+    );
+    const verdict = pending.catch((error: unknown) => error);
+    await entered;
+    assert.deepEqual(
+      events.map((event) => event.pct),
+      [0],
+    );
+    controller.abort();
+    release();
+    assert((await verdict) instanceof Error);
+    const final = boundary.settled({ message: "Operation aborted", aborted: true }, "unknown");
+    assert.equal(final?.data.outcome, "aborted");
+    assert.equal(final?.data.counts.used, 1, "completed evidence survives outer cancellation");
+    assert.equal(final?.data.accounting.parentDelivery, "unknown");
+    assert.deepEqual(
+      events.map((event) => [event.event, event.state, event.pct]),
+      [
+        ["start", "running", 0],
+        ["end", "cancelled", 0],
+      ],
+    );
+  } finally {
+    release();
+    boundary.dispose();
+  }
+});
+
+test("diagnostic observation is nested, concurrent, exception-safe and expires with its scope", async () => {
+  const first: string[] = [];
+  const second: string[] = [];
+  const note = (code: string) => observeOperationDiagnostic({ code, message: code });
+  let stale!: AsyncResource;
+  await Promise.all([
+    withOperationDiagnostics(
+      (diagnostic) => first.push(diagnostic.code),
+      async () => {
+        stale = new AsyncResource("stale-diagnostic");
+        note("first");
+        await withOperationDiagnostics(
+          () => {
+            throw new Error("observer failure");
+          },
+          async () => note("ignored"),
+        );
+        await Promise.resolve();
+        note("first-after-nested");
+      },
+    ),
+    withOperationDiagnostics(
+      (diagnostic) => second.push(diagnostic.code),
+      async () => {
+        note("second");
+        await Promise.resolve();
+        note("second-after-await");
+      },
+    ),
+  ]);
+  stale.runInAsyncScope(() => note("expired"));
+  stale.emitDestroy();
+  note("outside");
+  assert.deepEqual(first, ["first", "first-after-nested"]);
+  assert.deepEqual(second, ["second", "second-after-await"]);
 });
 
 test("public Context rejects duplicate authorities before inference", async (t) => {

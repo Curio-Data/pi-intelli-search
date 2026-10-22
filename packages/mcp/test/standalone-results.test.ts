@@ -6,7 +6,11 @@ import { test } from "node:test";
 import { Check } from "typebox/value";
 import { createRuntime, StandaloneError } from "../src/runtime.js";
 import { successResult, errorResult } from "../src/server.js";
-import { standaloneOutputSchemas, compactOutputSchema } from "../../../src/core/output-schemas.js";
+import {
+  standaloneOutputSchemas,
+  collateOutputSchema,
+  compactOutputSchema,
+} from "../../../src/core/output-schemas.js";
 import type { Progress, ResearchExecutionSettings } from "../../../src/core/contracts.js";
 import { fixture, fakeTransport, completion, json, logger } from "./helpers.js";
 
@@ -96,6 +100,132 @@ test("MCP redacts authored text without changing generated schema literals (T17/
       assert(result.data.sources[0].url.includes("[REDACTED]"));
       assert(!result.text.includes(`Answer ${secret}`));
       assert(Check(compactOutputSchema, successResult(result).structuredContent));
+    } finally {
+      await runtime.close();
+      await f.cleanup();
+    }
+  }
+});
+
+test("actual manual-workflow adapter envelopes retain large Unicode answers and bounded metadata (T17/T18)", async () => {
+  const long = '完整事实\\"\\n'.repeat(10_000);
+  for (const name of ["intelli_search", "intelli_extract", "intelli_collate"] as const) {
+    for (const failed of [false, true]) {
+      const f = await fixture();
+      const runtime = await createRuntime(f.config, {
+        env: { FIXTURE_KEY: "fixture-secret" },
+        logger,
+        fetch: fakeTransport(() =>
+          failed
+            ? json({ error: { code: 401, message: long } }, 401)
+            : json(
+                completion(
+                  long +
+                    (name === "intelli_collate"
+                      ? " [S1]."
+                      : "\nRead a report with `read .search/report.md`"),
+                  {
+                    usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5, cost: 0.01 },
+                  },
+                ),
+              ),
+        ),
+      });
+      try {
+        const result = await runtime
+          .execute(
+            name,
+            name === "intelli_search"
+              ? { query: "Q" }
+              : name === "intelli_extract"
+                ? page
+                : {
+                    query: "Q",
+                    extractions: [
+                      {
+                        url: "supplied",
+                        title: "Title",
+                        extraction: "Facts",
+                        status: "success",
+                        sourceType: "official",
+                      },
+                    ],
+                  },
+          )
+          .catch((error: unknown) => error);
+        const data =
+          result instanceof StandaloneError
+            ? result.data
+            : (result as { data: import("../../../src/core/contracts.js").FullData }).data;
+        assert(data);
+        assert(
+          Check(
+            name === "intelli_collate" ? collateOutputSchema : standaloneOutputSchemas[name],
+            data,
+          ),
+        );
+        const protocol =
+          result instanceof StandaloneError
+            ? errorResult(name, result.code, result.message, data)
+            : successResult(result as Awaited<ReturnType<typeof runtime.execute>>);
+        assert(Check(compactOutputSchema, protocol.structuredContent));
+        const structured = protocol.structuredContent as {
+          outcome: string;
+          text: string;
+          details: unknown;
+        };
+        assert.equal(structured.text, (protocol.content![0] as { text: string }).text);
+        assert.deepEqual(structured.details, data.details);
+        if (!failed)
+          assert(
+            structured.text.includes(long),
+            `${name}: the answer is not truncated to fit metadata`,
+          );
+        else
+          assert(
+            structured.text.endsWith(data.text),
+            "the adapter's complete safe error is retained",
+          );
+        const legacy = {
+          outcome: structured.outcome,
+          text: structured.text,
+          details: structured.details,
+        };
+        const overhead =
+          Buffer.byteLength(JSON.stringify(structured)) - Buffer.byteLength(JSON.stringify(legacy));
+        assert(overhead <= 8192, `${name} ${failed}: ${overhead}`);
+        assert(!JSON.stringify(structured).includes("RAW_SENTINEL"));
+        if (!failed && name !== "intelli_collate") {
+          assert(!data.text.includes("Read a report with `read"));
+          assert.match(data.text, /host's file-reading capability/);
+        }
+      } finally {
+        await runtime.close();
+        await f.cleanup();
+      }
+    }
+  }
+});
+
+test("MCP extraction keeps generated correlation and clock fields when a literal key matches them", async () => {
+  for (const secret of ["S1", "2026", "extract", "sdk-normalized", "unknown"]) {
+    const f = await fixture();
+    const runtime = await createRuntime(f.config, {
+      env: { FIXTURE_KEY: secret },
+      logger,
+      fetch: fakeTransport(() => json(completion(`Facts ${secret}`))),
+    });
+    try {
+      const result = await runtime.execute("intelli_extract", { ...page, url: secret });
+      assert(result.data && Check(standaloneOutputSchemas.intelli_extract, result.data));
+      assert.equal(result.data.sources[0].id, "S1");
+      assert.equal(result.data.attempts[0].pageId, "S1");
+      assert.equal(
+        new Date(result.data.timing.startedUtc).toISOString(),
+        result.data.timing.startedUtc,
+      );
+      assert.equal(result.data.sources[0].url, "[REDACTED]");
+      assert(!result.text.includes(`Facts ${secret}`));
     } finally {
       await runtime.close();
       await f.cleanup();

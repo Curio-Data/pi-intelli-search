@@ -221,7 +221,22 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
             )
           : undefined;
       const operationId = randomUUID();
-      const safeData = (data: FullData): FullData => redactFullData(data, redact);
+      const safeText = (text: string) =>
+        redact(
+          text
+            .replace(
+              /(^- Read (?:the extraction|the full page|the report): )`read ([^`]+)`/gm,
+              "$1`$2` (use the host's file-reading capability)",
+            )
+            .replace(
+              /Read a report with `read ([^`]+)`/g,
+              "Read `$1` with the host's file-reading capability",
+            ),
+        );
+      const safeData = (data: FullData): FullData => ({
+        ...redactFullData(data, redact),
+        text: safeText(data.text),
+      });
       try {
         validate(name, params);
         if ("domains" in params && params.domains !== undefined) {
@@ -342,17 +357,7 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
             });
             return {
               ...result,
-              text: redact(
-                result.text
-                  .replace(
-                    /(^- Read (?:the extraction|the full page|the report): )`read ([^`]+)`/gm,
-                    "$1`$2` (use the host's file-reading capability)",
-                  )
-                  .replace(
-                    /Read a report with `read ([^`]+)`/g,
-                    "Read `$1` with the host's file-reading capability",
-                  ),
-              ),
+              text: safeText(result.text),
             };
           },
         );
