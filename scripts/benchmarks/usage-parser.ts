@@ -34,7 +34,7 @@
 // rpc mode; message_end.message, tool_execution_end.result). Both modes share
 // the session-event shapes; only the skipped envelope records differ.
 
-import { canonicalJson } from "./canonical.js";
+import { asJson, canonicalJson, sha256Canonical } from "./canonical.js";
 import type { AccountingSummary, Json, ParsedUsage, TokenObservation } from "./contracts.js";
 
 interface AssistantObservation {
@@ -50,6 +50,17 @@ interface ToolObservation {
 
 const RPC_ENVELOPE_TYPES = new Set(["response", "extension_ui_request", "extension_ui_response"]);
 const JSON_HEADER_TYPE = "session";
+
+/** Optional sidecar evidence, correlated without mutating the canonical message. */
+export const MAIN_USAGE_EVIDENCE_TYPE = "intelli_benchmark_main_usage";
+export function mainUsageEvidence(message: Json, observed: boolean): Json {
+  return {
+    type: MAIN_USAGE_EVIDENCE_TYPE,
+    schemaVersion: 1,
+    messageSha256: sha256Canonical(message),
+    observed,
+  };
+}
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -80,14 +91,20 @@ export function tokensFromWireUsage(usage: unknown): TokenObservation | null {
   const reasoning = read("reasoning");
   const totalTokens = read("totalTokens");
   if (
-    rawInput === undefined && rawCacheRead === undefined && rawCacheWrite === undefined &&
-    output === undefined && totalTokens === undefined
+    rawInput === undefined &&
+    rawCacheRead === undefined &&
+    rawCacheWrite === undefined &&
+    output === undefined &&
+    totalTokens === undefined
   ) {
     return null;
   }
   return {
     ...(rawInput !== undefined
-      ? { inputTotal: rawInput + (rawCacheRead ?? 0) + (rawCacheWrite ?? 0), inputUncached: rawInput }
+      ? {
+          inputTotal: rawInput + (rawCacheRead ?? 0) + (rawCacheWrite ?? 0),
+          inputUncached: rawInput,
+        }
       : {}), // input unreported: uncached input and its total stay unknown
     ...(output !== undefined ? { outputTotal: output } : {}),
     ...(rawCacheRead !== undefined ? { cacheRead: rawCacheRead } : {}),
@@ -112,7 +129,8 @@ function isIntelliOperation(value: unknown): boolean {
 }
 
 /** The explicit intelli identity markers a tool result can carry. */
-export type IntelliResultMarker = "full" | "full-envelope" | "compact" | "compact-envelope" | "legacy-details";
+export type IntelliResultMarker =
+  "full" | "full-envelope" | "compact" | "compact-envelope" | "legacy-details";
 
 /** Every canonical token field a compact (MCP) projection cannot supply. */
 const ALL_TOKEN_FIELDS: ReadonlyArray<keyof import("./contracts.js").TokenObservation> = [
@@ -147,15 +165,22 @@ export function intelliResultMarker(result: unknown): IntelliResultMarker | null
   if (!isJsonObject(result)) return null;
   const structured = result["structuredContent"];
   if (isJsonObject(structured)) {
-    if (structured["schemaVersion"] === 1 && isIntelliOperation(structured["operation"])) return "full";
+    if (structured["schemaVersion"] === 1 && isIntelliOperation(structured["operation"]))
+      return "full";
     const meta = structured["meta"];
-    if (isJsonObject(meta) && meta["schemaVersion"] === 1 && isIntelliOperation(meta["operation"])) return "compact";
+    if (isJsonObject(meta) && meta["schemaVersion"] === 1 && isIntelliOperation(meta["operation"]))
+      return "compact";
     // CallToolResult envelope nesting (Pi's MCP client, review D1).
     const envelope = structured["structuredContent"];
     if (isJsonObject(envelope)) {
-      if (envelope["schemaVersion"] === 1 && isIntelliOperation(envelope["operation"])) return "full-envelope";
+      if (envelope["schemaVersion"] === 1 && isIntelliOperation(envelope["operation"]))
+        return "full-envelope";
       const envelopeMeta = envelope["meta"];
-      if (isJsonObject(envelopeMeta) && envelopeMeta["schemaVersion"] === 1 && isIntelliOperation(envelopeMeta["operation"])) {
+      if (
+        isJsonObject(envelopeMeta) &&
+        envelopeMeta["schemaVersion"] === 1 &&
+        isIntelliOperation(envelopeMeta["operation"])
+      ) {
         return "compact-envelope";
       }
     }
@@ -163,7 +188,8 @@ export function intelliResultMarker(result: unknown): IntelliResultMarker | null
   const details = result["details"];
   if (isJsonObject(details) && isJsonObject(details["intelli"])) {
     const intelli = details["intelli"];
-    if (intelli["schemaVersion"] === 1 && isIntelliOperation(intelli["operation"])) return "legacy-details";
+    if (intelli["schemaVersion"] === 1 && isIntelliOperation(intelli["operation"]))
+      return "legacy-details";
   }
   return null;
 }
@@ -189,11 +215,12 @@ export function accountingFromToolResult(result: unknown): AccountingSummary | n
   if (!isJsonObject(result)) return null;
   if (marker === "full" || marker === "full-envelope" || marker === "legacy-details") {
     const structured = result["structuredContent"];
-    const holder = marker === "legacy-details"
-      ? (result["details"] as Record<string, unknown>)["intelli"]
-      : marker === "full-envelope" && isJsonObject(structured)
-        ? structured["structuredContent"]
-        : structured;
+    const holder =
+      marker === "legacy-details"
+        ? (result["details"] as Record<string, unknown>)["intelli"]
+        : marker === "full-envelope" && isJsonObject(structured)
+          ? structured["structuredContent"]
+          : structured;
     const candidate = isJsonObject(holder) ? holder["accounting"] : null;
     return validAccountingShape(candidate) ? (candidate as unknown as AccountingSummary) : null;
   }
@@ -215,7 +242,12 @@ export function accountingFromToolResult(result: unknown): AccountingSummary | n
   const attempts = meta["attempts"];
   const missingAttempts = meta["missingAttempts"];
   if (typeof attempts !== "number" || !Number.isInteger(attempts) || attempts < 0) return null;
-  if (typeof missingAttempts !== "number" || !Number.isInteger(missingAttempts) || missingAttempts < 0) return null;
+  if (
+    typeof missingAttempts !== "number" ||
+    !Number.isInteger(missingAttempts) ||
+    missingAttempts < 0
+  )
+    return null;
   const observed = attempts - missingAttempts;
   if (observed < 0) return null; // bounds: observedAttempts must never be negative
   const reported = meta["reportedCost"];
@@ -225,8 +257,12 @@ export function accountingFromToolResult(result: unknown): AccountingSummary | n
     observedAttempts: observed,
     missingAttempts,
     tokens: {}, // compact projection carries no token components: unknown, never invented
-    ...(typeof reported === "number" ? { reportedCost: { total: reported } } : { reportedCost: {} }),
-    ...(typeof estimated === "number" ? { estimatedCost: { total: estimated } } : { estimatedCost: {} }),
+    ...(typeof reported === "number"
+      ? { reportedCost: { total: reported } }
+      : { reportedCost: {} }),
+    ...(typeof estimated === "number"
+      ? { estimatedCost: { total: estimated } }
+      : { estimatedCost: {} }),
     missingTokenFields: [...ALL_TOKEN_FIELDS],
     costComplete: meta["costComplete"] === true,
     parentDelivery: "unknown",
@@ -289,7 +325,8 @@ export function isIntelliToolExecution(toolName: unknown, result: unknown): bool
 }
 
 function assistantId(message: Record<string, unknown>, usedIds: Set<string>): string {
-  const provider = typeof message["provider"] === "string" ? message["provider"] : "unknown-provider";
+  const provider =
+    typeof message["provider"] === "string" ? message["provider"] : "unknown-provider";
   const model = typeof message["model"] === "string" ? message["model"] : "unknown-model";
   const responseId = typeof message["responseId"] === "string" ? message["responseId"] : null;
   const timestamp = typeof message["timestamp"] === "number" ? message["timestamp"] : 0;
@@ -316,6 +353,21 @@ export function parseUsageEvents(events: readonly Json[], mode: "json" | "rpc"):
   const usedIds = new Set<string>();
   const toolById = new Map<string, ToolObservation>();
   const toolOrder: string[] = [];
+  const mainEvidence = new Map<string, boolean>();
+  for (const event of events) {
+    if (
+      !isJsonObject(event) ||
+      event["type"] !== MAIN_USAGE_EVIDENCE_TYPE ||
+      event["schemaVersion"] !== 1 ||
+      typeof event["messageSha256"] !== "string" ||
+      !/^[0-9a-f]{64}$/.test(event["messageSha256"]) ||
+      typeof event["observed"] !== "boolean"
+    )
+      continue;
+    const hash = event["messageSha256"];
+    // Conflicting evidence cannot turn an unknown observation into known zero.
+    mainEvidence.set(hash, event["observed"] && mainEvidence.get(hash) !== false);
+  }
 
   for (const event of events) {
     if (!isJsonObject(event)) continue;
@@ -330,7 +382,18 @@ export function parseUsageEvents(events: readonly Json[], mode: "json" | "rpc"):
       const canonical = canonicalJson(message);
       const existing = assistantSeen.get(canonical);
       if (existing !== undefined) continue; // exact duplicate finalised message
-      const usage = tokensFromWireUsage(message["usage"]);
+      const candidate = tokensFromWireUsage(message["usage"]);
+      const observed = mainEvidence.get(sha256Canonical(asJson(message)));
+      // SDKs initialise required usage fields to zero when the provider sends
+      // no usage. Without a correlated wire-presence witness, all-zero SDK
+      // usage is ambiguous and must not become a zero-token H1 observation.
+      const usage =
+        observed === false ||
+        (observed !== true &&
+          candidate !== null &&
+          Object.values(candidate).every((value) => value === 0))
+          ? null
+          : candidate;
       const observation: AssistantObservation = { id: assistantId(message, usedIds), usage };
       assistantSeen.set(canonical, observation);
       assistantMessages.push(observation);

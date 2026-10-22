@@ -6,8 +6,8 @@
 // A real `Pi` AgentSession runs in-process with the built-in Codemode
 // extension, a read-only before_provider_request observer and the native
 // extension from the immutable createNativeExtension() factory. The main
-// model is a credential-free scripted OpenAI-completions SSE fixture on
-// loopback, so the host's own request serialisation, observer and usage
+// model uses a credential-free in-process HTTP fixture under the installed
+// OpenAI-completions serializer, so request serialisation, observer and usage
 // events are real. Recording sends pipeline stages through the real host
 // registry to a loopback stage fixture and freezes complete per-attempt
 // fixtures; replay injects only `registryStreamSimple` and `pageTransport` in
@@ -20,7 +20,7 @@
 //   seam if floor-host replay is ever required.
 //
 // Replay blocks run under a process-wide guard that forbids every network
-// primitive except the explicitly identified main fixture. A fixture miss
+// primitive during replay, including main network. A fixture miss
 // aborts the session and invalidates the block; there is no live fallback.
 
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -35,9 +35,20 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { performance } from "node:perf_hooks";
 import ts from "typescript";
-import type { Api, AssistantMessage, Context, Model, SimpleStreamOptions } from "@earendil-works/pi-ai";
-import type { PageTransport, PageTransportRequest, PageTransportResponse } from "../../src/core/execution-contracts.js";
+import type {
+  Api,
+  AssistantMessage,
+  Context,
+  Model,
+  SimpleStreamOptions,
+} from "@earendil-works/pi-ai";
+import type {
+  PageTransport,
+  PageTransportRequest,
+  PageTransportResponse,
+} from "../../src/core/execution-contracts.js";
 import type { RegistryStreamSimple } from "../../src/native-injection.js";
+import { createNativeUsageCapture } from "../../src/native-usage.js";
 import {
   CACHE_SUGGEST_PROMPT,
   COLLATION_SYSTEM_PROMPT,
@@ -51,7 +62,6 @@ import type {
   Json,
   ModelFixtureRequest,
   ModelRole,
-  UsageObservation,
 } from "../../scripts/benchmarks/contracts.js";
 import {
   createFixtureRecorder,
@@ -95,11 +105,17 @@ export async function selectHost(): Promise<HostSelection> {
   try {
     manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
   } catch (error) {
-    throw new Error(`NATIVE_REPLAY_PI_HOST ${root} is not a readable package root: ${String(error)}`);
+    throw new Error(
+      `NATIVE_REPLAY_PI_HOST ${root} is not a readable package root: ${String(error)}`,
+    );
   }
   if (manifest.name !== "@earendil-works/pi-coding-agent" || typeof manifest.version !== "string")
     throw new Error(`${root} is not @earendil-works/pi-coding-agent`);
-  return { root, version: manifest.version, kind: explicit ? "explicit-installed" : "local-dev-peer" };
+  return {
+    root,
+    version: manifest.version,
+    kind: explicit ? "explicit-installed" : "local-dev-peer",
+  };
 }
 
 // ── Process isolation ───────────────────────────────────────────────────────
@@ -145,7 +161,7 @@ export interface NetworkEvent {
 }
 
 export interface NetworkGuard {
-  /** Ports reachable on loopback for the current phase; the main fixture only, in replay. */
+  /** Ports reachable on loopback for capture only; replay permits no ports. */
   setPhase(phase: string, allowedPorts: readonly number[]): void;
   phase(): string;
   events(phase?: string): readonly NetworkEvent[];
@@ -172,21 +188,31 @@ export function installNetworkGuard(): NetworkGuard {
   };
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
-    note("fetch", url.href, LOOPBACK.has(url.hostname.replace(/^\[|\]$/g, "")) && allowed.has(Number(url.port)));
+    const url = new URL(
+      typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+    );
+    note(
+      "fetch",
+      url.href,
+      LOOPBACK.has(url.hostname.replace(/^\[|\]$/g, "")) && allowed.has(Number(url.port)),
+    );
     return originalFetch(input, init);
   }) as typeof fetch;
   const originalConnect = net.Socket.prototype.connect;
   net.Socket.prototype.connect = function (this: net.Socket, ...args: unknown[]) {
     // net.connect() passes its internal normalised [options, callback] array.
     const raw = args[0];
-    const first = (Array.isArray(raw) ? raw[0] : raw) as { port?: number; host?: string; path?: string } | number | string;
+    const first = (Array.isArray(raw) ? raw[0] : raw) as
+      { port?: number; host?: string; path?: string } | number | string;
     let target: string;
     let ok = false;
     if (typeof first === "object" && first !== null) {
       const options = first;
       target = options.path ?? `${options.host ?? "localhost"}:${options.port}`;
-      ok = options.path === undefined && LOOPBACK.has(options.host ?? "localhost") && allowed.has(Number(options.port));
+      ok =
+        options.path === undefined &&
+        LOOPBACK.has(options.host ?? "localhost") &&
+        allowed.has(Number(options.port));
     } else {
       target = `${String(args[1] ?? "localhost")}:${String(first)}`;
       ok = LOOPBACK.has(String(args[1] ?? "localhost")) && allowed.has(Number(first));
@@ -195,7 +221,11 @@ export function installNetworkGuard(): NetworkGuard {
     return (originalConnect as (...a: unknown[]) => net.Socket).apply(this, args);
   } as typeof net.Socket.prototype.connect;
   const restorers: Array<() => void> = [];
-  const patch = (target: Record<string, unknown>, name: string, primitive: NetworkEvent["primitive"]) => {
+  const patch = (
+    target: Record<string, unknown>,
+    name: string,
+    primitive: NetworkEvent["primitive"],
+  ) => {
     const original = target[name] as (...a: unknown[]) => unknown;
     target[name] = function (this: unknown, ...args: unknown[]) {
       // Module loading during setup may start a compiler service; nothing later may.
@@ -214,7 +244,10 @@ export function installNetworkGuard(): NetworkGuard {
   // The same cached binding object serves every wreq-js importer.
   // Qualification platform is Linux x86-64 glibc; other platforms fail loudly below.
   const requireFromWreq = createRequire(join(REPO_ROOT, "node_modules/wreq-js/dist/wreq-js.js"));
-  const bindingPath = join(REPO_ROOT, `node_modules/wreq-js/rust/wreq-js.${process.platform}-${process.arch}${process.platform === "linux" ? "-gnu" : ""}.node`);
+  const bindingPath = join(
+    REPO_ROOT,
+    `node_modules/wreq-js/rust/wreq-js.${process.platform}-${process.arch}${process.platform === "linux" ? "-gnu" : ""}.node`,
+  );
   try {
     const binding = requireFromWreq(bindingPath) as Record<string, unknown>;
     for (const name of Object.keys(binding))
@@ -229,7 +262,8 @@ export function installNetworkGuard(): NetworkGuard {
     },
     phase: () => phase,
     events: (only) => log.filter((event) => only === undefined || event.phase === only),
-    violations: (only) => log.filter((event) => !event.allowed && (only === undefined || event.phase === only)),
+    violations: (only) =>
+      log.filter((event) => !event.allowed && (only === undefined || event.phase === only)),
     restore() {
       globalThis.fetch = originalFetch;
       net.Socket.prototype.connect = originalConnect;
@@ -249,18 +283,29 @@ export interface AuthEvent {
 
 const AUTH_METHODS: Record<string, readonly string[]> = {
   ModelRegistry: ["getApiKeyAndHeaders", "getApiKeyForProvider", "getProviderAuth", "refresh"],
-  ModelRuntime: ["getAuth", "prepareRequest", "refresh", "login", "enqueueCredentialOperation", "synchronizeCredentialState"],
+  ModelRuntime: [
+    "getAuth",
+    "prepareRequest",
+    "refresh",
+    "login",
+    "enqueueCredentialOperation",
+    "synchronizeCredentialState",
+  ],
 };
 
 /**
  * Counts host credential resolution and refresh calls by guard phase and
  * provider. Observation only: the original method always runs.
  */
-export function countAuthResolution(host: Record<string, unknown>, phase: () => string): { events(only?: string): readonly AuthEvent[]; restore(): void } {
+export function countAuthResolution(
+  host: Record<string, unknown>,
+  phase: () => string,
+): { events(only?: string): readonly AuthEvent[]; restore(): void } {
   const log: AuthEvent[] = [];
   const restorers: Array<() => void> = [];
   for (const [className, methods] of Object.entries(AUTH_METHODS)) {
-    const proto = (host[className] as { prototype?: Record<string, unknown> } | undefined)?.prototype;
+    const proto = (host[className] as { prototype?: Record<string, unknown> } | undefined)
+      ?.prototype;
     if (!proto) continue;
     for (const method of methods) {
       const original = proto[method];
@@ -325,7 +370,10 @@ export interface WireUsage {
 
 /** One scripted main turn: tool calls or final text, with optional wire usage. */
 export interface MainTurn {
-  readonly toolCalls?: ReadonlyArray<{ readonly name: string; readonly args: Record<string, unknown> }>;
+  readonly toolCalls?: ReadonlyArray<{
+    readonly name: string;
+    readonly args: Record<string, unknown>;
+  }>;
   readonly text?: string;
   /** Omit to exercise missing main usage. */
   readonly usage?: WireUsage;
@@ -351,7 +399,10 @@ export interface MainFixture {
 function mainSse(turn: MainTurn | undefined, id: string, callPrefix: string): string {
   const parts: string[] = [];
   if (!turn) {
-    parts.push(sseChunk(chunk(id, { role: "assistant", content: "script exhausted" })), sseChunk(chunk(id, {}, "stop")));
+    parts.push(
+      sseChunk(chunk(id, { role: "assistant", content: "script exhausted" })),
+      sseChunk(chunk(id, {}, "stop")),
+    );
   } else if (turn.toolCalls?.length) {
     turn.toolCalls.forEach((call, index) =>
       parts.push(
@@ -372,7 +423,10 @@ function mainSse(turn: MainTurn | undefined, id: string, callPrefix: string): st
     );
     parts.push(sseChunk(chunk(id, {}, "tool_calls", turn.usage)));
   } else {
-    parts.push(sseChunk(chunk(id, { role: "assistant", content: turn.text ?? "" })), sseChunk(chunk(id, {}, "stop", turn.usage)));
+    parts.push(
+      sseChunk(chunk(id, { role: "assistant", content: turn.text ?? "" })),
+      sseChunk(chunk(id, {}, "stop", turn.usage)),
+    );
   }
   parts.push("data: [DONE]\n\n");
   return parts.join("");
@@ -389,7 +443,9 @@ function mainSse(turn: MainTurn | undefined, id: string, callPrefix: string): st
 export async function createMainFixture(hostRoot: string): Promise<MainFixture> {
   const completions = (await import(
     pathToFileURL(join(dirname(hostRoot), "pi-ai/dist/api/openai-completions.js")).href
-  )) as { streamSimple: (model: Model<Api>, context: unknown, options?: SimpleStreamOptions) => unknown };
+  )) as {
+    streamSimple: (model: Model<Api>, context: unknown, options?: SimpleStreamOptions) => unknown;
+  };
   let turns: readonly MainTurn[] = [];
   let next = 0;
   let fetchCalls = 0;
@@ -397,9 +453,17 @@ export async function createMainFixture(hostRoot: string): Promise<MainFixture> 
   const rawBodies: string[] = [];
   const inProcessFetch = (async (input: unknown, init?: { body?: unknown }) => {
     fetchCalls++;
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : (input as Request).url;
     if (!url.startsWith(MAIN_BASE_URL)) throw new Error(`main fixture received foreign URL ${url}`);
-    const body = typeof init?.body === "string" ? init.body : await new Response(init?.body as BodyInit).text();
+    const body =
+      typeof init?.body === "string"
+        ? init.body
+        : await new Response(init?.body as BodyInit).text();
     rawBodies.push(body);
     const sse = mainSse(turns[next++], `main-${rawBodies.length}`, `call_${rawBodies.length}`);
     return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
@@ -412,10 +476,14 @@ export async function createMainFixture(hostRoot: string): Promise<MainFixture> 
       models: [{ ...modelEntry("main"), api: MAIN_API }],
       streamSimple: (model: Model<Api>, context: unknown, options?: SimpleStreamOptions) => {
         if (options?.fetch) unguarded++;
-        return completions.streamSimple({ ...model, api: "openai-completions" } as Model<Api>, context, {
-          ...options,
-          fetch: inProcessFetch,
-        });
+        return completions.streamSimple(
+          { ...model, api: "openai-completions" } as Model<Api>,
+          context,
+          {
+            ...options,
+            fetch: inProcessFetch,
+          },
+        );
       },
     });
   };
@@ -441,7 +509,11 @@ export interface StageReply {
   readonly usage?: WireUsage;
   readonly errorBody?: string;
 }
-export type StageScript = (call: { readonly role: StageRole; readonly user: string; readonly n: number }) => StageReply;
+export type StageScript = (call: {
+  readonly role: StageRole;
+  readonly user: string;
+  readonly n: number;
+}) => StageReply;
 
 export interface StageFixture {
   readonly port: number;
@@ -474,7 +546,9 @@ export async function startStageFixture(): Promise<StageFixture> {
       typeof content === "string"
         ? content
         : (content as Array<{ text?: string }>).map((part) => part.text ?? "").join("");
-    const system = text(json.messages.find((m) => m.role === "system" || m.role === "developer")?.content ?? "");
+    const system = text(
+      json.messages.find((m) => m.role === "system" || m.role === "developer")?.content ?? "",
+    );
     const user = text(json.messages.find((m) => m.role === "user")?.content ?? "");
     const role = stageRoleOf(system);
     if (!role) {
@@ -486,7 +560,9 @@ export async function startStageFixture(): Promise<StageFixture> {
     const reply = script({ role, user, n: requests.filter((r) => r.role === role).length });
     if (reply.status && reply.status >= 400) {
       res.writeHead(reply.status, { "content-type": "application/json", ...(reply.headers ?? {}) });
-      res.end(reply.errorBody ?? JSON.stringify({ error: { message: `fixture status ${reply.status}` } }));
+      res.end(
+        reply.errorBody ?? JSON.stringify({ error: { message: `fixture status ${reply.status}` } }),
+      );
       return;
     }
     const id = `stage-${requests.length}`;
@@ -599,7 +675,8 @@ export function syntheticPage(id: string, facts: string): SyntheticPage {
 
 // ── Fixture identity (content-derived, never scope-derived) ────────────────
 
-const shortHash = (text: string) => createHash("sha256").update(text, "utf8").digest("hex").slice(0, 12);
+const shortHash = (text: string) =>
+  createHash("sha256").update(text, "utf8").digest("hex").slice(0, 12);
 
 /**
  * Node identity derives from exact request content: role from the exact
@@ -611,9 +688,12 @@ export const contentModelResolver: ModelNodeResolver = (request) => {
   const role = stageRoleOf(request.systemPrompt);
   if (!role) return { ambiguous: true, detail: "unknown stage system prompt" };
   if (role === "extract") {
-    const markers = [...request.userMessage.matchAll(/PAGE-MARKER:([A-Za-z0-9-]+)/g)].map((m) => m[1]);
+    const markers = [...request.userMessage.matchAll(/PAGE-MARKER:([A-Za-z0-9-]+)/g)].map(
+      (m) => m[1],
+    );
     const unique = [...new Set(markers)];
-    if (unique.length !== 1) return { ambiguous: true, detail: `${unique.length} page markers in extraction input` };
+    if (unique.length !== 1)
+      return { ambiguous: true, detail: `${unique.length} page markers in extraction input` };
     return { operationNode: `extract/${unique[0]}`, role };
   }
   return { operationNode: `${role}/${shortHash(request.userMessage)}`, role };
@@ -621,27 +701,12 @@ export const contentModelResolver: ModelNodeResolver = (request) => {
 
 export const contentPageResolver: PageNodeResolver = (request) => {
   const variant = request.accept.includes("markdown") ? "markdown" : "html";
-  return { operationNode: `${request.method === "HEAD" ? "probe" : "page"}/${variant}/${request.url}` };
+  return {
+    operationNode: `${request.method === "HEAD" ? "probe" : "page"}/${variant}/${request.url}`,
+  };
 };
 
 // ── Recording transports ────────────────────────────────────────────────────
-
-function usageObservation(message: AssistantMessage): UsageObservation {
-  const u = message.usage;
-  return {
-    tokens: {
-      inputUncached: u.input,
-      inputTotal: u.input + u.cacheRead + u.cacheWrite,
-      outputTotal: u.output,
-      cacheRead: u.cacheRead,
-      cacheWrite: u.cacheWrite,
-      totalTokens: u.totalTokens,
-    },
-    cost: { ...u.cost },
-    source: "sdk-normalized",
-    costBasis: "catalogue",
-  };
-}
 
 const textOf = (message: AssistantMessage) =>
   message.content
@@ -665,21 +730,27 @@ export interface Recording {
  * provider stream events (citations and wire usage), response metadata,
  * error text, usage and measured wall delay.
  */
-export function createRecording(scenario: string, pages: ReadonlyMap<string, SyntheticPage>): Recording {
+export function createRecording(
+  scenario: string,
+  pages: ReadonlyMap<string, SyntheticPage>,
+): Recording {
   const model = createFixtureRecorder({ boundary: "model", scenario });
   const fetchRecorder = createFixtureRecorder({ boundary: "fetch", scenario });
   let registryCalls = 0;
   const modelTransport: RegistryStreamSimple = async (registry, m, context, options) => {
     const withoutRole = await modelFixtureRequest(m, context, options);
     const resolution = contentModelResolver(withoutRole, m, context);
-    if ("ambiguous" in resolution) throw new Error(`Recording cannot identify node: ${resolution.detail}`);
+    if ("ambiguous" in resolution)
+      throw new Error(`Recording cannot identify node: ${resolution.detail}`);
     const request = asJson({ ...withoutRole, role: resolution.role } satisfies ModelFixtureRequest);
     const events: Json[] = [];
+    const usageCapture = createNativeUsageCapture();
     let providerResponse: { status: number; headers: Record<string, string> } | undefined;
     const streamOptions: SimpleStreamOptions = {
       ...options,
       onProviderStreamEvent: async (event, eventModel) => {
         events.push(structuredClone(event) as Json);
+        usageCapture.chunk(event);
         await options?.onProviderStreamEvent?.(event, eventModel);
       },
       onResponse: async (response, responseModel) => {
@@ -700,12 +771,13 @@ export function createRecording(scenario: string, pages: ReadonlyMap<string, Syn
       ...(message.responseId ? { responseId: message.responseId } : {}),
       ...(providerResponse ? { providerResponse } : {}),
     };
+    const observation = usageCapture.observation(message.usage);
     model.record(resolution.operationNode, request, {
       response: asJson(response),
       ...(message.stopReason === "error"
         ? { error: { kind: "provider-error", message: message.errorMessage ?? "unknown error" } }
         : {}),
-      usage: usageObservation(message),
+      ...(observation ? { usage: observation } : {}),
       delayMs,
     });
     return message;
@@ -725,9 +797,21 @@ export function createRecording(scenario: string, pages: ReadonlyMap<string, Syn
     const markdown = fixtureRequest.accept.includes("markdown");
     const status = page?.status ?? 404;
     const body = status === 200 ? ((markdown ? page?.markdown : page?.html) ?? "") : "not found";
-    const headers = { "content-type": status === 200 ? (markdown ? "text/markdown; charset=utf-8" : "text/html; charset=utf-8") : "text/plain" };
+    const headers = {
+      "content-type":
+        status === 200
+          ? markdown
+            ? "text/markdown; charset=utf-8"
+            : "text/html; charset=utf-8"
+          : "text/plain",
+    };
     fetchRecorder.record(resolution.operationNode, asJson(fixtureRequest), {
-      response: asJson({ status, headers, finalUrl: url, bodyText: request.method === "HEAD" ? "" : body }),
+      response: asJson({
+        status,
+        headers,
+        finalUrl: url,
+        bodyText: request.method === "HEAD" ? "" : body,
+      }),
       delayMs: 1,
     });
     const bytes = new TextEncoder().encode(request.method === "HEAD" ? "" : body);
@@ -744,7 +828,13 @@ export function createRecording(scenario: string, pages: ReadonlyMap<string, Syn
     };
     return response;
   };
-  return { model, fetch: fetchRecorder, modelTransport, pageTransport, registryCalls: () => registryCalls };
+  return {
+    model,
+    fetch: fetchRecorder,
+    modelTransport,
+    pageTransport,
+    registryCalls: () => registryCalls,
+  };
 }
 
 // ── Replay transports ───────────────────────────────────────────────────────
@@ -816,7 +906,12 @@ export function createReplayBlock(files: { model: FixtureFile; fetch: FixtureFil
     }
     return error;
   };
-  const modelTransport: RegistryStreamSimple = async (_registry, model: Model<Api>, context: Context, options) => {
+  const modelTransport: RegistryStreamSimple = async (
+    _registry,
+    model: Model<Api>,
+    context: Context,
+    options,
+  ) => {
     const guarded: SimpleStreamOptions = {
       ...options,
       ...(options?.fetch
@@ -889,14 +984,21 @@ async function sourceFiles(dir: string): Promise<string[]> {
 async function hashSources(): Promise<Record<string, string>> {
   const hashes: Record<string, string> = {};
   for (const file of await sourceFiles(join(REPO_ROOT, "src")))
-    hashes[relative(REPO_ROOT, file)] = createHash("sha256").update(await readFile(file)).digest("hex");
+    hashes[relative(REPO_ROOT, file)] = createHash("sha256")
+      .update(await readFile(file))
+      .digest("hex");
   return hashes;
 }
 
 /** The tsx-imported source tree, as development and the unit suite load it. */
 export async function loadSourceNative(): Promise<LoadedNative> {
   const entry = join(REPO_ROOT, "src/index.ts");
-  return { kind: "source", entry, module: (await import(pathToFileURL(entry).href)) as NativeModule, sourceHashes: await hashSources() };
+  return {
+    kind: "source",
+    entry,
+    module: (await import(pathToFileURL(entry).href)) as NativeModule,
+    sourceHashes: await hashSources(),
+  };
 }
 
 /**
@@ -905,19 +1007,37 @@ export async function loadSourceNative(): Promise<LoadedNative> {
  * of package.json so native identity resolves as it does from dist/. This is
  * isolated scratch, not the release build.
  */
-export async function compileNative(outRoot: string): Promise<{ entry: string; sourceHashes: Record<string, string> }> {
+export async function compileNative(
+  outRoot: string,
+): Promise<{ entry: string; sourceHashes: Record<string, string> }> {
   const sourceHashes = await hashSources();
-  const config = ts.readConfigFile(join(REPO_ROOT, "tsconfig.json"), ts.sys.readFile).config as { compilerOptions?: Record<string, unknown> };
-  const options = ts.convertCompilerOptionsFromJson(config.compilerOptions ?? {}, REPO_ROOT).options;
+  const config = ts.readConfigFile(join(REPO_ROOT, "tsconfig.json"), ts.sys.readFile).config as {
+    compilerOptions?: Record<string, unknown>;
+  };
+  const options = ts.convertCompilerOptionsFromJson(
+    config.compilerOptions ?? {},
+    REPO_ROOT,
+  ).options;
   for (const file of await sourceFiles(join(REPO_ROOT, "src"))) {
     const out = join(outRoot, relative(REPO_ROOT, file)).replace(/\.ts$/, ".js");
     await mkdir(dirname(out), { recursive: true });
     const { outputText, diagnostics } = ts.transpileModule(await readFile(file, "utf8"), {
-      compilerOptions: { ...options, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, sourceMap: false, inlineSourceMap: false, declaration: false, noEmit: false },
+      compilerOptions: {
+        ...options,
+        module: ts.ModuleKind.ESNext,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+        sourceMap: false,
+        inlineSourceMap: false,
+        declaration: false,
+        noEmit: false,
+      },
       fileName: file,
       reportDiagnostics: true,
     });
-    if (diagnostics?.length) throw new Error(`transpile ${file}: ${diagnostics.map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n")).join("; ")}`);
+    if (diagnostics?.length)
+      throw new Error(
+        `transpile ${file}: ${diagnostics.map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n")).join("; ")}`,
+      );
     await writeFile(out, outputText);
   }
   await cp(join(REPO_ROOT, "package.json"), join(outRoot, "package.json"));
@@ -926,7 +1046,12 @@ export async function compileNative(outRoot: string): Promise<{ entry: string; s
 
 export async function loadCompiledNative(outRoot: string): Promise<LoadedNative> {
   const { entry, sourceHashes } = await compileNative(outRoot);
-  return { kind: "compiled", entry, module: (await import(pathToFileURL(entry).href)) as NativeModule, sourceHashes };
+  return {
+    kind: "compiled",
+    entry,
+    module: (await import(pathToFileURL(entry).href)) as NativeModule,
+    sourceHashes,
+  };
 }
 
 // ── Sessions ────────────────────────────────────────────────────────────────
@@ -982,10 +1107,16 @@ export async function openSession(options: SessionOptions): Promise<SessionHandl
   const { host } = options;
   const captures: ObserverCapture[] = [];
   const toolEvents: Array<Record<string, unknown>> = [];
-  const observer = (pi: { on: (name: string, handler: (event: Record<string, unknown>) => unknown) => void }) => {
+  const observer = (pi: {
+    on: (name: string, handler: (event: Record<string, unknown>) => unknown) => void;
+  }) => {
     pi.on("before_provider_request", (event) => {
       const payload = structuredClone(event.payload) as Json;
-      captures.push({ sequence: captures.length + 1, payload, payloadSha256: sha256Canonical(payload) });
+      captures.push({
+        sequence: captures.length + 1,
+        payload,
+        payloadSha256: sha256Canonical(payload),
+      });
       return undefined;
     });
     for (const name of ["tool_execution_start", "tool_execution_update", "tool_execution_end"])
@@ -997,7 +1128,9 @@ export async function openSession(options: SessionOptions): Promise<SessionHandl
     observer,
     options.main.factory,
     ...(options.nativeFactory ? [options.nativeFactory] : []),
-    ...(options.codemode === "off" ? [] : [host.createCodemodeExtension({ mode: options.codemode })]),
+    ...(options.codemode === "off"
+      ? []
+      : [host.createCodemodeExtension({ mode: options.codemode })]),
     ...(options.extraFactories ?? []),
   ];
   const resourceLoader = new host.DefaultResourceLoader({
@@ -1014,7 +1147,8 @@ export async function openSession(options: SessionOptions): Promise<SessionHandl
   });
   await resourceLoader.reload();
   const loaded = resourceLoader.getExtensions();
-  if (loaded.errors.length) throw new Error(`extension load errors: ${JSON.stringify(loaded.errors)}`);
+  if (loaded.errors.length)
+    throw new Error(`extension load errors: ${JSON.stringify(loaded.errors)}`);
   const modelRuntime = await host.ModelRuntime.create({
     authPath: join(options.agentDir, "auth.json"),
     modelsPath: join(options.agentDir, "models.json"),
@@ -1028,17 +1162,30 @@ export async function openSession(options: SessionOptions): Promise<SessionHandl
     ...(options.activateOnly ? { noTools: "builtin" as const } : {}),
     tools: [
       ...(options.activateOnly ? (options.tools ?? []).map((name) => `+${name}`) : []),
-      ...(options.activateOnly ? [] : options.tools ??
-        (options.codemode === "off"
-          ? ["intelli_search", "intelli_extract", "intelli_collate", "intelli_research"]
-          : ["codemode", "intelli_search", "intelli_extract", "intelli_collate", "intelli_research"])),
+      ...(options.activateOnly
+        ? []
+        : (options.tools ??
+          (options.codemode === "off"
+            ? ["intelli_search", "intelli_extract", "intelli_collate", "intelli_research"]
+            : [
+                "codemode",
+                "intelli_search",
+                "intelli_extract",
+                "intelli_collate",
+                "intelli_research",
+              ]))),
     ],
     sessionManager: host.SessionManager.inMemory(options.workspace),
-    settingsManager: host.SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false } }),
+    settingsManager: host.SettingsManager.inMemory({
+      compaction: { enabled: false },
+      retry: { enabled: false },
+    }),
   });
   await session.bindExtensions({});
   // The in-process main provider exists only once its extension is bound.
-  const main = (modelRuntime as unknown as { getModel(provider: string, id: string): Model<Api> | undefined }).getModel(MAIN_PROVIDER, "main");
+  const main = (
+    modelRuntime as unknown as { getModel(provider: string, id: string): Model<Api> | undefined }
+  ).getModel(MAIN_PROVIDER, "main");
   if (!main) throw new Error("in-process main model missing from host registry");
   await session.setModel(main);
   const events: Json[] = [];
@@ -1071,7 +1218,9 @@ export async function restoreWorkspace(snapshot: string, workspace: string): Pro
 export async function treeDigest(dir: string): Promise<string> {
   const hash = createHash("sha256");
   const walk = async (current: string): Promise<void> => {
-    for (const entry of (await readdir(current, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const entry of (await readdir(current, { withFileTypes: true })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )) {
       const path = join(current, entry.name);
       hash.update(relative(dir, path));
       if (entry.isDirectory()) await walk(path);

@@ -10,6 +10,8 @@ M1 is accepted for the public manual workflow at technical source `26406720f1a04
 
 M2 is accepted at product base `ea9c2b9` plus reviewed manifest `3fbeaa9a381e91f6e7f26e99bacc25ca516fe9f4173b9201ee25ce49e6441170`. Fresh independent Opus blocking-delta review resolves the initial `7d86e67` blockers and independently reproduces all eleven gates. After coordinator acknowledgement, the repaired mandatory native `01_main.sh` passes on its first actual run on those exact bytes, before committing the harness. It proves registered bounded native research, new committed layout/index and full data/scoped usage at the canonical host boundary, with fresh selective access-only auth and immediate safety checks. [M2 Acceptance and Native Regression](DEVELOPMENT.md#m2-acceptance-and-native-regression) records exact report/evidence digests and carried conditions. M1 and helpers remain accepted. Continue M3's immutable factory, actual wrapper/bridge replay and temporary R2 dry run, then M4–M6 and both separately gated releases. Remaining live scenarios are stale until M4 migration; no P4 exit, live MCP/floor/cancellation, study or release verdict is claimed.
 
+M3 has an unaccepted immutable factory and integrated support tests. [M3 Replay Prototype](DEVELOPMENT.md#m3-replay-prototype) records the exact source history, corrected accounting/validity gaps, explicit host checks and the remaining multi-research suggestion-prompt replay constraint. No frozen corpus/method was changed, no second-research miss was waived, and no new live call or study ran. M4 guidance remains an isolated draft. Independent integrated fidelity assessment and M3 acceptance remain pending.
+
 ## Owner Decisions
 
 | Decision | Current Disposition |

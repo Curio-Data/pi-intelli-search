@@ -51,13 +51,38 @@
 // consumed: the attempt started and was then cancelled, which counts as
 // consumed-but-not-delivered, never as a skipped or missed response.
 
-import type { Api, AssistantMessage, Context, Model, SimpleStreamOptions, Usage } from "@earendil-works/pi-ai";
+import type {
+  Api,
+  AssistantMessage,
+  Context,
+  Model,
+  SimpleStreamOptions,
+  Usage,
+} from "@earendil-works/pi-ai";
 import type { RegistryStreamSimple } from "../../docs/plans/codemode/NATIVE-API.js";
-import type { PageTransport, PageTransportRequest, PageTransportResponse } from "../../src/core/execution-contracts.js";
+import type {
+  PageTransport,
+  PageTransportRequest,
+  PageTransportResponse,
+} from "../../src/core/execution-contracts.js";
 import { createNativeUsageCapture } from "../../src/native-usage.js";
-import { asJson, canonicalJson, requestSha256, sha256Canonical, type RequestBinding } from "./canonical.js";
+import {
+  asJson,
+  canonicalJson,
+  requestSha256,
+  sha256Canonical,
+  type RequestBinding,
+} from "./canonical.js";
 import { ReplayMissError, type BenchmarkReplayStore } from "./replay-store.js";
-import type { FetchFixtureRequest, FixtureKey, FixtureRecord, Json, ModelFixtureRequest, ModelRole, UsageObservation } from "./contracts.js";
+import type {
+  FetchFixtureRequest,
+  FixtureKey,
+  FixtureRecord,
+  Json,
+  ModelFixtureRequest,
+  ModelRole,
+  UsageObservation,
+} from "./contracts.js";
 
 /** Recorded wire shape of a model fixture response (inside FixtureRecord.response). */
 export interface ModelFixtureResponse {
@@ -65,7 +90,10 @@ export interface ModelFixtureResponse {
   readonly providerStreamEvents?: readonly Json[];
   readonly responseId?: string;
   /** Recorded provider response metadata replayed through `options.onResponse`. */
-  readonly providerResponse?: { readonly status: number; readonly headers?: Readonly<Record<string, string>> };
+  readonly providerResponse?: {
+    readonly status: number;
+    readonly headers?: Readonly<Record<string, string>>;
+  };
 }
 
 /** Recorded wire shape of a fetch/catalogue fixture response (inside FixtureRecord.response). */
@@ -96,8 +124,7 @@ export type ModelNodeResolver = (
 
 /** Result of deriving a page/catalogue node from a fetch request. */
 export type PageNodeResolution =
-  | { readonly operationNode: string }
-  | { readonly ambiguous: true; readonly detail: string };
+  { readonly operationNode: string } | { readonly ambiguous: true; readonly detail: string };
 
 /** Derives the fixture operation node for one physical fetch request. */
 export type PageNodeResolver = (request: FetchFixtureRequest) => PageNodeResolution;
@@ -127,7 +154,10 @@ function zeroUsage(): Usage {
   };
 }
 
-function waitRecordedDelay(delayMs: number, signal: AbortSignal | undefined): Promise<"elapsed" | "aborted"> {
+function waitRecordedDelay(
+  delayMs: number,
+  signal: AbortSignal | undefined,
+): Promise<"elapsed" | "aborted"> {
   if (signal?.aborted) return Promise.resolve("aborted");
   if (delayMs <= 0) return Promise.resolve("elapsed");
   return new Promise((resolve) => {
@@ -172,8 +202,11 @@ export function usageFromObservation(observation: UsageObservation | undefined):
   // subset to zero would invent one. Otherwise the field keeps the SDK's
   // zero placeholder, which the native usage capture deliberately ignores,
   // so it never becomes an observation.
-  const input = tokens.inputUncached ??
-    (tokens.inputTotal !== undefined && tokens.cacheRead !== undefined && tokens.cacheWrite !== undefined
+  const input =
+    tokens.inputUncached ??
+    (tokens.inputTotal !== undefined &&
+    tokens.cacheRead !== undefined &&
+    tokens.cacheWrite !== undefined
       ? Math.max(0, tokens.inputTotal - cacheRead - cacheWrite)
       : 0);
   const output = tokens.outputTotal ?? 0;
@@ -241,7 +274,8 @@ export function usageProviderEventFromObservation(observation: UsageObservation)
     usage["cost"] = observation.cost.total;
   }
   if (Object.keys(details).length > 0) usage["prompt_tokens_details"] = details;
-  if (Object.keys(completionDetails).length > 0) usage["completion_tokens_details"] = completionDetails;
+  if (Object.keys(completionDetails).length > 0)
+    usage["completion_tokens_details"] = completionDetails;
   if (Object.keys(usage).length === 0) return null;
   return {
     ...(observation.providerRequestId !== undefined ? { id: observation.providerRequestId } : {}),
@@ -373,7 +407,20 @@ function groupRecordsByRequest(
   return groups;
 }
 
-function assertNoAmbiguousNodes(groups: Map<string, Set<string>>, scenario: string, boundary: string): void {
+function qualifyReplay(store: BenchmarkReplayStore, check: () => void): void {
+  try {
+    check();
+  } catch (error) {
+    if (error instanceof ReplayMissError) store.invalidate(error);
+    throw error;
+  }
+}
+
+function assertNoAmbiguousNodes(
+  groups: Map<string, Set<string>>,
+  scenario: string,
+  boundary: string,
+): void {
   for (const [canonical, nodes] of groups) {
     if (nodes.size > 1) {
       throw new ReplayMissError(
@@ -406,9 +453,10 @@ export async function modelFixtureRequest(
     userMessage: userMessageFromContext(context),
     maxTokens: options?.maxTokens ?? null,
     reasoning: options?.reasoning ?? null,
-    effectivePayloadPatch: (effectivePayloadPatch === undefined || effectivePayloadPatch === null
-      ? null
-      : (effectivePayloadPatch as Json)),
+    effectivePayloadPatch:
+      effectivePayloadPatch === undefined || effectivePayloadPatch === null
+        ? null
+        : (effectivePayloadPatch as Json),
   };
 }
 
@@ -431,10 +479,12 @@ export interface ModelTransportReplayOptions extends TransportReplayOptions {
  * attempt. Ambiguous derivation throws `ReplayMissError` (reason
  * "ambiguous-node") and invalidates the block.
  */
-export function createModelTransportReplay(options: ModelTransportReplayOptions): RegistryStreamSimple {
+export function createModelTransportReplay(
+  options: ModelTransportReplayOptions,
+): RegistryStreamSimple {
   const bindings = options.bindings ?? [];
   const groups = groupRecordsByRequest(options.store, bindings, "model");
-  assertNoAmbiguousNodes(groups, options.scenario, "model");
+  qualifyReplay(options.store, () => assertNoAmbiguousNodes(groups, options.scenario, "model"));
   // Construction-time usage qualification (see usageReplayInvalidReason):
   // the frozen observation must be exactly reproducible through the actual
   // capture channels, or the block fails closed instead of silently
@@ -443,10 +493,12 @@ export function createModelTransportReplay(options: ModelTransportReplayOptions)
     if (record.key.boundary !== "model") continue;
     const reason = usageReplayInvalidReason(record);
     if (reason !== null) {
-      throw new ReplayMissError(
-        "invalid-file",
-        `Invalid model fixture usage for scenario "${options.scenario}" (${record.key.operationNode} occurrence ${record.key.occurrence}): ${reason}; no live capture path reproduces the frozen observation, so replay must fail closed`,
-        record.key,
+      options.store.invalidate(
+        new ReplayMissError(
+          "invalid-file",
+          `Invalid model fixture usage for scenario "${options.scenario}" (${record.key.operationNode} occurrence ${record.key.occurrence}): ${reason}; no live capture path reproduces the frozen observation, so replay must fail closed`,
+          record.key,
+        ),
       );
     }
   }
@@ -463,9 +515,11 @@ export function createModelTransportReplay(options: ModelTransportReplayOptions)
     const requestWithoutRole = await modelFixtureRequest(model, context, streamOptions);
     const resolution = options.resolveNode(requestWithoutRole, model, context);
     if ("ambiguous" in resolution) {
-      throw new ReplayMissError(
-        "ambiguous-node",
-        `Ambiguous model node derivation for scenario "${options.scenario}": ${resolution.detail}`,
+      return options.store.invalidate(
+        new ReplayMissError(
+          "ambiguous-node",
+          `Ambiguous model node derivation for scenario "${options.scenario}": ${resolution.detail}`,
+        ),
       );
     }
     const fixtureRequest: ModelFixtureRequest = { ...requestWithoutRole, role: resolution.role };
@@ -485,7 +539,10 @@ export function createModelTransportReplay(options: ModelTransportReplayOptions)
     const response = (record.response ?? null) as ModelFixtureResponse | null;
     if (response?.providerResponse && streamOptions?.onResponse) {
       await streamOptions.onResponse(
-        { status: response.providerResponse.status, headers: { ...(response.providerResponse.headers ?? {}) } },
+        {
+          status: response.providerResponse.status,
+          headers: { ...(response.providerResponse.headers ?? {}) },
+        },
         model,
       );
     }
@@ -582,7 +639,13 @@ export interface PageTransportReplayOptions extends TransportReplayOptions {
  */
 export function createPageTransportReplay(options: PageTransportReplayOptions): PageTransport {
   const bindings = options.bindings ?? [];
-  assertNoAmbiguousNodes(groupRecordsByRequest(options.store, bindings, "fetch"), options.scenario, "fetch");
+  qualifyReplay(options.store, () =>
+    assertNoAmbiguousNodes(
+      groupRecordsByRequest(options.store, bindings, "fetch"),
+      options.scenario,
+      "fetch",
+    ),
+  );
   const occurrences = new Map<string, number>();
   const replay: PageTransport = async (url, request: PageTransportRequest) => {
     const fixtureRequest: FetchFixtureRequest = {
@@ -595,9 +658,11 @@ export function createPageTransportReplay(options: PageTransportReplayOptions): 
     };
     const resolution = options.resolveNode(fixtureRequest);
     if ("ambiguous" in resolution) {
-      throw new ReplayMissError(
-        "ambiguous-node",
-        `Ambiguous page node derivation for scenario "${options.scenario}": ${resolution.detail}`,
+      return options.store.invalidate(
+        new ReplayMissError(
+          "ambiguous-node",
+          `Ambiguous page node derivation for scenario "${options.scenario}": ${resolution.detail}`,
+        ),
       );
     }
     const requestJson = asJson(fixtureRequest);
@@ -613,7 +678,9 @@ export function createPageTransportReplay(options: PageTransportReplayOptions): 
     };
     const record = await options.store.lookup(key, requestJson);
     if ((await waitRecordedDelay(record.delayMs, request.signal)) === "aborted") {
-      const error = new Error("Transport replay aborted before the recorded response was delivered");
+      const error = new Error(
+        "Transport replay aborted before the recorded response was delivered",
+      );
       error.name = "AbortError";
       throw error;
     }
@@ -625,15 +692,18 @@ export function createPageTransportReplay(options: PageTransportReplayOptions): 
     const response = record.response as FetchFixtureResponse | undefined;
     if (response === undefined || typeof response.status !== "number") {
       // Fail closed as a miss: the fixture did not freeze a usable response.
-      throw new ReplayMissError(
-        "not-found",
-        `Fetch fixture for ${key.operationNode} occurrence ${key.occurrence} has no usable response body`,
-        key,
+      return options.store.invalidate(
+        new ReplayMissError(
+          "not-found",
+          `Fetch fixture for ${key.operationNode} occurrence ${key.occurrence} has no usable response body`,
+          key,
+        ),
       );
     }
     const bytes = decodeBody(response);
     const headers = new Map<string, string>();
-    for (const [name, value] of Object.entries(response.headers ?? {})) headers.set(name.toLowerCase(), value);
+    for (const [name, value] of Object.entries(response.headers ?? {}))
+      headers.set(name.toLowerCase(), value);
     const responseUrl = response.finalUrl ?? url;
     const pageResponse: PageTransportResponse = {
       status: response.status,
@@ -687,7 +757,10 @@ export function uniqueMatchPageResolver(
       }
     });
     if (hits.length === 1) return { operationNode: hits[0]!.operationNode };
-    return { ambiguous: true, detail: `${hits.length} resolver rules matched fetch request (${request.method} ${request.url})` };
+    return {
+      ambiguous: true,
+      detail: `${hits.length} resolver rules matched fetch request (${request.method} ${request.url})`,
+    };
   };
 }
 
@@ -714,14 +787,18 @@ export function createRoleInferencer(byPrompt: {
 }
 
 function decodeBody(response: FetchFixtureResponse): Uint8Array {
-  if (response.bodyBase64 !== undefined) return new Uint8Array(Buffer.from(response.bodyBase64, "base64"));
+  if (response.bodyBase64 !== undefined)
+    return new Uint8Array(Buffer.from(response.bodyBase64, "base64"));
   if (response.bodyText !== undefined) return new TextEncoder().encode(response.bodyText);
   return new Uint8Array(0);
 }
 
 const CHUNK_BYTES = 16 * 1024;
 
-function chunkedStream(bytes: Uint8Array, signal: AbortSignal | undefined): ReadableStream<Uint8Array> {
+function chunkedStream(
+  bytes: Uint8Array,
+  signal: AbortSignal | undefined,
+): ReadableStream<Uint8Array> {
   let offset = 0;
   return new ReadableStream<Uint8Array>({
     pull(controller) {

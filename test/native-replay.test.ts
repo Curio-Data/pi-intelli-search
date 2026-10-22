@@ -3,7 +3,7 @@
 
 // T30/C30 native transport replay through actual registered wrappers, the
 // real Codemode bridge and real host loaders. Credential-free: the main model
-// is a scripted loopback OpenAI-completions fixture and every pipeline stage
+// uses an in-process HTTP fixture under the installed serializer; every pipeline stage
 // is recorded from, then replayed below, the real native policy. Set
 // NATIVE_REPLAY_PI_HOST to an installed pi-coding-agent root for the explicit
 // installed-host qualification; otherwise the repository dev peer is used and
@@ -83,13 +83,27 @@ const usage = (prompt: number, completion: number, cached?: number) => ({
 const stageScript: StageScript = ({ role, user, n }) => {
   switch (role) {
     case "search":
-      if (user.includes(QFAIL)) return { status: 400, errorBody: JSON.stringify({ error: { message: "fixture permanent bad request" } }) };
-      if (user.includes(QS)) return { text: `Repeated answer [Alpha](${ALPHA})`, usage: usage(40, 8) };
+      if (user.includes(QFAIL))
+        return {
+          status: 400,
+          errorBody: JSON.stringify({ error: { message: "fixture permanent bad request" } }),
+        };
+      if (user.includes(QS))
+        return { text: `Repeated answer [Alpha](${ALPHA})`, usage: usage(40, 8) };
       // Prose names alpha and a missing page; beta arrives only as an annotation.
-      return { text: `Answer: see [Alpha](${ALPHA}) and [Missing](${MISSING}).`, annotations: [BETA], usage: usage(50, 12, 10) };
+      return {
+        text: `Answer: see [Alpha](${ALPHA}) and [Missing](${MISSING}).`,
+        annotations: [BETA],
+        usage: usage(50, 12, 10),
+      };
     case "extract":
-      if (user.includes("PAGE-MARKER:Beta")) return { status: 400, errorBody: JSON.stringify({ error: { message: "fixture extract rejected" } }) };
-      if (user.includes("PAGE-MARKER:Delta")) return { text: "Official docs, current.\nDelta facts.", usage: usage(30, 6) };
+      if (user.includes("PAGE-MARKER:Beta"))
+        return {
+          status: 400,
+          errorBody: JSON.stringify({ error: { message: "fixture extract rejected" } }),
+        };
+      if (user.includes("PAGE-MARKER:Delta"))
+        return { text: "Official docs, current.\nDelta facts.", usage: usage(30, 6) };
       return { text: "Official docs, current.\nAlpha limit is 7.", usage: usage(300, 20) };
     case "collate":
       if (user.includes(QC)) return { text: "Standalone collation [S1]", usage: usage(60, 9) };
@@ -112,15 +126,35 @@ const codemodeScript = [
 
 const deltaContent = "# Delta\n\nPAGE-MARKER:Delta\n\nDelta supplied content.";
 const blockTurns: MainTurn[] = [
-  { toolCalls: [{ name: "codemode", args: { code: codemodeScript } }], usage: usage(1000, 50, 600) },
+  {
+    toolCalls: [{ name: "codemode", args: { code: codemodeScript } }],
+    usage: usage(1000, 50, 600),
+  },
   {
     toolCalls: [
-      { name: "intelli_extract", args: { url: "https://docs.example.test/delta", title: "Delta", content: deltaContent, query: Q, focusPrompt: "delta" } },
+      {
+        name: "intelli_extract",
+        args: {
+          url: "https://docs.example.test/delta",
+          title: "Delta",
+          content: deltaContent,
+          query: Q,
+          focusPrompt: "delta",
+        },
+      },
       {
         name: "intelli_collate",
         args: {
           query: QC,
-          extractions: [{ url: ALPHA, title: "Alpha", extraction: "Alpha limit is 7.", sourceType: "official-docs", status: "success" }],
+          extractions: [
+            {
+              url: ALPHA,
+              title: "Alpha",
+              extraction: "Alpha limit is 7.",
+              sourceType: "official-docs",
+              status: "success",
+            },
+          ],
         },
       },
       // Every supplied extraction is blocked: an error result with zero dispatched attempts.
@@ -128,7 +162,15 @@ const blockTurns: MainTurn[] = [
         name: "intelli_collate",
         args: {
           query: `${QC} blocked`,
-          extractions: [{ url: BETA, title: "Beta", extraction: "", sourceType: "official-docs", status: "failed" }],
+          extractions: [
+            {
+              url: BETA,
+              title: "Beta",
+              extraction: "",
+              sourceType: "official-docs",
+              status: "failed",
+            },
+          ],
         },
       },
     ],
@@ -142,10 +184,23 @@ interface BlockRun {
   readonly wallMs: number;
 }
 
-async function runSession(factory: ((pi: never) => void) | null, turns: MainTurn[], phase: string, ports: number[], onSession?: (h: SessionHandle) => void): Promise<BlockRun> {
+async function runSession(
+  factory: ((pi: never) => void) | null,
+  turns: MainTurn[],
+  phase: string,
+  ports: number[],
+  onSession?: (h: SessionHandle) => void,
+): Promise<BlockRun> {
   main.setScript(turns);
   guard.setPhase(phase, ports);
-  const handle = await openSession({ host, agentDir: isolation.agentDir, workspace, main, nativeFactory: factory, codemode: "on" });
+  const handle = await openSession({
+    host,
+    agentDir: isolation.agentDir,
+    workspace,
+    main,
+    nativeFactory: factory,
+    codemode: "on",
+  });
   onSession?.(handle);
   const started = performance.now();
   try {
@@ -164,7 +219,12 @@ const intelliEnds = (handle: SessionHandle) =>
     (event) =>
       (event as { type?: string }).type === "tool_execution_end" &&
       String((event as { toolName?: string }).toolName).startsWith("intelli_"),
-  ) as Array<{ toolName: string; toolCallId: string; isError: boolean; result: { content: Array<{ text?: string }>; details?: Record<string, unknown> } }>;
+  ) as Array<{
+    toolName: string;
+    toolCallId: string;
+    isError: boolean;
+    result: { content: Array<{ text?: string }>; details?: Record<string, unknown> };
+  }>;
 
 /** Stable per-result evidence: everything except generated ids, paths and wall times. */
 function stableResult(end: ReturnType<typeof intelliEnds>[number]) {
@@ -189,7 +249,13 @@ type Block = ReturnType<typeof createReplayBlock>;
 type Factory = (block: Block) => ((pi: never) => void) | null;
 
 /** One replay block from the frozen S0 state: misses abort the session. */
-async function replayRun(factory: Factory, turns: MainTurn[], blockFiles: ReturnType<typeof fixtureFiles>, phase: string, extensionPaths?: (block: Block) => string[]) {
+async function replayRun(
+  factory: Factory,
+  turns: MainTurn[],
+  blockFiles: ReturnType<typeof fixtureFiles>,
+  phase: string,
+  extensionPaths?: (block: Block) => string[],
+) {
   await restoreWorkspace(snapshot, workspace);
   const block = createReplayBlock(blockFiles);
   const stageBefore = stage.requests.length;
@@ -215,8 +281,8 @@ async function replayRun(factory: Factory, turns: MainTurn[], blockFiles: Return
   const wallMs = performance.now() - started;
   const mainBodies = [...main.rawBodies];
   handle.dispose();
-  // Store validity alone is insufficient: a resolver ambiguity throws before
-  // any store lookup and never enters store.misses(). Any miss error invalidates.
+  // Store invalidation includes resolver/construction errors before lookup.
+  // The outer session-stop witness remains independently required.
   let storesValid = true;
   try {
     block.modelStore.assertValid();
@@ -237,12 +303,22 @@ async function replayRun(factory: Factory, turns: MainTurn[], blockFiles: Return
     mainFetchCalls: main.fetchCalls() - mainBefore,
     model: keySummary(block.modelStore),
     fetch: keySummary(block.fetchStore),
-    misses: block.missErrors.map((e) => ({ reason: e.reason, node: e.key?.operationNode ?? null, message: e.message.slice(0, 200) })),
+    misses: block.missErrors.map((e) => ({
+      reason: e.reason,
+      node: e.key?.operationNode ?? null,
+      message: e.message.slice(0, 200),
+    })),
   };
 }
 
-const transportReplay = (module: typeof source.module): Factory => (block) =>
-  module.createNativeExtension({ mode: "transport-replay", registryStreamSimple: block.modelTransport, pageTransport: block.pageTransport }) as never;
+const transportReplay =
+  (module: typeof source.module): Factory =>
+  (block) =>
+    module.createNativeExtension({
+      mode: "transport-replay",
+      registryStreamSimple: block.modelTransport,
+      pageTransport: block.pageTransport,
+    }) as never;
 
 before(async () => {
   main = await createMainFixture(hostSelection.root);
@@ -269,8 +345,15 @@ describe(`native transport replay on ${hostSelection.kind} Pi ${hostSelection.ve
     // Seed: a committed prior run so the block's cache-suggest judge has a frozen candidate.
     const seed = createRecording("seed", pages);
     await runSession(
-      source.module.createNativeExtension({ mode: "unit", registryStreamSimple: seed.modelTransport, pageTransport: seed.pageTransport }) as never,
-      [{ toolCalls: [{ name: "intelli_research", args: { query: QSEED, maxUrls: 1 } }] }, { text: "seeded" }],
+      source.module.createNativeExtension({
+        mode: "unit",
+        registryStreamSimple: seed.modelTransport,
+        pageTransport: seed.pageTransport,
+      }) as never,
+      [
+        { toolCalls: [{ name: "intelli_research", args: { query: QSEED, maxUrls: 1 } }] },
+        { text: "seeded" },
+      ],
       "seed",
       [stage.port],
     );
@@ -280,7 +363,11 @@ describe(`native transport replay on ${hostSelection.kind} Pi ${hostSelection.ve
     const recording = createRecording("codemode-forced", pages);
     stage.setScript(stageScript);
     recorded = await runSession(
-      source.module.createNativeExtension({ mode: "unit", registryStreamSimple: recording.modelTransport, pageTransport: recording.pageTransport }) as never,
+      source.module.createNativeExtension({
+        mode: "unit",
+        registryStreamSimple: recording.modelTransport,
+        pageTransport: recording.pageTransport,
+      }) as never,
       blockTurns,
       "record",
       [stage.port],
@@ -297,40 +384,66 @@ describe(`native transport replay on ${hostSelection.kind} Pi ${hostSelection.ve
       toolEvents: recorded.handle.toolEvents.length,
       fixtures: { model: files.model.fixtures.length, fetch: files.fetch.fixtures.length },
       codemodeText: recorded.handle.events
-        .filter((e) => (e as { type?: string; toolName?: string }).type === "tool_execution_end" && (e as { toolName?: string }).toolName === "codemode")
+        .filter(
+          (e) =>
+            (e as { type?: string; toolName?: string }).type === "tool_execution_end" &&
+            (e as { toolName?: string }).toolName === "codemode",
+        )
         .map((e) => JSON.stringify((e as { result?: unknown }).result).slice(0, 2000)),
     });
     assert.equal(guard.violations("record").length, 0, JSON.stringify(guard.violations("record")));
-    assert.equal(recording.registryCalls(), stage.requests.length, "every recorded stage attempt went through the real host registry");
+    assert.equal(
+      recording.registryCalls(),
+      stage.requests.length,
+      "every recorded stage attempt went through the real host registry",
+    );
     assert(ends.length >= 6, `expected nested and direct intelli results, saw ${ends.length}`);
     // Observer discrimination: the observer sees exactly the main requests the
     // installed serializer sent; recorded stage attempts reached the stage
     // fixture through the host registry but never the observer.
     assert.equal(recorded.handle.captures.length, recorded.mainBodies.length);
-    assert.equal(canonical(recorded.handle.captures.map((c) => c.payload)), canonical(recorded.mainBodies.map((body) => JSON.parse(body))));
+    assert.equal(
+      canonical(recorded.handle.captures.map((c) => c.payload)),
+      canonical(recorded.mainBodies.map((body) => JSON.parse(body))),
+    );
     assert(stage.requests.length > 0);
     for (const capture of recorded.handle.captures) {
       const text = canonical(capture.payload);
-      for (const prompt of ["Web page content:", '"Previous searches:']) assert(!text.includes(prompt), "no stage request reached the observer");
+      for (const prompt of ["Web page content:", '"Previous searches:'])
+        assert(!text.includes(prompt), "no stage request reached the observer");
     }
     // The pipeline really carried raw page bytes: extraction inputs hold the sentinel.
-    assert(files.model.fixtures.some((f) => String((f.request as { userMessage?: string }).userMessage).includes(RAW_SENTINEL)));
+    assert(
+      files.model.fixtures.some((f) =>
+        String((f.request as { userMessage?: string }).userMessage).includes(RAW_SENTINEL),
+      ),
+    );
   });
 
   it("parses canonical mixed usage: main from assistant messages, pipeline once per intelli result", () => {
     const parsed = parseUsageEvents(recorded.handle.events, "json");
     assert.deepEqual(
-      parsed.assistantMessages.map((m) => m.usage && { inputTotal: m.usage.inputTotal, inputUncached: m.usage.inputUncached, cacheRead: m.usage.cacheRead, outputTotal: m.usage.outputTotal }),
+      parsed.assistantMessages.map(
+        (m) =>
+          m.usage && {
+            inputTotal: m.usage.inputTotal,
+            inputUncached: m.usage.inputUncached,
+            cacheRead: m.usage.cacheRead,
+            outputTotal: m.usage.outputTotal,
+          },
+      ),
       [
         { inputTotal: 1000, inputUncached: 400, cacheRead: 600, outputTotal: 50 },
-        // Turn 2 sent NO wire usage, yet the host zero-fills message_end usage;
-        // the parser cannot tell it from reported zeros. Pinned as a finding.
-        { inputTotal: 0, inputUncached: 0, cacheRead: 0, outputTotal: 0 },
+        // No wire usage: SDK zero placeholders must not become an H1 zero.
+        null,
         { inputTotal: 1500, inputUncached: 1500, cacheRead: 0, outputTotal: 5 },
       ],
     );
-    assert.deepEqual(parsed.missing, []);
-    const tools = parsed.toolMessages.map((t) => ({ nested: t.parentToolCallId !== undefined && t.parentToolCallId !== null, attempts: t.accounting?.attempts }));
+    assert.deepEqual(parsed.missing, [parsed.assistantMessages[1].id]);
+    const tools = parsed.toolMessages.map((t) => ({
+      nested: t.parentToolCallId !== undefined && t.parentToolCallId !== null,
+      attempts: t.accounting?.attempts,
+    }));
     assert.deepEqual(tools, [
       { nested: true, attempts: 6 }, // research: search, 2 extract (one error), collate 429 + retry, suggest
       { nested: true, attempts: 1 }, // repeated identical search, occurrence 1
@@ -347,11 +460,19 @@ describe(`native transport replay on ${hostSelection.kind} Pi ${hostSelection.ve
   it("replays the block with transport-replay injection only: exact occurrences, zero pipeline network, identical accounting", async () => {
     assert(files, "record step must run first");
     await restoreWorkspace(snapshot, workspace);
-    assert.equal(await treeDigest(workspace), s0Digest, "per-block workspace and index state are byte-identical");
+    assert.equal(
+      await treeDigest(workspace),
+      s0Digest,
+      "per-block workspace and index state are byte-identical",
+    );
     const stageBefore = stage.requests.length;
     const block = createReplayBlock(files);
     const replayed = await runSession(
-      source.module.createNativeExtension({ mode: "transport-replay", registryStreamSimple: block.modelTransport, pageTransport: block.pageTransport }) as never,
+      source.module.createNativeExtension({
+        mode: "transport-replay",
+        registryStreamSimple: block.modelTransport,
+        pageTransport: block.pageTransport,
+      }) as never,
       blockTurns,
       "replay",
       [],
@@ -373,7 +494,11 @@ describe(`native transport replay on ${hostSelection.kind} Pi ${hostSelection.ve
       registryReads: block.registryReads(),
       deliveredProviderEvents: block.deliveredEvents(),
       network: guard.events("replay"),
-      mainTransport: { population: "in-process injected fetch (no socket)", fetchCalls: main.fetchCalls(), unguardedStreams: main.unguardedStreams() },
+      mainTransport: {
+        population: "in-process injected fetch (no socket)",
+        fetchCalls: main.fetchCalls(),
+        unguardedStreams: main.unguardedStreams(),
+      },
       auth: auth.events("replay"),
       violations: guard.violations("replay"),
       stageRequestsDuringReplay: stage.requests.length - stageBefore,
@@ -393,7 +518,9 @@ describe(`native transport replay on ${hostSelection.kind} Pi ${hostSelection.ve
       "no credential login or credential operation during replay",
     );
     assert(
-      evidence.auth.filter((event) => event.method.endsWith(".refresh")).every((event) => event.provider === "allowNetwork=false"),
+      evidence.auth
+        .filter((event) => event.method.endsWith(".refresh"))
+        .every((event) => event.provider === "allowNetwork=false"),
       "model-configuration refreshes during replay are offline",
     );
     assert.equal(evidence.stageRequestsDuringReplay, 0);
@@ -404,30 +531,55 @@ describe(`native transport replay on ${hostSelection.kind} Pi ${hostSelection.ve
     block.fetchStore.assertValid();
     assert.deepEqual(model.unconsumed, [], "every recorded model occurrence was replayed");
     assert.deepEqual(fetchKeys.unconsumed, []);
-    assert.deepEqual([...model.consumed].sort(), files.model.fixtures.map((f) => `model:${f.key.operationNode}#${f.key.occurrence}`).sort());
-    assert(block.deliveredEvents() > 0, "citations and wire usage arrive only through recorded provider events");
+    assert.deepEqual(
+      [...model.consumed].sort(),
+      files.model.fixtures.map((f) => `model:${f.key.operationNode}#${f.key.occurrence}`).sort(),
+    );
+    assert(
+      block.deliveredEvents() > 0,
+      "citations and wire usage arrive only through recorded provider events",
+    );
     assert.deepEqual(replayedResults, recordedResults);
     assert.deepEqual(
       usageReplayed.toolMessages.map((t) => t.accounting),
       usageRecorded.toolMessages.map((t) => t.accounting),
     );
-    for (const body of [...recorded.mainBodies, ...replayed.mainBodies]) assert(!body.includes(RAW_SENTINEL), "raw page bytes never reach a main request");
-    assert.equal(canonical(replayed.handle.captures.map((c) => c.payload)), canonical(replayed.mainBodies.map((b) => JSON.parse(b))));
+    for (const body of [...recorded.mainBodies, ...replayed.mainBodies])
+      assert(!body.includes(RAW_SENTINEL), "raw page bytes never reach a main request");
+    assert.equal(
+      canonical(replayed.handle.captures.map((c) => c.payload)),
+      canonical(replayed.mainBodies.map((b) => JSON.parse(b))),
+    );
   });
 
   it("fails closed on a request drift: the miss stops the session, no live fallback, block invalid", async () => {
     const drifted = blockTurns.map((turn, index) =>
-      index === 0 ? { ...turn, toolCalls: [{ name: "codemode", args: { code: codemodeScript.replace(Q, `${Q} drifted`) } }] } : turn,
+      index === 0
+        ? {
+            ...turn,
+            toolCalls: [
+              { name: "codemode", args: { code: codemodeScript.replace(Q, `${Q} drifted`) } },
+            ],
+          }
+        : turn,
     );
     const run = await replayRun(transportReplay(source.module), drifted, files, "miss-drift");
-    await writeEvidence(isolation.root, "miss-drift", { host: hostSelection, ...run, handle: undefined, block: undefined });
+    await writeEvidence(isolation.root, "miss-drift", {
+      host: hostSelection,
+      ...run,
+      handle: undefined,
+      block: undefined,
+    });
     assert.equal(run.valid, false, "a miss invalidates the block");
     assert(run.misses.length >= 1);
     assert.equal(run.misses[0]!.reason, "not-found");
     assert.match(String(run.misses[0]!.node), /^search\//);
     assert.deepEqual(run.network, [], "no network primitive, so no live fallback");
     assert.equal(run.stageRequests, 0);
-    assert(run.model.unconsumed.length > 0, "the stopped block leaves later fixtures unconsumed (skipped, not served)");
+    assert(
+      run.model.unconsumed.length > 0,
+      "the stopped block leaves later fixtures unconsumed (skipped, not served)",
+    );
     assert.equal(run.block.teeFetchCalls(), 0);
   });
 
@@ -439,24 +591,47 @@ describe(`native transport replay on ${hostSelection.kind} Pi ${hostSelection.ve
       `const second = await tools.intelli_research({ query: ${JSON.stringify(Q2)}, maxUrls: 1 });`,
       "return String(second.length);",
     ].join("\n");
-    const turns: MainTurn[] = [{ toolCalls: [{ name: "codemode", args: { code: twice } }] }, { text: "Done." }];
+    const turns: MainTurn[] = [
+      { toolCalls: [{ name: "codemode", args: { code: twice } }] },
+      { text: "Done." },
+    ];
     await restoreWorkspace(snapshot, workspace);
     const recording = createRecording("two-research", pages);
     stage.setScript(stageScript);
     await runSession(
-      source.module.createNativeExtension({ mode: "unit", registryStreamSimple: recording.modelTransport, pageTransport: recording.pageTransport }) as never,
+      source.module.createNativeExtension({
+        mode: "unit",
+        registryStreamSimple: recording.modelTransport,
+        pageTransport: recording.pageTransport,
+      }) as never,
       turns,
       "record-two",
       [stage.port],
     );
     const twoFiles = fixtureFiles(recording);
-    const suggestRecords = twoFiles.model.fixtures.filter((f) => f.key.operationNode.startsWith("suggest/"));
+    const suggestRecords = twoFiles.model.fixtures.filter((f) =>
+      f.key.operationNode.startsWith("suggest/"),
+    );
     assert.equal(suggestRecords.length, 2, "both researches reached the judge while recording");
-    const run = await replayRun(transportReplay(source.module), turns, twoFiles, "miss-second-research");
-    await writeEvidence(isolation.root, "miss-second-research", { host: hostSelection, ...run, handle: undefined, block: undefined });
+    const run = await replayRun(
+      transportReplay(source.module),
+      turns,
+      twoFiles,
+      "miss-second-research",
+    );
+    await writeEvidence(isolation.root, "miss-second-research", {
+      host: hostSelection,
+      ...run,
+      handle: undefined,
+      block: undefined,
+    });
     assert.equal(run.valid, false);
     assert.equal(run.misses[0]?.reason, "not-found");
-    assert.match(String(run.misses[0]?.node), /^suggest\//, "the first miss is the second research's judge");
+    assert.match(
+      String(run.misses[0]?.node),
+      /^suggest\//,
+      "the first miss is the second research's judge",
+    );
     assert.deepEqual(run.network, []);
     assert.equal(run.stageRequests, 0);
   });
@@ -467,35 +642,76 @@ describe(`native transport replay on ${hostSelection.kind} Pi ${hostSelection.ve
         toolCalls: [
           {
             name: "intelli_extract",
-            args: { url: "https://docs.example.test/twin", title: "Twin", content: "PAGE-MARKER:Alpha and PAGE-MARKER:Beta", query: Q },
+            args: {
+              url: "https://docs.example.test/twin",
+              title: "Twin",
+              content: "PAGE-MARKER:Alpha and PAGE-MARKER:Beta",
+              query: Q,
+            },
           },
         ],
       },
       { text: "Done." },
     ];
     const run = await replayRun(transportReplay(source.module), ambiguous, files, "miss-ambiguous");
-    await writeEvidence(isolation.root, "miss-ambiguous", { host: hostSelection, ...run, handle: undefined, block: undefined });
+    await writeEvidence(isolation.root, "miss-ambiguous", {
+      host: hostSelection,
+      ...run,
+      handle: undefined,
+      block: undefined,
+    });
     assert.equal(run.misses[0]?.reason, "ambiguous-node");
     assert.equal(run.valid, false, "a resolver ambiguity invalidates the block");
-    // Library gap pinned: the store does not record resolver ambiguity.
-    assert.equal(run.storesValid, true);
+    assert.equal(run.storesValid, false, "resolver ambiguity invalidates the store before lookup");
     assert.deepEqual(run.network, []);
     // Identical request bytes recorded under two nodes cannot be told apart by content.
     const first = files.model.fixtures[0]!;
     const twin = createFixtureRecorder({ boundary: "model", scenario: files.model.scenario });
     for (const node of [first.key.operationNode, `${first.key.operationNode}-twin`])
       twin.record(node, first.request, { response: first.response!, delayMs: 0 });
-    assert.throws(() => createReplayBlock({ model: twin.toFile(), fetch: files.fetch }), (error: unknown) => error instanceof ReplayMissError && error.reason === "ambiguous-node");
+    assert.throws(
+      () => createReplayBlock({ model: twin.toFile(), fetch: files.fetch }),
+      (error: unknown) => error instanceof ReplayMissError && error.reason === "ambiguous-node",
+    );
   });
 
   it("captures injections immutably per loaded runtime; the default export stays uninjected", async () => {
-    assert.throws(() => source.module.createNativeExtension({ mode: "transport-replay", registryStreamSimple: async () => { throw new Error(); }, pageTransport: async () => { throw new Error(); }, operations: {} } as never), /cannot replace operations/);
-    assert.throws(() => source.module.createNativeExtension({ mode: "transport-replay", registryStreamSimple: async () => { throw new Error(); } } as never), /requires both/);
-    assert.throws(() => source.module.createNativeExtension({ mode: "record" } as never), /Unknown native injection mode/);
+    assert.throws(
+      () =>
+        source.module.createNativeExtension({
+          mode: "transport-replay",
+          registryStreamSimple: async () => {
+            throw new Error();
+          },
+          pageTransport: async () => {
+            throw new Error();
+          },
+          operations: {},
+        } as never),
+      /cannot replace operations/,
+    );
+    assert.throws(
+      () =>
+        source.module.createNativeExtension({
+          mode: "transport-replay",
+          registryStreamSimple: async () => {
+            throw new Error();
+          },
+        } as never),
+      /requires both/,
+    );
+    assert.throws(
+      () => source.module.createNativeExtension({ mode: "record" } as never),
+      /Unknown native injection mode/,
+    );
     let tripwire = 0;
     const run = await replayRun(
       (block) => {
-        const injection = { mode: "transport-replay" as const, registryStreamSimple: block.modelTransport, pageTransport: block.pageTransport };
+        const injection = {
+          mode: "transport-replay" as const,
+          registryStreamSimple: block.modelTransport,
+          pageTransport: block.pageTransport,
+        };
         const extension = source.module.createNativeExtension(injection);
         // Mutating the caller's object after capture must not reach the runtime.
         Object.assign(injection, {
@@ -534,18 +750,34 @@ describe(`native transport replay on ${hostSelection.kind} Pi ${hostSelection.ve
     const compiled = await loadCompiledNative(join(isolation.root, "compiled"));
     assert.notEqual(compiled.module.createNativeExtension, source.module.createNativeExtension);
     assert.deepEqual(compiled.sourceHashes, source.sourceHashes);
-    const run = await replayRun(transportReplay(compiled.module), blockTurns, files, "replay-compiled");
-    await writeEvidence(isolation.root, "replay-compiled", { host: hostSelection, entry: compiled.entry, ...run, handle: undefined, block: undefined, results: intelliEnds(run.handle).map(stableResult) });
+    const run = await replayRun(
+      transportReplay(compiled.module),
+      blockTurns,
+      files,
+      "replay-compiled",
+    );
+    await writeEvidence(isolation.root, "replay-compiled", {
+      host: hostSelection,
+      entry: compiled.entry,
+      ...run,
+      handle: undefined,
+      block: undefined,
+      results: intelliEnds(run.handle).map(stableResult),
+    });
     assert(run.valid, JSON.stringify(run.misses));
     assert.deepEqual(run.model.unconsumed, []);
     assert.deepEqual(run.fetch.unconsumed, []);
     assert.deepEqual(run.network, []);
-    assert.deepEqual(intelliEnds(run.handle).map(stableResult), intelliEnds(recorded.handle).map(stableResult));
+    assert.deepEqual(
+      intelliEnds(run.handle).map(stableResult),
+      intelliEnds(recorded.handle).map(stableResult),
+    );
   });
 
   for (const kind of ["source", "compiled"] as const)
     it(`replays through the host's own extension loader (jiti, fresh module graph): ${kind}`, async () => {
-      const entry = kind === "source" ? join(source.entry) : join(isolation.root, "compiled", "src/index.js");
+      const entry =
+        kind === "source" ? join(source.entry) : join(isolation.root, "compiled", "src/index.js");
       const dir = join(isolation.root, `host-loaded-${kind}`);
       await mkdir(dir, { recursive: true });
       const fixturePath = join(dir, "fixtures.json");
@@ -564,8 +796,15 @@ describe(`native transport replay on ${hostSelection.kind} Pi ${hostSelection.ve
           `export default createNativeExtension({ mode: "transport-replay", registryStreamSimple: block.modelTransport, pageTransport: block.pageTransport });`,
         ].join("\n"),
       );
-      const run = await replayRun(() => null, blockTurns, files, `replay-host-loaded-${kind}`, () => [wrapper]);
-      const probe = (globalThis as Record<symbol, unknown>)[Symbol.for(probeKey)] as { block: Block; createNativeExtension: unknown; peerVersion: string } | undefined;
+      const run = await replayRun(
+        () => null,
+        blockTurns,
+        files,
+        `replay-host-loaded-${kind}`,
+        () => [wrapper],
+      );
+      const probe = (globalThis as Record<symbol, unknown>)[Symbol.for(probeKey)] as
+        { block: Block; createNativeExtension: unknown; peerVersion: string } | undefined;
       assert(probe, "the host loaded the wrapper");
       const hostModel = keySummary(probe.block.modelStore);
       await writeEvidence(isolation.root, `replay-host-loaded-${kind}`, {
@@ -578,12 +817,23 @@ describe(`native transport replay on ${hostSelection.kind} Pi ${hostSelection.ve
         network: run.network,
         results: intelliEnds(run.handle).map(stableResult),
       });
-      assert.notEqual(probe.createNativeExtension, source.module.createNativeExtension, "the host loader built its own module graph");
-      assert.equal(probe.peerVersion, hostSelection.version, "the extension's peer imports resolved to the selected host");
+      assert.notEqual(
+        probe.createNativeExtension,
+        source.module.createNativeExtension,
+        "the host loader built its own module graph",
+      );
+      assert.equal(
+        probe.peerVersion,
+        hostSelection.version,
+        "the extension's peer imports resolved to the selected host",
+      );
       assert.deepEqual(probe.block.missErrors, []);
       assert.deepEqual(hostModel.unconsumed, []);
       assert.deepEqual(run.network, []);
       assert.equal(probe.block.teeFetchCalls(), 0);
-      assert.deepEqual(intelliEnds(run.handle).map(stableResult), intelliEnds(recorded.handle).map(stableResult));
+      assert.deepEqual(
+        intelliEnds(run.handle).map(stableResult),
+        intelliEnds(recorded.handle).map(stableResult),
+      );
     });
 });

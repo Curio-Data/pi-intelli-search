@@ -29,7 +29,13 @@
 
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { canonicalJson, normaliseByBindings, requestSha256, sha256Canonical, type RequestBinding } from "./canonical.js";
+import {
+  canonicalJson,
+  normaliseByBindings,
+  requestSha256,
+  sha256Canonical,
+  type RequestBinding,
+} from "./canonical.js";
 import type { FixtureKey, FixtureRecord, Json, ReplayStore } from "./contracts.js";
 
 export const FIXTURE_FILE_SCHEMA_VERSION = 1;
@@ -133,7 +139,9 @@ function validateBindingsForBoundaries(
       throw new InvalidFixtureFileError(`${at}: binding name must be a nonempty string`);
     }
     if (!Array.isArray(binding.paths) || binding.paths.length === 0) {
-      throw new InvalidFixtureFileError(`${at}: binding "${binding.name}" must declare at least one path`);
+      throw new InvalidFixtureFileError(
+        `${at}: binding "${binding.name}" must declare at least one path`,
+      );
     }
     for (const rawPath of binding.paths) {
       if (typeof rawPath !== "string" || rawPath === "") {
@@ -165,8 +173,13 @@ export function verifyFixtureFile(file: FixtureFile): readonly RequestBinding[] 
   if (!isJsonObject(file)) {
     throw new InvalidFixtureFileError("Fixture file must be a JSON object");
   }
-  if (file.schemaVersion !== FIXTURE_FILE_SCHEMA_VERSION || file.kind !== "intelli-benchmark-fixtures") {
-    throw new InvalidFixtureFileError(`Unsupported fixture file header: schemaVersion=${String(file.schemaVersion)}`);
+  if (
+    file.schemaVersion !== FIXTURE_FILE_SCHEMA_VERSION ||
+    file.kind !== "intelli-benchmark-fixtures"
+  ) {
+    throw new InvalidFixtureFileError(
+      `Unsupported fixture file header: schemaVersion=${String(file.schemaVersion)}`,
+    );
   }
   if (typeof file.scenario !== "string" || file.scenario === "") {
     throw new InvalidFixtureFileError("Fixture file scenario must be a nonempty string");
@@ -180,7 +193,11 @@ export function verifyFixtureFile(file: FixtureFile): readonly RequestBinding[] 
   const bindings = (file.bindings ?? []) as readonly RequestBinding[];
   const boundaries = new Set<FixtureKey["boundary"]>();
   for (const record of file.fixtures) {
-    if (isJsonObject(record) && isJsonObject(record.key) && typeof record.key.boundary === "string") {
+    if (
+      isJsonObject(record) &&
+      isJsonObject(record.key) &&
+      typeof record.key.boundary === "string"
+    ) {
       boundaries.add(record.key.boundary as FixtureKey["boundary"]);
     }
   }
@@ -198,13 +215,19 @@ export function verifyFixtureFile(file: FixtureFile): readonly RequestBinding[] 
       }
     }
     if (key.scenario !== file.scenario) {
-      throw new InvalidFixtureFileError(`${at}: key scenario "${String(key.scenario)}" does not match file scenario "${file.scenario}"`);
+      throw new InvalidFixtureFileError(
+        `${at}: key scenario "${String(key.scenario)}" does not match file scenario "${file.scenario}"`,
+      );
     }
     const occurrence = key.occurrence;
     if (typeof occurrence !== "number" || !Number.isInteger(occurrence) || occurrence < 1) {
       throw new InvalidFixtureFileError(`${at}: occurrence must be a positive integer`);
     }
-    if (record.request === undefined || record.request === null || typeof record.request === "string") {
+    if (
+      record.request === undefined ||
+      record.request === null ||
+      typeof record.request === "string"
+    ) {
       throw new InvalidFixtureFileError(`${at}: request must be a JSON object`);
     }
     if (record.error === undefined && record.response === undefined) {
@@ -213,7 +236,11 @@ export function verifyFixtureFile(file: FixtureFile): readonly RequestBinding[] 
     if (record.error !== undefined && !isJsonObject(record.error)) {
       throw new InvalidFixtureFileError(`${at}: error must be an object`);
     }
-    if (typeof record.delayMs !== "number" || !Number.isFinite(record.delayMs) || record.delayMs < 0) {
+    if (
+      typeof record.delayMs !== "number" ||
+      !Number.isFinite(record.delayMs) ||
+      record.delayMs < 0
+    ) {
       throw new InvalidFixtureFileError(`${at}: delayMs must be a finite nonnegative number`);
     }
     const expectedContent = recordContentSha256({
@@ -223,14 +250,21 @@ export function verifyFixtureFile(file: FixtureFile): readonly RequestBinding[] 
       delayMs: record.delayMs,
     });
     if (record.contentSha256 !== expectedContent) {
-      throw new InvalidFixtureFileError(`${at}: contentSha256 mismatch (expected ${expectedContent})`);
+      throw new InvalidFixtureFileError(
+        `${at}: contentSha256 mismatch (expected ${expectedContent})`,
+      );
     }
     const expectedRequest = requestSha256(record.request as Json, bindings);
     if (record.key.requestSha256 !== expectedRequest) {
-      throw new InvalidFixtureFileError(`${at}: key requestSha256 mismatch (expected ${expectedRequest})`);
+      throw new InvalidFixtureFileError(
+        `${at}: key requestSha256 mismatch (expected ${expectedRequest})`,
+      );
     }
     const id = keyId(record.key as unknown as FixtureKey);
-    if (seen.has(id)) throw new InvalidFixtureFileError(`${at}: duplicate fixture key ${canonicalJson(record.key)}`);
+    if (seen.has(id))
+      throw new InvalidFixtureFileError(
+        `${at}: duplicate fixture key ${canonicalJson(record.key)}`,
+      );
     seen.add(id);
   }
   return bindings;
@@ -264,6 +298,9 @@ export interface BenchmarkReplayStore extends ReplayStore {
   unconsumed(): readonly FixtureKey[];
   /** The verified fixture records backing this store (read-only view). */
   records(): readonly FixtureRecord[];
+  /** Failures outside lookup (for example resolver ambiguity) also invalidate the block. */
+  invalidate(error: ReplayMissError): never;
+  invalidations(): readonly ReplayMissError[];
 }
 
 export function createReplayStore(input: {
@@ -277,6 +314,7 @@ export function createReplayStore(input: {
   const consumedIds = new Set<string>();
   const consumedFamilies = new Map<string, number>();
   const misses: FixtureKey[] = [];
+  const invalidations: ReplayMissError[] = [];
   verifyFixtureFile({
     schemaVersion: FIXTURE_FILE_SCHEMA_VERSION,
     kind: "intelli-benchmark-fixtures",
@@ -310,7 +348,10 @@ export function createReplayStore(input: {
       // Key hash equality plus full canonical equality of the normalised
       // requests: a colliding key with different normalised bytes still fails
       // closed. Only declared binding paths are normalised (C30).
-      if (canonicalJson(normaliseByBindings(request, bindings)) !== canonicalJson(normaliseByBindings(record.request, bindings))) {
+      if (
+        canonicalJson(normaliseByBindings(request, bindings)) !==
+        canonicalJson(normaliseByBindings(record.request, bindings))
+      ) {
         misses.push(key);
         throw new ReplayMissError(
           "request-mismatch",
@@ -340,17 +381,29 @@ export function createReplayStore(input: {
       consumedFamilies.set(family, key.occurrence);
       return record;
     },
+    invalidate(error) {
+      invalidations.push(error);
+      if (error.key) misses.push(error.key);
+      throw error;
+    },
+    invalidations: () => [...invalidations],
     consumed: () => [...consumedKeys],
     misses: () => [...misses],
     unconsumed: () =>
       [...byKey.values()].map((record) => record.key).filter((key) => !consumedIds.has(keyId(key))),
     records: () => [...input.fixtures],
     assertValid() {
+      if (invalidations.length > 0) throw invalidations[0];
       if (misses.length > 0) {
         const detail = misses
-          .map((key) => `${key.boundary}/${key.scenario}/${key.operationNode}/occ-${key.occurrence}`)
+          .map(
+            (key) => `${key.boundary}/${key.scenario}/${key.operationNode}/occ-${key.occurrence}`,
+          )
           .join(", ");
-        throw new ReplayMissError("not-found", `Replay block invalid after ${misses.length} miss(es): ${detail}`);
+        throw new ReplayMissError(
+          "not-found",
+          `Replay block invalid after ${misses.length} miss(es): ${detail}`,
+        );
       }
     },
   };
@@ -379,7 +432,11 @@ export async function loadFixtureFile(path: string): Promise<FixtureFile> {
 /** Loads a verified fixture file into a replay store. */
 export async function loadReplayStore(path: string): Promise<BenchmarkReplayStore> {
   const file = await loadFixtureFile(path);
-  return createReplayStore({ fixtures: file.fixtures, bindings: file.bindings ?? [], scenario: file.scenario });
+  return createReplayStore({
+    fixtures: file.fixtures,
+    bindings: file.bindings ?? [],
+    scenario: file.scenario,
+  });
 }
 
 /** Writes a fixture file atomically (temp file then rename in the same directory). */
