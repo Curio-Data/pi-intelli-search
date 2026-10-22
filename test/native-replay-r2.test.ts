@@ -188,7 +188,7 @@ describe(`temporary R2 dry run against public R1 APIs on ${hostSelection.kind} P
     assert.deepEqual(guard.violations("r2-record"), []);
   });
 
-  it("replays the dry run below the real policy with zero network; full schemas and structuredContent on every branch", async () => {
+  it("replays the unit dry run with zero network; full result schemas exclude pre-admission argument rejection", async () => {
     await restoreWorkspace(snapshot, workspace);
     const block = createReplayBlock(files);
     widget = undefined;
