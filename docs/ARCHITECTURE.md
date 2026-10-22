@@ -71,7 +71,7 @@ The extension monitors `after_provider_response` events to detect Hypertext Tran
 
 Recovery is owned by `runModelWithPolicy()` in `src/core/llm.ts`, which `callLlm()` invokes once around native dispatch. Native streams receive `maxRetries: 0` so SDK retries do not compound with the shared policy. The policy's retry classifier mirrors `Pi` 1.3.0's own retry list (pi-ai `utils/retry.js`), covering transient provider load, gateway and wrapper wording, network and transport failures, premature stream endings and explicit retry guidance, while quota, budget and billing exhaustion fails fast without consuming the retry budget. Retries use full-jitter exponential backoff that honours any Retry-After hint, bounded by `llmRetryAttempts`, `retryBaseDelayMs`, and `retryMaxDelayMs`. On the [OpenRouter](https://openrouter.ai) path, the provider stream converts a failed HTTP request into `stopReason: "error"` with diagnostic text in `errorMessage`. The extension's classifier inspects that text rather than a raw HTTP response. SDK retries are disabled (`maxRetries: 0`); the shared policy owns reattempts. The `onResponse` callback only observes (it captures a Retry-After header) and never throws, because a throw would propagate out of the stream and bypass the retry loop.
 
-A hard per-call timeout (`llmTimeoutMs`) is applied with an `AbortController` via `callWithAbortTimeout()`, combined with the tool signal so Esc still cancels. This is necessary because the SDK request timeout does not cover a stalled streaming body, which a provider can hold open after a 200 under load. Stage 1 additionally retries a degraded-200 search (a valid response with zero links) up to `searchRetryAttempts` times, and `minRequestIntervalMs` optionally spaces the concurrent extract calls for keys with tight rate limits. These configured retries and application timeouts apply inside `intelli_research`. Native standalone search, extract and collate retain one attempt without an application-level timeout. The pure helpers live in `src/core/util.ts` and are unit-tested. Only actual application timer expiry is classified as an application timeout; permanent provider exceptions are not retried as timeouts.
+A hard per-call timeout (`llmTimeoutMs`) is applied with an `AbortController` via `callWithAbortTimeout()`, combined with the tool signal so Esc still cancels. This is necessary because the SDK request timeout does not cover a stalled streaming body, which a provider can hold open after a 200 under load. Stage 1 additionally retries a degraded-200 search (a valid response with zero links) up to `searchRetryAttempts` times, and `minRequestIntervalMs` optionally spaces the starts of every actual model attempt in the runtime, including retries and standalone calls, for keys with tight rate limits. These configured retries and application timeouts apply inside `intelli_research`. Native standalone search, extract and collate retain one attempt without an application-level timeout. The pure helpers live in `src/core/util.ts` and are unit-tested. Only actual application timer expiry is classified as an application timeout; permanent provider exceptions are not retried as timeouts.
 
 <a id="working-indicator-and-progress-bar"></a>
 ### Native Working Indicator and Progress Bar
@@ -84,17 +84,17 @@ In addition, the tool streams stage progress updates via `onUpdate()` and render
 
 `src/core/provenance.ts` builds the Source Assessment inventory from the successful extraction set and the same `SourceIdentity` used for cache writes. The model receives source IDs, page metadata and extracted content as JavaScript Object Notation (JSON), and returns synthesis only. It does not generate source inventories, relevance ratings or cache-file paths. Source IDs in prose, including grouped references, must resolve to evidence entries. Prose URLs must occur in the supplied extraction content or identify an evidence page; fragments and trailing-slash differences are accepted, but different hosts, schemes or query parameters are not merged. Cross-links remain content, not additional fetched sources. Model-generated numbered cache references and source inventories are rejected. Fenced, indented and inline code examples are preserved as data; ordinary project filenames such as `report.md` are not treated as cache declarations. These are reference checks, not proof that every factual claim is correct or grounded.
 
-Validation runs before rotation, downloads or cache writes. A failed collation preserves any prior report and index and raises an actionable error. Empty research extractions count as failures. Manual collation rejects an empty evidence set and duplicate extraction URLs, labels successful evidence as caller-supplied and marks absent full pages `Not cached`. Its optional `searchSummary` field remains accepted but does not enter synthesis. Native and MCP tools retain their input parameters; the `searchSummary` description now discloses that it is not synthesis evidence. The internal collation prompt and generated report prose intentionally change. Operation reports contain one Source Assessment inventory; the low-level report writer retains its legacy index only for callers that do not supply an inventory. `collate.summaryChars` continues to measure model synthesis, excluding the deterministic inventory.
+Validation runs before any report file is published. A failed collation publishes no report, leaves earlier runs and the index untouched and raises an actionable error. Empty research extractions count as failures. Manual collation rejects an empty evidence set and duplicate extraction URLs, labels successful evidence as caller-supplied and marks absent full pages `Not cached`. Its optional `searchSummary` field remains accepted but does not enter synthesis. Native and MCP tools retain their input parameters; the `searchSummary` description now discloses that it is not synthesis evidence. The internal collation prompt and generated report prose intentionally change. Operation reports contain one Source Assessment inventory; the low-level report writer retains its legacy index only for callers that do not supply an inventory. `collate.summaryChars` continues to measure model synthesis, excluding the deterministic inventory.
 
 ### Cache Suggest (Stage 5)
 
-After the main pipeline completes, a lightweight LLM judge (using the extract model for cost efficiency) compares the current query against up to 20 recent entries in `.search/.index.json`. It returns semantically related previous searches, which are formatted as a `📚 Related cached searches` table with exact report paths appended to the tool output. Prompt generation and response parsing share the same recent-history window.
+After collation and publication, a lightweight LLM judge (using the extract model for cost efficiency) compares the current query against up to 20 candidates. Candidates are the newest verified run for each query and UTC date in `.intelli-v1/index.json`, merged with valid legacy `.index.json` entries; the current query's own date and query key is excluded. A new-format candidate is offered only after its report marker and file hashes verify. Legacy candidates keep their stored query and timestamp and are never rewritten. The judge returns semantically related previous searches, formatted as a `📚 Related cached searches` table with exact report paths appended to the tool output. Prompt generation and response parsing share one frozen candidate array. The stage also runs for degraded outcomes, unlike earlier releases, so a degraded run can make one extra model call. This is a compatibility mapping of the previous behaviour; it adds no relevance grouping or retention policy.
 
 This stage is supplementary and never replaces the live search. The pipeline awaits the judge under configured timeout and retry policy, so it can add latency. Judge failure is logged without discarding completed research; cancellation still propagates. The recorded cost estimate is ≈500 input tokens, or ≈$0.0002.
 
 ## Dependency Boundary
 
-Native tools construct an explicit operation context through `src/native-operation-context.ts`, then invoke `src/core/operations/`. The core receives resolved settings, model client, workspace paths, package identity, cancellation, progress and diagnostics. It returns text, details and an explicit completed or degraded outcome. Native wrappers preserve existing result payloads, registry diagnostics and rendering.
+The four registered native tools bind through `src/native-registered-tools.ts` to the session-scoped runtime in `src/native-operation-runtime.ts`, then invoke the core operations. The core receives resolved settings, a scoped model client, workspace paths, package identity, authoritative operation services (cancellation, clock, progress, attempt ledger, fetch client and run store) and diagnostics. It returns text, details and an explicit outcome, plus full operation data and numeric usage. Native wrappers preserve existing result payloads, registry diagnostics and rendering, and add the full data under `details.intelli`. Direct legacy helper exports retained for characterisation still use `src/native-operation-context.ts` and the earlier cache layout; they are not the registered execution path.
 
 Model calls pass through `src/native-model-client.ts` to `callLlm()`. The native transport owns authentication, provider hooks and facade-only dispatch; `src/core/llm.ts` owns the single retry/timeout policy. Host settings discovery and model registration stay outside the core. Canonical schemas and shared helpers live in the core, with forwarding exports at former paths.
 
@@ -108,13 +108,39 @@ The standalone bundle externalises its declared third-party dependencies and imp
 
 ### Protocol Serving
 
-The standalone package serves the four canonical tools as an MCP server over stdio through the official split server package (`@modelcontextprotocol/server`, lockfile-pinned). Tool names and input parameters mirror the native tools. The initialize response carries server `instructions` for routing and optional skill loading, and the tool descriptions carry the same guidance. Hosts that defer tool definitions receive server instructions before loading those definitions; the guidance does not enforce model choice. One operation runs at a time with a bounded queue; stage progress maps to `notifications/progress` when the client supplies a token, and client cancellation aborts through the shared model policy. A startup guard diverts every non-protocol write away from standard output, so the stream carries protocol frames only; diagnostics use standard error. Closing standard input or receiving `SIGINT`/`SIGTERM` drains and aborts in-flight and queued work.
+The standalone package serves the four canonical tools as an MCP server over stdio through the official split server package (`@modelcontextprotocol/server`, lockfile-pinned). Tool names and input parameters mirror the native tools. The initialize response carries server `instructions` for routing and optional skill loading, and the tool descriptions carry the same guidance. Hosts that defer tool definitions receive server instructions before loading those definitions; the guidance does not enforce model choice. Operation admission defaults to two active and eight queued requests, configurable through the top-level `admission` object (1 to 16 active, 0 to 256 queued); a full queue returns a busy tool error, and a cancelled queued request settles without starting. Admission is separate from the runtime's model and fetch capacity, which parallel operations share. Stage progress maps to `notifications/progress` when the client supplies a token, and client cancellation aborts through the shared model policy. A startup guard diverts every non-protocol write away from standard output, so the stream carries protocol frames only; diagnostics use standard error. Closing standard input or receiving `SIGINT`/`SIGTERM` drains and aborts in-flight and queued work.
 
 Successful and degraded results carry the same complete operation text in `content` and `structuredContent.text`. An explicitly selected defective configuration file leaves the protocol available with actionable tool errors and is reread on each call until it loads. Missing launcher arguments and invalid workspaces still fail before serving; loaded configuration and startup credentials remain fixed until restart.
 
 ### Host Plugins
 
 Thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/`, generated from one shared guidance source in `guidance/` by `scripts/generate-plugin-bundles.mjs`; repository marketplace catalogues live at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. Launchers pin the exact MCP package version through `npx` and contain no pipeline code or credentials; each host's credential and workspace forwarding follows its own environment rules, documented in the generated skills. `npm run check:plugins` is the bidirectional drift gate between the generator and the committed tree.
+
+## Execution and Ownership
+
+Each adapter runtime owns one execution coordinator: one per native `Pi` session generation, and one per MCP runtime. The coordinator captures validated `execution` settings when the runtime starts; a changed setting takes effect only in a replacement runtime. When a native session is replaced or reloaded, the old generation stops admissions, aborts and drains its work, and only then does the new coordinator start, so two generations never run work at the same time.
+
+- **Operations:** every tool call takes an operation lease before preflight. The operation owns its page request chains, model attempts, timers, staging files and cache writers, and returns only after all of them settle, on completed, degraded, error and cancelled paths. No work continues after return. Research follows one order: admission, preflight, search, page phase, evidence freeze, collation, late drain, publication, suggestions, final accounting, settlement.
+- **Model Attempts:** admission happens inside the single retry owner, immediately around each transport attempt. A queued attempt holds no permit and has no usage record; its timeout starts at dispatch; its permit is released before backoff and reacquired for a retry. All attempts, including late extraction, count towards `modelConcurrency`. Page extraction may use at most `modelConcurrency` minus the one-slot critical reserve; search, collation and suggestion calls may use any free slot. When both classes wait, dispatch follows a repeating cycle of three critical opportunities to one page opportunity, round-robin between operations within each class. `minRequestIntervalMs` advances only when an attempt is actually dispatched.
+- **Policies:** research applies the configured retry and application timeout. Native standalone search, extract and collate keep one attempt and no application timeout, but still pass admission and pacing. MCP applies its explicit configured policy to every model call.
+- **Pages:** candidate URLs are filtered, deduplicated and clamped before page work, and receive stable `S1`, `S2`, … identifiers in that order. Every physical request chain (each fetch variant, alternate probe and documentation download) holds an aggregate fetch permit for its whole request, redirect, body and cancellation lifetime, and runs in its own child process. Bodies are read incrementally and rejected beyond the decoded byte limit. Accepted pages are spooled to private staging below `<cacheDir>/.staging/`, which releases their in-memory bodies. Streaming mode holds each page's slot through its extraction; barrier mode releases the slot after spooling, waits for the whole fetch stage and then reads staged files under the extraction limit.
+- **Deadline:** with an enabled deadline, the evidence set freezes at the first of all pages finishing, the adaptive cutoff (once the minimum source count is met) or the ceiling. Freezing cancels queued and in-flight fetches but not extractions already started. Only extractions finished before the freeze enter collation; later successes are saved under `late/` as non-evidence. With the deadline disabled, the freeze waits for every page.
+- **Cancellation:** abort from any state cancels and drains owned work. Runtime close cancels every operation and waits for settlement. The acceptance target is 5,000 milliseconds from abort to settlement; deterministic tests with scripted models and local pages settled every exercised phase within 17 milliseconds. Live provider cancellation latency and slow or unresponsive filesystems are not covered.
+
+### Results and Accounting
+
+All operations return their legacy `text`, `details` and `outcome`, plus full operation data and numeric usage; `error` and `aborted` outcomes carry final partial data. Native details keep their existing keys, add `intelli` with the full data and `execution` with the operation receipt. The MCP structured result is a compact projection that keeps the complete text and details and adds operation identity, report location, counts, elapsed time and usage completeness. Its added size is bounded at 8,192 encoded bytes over the legacy envelope; this is an output-size limit, not a measured token saving.
+
+A per-operation attempt ledger records one terminal observation for every dispatched attempt, including errors, timeouts and aborts. Missing provider observations stay unknown rather than zero, and `costComplete` is true only when every dispatched attempt has a provider-reported cost. When a host cancels a call, settled usage may not reach the host: native and MCP receipts then record parent delivery as `unknown`. On native hosts without returned error receipts, an operational failure throws and its partial accounting stays local. Session-level billing for cancelled calls is therefore not claimed complete.
+
+### Execution Limits
+
+- **Memory:** content limits bound accepted bytes, not process memory. Qualification on *Linux* observed one near-limit 8 MiB page adding ≈140-200 MiB of resident memory and four such pages adding ≈508 MiB, from decoded strings, two full reads by the HTML variant and alternate probe, and repeated parsing. No heap cap is claimed. Parallel MCP operations multiply this.
+- **Disk:** every accepted page stays in private staging until the run settles, so staging holds the whole fetched candidate set, up to three bytes per retained character for each page, in both page modes.
+- **Child Processes:** each physical request chain starts a child process, adding start-up cost and ≈50-82 MiB peak resident memory per chain in the same qualification.
+- **Trust:** the page child uses its own TLS stack with bundled roots plus `SSL_CERT_FILE` and `SSL_CERT_DIR`. `NODE_EXTRA_CA_CERTS` reaches the child's environment but does not affect page trust. Each child receives only an allow-listed environment captured at runtime start; the provider key variable is excluded.
+- **Discovery:** documentation discovery has its own cancellation, combined with the operation signal, and is cancelled at finalisation. A download cut off there leaves no diagnostic.
+- **Host Sequencing:** native `intelli_research` and `intelli_collate` declare sequential execution, so `Pi` runs each call one at a time with other tool calls; page parallelism happens inside one research call. Native `intelli_search` and `intelli_extract` keep the host default execution mode, and MCP admission runs whole operations in parallel.
 
 ## Source Code Structure
 
@@ -130,7 +156,13 @@ src/
 │   ├── paths.ts            # Physical workspace roots and display policy
 │   ├── fetch.ts            # Dual fetch and documentation downloads
 │   ├── console.ts          # Async-scoped dependency diagnostic suppression
-│   ├── cache.ts            # Artifacts, locks and index
+│   ├── cache.ts            # Legacy artifacts, locks and index
+│   ├── research-result.ts  # Registered research pipeline and finalisation
+│   ├── execution-*.ts      # Execution settings and capacity coordinator
+│   ├── fetch-client.ts     # Bounded page fetch and documentation discovery
+│   ├── page-*.ts           # Child-process transport, staging and deadline
+│   ├── run-store.ts        # Run allocation, publication, index and accounting
+│   ├── run-*.ts            # Formats, journal, lock and suggestion candidates
 │   ├── telemetry.ts        # Injected identity and local sidecar
 │   ├── annotations.ts      # Citation harvesting
 │   ├── messages.ts         # Prompt messages and cache appendices
@@ -139,7 +171,9 @@ src/
 │   ├── progress.ts         # Host-neutral pipeline progress
 │   ├── types.ts            # Shared data types
 │   └── util.ts             # Pure helpers and concurrency
-├── native-operation-context.ts # Native context and result/progress mapping
+├── native-registered-tools.ts  # Registered tool binding
+├── native-operation-runtime.ts # Session-scoped runtime, receipts and generations
+├── native-operation-context.ts # Legacy helper context and result/progress mapping
 ├── native-model-client.ts  # Model adapter delegating to callLlm()
 ├── native-identity.ts      # Native manifest identity
 ├── agent-dir.ts            # Native host-directory discovery
@@ -161,33 +195,48 @@ plugins/                    # Generated Claude Code and Codex bundles (manifests
 
 ## Cache Structure
 
+Registered research and collation write each run once, into a new directory in the `.intelli-v1` namespace below the configured cache root. [Cache and Recovery](CACHE.md) lists every file, the diagnostics and the operator procedures; this section explains the design.
+
 ```
 .search/
-├── 2026-04-19-d1-worker-api-3f7a2c/
-│   ├── report.md                              # Synthesis + authoritative source inventory
-│   ├── query.txt                              # Original search query
-│   ├── meta.json                              # Local-only telemetry sidecar (v0.11.0+)
-│   ├── extractions/                           # Per-page LLM extractions (≈3-5K each)
-│   │   ├── 01-developers-cloudflare-com.md
-│   │   └── 02-developers-cloudflare-com.md
-│   └── sources/                               # Full content
-│       ├── 01-developers-cloudflare-com.md    # Defuddle OR raw Markdown (best score)
-│       ├── 02-developers-cloudflare-com.md
-│       └── llms-full-developers-cloudflare-com.md   # Raw llms-full.txt (auto-downloaded)
-└── .index.json                                # Index of all cached searches
+├── .intelli-v1/
+│   ├── namespace.json            # Namespace identity
+│   ├── allocations.ndjson        # Append-only, checksum-chained journal
+│   ├── writer.lock               # Permanent kernel-lock file
+│   ├── index.json                # Secondary, rebuildable index
+│   └── runs/<label>-<nonce>/     # One directory per admitted run
+│       ├── reservation.json
+│       ├── committed.json        # Report marker
+│       ├── report.md, query.txt, run.json
+│       ├── extractions/S1.md, sources/P1.md, late/S4.md
+│       ├── accounting.json, accounting.committed.json
+│       └── meta.json             # Optional telemetry
+├── .staging/                     # Private page staging
+├── .index.json                   # Legacy, read only
+└── <date>-<slug>-<hash>/         # Legacy runs, read only
 ```
 
-Each research run writes a cache entry named `<date>-<slug>-<hash>`. The `<hash>` is six hexadecimal characters from a Secure Hash Algorithm 1 (SHA-1) hash of the full query. It distinguishes queries sharing a readable stem and reduces collision risk; it does not guarantee unique names. The same query produces the same hash. Runs of that query on the same Coordinated Universal Time (UTC) date refresh the same directory; a different UTC date produces a different directory. A completed refresh attempts to archive the previous report, extractions, numbered sources and telemetry sidecar to a numbered sibling folder (`<slug>.1`, then `.2` and so on). Rotation moves files individually, not atomically: failure is logged and falls back to in-place replacement, and an interrupted rotation can leave a partial archive. Copy important reports elsewhere before repeating a query. Supplementary `llms-full-*` documentation stays with the live folder. A degraded refresh preserves a prior successful report and its artefact set untouched, recording only the failed attempt in `meta.json`. Writers use a short cache lock and per-file atomic replacements; lockless readers are not promised whole-directory snapshot visibility.
+- **Allocation:** under the writer lock, the run store validates the complete journal and namespace identity, appends one checksum-chained record with the next sequence number, syncs it, then creates and syncs the run directory and `reservation.json` with exclusive creation. A crash after the journal sync leaves an allowed gap; sequences are never reused. The directory label is the UTC date plus up to five query words and carries no identity; a 32-character random nonce follows it, and up to 16 collisions are retried.
+- **Publication:** all listed files are written and synced inside the owned directory, staged pages are streamed in, and `committed.json` is published last by an atomic rename. That rename is the commit point: before it, cancellation publishes nothing; after it, an abort cannot roll the report back. Readers accept only runs whose marker agrees with the journal and reservation and whose files match their recorded lengths and SHA-256 digests. Accounting is appended afterwards with its own marker and never invalidates the report.
+- **Lock:** `writer.lock` is a permanent regular file locked through the kernel by `fs-native-extensions` `tryLock`, polled every 25 milliseconds for up to 2,000 milliseconds. Process exit releases it, including `SIGKILL`. The file is never unlinked, renamed or truncated, and there is no stale-lock cleanup. No network or model call runs under it. Busy, unsupported or unloadable locking returns an unavailable-persistence diagnostic without discarding the answer.
+- **Index:** `index.json` is secondary. A corrupt index is copied aside and rebuilt from verified runs on the next publication; readers rebuild candidates in memory without rewriting it. An oversized index is left untouched and withdraws new-format suggestions. The index never restores allocation numbering.
+- **Useful Answers:** allocation, journal, marker or index failure never erases a computed answer. The result reports `Persistence unavailable` with the diagnostic, or a committed report with an index or accounting diagnostic. Degraded research publishes no report; the reserved directory keeps its reservation and optional telemetry, and the result reports persistence as `not-requested` without naming it.
+- **Legacy Bridge:** directories and `.index.json` from earlier releases are read for suggestions only, using their stored query and timestamp. Unknown provenance stays unknown, and nothing in the legacy layout is rewritten, rotated or deleted. Old and new writers are isolated by namespace rather than by a shared lock.
+- **Retention:** nothing deletes historical or incomplete runs, and index selection is not disk retention. The MCP whole-cache safety scan fails closed at 100,000 entries before inference rather than weakening the scan or deleting files. Journal growth is bounded by a 67,108,864-byte ceiling with no compaction. Growth has not been measured; operators archive offline as described in [Cache and Recovery](CACHE.md#offline-archival).
+
+Direct legacy helper exports retain the earlier `<date>-<slug>-<hash>/` layout, same-day rotation to numbered siblings and `.index.json` writes for characterisation. The registered tools do not use them.
+
+The persistence protocol is verified by deterministic tests and one live native research regression on *Linux* x86-64 with *Node.js* 24 on local encrypted btrfs. Other operating systems, network, overlay and remotely shared filesystems, slow storage and long-term growth are not verified. Path and link checks reject pre-existing escapes; they are not a sandbox against hostile concurrent filesystem mutation.
 
 ### Physical and Display Paths
 
-Both cache-writing tools resolve physical paths against the absolute session workspace, including the shared index and locks. `makeCachePath()` returns an absolute path. Prompts, result details, appendices and report headers use a separate display path, preserving native relative paths such as `.search/<slug>/`. Absolute and parent-relative native cache settings remain supported.
+Both cache-writing tools resolve physical paths against the absolute session workspace, including the namespace, lock and staging. Prompts, result details, appendices and report headers use a separate display path, preserving native relative paths such as `.search/.intelli-v1/runs/<run>/`. Absolute and parent-relative native cache settings remain supported.
 
-Documentation downloads stage in unique directories under the configured cache root's `.staging/`, not the operating-system temporary directory. Writers settle before unconditional cleanup, including cancellation and cache-write failure. Downloads occur outside cache locks. Optional staging setup or cleanup failure is logged and does not discard the completed research result. Failed cleanup can leave a staging directory; there is no automatic sweep. Stop all research processes using the cache before inspecting the logged path and removing an abandoned directory. Native absolute and parent-relative cache settings can place staging outside the workspace; the standalone adapter separately validates workspace containment and rejects existing cache links.
+Pages and documentation downloads stage in unique directories under the configured cache root's `.staging/`, not the operating-system temporary directory. Writers settle before cleanup, including cancellation and publication failure. Failed cleanup can leave a staging directory; there is no automatic sweep. Stop all processes using the cache before inspecting the logged path and removing an abandoned directory. Native absolute and parent-relative cache settings can place staging outside the workspace; the standalone adapter separately validates workspace containment and rejects existing cache links.
 
 ### Telemetry Sidecar
 
-Unless disabled, completed and documented degraded `intelli_research` paths attempt a best-effort `meta.json` write, including no links found, all fetches failed and all extractions failed. Cancellation and thrown failures do not all produce a sidecar. The `outcome` field records which exit path produced the file, so the analysis script can measure degradation rates, not just success. The schema is owned by `src/core/telemetry.ts` and is additive-only: future versions add optional fields and never rename or remove existing ones.
+Unless disabled, completed and documented degraded `intelli_research` paths attempt a best-effort `meta.json` write into the run directory, including no links found, all fetches failed and all extractions failed. Degraded runs therefore leave telemetry in an unpublished run directory. No sidecar is written when allocation fails, after an observed cancellation or on thrown failures. The `outcome` field records which exit path produced the file, so the analysis script can measure degradation rates, not just success. The schema is owned by `src/core/telemetry.ts` and is additive-only: future versions add optional fields and never rename or remove existing ones.
 
 ```jsonc
 {
