@@ -30,6 +30,22 @@ Builders may implement isolated new deadline, staging, publication and qualifica
 
 Use two implementation support slots and a serial validation lane. Do not share mutable worktree state, run competing full gates or delegate central integration through an isolated-file brief.
 
+## F7 Replay Amendment
+
+On 22 October 2026, after the independent M3 review blocked multi-research suggestion replay, the owner was asked:
+
+> D1) Approve a narrowly versioned replay-contract/method amendment covering generated paths/timestamps and frozen suggestion membership/order? This is required to continue past M3. No study quota or release authority was assumed.
+
+The owner's answer was:
+
+> yes
+>
+> Let's get afrsh agen to do it; do the fresh agent handover
+
+The owner approves the narrow amendment scope and assigns its execution to a fresh agent. Prepare, freeze and independently review the versioned C30/T30/codemode-method amendment before implementing against its accepted revision. Exact generated cache path and Coordinated Universal Time (UTC) bindings must also account for parallel suggestion-candidate membership and order before node derivation and hashing. Query, source and code text must remain exact. The approval selects no normalisation algorithm, does not authorise silently serialising away the prescribed parallel population, and does not permit hidden fixed clocks/run IDs, disabled suggestions, weakened misses or corpus relabelling.
+
+This is approval to resolve F7 through the recorded specification-revision process, not an already amended or accepted contract, corrected implementation, M3 exit or live-regression verdict. Preserve the accepted P0-2 bundle and M1/M2 history. The complete M3–M6 programme and both separately gated releases remain the task. Do not request this scope approval again. New study spend, other live scenarios, staging, publication and merge authority are unchanged.
+
 ## Unchanged Approvals
 
 Standing mandatory `01_main.sh` approval stays with the unfinished `feat/codemode-research` branch. This decision does not transfer that approval to builder branches or approve studies, other live scenarios, staging, publication or merging. Final independent reviews, paid-tranche decisions, candidate/release ownership and the R1/R2 split remain unchanged.
