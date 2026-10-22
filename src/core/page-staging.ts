@@ -286,6 +286,12 @@ export function createPageStaging(options: PageStagingOptions): PageStaging {
     record.work = new Promise<void>((resolve) => {
       settleWork = resolve;
     });
+    let workSettled = false;
+    const settleWorkOnce = (): void => {
+      if (workSettled) return;
+      workSettled = true;
+      settleWork();
+    };
     let underlying: Promise<void> | undefined;
     try {
       const dir = await directory();
@@ -299,7 +305,7 @@ export function createPageStaging(options: PageStagingOptions): PageStaging {
       );
       const writer = writeStaged(path, content);
       underlying = writer;
-      return await new Promise<PageStagingWriteResult>((resolve, reject) => {
+      const facing = new Promise<PageStagingWriteResult>((resolve, reject) => {
         let settled = false;
         const settleFacing = (deliver: () => void) => {
           if (settled) return;
@@ -318,13 +324,21 @@ export function createPageStaging(options: PageStagingOptions): PageStaging {
           (error: unknown) => settleFacing(() => reject(error)),
         );
       });
+      // The caller observes cancellation promptly: the write promise settles
+      // with the facing outcome, never held open by a stalled physical writer.
+      // The physical writer stays owned: record.work settles only after BOTH
+      // the facing outcome and the writer settle, so release()/settle() still
+      // await it and no later slot is granted early. This continuation runs to
+      // completion on its own (allSettled cannot reject, facing settles no
+      // later than the writer); it is not an abandoned promise or a timeout.
+      Promise.allSettled([facing, writer]).then(() => settleWorkOnce());
+      return await facing;
     } finally {
-      try {
-        // The physical writer is never abandoned, even after cancellation.
-        await underlying?.then(() => undefined, () => undefined);
-      } finally {
-        settleWork();
-      }
+      // With a started writer, the allSettled continuation owns work
+      // settlement. The body settles work here only for pre-writer faults
+      // (directory fault or early state/abort recheck), where there is no
+      // physical writer to await.
+      if (!underlying) settleWorkOnce();
     }
   }
 
