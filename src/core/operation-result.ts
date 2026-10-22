@@ -9,6 +9,7 @@ import type {
   FullData,
   NumericHostUsage,
   Diagnostic,
+  ModelBinding,
   OperationContext,
   OperationFailure,
   OperationResult,
@@ -19,7 +20,10 @@ import { withOperationDiagnostics } from "./operation-diagnostics.js";
 import { parseExecutionSettings } from "./execution-settings.js";
 
 export class CoreConfigurationError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly bindings: readonly ModelBinding[] = [],
+  ) {
     super(message);
     this.name = "CoreConfigurationError";
   }
@@ -89,6 +93,7 @@ export async function produceCoreResult(
   if (missing.length)
     throw new CoreConfigurationError(
       `Configured model unavailable for role(s): ${missing.map((item) => `${item.role}: ${item.config.provider}/${item.config.model}`).join(", ")}`,
+      missing,
     );
   const producerOffset = Math.max(0, clock.monotonicMs() - started);
   const producer = create(legacy);

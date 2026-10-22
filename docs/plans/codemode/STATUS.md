@@ -4,7 +4,9 @@ Specification revision: `P0-2`. Status: accepted contract freeze after independe
 
 ## Current Implementation Checkpoint
 
-M1 is in progress with a committed, unreviewed public manual-workflow prototype, not an accepted milestone. `.tmp/codemode-m1/CHECKPOINT.md` records actual source changes, deterministic checks/failures and remaining acceptance work. The first-upgrade migration notice, source review, fresh installs and mandatory native regression are still pending for these bytes. No new live run was made.
+M1 remains pending acceptance. The public manual-workflow candidate `499d962` closes migration-notice preservation, actual public-signature assertions, diagnostic lifetime, cleanup-inclusive timing and adapter schema/compact-budget coverage. All eleven sequential gates, including both fresh installs, passed and were independently reproduced. Fresh Opus review narrowly blocked native missing-model guidance and stale status notes; the correction restores native recovery hints and adds a no-dispatch regression. That delta still requires exact-candidate review and the mandatory native regression. No new live run was made.
+
+[Development](DEVELOPMENT.md#m1-manual-workflow-candidate) records the review, failures and limits. Local candidate evidence is under `.tmp/codemode-m1-resume-20261021/`, with the earlier checkpoint preserved under `.tmp/codemode-m1/`. Those ignored files exist only in the retained worktree, not a clean clone. Research, the all-five schema map and immutable replay remain M2/M3; this is not P4 exit.
 
 Approved helper branches remain separate: deadline `3eef294` has passing focused checks but no integration/independent acceptance; staging `5932457` is WIP with an unresolved writer-cancellation test hang. Retain both worktrees and evidence; neither is merged. The active resume names the next concrete M1 actions and safe recommissioning points. Earlier accepted slices and their live regressions remain revision-specific history, not evidence that this prototype passes.
 

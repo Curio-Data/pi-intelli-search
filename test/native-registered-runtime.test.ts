@@ -180,6 +180,56 @@ async function fixture(transport: Transport, options: NativeRuntimeOptions = {},
   };
 }
 
+test("registered manual model preflight errors retain native recovery hints without dispatch (T15/T17)", async (t) => {
+  for (const supportsErrorResults of [false, true]) {
+    const f = await fixture(
+      async () => {
+        throw new Error("must not dispatch");
+      },
+      { supportsErrorResults },
+    );
+    const find = t.mock.method(f.ctx.modelRegistry, "find", () => undefined);
+    Object.assign(f.ctx.modelRegistry, {
+      getAll: () => [
+        { provider: "openrouter", id: "same-model-corrected" },
+        { provider: "other-provider", id: "foreign-model" },
+      ],
+    });
+    try {
+      for (const name of ["intelli_search", "intelli_extract", "intelli_collate"] as const) {
+        await assert.rejects(
+          f.run(
+            name,
+            name === "intelli_search"
+              ? { query: "Q" }
+              : name === "intelli_extract"
+                ? { ...page, query: "Q" }
+                : suppliedCollation(),
+          ),
+          (error: unknown) => {
+            assert(error instanceof Error && !(error instanceof NativeExecutionError));
+            assert.match(error.message, new RegExp(`${name.slice(8)}: openrouter/same-model`));
+            assert.match(error.message, /Available openrouter models: same-model-corrected/);
+            assert.match(error.message, /settings.json/);
+            assert.match(error.message, /Run \/login to add API keys/);
+            assert.match(error.message, /\/model to see available models/);
+            assert(!error.message.includes("foreign-model"));
+            assert(
+              !("usage" in error) && !("data" in error),
+              "ordinary preflight invents no receipt",
+            );
+            return true;
+          },
+        );
+      }
+      assert.equal(f.updates.length, 0);
+    } finally {
+      find.mock.restore();
+      await f.cleanup();
+    }
+  }
+});
+
 test("registered entry uses scoped standalone inference, numeric usage and no mutable transport harness (T11/T15/T16)", async (t) => {
   t.mock.method(globalThis, "fetch", async () => {
     throw new Error("network forbidden");

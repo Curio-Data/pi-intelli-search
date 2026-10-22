@@ -10,6 +10,7 @@ import type {
   Clock,
   FullData,
   Diagnostic,
+  ModelBinding,
   OperationContext,
   OperationInputs,
   OperationResult,
@@ -19,7 +20,11 @@ import type {
 import { createRuntimeGenerations, type OperationRuntime } from "./core/operation-runtime.js";
 import { AdmissionError } from "./core/execution-coordinator.js";
 import { createSystemClock } from "./core/clock.js";
-import { createOperationResultBoundary, isOperationFailure } from "./core/operation-result.js";
+import {
+  createOperationResultBoundary,
+  isOperationFailure,
+  CoreConfigurationError,
+} from "./core/operation-result.js";
 import { collate } from "./core/operations/collate.js";
 import { parseExecutionSettings, validateRequestInterval } from "./core/execution-settings.js";
 import { createRunStore } from "./core/run-store.js";
@@ -291,6 +296,19 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
           }),
         warn: (message: string) => diagnose({ code: "OPERATION_DIAGNOSTIC", message }),
       };
+      const missingModels = (bindings: readonly ModelBinding[]) => {
+        const lines = bindings.map((binding) => {
+          const hint = describeModelCatalog(
+            modelContext,
+            binding.config.provider,
+            binding.config.model,
+          );
+          return `  ${binding.role}: ${binding.config.provider}/${binding.config.model}${hint ? `\n${hint}` : ""}`;
+        });
+        return new Error(
+          `Configured model(s) not found in Pi's model registry:\n${lines.join("\n")}\nCheck your settings.json for typos or missing provider configuration. Run /login to add API keys, or /model to see available models.`,
+        );
+      };
       const operationId = randomUUID();
       const boundary =
         name !== "intelli_research"
@@ -396,19 +414,7 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
                     options.researchDependencies,
                   );
                 } catch (error) {
-                  if (error instanceof MissingModelsError) {
-                    const lines = error.bindings.map((binding) => {
-                      const hint = describeModelCatalog(
-                        modelContext,
-                        binding.config.provider,
-                        binding.config.model,
-                      );
-                      return `  ${binding.role}: ${binding.config.provider}/${binding.config.model}${hint ? `\n${hint}` : ""}`;
-                    });
-                    throw new Error(
-                      `Configured model(s) not found in Pi's model registry:\n${lines.join("\n")}\nCheck your settings.json for typos or missing provider configuration. Run /login to add API keys, or /model to see available models.`,
-                    );
-                  }
+                  if (error instanceof MissingModelsError) throw missingModels(error.bindings);
                   throw error;
                 } finally {
                   if (captured.indicator?.operationId === operationId) {
@@ -439,6 +445,8 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
           usage: full?.usage ?? owned!.ledger.hostUsage(),
         };
       } catch (error) {
+        // Configuration remains an ordinary error, with native recovery guidance.
+        if (error instanceof CoreConfigurationError) throw missingModels(error.bindings);
         // Runtime.run has drained before any ledger projection, including errors.
         if (
           !owned ||
