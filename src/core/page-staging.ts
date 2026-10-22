@@ -2,9 +2,10 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
 // C19 page staging: bounded retained-page slots plus a private spool directory
-// below <cacheRoot>/.staging/. A slot is logical page admission, acquired
-// before fetching and held through extraction; it is not a physical fetch
-// permit and this helper never calls the lease's acquireFetch. The coordinator
+// below <cacheRoot>/.staging/. A slot bounds retained page bodies: streaming
+// holds it through extraction; a full-fetch barrier releases it after spooling
+// and later reads staged files under bounded extraction admission. It is not a
+// physical fetch permit; this helper never calls acquireFetch. The coordinator
 // owns publication (RunStore.commit streams staged files through
 // Artifact.stagedPath), finalisation order and the lease; this helper never
 // calls the lease's abort or settle and never deletes anything outside its own
@@ -48,7 +49,7 @@ export interface PageStagingSlot {
    */
   write(content: string): Promise<PageStagingWriteResult>;
   /**
-   * Idempotent. Marks the slot unWritable, settles the owned writer (if any)
+   * Idempotent. Marks the slot unwritable, settles the owned writer (if any)
    * and only then grants the slot to the longest-queued waiter. Successful
    * staged files are retained for RunStore.commit until settlement.
    */
@@ -81,9 +82,8 @@ export interface PageStagingOptions {
   /** Internal UTF-8 byte ceiling per staged page; not a new setting. */
   readonly maxPageBytes: number;
   /**
-   * Test seam replacing the physical staged-file write. Proposed internal
-   * contract addition (see the builder report); production callers omit it and
-   * get exclusive-creation private regular files.
+   * Captured internal test seam replacing the physical staged-file write.
+   * Production callers omit it and get exclusive-creation private regular files.
    */
   readonly writeStagedFile?: (path: string, content: string) => Promise<void>;
 }

@@ -8,7 +8,7 @@ M1 is accepted for the public manual workflow at technical source `26406720f1a04
 
 [Development](DEVELOPMENT.md#m1-manual-workflow-candidate) records the review, failures and [mandatory regression](DEVELOPMENT.md#m1-native-regression). Local candidate evidence is under `.tmp/codemode-m1-resume-20261021/`, with the earlier checkpoint preserved under `.tmp/codemode-m1/`. Those ignored files exist only in the retained worktree, not a clean clone. Research, the all-five schema map and immutable replay remain M2/M3; this is not P4 exit.
 
-Approved helper branches remain separate: deadline `3eef294` has passing focused checks but no integration/independent acceptance; staging `5932457` is WIP with an unresolved writer-cancellation test hang. Retain both worktrees and evidence; neither is merged. The active resume names the next concrete M1 actions and safe recommissioning points. Earlier accepted slices and their live regressions remain revision-specific history, not evidence that this prototype passes.
+M2 is in progress. Corrected deadline `82ab7c0` and staging `1a06713` have fresh independent integration-readiness acceptance and are merged with their histories preserved. Both retained worktrees and all failed reports/logs remain available. The coordinator recorded a mode-specific barrier staging disposition for later implementation and technical fidelity review. Research still uses legacy scheduling/publication; the helpers do not establish M2 acceptance, bounded-service activation or C06/T19 qualification. [Development](DEVELOPMENT.md#m2-helper-integration) records exact evidence and conditions.
 
 ## Owner Decisions
 

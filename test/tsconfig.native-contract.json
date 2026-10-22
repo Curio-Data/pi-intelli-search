@@ -14,6 +14,8 @@
     "core-scoped-policy.test.ts",
     "core-operation-runtime.test.ts",
     "core-page-transport.test.ts",
+    "core-page-deadline.test.ts",
+    "core-page-staging.test.ts",
     "core-fetch-client.test.ts",
     "core-fetch-operation.test.ts",
     "core-execution-settings.test.ts",

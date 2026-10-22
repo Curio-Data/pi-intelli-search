@@ -63,6 +63,8 @@ describe("shared engine dependency boundary", () => {
         "core/execution-coordinator.ts",
         "core/operation-runtime.ts",
         "core/page-transport.ts",
+        "core/page-deadline.ts",
+        "core/page-staging.ts",
         "core/execution-settings.ts",
         "core/standalone-result.ts",
         "core/collate-result.ts",
