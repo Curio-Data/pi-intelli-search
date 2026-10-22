@@ -12,6 +12,7 @@ import {
   compactOutputSchema,
   CoreOperationFailure,
 } from "../src/core/index.js";
+import { observeOperationDiagnostic } from "../src/core/operation-diagnostics.js";
 import { compactResult } from "../src/core/compact-result.js";
 import { createOperationRuntime } from "../src/core/operation-runtime.js";
 import { createFetchClient } from "../src/core/fetch-client.js";
@@ -73,6 +74,7 @@ async function fixture(
     urls?: string[];
     transport?: PageTransport;
     clock?: Clock;
+    search?: (request: ScopedRequest, signal: AbortSignal) => Promise<string>;
     extract?: (request: ScopedRequest, signal: AbortSignal) => Promise<string>;
     collate?: (request: ScopedRequest, signal: AbortSignal) => Promise<string>;
     store?: (store: RunStore) => RunStore;
@@ -177,9 +179,12 @@ async function fixture(
             });
             let text: string;
             if (request.scope.role === "search")
-              text = (options.urls ?? ["https://example.org/one", "https://example.org/two"])
-                .map((url, i) => `[Page ${i}](${url})`)
-                .join(" ");
+              text = await (options.search?.(request, control.signal) ??
+                Promise.resolve(
+                  (options.urls ?? ["https://example.org/one", "https://example.org/two"])
+                    .map((url, i) => `[Page ${i}](${url})`)
+                    .join(" "),
+                ));
             else if (request.scope.role === "extract")
               text = await (options.extract?.(request, control.signal) ??
                 Promise.resolve("Official docs, current.\nExtracted facts"));
@@ -226,6 +231,13 @@ for (const pageExecution of ["streaming", "barrier"] as const) {
     });
     const result = await f.run();
     assert(Check(operationOutputSchemas.intelli_research, result.data));
+    assert(!Check(operationOutputSchemas.intelli_research, { ...result.data, unexpected: true }));
+    assert(
+      !Check(operationOutputSchemas.intelli_research, {
+        ...result.data,
+        sources: [{ ...result.data.sources[0], content: "RAW_PAGE_SENTINEL" }],
+      }),
+    );
     assert.deepEqual(Object.keys(operationOutputSchemas).sort(), [
       "intelli_collate",
       "intelli_extract",
@@ -234,6 +246,23 @@ for (const pageExecution of ["streaming", "barrier"] as const) {
       "intelli_search",
     ]);
     assert.equal(result.outcome, "completed");
+    const compact = compactResult(result.data);
+    assert(Check(compactOutputSchema, compact));
+    assert.equal(compact.text, result.text);
+    const legacy = {
+      outcome: result.outcome,
+      text: result.text,
+      details: {
+        cachePath: result.details.cachePath,
+        urlsSearched: result.details.urlsSearched,
+        pagesFetched: result.details.pagesFetched,
+        pagesFailed: result.details.pagesFailed,
+      },
+    };
+    assert(
+      Buffer.byteLength(JSON.stringify(compact)) - Buffer.byteLength(JSON.stringify(legacy)) <=
+        8_192,
+    );
     assert.deepEqual(
       result.data.sources.map((source) => [source.id, source.state]),
       [
@@ -499,3 +528,193 @@ test("abort during a long success-path drain does not wait out the optional budg
   assert.equal(clock.timers.size, 0);
   assert.equal(f.runtime.coordinator.snapshot().activeOperations, 0);
 });
+
+for (const pageExecution of ["streaming", "barrier"] as const) {
+  test(`${pageExecution}: spool admission and bounded extraction preserve the full-fetch control (T19)`, async (t) => {
+    const entered = deferred();
+    const release = deferred();
+    const fetched = new Set<string>();
+    let active = 0;
+    let peak = 0;
+    let first = true;
+    const f = await fixture(t, {
+      execution: { pageExecution },
+      settings: { maxUrls: 10, fetchConcurrency: 2, extractionConcurrency: 1 },
+      urls: Array.from({ length: 5 }, (_, i) => `https://example.org/${i}`),
+      transport: async (url, request) => {
+        fetched.add(url);
+        return markdownPage()(url, request);
+      },
+      extract: async () => {
+        active++;
+        peak = Math.max(peak, active);
+        if (first) {
+          first = false;
+          entered.resolve();
+          await release.promise;
+        }
+        active--;
+        return "Official docs\nFacts";
+      },
+    });
+    const pending = f.run();
+    await entered.promise;
+    try {
+      const directories = await readdir(join(f.root, ".search/.staging"));
+      assert.equal(directories.length, 1);
+      const spools = await readdir(join(f.root, ".search/.staging", directories[0]));
+      if (pageExecution === "barrier") {
+        assert.equal(fetched.size, 5, "all logical fetches finish before first extraction");
+        assert.equal(spools.length, 5, "disk population is N, separately from retained-body slots");
+      } else {
+        assert(fetched.size <= 2, "streaming cannot admit beyond the retained-page limit");
+        assert(spools.length <= 2);
+      }
+      assert.equal(peak, 1);
+    } finally {
+      release.resolve();
+    }
+    const result = await pending;
+    assert.equal(result.data.counts.candidates, 5);
+    assert.equal(result.data.counts.used, 5);
+    assert.equal(peak, 1);
+  });
+}
+
+test("a page retry after cutoff is rejected while critical collation remains eligible (T09/T11)", async (t) => {
+  const clock = new ManualClock();
+  const secondStarted = deferred();
+  const firstRelease = deferred();
+  const secondRelease = deferred();
+  const firstSettled = deferred();
+  let attempts = 0;
+  const f = await fixture(t, {
+    clock,
+    settings: { llmRetryAttempts: 2 },
+    execution: {
+      deadline: { enabled: true, quorum: 1, factor: 1, floorMs: 0, ceilingMs: 100, minSources: 1 },
+    },
+    extract: async (request) => {
+      if (request.scope.pageId === "S1") {
+        await firstRelease.promise;
+        return "Official docs\nFacts";
+      }
+      attempts++;
+      secondStarted.resolve();
+      await secondRelease.promise;
+      throw new Error("503 retryable fixture");
+    },
+    collate: async () => {
+      secondRelease.resolve();
+      return "Answer [S1]";
+    },
+  });
+  const push = f.events.push.bind(f.events);
+  f.events.push = (...events) => {
+    const n = push(...events);
+    if (events.some((event) => event.pageId === "S1" && event.message.includes("settled")))
+      firstSettled.resolve();
+    return n;
+  };
+  const pending = f.run();
+  await secondStarted.promise;
+  firstRelease.resolve();
+  await firstSettled.promise;
+  clock.set(100);
+  const result = await pending;
+  assert.equal(result.outcome, "completed");
+  assert.equal(attempts, 1);
+  assert.equal(result.data.attempts.filter((item) => item.pageId === "S2").length, 1);
+  assert.equal(result.data.counts.used, 1);
+  assert.equal(clock.timers.size, 0);
+});
+
+test("pre-commit diagnostics remain combined after successful publication", async (t) => {
+  const f = await fixture(t, {
+    store: (store) => ({
+      ...store,
+      async allocate(input) {
+        observeOperationDiagnostic({ code: "FIRST", message: "First diagnostic" });
+        observeOperationDiagnostic({ code: "SECOND", message: "Second diagnostic" });
+        return store.allocate(input);
+      },
+    }),
+  });
+  const result = await f.run();
+  assert.equal(result.data.cache.status, "committed");
+  if (result.data.cache.status === "committed") {
+    assert.match(result.data.cache.diagnostic!.message, /FIRST: First diagnostic/);
+    assert.match(result.data.cache.diagnostic!.message, /SECOND: Second diagnostic/);
+  }
+});
+
+test("degraded research deliberately includes the common suggestion finalisation and its accounting", async (t) => {
+  const f = await fixture(t, {
+    urls: [],
+    store: (store) => ({
+      ...store,
+      candidates: async () => [
+        {
+          query: "prior",
+          reportPath: ".search/.intelli-v1/runs/prior/report.md",
+          namespace: "v1",
+          startedUtc: "2026-10-21T00:00:00.000Z",
+          compatibilityKey: "verified-service-fixture",
+        },
+      ],
+    }),
+  });
+  const result = await f.run();
+  assert.equal(result.outcome, "no-links");
+  assert.deepEqual(
+    result.data.attempts.map((attempt) => attempt.role),
+    ["search", "search", "suggest"],
+  );
+  assert.equal(result.data.accounting.attempts, 3);
+  assert.equal(result.data.accounting.reportedCost.total, 0.03);
+  assert.equal(result.data.cache.status, "not-requested");
+});
+
+test("an invalid consumed extraction limit rejects before inference rather than queuing forever (T03)", async (t) => {
+  for (const extractionConcurrency of [0, -1, 1.5, NaN]) {
+    const f = await fixture(t, { settings: { extractionConcurrency } });
+    await assert.rejects(f.run(), /tuning.extractionConcurrency must be a positive integer/);
+    assert.equal(f.requests.length, 0);
+    assert.equal(f.runtime.coordinator.snapshot().activeOperations, 0);
+  }
+});
+
+for (const role of ["search", "extract", "collate"] as const) {
+  test(`abort during ${role} drains the scoped model and preserves partial failure data (T04/T17)`, async (t) => {
+    const entered = deferred();
+    const stop = async (_request: ScopedRequest, signal: AbortSignal) => {
+      entered.resolve();
+      if (!signal.aborted)
+        await new Promise<void>((resolve) =>
+          signal.addEventListener("abort", () => resolve(), { once: true }),
+        );
+      signal.throwIfAborted();
+      return "Unreachable";
+    };
+    const f = await fixture(t, {
+      search: role === "search" ? stop : undefined,
+      extract: role === "extract" ? stop : undefined,
+      collate: role === "collate" ? stop : undefined,
+    });
+    const controller = new AbortController();
+    const pending = f.run(controller.signal).catch((error: unknown) => error);
+    await entered.promise;
+    controller.abort();
+    const error = await pending;
+    assert(error instanceof CoreOperationFailure);
+    {
+      assert(Check(operationOutputSchemas.intelli_research, error.data));
+      assert.equal(error.data.outcome, "aborted");
+      assert.equal(error.data.accounting.parentDelivery, "unknown");
+      assert.equal(error.data.cache.status === "committed", false);
+    }
+    assert.equal(f.runtime.coordinator.snapshot().activeOperations, 0);
+    assert.equal(f.runtime.coordinator.snapshot().activeFetches, 0);
+    assert.notEqual(f.events.at(-1)?.pct, 100);
+  });
+}

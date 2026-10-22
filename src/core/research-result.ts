@@ -30,7 +30,7 @@ import {
   type PageDeadline,
   type PageDeadlineSnapshot,
 } from "./page-deadline.js";
-import { validatePageFetchSettings } from "./page-runtime.js";
+import { FetchConfigurationError, validatePageFetchSettings } from "./page-runtime.js";
 import { createPageStaging, type PageStaging, type PageStagingSlot } from "./page-staging.js";
 import { AdmissionError } from "./execution-coordinator.js";
 import { validatePageTransportUrl } from "./page-transport.js";
@@ -225,12 +225,17 @@ export function createResearchResult(
     urlsSearched: pages.length,
     pagesFetched: counts().fetched,
     pagesFailed: pages.filter((page) => page.source.state === "fetch-failed").length,
-    ...(snapshot?.adaptiveAtMs === undefined
-      ? {}
-      : { deadlineAdaptiveMs: Math.max(0, snapshot.adaptiveAtMs - started) }),
-    ...(snapshot?.ceilingAtMs === undefined
-      ? {}
-      : { deadlineCeilingMs: Math.max(0, snapshot.ceilingAtMs - started) }),
+    ...(snapshot
+      ? {
+          pageDeadline: {
+            timebase: "runtime-monotonic-ms",
+            startedAtMs: snapshot.startedAtMs,
+            frozenAtMs: snapshot.frozenAtMs,
+            ...(snapshot.adaptiveAtMs === undefined ? {} : { adaptiveAtMs: snapshot.adaptiveAtMs }),
+            ...(snapshot.ceilingAtMs === undefined ? {} : { ceilingAtMs: snapshot.ceilingAtMs }),
+          },
+        }
+      : {}),
   });
 
   const search = async () => {
@@ -300,7 +305,13 @@ export function createResearchResult(
     const signal = AbortSignal.any([services!.operation.signal, pageDrain.signal]);
     throwIfAborted(signal);
     if (pageCutoff.signal.aborted) throw new AdmissionError("PAGE_CUTOFF");
-    const body = await readFile(page.stagedPath!, "utf8");
+    let body: string;
+    try {
+      body = await readFile(page.stagedPath!, "utf8");
+    } catch {
+      stagingFault();
+      throw new Error("Private page staging could not be read");
+    }
     throwIfAborted(signal);
     if (pageCutoff.signal.aborted) throw new AdmissionError("PAGE_CUTOFF");
     extractionInputChars += Math.min(body.length, context.settings.extractMaxChars);
@@ -394,15 +405,20 @@ export function createResearchResult(
       policy: execution.deadline,
       candidateIds: pages.map((page) => page.source.id),
       onFreeze(value) {
-        snapshot = value;
-        evidence = Object.freeze(
+        const frozenEvidence = Object.freeze(
           value.successIds.map((id) => {
             const page = pages.find((page) => page.source.id === id)!;
             if (!page.extraction?.extraction.trim()) throw new Error("Frozen evidence is missing");
-            page.source = { ...page.source, state: "used" };
             return Object.freeze({ id, extraction: page.extraction });
           }),
         );
+        // Validate the whole snapshot before mutating any source state.
+        snapshot = value;
+        evidence = frozenEvidence;
+        for (const id of value.successIds) {
+          const page = pages.find((page) => page.source.id === id)!;
+          page.source = { ...page.source, state: "used" };
+        }
         services!.operation.cutoffPages();
         pageCutoff.abort();
         resolveFreeze(value);
@@ -640,10 +656,8 @@ export function createResearchResult(
       runId: reservation.runId,
       reportPath: join(reservation.displayPath, "report.md"),
       index: "unavailable",
-      ...(diagnostics.length
-        ? { diagnostic: cache.status === "unavailable" ? cache.diagnostic : diagnostics.at(-1)! }
-        : {}),
     };
+    if (diagnostics.length) diagnostic(diagnostics.at(-1)!);
     for (const [i, source] of manifestSources.entries()) {
       const { input: _input, ...record } = source;
       pages[i].source = {
@@ -745,7 +759,15 @@ export function createResearchResult(
       services = value.services;
       if (services.clock !== clock || context.signal !== services.operation.signal)
         throw new TypeError("Research must use the authoritative clock and signal");
-      validatePageFetchSettings(context.settings);
+      const prefix = context.identity.adapter === "mcp" ? "tuning" : "pi-intelli-search";
+      validatePageFetchSettings(context.settings, prefix);
+      if (
+        !Number.isSafeInteger(context.settings.extractionConcurrency) ||
+        context.settings.extractionConcurrency < 1
+      )
+        throw new FetchConfigurationError(
+          `${prefix}.extractionConcurrency must be a positive integer`,
+        );
       active = true;
       const signal = services.operation.signal;
       const aborted = () => {
@@ -829,7 +851,7 @@ export function createResearchResult(
         throwIfAborted(signal);
         stage = "cache";
         pct = Math.max(pct, 80);
-        emit("start", "running", "Publishing settled research...");
+        emit("start", "running", "Finalising settled research...");
         await publish();
         await suggestions();
         throwIfAborted(signal);

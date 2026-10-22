@@ -140,6 +140,9 @@ try {
     focusPrompt: "Verify installation",
   });
   assert.equal(result.outcome, "completed");
+  assert.equal(result.data.operation, "intelli_research");
+  assert.equal(result.data.cache.status, "committed");
+  assert.equal(result.data.counts.used, 1);
   assert(htmlRequests > 0 && markdownRequests > 0, "both real native fetch paths must run");
   const cachePath = result.details.cachePath;
   assert(cachePath.startsWith(join(workspace, ".search") + sep));
@@ -155,6 +158,12 @@ try {
     await readFile(join(cachePath, "report.md"), "utf8"),
     /Installed artifact research succeeded/,
   );
+  const runManifest = JSON.parse(await readFile(join(cachePath, "run.json"), "utf8"));
+  assert.deepEqual(runManifest.evidenceSourceIds, ["S1"]);
+  const accounting = JSON.parse(await readFile(join(cachePath, "accounting.json"), "utf8"));
+  assert.deepEqual(accounting.attempts, result.data.attempts);
+  assert.deepEqual(await readdir(join(workspace, ".search/.staging")), []);
+  await runtime.close();
   assert(modelCalls >= 6);
   assert.equal(
     (await readdir(process.cwd())).includes(".search"),

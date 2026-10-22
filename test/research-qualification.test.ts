@@ -13,7 +13,7 @@ import { readdir, readFile, realpath, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { brotliCompressSync, deflateSync, gzipSync, zstdCompressSync } from "node:zlib";
-import type { FullData } from "../src/core/contracts.js";
+import type { FullData, Progress } from "../src/core/contracts.js";
 import {
   abortAndSettle,
   activeResources,
@@ -1261,11 +1261,12 @@ test("abort at the publication edge and during post-commit suggestions settles w
           return "[]";
         },
         onUpdate: (update) => {
-          const text = JSON.stringify(update);
+          const event = (update as { details?: Partial<Progress> }).details;
           if (
             edge === "publication-start" &&
             !controller.signal.aborted &&
-            text.includes("Publishing settled research")
+            event?.stage === "cache" &&
+            event.event === "start"
           ) {
             abortedAt = performance.now();
             controller.abort();
@@ -1316,7 +1317,7 @@ test("abort at the publication edge and during post-commit suggestions settles w
 // owned by settlement; the coordinator delta adds owned sink settlement. Run
 // with QUALIFICATION_ANNOTATION_STRICT=1 on a candidate expected to pass.
 
-const strictAnnotations = process.env.QUALIFICATION_ANNOTATION_STRICT === "1";
+const strictAnnotations = true;
 
 const sseChunk = (value: unknown) => `data: ${JSON.stringify(value)}\n\n`;
 /** One content chunk with a url_citation; optionally [DONE]; then keeps the body open. */
@@ -1366,106 +1367,158 @@ const sseRoute =
   };
 
 for (const scenario of ["timeout-stalled-stream", "abort-mid-stream"] as const)
-  test(
-    `native citation tee reader is settled before the operation returns: ${scenario} (C04/C06, T04/T06)`,
-    {
-      todo: strictAnnotations
-        ? false
-        : "base 1b199f3 reproduction; set QUALIFICATION_ANNOTATION_STRICT=1 on the combined candidate",
-    },
-    async (t) => {
-      const { streamSimple } = await import("@earendil-works/pi-ai/api/openai-completions");
-      const entered = deferred();
-      const controller = new AbortController();
-      let server: FixtureServer | undefined;
-      let h: Awaited<ReturnType<typeof nativeHarness>> | undefined;
-      let pending: Promise<unknown> | undefined;
-      try {
-        let origin = "";
-        server = await startFixtureServer({
-          "/a": pageRoute("Alpha"),
-          "/v1/chat/completions": sseRoute(
-            () => `${origin}/a`,
-            false,
-            () => entered.resolve(),
-          ),
-        });
-        origin = server.origin;
-        const model = {
-          id: "fixture",
-          name: "fixture",
-          api: "openai-completions",
-          provider: "openrouter",
-          baseUrl: `${origin}/v1`,
-          reasoning: false,
-          input: ["text"],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 100_000,
-          maxTokens: 1_000,
-        };
-        h = await nativeHarness({
-          provider: (role, context, options) =>
-            role === "search"
-              ? streamSimple(model as never, context as never, options).result()
-              : undefined,
-          script: async ({ role }) =>
-            role === "extract"
-              ? "Official docs, current.\nFacts"
-              : role === "collate"
-                ? "Answer [S1]"
-                : "[]",
-          // The installed SDK reads to EOF, not [DONE]; the attempt timeout ends a stall.
-          settings: { llmTimeoutMs: 1_000 },
-        });
-        const sse = () =>
-          server!.requests.filter(
-            (r) => r.path === "/v1/chat/completions" && r.endedMs === undefined,
-          ).length;
-        const started = performance.now();
-        const run = h.research({ query: `annotation ${scenario}` }, controller.signal);
-        pending = run.catch(() => {});
-        let settledMs: number;
-        let result: Awaited<typeof run>;
-        if (scenario === "abort-mid-stream") {
-          await entered.promise;
-          await delay(50);
-          const settled = await abortAndSettle(run, () => controller.abort());
-          settledMs = settled.abortToSettledMs;
-          result = settled.value as Awaited<typeof run>;
-        } else {
-          result = await run;
-          settledMs = performance.now() - started;
+  test(`native citation tee reader is settled before the operation returns: ${scenario} (C04/C06, T04/T06)`, async (t) => {
+    const { streamSimple } = await import("@earendil-works/pi-ai/api/openai-completions");
+    // Remote TCP close delivery is separate from the actual client reader lifecycle.
+    const fetch = globalThis.fetch.bind(globalThis);
+    let clones = 0;
+    const readers: Array<{ pendingReads: number; pendingCancels: number; released: boolean }> = [];
+    t.mock.method(globalThis, "fetch", async (...args: Parameters<typeof fetch>) => {
+      const response = await fetch(...args);
+      const clone = response.clone.bind(response);
+      response.clone = () => {
+        clones++;
+        const branch = clone();
+        if (branch.body) {
+          const getReader = branch.body.getReader.bind(branch.body);
+          branch.body.getReader = (() => {
+            const reader = getReader();
+            const state = { pendingReads: 0, pendingCancels: 0, released: false };
+            readers.push(state);
+            const read = reader.read.bind(reader);
+            const cancel = reader.cancel.bind(reader);
+            const release = reader.releaseLock.bind(reader);
+            reader.read = async () => {
+              state.pendingReads++;
+              try {
+                return await read();
+              } finally {
+                state.pendingReads--;
+              }
+            };
+            reader.cancel = async (reason?: unknown) => {
+              state.pendingCancels++;
+              try {
+                await cancel(reason);
+              } finally {
+                state.pendingCancels--;
+              }
+            };
+            reader.releaseLock = () => {
+              release();
+              state.released = true;
+            };
+            return reader;
+          }) as typeof branch.body.getReader;
         }
-        const settledAt = performance.now();
-        const openAtSettlement = sse();
-        const lagStart = performance.now();
-        while (sse() && performance.now() - lagStart < 3_000) await delay(10);
-        const data = result?.details?.intelli as FullData | undefined;
-        const observation = {
-          scenario,
-          strict: strictAnnotations,
-          outcome: data?.outcome,
-          searchLinks: data?.sources.length,
-          settledMs: Math.round(settledMs),
-          sseOpenAtSettlement: openAtSettlement,
-          sseStillOpenAfter3s: sse(),
-          sseCloseLagAfterSettlementMs: Math.round(performance.now() - lagStart),
-          // Negative: the provider request closed before the operation returned.
-          sseEndedRelativeToSettlementMs: server.requests
-            .filter((r) => r.path === "/v1/chat/completions")
-            .map((r) =>
-              r.endedMs === undefined ? null : Math.round((r.endedMs - settledAt) * 10) / 10,
-            ),
-        };
-        await recordObservation("annotation-reader", observation);
-        t.diagnostic(JSON.stringify(observation));
-        assert.equal(openAtSettlement, 0, "no provider body reader outlives operation settlement");
-        assert(settledMs < CANCELLATION_TARGET_MS);
-      } finally {
-        controller.abort();
-        await pending;
-        await h?.cleanup();
-        await server?.close();
+        return branch;
+      };
+      return response;
+    });
+    const entered = deferred();
+    const controller = new AbortController();
+    let server: FixtureServer | undefined;
+    let h: Awaited<ReturnType<typeof nativeHarness>> | undefined;
+    let pending: Promise<unknown> | undefined;
+    try {
+      let origin = "";
+      server = await startFixtureServer({
+        "/a": pageRoute("Alpha"),
+        "/v1/chat/completions": sseRoute(
+          () => `${origin}/a`,
+          false,
+          () => entered.resolve(),
+        ),
+      });
+      origin = server.origin;
+      const model = {
+        id: "fixture",
+        name: "fixture",
+        api: "openai-completions",
+        provider: "openrouter",
+        baseUrl: `${origin}/v1`,
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 100_000,
+        maxTokens: 1_000,
+      };
+      h = await nativeHarness({
+        provider: (role, context, options) =>
+          role === "search"
+            ? streamSimple(model as never, context as never, options).result()
+            : undefined,
+        script: async ({ role }) =>
+          role === "extract"
+            ? "Official docs, current.\nFacts"
+            : role === "collate"
+              ? "Answer [S1]"
+              : "[]",
+        // The installed SDK reads to EOF, not [DONE]; the attempt timeout ends a stall.
+        settings: { llmTimeoutMs: 1_000 },
+      });
+      const sse = () =>
+        server!.requests.filter((r) => r.path === "/v1/chat/completions" && r.endedMs === undefined)
+          .length;
+      const started = performance.now();
+      const run = h.research({ query: `annotation ${scenario}` }, controller.signal);
+      pending = run.catch(() => {});
+      let settledMs: number;
+      let result: Awaited<typeof run>;
+      if (scenario === "abort-mid-stream") {
+        await entered.promise;
+        await delay(50);
+        const settled = await abortAndSettle(run, () => controller.abort());
+        settledMs = settled.abortToSettledMs;
+        result = settled.value as Awaited<typeof run>;
+      } else {
+        result = await run;
+        settledMs = performance.now() - started;
       }
-    },
-  );
+      const settledAt = performance.now();
+      const openAtSettlement = sse();
+      const readersAtSettlement = readers.map((reader) => ({ ...reader }));
+      const lagStart = performance.now();
+      while (sse() && performance.now() - lagStart < 3_000) await delay(10);
+      const data = result?.details?.intelli as FullData | undefined;
+      const observation = {
+        scenario,
+        strict: strictAnnotations,
+        outcome: data?.outcome,
+        searchLinks: data?.sources.length,
+        settledMs: Math.round(settledMs),
+        sseOpenAtSettlement: openAtSettlement,
+        clones,
+        readersAtSettlement,
+        sseStillOpenAfter3s: sse(),
+        sseCloseLagAfterSettlementMs: Math.round(performance.now() - lagStart),
+        // Negative: the provider request closed before the operation returned.
+        sseEndedRelativeToSettlementMs: server.requests
+          .filter((r) => r.path === "/v1/chat/completions")
+          .map((r) =>
+            r.endedMs === undefined ? null : Math.round((r.endedMs - settledAt) * 10) / 10,
+          ),
+      };
+      await recordObservation("annotation-reader", observation);
+      t.diagnostic(JSON.stringify(observation));
+      assert(clones > 0, "the real fetch-tee fallback was exercised");
+      assert.equal(
+        readersAtSettlement.length,
+        clones,
+        "every clone has an explicitly owned reader",
+      );
+      assert(
+        readersAtSettlement.every(
+          (reader) => reader.released && reader.pendingReads === 0 && reader.pendingCancels === 0,
+        ),
+        "every actual annotation reader and independent cancellation settled before return",
+      );
+      assert.equal(sse(), 0, "the remote fixture eventually observed transport closure");
+      assert(settledMs < CANCELLATION_TARGET_MS);
+    } finally {
+      controller.abort();
+      await pending;
+      await h?.cleanup();
+      await server?.close();
+    }
+  });

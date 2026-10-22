@@ -114,4 +114,9 @@ cp "$PROJECT_DIR/test/probes/page-transport-install.mjs" "$TEST_DIR/_page-transp
 node "$TEST_DIR/_page-transport.mjs" "$PKG_ROOT/dist/core/page-transport.js"
 
 echo ""
+echo "── Installed registered native research ───────────────────────────"
+cp "$PROJECT_DIR/test/probes/native-research-install.mjs" "$TEST_DIR/_native-research.mjs"
+node "$TEST_DIR/_native-research.mjs" "$PKG_ROOT"
+
+echo ""
 echo "✅ Local publish smoke test passed — package is loadable with peer deps resolved to latest"

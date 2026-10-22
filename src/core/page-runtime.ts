@@ -20,7 +20,10 @@ export class FetchConfigurationError extends TypeError {
 }
 
 /** Legacy per-run fetch settings become strict only when bounded fetch is consumed. */
-export function validatePageFetchSettings(settings: DeepReadonly<ResearchSettings>): void {
+export function validatePageFetchSettings(
+  settings: DeepReadonly<ResearchSettings>,
+  prefix = "pi-intelli-search",
+): void {
   for (const [name, min, max] of [
     ["fetchConcurrency", 1, 512],
     ["fetchTimeoutMs", 1, 600_000],
@@ -28,7 +31,7 @@ export function validatePageFetchSettings(settings: DeepReadonly<ResearchSetting
     const value = settings[name];
     if (!Number.isSafeInteger(value) || value < min || value > max)
       throw new FetchConfigurationError(
-        `pi-intelli-search.${name} must be an integer from ${min} to ${max}`,
+        `${prefix}.${name} must be an integer from ${min} to ${max}`,
       );
   }
 }
@@ -101,11 +104,15 @@ export function capturePageEnvironment(
     "SSL_CERT_DIR",
     "NODE_EXTRA_CA_CERTS",
   ];
+  const allowed = new Set(names.map((name) => name.toLowerCase()));
   return Object.freeze(
     Object.fromEntries(
-      names
-        .filter((name) => name !== secretKey && environment[name] !== undefined)
-        .map((name) => [name, environment[name]]),
+      Object.entries(environment).filter(
+        ([name, value]) =>
+          value !== undefined &&
+          allowed.has(name.toLowerCase()) &&
+          name.toLowerCase() !== secretKey?.toLowerCase(),
+      ),
     ),
   );
 }

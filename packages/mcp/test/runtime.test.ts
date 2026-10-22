@@ -6,6 +6,8 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createRuntime, identity, StandaloneError } from "../src/runtime.js";
+import { Check } from "typebox/value";
+import { researchOutputSchema } from "../../../src/core/output-schemas.js";
 import { markdownPage } from "../../../test/helpers/page-fixtures.js";
 import { CACHE_SUGGEST_PROMPT } from "../../../src/core/prompts.js";
 import { completion, fakeTransport, fixture, json, logger } from "./helpers.js";
@@ -84,6 +86,9 @@ test("all shared operations run outside the host with standalone policy and cach
       { onProgress: (p) => progress.push(p.stage) },
     );
     assert.equal(research.outcome, "completed");
+    assert(Check(researchOutputSchema, research.data));
+    assert.equal(research.data!.text, research.text);
+    assert.deepEqual(research.data!.details, research.details);
     assert.deepEqual(
       [...new Set(research.execution.attempts.map((item) => item.role))],
       ["search", "extract", "collate", "suggest"],

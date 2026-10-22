@@ -591,15 +591,46 @@ it("adapter factory consumes captured proxy environment and character settings t
   }
 });
 
+it("transport environment capture preserves platform casing and excludes credential aliases", () => {
+  const environment = capturePageEnvironment(
+    {
+      Path: "C:\\tools",
+      SystemRoot: "C:\\Windows",
+      windir: "C:\\Windows",
+      https_proxy: "http://proxy.example",
+      SSL_CERT_FILE: "ca.pem",
+      NODE_OPTIONS: "forbidden",
+      node_options: "forbidden",
+      Provider_Key: "secret",
+      pAtH: "secret-alias",
+    },
+    "PATH",
+  );
+  assert.deepEqual(environment, {
+    SystemRoot: "C:\\Windows",
+    windir: "C:\\Windows",
+    https_proxy: "http://proxy.example",
+    SSL_CERT_FILE: "ca.pem",
+  });
+  assert(Object.isFrozen(environment));
+  // This is a mapping test, not Windows transport qualification.
+});
+
 it("all registered factories select the captured bounded service without adding a fetch registration", async () => {
   const native = await readFile(
     new URL("../src/native-operation-runtime.ts", import.meta.url),
     "utf8",
   );
   const mcp = await readFile(new URL("../packages/mcp/src/runtime.ts", import.meta.url), "utf8");
-  assert.match(native, /createFetch: capturePageFetchFactory\(settings, clock, pagePolicy, options.pageTransport\)/);
+  assert.match(
+    native,
+    /createFetch: capturePageFetchFactory\(settings, clock, pagePolicy, options.pageTransport\)/,
+  );
   assert.match(native, /environment: capturePageEnvironment\(process.env\)/);
-  assert.match(mcp, /capturePageFetchFactory\(\s*config.settings,\s*clock,\s*pagePolicy,\s*options.pageTransport,?\s*\)/);
+  assert.match(
+    mcp,
+    /capturePageFetchFactory\(\s*config.settings,\s*clock,\s*pagePolicy,\s*options.pageTransport,?\s*\)/,
+  );
   assert.match(mcp, /environment: capturePageEnvironment\(env, config.apiKeyEnv\)/);
   assert(!native.includes("Coordinated fetch is not installed"));
   assert(!mcp.includes('case "intelli_fetch"'));

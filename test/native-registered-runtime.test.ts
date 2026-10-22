@@ -23,7 +23,11 @@ import type {
 import extension from "../src/index.js";
 import { getEventListeners } from "node:events";
 import { Check } from "typebox/value";
-import { standaloneOutputSchemas, collateOutputSchema } from "../src/core/output-schemas.js";
+import {
+  standaloneOutputSchemas,
+  collateOutputSchema,
+  researchOutputSchema,
+} from "../src/core/output-schemas.js";
 import { suppliedCollation, verifyCollateData } from "./helpers/collate-fixtures.js";
 import { markdownPage } from "./helpers/page-fixtures.js";
 import { createRunStore } from "../src/core/run-store.js";
@@ -372,6 +376,11 @@ test("native research/suggest roles share a settled operation, retry accounting 
       f.ctx,
     );
     assert(!result.isError);
+    const data = result.details!.intelli as FullData;
+    assert(Check(researchOutputSchema, data));
+    assert.equal(data.text, result.content[0].type === "text" ? result.content[0].text : "");
+    assert.equal(data.accounting.attempts, 5);
+    assert.equal(data.sources[0].state, "used");
     const execution = receipt(result);
     assert.deepEqual(
       execution.attempts.map((item) => item.role),

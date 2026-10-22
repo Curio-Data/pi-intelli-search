@@ -26,6 +26,7 @@ import {
   createAnnotationSink,
   harvestChunkAnnotations,
   settleAnnotationSink,
+  settleOwnedAnnotationSink,
   wrapFetchForAnnotations,
 } from "./annotations.js";
 import { runModelWithPolicy } from "./core/llm.js";
@@ -212,7 +213,11 @@ export async function callLlm(
     const usageCapture = observe ? createNativeUsageCapture() : undefined;
     if (options?.annotations) options.annotations.citations.length = 0;
     const annotationFetch = annotations
-      ? wrapFetchForAnnotations(globalThis.fetch.bind(globalThis), annotations)
+      ? wrapFetchForAnnotations(
+          globalThis.fetch.bind(globalThis),
+          annotations,
+          options?.policyHooks ? signal : undefined,
+        )
       : undefined;
     const streamOptions: SimpleStreamOptions = {
       apiKey: auth.apiKey,
@@ -253,23 +258,42 @@ export async function callLlm(
     const transport = options?.registryStreamSimple ?? __harness.registryStreamSimple;
     let value: AssistantMessage;
     try {
-      value = await transport(registry, model, context, streamOptions);
-    } catch (error) {
-      const observation = usageCapture?.observation(undefined);
+      try {
+        value = await transport(registry, model, context, streamOptions);
+      } catch (error) {
+        const observation = usageCapture?.observation(undefined);
+        if (observation) observe?.(observation);
+        throw error;
+      }
+      // The SDK always initialises usage, even on failures with no usage payload.
+      // Preserve wire presence instead of treating those placeholders as observed.
+      const observation = usageCapture?.observation(value.usage);
       if (observation) observe?.(observation);
-      throw error;
+      if (value.stopReason === "error")
+        return { value, error: value.errorMessage ?? "unknown error" };
+      if (annotations) {
+        if (options?.policyHooks)
+          await settleOwnedAnnotationSink(
+            annotations,
+            signal!,
+            false,
+            2_000,
+            options.policyHooks.clock,
+          );
+        else await settleAnnotationSink(annotations);
+        options!.annotations!.citations.push(...annotations.citations);
+      }
+      return { value };
+    } finally {
+      if (annotations && options?.policyHooks)
+        await settleOwnedAnnotationSink(
+          annotations,
+          signal!,
+          true,
+          2_000,
+          options.policyHooks.clock,
+        );
     }
-    // The SDK always initialises usage, even on failures with no usage payload.
-    // Preserve wire presence instead of treating those placeholders as observed.
-    const observation = usageCapture?.observation(value.usage);
-    if (observation) observe?.(observation);
-    if (value.stopReason === "error")
-      return { value, error: value.errorMessage ?? "unknown error" };
-    if (annotations) {
-      await settleAnnotationSink(annotations);
-      options!.annotations!.citations.push(...annotations.citations);
-    }
-    return { value };
   };
   const policyRequest = {
     model: config,

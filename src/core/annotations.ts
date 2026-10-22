@@ -36,6 +36,8 @@ export interface AnnotationSink {
   citations: HarvestedCitation[];
   /** In-flight background body reads started by the fetch wrapper. */
   reads?: Promise<void>[];
+  /** Scoped execution owns cancellation and actual reader settlement. */
+  ownedReaders?: Array<{ readonly read: Promise<void>; cancel(): Promise<void> }>;
 }
 
 /**
@@ -59,6 +61,41 @@ export async function settleAnnotationSink(sink: AnnotationSink, timeoutMs = 2_0
     await Promise.race([Promise.allSettled(reads).then(() => undefined), timeout]);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/** A timeout requests cancellation; it never substitutes for reader settlement. */
+export async function settleOwnedAnnotationSink(
+  sink: AnnotationSink,
+  signal: AbortSignal,
+  cancelImmediately = false,
+  timeoutMs = 2_000,
+  clock?: { schedule(delayMs: number, callback: () => void): () => void },
+): Promise<void> {
+  const readers = sink.ownedReaders ?? [];
+  if (!readers.length) return;
+  const cancellations: Promise<void>[] = [];
+  let cancelled = false;
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    cancellations.push(...readers.map((reader) => reader.cancel()));
+  };
+  signal.addEventListener("abort", cancel, { once: true });
+  let clearTimer = () => {};
+  if (cancelImmediately || signal.aborted) cancel();
+  else if (clock) clearTimer = clock.schedule(timeoutMs, cancel);
+  else {
+    const timer = setTimeout(cancel, timeoutMs);
+    clearTimer = () => clearTimeout(timer);
+  }
+  try {
+    await Promise.allSettled(readers.map((reader) => reader.read));
+    // A cancelled read can resolve before the underlying cancellation settles.
+    await Promise.allSettled(cancellations);
+  } finally {
+    clearTimer();
+    signal.removeEventListener("abort", cancel);
   }
 }
 
@@ -183,6 +220,7 @@ export function parseCitations(bodyText: string): HarvestedCitation[] {
 export function wrapFetchForAnnotations(
   baseFetch: FetchFunction,
   sink: AnnotationSink,
+  ownedSignal?: AbortSignal,
 ): FetchFunction {
   return async (input, init) => {
     const response = await baseFetch(input, init);
@@ -192,6 +230,48 @@ export function wrapFetchForAnnotations(
         // called before the SDK touches response.body — it is, synchronously
         // here, before the response is returned.
         const tee = response.clone();
+        if (ownedSignal && tee.body) {
+          const reader = tee.body.getReader();
+          let cancelled = false;
+          let complete = false;
+          let cancellation: Promise<void> | undefined;
+          const cancel = () => {
+            if (complete) return cancellation ?? Promise.resolve();
+            cancelled = true;
+            return (cancellation ??= reader.cancel().catch(() => {}));
+          };
+          const onAbort = () => {
+            void cancel();
+          };
+          ownedSignal.addEventListener("abort", onAbort, { once: true });
+          const read = (async () => {
+            try {
+              if (ownedSignal.aborted) await cancel();
+              const chunks: string[] = [];
+              const decoder = new TextDecoder();
+              for (;;) {
+                const chunk = await reader.read();
+                if (chunk.done) break;
+                if (!cancelled) chunks.push(decoder.decode(chunk.value, { stream: true }));
+              }
+              if (!cancelled) {
+                chunks.push(decoder.decode());
+                for (const citation of parseCitations(chunks.join("")))
+                  pushCitation(sink, citation);
+              }
+            } catch {
+              /* The main stream owns provider failures. */
+            } finally {
+              await cancellation;
+              complete = true;
+              ownedSignal.removeEventListener("abort", onAbort);
+              reader.releaseLock();
+            }
+          })();
+          sink.ownedReaders = [...(sink.ownedReaders ?? []), { read, cancel }];
+          sink.reads = [...(sink.reads ?? []), read];
+          return response;
+        }
         const read = tee
           .text()
           .then((bodyText) => {

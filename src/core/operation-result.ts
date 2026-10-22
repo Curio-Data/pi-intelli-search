@@ -140,7 +140,8 @@ export async function produceCoreResult(
         : undefined,
       aborted ? "unknown" : "available",
     );
-    const elapsedMs = Math.max(0, clock.monotonicMs() - started);
+    producer.dispose();
+    const allWorkSettledMs = Math.max(0, clock.monotonicMs() - started);
     const final: CoreResult = {
       ...produced,
       data: {
@@ -148,8 +149,8 @@ export async function produceCoreResult(
         timing: {
           ...produced.data.timing,
           startedUtc,
-          elapsedMs,
-          allWorkSettledMs: elapsedMs,
+          elapsedMs: Math.max(0, clock.monotonicMs() - started),
+          allWorkSettledMs,
           ...(produced.data.timing.cutoffMs === undefined
             ? {}
             : { cutoffMs: producerOffset + produced.data.timing.cutoffMs }),
@@ -256,7 +257,7 @@ export function createOperationResultBoundary(
       if (!value || !services) return undefined;
       if (value.data.operationId !== services.operation.id)
         throw new TypeError("Foreign core result at adapter boundary");
-      const elapsedMs = Math.max(0, clock.monotonicMs() - started);
+      const allWorkSettledMs = Math.max(0, clock.monotonicMs() - started);
       const outcome = failure ? (failure.aborted ? "aborted" : "error") : value.outcome;
       const text = failure?.message ?? value.text;
       const data: FullData = {
@@ -266,8 +267,8 @@ export function createOperationResultBoundary(
         timing: {
           ...value.data.timing,
           startedUtc,
-          elapsedMs,
-          allWorkSettledMs: elapsedMs,
+          elapsedMs: allWorkSettledMs,
+          allWorkSettledMs,
           ...(value.data.timing.cutoffMs === undefined
             ? {}
             : { cutoffMs: coreOffset + value.data.timing.cutoffMs }),
@@ -286,7 +287,7 @@ export function createOperationResultBoundary(
       if (terminal)
         send({
           ...terminal,
-          elapsedMs,
+          elapsedMs: Math.max(0, clock.monotonicMs() - started),
           ...(failure
             ? {
                 state: failure.aborted ? ("cancelled" as const) : ("failed" as const),
@@ -295,7 +296,19 @@ export function createOperationResultBoundary(
               }
             : {}),
         });
-      return { text, details: data.details, outcome, data, usage: services.ledger.hostUsage() };
+      // Result handoff follows owned settlement and terminal progress delivery.
+      // These are separate samples, even when a coarse clock makes them equal.
+      const finalData = {
+        ...data,
+        timing: { ...data.timing, elapsedMs: Math.max(0, clock.monotonicMs() - started) },
+      };
+      return {
+        text,
+        details: finalData.details,
+        outcome,
+        data: finalData,
+        usage: services.ledger.hostUsage(),
+      };
     },
     dispose() {
       removeAbort?.();

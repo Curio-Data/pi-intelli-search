@@ -503,7 +503,8 @@ export function sampleMemory(intervalMs = 2) {
     const now = process.memoryUsage();
     heap = Math.max(heap, now.heapUsed);
     rss = Math.max(rss, now.rss);
-    external = Math.max(external, now.external + now.arrayBuffers);
+    // arrayBuffers is a subset of external, not an additional allocation.
+    external = Math.max(external, now.external);
   }, intervalMs);
   return {
     stop() {
@@ -643,6 +644,7 @@ export async function nativeHarness(options: NativeHarnessOptions) {
     calls,
     updates,
     runtime,
+    context: ctx,
     research(params: OperationInputs["intelli_research"], signal?: AbortSignal) {
       return runtime.execute(
         "intelli_research",

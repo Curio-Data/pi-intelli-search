@@ -17,7 +17,11 @@ import {
   validateRequestInterval,
 } from "../../../src/core/execution-settings.js";
 import { createRunStore } from "../../../src/core/run-store.js";
-import { capturePageFetchFactory, capturePageEnvironment } from "../../../src/core/page-runtime.js";
+import {
+  FetchConfigurationError,
+  capturePageFetchFactory,
+  capturePageEnvironment,
+} from "../../../src/core/page-runtime.js";
 import { executionReceipt, type ExecutionReceipt } from "./execution-receipt.js";
 import type { TSchema } from "typebox";
 import {
@@ -367,7 +371,8 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
         };
       } catch (error) {
         // The runtime has settled before this boundary reads any ledger state.
-        if (error instanceof CoreConfigurationError) state.category = "CONFIGURATION";
+        if (error instanceof CoreConfigurationError || error instanceof FetchConfigurationError)
+          state.category = "CONFIGURATION";
         const cause =
           isOperationFailure(error) && error.cause instanceof StandaloneError ? error.cause : error;
         const aborted = Boolean(

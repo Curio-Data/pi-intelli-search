@@ -227,6 +227,15 @@ test("public operational failures retain partial accounting after cleanup (T17)"
   assert.equal(f.cleanups(), 1);
 });
 
+test("public handoff and owned-settlement times are separate clock observations", async (t) => {
+  const f = await fixture(t);
+  const underlying = f.clock.monotonicMs.bind(f.clock);
+  let samples = 0;
+  f.clock.monotonicMs = () => underlying() + samples++;
+  const result = await f.run((context) => search({ query: "separate observations" }, context));
+  assert(result.data.timing.elapsedMs > result.data.timing.allWorkSettledMs);
+});
+
 test("public zero-input collate is an inspectable zero-attempt error; configuration remains ordinary", async (t) => {
   const f = await fixture(t);
   await assert.rejects(

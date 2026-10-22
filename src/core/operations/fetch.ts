@@ -12,6 +12,7 @@ import type {
   SourceRecord,
 } from "../contracts.js";
 import { AdmissionError } from "../execution-coordinator.js";
+import { FetchConfigurationError } from "../page-runtime.js";
 import { validatePageTransportUrl } from "../page-transport.js";
 
 export class FetchOperationFailure extends Error implements OperationFailure {
@@ -91,9 +92,11 @@ export async function fetchPage(params: FetchParams, context: Context): Promise<
         ? "FETCH_CANCELLED"
         : error instanceof AdmissionError && error.code === "BUSY"
           ? "BUSY"
-          : error instanceof TypeError
-            ? "INVALID_FETCH_ARGUMENTS"
-            : "TRANSPORT_FAILED",
+          : error instanceof FetchConfigurationError
+            ? "INVALID_FETCH_CONFIGURATION"
+            : error instanceof TypeError
+              ? "INVALID_FETCH_ARGUMENTS"
+              : "TRANSPORT_FAILED",
     };
   } finally {
     operation.signal.removeEventListener("abort", onAbort);
