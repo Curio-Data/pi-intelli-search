@@ -32,6 +32,10 @@ Quota-stopped K3, Qwen and GLM attempts remain preserved and are not counted as 
 
 M1 is accepted at technical source `2640672`, with its mandatory native regression passed at acknowledgement `d140514`. [Development](DEVELOPMENT.md#m1-manual-workflow-candidate) records the fresh Opus review, blocking delta, independently reproduced eleven-gate lanes and credential-safe regression. This closes the manual search/extract/collate public-result boundary, migration-notice preservation, literal-redaction schema/correlation edge, diagnostic forwarding/consolidation and actual-runtime joined-waiter witness described as pending at the earlier slice checkpoints below. Those earlier reports remain revision-specific evidence. Research's producer, complete schema map, bounded activation, progress qualification, replay and all release/guidance/platform conditions remain open; no P4 exit follows from M1.
 
+## M3 Replay Completion
+
+M3 is accepted at technical source `17eabc9` under specification `P0-3-F7`. Fresh independent Opus review reproduces all eleven gates and installed-host qualification; after coordinator acknowledgement, the standing-authorised mandatory regression passes once at `ea9db7e` with unchanged implementation and immediate credential-safety checks. [Development](DEVELOPMENT.md#m3-technical-acceptance) records the report and [live evidence](DEVELOPMENT.md#m3-native-regression). This closes the actual-wrapper/Codemode/F7 replay obligation for the exercised population, not P4 exit, a study or either release. Direct native batch qualification/disclosure, main wire-presence and per-field usage recording, floor/platform/growth and final native capabilities remain their assigned later gates. Original library/P0-2 histories and accepted M1/M2 remain preserved.
+
 ## Integration Conditions
 
 These conditions remain open and bind the next coordinator work:
