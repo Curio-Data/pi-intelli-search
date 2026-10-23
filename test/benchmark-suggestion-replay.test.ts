@@ -38,6 +38,7 @@ import {
   type SuggestionBaselineEntry,
   type SuggestionViewArtefact,
   type SuggestionViewRecorder,
+  type SuggestionViewReplay,
   type SuggestionViewSession,
 } from "../scripts/benchmarks/suggestion-replay.js";
 import type { Json, ModelFixtureRequest } from "../scripts/benchmarks/contracts.js";
@@ -582,8 +583,159 @@ describe("recorder", () => {
     assert.equal(beta.outcome, "failed");
     assert.deepEqual(beta.failurePhases, ["index", "operation"]);
     assert.equal(beta.committed, false);
-    assert.equal(beta.settleWitness, "operation-phase");
+    // The settle-time operation phase is audit data (failurePhases), not
+    // settlement evidence: beta carries no settle witness; alpha's serial
+    // settlement came from the host settled witness.
+    assert.equal(beta.settleWitness, null);
     assert.equal(artefact.producers.find((producer) => producer.node === "research-alpha")!.settleWitness, "host-settled");
+  });
+
+  it("records a collate producer that publishes without reading and feeds a later research suggestion", async () => {
+    const session = createSuggestionViewRecorder({
+      scenario: SCENARIO,
+      block: "block-collate",
+      scheduleManifestSha256: SCHEDULE_MANIFEST_SHA256,
+      workflow: [
+        { node: "collate-extra", query: "collated summary query", occurrence: 1, kind: "collate" },
+        { node: "research-alpha", query: "alpha query", occurrence: 1 },
+      ],
+      baseline: BASELINE,
+      displayRoot: DISPLAY_ROOT,
+      initialTreeDigest: "1".repeat(64),
+      onInvalid: () => {},
+    });
+    const resCollate = reservationFor("collated summary query", DATE, "2026-10-23-collated-summary-x1y2z3", 45);
+    const rowCollate = v1Row("collated summary query", DATE, resCollate.runId, 45);
+    let rows: readonly IndexCandidate[] = [rowCollate, ...BASELINE];
+    const block = harness(session.controller, {
+      reservations: { "collated summary query": [resCollate], "alpha query": [RES_ALPHA] },
+      rows: () => rows,
+    });
+    // Real wrapper sequence: the collate operation allocates, commits and
+    // becomes index-visible, and NEVER calls candidates.
+    const collateStarted = await allocateOn(block, "collated summary query");
+    await collateStarted.wrapper.commit(collateStarted.reservation!, [], collateStarted.operation.signal);
+    await collateStarted.wrapper.updateIndex(runOf(collateStarted.reservation!), "collated summary query", collateStarted.operation.signal);
+    // The research reads: the collate publication is a block-local entry in its view.
+    const alpha = await driveOperation(block, "alpha query");
+    session.prepare(suggestRequest("alpha query", alpha.view));
+    await block.finish();
+    const artefact = session.exportArtefact({ fixtureFiles: FIXTURE_FILES });
+    verifySuggestionArtefact(artefact);
+    assert.equal(artefact.reads.length, 1);
+    assert.equal(artefact.reads[0]!.readerNode, "research-alpha");
+    const collate = artefact.producers.find((producer) => producer.node === "collate-extra")!;
+    assert.equal(collate.outcome, "indexed");
+    assert.deepEqual(artefact.reads[0]!.view[0]!.origin, { kind: "block-local", producer: "collate-extra" });
+    assert.deepEqual(artefact.reads[0]!.dependencies, ["collate-extra"]);
+    assert.equal(artefact.workflow[0]!.kind, "collate");
+    assert.equal(artefact.workflow[1]!.kind, "research");
+    // Replay the same shape end to end, including the completeness finalisation.
+    const replay = createSuggestionViewReplay({
+      artefact,
+      displayRoot: DISPLAY_ROOT,
+      budgetMs: 5000,
+      expectedFixtureFiles: FIXTURE_FILES,
+      onInvalid: () => {},
+    });
+    const freshCollate = freshReservation(resCollate, "fresh-collate-run-201");
+    const freshAlpha = freshReservation(RES_ALPHA, "fresh-alpha-run-202");
+    rows = [freshRow(rowCollate, freshCollate.runId), ...BASELINE];
+    const replayBlock = harness(replay.controller, {
+      reservations: { "collated summary query": [freshCollate], "alpha query": [freshAlpha] },
+      rows: () => rows,
+    });
+    const replayCollate = await allocateOn(replayBlock, "collated summary query");
+    await replayCollate.wrapper.commit(replayCollate.reservation!, [], replayCollate.operation.signal);
+    await replayCollate.wrapper.updateIndex(runOf(replayCollate.reservation!), "collated summary query", replayCollate.operation.signal);
+    const replayAlpha = await driveOperation(replayBlock, "alpha query");
+    const canonical = replay.prepare(suggestRequest("alpha query", replayAlpha.view));
+    assert.equal(sha256Canonical(canonical), artefact.suggestRequests[0]!.canonicalSha256);
+    await replayBlock.finish();
+    replay.assertValid();
+    replay.assertReplayComplete();
+    // Negative, in its own session (the fault is sticky-invalidating): a
+    // candidate read for the declared collate operation fails closed.
+    {
+      const negative = createSuggestionViewRecorder({
+        scenario: SCENARIO,
+        block: "block-collate-negative",
+        scheduleManifestSha256: SCHEDULE_MANIFEST_SHA256,
+        workflow: [{ node: "collate-extra", query: "collated summary query", occurrence: 1, kind: "collate" }],
+        baseline: BASELINE,
+        displayRoot: DISPLAY_ROOT,
+        initialTreeDigest: "1".repeat(64),
+        onInvalid: () => {},
+      });
+      const negativeBlock = harness(negative.controller, {
+        reservations: { "collated summary query": [resCollate] },
+        rows: [],
+      });
+      const started = await allocateOn(negativeBlock, "collated summary query");
+      await assert.rejects(
+        started.wrapper.candidates(started.reservation, "collated summary query", started.operation.signal),
+        /never reads/,
+      );
+      assert.throws(() => negative.assertValid(), /never reads/);
+      await negativeBlock.finish();
+    }
+  });
+
+  it("accepts only the host settled witness for serial query reuse, not the settle-time operation phase", async () => {
+    const buildSession = (): SuggestionViewRecorder =>
+      createSuggestionViewRecorder({
+        scenario: SCENARIO,
+        block: "block-serial-settle",
+        scheduleManifestSha256: SCHEDULE_MANIFEST_SHA256,
+        workflow: [
+          { node: "research-alpha", query: "alpha query", occurrence: 1 },
+          { node: "alpha-repeat", query: "alpha query", occurrence: 2 },
+        ],
+        baseline: BASELINE,
+        displayRoot: DISPLAY_ROOT,
+        initialTreeDigest: "1".repeat(64),
+        onInvalid: () => {},
+      });
+    // Occurrence 1 fails at the index phase; its settle-time operation phase
+    // fires at wrapper settlement. That notification is NOT settlement
+    // evidence: the serial repeat must still fail closed.
+    {
+      const session = buildSession();
+      const block = harness(session.controller, {
+        reservations: { "alpha query": [RES_ALPHA, RES_REPEAT] },
+        rows: [...BASELINE],
+        indexResults: ["unavailable"],
+      });
+      const first = await driveOperation(block, "alpha query");
+      session.prepare(suggestRequest("alpha query", first.view));
+      await first.wrapper.settle();
+      await assert.rejects(driveOperation(block, "alpha query"), /notification failed|requires the real host settlement witness/);
+      assert.throws(() => session.assertValid(), /requires the real host settlement witness/);
+      await block.finish();
+    }
+    // With the real host settled witness, the repeat runs and the artefact
+    // records the settlement evidence.
+    {
+      const session = buildSession();
+      const block = harness(session.controller, {
+        reservations: { "alpha query": [RES_ALPHA, RES_REPEAT] },
+        rows: [...BASELINE],
+        indexResults: ["unavailable"],
+      });
+      const first = await driveOperation(block, "alpha query");
+      session.prepare(suggestRequest("alpha query", first.view));
+      await first.wrapper.settle();
+      session.reportHostWitness({ query: "alpha query", outcome: "settled" });
+      const repeat = await driveOperation(block, "alpha query");
+      session.prepare(suggestRequest("alpha query", repeat.view));
+      await block.finish();
+      const artefact = session.exportArtefact({ fixtureFiles: FIXTURE_FILES });
+      const alpha = artefact.producers.find((producer) => producer.node === "research-alpha")!;
+      assert.equal(alpha.outcome, "failed");
+      assert.deepEqual(alpha.failurePhases, ["index", "operation"]);
+      assert.equal(alpha.settleWitness, "host-settled");
+      assert.equal(artefact.producers.find((producer) => producer.node === "alpha-repeat")!.settleWitness, null);
+    }
   });
 
   it("resolves a pre-allocation abort only through the coordinator's host witness", async () => {
@@ -612,7 +764,7 @@ describe("recorder", () => {
     );
     // The witnessed operation never read, so the block cannot export: a
     // pre-allocation abort remains an explicit invalidation, never repaired.
-    assert.throws(() => session.exportArtefact(), /settled without a candidate read/);
+    assert.throws(() => session.exportArtefact(), /settled without its frozen candidate read/);
   });
 
   it("records commit success for an index-failed producer through the commit-succeeded witness", async () => {
@@ -896,7 +1048,7 @@ describe("artefact integrity", () => {
 });
 
 describe("replay", () => {
-  function replaySession(artefact: SuggestionViewArtefact, budgetMs = 5000): SuggestionViewSession {
+  function replaySession(artefact: SuggestionViewArtefact, budgetMs = 5000): SuggestionViewReplay {
     return createSuggestionViewReplay({
       artefact,
       displayRoot: DISPLAY_ROOT,
@@ -948,6 +1100,7 @@ describe("replay", () => {
     assert.equal(sha256Canonical(canonical), frozen.canonicalSha256);
     await block.finish();
     session.assertValid();
+    session.assertReplayComplete();
   });
 
   it("waits for a deferred prerequisite publication inside the block budget", async () => {
@@ -1071,6 +1224,64 @@ describe("replay", () => {
       (error: unknown) => error instanceof SuggestionViewError && error.reason === "cancelled",
     );
     await block.finish();
+  });
+
+  it("fails end-of-block completeness when controller reads never entered the library", async () => {
+    const artefact = await recordCanonicalBlock();
+    const session = replaySession(artefact);
+    // A fault-free session: producers allocate and publish through the real
+    // wrapper, but no candidates call ever reaches the controller (the
+    // wrapper was poisoned before every read). assertValid alone would pass.
+    const block = harness(session.controller, {
+      reservations: {
+        "alpha query": [freshReservation(RES_ALPHA, "fresh-a-131")],
+        "beta query": [freshReservation(RES_BETA, "fresh-b-132")],
+      },
+      rows: [...BASELINE],
+    });
+    for (const [query, started] of [
+      ["alpha query", await allocateOn(block, "alpha query")],
+      ["beta query", await allocateOn(block, "beta query")],
+    ] as const) {
+      await started.wrapper.commit(started.reservation!, [], started.operation.signal);
+      await started.wrapper.updateIndex(runOf(started.reservation!), query, started.operation.signal);
+    }
+    session.assertValid();
+    assert.throws(() => session.assertReplayComplete(), /frozen candidate read of "research-alpha" was never performed/);
+    assert.throws(() => session.assertValid(), /never performed/);
+    await block.finish();
+  });
+
+  it("fails end-of-block completeness for undriven producers and unreplayed suggestion requests", async () => {
+    const artefact = await recordCanonicalBlock();
+    // Nothing was driven at all.
+    {
+      const session = replaySession(artefact);
+      session.assertValid();
+      assert.throws(() => session.assertReplayComplete(), /was never driven at replay/);
+    }
+    // Every frozen read was performed, but the frozen suggestion judge
+    // request of the first research was never replayed.
+    {
+      const session = replaySession(artefact);
+      const FRESH_ALPHA = freshReservation(RES_ALPHA, "fresh-a-141");
+      const FRESH_BETA = freshReservation(RES_BETA, "fresh-b-142");
+      const FRESH_REPEAT = freshReservation(RES_REPEAT, "fresh-a-143");
+      let rows: readonly IndexCandidate[] = [...BASELINE];
+      const block = harness(session.controller, {
+        reservations: { "alpha query": [FRESH_ALPHA, FRESH_REPEAT], "beta query": [FRESH_BETA] },
+        rows: () => rows,
+      });
+      await driveOperation(block, "alpha query");
+      session.reportHostWitness({ query: "alpha query", outcome: "settled" });
+      rows = [freshRow(ROW_ALPHA, FRESH_ALPHA.runId), ...BASELINE];
+      await driveOperation(block, "beta query");
+      rows = [freshRow(ROW_BETA, FRESH_BETA.runId), ...BASELINE];
+      await driveOperation(block, "alpha query");
+      await block.finish();
+      session.assertValid();
+      assert.throws(() => session.assertReplayComplete(), /frozen suggestion judge request of "research-alpha" was never replayed/);
+    }
   });
 
   it("fails closed on a judge message that does not match the projected view", async () => {

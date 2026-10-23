@@ -81,6 +81,14 @@ export interface SuggestionWorkflowOperation {
   readonly query: string;
   /** Serial occurrence of this exact query within the workflow (1-based). */
   readonly occurrence: number;
+  /**
+   * Operation kind. Omitted means "research" (the unambiguous default for
+   * source compatibility). A "collate" producer allocates and publishes like
+   * any report producer and can appear in another research's candidate view,
+   * but never performs a candidate read of its own and never receives a
+   * suggestion judge request.
+   */
+  readonly kind?: "research" | "collate";
 }
 
 /** Candidate fields as returned by the real verified reader. */
@@ -131,7 +139,7 @@ export interface SuggestionProducerRecord {
   readonly committed: boolean;
   readonly hostWitness: "failed-before-allocation" | "commit-succeeded" | null;
   /** How operation settlement was established for the serial order; null when never established. */
-  readonly settleWitness: "host-settled" | "operation-phase" | "pre-allocation" | null;
+  readonly settleWitness: "host-settled" | "pre-allocation" | null;
   readonly reservation: SuggestionReservationRecord | null;
   readonly indexedManifestSha256: string | null;
 }
@@ -337,6 +345,7 @@ export type SuggestionInvalidReason =
   | "unknown-operation"
   | "operation-query-mismatch"
   | "invalid-notification"
+  | "collate-read"
   | "duplicate-allocation"
   | "duplicate-read"
   | "overlapping-queries"
@@ -581,6 +590,8 @@ function validateWorkflowShape(
     nodes.add(node);
     if (!nonemptyString(op.query))
       throw new SuggestionViewError("invalid-workflow", `${at}: query must be a nonempty string`);
+    if (op.kind !== undefined && op.kind !== "research" && op.kind !== "collate")
+      throw new SuggestionViewError("invalid-workflow", `${at}: kind must be "research" or "collate" when present`);
     if (typeof op.occurrence !== "number" || !Number.isSafeInteger(op.occurrence) || op.occurrence < 1)
       throw new SuggestionViewError("invalid-workflow", `${at}: occurrence must be a positive integer`);
     const occurrences = byQuery.get(op.query) ?? [];
@@ -661,6 +672,12 @@ export function verifySuggestionArtefact(artefact: SuggestionViewArtefact): void
   try {
     validateWorkflowShape(artefact.workflow);
     validateBaselineShape(artefact.baseline);
+    // The artefact is the frozen record: its workflow entries carry the
+    // explicit operation kind (the recorder normalises the research default).
+    artefact.workflow.forEach((op, index) => {
+      if (op.kind !== "research" && op.kind !== "collate")
+        fail(`workflow[${index}]: the frozen artefact must carry an explicit kind "research" or "collate"`);
+    });
   } catch (error) {
     if (error instanceof SuggestionViewError) fail(error.message);
     throw error;
@@ -737,14 +754,11 @@ export function verifySuggestionArtefact(artefact: SuggestionViewArtefact): void
     if (
       producer.settleWitness !== null &&
       producer.settleWitness !== "host-settled" &&
-      producer.settleWitness !== "operation-phase" &&
       producer.settleWitness !== "pre-allocation"
     )
       fail(`${at}: unknown settle witness`);
     if (producer.settleWitness === "pre-allocation" && producer.allocated)
       fail(`${at}: a pre-allocation settle witness means the producer never allocated`);
-    if (producer.settleWitness === "operation-phase" && !producer.failurePhases.includes("operation"))
-      fail(`${at}: an operation-phase settle witness requires the settle-time operation phase`);
     if (producer.hostWitness !== null && producer.hostWitness !== "failed-before-allocation" && producer.hostWitness !== "commit-succeeded")
       fail(`${at}: unknown host witness`);
     if (producer.indexedManifestSha256 !== null && !isHex64(producer.indexedManifestSha256))
@@ -752,10 +766,13 @@ export function verifySuggestionArtefact(artefact: SuggestionViewArtefact): void
     if (producer.outcome !== "indexed" && producer.indexedManifestSha256 !== null)
       fail(`${at}: only an indexed producer records a manifest digest`);
   }
-  // Reads: one per workflow node, views classify against baseline/producers.
+  // Reads: exactly one per RESEARCH operation; a collate producer never reads.
   if (!isArrayValue(artefact.reads)) fail("Artefact reads must be an array");
-  if (artefact.reads.length !== artefact.workflow.length)
-    fail("Every workflow operation must have exactly one read occurrence record");
+  const researchOps = artefact.workflow.filter((op) => op.kind === "research");
+  if (artefact.reads.length !== researchOps.length)
+    fail(
+      "Every research operation must have exactly one read occurrence record, and a collate operation must have none",
+    );
   const readNodes = new Set<string>();
   const readByNode = new Map<string, SuggestionReadRecord>();
   for (const [index, read] of artefact.reads.entries()) {
@@ -765,6 +782,7 @@ export function verifySuggestionArtefact(artefact: SuggestionViewArtefact): void
     if (readNodes.has(node)) fail(`${at}: duplicate read record for "${node}"`);
     readNodes.add(node);
     const op = byNode.get(node)!;
+    if (op.kind !== "research") fail(`${at}: a read record exists for collate operation "${node}"`);
     if (read.occurrence !== op.occurrence || read.query !== op.query)
       fail(`${at}: read occurrence/query does not match the workflow entry`);
     if (!isArrayValue(read.view)) fail(`${at}: view must be an array`);
@@ -1122,9 +1140,14 @@ abstract class SuggestionSessionCore {
    * witness, or by the settle-time `operation` unavailable phase; it is
    * never inferred from a read, a model response or a publication.
    */
-  protected settledForSerial(producer: ProducerRuntime): boolean {
+  settledForSerial(producer: ProducerRuntime): boolean {
     if (producer.settledWitness || producer.preAllocationWitness) return true;
-    return producer.phases.includes("operation");
+    // Only coordinator-reported host witnesses establish settlement. The
+    // settle-time `operation` unavailable phase fires during run-store
+    // settlement, before the runtime lease and host result necessarily
+    // settle, so it is not full operation settlement evidence; completed
+    // reads, preparations and publications never count either.
+    return false;
   }
 
   /**
@@ -1324,6 +1347,11 @@ abstract class SuggestionSessionCore {
     current: RunReservation | undefined,
   ): ProducerRuntime {
     const producer = this.bindProducerEvent(query, operationId, "read");
+    if ((producer.op.kind ?? "research") === "collate")
+      this.fault(
+        "collate-read",
+        `A candidate read arrived for collate producer "${producer.op.node}"; the frozen workflow declares it never reads`,
+      );
     if (producer.readBound)
       this.fault("duplicate-read", `Operation "${operationId}" performed more than one candidate read`);
     if (producer.reservation !== null) {
@@ -1670,8 +1698,21 @@ export function createSuggestionViewRecorder(options: SuggestionRecorderOptions)
       for (const producer of this.producers) {
         if (!producer.started)
           this.fault("incomplete-block", `Workflow operation "${producer.op.node}" never started`);
-        if (!producer.readBound)
-          this.fault("incomplete-block", `Workflow operation "${producer.op.node}" settled without a candidate read`);
+        if ((producer.op.kind ?? "research") === "collate") {
+          // A collate producer allocates and publishes but never reads: no
+          // candidate read is required or permitted (bindRead already rejects
+          // one), and no suggestion judge request can exist for it.
+          if (producer.readBound)
+            this.fault(
+              "collate-read",
+              `Collate producer "${producer.op.node}" performed a candidate read despite the frozen declaration`,
+            );
+        } else if (!producer.readBound) {
+          this.fault(
+            "incomplete-block",
+            `Research operation "${producer.op.node}" settled without its frozen candidate read`,
+          );
+        }
         if (producer.allocated && producer.status !== "indexed" && producer.phases.length === 0)
           this.fault(
             "incomplete-block",
@@ -1713,9 +1754,7 @@ export function createSuggestionViewRecorder(options: SuggestionRecorderOptions)
           ? "host-settled"
           : producer.preAllocationWitness
             ? "pre-allocation"
-            : producer.phases.includes("operation")
-              ? "operation-phase"
-              : null,
+            : null,
         reservation: producer.reservation
           ? {
               runId: producer.reservation.runId,
@@ -1727,24 +1766,33 @@ export function createSuggestionViewRecorder(options: SuggestionRecorderOptions)
           : null,
         indexedManifestSha256: producer.indexedManifestSha256,
       }));
-      const reads: SuggestionReadRecord[] = this.producers.map((producer) => {
-        const view = producer.view ?? [];
-        const matchedIndex = suggestRequests.findIndex((record) => record.readerNode === producer.op.node);
-        return {
-          readerNode: producer.op.node,
-          occurrence: producer.op.occurrence,
-          query: producer.op.query,
-          view,
-          dependencies: [
-            ...new Set(
-              view
-                .filter((entry) => entry.origin.kind === "block-local")
-                .map((entry) => (entry.origin as { producer: string }).producer),
-            ),
-          ],
-          matchedSuggestRequest: view.length > 0 ? (matchedIndex >= 0 ? matchedIndex : null) : null,
-        };
-      });
+      const reads: SuggestionReadRecord[] = this.producers
+        .filter((producer) => (producer.op.kind ?? "research") === "research")
+        .map((producer) => {
+          const view = producer.view ?? [];
+          const matchedIndex = suggestRequests.findIndex((record) => record.readerNode === producer.op.node);
+          return {
+            readerNode: producer.op.node,
+            occurrence: producer.op.occurrence,
+            query: producer.op.query,
+            view,
+            dependencies: [
+              ...new Set(
+                view
+                  .filter((entry) => entry.origin.kind === "block-local")
+                  .map((entry) => (entry.origin as { producer: string }).producer),
+              ),
+            ],
+            matchedSuggestRequest: view.length > 0 ? (matchedIndex >= 0 ? matchedIndex : null) : null,
+          };
+        });
+      // The frozen workflow normalises the research default to an explicit
+      // kind, and the integrity digest is computed over the SAME normalised
+      // records the artefact carries.
+      const frozenWorkflow: readonly SuggestionWorkflowOperation[] = options.workflow.map((op) => ({
+        ...op,
+        kind: op.kind ?? "research",
+      }));
       const artefact: SuggestionViewArtefact = {
         schemaVersion: SUGGESTION_ARTEFACT_SCHEMA_VERSION,
         kind: SUGGESTION_ARTEFACT_KIND,
@@ -1752,7 +1800,7 @@ export function createSuggestionViewRecorder(options: SuggestionRecorderOptions)
         scenario: options.scenario,
         block: options.block,
         scheduleManifestSha256: options.scheduleManifestSha256,
-        workflow: options.workflow.map((op) => ({ ...op })),
+        workflow: frozenWorkflow,
         baseline: baseline.map(fieldsOf),
         displayRoot: options.displayRoot,
         initialTreeDigest: options.initialTreeDigest,
@@ -1761,7 +1809,7 @@ export function createSuggestionViewRecorder(options: SuggestionRecorderOptions)
         reads,
         suggestRequests: [...suggestRequests],
         integrity: {
-          workflowSha256: sha256Canonical(options.workflow),
+          workflowSha256: sha256Canonical(frozenWorkflow),
           baselineSha256: sha256Canonical(baseline),
           producersSha256: sha256Canonical(producers),
           readsSha256: sha256Canonical(reads),
@@ -1798,6 +1846,18 @@ async function readAll(readVerified: () => Promise<readonly IndexCandidate[]>): 
 // ---------------------------------------------------------------------------
 // Replay
 // ---------------------------------------------------------------------------
+
+/** Replay session: adds the end-of-block completeness finalisation. */
+export interface SuggestionViewReplay extends SuggestionViewSession {
+  /**
+   * End-of-block replay completeness assertion, distinct from the sticky-error
+   * `assertValid()`: a fault-free session whose controller reads never entered
+   * the library (for example a native wrapper poisoned before every read)
+   * still fails here. Requires the frozen expected producers, candidate reads
+   * and suggestion-request occurrences; never fabricates missed work.
+   */
+  assertReplayComplete(): void;
+}
 
 /** Constructor options for the replay. */
 export interface SuggestionReplayOptions extends SuggestionSessionOptions {
@@ -1836,7 +1896,7 @@ export interface SuggestionReplayOptions extends SuggestionSessionOptions {
  * fail closed. No polling loop, filesystem bypass, index mutation or
  * invented candidate exists in this session.
  */
-export function createSuggestionViewReplay(options: SuggestionReplayOptions): SuggestionViewSession {
+export function createSuggestionViewReplay(options: SuggestionReplayOptions): SuggestionViewReplay {
   verifySuggestionArtefact(options.artefact);
   if (options.displayRoot !== options.artefact.displayRoot)
     throw new SuggestionViewError(
@@ -1895,12 +1955,15 @@ export function createSuggestionViewReplay(options: SuggestionReplayOptions): Su
 
     constructor() {
       super(artefact.workflow, options.onInvalid);
-      // Frozen views are known at construction; dependency validation ran in
-      // verifySuggestionArtefact (existence, self-dependency, acyclicity).
+      // Frozen views are known at construction for research producers;
+      // dependency validation ran in verifySuggestionArtefact (existence,
+      // self-dependency, acyclicity). A collate producer never reads, so it
+      // carries no frozen view and never matches a suggestion preparation.
       for (const producer of this.producers) {
+        if ((producer.op.kind ?? "research") === "collate") continue;
         const read = readByNode.get(producer.op.node);
         if (read === undefined)
-          throw new SuggestionViewError("invalid-artefact", `No frozen read record for workflow node "${producer.op.node}"`);
+          throw new SuggestionViewError("invalid-artefact", `No frozen read record for research workflow node "${producer.op.node}"`);
         producer.view = read.view;
       }
     }
@@ -2248,10 +2311,40 @@ export function createSuggestionViewReplay(options: SuggestionReplayOptions): Su
     reportHostWitness(input: SuggestionHostWitnessInput): void {
       super.reportHostWitness(input);
     }
+
+    assertReplayComplete(): void {
+      // Distinct from the sticky-error assertValid(): a fault-free session
+      // whose controller reads never entered the library (for example a
+      // native wrapper poisoned before every read) still fails here. Nothing
+      // is fabricated: only what actually happened can satisfy the check.
+      this.assertValid();
+      for (const producer of this.producers) {
+        if (!producer.started)
+          this.fault(
+            "incomplete-block",
+            `Producer "${producer.op.node}" was never driven at replay`,
+          );
+        if ((producer.op.kind ?? "research") === "research" && !producer.readBound)
+          this.fault(
+            "incomplete-block",
+            `The frozen candidate read of "${producer.op.node}" was never performed at replay`,
+          );
+      }
+      for (const record of artefact.suggestRequests) {
+        const producer = this.byNode.get(record.readerNode);
+        if (producer === undefined)
+          this.fault("invalid-artefact", `Suggestion request references unknown reader "${record.readerNode}"`);
+        if (producer !== undefined && !producer.prepareBound)
+          this.fault(
+            "incomplete-block",
+            `The frozen suggestion judge request of "${record.readerNode}" was never replayed`,
+          );
+      }
+    }
   }
 
   const replay = new Replay();
-  const session: SuggestionViewSession = {
+  const session: SuggestionViewReplay = {
     controller: Object.freeze({
       allocated: (input) => replay.onAllocated(input.operationId, input.query, input.reservation),
       indexed: (input) => replay.onIndexed(input.operationId, input.run),
@@ -2262,6 +2355,7 @@ export function createSuggestionViewReplay(options: SuggestionReplayOptions): Su
     reportHostWitness: (input) => replay.reportHostWitness(input),
     assertValid: () => replay.assertValid(),
     observations: () => replay.observationsList(),
+    assertReplayComplete: () => replay.assertReplayComplete(),
   };
   return session;
 }
