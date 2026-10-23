@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
-// Deterministic P0 documentation/corpus gate. No inference, network or runtime feature tests.
+// Deterministic versioned documentation/corpus gate. No inference or runtime feature tests.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -80,14 +80,48 @@ const expected = {
 const manifestPath = `${corpusRoot}/manifest.json`;
 if (args.has("--write-manifest")) writeFileSync(manifestPath, `${JSON.stringify(expected, null, 2)}\n`);
 assert.deepEqual(JSON.parse(read(manifestPath)), expected, "Corpus/method manifest drift; inspect changes before deliberate regeneration");
+// Pin the original acceptance snapshot, not an editable replacement file list.
+const historyRoot = `${contractRoot}/history/P0-2`;
+const historicalAcceptance = read(`${historyRoot}/acceptance.json`);
+assert.equal(hash(historicalAcceptance), "40aca10e1e2bdeb5a98924dbc23bc4fb05d51258956369604745ec95880efca6", "P0-2 acceptance snapshot changed");
+const historical = JSON.parse(historicalAcceptance);
+assert.equal(historical.reviewedCommit, "842c56fc539451c84b2cd8793a3265810a998058");
+assert.equal(hash(read(`${historyRoot}/REVIEW.md`)), historical.reviewReportSha256);
+assert.equal(hash(read(`${historyRoot}/SPECIFICATION-SHA256SUMS`)), historical.specificationManifestSha256);
+assert.equal(hash(execFileSync("git", ["show", `${historical.reviewedCommit}:${contractRoot}/SPECIFICATION-SHA256SUMS`])), historical.specificationManifestSha256);
+const f7RevisedPaths = new Set([
+  `${contractRoot}/CONTRACT.md`, `${contractRoot}/ACCEPTANCE.md`,
+  `${contractRoot}/NATIVE-API.ts`, "scripts/check-codemode-plan.mjs",
+]);
+for (const item of historical.specificationFiles) {
+  if (!f7RevisedPaths.has(item.path))
+    assert.equal(hash(readFileSync(item.path)), item.sha256, `Outside F7 scope: ${item.path}`);
+  assert.equal(hash(execFileSync("git", ["show", `${historical.reviewedCommit}:${item.path}`])), item.sha256, `Historical review commit mismatch: ${item.path}`);
+}
+// Select F7-1 without changing the old corpus/method manifest.
+const methodAuthorityPath = "docs/benchmarks/codemode/method-authority-F7-1.json";
+const methodAuthority = JSON.parse(read(methodAuthorityPath));
+assert.deepEqual(methodAuthority, {
+  schemaVersion: 1,
+  revision: "F7-1",
+  specificationRevision: "P0-3-F7",
+  scope: "suggestion-replay-only",
+  base: { path: "docs/benchmarks/codemode/METHOD.md", sha256: hash(read("docs/benchmarks/codemode/METHOD.md")) },
+  amendment: { path: "docs/benchmarks/codemode/METHOD-F7-1.md", sha256: hash(read("docs/benchmarks/codemode/METHOD-F7-1.md")) },
+  corpusManifestSha256: hash(read(manifestPath)),
+});
+assert.equal(methodAuthority.base.sha256, historical.specificationFiles.find((item) => item.path === methodAuthority.base.path)?.sha256);
 const contract = read(`${contractRoot}/CONTRACT.md`);
 const specificationRevision = /^Specification revision: `([^`]+)`/m.exec(contract)?.[1];
-assert(specificationRevision, "Missing specification revision");
+assert.equal(specificationRevision, methodAuthority.specificationRevision, "Method/specification revision mismatch");
 const specificationPaths = [
   ...["CONTRACT.md", "API.ts", "NATIVE-API.ts", "ACCEPTANCE.md", "consumer.typecheck.ts", "tsconfig.json", "LOCK-EVIDENCE.md"].map((p) => `${contractRoot}/${p}`),
   ...expected.inputFiles.map((f) => `${corpusRoot}/${f.path}`), manifestPath,
   ...methodPaths.map((p) => `${corpusRoot}/${p}`.split("/").reduce((parts, p) => p === ".." ? parts.slice(0, -1) : [...parts, p], []).join("/")),
   "scripts/check-codemode-plan.mjs",
+  `${contractRoot}/F7-REPLAY.md`,
+  `${historyRoot}/acceptance.json`, `${historyRoot}/REVIEW.md`, `${historyRoot}/SPECIFICATION-SHA256SUMS`,
+  methodAuthorityPath, methodAuthority.amendment.path,
 ].sort();
 const specificationFiles = specificationPaths.map((path) => ({ path, sha256: hash(readFileSync(path)) }));
 const specificationManifest = `${contractRoot}/SPECIFICATION-SHA256SUMS`;
@@ -98,7 +132,7 @@ const acceptance = read(`${contractRoot}/ACCEPTANCE.md`);
 const clauseIds = [...contract.matchAll(/^### (C\d{2}) /gm)].map((m) => m[1]);
 assert.deepEqual(clauseIds, Array.from({ length: 34 }, (_, i) => `C${String(i + 1).padStart(2, "0")}`));
 assert.deepEqual([...acceptance.matchAll(/^\| T\d{2} \| (C\d{2}) \|/gm)].map((m) => m[1]), clauseIds);
-const docs = [`${contractRoot}/CONTRACT.md`, `${contractRoot}/ACCEPTANCE.md`, `${contractRoot}/STATUS.md`, "docs/plans/research-history/PLAN.md", ...methodPaths.map((p) => resolve(corpusRoot, p))];
+const docs = [`${contractRoot}/CONTRACT.md`, `${contractRoot}/ACCEPTANCE.md`, `${contractRoot}/STATUS.md`, `${contractRoot}/F7-REPLAY.md`, methodAuthority.amendment.path, "docs/plans/research-history/PLAN.md", ...methodPaths.map((p) => resolve(corpusRoot, p))];
 for (const path of docs) {
   const text = read(path);
   assert(!text.includes("\u2014"), `${path}: authored em dash`);
@@ -127,4 +161,4 @@ if (args.has("--require-accepted")) {
     assert.equal(hash(committed), item.sha256, `Review commit mismatch: ${item.path}`);
   }
 }
-console.log("Codemode P0 contract/corpus/method checks passed; no feature or live benchmark verdict implied.");
+console.log("Codemode versioned contract/corpus/method checks passed; P0-2 history preserved; no feature or live benchmark verdict implied.");

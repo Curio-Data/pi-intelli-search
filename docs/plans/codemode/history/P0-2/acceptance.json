@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "revision": "P0-2",
+  "status": "accepted",
+  "reviewedCommit": "842c56fc539451c84b2cd8793a3265810a998058",
+  "acceptedDocumentationCommit": "c198b19c5dcbd76c551964686b3eb272e5fbc927",
+  "reviewerModel": "claude-opus-5-5[1m]",
+  "reviewReportSha256": "b70abc91ea7171ca44986b98429b222eb94ba41824d36eca89233619f692f620",
+  "specificationManifestSha256": "b0e154ba7c6f097806302f5bd90f3e26cbfa07e0d769061cc0e9b9f148e778a3",
+  "coordinatorAccepted": true,
+  "coordinatorModel": "openai-codex/gpt-6.1-sol",
+  "acceptedUtc": "2026-10-18T13:45:09.829Z",
+  "bindingConditions": [
+    {
+      "id": "N1",
+      "status": "required",
+      "handoff": "BUILDER-HANDOFF.md#binding-replay-condition"
+    }
+  ],
+  "builderNotes": "P1/P2/P3 conditions and immutable-base workflow in BUILDER-HANDOFF.md; no builder commissioned by this record",
+  "specificationFiles": [
+    {
+      "path": "docs/benchmarks/METHOD.md",
+      "sha256": "51a6e61af51b75a76e4864146fee65ff4e8df5b5cd041edd80d6fa312e213812"
+    },
+    {
+      "path": "docs/benchmarks/codemode/METHOD.md",
+      "sha256": "1636a9b15331485e610d2413fb20b9350d302fedf9189e35b27de694ef7130f4"
+    },
+    {
+      "path": "docs/benchmarks/corpus/codemode.json",
+      "sha256": "d762e00e79f8731704a8dceb522d25b4a8a22253a2c9157699b7754447a5eb01"
+    },
+    {
+      "path": "docs/benchmarks/corpus/deadline.json",
+      "sha256": "7c5910be960dd0f3446ecaba6f5b0ca47d14ad3a9a28bddec9ff755494356fc5"
+    },
+    {
+      "path": "docs/benchmarks/corpus/judge-calibration.json",
+      "sha256": "5dafc83692229846fbe377dec6320a1315e789f740dd13147c9a028359415189"
+    },
+    {
+      "path": "docs/benchmarks/corpus/manifest.json",
+      "sha256": "46b9c2207c9d043547f8b6a409c17b6ea26aecef47a63fdbc0328c75e22defc4"
+    },
+    {
+      "path": "docs/benchmarks/corpus/query-expansion.json",
+      "sha256": "df27483a4c341005148eca0466c00dd79754fc66aebfb7cc9b2403c7c6b4db75"
+    },
+    {
+      "path": "docs/benchmarks/deadline/METHOD.md",
+      "sha256": "27b2911e0373d6ff66901b5a060d139a1eba5fa359c2d48265ea68ea231aba3e"
+    },
+    {
+      "path": "docs/benchmarks/query-expansion/METHOD.md",
+      "sha256": "1459a9e977cfd82402867cb9a74dfaa3180209ec61f6c9da81c6ae504b19678e"
+    },
+    {
+      "path": "docs/plans/codemode/ACCEPTANCE.md",
+      "sha256": "5f2e4a3939e0e0059792a77b369e73121e60ebde1333ae85a6e2660d2188426e"
+    },
+    {
+      "path": "docs/plans/codemode/API.ts",
+      "sha256": "8b653c22aba1785d2b63e5a526991c5f39c29bfd0ceeb419879f6cc2073482f8"
+    },
+    {
+      "path": "docs/plans/codemode/CONTRACT.md",
+      "sha256": "671484e4937229b07a9b3210d68c386865b214394a5239f29611e1ede716b7f9"
+    },
+    {
+      "path": "docs/plans/codemode/LOCK-EVIDENCE.md",
+      "sha256": "9eec150f79f31359fbfa0d1a8e57571a57d021534467c5dcb9f86dd1a9a14e3c"
+    },
+    {
+      "path": "docs/plans/codemode/NATIVE-API.ts",
+      "sha256": "47f261e708036b65dff502a71a43cf03897a7382f652091220e468550b1f135d"
+    },
+    {
+      "path": "docs/plans/codemode/consumer.typecheck.ts",
+      "sha256": "91a58d2767f28a3b6f56162a41c6c18c8fcf4f97295f0929dc91401cf979e348"
+    },
+    {
+      "path": "docs/plans/codemode/tsconfig.json",
+      "sha256": "97812e1982bcb14f2bb02cd8dec8543c968d8f84dc8cc621066afa5128d9f102"
+    },
+    {
+      "path": "scripts/check-codemode-plan.mjs",
+      "sha256": "c41ce25104646e16b6241ba99ed9fe7fcca4cd3920f8755359f25e21d3bea839"
+    }
+  ]
+}
