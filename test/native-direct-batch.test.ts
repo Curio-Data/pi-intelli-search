@@ -66,6 +66,8 @@ let stage: StageFixture;
 
 const QA = "direct batch alpha research";
 const QB = "direct batch bravo research";
+/** Its search is permanently rejected (HTTP 400) after actual dispatch. */
+const QF = "direct batch failing research";
 const QC = "direct batch standalone collate";
 const page = (id: string) => `https://docs.example.test/${id.toLowerCase()}`;
 const PAGES: Record<string, readonly string[]> = { [QA]: ["A1", "A2"], [QB]: ["B1", "B2"] };
@@ -92,7 +94,7 @@ const ROLE_USAGE: Record<StageRole, { prompt: number; completion: number }> = {
 
 /** Owning operation of one stage request, from exact request content. */
 function ownerOf(role: StageRole, user: string): string {
-  if (role === "search") return [QA, QB].find((q) => user.startsWith(q)) ?? "unknown";
+  if (role === "search") return [QA, QB, QF].find((q) => user.startsWith(q)) ?? "unknown";
   if (role === "extract") {
     const marker = /PAGE-MARKER:([A-Za-z0-9]+)/.exec(user)?.[1];
     return Object.entries(PAGES).find(([, ids]) => marker && ids.includes(marker))?.[0] ?? "unknown";
@@ -121,6 +123,8 @@ interface ScriptOptions {
   readonly searchRendezvousMs?: number;
   /** Extra hold on every extraction response (creates page-class pressure). */
   readonly extractHoldMs?: number;
+  /** Owners whose search the fixture rejects with a permanent 400 (no usage on the wire). */
+  readonly rejectSearch?: readonly string[];
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -177,6 +181,12 @@ function scriptStage(options: ScriptOptions = {}): Meter {
     const reply = (text: string): StageReply => ({ text, usage: usage(prompt, completion), after: settle });
     switch (role) {
       case "search": {
+        if (options.rejectSearch?.includes(owner))
+          return {
+            status: 400,
+            errorBody: JSON.stringify({ error: { message: "fixture permanent bad request" } }),
+            after: settle,
+          };
         const ids = PAGES[owner] ?? [];
         return reply(`Answer for ${owner}: ${ids.map((id) => `[${id}](${page(id)})`).join(" and ")}.`);
       }
@@ -613,6 +623,120 @@ describe(`direct native research batches on ${hostSelection.kind} Pi ${hostSelec
     assert(run.meter.peakByRole.extract >= 2, `extract peak ${run.meter.peakByRole.extract}`);
     assert(run.meter.peak > 2, `model peak ${run.meter.peak}`);
     assert(run.pages.peak >= 2, `fetch peak ${run.pages.peak}`);
+  });
+
+  it("a parallel direct batch settles both members when one research fails after actual search dispatch", async () => {
+    const phase = "record-direct-failure";
+    const run = await runBatch({
+      phase,
+      calls: [researchCall(QF), researchCall(QA)],
+      script: { searchRendezvousMs: 10_000, rejectSearch: [QF] },
+    });
+    const results = ends(run.handle);
+    const failed = results.find((end) => queryOf(run.handle, end) === QF);
+    const sibling = results.find((end) => queryOf(run.handle, end) === QA);
+    await writeEvidence(isolation.root, "direct-failure", { ...evidenceOf(run), failedEnd: failed ?? null });
+    assert.equal(run.promptError, null);
+    assert.deepEqual(guard.violations(phase), [], JSON.stringify(guard.violations(phase)));
+    assert.equal(run.registryCalls, run.meter.rows.length);
+    assert(!run.meter.rows.some((row) => row.owner === "unknown"));
+    for (const body of run.mainBodies) assert(!body.includes(RAW_SENTINEL));
+
+    // Genuine overlap before the failure: the rejected search was dispatched
+    // and held in flight with its sibling's, and both were admitted first.
+    assert.equal(run.meter.rendezvous, "met");
+    assert.equal(run.meter.peakByRole.search, 2);
+    assert.deepEqual(
+      run.meter.rows.filter((row) => row.owner === QF).map((row) => row.role),
+      ["search"],
+      "a permanent 400 is one dispatched attempt: no retry and no later stage",
+    );
+    assert.deepEqual(new Set(allocatedBeforeFirstPublication(run.admissions)), new Set([QF, QA]));
+    assert.deepEqual(hostOrder(run.handle).slice(0, 2), ["intelli_research:start", "intelli_research:start"]);
+
+    // Both members settle: one host end each, the session continues and the
+    // main model receives both results in its next request.
+    assert.equal(results.length, 2);
+    assert(failed && sibling, "one end per member");
+    assert.equal(run.mainBodies.length, 2, "the batch settled and the agent loop continued");
+    assert(run.mainBodies[1]!.includes("fixture permanent bad request"), "main sees the failure");
+
+    // The sibling completes and publishes with its own exact ledger.
+    assert.equal(sibling.isError, false);
+    assert.equal(sibling.result.details?.intelli?.outcome, "completed");
+    const own = stageTotals(run.meter.rows, QA);
+    const siblingAccounting = accountingOf(sibling);
+    assert.equal(siblingAccounting.attempts, own.attempts);
+    assert.equal(siblingAccounting.observedAttempts, own.attempts);
+    assert.equal(siblingAccounting.missingAttempts, 0);
+    assert.equal(siblingAccounting.tokens?.inputTotal, own.input);
+    assert.equal(siblingAccounting.tokens?.outputTotal, own.output);
+
+    // The failure is a canonical error result, not a thrown host error.
+    assert.equal(failed.isError, true);
+    const data = (failed.result.details?.intelli ?? {}) as Record<string, unknown>;
+    assert.equal(data.outcome, "error");
+    assert.match(String(failed.result.content?.[0]?.text), /fixture permanent bad request/);
+    assert.deepEqual(data.cache, { status: "not-requested" });
+    const attempts = data.attempts as Array<{ role?: string; state?: string }>;
+    assert.deepEqual(attempts.map((a) => `${a.role}:${a.state}`), ["search:failed"]);
+    // Partial accounting keeps missingness: no zero tokens or zero charges invented.
+    const failedAccounting = data.accounting as Record<string, unknown>;
+    assert.deepEqual(
+      {
+        attempts: failedAccounting.attempts,
+        observedAttempts: failedAccounting.observedAttempts,
+        missingAttempts: failedAccounting.missingAttempts,
+        tokens: failedAccounting.tokens,
+        reportedCost: failedAccounting.reportedCost,
+        estimatedCost: failedAccounting.estimatedCost,
+        costComplete: failedAccounting.costComplete,
+        parentDelivery: failedAccounting.parentDelivery,
+      },
+      {
+        attempts: 1,
+        observedAttempts: 0,
+        missingAttempts: 1,
+        tokens: {},
+        reportedCost: {},
+        estimatedCost: {},
+        costComplete: false,
+        parentDelivery: "available",
+      },
+    );
+    assert.deepEqual(
+      [...(failedAccounting.missingTokenFields as string[])].sort(),
+      ["cacheRead", "cacheWrite", "cacheWrite1h", "inputTotal", "inputUncached", "outputTotal", "reasoning", "totalTokens"],
+    );
+    // The execution receipt carries the same canonical accounting.
+    const execution = (failed.result.details as { execution?: { accounting?: unknown } } | undefined)?.execution;
+    assert.deepEqual(execution?.accounting, failedAccounting);
+    // Host numeric usage has required number fields: unknown values are zero
+    // placeholders (CONTRACT C17/T17 numeric host usage), and the canonical
+    // completeness above explains them. Pinned here so a change is visible.
+    const hostUsage = (failed.result as { usage?: Record<string, unknown> }).usage;
+    assert.deepEqual(hostUsage, {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    });
+
+    // Actual store lifecycle: both allocated, only the sibling published, and
+    // the failed operation settled with an operation-phase unavailability.
+    const allocations = run.admissions.filter((event) => event.kind === "allocated");
+    assert.equal(allocations.length, 2);
+    const failedOperation = allocations.find((event) => event.query === QF)!.operationId;
+    assert.deepEqual(
+      run.admissions.filter((event) => event.kind !== "allocated").map((event) => `${event.kind}:${event.operationId === failedOperation ? "F" : "A"}`),
+      ["unavailable:F", "indexed:A"],
+    );
+    assert.deepEqual(
+      run.admissions.filter((event) => event.kind === "unavailable").map((event) => (event as { phase: string }).phase),
+      ["operation"],
+    );
   });
 
   it("a direct batch containing sequential collate serialises as a whole", async () => {
