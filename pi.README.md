@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1420%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1434%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -85,6 +85,10 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
   - [Required API Keys](#required-api-keys)
 - [Pipeline](#pipeline)
 - [Cost](#cost)
+- [Research Execution](#research-execution)
+  - [Operation Lifetimes](#operation-lifetimes)
+  - [Concurrent Calls](#concurrent-calls)
+  - [Resource Limits](#resource-limits)
 - [Settings](#settings)
   - [Settings Reference](#settings-reference)
   - [Automatic llms-full.txt Discovery](#automatic-llms-fulltxt-discovery)
@@ -405,7 +409,7 @@ For an observed account limit of approximately 0.33 requests per second, the def
 }
 ```
 
-Choose pacing, concurrency and retry settings from observed account and provider rate limits, whether the key is paid, free-tier or shared. Leave the throttle off when the account handles the default fan-out without rate-limit failures.
+Choose pacing, concurrency and retry settings from observed account and provider rate limits, whether the key is paid, free-tier or shared. Leave the throttle off when the account handles the default fan-out without rate-limit failures. The interval spaces every model attempt in the session, including search, collation, suggestions and retries, so under this recipe each model attempt starts at least 3 seconds after the previous one.
 
 ### Recipe 8: Per-Project Override
 
@@ -618,7 +622,7 @@ The illustration shows the native pipeline with the model configuration at its c
 
 The search stage merges text links with harvested citation annotations before selecting pages (see [Source Harvesting from Citations](#source-harvesting-from-citations)). Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈30-50K for 10 pages).
 
-Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it.
+Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local-only `meta.json` telemetry sidecar into their run directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it. Capacity, page scheduling and resource limits are described in [Research Execution](#research-execution).
 
 See [docs/ARCHITECTURE.md](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md) for detailed design decisions.
 
@@ -636,7 +640,69 @@ Per research run with the default 10 pages: ≈$0.09
 | Collate (M3 via OpenRouter)         | 1                     | ≈$0.01    |
 | Cache Suggest (M3 via OpenRouter)   | 1                     | ≈$0.0002  |
 
-Since v0.13.0 the search stage adds recovered provider citation URLs to prose links, increasing the candidate source set; `maxUrls` still caps page selection. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 and M2.7 had equal per-token prices in the recorded benchmark; M3 wrote ≈2× the extraction characters, with the cost estimate separately projecting greater token usage); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](#choosing-an-alternative-search-configuration) or [MCP configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#configuration). The extract and collate rows scale with the selected models.
+Since v0.13.0 the search stage adds recovered provider citation URLs to prose links, increasing the candidate source set; `maxUrls` still caps page selection. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 and M2.7 had equal per-token prices in the recorded benchmark; M3 wrote ≈2× the extraction characters, with the cost estimate separately projecting greater token usage); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](#choosing-an-alternative-search-configuration) or [MCP configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#configuration). The extract and collate rows scale with the selected models. Degraded research (`no-links`, `fetch-failed`, `extraction-failed`) also runs the cache-suggest call when earlier runs exist.
+
+## Research Execution
+
+Research fetches and extracts pages in parallel under shared capacity limits. One runtime owns those limits: a native `Pi` session, or one MCP server process. Both packages accept the same `execution` block, natively under the `pi-intelli-search` namespace and in MCP configuration under `tuning`. Unknown keys and out-of-range values fail before any inference. A native trusted project's `execution` block replaces the global block entirely; there is no per-key merge. The defaults are unmeasured starting values, not performance claims.
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "execution": {
+      "pageExecution": "streaming",
+      "modelConcurrency": 5,
+      "aggregateFetchConcurrency": 4,
+      "lateDrainMs": 0,
+      "deadline": {
+        "enabled": false
+      }
+    }
+  }
+}
+```
+
+| Field | Default | Accepted Values | Effect |
+|---|---|---|---|
+| `pageExecution` | `streaming` | `streaming` or `barrier` | `streaming` extracts each page as soon as its fetch finishes. `barrier` fetches every page before extraction starts |
+| `modelConcurrency` | `5` | Integer from 2 to 64 | Model attempts in flight at once across every operation in the runtime, including retries and suggestion calls |
+| `criticalReserve` | `1` | Exactly 1 | Slots held back for search, collation and suggestion calls. Page extraction uses at most `modelConcurrency` minus this reserve |
+| `aggregateFetchConcurrency` | `4` | Integer from 1 to 32 | Physical page request chains in flight at once across every operation. Each chain runs in its own child process |
+| `lateDrainMs` | `0` | Integer from 0 to 30,000 | Milliseconds that extractions started before a deadline cutoff can continue after collation. Their results are saved as non-evidence and never enter the summary |
+| `deadline` | `{ "enabled": false }` | Whole object, described below | Adaptive page cutoff for streaming research |
+| `fetchMaxResponseBytes` | `8388608` | Integer from 65,536 to 16,777,216 | Decoded bytes accepted per page response; a larger response is rejected, not truncated |
+| `docsMaxResponseBytes` | `16777216` | Integer from 65,536 to 33,554,432 | The same bound for `llms-full.txt` documentation downloads |
+| `fetchMaxChars` | `500000` | Integer from 1 to 500,000 | Cleaned characters kept per page; truncation is reported separately from rejection |
+
+The existing `fetchConcurrency` and `extractionConcurrency` settings remain per-run limits inside these runtime-wide limits. Effective page concurrency is the smaller of `extractionConcurrency` and `modelConcurrency` minus the reserve, which is 4 with the defaults. `minRequestIntervalMs` now spaces the starts of all actual model attempts in the runtime, including retries, search, collation, suggestions and standalone tool calls, where it previously spaced only research extraction calls. A queued attempt holds no slot and starts no timer: its model-call timeout begins at dispatch, and its slot is released before any retry backoff.
+
+An enabled `deadline` must set every field explicitly: `quorum` (greater than 0, at most 1), `factor` (greater than 0, at most 10), `floorMs` (0 to 600,000), `ceilingMs` (1 to 600,000, not below `floorMs`) and `minSources` (1 to 100). The packages supply no recommended values, and a deadline cannot be combined with `barrier`. Once the `quorum` fraction of pages has finished with at least one success, the cutoff is set once to the quorum time plus `factor` times the median successful page time, clamped between `floorMs` and `ceilingMs` after page work starts. The cutoff waits for `minSources` successes until the ceiling. At the cutoff, queued and in-flight fetches are cancelled, and only extractions finished before it enter the summary.
+
+The native session captures these settings when it starts; a change takes effect in the next session. The MCP server captures them when its runtime is constructed; restart it after a change.
+
+### Operation Lifetimes
+
+Each tool call is one operation. It owns its page request chains, model attempts, staging files and cache writers, and it returns only after all of them have settled, on success, degraded outcome, error or cancellation. Cancellation stops queued and in-flight work and waits for it to finish. Deterministic tests on *Linux* measured cancellation settling within 17 milliseconds against scripted models and local pages, inside a 5,000-millisecond test target; live provider and filesystem latency are not covered by that measurement.
+
+Research applies the configured model retry and timeout policy. The native standalone `intelli_search`, `intelli_extract` and `intelli_collate` tools keep one model attempt and no application-level timeout. MCP applies its configured retry and timeout policy to every model call. Every model attempt in either package passes the same capacity and pacing limits.
+
+Research documentation discovery runs alongside page work and is cancelled when the run finalises. A download still in progress at that point is dropped without a diagnostic, so a result can contain fewer documentation files than a slower run of the same query.
+
+When a host cancels a call, the operation still settles its own work, but usage reported after the cancellation may not reach the host. Accounting then records delivery as `unknown`. Missing provider usage is also distinct from zero: required numeric host fields use zero placeholders while full accounting marks the missing observations. A host that sums only numeric fields can therefore display an incomplete session total, after failures as well as cancellation. The provider account is the authority for charges.
+
+### Concurrent Calls
+
+Parallel operations share one runtime's model and fetch capacity rather than each receiving their own: page extraction across all of them uses at most `modelConcurrency` minus the reserve, and page requests at most `aggregateFetchConcurrency`. Competing calls queue for those same permits while retaining their own page memory and staging. Each research performs its own provider work, even for an identical query; results are not reused across calls. A successful allocation reserves a separate run, and any saved reports remain distinct.
+
+In `Pi`, `intelli_research` calls issued together in one assistant turn run at the same time, as do research calls a tool issues through `Pi`'s nested tool-call interface; earlier releases ran research calls one at a time. `intelli_collate` still runs one at a time: a turn that includes it, or any other tool that declares sequential execution, runs every call in that turn one after another. An SDK embedder can configure the agent for sequential execution, which takes precedence over these declarations; the verified hosts expose no stock CLI flag or settings key for it. Issue one research per turn to keep research serial. A session accepts at most 64 active operations.
+
+### Resource Limits
+
+The content limits bound accepted bytes, not process memory. Deterministic qualification on *Linux* observed one accepted page near the 8 MiB limit adding ≈140-200 MiB of resident memory, and four such pages at default concurrency adding ≈508 MiB, because each page is decoded, read by two fetch variants and parsed more than once. Page bodies held in memory are bounded by `fetchConcurrency` within each run, so parallel calls multiply them, and every accepted page stays in private staging on disk until the run finishes, up to three bytes per kept character for each page.
+
+Each physical page request chain starts its own child process, which adds process start-up cost and ≈50-82 MiB peak resident memory per chain in the same qualification. `aggregateFetchConcurrency` bounds how many run at once.
+
+Page fetching uses its own Transport Layer Security (TLS) stack. It trusts its bundled roots plus certificates named by `SSL_CERT_FILE` or `SSL_CERT_DIR`; `NODE_EXTRA_CA_CERTS` is passed to the page process but has no effect on page trust. A private certificate authority supplied only through `NODE_EXTRA_CA_CERTS` lets model calls succeed while pages fail with `TRANSPORT_FAILED`.
 
 ## Settings
 
@@ -700,20 +766,21 @@ The example below shows the default models and common tuning settings. The [Sett
 | `maxUrls` | 1 → 2 | `20` | Hard cap on URLs fetched. Lower caps mean faster responses and lower cost; higher caps allow more thorough research. Each extra successfully extracted page adds ≈$0.007 under the M3 output-volume estimate in [Cost](#cost). Requests above the cap are silently clamped. Raised from 16 in v0.13.0. |
 | `cacheDir` | 4, 5 | `.search` | Directory where research runs are cached. Change this to keep project-specific research separate. Example: `".my-research-cache"`. |
 | `extractMaxChars` | 3. Extract | `150000` | Maximum characters of page content fed to the extract LLM per page. Each 50K chars consumes ≈12K input tokens as a planning approximation; the model's tokenizer determines the actual count. Add prompt tokens and reserved output (`extractionMaxTokens`) before comparing with the token window. Lower this limit if that budget does not fit; raise it only with sufficient headroom. |
-| `extractionConcurrency` | 3. Extract | `4` | Number of per-page extractions sent to the extract model simultaneously. Bounded so a wide result set does not fire many concurrent LLM calls and trigger rate limiting. Raise it (6-8) on generous rate limits for faster extraction; lower it (1-2) on tight limits. |
+| `extractionConcurrency` | 3. Extract | `4` | Number of per-page extractions one research run sends to the extract model simultaneously. Bounded so a wide result set does not fire many concurrent LLM calls and trigger rate limiting. It takes effect only up to `execution.modelConcurrency` minus one, which is 4 with the defaults, so raising it for faster extraction on generous rate limits also requires raising `modelConcurrency` (see [Research Execution](#research-execution)). Lower it (1-2) on tight limits. |
 | `extractionMaxTokens` | 3. Extract | `3000` | Maximum output tokens for each per-page extraction. Higher values preserve more detail at higher cost. Lower this when using a model with a small context window so the output does not crowd out the input. The extract prompt targets 3,000-5,000 characters; 3,000 tokens covers this comfortably. |
 | `collationMaxTokens` | 4. Collate | `4000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. Lower this when using a collation model with a small context window (the output must fit alongside all extraction inputs). This bounds synthesis output, not the source and cache appendices added afterwards. |
 | `fetchTimeoutMs` | 2. Fetch | `20000` | Per-page fetch timeout in milliseconds. Increase for sites known to be slow. Fetches run in parallel so this does not multiply by page count. |
-| `fetchConcurrency` | 2. Fetch | `4` | Number of pages fetched simultaneously. Higher values (6-8) complete the fetch stage faster but may trigger rate limiting. Lower values (2) are gentler on target servers. |
+| `fetchConcurrency` | 2. Fetch | `4` | Number of pages one research run fetches and holds simultaneously. Physical page requests across the session are further limited by `execution.aggregateFetchConcurrency` (default 4), so higher values (6-8) also require raising that limit and may trigger rate limiting. Lower values (2) are gentler on target servers. |
 | `browserFingerprint` | 2. Fetch | `chrome_145` | Transport Layer Security (TLS) fingerprint used by [_wreq-js_](https://github.com/sqdshguy/wreq-js) to impersonate a browser. Determines which Hypertext Transfer Protocol (HTTP) client signature the site sees. Available profiles include `chrome_*`, `firefox_*`, `safari_*`, `edge_*`, and `opera_*` across many versions. Change this if a site blocks the default fingerprint. |
 | `llmTimeoutMs` | Research LLM | `90000` | Hard per-call timeout in milliseconds for each model request inside `intelli_research`. Bounds a stalled provider connection (common under rate limiting) so it becomes a retryable timeout instead of hanging on the software development kit (SDK)'s long default. Raise it for slow reasoning models on large inputs; lower it to fail faster. |
 | `llmRetryAttempts` | Research LLM | `3` | Total attempts per LLM call including the first. Transient failures (HTTP 429, 5xx, timeouts) are retried with full-jitter exponential backoff that honours any Retry-After hint. Set to `1` to disable retry. |
 | `retryBaseDelayMs` | Research LLM | `1500` | Base delay for retry backoff. Attempt N waits a random duration up to `min(retryMaxDelayMs, retryBaseDelayMs * 2^(N-1))`. |
 | `retryMaxDelayMs` | Research LLM | `20000` | Upper bound on any single retry backoff, and the clamp applied to a Retry-After hint so a large hint cannot stall the pipeline. |
 | `searchRetryAttempts` | 1. Search | `2` | Total attempts for the search stage when it returns a valid response with zero usable links (a degraded result), including the first. Independent of `llmRetryAttempts`, which covers transport errors. |
-| `minRequestIntervalMs` | 3. Extract | `0` | Minimum gap in milliseconds between concurrent extract LLM calls. `0` disables the throttle. For an observed account limit of approximately 0.33 requests per second, use approximately `3000`. Adjust to observed limits rather than payment status. |
+| `minRequestIntervalMs` | All LLM | `0` | Minimum gap in milliseconds between the starts of actual model attempts across the session, including retries and standalone tool calls. Integer from 0 to 120,000; `0` disables the throttle. For an observed account limit of approximately 0.33 requests per second, use approximately `3000`. Adjust to observed limits rather than payment status. |
 | `disableLlmsFullDiscovery` | Supplementary Fetch | `false` | Set `true` to skip automatic `llms-full.txt` probes and downloads. This does not disable page fetching or extraction. See [Automatic llms-full.txt Discovery](#automatic-llms-fulltxt-discovery). |
-| `disableTelemetry` | All | `false` | When `false`, completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local `meta.json` sidecar into the configured cache. It contains the full query and per-stage outcomes, which can include confidential information. The sidecar adds no network transmission or credential fields; ordinary research still sends requests to configured services. Set `true` to suppress it. |
+| `execution` | All | see [Research Execution](#research-execution) | Strict block for runtime-wide model and fetch capacity, page scheduling, the optional deadline and fetch size bounds. Invalid values fail before inference; a trusted project block replaces the global block entirely. |
+| `disableTelemetry` | All | `false` | When `false`, completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local `meta.json` sidecar into their run directory below the configured cache. It contains the full query and per-stage outcomes, which can include confidential information. The sidecar adds no network transmission or credential fields; ordinary research still sends requests to configured services. Set `true` to suppress it. |
 
 `httpProxy` is a separate top-level `Pi` setting, not a `pi-intelli-search` namespace key; page fetching honours it too. Its default is unset.
 
@@ -737,35 +804,41 @@ No configuration is needed. The probe and download are automatic.
 
 ## Cache Structure
 
-Both packages write this format. The native extension resolves the cache against the active `Pi` workspace; MCP resolves it against `INTELLI_SEARCH_WORKSPACE` or `--workspace` and keeps it beneath that workspace. See the MCP [filesystem boundaries](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#filesystem-and-privacy-boundaries).
+Both packages write this format. The native extension resolves the cache against the active `Pi` workspace; MCP resolves it against `INTELLI_SEARCH_WORKSPACE` or `--workspace` and keeps it beneath that workspace. See the MCP [filesystem boundaries](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#filesystem-and-privacy-boundaries). [Cache and Recovery](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/CACHE.md) explains how runs are validated and how to respond to persistence diagnostics.
 
 ```text
 .search/
-├── 2026-04-19-d1-worker-api-3f7a2c/
-│   ├── report.md               # Synthesis + authoritative source inventory
-│   ├── query.txt               # Original search query
-│   ├── meta.json               # Local-only telemetry sidecar (v0.11.0+)
-│   ├── extractions/            # Per-page LLM extractions (≈3-5K each)
-│   │   ├── 01-developers-cloudflare-com.md
-│   │   └── 02-developers-cloudflare-com.md
-│   └── sources/                # Full page content
-│       ├── 01-developers-cloudflare-com.md
-│       ├── 02-developers-cloudflare-com.md
-│       └── llms-full-developers-cloudflare-com.md
-└── .index.json                 # Index of all cached searches
+├── .intelli-v1/                 # Run namespace
+│   ├── allocations.ndjson       # Allocation journal
+│   ├── writer.lock              # Permanent lock file
+│   ├── index.json               # Suggestion index
+│   └── runs/
+│       └── 2026-10-22-d1-worker-api-limits-<nonce>/
+│           ├── committed.json   # Report marker
+│           ├── report.md        # Synthesis + source inventory
+│           ├── query.txt        # Original query
+│           ├── run.json         # Source states, provenance
+│           ├── extractions/
+│           │   ├── S1.md
+│           │   └── S2.md
+│           ├── sources/
+│           │   ├── P1.md
+│           │   └── llms-full-D1.md
+│           ├── accounting.json  # Model attempts and usage
+│           └── meta.json        # Local telemetry
+├── .index.json                  # Legacy index, read only
+└── 2026-04-19-d1-worker-api-3f7a2c/  # Legacy run, read only
 ```
 
-Each research run writes a cache entry named `<date>-<slug>-<hash>`. The `<hash>` is six hexadecimal characters from a Secure Hash Algorithm 1 (SHA-1) hash of the full query. It distinguishes queries sharing a readable stem and reduces collision risk; it does not guarantee unique names. Concurrent writers use short cache locks, and index updates are atomic. Cache readers do not take those locks: a multi-file refresh is not a whole-directory atomic snapshot.
+When allocation succeeds, `intelli_research` reserves a new directory below `.intelli-v1/runs/` before search, and `intelli_collate` does so once its input is valid. Its name contains the Coordinated Universal Time (UTC) date, up to five query words and a random nonce. The readable prefix is descriptive, not an ownership proof; repeating a query on the same day allocates another directory. No run is replaced, rotated or archived to a numbered sibling. A run is a report only when its `committed.json` marker verifies the journal record and the length and digest of every listed file; tools advertise and suggest only verified runs. Read exact paths from the result's Source Assessment table rather than predicting filenames. Documentation downloads and caller-supplied full pages that match no collated source are listed only in the run's `run.json`.
 
-Refresh behaviour:
+The report and its files remain on disk for as long as the cache directory exists. Nothing removes old runs, so disk use grows with every call. To retain or retire history, follow [Offline Archival](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/CACHE.md#offline-archival).
 
-- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and telemetry sidecar to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set.
-- Archive failure is logged and the completed run can replace canonical files in place; interrupted rotation can leave a partial archive.
-- Supplementary `llms-full-*` documentation downloads stay with the live folder and are not archived.
-- A degraded repeat preserves the earlier successful report, extractions, sources and index entry untouched and records only the failed attempt in `meta.json`.
-- The numbered siblings are a same-day safety net, not a versioned archive: copy a report elsewhere if it must be retained long-term.
+Degraded research (`no-links`, `fetch-failed`, `extraction-failed`) publishes no report and returns an empty `details.cachePath`. Its reserved directory remains below `runs/` with the failed attempt's telemetry, unless telemetry is disabled, and the result does not name it. Cancelled and failed calls also leave their reserved directory without a report. When the cache cannot be written, a completed answer is still returned with a `Persistence unavailable` diagnostic and no report path.
 
-**Local Telemetry (`meta.json`):** Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+Directories written by earlier releases (`<date>-<slug>-<hash>/` and `.index.json`) are left untouched. Related-search suggestions still read them; no current tool rewrites, rotates or deletes them.
+
+**Local Telemetry (`meta.json`):** Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write into the run directory. Allocation failure, an observed cancellation and thrown failures produce no sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.
 
 To suppress the sidecar in the native extension, set `disableTelemetry: true` inside the `pi-intelli-search` namespace in [Settings](#settings).
 
@@ -784,6 +857,7 @@ To suppress the sidecar in the native extension, set `disableTelemetry: true` in
 - [Comparison](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPARISON.md): How `intelli-search` compares to other `Pi` search extensions and to host-native web search.
 - [Changelog](https://github.com/Curio-Data/pi-intelli-search/blob/main/CHANGELOG.md): Release history.
 - [Architecture](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md): Detailed design decisions and pipeline internals.
+- [Cache and Recovery](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/CACHE.md): Run layout, validity checks, persistence diagnostics and offline archival.
 - [Compatibility](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md): Tested host versions and artefacts for the native extension, MCP server and plugins.
 - [Components](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPONENTS.md): Third-party dependencies and licence attribution.
 - [Native skill guide](https://github.com/Curio-Data/pi-intelli-search/blob/main/skills/intelli-search/SKILL.md): Agent-facing usage instructions for `Pi`.

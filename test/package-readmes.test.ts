@@ -210,11 +210,12 @@ describe("repository package READMEs", () => {
       assert.equal(text.split("docs/images/01.png").length, 2, "main image occurs once");
     }
     for (const text of Object.values(generated)) {
-      assert.match(text, /Archive failure is logged and the completed run can replace canonical files in place/);
+      assert.match(text, /No run is replaced, rotated or archived to a numbered sibling/);
+      assert.doesNotMatch(text, /Archive failure is logged and the completed run can replace canonical files in place/);
       assert.match(text, /recovery is best-effort, not a complete record of sources consulted/);
       assert.match(text, /query and metadata can contain personal or confidential information/);
       assert.match(text, /can be `0` when none are recovered/);
-      assert.match(text, /does not guarantee unique names/);
+      assert.match(text, /readable prefix is descriptive, not an ownership proof/);
       assert.match(text, /^## Licence$/m);
       assert.ok((anchorsOf(text) as Set<string>).has("license"), "preserve the old licence anchor");
       assert.match(text, /^## Usage Examples$/m);

@@ -35,9 +35,9 @@ Current tools write each run once, into its own new directory below `<cacheDir>/
 └── 2026-04-19-d1-worker-api-3f7a2c/ # Legacy run, read only
 ```
 
-The run directory name is a display label followed by a nonce of 32 hexadecimal characters. The label is the Coordinated Universal Time (UTC) date of the run plus up to five lowercase query words; it identifies nothing. Exclusive directory creation, not the label or nonce, makes each directory belong to one operation. A repeated query on the same day creates a new directory: nothing is rotated, archived to a numbered sibling or replaced.
+The run directory name is a display label followed by a nonce of 32 hexadecimal characters. The label is the Coordinated Universal Time (UTC) date of the run plus up to five lowercase query words; it is descriptive, not an ownership proof. Exclusive directory creation, not the label or nonce, makes each directory belong to one operation. A repeated query on the same day creates a new directory: nothing is rotated, archived to a numbered sibling or replaced.
 
-Research reserves its directory when the call starts, before search; manual collation reserves its directory once its input passes validation. A saved research run holds every file shown above that applies to it. Manual collation writes the same structure without documentation downloads, late files or telemetry; caller-supplied full pages appear under `sources/`, numbered in input order.
+When allocation succeeds, research reserves its directory before search; manual collation does so once its input passes validation. A saved research run holds every file shown above that applies to it. Manual collation writes the same structure without documentation downloads, late files or telemetry; caller-supplied full pages appear under `sources/`, numbered in input order.
 
 The tool result and the report's Source Assessment table give the exact path of each extraction and each full page paired with a source. Research documentation downloads (`sources/llms-full-<id>.md`) and caller-supplied full pages whose URL matches no collated source are listed only in the run's `run.json`, under `documents` and `suppliedPages`. Read `run.json` only from a valid run, and take paths from it rather than guessing filenames.
 
@@ -110,7 +110,7 @@ The journal is the authority for admission order. A partial final line, broken c
 
 Neither route repairs the damaged namespace. Each starts a separate namespace that the operator has chosen explicitly, with its own journal beginning again at sequence 1, and leaves the damaged namespace intact for inspection. The packages never reuse or renumber the old history, and pointing `cacheDir` back at the damaged namespace does not repair it.
 
-This release has no packaged command that validates or repairs a journal, and no procedure for returning a damaged namespace to service is documented.
+This release has no packaged command that validates or repairs a journal, and no procedure for returning unknown damaged allocation history to service is documented. For a sound journal with secondary-index damage or omissions, request a maintainer-assisted source-checkout rebuild: the internal `rebuildRunIndex()` routine takes the stable lock, validates the journal and committed records, preserves the old index and replaces only that secondary catalogue. [Cache Qualification](CACHE-QUALIFICATION.md#isolation-and-recovery-proofs) exercises that route and its refusals. It is not a supported end-user deep-import interface; do not delete or hand-edit an index to trigger repair.
 
 ## Incomplete Runs
 
@@ -130,15 +130,15 @@ Interrupted page staging can leave a directory below `.staging/`. Staging holds 
 
 ## Growth
 
-Nothing removes old runs. Every research call adds a directory when it starts, and every collation does so once its input is valid. A saved run holds its structural files, one extraction per used page, one full page per accepted page and any documentation downloads. Disk use therefore grows with every call, including degraded, failed, cancelled and incomplete runs, and parallel calls add directories at the same time. Growth rates and scan durations have not been measured.
+No automatic cleanup removes old runs. Each successful allocation adds a directory, including for a run that later degrades, fails or is cancelled; an allocation failure need not create a reservation. A saved run holds structural files, source and extraction files, and any documentation downloads. Parallel operations add to the same retained history. [Cache Qualification](CACHE-QUALIFICATION.md) records measured growth, near-limit query/index behaviour, the physical scan boundary and preservation drills on the verified host; these are not long-term or cross-platform performance promises.
 
-The MCP server inspects every entry below `cacheDir`, including legacy directories, the namespace and staging, when its runtime starts and twice per operation. At 100,000 inspected entries the runtime fails to start, or an operation fails with a `WORKSPACE` error before any inference; it does not weaken the scan, delete files or archive anything to continue. Each operation holds its admission slot during its scans, so a large cache also lengthens queueing. The following command approximates the scanned entry count from the workspace directory:
+The MCP server inspects every entry below `cacheDir`, including legacy directories, the namespace and staging, when its runtime starts and twice per operation. Beyond 100,000 inspected entries the runtime fails to start, or an operation fails with a `WORKSPACE` error before any inference; it does not weaken the scan, delete files or archive anything to continue. Each operation holds its admission slot during its scans, so a large cache also lengthens queueing. The following command approximates the scanned entry count from the workspace directory:
 
 ```bash
 find .search | wc -l
 ```
 
-The native extension has no equivalent entry limit, but the same directories accumulate. The allocation journal has a 67,108,864-byte safety ceiling and the index has a ceiling derived from it.
+The native extension has no equivalent entry limit, but the same directories accumulate. The allocation journal has a 67,108,864-byte safety ceiling and the index has a ceiling derived from it. A few near-limit queries can exhaust the index budget much earlier. A valid index left in place after a refused update remains usable but omits the newer run; an already oversized input instead withdraws new-format suggestions. Explicit rebuild attempts preserve a full copy before checking the rebuilt size, so repeated refused attempts consume additional disk space. Do not loop on rebuild failures.
 
 ## Offline Archival
 
@@ -153,4 +153,4 @@ Transfer to other storage is outside these procedures. A move across filesystems
 
 ## Verification Scope
 
-The lock, journal, marker and index protocol has deterministic tests and the mandatory live native research regression on *Linux* x86-64 with *Node.js* 24 on local encrypted btrfs. The behaviour on *macOS*, *Windows*, network, overlay or remotely shared filesystems has not been verified. Crash recovery on slow or unresponsive storage, long-term growth, the scan cost at its limit and these recovery and archival procedures as a whole have not been exercised end to end. The path, link and identity checks reject pre-existing escapes; they do not protect against another process with write access deliberately replacing files during a run.
+The lock, journal, marker and index protocol has deterministic tests and the mandatory live native research regression on *Linux* x86-64 with *Node.js* 24 on local encrypted btrfs. The behaviour on *macOS*, *Windows*, network, overlay or remotely shared filesystems has not been verified. Physical growth, the scan boundary, mixed writer processes and the explicit offline choices have the bounded synthetic qualification recorded in [Cache Qualification](CACHE-QUALIFICATION.md). Power-loss recovery, slow or unresponsive storage and long-term retained histories remain unverified. The path, link and identity checks reject pre-existing escapes; they do not protect against another process with write access deliberately replacing files during a run.

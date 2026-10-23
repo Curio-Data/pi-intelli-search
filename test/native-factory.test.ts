@@ -156,7 +156,7 @@ test("factory capture is immutable across registrations and retains real scoped 
   const make = (factory: typeof extension) => {
     const tools = new Map<
       string,
-      { executionMode?: string; execute: (...args: unknown[]) => Promise<{ details: { intelli: FullData } }> }
+      { executionMode?: string; description?: string; execute: (...args: unknown[]) => Promise<{ details: { intelli: FullData } }> }
     >();
     const handlers = new Map<
       string,
@@ -192,6 +192,11 @@ test("factory capture is immutable across registrations and retains real scoped 
     );
     assert.equal(tools.get("intelli_research")!.executionMode, "parallel");
     assert.equal(tools.get("intelli_collate")!.executionMode, "sequential");
+    for (const name of ["intelli_research", "intelli_collate"]) {
+      const description = tools.get(name)!.description ?? "";
+      assert.match(description, /A saved report goes into a new run directory/);
+      assert.doesNotMatch(description, /archive|numbered sibling|replace files in place/);
+    }
     return () =>
       tools
         .get("intelli_search")!

@@ -189,8 +189,9 @@ describe("plugin bundle generation", () => {
         skill.includes("file-reading"),
         `${host}: host-neutral file-reading wording`,
       );
-      assert.match(skill, /Archiving is best-effort/, `${host}: no retention guarantee`);
-      assert.match(skill, /new run can replace the canonical files in place/, `${host}: archive fallback disclosed`);
+      assert.match(skill, /A saved report goes into a new run directory/, `${host}: immutable run layout`);
+      assert.match(skill, /never replaces or moves an earlier report/, `${host}: earlier reports preserved`);
+      assert.doesNotMatch(skill, /Archiving is best-effort|new run can replace the canonical files/, `${host}: no legacy rotation promise`);
       assert.match(skill, /Harvesting is best-effort, not a complete record of sources consulted/, `${host}: citation scope`);
       assert.match(skill, /pipeline awaits the judge/, `${host}: supplementary-stage latency`);
       assert.match(skill, /`details\.cachePath`/, `${host}: custom cache paths supported`);

@@ -15,15 +15,15 @@
 // at the 16 MiB structural limit, a committed population against the 128 MiB
 // secondary-index budget, a 100000-entry whole-parent scan population and the
 // pinned pi-v0.19.0 old/new writer processes. It writes bounded populations
-// (planning estimate: under 1 GiB) under the repository's encrypted
+// (planning estimate: approximately 1 to 2 GiB) under the repository's encrypted
 // .tmp/m4-growth scratch and takes minutes. Nothing is deleted, reset or
 // lowered; constants are read from src/core/run-format.ts at runtime.
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { freemem, cpus, totalmem } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   CANDIDATE_WINDOW,
@@ -98,7 +98,7 @@ function capture(
   child.stderr.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
   return new Promise((resolve, reject) => {
     child.once("error", reject);
-    child.once("exit", (code) => resolve({ code, stdout, stderr }));
+    child.once("close", (code) => resolve({ code, stdout, stderr }));
   });
 }
 
@@ -107,7 +107,24 @@ const evidence =
   process.env.INTELLI_GROWTH_EVIDENCE && process.env.INTELLI_GROWTH_EVIDENCE.length > 0
     ? process.env.INTELLI_GROWTH_EVIDENCE
     : join(scratch, "qualification", `${stamp}-P${process.pid}`);
-await mkdir(evidence, { recursive: true });
+// Never overwrite or append a new run into an existing evidence directory.
+await mkdir(dirname(evidence), { recursive: true });
+await mkdir(evidence);
+
+async function sourceFiles(directory: string): Promise<string[]> {
+  const files: string[] = [];
+  for (const entry of await readdir(join(repo, directory), { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...await sourceFiles(path));
+    else if (entry.isFile() && entry.name.endsWith(".ts")) files.push(path);
+  }
+  return files;
+}
+const inputSha256: Record<string, string> = {};
+for (const path of [...ownedFiles, "package.json", "package-lock.json",
+  ...await sourceFiles("src"), ...await sourceFiles("packages/mcp/src")].sort()) {
+  inputSha256[path] = createHash("sha256").update(await readFile(join(repo, path))).digest("hex");
+}
 
 const [head, branch, dirty, mount, disk] = await Promise.all([
   capture("git", ["rev-parse", "HEAD"]),
@@ -132,13 +149,14 @@ const environment = {
   gitHead: head.code === 0 ? head.stdout.trim() : `unavailable (exit ${head.code})`,
   gitBranch: branch.code === 0 ? branch.stdout.trim() : `unavailable (exit ${branch.code})`,
   ownedFilesStatus: dirty.code === 0 ? dirty.stdout.trim() : `unavailable (exit ${dirty.code})`,
+  inputSha256,
   evidenceMount: mount.code === 0 ? mount.stdout.trim() : `unavailable (exit ${mount.code})`,
   scratchDisk: disk.code === 0 ? disk.stdout.trim() : `unavailable (exit ${disk.code})`,
   plan,
   note: "Single-host observations on the recorded mount. Byte counts are filesystem sizes; elapsed values are wall-clock milliseconds. No heap cap, latency promise or unsupported-platform claim follows from them.",
 };
 const environmentBytes = JSON.stringify(environment, null, 2);
-await writeFile(join(evidence, "environment.json"), environmentBytes);
+await writeFile(join(evidence, "environment.json"), environmentBytes, { flag: "wx" });
 
 process.stdout.write(
   [
@@ -172,9 +190,9 @@ child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
 });
 const exit = await new Promise<number | null>((resolve, reject) => {
   child.once("error", reject);
-  child.once("exit", (code) => resolve(code));
+  child.once("close", (code) => resolve(code));
 });
-await writeFile(join(evidence, "tap-output.txt"), tapOutput);
+await writeFile(join(evidence, "tap-output.txt"), tapOutput, { flag: "wx" });
 
 const hash = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
 let summaryText: string | undefined;

@@ -14,6 +14,7 @@
 // memory or platform promise is asserted anywhere in this file.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { after, describe, it } from "node:test";
 import {
   appendFile,
@@ -57,6 +58,7 @@ import {
   evidenceDir,
   extractOldWriterSource,
   growthProfile,
+  growthRepo,
   growthScratchRoot,
   hashTree,
   queryOfLength,
@@ -250,6 +252,30 @@ async function finishScenario(root: string, label: string): Promise<void> {
 }
 
 describe(`M4 cache growth and recovery qualification (profile: ${PROFILE})`, () => {
+  it("q0: driver refuses reused evidence and unknown profiles without starting populations", async () => {
+    const root = await growthScratchRoot("q0-driver-safety");
+    const marker = join(root, "preserve.txt");
+    await writeFile(marker, "existing evidence");
+    const invoke = (args: string[]) => spawnSync(process.execPath,
+      ["--import", "tsx", "scripts/qualify-cache-growth.mts", ...args], {
+        cwd: growthRepo,
+        env: { ...process.env, INTELLI_GROWTH_EVIDENCE: root },
+        encoding: "utf8",
+      });
+    const plan = invoke([]);
+    assert.equal(plan.status, 0, plan.stderr);
+    assert.match(plan.stdout, /nothing was written or executed/);
+    const reused = invoke(["--profile", "full"]);
+    assert.notEqual(reused.status, 0);
+    assert.match(reused.stderr, /EEXIST/);
+    const invalid = invoke(["--profile", "ful"]);
+    assert.equal(invalid.status, 2);
+    assert.equal(await readFile(marker, "utf8"), "existing evidence");
+    assert.deepEqual(await readdir(root), ["preserve.txt"]);
+    await record({ scenario: "q0", event: "driver-safety", noArgumentExit: plan.status,
+      reusedEvidenceExit: reused.status, unknownProfileExit: invalid.status, existingEvidencePreserved: true });
+    await finishScenario(root, "q0");
+  });
   after(async () => {
     summary.finishedAt = new Date().toISOString();
     if (!EVIDENCE) return;

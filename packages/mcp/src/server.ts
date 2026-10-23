@@ -96,14 +96,11 @@ const toolDefinitions: Array<{
     title: "Intelli Collate",
     description:
       "Deduplicate and synthesise multiple per-page extractions into a single " +
-      "concise summary. Writes results to the workspace cache for follow-up. " +
+      "concise summary. " +
       "Use this after extracting multiple pages with intelli_extract; for " +
-      "end-to-end research, use intelli_research. Repeating a query on the " +
-      "same UTC date attempts to archive its earlier cached report, " +
-      "extractions and numbered sources to the lowest free numbered sibling " +
-      "folder (.1, then .2 and so on); archiving is best-effort and a " +
-      "failure lets the completed run replace files in place, so copy a " +
-      "report elsewhere if it must be retained. " +
+      "end-to-end research, use intelli_research. A saved report goes into " +
+      "a new workspace cache run directory without replacing earlier reports. " +
+      "A valid answer is still returned when persistence is unavailable. " +
       skillGuidance,
     schema: collateSchema,
     annotations: {
@@ -127,17 +124,14 @@ const toolDefinitions: Array<{
       "provider calls than intelli_search. " +
       skillGuidance +
       " " +
-      "Writes results to the workspace cache; use the returned summary " +
+      "Use the returned summary " +
       "directly and read cached pages only when it is insufficient. " +
       "Use maxUrls to control breadth: 3 for targeted, 10 (default) " +
       "for broad, 16 for exhaustive. Always provide focusPrompt to guide " +
       "extraction. All operations call external services and incur provider " +
-      "charges. Repeating a query on the same UTC date attempts to archive " +
-      "its cached report, extractions and numbered sources to the lowest " +
-      "free numbered sibling folder (.1, then .2 and so on); archiving is " +
-      "best-effort and a failure lets the completed run replace files in " +
-      "place, so copy a report elsewhere if it must be retained. A degraded " +
-      "repeat preserves the earlier successful report.",
+      "charges. A saved report goes into a new workspace cache run directory " +
+      "without replacing earlier reports. Degraded research saves no report; " +
+      "a valid answer is still returned when persistence is unavailable.",
     schema: researchSchema,
     annotations: {
       title: "Intelli Research",

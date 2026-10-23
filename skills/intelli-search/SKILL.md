@@ -113,7 +113,7 @@ Example: researching "KV vs Durable Objects". Extract KV pages with `focusPrompt
 
 ### Parallel Calls
 
-`intelli_research` calls issued in the same turn run at the same time and share the session's model and fetch capacity, so a parallel batch is not proportionally faster. Each call runs the full paid pipeline and saves a separate run; do not issue duplicate research for the same question. `intelli_collate` runs one at a time, and a turn that includes it runs every call in that turn one after another. Issue collation in its own turn when other calls should overlap.
+`intelli_research` calls issued in the same turn run at the same time and share the session's model and fetch capacity; a parallel batch does not enlarge those limits. Each call performs its own provider work and reserves a separate run when allocation succeeds. Do not issue duplicate research for the same question. `intelli_collate` runs one at a time, and a turn that includes it runs every call in that turn one after another. Issue collation in its own turn when other calls should overlap.
 
 ## Evidence and Provenance
 

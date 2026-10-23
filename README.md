@@ -13,7 +13,7 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1420%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1434%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -114,6 +114,10 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
   - [Required API Keys](#required-api-keys)
 - [Pipeline](#pipeline)
 - [Cost](#cost)
+- [Research Execution](#research-execution)
+  - [Operation Lifetimes](#operation-lifetimes)
+  - [Concurrent Calls](#concurrent-calls)
+  - [Resource Limits](#resource-limits)
 - [Settings](#settings)
   - [Settings Reference](#settings-reference)
   - [Automatic llms-full.txt Discovery](#automatic-llms-fulltxt-discovery)
@@ -908,14 +912,14 @@ Research applies the configured model retry and timeout policy. The native stand
 
 Research documentation discovery runs alongside page work and is cancelled when the run finalises. A download still in progress at that point is dropped without a diagnostic, so a result can contain fewer documentation files than a slower run of the same query.
 
-When a host cancels a call, the operation still settles its own work, but usage reported after the cancellation may not reach the host. Accounting then records delivery as `unknown`. Host usage totals for cancelled calls can therefore be incomplete; the provider account is the authority for charges.
+When a host cancels a call, the operation still settles its own work, but usage reported after the cancellation may not reach the host. Accounting then records delivery as `unknown`. Missing provider usage is also distinct from zero: required numeric host fields use zero placeholders while full accounting marks the missing observations. A host that sums only numeric fields can therefore display an incomplete session total, after failures as well as cancellation. The provider account is the authority for charges.
 
 ### Concurrent Calls
 
-Parallel operations share one runtime's model and fetch capacity rather than each receiving their own: page extraction across all of them uses at most `modelConcurrency` minus the reserve, and page requests at most `aggregateFetchConcurrency`. A call running beside others can therefore take longer than it would alone, while each still adds its own page memory, staging and run directory. Every parallel research call runs the full paid pipeline and saves a separate run, even for an identical query.
+Parallel operations share one runtime's model and fetch capacity rather than each receiving their own: page extraction across all of them uses at most `modelConcurrency` minus the reserve, and page requests at most `aggregateFetchConcurrency`. Competing calls queue for those same permits while retaining their own page memory and staging. Each research performs its own provider work, even for an identical query; results are not reused across calls. A successful allocation reserves a separate run, and any saved reports remain distinct.
 
 <!-- packages:pi -->
-In `Pi`, `intelli_research` calls issued together in one assistant turn run at the same time, as do research calls a tool issues through `Pi`'s nested tool-call interface; earlier releases ran research calls one at a time. `intelli_collate` still runs one at a time: a turn that includes it, or any other tool that declares sequential execution, runs every call in that turn one after another. A host whose agent is configured for sequential tool execution runs all calls one at a time. A session accepts at most 64 active operations.
+In `Pi`, `intelli_research` calls issued together in one assistant turn run at the same time, as do research calls a tool issues through `Pi`'s nested tool-call interface; earlier releases ran research calls one at a time. `intelli_collate` still runs one at a time: a turn that includes it, or any other tool that declares sequential execution, runs every call in that turn one after another. An SDK embedder can configure the agent for sequential execution, which takes precedence over these declarations; the verified hosts expose no stock CLI flag or settings key for it. Issue one research per turn to keep research serial. A session accepts at most 64 active operations.
 <!-- /packages -->
 <!-- packages:mcp -->
 The MCP server runs whole operations in parallel within its [admission](#serving-the-protocol) bounds, two at once by default.
@@ -1166,7 +1170,7 @@ For manual extraction followed by collation, construct each collation item from 
 
 ### Filesystem and Privacy Boundaries
 
-All cache paths returned by the standalone adapter are absolute and anchored to the selected workspace. Cache and staging content stay beneath the configured cache directory. Existing symlinks, dangling links and hardlinked files in cache ancestors or artefact subtrees are rejected before an operation; checks repeat after model preflight. Special filesystem entries and an oversized safety scan are rejected. The full scan runs at runtime construction and twice per operation, so its cost grows with cache size; queued requests wait behind that scan. The scan covers every entry below `cacheDir`, including earlier runs, incomplete runs and legacy directories. At 100,000 inspected entries the runtime cannot start, and an operation fails with a `WORKSPACE` error before inference; nothing is deleted or archived automatically. Follow [Offline Archival](docs/CACHE.md#offline-archival) after stopping all processes using that cache. Every research call, and every collation call whose input is valid, adds a run directory, including degraded, failed and cancelled calls, so the entry count only grows.
+All cache paths returned by the standalone adapter are absolute and anchored to the selected workspace. Cache and staging content stay beneath the configured cache directory. Existing symlinks, dangling links and hardlinked files in cache ancestors or artefact subtrees are rejected before an operation; checks repeat after model preflight. Special filesystem entries and an oversized safety scan are rejected. The full scan runs at runtime construction and twice per operation, so its cost grows with cache size; queued requests wait behind that scan. The scan covers every entry below `cacheDir`, including earlier runs, incomplete runs and legacy directories. Beyond 100,000 inspected entries the runtime cannot start, and an operation fails with a `WORKSPACE` error before inference; nothing is deleted or archived automatically. Follow [Offline Archival](docs/CACHE.md#offline-archival) after stopping all processes using that cache. Every successful allocation adds a run directory, including for an operation that later degrades, fails or is cancelled, so retained history grows. Allocation failure need not create a reservation.
 
 These checks prevent pre-existing path escapes, not malicious concurrent filesystem replacement by another process with write access. Use a workspace controlled by the same trusted local operator. No operating-system sandbox or protection against hostile same-user mutation is claimed. Fetched URLs are not constrained to public addresses; the runtime is not a hosted service or an unrestricted remote execution endpoint.
 
@@ -1225,7 +1229,7 @@ Both packages write this format. The native extension resolves the cache against
 └── 2026-04-19-d1-worker-api-3f7a2c/  # Legacy run, read only
 ```
 
-Each `intelli_research` call reserves a new directory below `.intelli-v1/runs/` when it starts, and each `intelli_collate` call does so once its input is valid. Its name is the Coordinated Universal Time (UTC) date, up to five query words and a random nonce; the name identifies nothing, and repeating a query on the same day writes another directory. No run is replaced, rotated or archived to a numbered sibling. A run is a report only when its `committed.json` marker verifies the journal record and the length and digest of every listed file; tools advertise and suggest only verified runs. Read exact paths from the result's Source Assessment table rather than predicting filenames. Documentation downloads and caller-supplied full pages that match no collated source are listed only in the run's `run.json`.
+When allocation succeeds, `intelli_research` reserves a new directory below `.intelli-v1/runs/` before search, and `intelli_collate` does so once its input is valid. Its name contains the Coordinated Universal Time (UTC) date, up to five query words and a random nonce. The readable prefix is descriptive, not an ownership proof; repeating a query on the same day allocates another directory. No run is replaced, rotated or archived to a numbered sibling. A run is a report only when its `committed.json` marker verifies the journal record and the length and digest of every listed file; tools advertise and suggest only verified runs. Read exact paths from the result's Source Assessment table rather than predicting filenames. Documentation downloads and caller-supplied full pages that match no collated source are listed only in the run's `run.json`.
 
 The report and its files remain on disk for as long as the cache directory exists. Nothing removes old runs, so disk use grows with every call. To retain or retire history, follow [Offline Archival](docs/CACHE.md#offline-archival).
 

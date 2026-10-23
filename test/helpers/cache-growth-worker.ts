@@ -90,7 +90,7 @@ function capture(
   });
   const promise = new Promise<Capture>((resolvePromise, reject) => {
     child.once("error", reject);
-    child.once("exit", (code) => resolvePromise({ code, stdout, stderr }));
+    child.once("close", (code) => resolvePromise({ code, stdout, stderr }));
   }) as Promise<Capture> & { child: ReturnType<typeof spawn> };
   promise.child = child;
   return promise;
@@ -259,11 +259,11 @@ export async function extractOldWriterSource(): Promise<OldWriterSource> {
   const [archiveResult, extractResult] = await Promise.all([
     new Promise<number | null>((resolveExit, reject) => {
       archive.once("error", reject);
-      archive.once("exit", (code) => resolveExit(code));
+      archive.once("close", (code) => resolveExit(code));
     }),
     new Promise<number | null>((resolveExit, reject) => {
       extract.once("error", reject);
-      extract.once("exit", (code) => resolveExit(code));
+      extract.once("close", (code) => resolveExit(code));
     }),
   ]);
   if (archiveResult !== 0 || extractResult !== 0)
@@ -323,7 +323,7 @@ export function runGrowthWorker(
   child.stderr.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
   const promise = new Promise<WorkerResult>((resolveExit, reject) => {
     child.once("error", reject);
-    child.once("exit", (code, signal) => resolveExit({ code, signal, stdout, stderr }));
+    child.once("close", (code, signal) => resolveExit({ code, signal, stdout, stderr }));
   }) as Promise<WorkerResult> & { child: ReturnType<typeof spawn> };
   promise.child = child;
   return promise;

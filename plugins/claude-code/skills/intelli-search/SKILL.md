@@ -9,7 +9,7 @@ Intelligent web research through the `intelli-search` Model Context Protocol (MC
 
 Use these tools for current web research when this skill is selected, rather than silently substituting host-native search. If the server or tools are unavailable, report the setup failure explicitly; using another search tool does not establish that this server worked.
 
-Inference uses the configured provider account. The server runs one operation at a time with up to eight requests queued; excess submissions receive a busy error rather than waiting.
+Inference uses the configured provider account. By default the server runs two operations at once and queues up to eight more; a submission beyond both bounds receives a busy error rather than waiting. Parallel calls share the server's model and fetch capacity, so they are not proportionally faster, and each research call runs the full paid pipeline. Do not issue duplicate research calls for the same question.
 
 ## When to Use Which Tool
 
@@ -139,13 +139,15 @@ Manual `mcp__plugin_intelli-search_intelli_search__intelli_collate` treats its i
 
 The `mcp__plugin_intelli-search_intelli_search__intelli_research` result already contains a concise deduplicated summary. Use it directly. Do not read cache files unless the summary is insufficient for the task.
 
-Before repeating a query whose report must be retained, copy the report elsewhere. A successful repeat on the same Coordinated Universal Time (UTC) date attempts to archive the previous run's artefacts to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing fresh results. Archiving is best-effort: a failure is logged and the new run can replace the canonical files in place, leaving an incomplete archive. A degraded repeat preserves an earlier successful report and records the failed attempt in telemetry when enabled. The numbered siblings are a same-day safety measure, not a retention guarantee.
+A saved report goes into a new run directory; repeating a query never replaces or moves an earlier report. A degraded result (`no-links`, `fetch-failed`, `extraction-failed`) saves no report and returns an empty `details.cachePath`. When the cache cannot be written, the answer still arrives, ending with `Persistence unavailable (<code>): <message>` and no report path; use the answer and report the diagnostic rather than repeating the paid research to obtain a file.
 
 The result also includes a `📚 Related cached searches` section when semantically similar previous searches exist in the workspace cache. These are discovered by a model judge that compares the current query against the cache index. The related searches are:
 
 - **Supplementary:** The live search always runs. Cached results are offered as additional context.
 - **Cross-Reference:** Read a previous `report.md` when live results are incomplete.
 - **Prior Evidence:** Point to earlier research on the same topic when the live result needs checking.
+
+Suggestions also appear on degraded results. They come from verified saved runs and from reports written by earlier releases, never from the current query's own date and query.
 
 Only reach into the cache when:
 
@@ -156,14 +158,15 @@ Only reach into the cache when:
 
 ## Follow Up from Cache
 
-The tool result's `details.cachePath` identifies the cache entry's absolute path. The default is `.search/<date>-<slug>-<hash>/` below the selected workspace; `tuning.cacheDir` can change the cache root. Use the `Read` tool, this host's file-reading capability. List the directory and select an exact filename; the examples below are paths, not commands.
+The tool result's `details.cachePath` identifies the run directory's absolute path, below `.search/.intelli-v1/runs/` in the selected workspace by default; `tuning.cacheDir` can change the cache root. It is empty when no report was saved. Use the `Read` tool, this host's file-reading capability. Take exact file paths from the Source Assessment table; the examples below are paths, not commands. Documentation downloads and supplied full pages that match no collated source appear only in the run's `run.json`, under `documents` and `suppliedPages`.
 
 | Need | File |
 |------|------|
-| Quick refresher on one source | `extractions/<exact-file>.md` |
-| Full original page content | `sources/<exact-file>.md` |
+| Quick refresher on one source | `extractions/S<n>.md` from the inventory |
+| Full original page content | `sources/P<n>.md` from the inventory |
 | Collated overview | `report.md` |
-| Per-stage outcomes | `meta.json` |
+| Per-stage outcomes (research only) | `meta.json` |
+| Documentation downloads, unmatched supplied pages | Paths listed in `run.json` |
 | Re-fetch a single URL fresh | Use an installed web-fetch tool or shell/HTTP tools; the server provides no standalone fetch tool |
 
 ## How It Works
@@ -285,4 +288,5 @@ Workspace expansion is recorded on _Claude Code_ v2.1.289 only; other versions a
 - **Operation Failures** (`OPERATION`): a stage of the pipeline failed after validation. The message names the stage; retry once, then report if it persists.
 - **Cancelled** (`CANCELLED`): the client cancelled the call. Do not retry automatically.
 - **Degraded Research** (`no-links`, `fetch-failed`, `extraction-failed`): the result is still returned with what succeeded. Check the summary and decide whether a narrower query or a retry is warranted.
-- **Busy:** the eight-request queue is already full. Wait for an earlier call to finish before submitting another.
+- **Busy:** every active slot is in use and the queue is full; the error reports the server as busy. Wait for an earlier call to finish before submitting another.
+- **Persistence Unavailable:** the answer arrived but was not saved. Use it; repeating the call incurs provider charges again and does not repair the cache. The operator guide in the package documentation lists each diagnostic code.
