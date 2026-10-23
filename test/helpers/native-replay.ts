@@ -75,6 +75,7 @@ import {
   createPageTransportReplay,
   modelFixtureRequest,
   type ModelNodeResolver,
+  type ModelRequestPreparer,
   type PageNodeResolver,
 } from "../../scripts/benchmarks/transport-replay.js";
 
@@ -129,11 +130,15 @@ export interface Isolation {
 
 /**
  * Private HOME, agent directory and TMPDIR below the repository's encrypted
- * .tmp/. Must run before the host or native source is imported.
+ * .tmp/ (or an owned directory beneath it). Must run before the host or
+ * native source is imported.
  */
-export async function isolateProcess(prefix: string): Promise<Isolation> {
-  await mkdir(join(REPO_ROOT, ".tmp"), { recursive: true });
-  const root = await mkdtemp(join(REPO_ROOT, ".tmp", `native-replay-${prefix}-`));
+export async function isolateProcess(
+  prefix: string,
+  parent: string = join(REPO_ROOT, ".tmp"),
+): Promise<Isolation> {
+  await mkdir(parent, { recursive: true });
+  const root = await mkdtemp(join(parent, `native-replay-${prefix}-`));
   const agentDir = join(root, "agent");
   const home = join(root, "home");
   const tmp = join(root, "tmp");
@@ -508,6 +513,8 @@ export interface StageReply {
   readonly annotations?: readonly string[];
   readonly usage?: WireUsage;
   readonly errorBody?: string;
+  /** Recording only: hold the response until this settles (schedules genuine overlap). */
+  readonly after?: Promise<unknown>;
 }
 export type StageScript = (call: {
   readonly role: StageRole;
@@ -558,6 +565,7 @@ export async function startStageFixture(): Promise<StageFixture> {
     }
     requests.push({ role, user });
     const reply = script({ role, user, n: requests.filter((r) => r.role === role).length });
+    if (reply.after) await reply.after;
     if (reply.status && reply.status >= 400) {
       res.writeHead(reply.status, { "content-type": "application/json", ...(reply.headers ?? {}) });
       res.end(
@@ -730,19 +738,41 @@ export interface Recording {
  * provider stream events (citations and wire usage), response metadata,
  * error text, usage and measured wall delay.
  */
+export interface RecordingOptions {
+  /**
+   * Benchmark-only request preparation (F7). When present it replaces the
+   * content resolver for node derivation and supplies the canonical fixture
+   * request, exactly as the replay transport's `prepare` hook does, so record
+   * and replay share one preparation. Default: unchanged resolver path.
+   */
+  readonly prepare?: ModelRequestPreparer;
+}
+
 export function createRecording(
   scenario: string,
   pages: ReadonlyMap<string, SyntheticPage>,
+  recordingOptions: RecordingOptions = {},
 ): Recording {
   const model = createFixtureRecorder({ boundary: "model", scenario });
   const fetchRecorder = createFixtureRecorder({ boundary: "fetch", scenario });
   let registryCalls = 0;
   const modelTransport: RegistryStreamSimple = async (registry, m, context, options) => {
     const withoutRole = await modelFixtureRequest(m, context, options);
-    const resolution = contentModelResolver(withoutRole, m, context);
-    if ("ambiguous" in resolution)
-      throw new Error(`Recording cannot identify node: ${resolution.detail}`);
-    const request = asJson({ ...withoutRole, role: resolution.role } satisfies ModelFixtureRequest);
+    let operationNode: string;
+    let request: Json;
+    if (recordingOptions.prepare) {
+      // Same preparation as replay; a preparation fault has already marked
+      // the external block invalid and propagates as a failed attempt.
+      const prepared = recordingOptions.prepare(withoutRole, m, context);
+      operationNode = prepared.operationNode;
+      request = prepared.request;
+    } else {
+      const resolution = contentModelResolver(withoutRole, m, context);
+      if ("ambiguous" in resolution)
+        throw new Error(`Recording cannot identify node: ${resolution.detail}`);
+      operationNode = resolution.operationNode;
+      request = asJson({ ...withoutRole, role: resolution.role } satisfies ModelFixtureRequest);
+    }
     const events: Json[] = [];
     const usageCapture = createNativeUsageCapture();
     let providerResponse: { status: number; headers: Record<string, string> } | undefined;
@@ -772,7 +802,7 @@ export function createRecording(
       ...(providerResponse ? { providerResponse } : {}),
     };
     const observation = usageCapture.observation(message.usage);
-    model.record(resolution.operationNode, request, {
+    model.record(operationNode, request, {
       response: asJson(response),
       ...(message.stopReason === "error"
         ? { error: { kind: "provider-error", message: message.errorMessage ?? "unknown error" } }
@@ -863,7 +893,21 @@ export function fixtureFiles(recording: Recording): { model: FixtureFile; fetch:
  * that throws on any read and an `options.fetch` that throws and counts.
  * The first miss stops the session through the supplied callback.
  */
-export function createReplayBlock(files: { model: FixtureFile; fetch: FixtureFile }): ReplayBlock {
+export interface ReplayBlockOptions {
+  /** Benchmark-only F7 preparation; replaces the content resolver (see RecordingOptions). */
+  readonly prepare?: ModelRequestPreparer;
+  /**
+   * Declared scheduling perturbation: extra wall delay before a page replay,
+   * honouring the request signal. It changes timing only, never bytes, keys
+   * or responses, and exists to force visibility-wait paths.
+   */
+  readonly pageDelayMs?: (url: string) => number;
+}
+
+export function createReplayBlock(
+  files: { model: FixtureFile; fetch: FixtureFile },
+  blockOptions: ReplayBlockOptions = {},
+): ReplayBlock {
   const modelStore = createReplayStore({
     fixtures: files.model.fixtures,
     scenario: files.model.scenario,
@@ -877,7 +921,9 @@ export function createReplayBlock(files: { model: FixtureFile; fetch: FixtureFil
   const replayModel = createModelTransportReplay({
     store: modelStore,
     scenario: files.model.scenario,
-    resolveNode: contentModelResolver,
+    ...(blockOptions.prepare
+      ? { prepare: blockOptions.prepare }
+      : { resolveNode: contentModelResolver }),
   });
   const replayPage = createPageTransportReplay({
     store: fetchStore,
@@ -939,6 +985,8 @@ export function createReplayBlock(files: { model: FixtureFile; fetch: FixtureFil
   };
   const pageTransport: PageTransport = async (url, request) => {
     try {
+      const extra = blockOptions.pageDelayMs?.(url) ?? 0;
+      if (extra > 0) await delayWithSignal(extra, request.signal);
       return await replayPage(url, request);
     } catch (error) {
       throw miss(error);
@@ -957,6 +1005,22 @@ export function createReplayBlock(files: { model: FixtureFile; fetch: FixtureFil
       stop = next;
     },
   };
+}
+
+/** Timer-only delay; removes its timer and listener on abort. */
+function delayWithSignal(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal!.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 // ── Loaders ─────────────────────────────────────────────────────────────────
@@ -1097,6 +1161,8 @@ export interface SessionOptions {
    * and active set: naming a codemode-exposure tool there declares it.
    */
   readonly activateOnly?: boolean;
+  /** Synchronous live hook for every tool_execution_* event (host settled witnesses). */
+  readonly onToolEvent?: (event: Record<string, unknown>) => void;
 }
 
 /**
@@ -1121,7 +1187,9 @@ export async function openSession(options: SessionOptions): Promise<SessionHandl
     });
     for (const name of ["tool_execution_start", "tool_execution_update", "tool_execution_end"])
       pi.on(name, (event) => {
-        toolEvents.push(JSON.parse(JSON.stringify(event)) as Record<string, unknown>);
+        const copy = JSON.parse(JSON.stringify(event)) as Record<string, unknown>;
+        toolEvents.push(copy);
+        options.onToolEvent?.(copy);
       });
   };
   const factories = [
