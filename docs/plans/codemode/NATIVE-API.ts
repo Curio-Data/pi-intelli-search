@@ -12,9 +12,16 @@ export interface NativeSuggestionReadView {
     readonly query: string;
     readonly reservation: RunReservation;
   }) => void;
-  readonly committed: (input: {
+  /** Fired only after the real updateIndex resolves "updated", not after commit alone. */
+  readonly indexed: (input: {
     readonly operationId: string;
     readonly run: CommittedRun;
+  }) => void;
+  /** Notification exceptions never roll back or change a store write's outcome. */
+  readonly unavailable: (input: {
+    readonly operationId: string;
+    readonly query: string;
+    readonly phase: "allocation" | "commit" | "index" | "operation";
   }) => void;
   /** Return unique immutable candidate references from the latest real read. */
   readonly candidates: (input: {

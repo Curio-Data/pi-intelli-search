@@ -1,6 +1,8 @@
 # Builder Handoff
 
-The current F7 revision is pending; read [Status](STATUS.md) and do not implement its amendment until independent review and coordinator acceptance. The original handoff below records specification `P0-2`, reviewed at `842c56fc539451c84b2cd8793a3265810a998058`, whose acceptance is preserved under `history/P0-2/`. It does not commission an agent, create a worktree or begin P1. Read [STATUS.md](STATUS.md), `acceptance.json`, [CONTRACT.md](CONTRACT.md) and [ACCEPTANCE.md](ACCEPTANCE.md). The accepted documentation base is `c198b19c5dcbd76c551964686b3eb272e5fbc927`. The coordinator must first land the matching central type/injection seam descendant from that accepted base; builders then use that descendant carrying the accepted specification.
+The current F7 revision is pending; read [Status](STATUS.md), current `acceptance.json`, [Contract](CONTRACT.md) and [Acceptance Map](ACCEPTANCE.md). Do not implement the amendment until independent review and coordinator acceptance. Declaration-first freezing intentionally leaves the native factory's exact type-equality test red; Status records the required first implementation closure. No builder is commissioned by this note.
+
+The original handoff below records specification `P0-2`, reviewed at `842c56fc539451c84b2cd8793a3265810a998058`, whose acceptance evidence is preserved under `history/P0-2/`. Its accepted documentation base is `c198b19c5dcbd76c551964686b3eb272e5fbc927`. Matching central seams and accepted M1/M2 already exist; historical P1 entry instructions do not reopen that work.
 
 ## Base and Review Integrity
 

@@ -152,6 +152,10 @@ if (args.has("--require-accepted")) {
   assert(/^VERDICT: ACCEPT$/m.test(review) && review.trimEnd().endsWith("STATUS: COMPLETE"), "Independent report must accept the revision and be complete");
   assert(review.includes(record.reviewedCommit), "Independent report must name the exact reviewed commit");
   assert(record.coordinatorAccepted && record.reviewerModel && record.specificationFiles.length);
+  assert.equal(record.priorAcceptance, "history/P0-2/acceptance.json");
+  assert.equal(record.acceptanceScope, "specification-only");
+  assert(record.bindingConditions?.some((condition) => condition.id === "N1" && condition.status === "required" && condition.handoff === "BUILDER-HANDOFF.md#binding-replay-condition"), "N1 must remain binding");
+  assert(record.bindingConditions?.some((condition) => condition.id === "F7-TYPE-LAG" && condition.status === "required" && condition.assertion === "test/fixtures/codemode-seams.typecheck.ts:26" && condition.firstImplementationMustClose === true && condition.equalityTestMustNotBeWeakened === true), "Declaration-first type lag requires explicit closure");
   assert.deepEqual(record.specificationFiles, specificationFiles, "Acceptance must cover the complete frozen bundle");
   assert.equal(record.specificationManifestSha256, hash(read(specificationManifest)));
   assert.equal(hash(execFileSync("git", ["show", `${record.reviewedCommit}:${specificationManifest}`])), record.specificationManifestSha256);

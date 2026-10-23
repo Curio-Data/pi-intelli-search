@@ -8,5 +8,20 @@
   "specificationManifestSha256": null,
   "coordinatorAccepted": false,
   "specificationFiles": [],
-  "priorAcceptance": "history/P0-2/acceptance.json"
+  "priorAcceptance": "history/P0-2/acceptance.json",
+  "acceptanceScope": "specification-only",
+  "bindingConditions": [
+    {
+      "id": "N1",
+      "status": "required",
+      "handoff": "BUILDER-HANDOFF.md#binding-replay-condition"
+    },
+    {
+      "id": "F7-TYPE-LAG",
+      "status": "required",
+      "assertion": "test/fixtures/codemode-seams.typecheck.ts:26",
+      "firstImplementationMustClose": true,
+      "equalityTestMustNotBeWeakened": true
+    }
+  ]
 }
