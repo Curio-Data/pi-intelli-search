@@ -129,6 +129,34 @@ export type PageNodeResolution =
 /** Derives the fixture operation node for one physical fetch request. */
 export type PageNodeResolver = (request: FetchFixtureRequest) => PageNodeResolution;
 
+/**
+ * Canonical request plus resolved identity produced by benchmark-only F7
+ * request preparation. `request` is the exact bytes used for occurrence and
+ * request hashing and for store lookup: for suggestion judge requests it is
+ * the projected F7 representation (explicit marker, typed generated-leaf
+ * tokens), for every other request it is byte-identical to the default path.
+ */
+export interface ModelRequestPreparation {
+  /** Canonical request JSON used for fixture hashing and store lookup. */
+  readonly request: Json;
+  readonly operationNode: string;
+  readonly role: ModelRole;
+}
+
+/**
+ * Benchmark-only request preparation hook (F7 recorded suggestion views).
+ * Runs before both node derivation and request hashing: the returned
+ * canonical request and resolved role/node replace the default
+ * resolver-plus-raw-request sequence. Errors thrown here invalidate the
+ * replay store (the transport wraps them as a fail-closed miss); a thrown
+ * `ReplayMissError` is re-invalidated as-is. The hook never performs I/O.
+ */
+export type ModelRequestPreparer = (
+  request: Omit<ModelFixtureRequest, "role">,
+  model: Model<Api>,
+  context: Context,
+) => ModelRequestPreparation;
+
 function abortMessage(model: Model<Api>): AssistantMessage {
   return {
     role: "assistant",
@@ -462,7 +490,14 @@ export async function modelFixtureRequest(
 
 export interface ModelTransportReplayOptions extends TransportReplayOptions {
   /** Deterministic node/role derivation for the one shared instance. */
-  readonly resolveNode: ModelNodeResolver;
+  readonly resolveNode?: ModelNodeResolver;
+  /**
+   * Benchmark-only F7 preparation hook. When present it runs before node
+   * derivation and hashing and supplies the canonical request plus resolved
+   * role/node; `resolveNode` is then only required for the preparer itself.
+   * Exactly one of `prepare` or `resolveNode` must be provided.
+   */
+  readonly prepare?: ModelRequestPreparer;
 }
 
 /**
@@ -482,6 +517,8 @@ export interface ModelTransportReplayOptions extends TransportReplayOptions {
 export function createModelTransportReplay(
   options: ModelTransportReplayOptions,
 ): RegistryStreamSimple {
+  if (!options.prepare && !options.resolveNode)
+    throw new TypeError("createModelTransportReplay requires resolveNode or prepare");
   const bindings = options.bindings ?? [];
   const groups = groupRecordsByRequest(options.store, bindings, "model");
   qualifyReplay(options.store, () => assertNoAmbiguousNodes(groups, options.scenario, "model"));
@@ -513,22 +550,50 @@ export function createModelTransportReplay(
     // a fixture miss or ambiguous derivation throws and invalidates the
     // block (N1, C30).
     const requestWithoutRole = await modelFixtureRequest(model, context, streamOptions);
-    const resolution = options.resolveNode(requestWithoutRole, model, context);
-    if ("ambiguous" in resolution) {
-      return options.store.invalidate(
-        new ReplayMissError(
-          "ambiguous-node",
-          `Ambiguous model node derivation for scenario "${options.scenario}": ${resolution.detail}`,
-        ),
-      );
+    let operationNode: string;
+    let role: ModelRole;
+    let requestJson: Json;
+    if (options.prepare) {
+      // Benchmark-only F7 preparation: runs before node derivation and
+      // hashing, and its errors invalidate the store (fail closed, no live
+      // fallback). A ReplayMissError was already recorded as a block
+      // invalidation by the preparer or its stop callback; re-invalidating is
+      // idempotent and keeps the miss observable through invalidations().
+      let prepared: ModelRequestPreparation;
+      try {
+        prepared = options.prepare(requestWithoutRole, model, context);
+      } catch (error) {
+        const miss =
+          error instanceof ReplayMissError
+            ? error
+            : new ReplayMissError(
+                "request-mismatch",
+                `Model request preparation failed for scenario "${options.scenario}": ${error instanceof Error ? error.message : String(error)}`,
+              );
+        return options.store.invalidate(miss);
+      }
+      operationNode = prepared.operationNode;
+      role = prepared.role;
+      requestJson = prepared.request;
+    } else {
+      const resolution = options.resolveNode!(requestWithoutRole, model, context);
+      if ("ambiguous" in resolution) {
+        return options.store.invalidate(
+          new ReplayMissError(
+            "ambiguous-node",
+            `Ambiguous model node derivation for scenario "${options.scenario}": ${resolution.detail}`,
+          ),
+        );
+      }
+      operationNode = resolution.operationNode;
+      role = resolution.role;
+      requestJson = asJson({ ...requestWithoutRole, role } satisfies ModelFixtureRequest);
     }
-    const fixtureRequest: ModelFixtureRequest = { ...requestWithoutRole, role: resolution.role };
-    const requestJson = asJson(fixtureRequest);
     const hash = requestSha256(requestJson, bindings);
     const key: FixtureKey = {
       boundary: "model",
       scenario: options.scenario,
-      operationNode: resolution.operationNode,
+      operationNode,
       requestSha256: hash,
       occurrence: nextOccurrence(hash),
     };
