@@ -4,7 +4,7 @@ Intelligent web research through the `intelli-search` Model Context Protocol (MC
 
 Use these tools for current web research when this skill is selected, rather than silently substituting host-native search. If the server or tools are unavailable, report the setup failure explicitly; using another search tool does not establish that this server worked.
 
-Inference uses the configured provider account. By default the server runs two operations at once and queues up to eight more; a submission beyond both bounds receives a busy error rather than waiting. Parallel calls share the server's model and fetch capacity.
+Inference uses the configured provider account. By default the server runs two operations at once and queues up to eight more; a submission beyond both bounds receives a busy error rather than waiting. Parallel calls share the server's model and fetch capacity, so they are not proportionally faster, and each research call runs the full paid pipeline. Do not issue duplicate research calls for the same question.
 
 ## When to Use Which Tool
 
@@ -134,7 +134,7 @@ Manual `{{TOOL_COLLATE}}` treats its inputs as caller-supplied evidence. Supply 
 
 The `{{TOOL_RESEARCH}}` result already contains a concise deduplicated summary. Use it directly. Do not read cache files unless the summary is insufficient for the task.
 
-Each research or collation call saves its report in a new run directory; repeating a query never replaces or moves an earlier report. A degraded result (`no-links`, `fetch-failed`, `extraction-failed`) saves no report and returns an empty `details.cachePath`. When the cache cannot be written, a completed answer still arrives, ending with `Persistence unavailable (<code>): <message>` and no report path; use the answer and report the diagnostic rather than repeating the paid research to obtain a file.
+A saved report goes into a new run directory; repeating a query never replaces or moves an earlier report. A degraded result (`no-links`, `fetch-failed`, `extraction-failed`) saves no report and returns an empty `details.cachePath`. When the cache cannot be written, the answer still arrives, ending with `Persistence unavailable (<code>): <message>` and no report path; use the answer and report the diagnostic rather than repeating the paid research to obtain a file.
 
 The result also includes a `📚 Related cached searches` section when semantically similar previous searches exist in the workspace cache. These are discovered by a model judge that compares the current query against the cache index. The related searches are:
 
@@ -153,14 +153,15 @@ Only reach into the cache when:
 
 ## Follow Up from Cache
 
-The tool result's `details.cachePath` identifies the run directory's absolute path, below `.search/.intelli-v1/runs/` in the selected workspace by default; `tuning.cacheDir` can change the cache root. It is empty when no report was saved. {{CACHE_READ_HINT}} Take exact file paths from the Source Assessment table; the examples below are paths, not commands.
+The tool result's `details.cachePath` identifies the run directory's absolute path, below `.search/.intelli-v1/runs/` in the selected workspace by default; `tuning.cacheDir` can change the cache root. It is empty when no report was saved. {{CACHE_READ_HINT}} Take exact file paths from the Source Assessment table; the examples below are paths, not commands. Documentation downloads and supplied full pages that match no collated source appear only in the run's `run.json`, under `documents` and `suppliedPages`.
 
 | Need | File |
 |------|------|
 | Quick refresher on one source | `extractions/S<n>.md` from the inventory |
 | Full original page content | `sources/P<n>.md` from the inventory |
 | Collated overview | `report.md` |
-| Per-stage outcomes | `meta.json` |
+| Per-stage outcomes (research only) | `meta.json` |
+| Documentation downloads, unmatched supplied pages | Paths listed in `run.json` |
 | Re-fetch a single URL fresh | Use an installed web-fetch tool or shell/HTTP tools; the server provides no standalone fetch tool |
 
 ## How It Works
@@ -202,4 +203,4 @@ This is also why `focusPrompt` matters. It tells the extraction model what to ke
 - **Cancelled** (`CANCELLED`): the client cancelled the call. Do not retry automatically.
 - **Degraded Research** (`no-links`, `fetch-failed`, `extraction-failed`): the result is still returned with what succeeded. Check the summary and decide whether a narrower query or a retry is warranted.
 - **Busy:** every active slot is in use and the queue is full; the error reports the server as busy. Wait for an earlier call to finish before submitting another.
-- **Persistence Unavailable:** the answer is complete but was not saved. Use it; repeating the call incurs provider charges again and does not repair the cache. The operator guide in the package documentation lists each diagnostic code.
+- **Persistence Unavailable:** the answer arrived but was not saved. Use it; repeating the call incurs provider charges again and does not repair the cache. The operator guide in the package documentation lists each diagnostic code.

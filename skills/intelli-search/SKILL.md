@@ -111,6 +111,10 @@ For a different focus per URL (for example, comparing alternatives side-by-side)
 
 Example: researching "KV vs Durable Objects". Extract KV pages with `focusPrompt="Extract KV read/write patterns, consistency model, and latency characteristics"`. Extract Durable Objects pages with `focusPrompt="Extract the consistency guarantees, transaction API, and single-computer model"`.
 
+### Parallel Calls
+
+`intelli_research` calls issued in the same turn run at the same time and share the session's model and fetch capacity, so a parallel batch is not proportionally faster. Each call runs the full paid pipeline and saves a separate run; do not issue duplicate research for the same question. `intelli_collate` runs one at a time, and a turn that includes it runs every call in that turn one after another. Issue collation in its own turn when other calls should overlap.
+
 ## Evidence and Provenance
 
 The Source Assessment inventory is generated from successful, non-empty extractions, not the search model's citations. IDs such as `[S1]` identify those evidence entries; cross-links in the synthesis are not additional fetched pages. Read exact cache paths from the inventory rather than guessing numbered filenames. `Not cached` means no full-page file exists for that source. The checks establish reference consistency, not factual accuracy.
@@ -136,18 +140,19 @@ Only reach into the cache when:
 
 ## Follow Up from Cache
 
-Each research or collation call saves its report in a new run directory below `.search/.intelli-v1/runs/`; native `cacheDir` settings can change the cache root. Use the path returned in `details.cachePath`; it is empty when no report was saved. Repeating a query never replaces or moves an earlier report.
+A saved report goes into a new run directory below `.search/.intelli-v1/runs/`; native `cacheDir` settings can change the cache root. Use the path returned in `details.cachePath`; it is empty when no report was saved. Repeating a query never replaces or moves an earlier report.
 
-A degraded result (`no-links`, `fetch-failed`, `extraction-failed`) saves no report. When the cache cannot be written, a completed answer still arrives, ending with `Persistence unavailable (<code>): <message>` and no report path. Use that answer and report the diagnostic; repeating the research incurs provider charges again and does not repair the cache.
+A degraded result (`no-links`, `fetch-failed`, `extraction-failed`) saves no report. When the cache cannot be written, the answer still arrives, ending with `Persistence unavailable (<code>): <message>` and no report path. Use that answer and report the diagnostic; repeating the research incurs provider charges again and does not repair the cache.
 
-The following are path examples for `read`, not shell commands. Take exact paths from the Source Assessment table; `read` does not expand shell globs.
+The following are path examples for `read`, not shell commands. Take exact paths from the Source Assessment table; `read` does not expand shell globs. Documentation downloads and supplied full pages that match no collated source appear only in the run's `run.json`, under `documents` and `suppliedPages`.
 
 | Need | Path Relative to Returned Cache Entry |
 |------|---------|
 | Quick refresher on one source | `extractions/S<n>.md` from the inventory |
 | Full original page content | `sources/P<n>.md` from the inventory |
 | Collated overview | `report.md` |
-| Per-stage outcomes (v0.11.0+) | `meta.json` |
+| Per-stage outcomes (research only) | `meta.json` |
+| Documentation downloads, unmatched supplied pages | Paths listed in `run.json` |
 | Re-fetch a single URL fresh | Use an installed web-fetch tool or shell/HTTP tools; `intelli-search` provides no standalone fetch tool |
 
 ## How It Works
