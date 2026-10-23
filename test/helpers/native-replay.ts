@@ -902,6 +902,12 @@ export interface ReplayBlockOptions {
    * or responses, and exists to force visibility-wait paths.
    */
   readonly pageDelayMs?: (url: string) => number;
+  /**
+   * Declared scheduling perturbation for model replays, same contract as
+   * pageDelayMs. A page delay holds a shared fetch admission slot and can
+   * starve sibling operations; a model delay holds only that call's permit.
+   */
+  readonly modelDelayMs?: (context: Context) => number;
 }
 
 export function createReplayBlock(
@@ -978,6 +984,8 @@ export function createReplayBlock(
         : {}),
     };
     try {
+      const extra = blockOptions.modelDelayMs?.(context) ?? 0;
+      if (extra > 0) await delayWithSignal(extra, options?.signal);
       return await replayModel(registryTripwire, model, context, guarded);
     } catch (error) {
       throw miss(error);

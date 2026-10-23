@@ -85,6 +85,8 @@ import {
   type StartOrder,
 } from "./helpers/native-replay-f7.js";
 import { parseUsageEvents } from "../scripts/benchmarks/usage-parser.js";
+import type { Context } from "@earendil-works/pi-ai";
+import { SEARCH_SYSTEM_PROMPT } from "../src/core/prompts.js";
 import { sha256Canonical } from "../scripts/benchmarks/canonical.js";
 import {
   F7_SUGGESTION_MARKER,
@@ -173,6 +175,23 @@ const BLOCKER_SEQUENTIAL =
 function requireParallel(block: FrozenBlock | undefined): FrozenBlock {
   if (!block) assert.fail(`parallel block unavailable (${BLOCKER_SEQUENTIAL})`);
   return block;
+}
+
+/**
+ * Timing-only perturbation: delay P2's search request (one model permit),
+ * never its pages, which would hold shared fetch slots and starve P1.
+ */
+const delayP2Search = (ms: number) => (context: Context) =>
+  context.systemPrompt === SEARCH_SYSTEM_PROMPT &&
+  JSON.stringify(context.messages).includes(JSON.stringify(Q2).slice(1, -1))
+    ? ms
+    : 0;
+
+/** Logical P-group nodes in real admission (allocation) order. */
+function groupAdmission(probe: ControllerProbe, workflow: readonly SuggestionWorkflowOperation[]): string[] {
+  return allocations(probe)
+    .map((event) => nodeOfOperation(probe, workflow, event.operationId))
+    .filter((node): node is string => node === "P1" || node === "P2");
 }
 
 const researchCount = (schedule: F7ScheduleManifest) =>
@@ -509,6 +528,7 @@ interface ReplayVariant {
   readonly module?: NativeModule;
   readonly startOrder?: StartOrder;
   readonly pageDelayMs?: (url: string) => number;
+  readonly modelDelayMs?: (context: Context) => number;
   readonly budgetMs?: number;
   readonly timeoutMs?: number;
   readonly throwAfter?: ProbeHooks["throwAfter"];
@@ -536,6 +556,7 @@ async function replayBlock(frozen: FrozenBlock, variant: ReplayVariant) {
     budgetMs: variant.budgetMs ?? BUDGET_MS,
     expectedInitialTreeDigest: loaded.manifest.initialTreeDigest,
     ...(variant.pageDelayMs ? { pageDelayMs: variant.pageDelayMs } : {}),
+    ...(variant.modelDelayMs ? { modelDelayMs: variant.modelDelayMs } : {}),
     ...(variant.suggestNode ? { suggestNode: variant.suggestNode } : {}),
     probeHooks: {
       ...(variant.throwAfter ? { throwAfter: variant.throwAfter } : {}),
@@ -888,10 +909,14 @@ describe(`F7-1 suggestion replay through actual wrappers on ${hostSelection.kind
       .map((event) => String(event.type).replace("tool_execution_", ""))
       .filter((type) => type !== "update");
     assert.deepEqual(hostOrder.slice(0, 2), ["start", "start"], "host saw both starts before any end");
+    // Concurrent admission order is not launch order (observed on both
+    // hosts), and the real reader orders by admission sequence, so P3's
+    // frozen order follows the recorded admission order.
+    const recordedAdmission = groupAdmission(recorded.driver.probe, parallel.artefact.workflow);
     assert.deepEqual(frozenViews(parallel.artefact), {
       P1: ["P2", "baseline"],
       P2: ["baseline"],
-      P3: ["P2", "P1", "baseline"],
+      P3: [...recordedAdmission].reverse().concat("baseline"),
     });
   });
 
@@ -943,16 +968,29 @@ describe(`F7-1 suggestion replay through actual wrappers on ${hostSelection.kind
     assert.notEqual(run.scriptSha256, requireParallel(parallel).script.sha256, "the permuted script is a distinct exact script");
     await evidence("replay-parallel-reversed", run);
     assertValidReplay(requireParallel(parallel), run);
-    assert.equal(allocations(run.driver.probe)[0]?.query, Q2, "P2 allocated first during replay");
+    // Launch order influences but does not determine concurrent admission
+    // order, so the reorder path is exercised only when replay admission
+    // differs from the recording. Invariants are asserted on every run; the
+    // exercised flag is evidence, counted across runs in the report.
+    const frozen = requireParallel(parallel);
+    const recordedAdmission = groupAdmission(frozen.driver.probe, frozen.artefact.workflow);
+    const replayAdmission = groupAdmission(run.driver.probe, frozen.artefact.workflow);
     const p3 = run.readOrders.find((read) => read.node === "P3")!;
-    assert.deepEqual(p3.current, ["P1", "P2", "baseline"], "actual reader order follows the replay admission order");
-    assert.deepEqual(p3.selected, ["P2", "P1", "baseline"], "selected order equals the recorded view");
+    assert.deepEqual(p3.current, [...replayAdmission].reverse().concat("baseline"), "actual reader order follows replay admission");
+    assert.deepEqual(p3.selected, frozenViews(frozen.artefact).P3, "selected order equals the recorded view");
+    const reorderExercised = canonical(replayAdmission) !== canonical(recordedAdmission);
+    if (reorderExercised) assert.notDeepEqual(p3.current, p3.selected, "the projection reordered actual reader output");
+    await writeEvidence(isolation.root, "replay-parallel-reversed-admission", {
+      recordedAdmission,
+      replayAdmission,
+      reorderExercised,
+    });
   });
 
   it("replays the parallel block with a real visibility wait for a later-publishing sibling", async () => {
     const run = await replayBlock(requireParallel(parallel), {
       name: "visibility-wait",
-      pageDelayMs: (url) => (new URL(url).host === hostOf(1) ? 2_500 : 0),
+      modelDelayMs: delayP2Search(2_500),
     });
     await evidence("replay-parallel-visibility-wait", run);
     assertValidReplay(requireParallel(parallel), run);
@@ -1302,7 +1340,7 @@ describe(`F7-1 suggestion replay through actual wrappers on ${hostSelection.kind
     const run = await replayBlock(requireParallel(parallel), {
       name: "budget-expired",
       budgetMs: 300,
-      pageDelayMs: (url) => (new URL(url).host === hostOf(1) ? 4_000 : 0),
+      modelDelayMs: delayP2Search(4_000),
     });
     await evidence("replay-parallel-budget-expired", run);
     assertInvalidReplay(run);
@@ -1312,7 +1350,7 @@ describe(`F7-1 suggestion replay through actual wrappers on ${hostSelection.kind
   it("invalidates on operation cancellation during a visibility wait", async () => {
     const run = await replayBlock(requireParallel(parallel), {
       name: "cancelled",
-      pageDelayMs: (url) => (new URL(url).host === hostOf(1) ? 6_000 : 0),
+      modelDelayMs: delayP2Search(6_000),
       abortWhenReading: { query: Q1, afterMs: 150 },
     });
     await evidence("replay-parallel-cancelled", run);
@@ -1329,7 +1367,7 @@ describe(`F7-1 suggestion replay through actual wrappers on ${hostSelection.kind
     const run = await replayBlock(requireParallel(parallel), {
       name: "script-deadline",
       timeoutMs,
-      pageDelayMs: (url) => (new URL(url).host === hostOf(1) ? timeoutMs + 5_000 : 0),
+      modelDelayMs: delayP2Search(timeoutMs + 5_000),
     });
     await evidence("replay-parallel-script-deadline", { ...run, timeoutMs } as ReplayRun);
     assertInvalidReplay(run);

@@ -24,6 +24,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import type { Context } from "@earendil-works/pi-ai";
 import type { IndexCandidate } from "../../src/core/contracts.js";
 import type { NativeSuggestionReadView } from "../../src/native-injection.js";
 import { selectCandidates } from "../../src/core/run-index.js";
@@ -735,6 +736,7 @@ export function createF7Replay(input: {
   readonly budgetMs: number;
   readonly expectedInitialTreeDigest: string;
   readonly pageDelayMs?: (url: string) => number;
+  readonly modelDelayMs?: (context: Context) => number;
   readonly probeHooks?: ProbeHooks;
   /** Negative proof only: derive suggestion nodes differently from recording. */
   readonly suggestNode?: (view: SuggestionProjectionViewIdentity) => string;
@@ -763,6 +765,7 @@ export function createF7Replay(input: {
   const block = createReplayBlock(input.loaded.files, {
     prepare,
     ...(input.pageDelayMs ? { pageDelayMs: input.pageDelayMs } : {}),
+    ...(input.modelDelayMs ? { modelDelayMs: input.modelDelayMs } : {}),
   });
   block.onMiss(() => stop());
   return {
