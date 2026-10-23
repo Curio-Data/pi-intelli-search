@@ -174,6 +174,21 @@ describe("F7 native verified suggestion read seam", () => {
     await f.finish();
   });
 
+  it("invalidates asynchronous notifications but still drains their returned work", async () => {
+    const release = deferred<void>();
+    let settled = false;
+    const f = fixture({}, { allocated: async () => { await release.promise; } });
+    const allocated = await f.view.allocate({ operationId: f.operation.id, query: "q", startedUtc: reservation.startedUtc, signal: f.operation.signal });
+    assert.equal(allocated.status, "allocated", "notification cannot change a real write result");
+    await assert.rejects(f.view.candidates(undefined, "q", f.operation.signal), /notification failed/);
+    const closing = f.view.settle().then(() => { settled = true; });
+    await Promise.resolve();
+    assert.equal(settled, false);
+    release.resolve();
+    await closing;
+    await f.finish();
+  });
+
   it("reports producer failure phases and allocated-without-index settlement once", async () => {
     const unavailable = { status: "unavailable" as const, diagnostic: { code: "TEST", message: "test" } };
     const f = fixture({ commit: async () => unavailable });

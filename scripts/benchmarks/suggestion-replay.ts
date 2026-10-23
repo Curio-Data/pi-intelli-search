@@ -339,6 +339,7 @@ export function renderSuggestionSegments(
 /** Fail-closed invalidation reasons. */
 export type SuggestionInvalidReason =
   | "invalid-argument"
+  | "reader-failed"
   | "invalid-artefact"
   | "invalid-workflow"
   | "invalid-baseline"
@@ -1125,6 +1126,19 @@ abstract class SuggestionSessionCore {
     return [...this.observations];
   }
 
+  protected async verifiedRead(
+    readVerified: () => Promise<readonly IndexCandidate[]>,
+    signal: AbortSignal,
+  ): Promise<readonly IndexCandidate[]> {
+    try {
+      return await readAll(readVerified);
+    } catch (error) {
+      if (signal.aborted) this.faultCancelled(signal);
+      if (error instanceof SuggestionViewError) this.fault(error.reason, error.message);
+      this.fault("reader-failed", "The actual verified suggestion candidate read failed");
+    }
+  }
+
   /** Marks invalid and propagates cancellation as the abort reason. */
   protected faultCancelled(signal: AbortSignal): never {
     const error = new SuggestionViewError("cancelled", "The suggestion replay block was cancelled during a visibility wait");
@@ -1136,9 +1150,9 @@ abstract class SuggestionSessionCore {
   /**
    * Real settlement of one occurrence, as required before a later serial
    * occurrence of the same query may start. Settlement is established only
-   * by the coordinator's host settled-event witness, by a pre-allocation
-   * witness, or by the settle-time `operation` unavailable phase; it is
-   * never inferred from a read, a model response or a publication.
+   * by the coordinator's host settled-event witness or a pre-allocation
+   * witness; it is never inferred from a store phase, a read, a model
+   * response or a publication.
    */
   settledForSerial(producer: ProducerRuntime): boolean {
     if (producer.settledWitness || producer.preAllocationWitness) return true;
@@ -1502,7 +1516,7 @@ export function createSuggestionViewRecorder(options: SuggestionRecorderOptions)
     }): Promise<readonly IndexCandidate[]> {
       this.assertNotInvalid();
       const producer = this.bindRead(input.query, input.operationId, input.current);
-      const rows = await readAll(input.readVerified);
+      const rows = await this.verifiedRead(input.readVerified, input.signal);
       this.assertNotInvalid();
       const entries = rows.map((row) => this.classifyRow(row, producer));
       const paths = new Set<string>();
@@ -1974,10 +1988,10 @@ export function createSuggestionViewReplay(options: SuggestionReplayOptions): Su
 
     private remainingBudgetMs(): number {
       if (this.budgetStartedAt === null) {
-        this.budgetStartedAt = Date.now();
+        this.budgetStartedAt = performance.now();
         return options.budgetMs;
       }
-      return options.budgetMs - (Date.now() - this.budgetStartedAt);
+      return options.budgetMs - (performance.now() - this.budgetStartedAt);
     }
 
     private async waitForDependencies(
@@ -2148,7 +2162,7 @@ export function createSuggestionViewReplay(options: SuggestionReplayOptions): Su
         if (error instanceof SuggestionViewError) this.fault(error.reason, error.message);
         this.fault("cancelled", `The visibility wait of "${producer.op.node}" failed: ${String(error)}`);
       }
-      const rows = await readAll(input.readVerified);
+      const rows = await this.verifiedRead(input.readVerified, input.signal);
       this.assertNotInvalid();
       const selected: IndexCandidate[] = [];
       const used = new Set<IndexCandidate>();

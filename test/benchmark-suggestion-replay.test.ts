@@ -1525,6 +1525,11 @@ describe("transport preparation integration", () => {
       const fixtures = createFixtureRecorder({ boundary: "model", scenario: SCENARIO });
       fixtures.record("research.search", asJson(nonSuggestRequest()), { response: { text: "answer" }, delayMs: 0 });
       const store = createReplayStore({ fixtures: fixtures.records(), scenario: SCENARIO });
+      assert.throws(() => createModelTransportReplay({
+        store, scenario: SCENARIO, resolveNode: resolver,
+        prepare: () => { throw new Error("must not run during construction"); },
+      }), /exactly one function/);
+      assert.throws(() => createModelTransportReplay({ store, scenario: SCENARIO } as never), /exactly one function/);
       const transport = createModelTransportReplay({ store, scenario: SCENARIO, resolveNode: resolver });
       const message = await transport(
         { streamSimple: () => ({ result: async () => { throw new Error("live registry invoked"); } }) } as never,
@@ -1536,6 +1541,25 @@ describe("transport preparation integration", () => {
       store.assertValid();
     } finally {
       guard.restore();
+    }
+  });
+
+  it("immediately invalidates recorder and replay on an actual verified-reader failure", async () => {
+    const artefact = await recordCanonicalBlock();
+    for (const mode of ["record", "replay"] as const) {
+      const stopped: SuggestionViewError[] = [];
+      const session = mode === "record" ? recorderSession((error) => { stopped.push(error); }) : createSuggestionViewReplay({
+        artefact, displayRoot: DISPLAY_ROOT, budgetMs: 5000,
+        expectedFixtureFiles: FIXTURE_FILES, onInvalid: (error) => { stopped.push(error); },
+      });
+      await assert.rejects(session.controller.candidates({
+        operationId: "reader-failure", current: undefined, query: "alpha query",
+        signal: new AbortController().signal,
+        readVerified: async () => { throw new Error("filesystem unavailable"); },
+      }), /actual verified suggestion candidate read failed/);
+      assert.equal(stopped.length, 1);
+      assert.equal(stopped[0]!.reason, "reader-failed");
+      assert.throws(() => session.assertValid(), /actual verified/);
     }
   });
 

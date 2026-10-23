@@ -517,8 +517,10 @@ export interface ModelTransportReplayOptions extends TransportReplayOptions {
 export function createModelTransportReplay(
   options: ModelTransportReplayOptions,
 ): RegistryStreamSimple {
-  if (!options.prepare && !options.resolveNode)
-    throw new TypeError("createModelTransportReplay requires resolveNode or prepare");
+  if ((options.prepare === undefined) === (options.resolveNode === undefined) ||
+      (options.prepare !== undefined && typeof options.prepare !== "function") ||
+      (options.resolveNode !== undefined && typeof options.resolveNode !== "function"))
+    throw new TypeError("createModelTransportReplay requires exactly one function: resolveNode or prepare");
   const bindings = options.bindings ?? [];
   const groups = groupRecordsByRequest(options.store, bindings, "model");
   qualifyReplay(options.store, () => assertNoAmbiguousNodes(groups, options.scenario, "model"));

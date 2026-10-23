@@ -50,7 +50,15 @@ export function withNativeSuggestionReadView(
   };
   const notify = (callback: () => void) => {
     try {
-      callback();
+      const result: unknown = callback();
+      if (result !== null && (typeof result === "object" || typeof result === "function") &&
+          typeof (result as { then?: unknown }).then === "function") {
+        // TypeScript permits async functions in void callback slots. They are
+        // invalid synchronous notifications, but their returned work still has
+        // to drain rather than become an unhandled or detached promise.
+        poisoned = true;
+        void own(async () => { await result; }).catch(() => {});
+      }
     } catch {
       // The benchmark controller also marks its external block invalid before
       // rethrowing. Never let notification faults change an actual write result.

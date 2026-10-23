@@ -156,7 +156,7 @@ test("factory capture is immutable across registrations and retains real scoped 
   const make = (factory: typeof extension) => {
     const tools = new Map<
       string,
-      { execute: (...args: unknown[]) => Promise<{ details: { intelli: FullData } }> }
+      { executionMode?: string; execute: (...args: unknown[]) => Promise<{ details: { intelli: FullData } }> }
     >();
     const handlers = new Map<
       string,
@@ -190,6 +190,8 @@ test("factory capture is immutable across registrations and retains real scoped 
       [...tools.keys()],
       ["intelli_search", "intelli_extract", "intelli_collate", "intelli_research"],
     );
+    assert.equal(tools.get("intelli_research")!.executionMode, "parallel");
+    assert.equal(tools.get("intelli_collate")!.executionMode, "sequential");
     return () =>
       tools
         .get("intelli_search")!
