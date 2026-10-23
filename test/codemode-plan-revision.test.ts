@@ -45,6 +45,8 @@ describe("F7 specification revision authority", () => {
   it("retains diagnostic validation while strict acceptance rejects a pending revision", () => fixture((root, check) => {
     const diagnostic = check();
     assert.equal(diagnostic.status, 0, String(diagnostic.stderr));
+    const accepted = check("--require-accepted");
+    assert.equal(accepted.status, 0, String(accepted.stderr));
     mutate(root, "docs/plans/codemode/acceptance.json", (text) => {
       const value = JSON.parse(text);
       value.status = "pending";
@@ -53,6 +55,17 @@ describe("F7 specification revision authority", () => {
     });
     failure(check("--require-accepted"), /pending/);
   }));
+
+  for (const condition of ["N1", "F7-TYPE-LAG", "acceptanceScope"])
+    it(`rejects accepted metadata missing ${condition}`, () => fixture((root, check) => {
+      mutate(root, "docs/plans/codemode/acceptance.json", (text) => {
+        const value = JSON.parse(text);
+        if (condition === "acceptanceScope") delete value.acceptanceScope;
+        else value.bindingConditions = value.bindingConditions.filter((item: { id: string }) => item.id !== condition);
+        return JSON.stringify(value);
+      });
+      failure(check("--require-accepted"), /N1 must remain binding|Declaration-first type lag|specification-only/);
+    }));
 
   it("rejects changing original corpus inputs even after deliberate manifest regeneration", () => fixture((root, check) => {
     mutate(root, "docs/benchmarks/corpus/codemode.json", (text) => text.replace('"query": "', '"query": "changed '));

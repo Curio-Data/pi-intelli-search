@@ -9,7 +9,7 @@ import type {
   PageTransport,
   ResearchExecutionSettings,
 } from "../../src/core/contracts.js";
-import type { NativeTestInjection, RegistryStreamSimple } from "../../src/native-injection.js";
+import type { NativeTestInjection, RegistryStreamSimple, NativeSuggestionReadView } from "../../src/native-injection.js";
 import type * as Specification from "../../docs/plans/codemode/API.js";
 import type * as NativeSpecification from "../../docs/plans/codemode/NATIVE-API.js";
 import type * as PublicCore from "../../src/core/index.js";
@@ -68,6 +68,19 @@ const replay: NativeTestInjection = {
 const specReplay: NativeSpecification.NativeTestInjection = replay;
 const implementationReplay: NativeTestInjection = specReplay;
 void implementationReplay;
+type PublicSuggestionReadView = Assert<Equal<NativeSuggestionReadView, NativeSpecification.NativeSuggestionReadView>>;
+const readView: NativeSuggestionReadView = {
+  allocated(input) { void input.reservation; },
+  indexed(input) { void input.run; },
+  unavailable(input) { void input.phase; },
+  async candidates(input) { return input.readVerified(); },
+};
+const withView: NativeTestInjection = { ...replay, suggestionReadView: readView };
+const specWithView: NativeSpecification.NativeTestInjection = withView;
+void specWithView;
+// @ts-expect-error The restricted seam has no writer capability.
+const writerView: NativeSuggestionReadView = { ...readView, writer() {} };
+void writerView;
 // @ts-expect-error Complete replay cannot bypass policy by substituting operations.
 const bypass: NativeTestInjection = { ...replay, operations: {} };
 // @ts-expect-error Complete replay cannot substitute an operation context.

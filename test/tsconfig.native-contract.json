@@ -38,6 +38,8 @@
     "core-console.test.ts",
     "native-model-client.test.ts",
     "native-factory.test.ts",
+    "native-suggestion-view.test.ts",
+    "codemode-plan-revision.test.ts",
     "native-replay*.test.ts",
     "helpers/native-replay*.ts",
     "workspace-paths.test.ts",

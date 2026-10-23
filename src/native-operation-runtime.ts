@@ -42,7 +42,8 @@ import { loadSettings } from "./settings.js";
 import { nativeProgress, nativeResult } from "./native-operation-context.js";
 import type { OnUpdate } from "./host-types.js";
 import { errMsg, textContent } from "./util.js";
-import type { RegistryStreamSimple } from "./native-injection.js";
+import { captureSuggestionReadView, type NativeSuggestionReadView, type RegistryStreamSimple } from "./native-injection.js";
+import { withNativeSuggestionReadView } from "./native-suggestion-view.js";
 
 interface SessionKey {
   readonly owner: object;
@@ -70,6 +71,7 @@ export interface NativeRuntimeOptions {
   readonly supportsErrorResults?: boolean;
   readonly pageTransport?: PageTransport;
   readonly registryStreamSimple?: RegistryStreamSimple;
+  readonly suggestionReadView?: NativeSuggestionReadView;
   readonly operations?: Partial<EngineOperations>;
   readonly transformContext?: (context: Context) => Context;
   readonly createRuns?: (services: { operationId: string; clock: Clock }) => RunStore;
@@ -97,7 +99,7 @@ export class NativeExecutionError extends Error {
 
 /** One closure per extension registration. Construction starts no work. */
 export function createNativeOperationRuntime(options: NativeRuntimeOptions = {}) {
-  options = { ...options };
+  options = { ...options, suggestionReadView: captureSuggestionReadView(options.suggestionReadView) };
   const operations = Object.freeze({ search, extract, collate, research, ...options.operations });
   const generations = createRuntimeGenerations();
   const sessions = new WeakMap<object, Map<string | undefined, SessionState>>();
@@ -185,16 +187,20 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
           fetchConcurrency: execution.aggregateFetchConcurrency,
           minRequestIntervalMs: settings.minRequestIntervalMs,
           createFetch: capturePageFetchFactory(settings, clock, pagePolicy, options.pageTransport),
-          createRuns: (operation) =>
-            options.createRuns?.({ operationId: operation.id, clock }) ??
-            createRunStore({
-              workspaceRoot: paths.workspaceRoot,
-              cacheRoot: paths.cacheRoot,
-              displayRoot: paths.cacheDisplayRoot,
-              clock,
-              randomId: () => randomBytes(16).toString("hex"),
-              onDiagnostic: (diagnostic) => diagnostics.get(operation.id)?.(diagnostic),
-            }),
+          createRuns: (operation) => {
+            const store = options.createRuns?.({ operationId: operation.id, clock }) ??
+              createRunStore({
+                workspaceRoot: paths.workspaceRoot,
+                cacheRoot: paths.cacheRoot,
+                displayRoot: paths.cacheDisplayRoot,
+                clock,
+                randomId: () => randomBytes(16).toString("hex"),
+                onDiagnostic: (diagnostic) => diagnostics.get(operation.id)?.(diagnostic),
+              });
+            return options.suggestionReadView
+              ? withNativeSuggestionReadView(store, options.suggestionReadView, operation)
+              : store;
+          },
         });
         state.runtime = runtime;
         if (!active(state)) {
