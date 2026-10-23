@@ -1,112 +1,119 @@
-# Codemode P0-2 Amendment Review (cm-p0-opus-r2)
+# F7 Specification Delta R2 Review
 
-Reviewer: `claude-opus-5-5[1m]` through *Claude Code*, acting as an independent Reviewer under brief `.tmp/agents/codemode-p0-review/briefs/cm-p0-opus-r2.md`. Review date: 2026-10-18. This review follows my P0-1 review of `7fafa5275f4a38e236bf94a50069c50c29ca1eb2` (`.tmp/agents/codemode-p0-review/reports/cm-p0-opus.md`).
+Reviewer: `cm-f7-spec-review`, *Claude Code* running `claude-opus-5-5[1m]` (native provider), read-only. Date: 2026-10-23.
 
-Reviewed commit: `842c56fc539451c84b2cd8793a3265810a998058` (`HEAD` of `feat/codemode-research` at review time; no tracked changes in the worktree, only the untracked `node_modules`). Observed.
-
-Scope: the diff `7fafa52..842c56f` and the final committed content of every changed or added file. That covers CONTRACT, API, NATIVE-API, consumer, ACCEPTANCE, STATUS, LOCK-EVIDENCE, REVIEW-DISPOSITIONS, SPECIFICATION-SHA256SUMS, `acceptance.json`, the checker, `ci.yml`, `package.json`, the renamed `docs/benchmarks/METHOD.md`, the method files and the manifest. I also checked their immediate interactions with unchanged clauses and with current source. My P0-1 analysis of unchanged clauses still stands, except where noted below.
-
-Claim tags: **Observed**, **Stated**, **Inferred**, **Assumed**, **Unknown**.
-
-## Verdict
+Reviewed commit: `1a7ce89f9033ab5c2d37ac0c5d66dd248e2f7e41` (specification revision `P0-3-F7`, amendment `F7-1`), parent `0f76a74061b8de1e7145165d62a99e23714fc767`, approved handover base `568cd52a970bd9de12363d6503ddda940a55e3d8`.
 
 VERDICT: ACCEPT
 
-I accept P0-2 at exact commit `842c56fc539451c84b2cd8793a3265810a998058` as the frozen contract, interface, corpus and method revision for briefing builders. Both P0-1 blockers are resolved in the committed text and signatures. M1 to M6 are addressed. I found no new blocker.
+## Verdict Summary
 
-Four new findings (N1 to N4) and several low ones remain. None requires a signature change. N1 is a binding condition: it must be quoted into the P3 and coordinator replay briefs, because otherwise replay could make a live network call. The rest are wording or later-stage obligations.
+I accept the revision at `1a7ce89f9033ab5c2d37ac0c5d66dd248e2f7e41` for specification-only acceptance. Both blockers from the initial review (`review.md`, SHA-256 `7cf4674a1e8a281b535f96b711160bfad729c3d6e5eb666e0cff84612a3f5962`, preserved unchanged) are resolved in normative text and in the frozen declaration:
 
-This acceptance covers the contract freeze only. It does not cover runtime cancellation, publication crash safety, lock packaging or platform support, replay integration, the live suite or any benchmark. Those remain the assigned P1 to P8 gates, as STATUS, ACCEPTANCE and LOCK-EVIDENCE say themselves.
+- B1 is resolved by the reviewer's option (b).
+- B2 is resolved by an index-visible `indexed` notification plus an `unavailable` notification.
 
-## Checks Performed
+M1 and M2 are resolved. M3, M4, L1, L2, L3, L5 and L6 are addressed. M5 and L4 are partly addressed, with the residue openly disclosed. That residue does not block. Six low residual points remain (R1 to R6). None needs another revision before implementation; each can go into the implementation brief or the eventual acceptance notes.
 
-| Check | Result | Basis |
+This verdict does not accept M3 implementation, permit implementation before coordinator acceptance is recorded, or count as a full-suite pass. `test:all` is intentionally red at this commit, which is declared condition `F7-TYPE-LAG`.
+
+## Integrity Checks (Observed)
+
+- `git rev-parse HEAD` = `1a7ce89f9033ab5c2d37ac0c5d66dd248e2f7e41`. `git status --porcelain` was empty before and after the review.
+- `candidate-r2.sha256` has SHA-256 `81c8c7fcad481a248482cd808c82de6a57f665dc92c31187a0a5f50c79591163`, matching `DELTA-R2.md`. All 15 file entries pass `sha256sum -c`.
+- The manifest's file set equals `git diff --name-only 568cd52 1a7ce89` exactly, so the delta is complete against the approved handover.
+- The README files do not appear because they are now byte-identical to `568cd52`.
+- `git diff --stat 0f76a74 1a7ce89` touches 15 files, all documentation or specification files plus the checker. Nothing changes under `src/`, `packages/mcp/src/`, `test/fixtures/` or the corpus. `test/codemode-plan-revision.test.ts` is unchanged (`caa6b547…`).
+- P0-2 history is unchanged: `history/P0-2/acceptance.json` `40aca10e…`, `REVIEW.md` `b70abc91…`, `SPECIFICATION-SHA256SUMS` `b0e154ba…`. The diagnostic checker re-verifies these against reviewed commit `842c56f`.
+- `method-authority-F7-1.json` changes only the amendment digest, to `b053701f…`, which matches `METHOD-F7-1.md`. The base method and corpus manifest digests are unchanged.
+- N1 is unchanged and still quoted verbatim in `F7-REPLAY.md`. The revised seam adds only notifications. It exposes no fetch, transport, tee or network capability.
+
+## Commands Run (Observed)
+
+Private `HOME`, `PI_CODING_AGENT_DIR`, `TMPDIR` and npm cache under `.tmp/agents/codemode-f7-spec-review/work/r2/env/`, with no credentials. Logs are in `work/r2/`.
+
+| Command | Exit | Note |
 |---|---|---|
-| `node scripts/check-codemode-plan.mjs` (plain) | Exit 0 | Observed; `.tmp/agents/codemode-p0-review/work/cm-p0-opus/check-r2.log` |
-| `node scripts/check-codemode-plan.mjs --require-accepted` | Exit 1: `'pending'` is not `'accepted'` at `check-codemode-plan.mjs:113` | Observed; `check-r2-strict.log`. This failure is intended while acceptance is pending (STATUS, Acceptance Record). It also confirms the strict gate does not pass vacuously. |
-| `node_modules/.bin/tsc -p docs/plans/codemode/tsconfig.json` | Exit 0, no diagnostics. This covers `NATIVE-API.ts` through the consumer, including both `@ts-expect-error` guards (an enabled deadline with missing numbers, and transport replay combined with `operations`). | Observed; `tsc-r2.log` |
-| Coordinator gate logs (`.tmp/codemode-p0-evidence/gates-r2/`) | `exits.tsv` lists exit 0 for build-all, test-all, native-contract-types, toc, readmes, plugins, checker-syntax and audit. The test-all tail shows 46 pass and 0 fail. `plan.log` shows the checker passing. | Observed (logs read); Stated that they ran against this content. All were written between 15:31:00 and 15:31:29, and the commit time is 15:31:29. `exits.tsv` has no rows for `plan` and `api-types`, although their logs exist (see L4). I re-ran those two myself. |
-| `fs-native-extensions` tarball integrity | The `sha512` of the retained `package.tgz` equals the integrity value in `registry.json` and in LOCK-EVIDENCE. | Observed (computed with `openssl dgst -sha512`) |
-| Live registry | `npm view fs-native-extensions@1.5.1` (cache in my scratch, no credentials): the integrity matches, `latest` is `1.5.1`, and it was published 2026-08-31T05:36:49Z. | Observed, live source, 2026-10-18 |
-| Distributed native source | Linux `fcntl(fd, F_OFD_SETLK, …)` with `l_len = 0` (whole file), `src/linux.c:22-35`. macOS `flock(… LOCK_EX \| LOCK_NB)`, `src/apple.c:15-18`. Windows `LockFileEx` with `LOCKFILE_FAIL_IMMEDIATELY` and length 0 mapped to `SIZE_MAX`, `src/win32.c:14-38`. Contention is normalised to `EAGAIN`, `src/shared.c:15`. `index.js` `tryLock()` returns false on `EAGAIN`. | Observed (retained extracted package) |
-| Kernel primitive probe | `kernel-lock-result.json` reports all five checks true and `runtimeFeatureAcceptance: false`. The script opens `writer.lock` with `'a+'` (no truncation), uses separate descriptors and 8 cooperating worker processes appending to a journal, kills the holder with `SIGKILL`, and checks the inode is unchanged. | Observed (script and result read; not re-run) |
-| Full build, suites, live E2E, installs, paid calls | Not run | Prohibited by the brief |
+| `node scripts/check-codemode-plan.mjs` | 0 | Diagnostic checker (`diag.log`) |
+| `node scripts/check-codemode-plan.mjs --require-accepted` | 1 | Intentional strict rejection, `actual: 'pending'` and `expected: 'accepted'` (`strict.log`). Not a passing gate |
+| `tsc -p docs/plans/codemode/tsconfig.json` | 0 | Specification consumer types |
+| `tsc --noEmit -p test/tsconfig.native-contract.json` | 0 | Native-contract types |
+| `node --import tsx --test test/codemode-plan-revision.test.ts` | 0 | 6 of 6 pass |
+| `node --import tsx --test test/codemode-seams.test.ts` | 1 | Exactly one TS2344, at `test/fixtures/codemode-seams.typecheck.ts:26:3`. This is the declared `F7-TYPE-LAG` assertion, and there are no other errors |
+| `tsc -p work/r2/probe/tsconfig.json` | 0 | Probe: the revised `NativeSuggestionReadView` compiles in transport-replay mode. `committed` is rejected as an excess property and `unavailable` is required (both checked with `@ts-expect-error`) |
 
-## Resolution of P0-1 Findings
+I did not run full gates, installs, audit or any live command, as instructed. The coordinator's `gates-r2-exact/` logs show HEAD `1a7ce89` before and after, a clean status, and all 14 results matching their declared expectations. Native `test:all` reports 1256 tests: 1254 pass, 1 fail, 1 skipped. MCP reports 87 of 87 pass. These match `DELTA-R2.md`. I cite them as log content, not as my own reproduction.
 
-| P0-1 Finding | Amendment Observed at `842c56f` | Assessment |
+## Disposition of Initial Findings
+
+| Finding | Status | Evidence and Assessment |
 |---|---|---|
-| B1: no per-page or discovery fetch cancellation | `FetchScope { pageId?, signal? }`; `acquireFetch(scope?)`; `Permit.signal`; `FetchClient.fetch(…, scope?)`; `discover(…, signal)`. `cutoffPages()` is now sticky and aborts only active page-fetch permit signals (API.ts:58-72, 37-42, 317-335). C09 states that the operation signal stays live for collation, commit and accounting, and that discovery has its own controller. `PageTransportRequest.signal` carries the permit signal to the transport. | **Resolved.** The interface now provides independent cancellation paths, and it does not abort active extraction. `wreq-js` accepts the per-request signal (`wreq-js.d.ts:274`, Observed in round 1). |
-| B2: manual-only lock recovery and whole-namespace quarantine | C25 now selects `fs-native-extensions` 1.5.1 with nonblocking `tryLock`/`unlock` on a permanent regular file. Release is automatic on descriptor or process death, with no unlink, rename, truncation, age or PID fallback. Whole-namespace quarantine is forbidden. Journal repair is separate. The lazy-loaded binding falls back to non-persisted answers. Packaging, platform and floor gates are assigned before R1. | **Resolved.** The inconsistency is removed. The baseline's automatic crash recovery is restored without an eviction race. No owner acknowledgement is needed now, because the user-visible regression no longer exists. |
-| M1: commit failure mode | `commit()` returns a committed or unavailable union. C22 sets the linearisation point: abort before the marker rename publishes nothing; abort after it keeps the committed run. | Resolved |
-| M2: replay above the policy | `NATIVE-API.ts` adds a discriminated `NativeTestInjection` whose `transport-replay` mode requires `registryStreamSimple` and `pageTransport` and forbids `operations` and `transformContext` (enforced by the type guard). `RegistryStreamSimple` matches the current `__harness.registryStreamSimple` signature (`src/llm.ts:67-78`, Observed). | Resolved, subject to N1 |
-| M3: duplicate authorities in `Context` | `Context` now omits `signal`, `now`, `random` and `onProgress`. C10 names the authoritative members of `services` and requires scope and ledger identity to be asserted. `PolicyHooks.random` is added. | Resolved |
-| M4: undocumented acceptance mechanism | The acceptance artefacts are named in STATUS and ACCEPTANCE. The strict gate is in `package.json` (`check:codemode-plan`) and in CI with `fetch-depth: 0`. `SPECIFICATION-SHA256SUMS` hashes the bundle. The checker requires `VERDICT: ACCEPT`, the exact commit and `STATUS: COMPLETE` in `REVIEW.md`. | Resolved; see L3 |
-| M5: cutoff stickiness | API.ts:62 comment, C09 and the `AdmissionError` `PAGE_CUTOFF` code | Resolved |
-| M6: MCP scan cap | C28: an explicit fail-closed workspace error before inference; no bypass and no automatic deletion; tested at the boundary | Resolved as a declared limitation with a test obligation |
-| L1, L2, L3, L4, L5, L6, L7 | Covered by reservation filename and hash canonicalisation; P2 schema deliverable; `minimum` reason with its mapping in C08 step 8; `PolicyHooks.random`; "once per policy invocation"; `tuning.execution`; stage and decision references in C02; TTL replaced; H1 population disclosed in `METHOD.md` | Resolved. MCP config currently has a `tuning` root (`packages/mcp/src/config.ts:252-264`, Observed), so `tuning.execution` fits the existing shape. |
-| L8 housekeeping | Deferred to P4b | Acceptable |
+| B1: Missing Submission Witness | Resolved | `F7-REPLAY.md` Block Identity: ownership binds by exact query uniqueness among simultaneously active report producers. Serial repeated research needs a frozen occurrence order with prior settlement. Overlapping identical research or collation queries invalidate the block. T30 (`ACCEPTANCE.md`) and the Acceptance Proofs section narrow "repeated identical calls" to model-request occurrences and serial repeated research. `METHOD-F7-1.md` matches. No invented start seam. The corpus has unique `workflowQueries` within every item, so the qualifying population is unaffected (Observed in my earlier review) |
+| B2: Index Visibility and Failure | Resolved | `NATIVE-API.ts`: `indexed` is documented as firing only after `updateIndex` resolves `"updated"`. `unavailable` carries phase `allocation`, `commit`, `index` or `operation`. The text states immediate invalidation of dependent reads, host settled events for failures before any notification, and the block budget as backstop. Notification exceptions invalidate the block externally, are contained natively, poison later reads and never change a store outcome. This matches the source ordering (`src/core/research-result.ts:648-686`) |
+| M1: Type Lag Disclosure | Resolved | Tracked `STATUS.md` and `BUILDER-HANDOFF.md` disclose the exact assertion, a red `test:all` and closure by the first implementation commit. `acceptance.json` carries `N1` and `F7-TYPE-LAG`. The strict checker now asserts both, plus `priorAcceptance` and `acceptanceScope: "specification-only"`. The equality test is unchanged |
+| M2: Badge | Resolved | All four README files are byte-identical to `568cd52`, with the badge at `1336 passing` and no green full-suite claim (see R3) |
+| M3: UTC-Date Grouping | Resolved | New Dependency Ownership paragraph: a date-dependent change or a midnight-crossing block invalidates when the frozen view cannot be verified. Keys and dates are never bound or changed, and rerun reasons are kept append-only. Schedules must avoid midnight crossings |
+| M4: Populations | Resolved | `METHOD-F7-1.md`: each item's schedule is fixed in its run manifest before capture, schedules are never pooled into one estimator, and H1 is unchanged |
+| M5: Readability | Partly resolved, accepted | The method introduction is split into sentences. The negative proofs are now one list item per invalidation group. Some slash compounds remain in the controller rules (for example, "baseline additions/removals/metadata changes"); in context each reads as "any of", so validity is unaffected |
+| L1: Legacy Verification | Resolved | Rule 1 now distinguishes new-format marker, journal and file-hash verification from the accepted legacy verification |
+| L2: Call Site | Resolved | Binding rule 1 names `src/core/research-result.ts` `suggestions()` and `formatIndexForJudge(index, "")`. Observed to match the source template |
+| L3: Formatter Tension | Resolved | A benchmark-side segment builder must match both the unchanged production formatter and the actual `userMessage`, byte for byte |
+| L4: Checker Coverage | Partly resolved, accepted | Strict assertions for prior acceptance and binding conditions are added. Consumer use of the seam and strict-positive tests are deferred to implementation and disclosed (see R5). The file-level guard is described accurately |
+| L5: Nested Identity Capture | Resolved | `F7-REPLAY.md` requires snapshotting every nested controller function at factory capture and rejecting unknown or non-function members |
+| L6: Handoff Mixing | Resolved | `BUILDER-HANDOFF.md` separates the pending-revision paragraph from the historical P0-2 paragraph |
 
-## New Findings
+The enclosing-budget point from my feasibility notes is also adopted: the wait budget must fit within the script budget, and expiry of any enclosing budget invalidates the block.
 
-### N1 Replay Through the Fetch-Tee Hook Could Make a Live Call (Medium, Binding Condition)
+## Residual Points (Non-Blocking)
 
-C30 says transport replay should "Replay recorded provider events/fetch-tee frames through the supplied citation hooks", and "misses … never fall back live". The `SimpleStreamOptions` that native `callLlm()` passes into `registryStreamSimple` contains two citation channels:
+R1 to R4 are clarifications for the implementation brief. R5 and R6 note follow-on work and checks I could not make.
 
-- `onProviderStreamEvent`, a pure callback.
-- `fetch`, which is `wrapFetchForAnnotations(globalThis.fetch.bind(globalThis), annotations)` (`src/llm.ts`, the attempt body near line 200; Observed).
+### R1 (Low). Commit Success Is No Longer a Separate Notification
 
-A replay transport that "replays fetch-tee frames" by calling `options.fetch` would therefore issue a real network request through `globalThis.fetch`. No signature in NATIVE-API.ts prevents it (Inferred). The replay host is `Pi` 1.3.0, where `onProviderStreamEvent` is available, so feeding recorded chunks only through that hook is sufficient. The fetch-tee fallback matters only on hosts older than `pi-ai` 0.99.
+The text says "Record successful commit separately from index visibility". The seam now has no `committed` notification.
 
-**Condition for the P3 and coordinator briefs:** a transport-replay implementation must never invoke `options.fetch` or any network primitive. It must replay citations only through recorded `onProviderStreamEvent` chunks, or through a declared non-network tee seam if floor-host replay is ever required. T30 should assert zero `globalThis.fetch` and zero `wreq` invocations during a replay block. No signature change is needed.
+**Inferred:** commit success can be derived from `indexed`, or from `unavailable` with `phase: "index"`, because index work follows only a successful commit. The implementation brief should state that derivation so that recording does not invent an extra hook.
 
-### N2 Lock Wording: "Same Stable Lock Inode/Handle" (Low)
+### R2 (Low). The `operation` Phase Is Not Defined
 
-C25 says "Open the same stable lock inode/handle for every acquisition", but also that each acquisition closes its descriptor in `finally`. A handle cannot be the same across acquisitions; the invariant is the same path and inode. Reword it as "the same path and inode" to avoid a builder caching one long-lived descriptor across operations. That would serialise all operations onto one open file description and defeat OFD conflict detection between in-process `RunStore` instances. This is Inferred from OFD semantics: locks taken twice through the same description do not conflict.
+The text routes failures before any notification through the host's settled tool-result or error event. It does not say when the native adapter itself fires `unavailable` with `phase: "operation"`.
 
-### N3 Location of Owner Metadata (Low)
+**Recommended brief text:** the native adapter fires it once when an operation that has already been allocated settles without `indexed`, or with any other `unavailable` phase, for example on abort or a thrown error between `allocate` and `updateIndex`.
 
-C25 forbids truncating the lock path, yet allows owner metadata "written only while ownership is held" without saying where. If it is written into `writer.lock`, variable-length rewrites without truncation leave stale trailing bytes. On *Windows*, the whole-file `LockFileEx` range (`SIZE_MAX`) is a mandatory lock, so other processes cannot read the diagnostic while it is held (Inferred from `src/win32.c:14-38`; Windows is unverified, as the contract says). P2 should place metadata in a separate file inside the owned critical section, or write a fixed-size record.
+### R3 (Low). The Badge Understates Rather Than Overstates
 
-### N4 Native Factory Has No Clock Injection (Low)
+At this commit 1341 tests pass (1254 native and 87 standalone), 1 fails and 1 is skipped. The badge shows `1336 passing`, the last fully green count. No overclaim results, and tracked `STATUS.md` discloses the red suite. Update the badge when the type lag closes.
 
-`createNativeExtension(injection?)` accepts transports but no `Clock`. Replay through native wrappers therefore runs on real time, with `FixtureRecord.delayMs` honoured in wall-clock terms. The deadline method's "injected scheduler for deterministic comparison" is then achievable only at the core `Context` level (`services.clock`), not through the native wrapper path (Inferred). The deadline method should state which population each comparison uses. Alternatively, the coordinator's seam descendant can add an optional clock to the unit mode. This is not needed for P1 or P2.
+### R4 (Low). `F7-TYPE-LAG` Stays "Required" Permanently
 
-## Low Findings
+The acceptance record is immutable after acceptance, and the strict checker will keep requiring the condition with `status: "required"`. Closure therefore has to be evidenced elsewhere, in development notes and the integrated M3 review, without mutating `acceptance.json`. State that in the implementation brief.
 
-- **L1 Transitive Pinning.** `fs-native-extensions` depends on `require-addon` `^1.1.0` and `which-runtime` `^1.2.0`, and the probe install also pulled in `bare-addon-resolve`, `bare-module-resolve` and `bare-semver` (Observed, `lock-dependency/probe/node_modules`). C25 pins the direct version only. The production lockfile pins and audits these during P2/R1. Add the transitives explicitly to the dependency and legal inventory. `require.addon('.', __filename)` resolves prebuilds relative to the module file, so the standalone esbuild bundle must keep the package external (Inferred from `binding.js`). C25's "external/asset/legal inventory" covers this.
-- **L2 Model Permit Signal.** `Permit.signal` is defined by C09 for fetch permits only. State that a model permit's signal reflects ticket or operation cancellation and runtime close, and is never aborted by `cutoffPages()`.
-- **L3 Acceptance Immutability.** With `--require-accepted` in CI, any later edit to a bundled file (CONTRACT, API, NATIVE-API, ACCEPTANCE, LOCK-EVIDENCE, consumer, checker, corpus, methods) fails CI until a new revision is reviewed and `acceptance.json` updated. That is intended. STATUS, however, documents only "new versioned files" for corpus and method expansions, not the amendment procedure for the contract itself. Two more points: CI resolves `reviewedCommit` from fetched history, so the branch must reach `main` by a merge commit, not a squash (the repository's recent history uses merge commits; Observed `git log --merges`). Also, `package.json`'s script and `ci.yml` are outside the hashed bundle.
-- **L4 Gate Provenance.** `gates-r2/exits.tsv` omits the `plan` and `api-types` rows that the P0-1 table had. Their logs exist, and my re-runs passed. Record them for a complete evidence manifest.
-- **L5 Research Page Retention.** This is in unchanged text that I did not raise in round 1. `FetchClient.fetch` returns `SourceRecord.content` in memory, and the `fetch` call takes no staging root, so spooling under C19 happens after return. Retention stays bounded by the per-run logical page limit and `fetchMaxChars`. C19 can be met as written; P4 should simply not assume `FetchClient` spools.
-- **L6 Prose Density.** The new C09, C22 and C25 text continues the dense slash-chain style noted in round 1. The mechanics pass: no em dashes, no second person, title-case headings, no stale `README.md` method links (Observed with `rg`). Builders under pressure would benefit from splitting C25 into acquisition, release, failure and packaging sentences. This is not a gate.
+### R5 (Low). New Strict Assertions Lack Focused Tests
 
-## Verified Claims
+`test/codemode-plan-revision.test.ts` does not exercise the new `bindingConditions`, `priorAcceptance` or `acceptanceScope` assertions. The coordinator's acceptance commit will exercise them for real when the strict gate runs. A mutation test that removes `F7-TYPE-LAG` from an otherwise accepted fixture should follow with the implementation.
 
-| Claim | Location | Result | Basis |
-|---|---|---|---|
-| Linux uses OFD locks, so separate descriptors in one process conflict and closing an unrelated descriptor does not release | C25, LOCK-EVIDENCE | Source uses `F_OFD_SETLK`; the probe observed both behaviours | Observed (source and probe result) |
-| The kernel releases the lock after `SIGKILL` with the inode unchanged | C25 | Probe observed | Observed (result file); not re-run; Linux x86-64, Node.js 24, encrypted btrfs only |
-| The blocking wait API exists but is not used | C25 | `waitForLock` and `waitForLockSync` exist in `index.js`; the contract selects only `tryLock` with 25 ms polling | Observed |
-| macOS and Windows behaviour | C25 | Source branches only | Unknown at runtime; correctly labelled unverified in C21 and LOCK-EVIDENCE |
-| The replay seam matches the existing native transport double | NATIVE-API.ts:11-16; `src/llm.ts:67-78` | Same parameter and return shapes | Observed |
-| Removing `signal`, `now` and `random` from `Context` | API.ts:403 | Compiles; the consumer uses `services` | Observed (tsc) |
-| The native addon is a new class of dependency | C25 | It is not: `wreq-js` is already a native runtime dependency | Observed (`package.json` dependencies, round 1) |
+### R6 (Not Investigated). Coordinator-Owned Evidence
 
-## Owner-Scope Fidelity
+These points depend on the coordinator's work, not on this revision:
 
-The owner decisions are unchanged and are still reflected exactly (C03, C15, C18, C26, C27, C31, C32; compared in round 1, with the unchanged text re-read here). The amendment adds no history policy, cap, retention utility, paid call or release. The new runtime dependency is an engineering selection with production gates, not an owner policy question. It replaces a design that would have needed owner acknowledgement. Observed.
+- **Operation phase timing:** I did not check whether every allocated native failure path can fire `unavailable` with `phase: "operation"` before settlement. That is implementation evidence for the integrated M3 review.
+- **Host settled events:** host tool-result and error events are named as the witness for failures before allocation. Showing that they are observable through the real Codemode bridge falls under T30 proof.
 
-## Unexamined Areas
+## Design Feasibility (Unchanged Assessment)
 
-- Kernel-probe re-execution and probes on other platforms. Not run: the brief limits me to small probes, and the coordinator owns this evidence. Next step: P2 independent-process and crash tests, then R1 platform and tarball gates.
-- Private checkpoint manifest coverage of the lock evidence. Stated by LOCK-EVIDENCE, not checked.
-- `REVIEW-DISPOSITIONS.md` and `STATUS.md` are not in the hashed bundle. They are mutable acceptance records by design, and I reviewed them only for accuracy against the diff. They are accurate.
+The feasibility conclusions of the initial review still hold:
 
-## Required Next Steps
+- **Seam placement:** the per-operation `RunStore` places the seam.
+- **Reference validation:** frozen candidate arrays support it.
+- **Waits:** no model permit or lock is held during them, and publication-only dependencies cannot form a cycle.
+- **Binding:** the message template has whole-field leaves, and judge responses carry indices.
 
-1. Coordinator: record this report as `docs/plans/codemode/REVIEW.md`, and fill `acceptance.json` with `reviewedCommit` `842c56fc539451c84b2cd8793a3265810a998058`, the reviewer model, the report hash, the bundle hashes and the coordinator decision. Make that a later commit that changes no bundled file, then run `npm run check:codemode-plan` to exit 0.
-2. Quote N1 as a binding condition in the P3 and coordinator replay briefs. Carry N2 and N3 into the P2 brief and N4 into the deadline-method owner's brief.
-3. Land the type-only central seam descendant before commissioning builders, as C02 requires.
+The revised notifications fit the observed source order: `allocate` (`research-result.ts:791`), then `commit` (`:648`), then `updateIndex` (`:674`), then `suggestions()` (`:686`). All statements here are design assessments. No runtime behaviour of the seam exists to observe.
+
+## Claim Basis and Limits
+
+- Repository files at `1a7ce89` and installed `node_modules`, inspected on 2026-10-23. No web lookups were needed, because no new external library behaviour is relied upon.
+- The six commands above are my own reproduction. Full-gate results are the coordinator's logs.
+- Prose fidelity: the new text preserves the owner's scope wording on parallelism, exact text, clocks and identifiers, and corpus labels. It records the type lag as a failure, not a pass, and claims no implementation. The *Sol* prose self-review exception is the coordinator's and is not counted here.
 
 STATUS: COMPLETE
