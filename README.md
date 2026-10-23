@@ -628,7 +628,7 @@ For an observed account limit of approximately 0.33 requests per second, the def
 }
 ```
 
-Choose pacing, concurrency and retry settings from observed account and provider rate limits, whether the key is paid, free-tier or shared. Leave the throttle off when the account handles the default fan-out without rate-limit failures.
+Choose pacing, concurrency and retry settings from observed account and provider rate limits, whether the key is paid, free-tier or shared. Leave the throttle off when the account handles the default fan-out without rate-limit failures. The interval spaces every model attempt in the session, including search, collation, suggestions and retries, so under this recipe each model attempt starts at least 3 seconds after the previous one.
 
 ### Recipe 8: Per-Project Override
 
@@ -842,7 +842,7 @@ The illustration shows the native pipeline with the model configuration at its c
 
 The search stage merges text links with harvested citation annotations before selecting pages (see [Source Harvesting from Citations](#source-harvesting-from-citations)). Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈30-50K for 10 pages).
 
-Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it.
+Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local-only `meta.json` telemetry sidecar into their run directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it. Capacity, page scheduling and resource limits are described in [Research Execution](#research-execution).
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
@@ -860,7 +860,63 @@ Per research run with the default 10 pages: ≈$0.09
 | Collate (M3 via OpenRouter)         | 1                     | ≈$0.01    |
 | Cache Suggest (M3 via OpenRouter)   | 1                     | ≈$0.0002  |
 
-Since v0.13.0 the search stage adds recovered provider citation URLs to prose links, increasing the candidate source set; `maxUrls` still caps page selection. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 and M2.7 had equal per-token prices in the recorded benchmark; M3 wrote ≈2× the extraction characters, with the cost estimate separately projecting greater token usage); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](#choosing-an-alternative-search-configuration) or [MCP configuration](#configuration). The extract and collate rows scale with the selected models.
+Since v0.13.0 the search stage adds recovered provider citation URLs to prose links, increasing the candidate source set; `maxUrls` still caps page selection. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 and M2.7 had equal per-token prices in the recorded benchmark; M3 wrote ≈2× the extraction characters, with the cost estimate separately projecting greater token usage); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](#choosing-an-alternative-search-configuration) or [MCP configuration](#configuration). The extract and collate rows scale with the selected models. Degraded research (`no-links`, `fetch-failed`, `extraction-failed`) also runs the cache-suggest call when earlier runs exist.
+
+## Research Execution
+
+Research fetches and extracts pages in parallel under shared capacity limits. One runtime owns those limits: a native `Pi` session, or one MCP server process. Both packages accept the same `execution` block, natively under the `pi-intelli-search` namespace and in MCP configuration under `tuning`. Unknown keys and out-of-range values fail before any inference. A native trusted project's `execution` block replaces the global block entirely; there is no per-key merge. The defaults are unmeasured starting values, not performance claims.
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "execution": {
+      "pageExecution": "streaming",
+      "modelConcurrency": 5,
+      "aggregateFetchConcurrency": 4,
+      "lateDrainMs": 0,
+      "deadline": {
+        "enabled": false
+      }
+    }
+  }
+}
+```
+
+| Field | Default | Accepted Values | Effect |
+|---|---|---|---|
+| `pageExecution` | `streaming` | `streaming` or `barrier` | `streaming` extracts each page as soon as its fetch finishes. `barrier` fetches every page before extraction starts |
+| `modelConcurrency` | `5` | Integer from 2 to 64 | Model attempts in flight at once across every operation in the runtime, including retries and suggestion calls |
+| `criticalReserve` | `1` | Exactly 1 | Slots held back for search, collation and suggestion calls. Page extraction uses at most `modelConcurrency` minus this reserve |
+| `aggregateFetchConcurrency` | `4` | Integer from 1 to 32 | Physical page request chains in flight at once across every operation. Each chain runs in its own child process |
+| `lateDrainMs` | `0` | Integer from 0 to 30,000 | Milliseconds that extractions started before a deadline cutoff can continue after collation. Their results are saved as non-evidence and never enter the summary |
+| `deadline` | `{ "enabled": false }` | Whole object, described below | Adaptive page cutoff for streaming research |
+| `fetchMaxResponseBytes` | `8388608` | Integer from 65,536 to 16,777,216 | Decoded bytes accepted per page response; a larger response is rejected, not truncated |
+| `docsMaxResponseBytes` | `16777216` | Integer from 65,536 to 33,554,432 | The same bound for `llms-full.txt` documentation downloads |
+| `fetchMaxChars` | `500000` | Integer from 1 to 500,000 | Cleaned characters kept per page; truncation is reported separately from rejection |
+
+The existing `fetchConcurrency` and `extractionConcurrency` settings remain per-run limits inside these runtime-wide limits. Effective page concurrency is the smaller of `extractionConcurrency` and `modelConcurrency` minus the reserve, which is 4 with the defaults. `minRequestIntervalMs` now spaces the starts of all actual model attempts in the runtime, including retries, search, collation, suggestions and standalone tool calls, where it previously spaced only research extraction calls. A queued attempt holds no slot and starts no timer: its model-call timeout begins at dispatch, and its slot is released before any retry backoff.
+
+An enabled `deadline` must set every field explicitly: `quorum` (greater than 0, at most 1), `factor` (greater than 0, at most 10), `floorMs` (0 to 600,000), `ceilingMs` (1 to 600,000, not below `floorMs`) and `minSources` (1 to 100). The packages supply no recommended values, and a deadline cannot be combined with `barrier`. Once the `quorum` fraction of pages has finished with at least one success, the cutoff is set once to the quorum time plus `factor` times the median successful page time, clamped between `floorMs` and `ceilingMs` after page work starts. The cutoff waits for `minSources` successes until the ceiling. At the cutoff, queued and in-flight fetches are cancelled, and only extractions finished before it enter the summary.
+
+The native session captures these settings when it starts; a change takes effect in the next session. The MCP server captures them when its runtime is constructed; restart it after a change.
+
+### Operation Lifetimes
+
+Each tool call is one operation. It owns its page request chains, model attempts, staging files and cache writers, and it returns only after all of them have settled, on success, degraded outcome, error or cancellation. Cancellation stops queued and in-flight work and waits for it to finish. Deterministic tests on *Linux* measured cancellation settling within 17 milliseconds against scripted models and local pages, inside a 5,000-millisecond test target; live provider and filesystem latency are not covered by that measurement.
+
+Research applies the configured model retry and timeout policy. The native standalone `intelli_search`, `intelli_extract` and `intelli_collate` tools keep one model attempt and no application-level timeout. MCP applies its configured retry and timeout policy to every model call. Every model attempt in either package passes the same capacity and pacing limits.
+
+Research documentation discovery runs alongside page work and is cancelled when the run finalises. A download still in progress at that point is dropped without a diagnostic, so a result can contain fewer documentation files than a slower run of the same query.
+
+When a host cancels a call, the operation still settles its own work, but usage reported after the cancellation may not reach the host. Accounting then records delivery as `unknown`. Host usage totals for cancelled calls can therefore be incomplete; the provider account is the authority for charges.
+
+### Resource Limits
+
+The content limits bound accepted bytes, not process memory. Deterministic qualification on *Linux* observed one accepted page near the 8 MiB limit adding ≈140-200 MiB of resident memory, and four such pages at default concurrency adding ≈508 MiB, because each page is decoded, read by two fetch variants and parsed more than once. Page bodies held in memory are bounded by `fetchConcurrency`, but every accepted page stays in private staging on disk until the run finishes, up to three bytes per kept character for each page.
+
+Each physical page request chain starts its own child process, which adds process start-up cost and ≈50-82 MiB peak resident memory per chain in the same qualification. `aggregateFetchConcurrency` bounds how many run at once.
+
+Page fetching uses its own Transport Layer Security (TLS) stack. It trusts its bundled roots plus certificates named by `SSL_CERT_FILE` or `SSL_CERT_DIR`; `NODE_EXTRA_CA_CERTS` is passed to the page process but has no effect on page trust. A private certificate authority supplied only through `NODE_EXTRA_CA_CERTS` lets model calls succeed while pages fail with `TRANSPORT_FAILED`.
 
 <!-- packages:pi -->
 ## Settings
@@ -936,9 +992,10 @@ The example below shows the default models and common tuning settings. The [Sett
 | `retryBaseDelayMs` | Research LLM | `1500` | Base delay for retry backoff. Attempt N waits a random duration up to `min(retryMaxDelayMs, retryBaseDelayMs * 2^(N-1))`. |
 | `retryMaxDelayMs` | Research LLM | `20000` | Upper bound on any single retry backoff, and the clamp applied to a Retry-After hint so a large hint cannot stall the pipeline. |
 | `searchRetryAttempts` | 1. Search | `2` | Total attempts for the search stage when it returns a valid response with zero usable links (a degraded result), including the first. Independent of `llmRetryAttempts`, which covers transport errors. |
-| `minRequestIntervalMs` | 3. Extract | `0` | Minimum gap in milliseconds between concurrent extract LLM calls. `0` disables the throttle. For an observed account limit of approximately 0.33 requests per second, use approximately `3000`. Adjust to observed limits rather than payment status. |
+| `minRequestIntervalMs` | All LLM | `0` | Minimum gap in milliseconds between the starts of actual model attempts across the session, including retries and standalone tool calls. Integer from 0 to 120,000; `0` disables the throttle. For an observed account limit of approximately 0.33 requests per second, use approximately `3000`. Adjust to observed limits rather than payment status. |
 | `disableLlmsFullDiscovery` | Supplementary Fetch | `false` | Set `true` to skip automatic `llms-full.txt` probes and downloads. This does not disable page fetching or extraction. See [Automatic llms-full.txt Discovery](#automatic-llms-fulltxt-discovery). |
-| `disableTelemetry` | All | `false` | When `false`, completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local `meta.json` sidecar into the configured cache. It contains the full query and per-stage outcomes, which can include confidential information. The sidecar adds no network transmission or credential fields; ordinary research still sends requests to configured services. Set `true` to suppress it. |
+| `execution` | All | see [Research Execution](#research-execution) | Strict block for runtime-wide model and fetch capacity, page scheduling, the optional deadline and fetch size bounds. Invalid values fail before inference; a trusted project block replaces the global block entirely. |
+| `disableTelemetry` | All | `false` | When `false`, completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local `meta.json` sidecar into their run directory below the configured cache. It contains the full query and per-stage outcomes, which can include confidential information. The sidecar adds no network transmission or credential fields; ordinary research still sends requests to configured services. Set `true` to suppress it. |
 
 `httpProxy` is a separate top-level `Pi` setting, not a `pi-intelli-search` namespace key; page fetching honours it too. Its default is unset.
 
@@ -994,11 +1051,11 @@ An invocation without `--check-config` validates the explicit workspace, then se
 
 - **Registration and Schemas.** Tool names and JSON input schemas mirror the native `Pi` tools verbatim; descriptions adapt the native guidance for protocol clients (host-neutral cache wording, embedded `focusPrompt` and breadth guidance), because the protocol offers no separate guidance channel. Invalid tool arguments are reported as tool errors (`isError` results), matching the software development kit (SDK) distinction between malformed protocol requests and invalid arguments.
 - **Results.** Successful calls return the complete operation text both as text content and as `structuredContent.text`, alongside `outcome` and `details`. Hosts that prefer the structured representation receive the same answer, sources and cache suggestions. The duplication is intentional for host compatibility; a host that forwards both representations can consume extra context. Degraded research (`no-links`, `fetch-failed`, `extraction-failed`) remains a normal result. Execution failures return `isError` results tagged with the safe `StandaloneError` category rather than raw provider causes.
-- **Queueing.** One operation runs at a time and up to eight further requests queue; requests beyond the bound settle immediately with a busy tool error. A queued request whose client cancels settles without starting its operation.
+- **Admission.** Two operations run at once by default and up to eight further requests queue in arrival order; a request beyond both bounds settles immediately with an `OPERATION` tool error whose message reports the server as busy. The optional top-level `admission` object sets `maxConcurrent` (integer from 1 to 16, default 2) and `maxQueued` (integer from 0 to 256, default 8). With `maxQueued: 0`, a request still starts when an active slot is free. Set `maxConcurrent: 1` for one operation at a time. Parallel operations share the runtime's model and fetch capacity in [Research Execution](#research-execution), and each adds its own page memory. A queued request whose client cancels settles without starting its operation.
 - **Progress and Cancellation.** When the client supplies a progress token, stage progress is forwarded as `notifications/progress` (percentage of one hundred). Client cancellation aborts the running operation through the shared model policy and stage boundaries.
-- **Shutdown.** Closing standard input aborts in-flight and queued work, closes the transport and exits. `SIGINT` and `SIGTERM` trigger the same drain with a bounded hard-exit backstop. No unanswered request or runaway child work remains.
+- **Shutdown.** Closing standard input aborts in-flight and queued work, waits for active operations to settle, closes the transport and exits. A cancelled operation returns a `CANCELLED` error; a report survives only when its marker was published before the cancellation. `SIGINT` and `SIGTERM` trigger the same drain with a bounded hard-exit backstop. No unanswered request or runaway child work remains.
 - **Framing.** Standard output carries protocol messages only. Before the server module loads, a guard diverts `process.stdout.write` (including console output, import-time writes and direct dependency writes) to standard error; the transport writes frames through the original stream, so the SDK's own output is never corrupted. Adapter diagnostics use standard error.
-- **Annotations.** `intelli_search` and `intelli_extract` are marked read-only; `intelli_collate` and `intelli_research` write cache files and carry `destructiveHint: true` because repeating a query replaces the canonical cache folder's contents (attempting to archive the previous set to a numbered sibling; archive failure falls back to in-place replacement). No tool claims idempotence. Operations use external services; inference and search charges apply to the configured provider account. Invalid calls and startup validation do not perform inference.
+- **Annotations.** `intelli_search` and `intelli_extract` are marked read-only; `intelli_collate` and `intelli_research` write cache files and carry `destructiveHint: true`. Each call writes a new run directory and never replaces an earlier run; the hint is retained because each publication replaces the shared suggestion index file, and the calls keep consuming disk space with no automatic retention (see [Cache and Recovery](docs/CACHE.md)). No tool claims idempotence. Operations use external services; inference and search charges apply to the configured provider account. Invalid calls and startup validation do not perform inference.
 
 Startup diagnostics go to standard error. The SDK version range is declared in `package.json` (the lockfile pins the verified release); the protocol implementation is the official split server package verified in the repository handoff.
 
@@ -1008,7 +1065,7 @@ Select the configuration with `--config FILE` or `INTELLI_SEARCH_CONFIG`. Select
 
 The [minimal configuration](#create-the-configuration) explicitly selects OpenRouter for every role; add an optional `tuning` object (for example `"cacheDir": ".search"`) beside `providers` and `models`. These are example selections, not standalone defaults.
 
-Only `providers`, `models` and optional `tuning` are accepted at the top level. All three model roles are required. The provider object accepts only `apiKeyEnv`, an environment-variable name rather than a key value. The initial provider scope is OpenRouter at its fixed `https://openrouter.ai/api/v1` endpoint; custom endpoints, proxy settings, provider fallback and dynamic router model identifiers are not accepted.
+Only `providers`, `models`, optional `tuning` and optional `admission` are accepted at the top level; `admission` is described under [Serving the Protocol](#serving-the-protocol). All three model roles are required. The provider object accepts only `apiKeyEnv`, an environment-variable name rather than a key value. The initial provider scope is OpenRouter at its fixed `https://openrouter.ai/api/v1` endpoint; custom endpoints, proxy settings, provider fallback and dynamic router model identifiers are not accepted.
 
 Configuration loading does not require working credentials. Each operation validates its required model roles against OpenRouter's model catalogue before inference. Full research validates all three roles first. Validation checks exact identifiers, text input/output, advertised reasoning efforts when supplied, and tool support for an enabled search tool. Catalogue lookup is bounded and cancellable. It establishes advertised capabilities, not account credit, per-key model access or future provider availability; inference errors remain possible.
 
@@ -1033,7 +1090,8 @@ Unspecified tuning comes from the canonical [shared defaults](src/core/defaults.
 | `searchRetryAttempts` | `2`: search attempts after a valid response with no usable links, including the first | Integer from 1 to 10 |
 | `retryBaseDelayMs` | `1500`: base exponential-backoff delay in milliseconds | Integer from 0 to 120,000; must not exceed `retryMaxDelayMs` |
 | `retryMaxDelayMs` | `20000`: maximum backoff and Retry-After delay in milliseconds | Integer from 0 to 120,000 |
-| `minRequestIntervalMs` | `0`: extraction-call spacing in milliseconds; zero disables pacing | Integer from 0 to 120,000 |
+| `minRequestIntervalMs` | `0`: spacing in milliseconds between the starts of all model attempts in the runtime, including retries; zero disables pacing | Integer from 0 to 120,000 |
+| `execution` | Streaming pages, five model slots, four fetch chains, deadline disabled | Strict block described in [Research Execution](#research-execution) |
 | `cacheDir` | `.search`: workspace-relative cache directory | Nonempty relative directory, without absolute paths, backslashes or traversal components |
 | `browserFingerprint` | `chrome_145`: browser signature for fetching | `chrome_145`, the verified shared profile |
 | `disableTelemetry` | `false`: write the local `meta.json` sidecar; `true` suppresses it | Boolean |
@@ -1085,7 +1143,9 @@ const result = await runtime.execute("intelli_research", {
 console.log(result.text);
 ```
 
-This example incurs inference and search charges when run with a real credential. `execute()` also accepts `intelli_search`, `intelli_extract` and `intelli_collate`, with the canonical tool parameters. Its optional third argument supplies `signal` and `onProgress`. Results contain `text`, `details` and `outcome`; execution failures throw. Degraded research remains a result.
+This example incurs inference and search charges when run with a real credential. `execute()` also accepts `intelli_search`, `intelli_extract` and `intelli_collate`, with the canonical tool parameters. Its optional third argument supplies `signal` and `onProgress`. Results contain `text`, `details` and `outcome`; registered operations also return full operation `data`, numeric `usage` and an `execution` receipt with the operation identifier, accounting summary and per-attempt records. Execution failures throw a `StandaloneError`, which carries the same receipt, partial `data` and `usage` when the operation had started. Degraded research remains a result. The receipt and full data shapes belong to the experimental entrypoint and can change without a major version.
+
+`runtime.close()` stops new admissions, cancels active work and resolves after it settles. Create one runtime per process: each owns its own capacity limits, and two runtimes on the same cache share only the cache lock.
 
 Standalone validation rejects unknown argument keys, empty queries, nonpositive or fractional `maxUrls`, arrays exceeding 100 entries, strings exceeding 2,000,000 characters and unsupported extraction statuses. Most of these standalone validation rules are separate from the native tool schemas; the exception is the rejection of `maxUrls` values below 1, which the shared core schema also declares as `minimum: 1`, so it fails schema validation before the runtime's specific message. Positive fractional values at or above 1 still fail the standalone integer check.
 
@@ -1095,7 +1155,7 @@ For manual extraction followed by collation, construct each collation item from 
 
 ### Filesystem and Privacy Boundaries
 
-All cache paths returned by the standalone adapter are absolute and anchored to the selected workspace. Cache and staging content stay beneath the configured cache directory. Existing symlinks, dangling links and hardlinked files in cache ancestors or artefact subtrees are rejected before an operation; checks repeat after model preflight. Special filesystem entries and an oversized safety scan are rejected. The full scan runs at runtime construction and twice per operation, so its cost grows with cache size; queued requests wait behind that scan. At 100,000 inspected entries, select a smaller cache directory or archive old entries after stopping all processes using that cache. Same-query runs on the same Coordinated Universal Time (UTC) date refresh one cache directory. A completed refresh attempts to archive the prior artefacts to a numbered sibling; archive failure is logged and can lead to in-place replacement. A degraded repeat preserves prior successful output. Another UTC date produces a different directory.
+All cache paths returned by the standalone adapter are absolute and anchored to the selected workspace. Cache and staging content stay beneath the configured cache directory. Existing symlinks, dangling links and hardlinked files in cache ancestors or artefact subtrees are rejected before an operation; checks repeat after model preflight. Special filesystem entries and an oversized safety scan are rejected. The full scan runs at runtime construction and twice per operation, so its cost grows with cache size; queued requests wait behind that scan. The scan covers every entry below `cacheDir`, including earlier runs, incomplete runs and legacy directories. At 100,000 inspected entries the runtime cannot start, and an operation fails with a `WORKSPACE` error before inference; nothing is deleted or archived automatically. Follow [Offline Archival](docs/CACHE.md#offline-archival) after stopping all processes using that cache. Every research or collation call writes a new run directory, so the entry count only grows.
 
 These checks prevent pre-existing path escapes, not malicious concurrent filesystem replacement by another process with write access. Use a workspace controlled by the same trusted local operator. No operating-system sandbox or protection against hostile same-user mutation is claimed. Fetched URLs are not constrained to public addresses; the runtime is not a hosted service or an unrestricted remote execution endpoint.
 
@@ -1128,35 +1188,41 @@ Every startup failure is diagnostic-only and lands on standard error; standard o
 
 ## Cache Structure
 
-Both packages write this format. The native extension resolves the cache against the active `Pi` workspace; MCP resolves it against `INTELLI_SEARCH_WORKSPACE` or `--workspace` and keeps it beneath that workspace. See the MCP [filesystem boundaries](#filesystem-and-privacy-boundaries).
+Both packages write this format. The native extension resolves the cache against the active `Pi` workspace; MCP resolves it against `INTELLI_SEARCH_WORKSPACE` or `--workspace` and keeps it beneath that workspace. See the MCP [filesystem boundaries](#filesystem-and-privacy-boundaries). [Cache and Recovery](docs/CACHE.md) explains how runs are validated and how to respond to persistence diagnostics.
 
 ```text
 .search/
-├── 2026-04-19-d1-worker-api-3f7a2c/
-│   ├── report.md               # Synthesis + authoritative source inventory
-│   ├── query.txt               # Original search query
-│   ├── meta.json               # Local-only telemetry sidecar (v0.11.0+)
-│   ├── extractions/            # Per-page LLM extractions (≈3-5K each)
-│   │   ├── 01-developers-cloudflare-com.md
-│   │   └── 02-developers-cloudflare-com.md
-│   └── sources/                # Full page content
-│       ├── 01-developers-cloudflare-com.md
-│       ├── 02-developers-cloudflare-com.md
-│       └── llms-full-developers-cloudflare-com.md
-└── .index.json                 # Index of all cached searches
+├── .intelli-v1/                 # Run namespace
+│   ├── allocations.ndjson       # Allocation journal
+│   ├── writer.lock              # Permanent lock file
+│   ├── index.json               # Suggestion index
+│   └── runs/
+│       └── 2026-10-22-d1-worker-api-limits-<nonce>/
+│           ├── committed.json   # Report marker
+│           ├── report.md        # Synthesis + source inventory
+│           ├── query.txt        # Original query
+│           ├── run.json         # Source states, provenance
+│           ├── extractions/
+│           │   ├── S1.md
+│           │   └── S2.md
+│           ├── sources/
+│           │   ├── P1.md
+│           │   └── llms-full-D1.md
+│           ├── accounting.json  # Model attempts and usage
+│           └── meta.json        # Local telemetry
+├── .index.json                  # Legacy index, read only
+└── 2026-04-19-d1-worker-api-3f7a2c/  # Legacy run, read only
 ```
 
-Each research run writes a cache entry named `<date>-<slug>-<hash>`. The `<hash>` is six hexadecimal characters from a Secure Hash Algorithm 1 (SHA-1) hash of the full query. It distinguishes queries sharing a readable stem and reduces collision risk; it does not guarantee unique names. Concurrent writers use short cache locks, and index updates are atomic. Cache readers do not take those locks: a multi-file refresh is not a whole-directory atomic snapshot.
+Every `intelli_research` or `intelli_collate` call writes a new directory below `.intelli-v1/runs/`. Its name is the Coordinated Universal Time (UTC) date, up to five query words and a random nonce; the name identifies nothing, and repeating a query on the same day writes another directory. No run is replaced, rotated or archived to a numbered sibling. A run is a report only when its `committed.json` marker verifies the journal record and the length and digest of every listed file; tools advertise and suggest only verified runs. Read exact paths from the result's Source Assessment table rather than predicting filenames.
 
-Refresh behaviour:
+The report and its files remain on disk for as long as the cache directory exists. Nothing removes old runs, so disk use grows with every call. To retain or retire history, follow [Offline Archival](docs/CACHE.md#offline-archival).
 
-- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and telemetry sidecar to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set.
-- Archive failure is logged and the completed run can replace canonical files in place; interrupted rotation can leave a partial archive.
-- Supplementary `llms-full-*` documentation downloads stay with the live folder and are not archived.
-- A degraded repeat preserves the earlier successful report, extractions, sources and index entry untouched and records only the failed attempt in `meta.json`.
-- The numbered siblings are a same-day safety net, not a versioned archive: copy a report elsewhere if it must be retained long-term.
+Degraded research (`no-links`, `fetch-failed`, `extraction-failed`) publishes no report and returns an empty `details.cachePath`. Its reserved directory remains below `runs/` with the failed attempt's telemetry, unless telemetry is disabled, and the result does not name it. When the cache cannot be written, a completed answer is still returned with a `Persistence unavailable` diagnostic and no report path.
 
-**Local Telemetry (`meta.json`):** Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+Directories written by earlier releases (`<date>-<slug>-<hash>/` and `.index.json`) are left untouched. Related-search suggestions still read them; no current tool rewrites, rotates or deletes them.
+
+**Local Telemetry (`meta.json`):** Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write into the run directory. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](scripts/README.md) can aggregate these sidecars to report per-stage success rates.
 
 <!-- packages:pi -->
 To suppress the sidecar in the native extension, set `disableTelemetry: true` inside the `pi-intelli-search` namespace in [Settings](#settings).
@@ -1217,6 +1283,7 @@ pi install /path/to/pi-intelli-search
 - [Comparison](docs/COMPARISON.md): How `intelli-search` compares to other `Pi` search extensions and to host-native web search.
 - [Changelog](CHANGELOG.md): Release history.
 - [Architecture](docs/ARCHITECTURE.md): Detailed design decisions and pipeline internals.
+- [Cache and Recovery](docs/CACHE.md): Run layout, validity checks, persistence diagnostics and offline archival.
 - [Compatibility](docs/COMPATIBILITY.md): Tested host versions and artefacts for the native extension, MCP server and plugins.
 - [Components](docs/COMPONENTS.md): Third-party dependencies and licence attribution.
 <!-- packages:pi -->

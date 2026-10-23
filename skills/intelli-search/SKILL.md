@@ -126,6 +126,8 @@ The tool output also includes a **📚 Related cached searches** section when se
 - **Cross-Reference:** Read a previous `report.md` when live results are incomplete.
 - **Prior Evidence:** Point to earlier research on the same topic when the live result needs checking.
 
+Suggestions also appear on degraded results. They come from verified saved runs and from reports written by earlier releases, never from the current query's own date and query.
+
 Only reach into the cache when:
 - The user asks about a specific source that needs re-examination.
 - A complete code example is needed that was truncated in the summary.
@@ -134,14 +136,16 @@ Only reach into the cache when:
 
 ## Follow Up from Cache
 
-The cache defaults to `.search/<date>-<slug>-<hash>/`; native `cacheDir` settings can change its root. Use the path returned in `details.cachePath`. A completed repeat on the same Coordinated Universal Time (UTC) date attempts to archive prior artefacts to a numbered sibling (`<cachePath>.1/`, then `.2` and so on). Archive failure is logged and can lead to in-place replacement; interrupted rotation can leave a partial archive. A degraded repeat preserves prior successful output. Copy important reports elsewhere before repeating a query.
+Each research or collation call saves its report in a new run directory below `.search/.intelli-v1/runs/`; native `cacheDir` settings can change the cache root. Use the path returned in `details.cachePath`; it is empty when no report was saved. Repeating a query never replaces or moves an earlier report.
 
-The following are path examples for `read`, not shell commands. List the directory first and choose an exact filename; `read` does not expand shell globs.
+A degraded result (`no-links`, `fetch-failed`, `extraction-failed`) saves no report. When the cache cannot be written, a completed answer still arrives, ending with `Persistence unavailable (<code>): <message>` and no report path. Use that answer and report the diagnostic; repeating the research incurs provider charges again and does not repair the cache.
+
+The following are path examples for `read`, not shell commands. Take exact paths from the Source Assessment table; `read` does not expand shell globs.
 
 | Need | Path Relative to Returned Cache Entry |
 |------|---------|
-| Quick refresher on one source | `extractions/<exact-file>.md` |
-| Full original page content | `sources/<exact-file>.md` |
+| Quick refresher on one source | `extractions/S<n>.md` from the inventory |
+| Full original page content | `sources/P<n>.md` from the inventory |
 | Collated overview | `report.md` |
 | Per-stage outcomes (v0.11.0+) | `meta.json` |
 | Re-fetch a single URL fresh | Use an installed web-fetch tool or shell/HTTP tools; `intelli-search` provides no standalone fetch tool |
