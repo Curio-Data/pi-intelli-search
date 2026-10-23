@@ -149,6 +149,12 @@ const REPEAT = defineSchedule({
   initialState: "seeded",
   groups: [[["R1", 0]], [["R2", 1]], [["R3", 0]]],
 });
+const RETRY = defineSchedule({
+  corpus,
+  block: "retry",
+  initialState: "empty",
+  groups: [[["T1", 0]], [["T2", 1]], [["T3", 2]]],
+});
 const COLLATE_FIRST = defineSchedule({
   corpus,
   block: "collate-first",
@@ -1142,6 +1148,236 @@ describe(`F7-1 suggestion replay through actual wrappers on ${hostSelection.kind
     assert.match(String(block.missErrors[0]!.key?.operationNode), /^suggest\//);
     assert.deepEqual(guard.events(phase), []);
   });
+
+  // ── Retries inside an F7 block ──────────────────────────────────────────
+
+  let retry: FrozenBlock;
+
+  it("records a serial block with scripted 429 retries on a collate and a suggestion judge attempt", async () => {
+    let collateFailed = false;
+    let suggestFailed = false;
+    const recorded = await recordBlock(RETRY, () => ({
+      override: ({ role, user }) => {
+        const rateLimited = { status: 429, headers: { "retry-after": "0" } };
+        if (role === "collate" && !collateFailed && user.includes(Q2)) {
+          collateFailed = true;
+          return rateLimited;
+        }
+        if (role === "suggest" && !suggestFailed && user.startsWith(`Current query: "${Q3}"`)) {
+          suggestFailed = true;
+          return rateLimited;
+        }
+        return undefined;
+      },
+    }));
+    assertRecorded(recorded);
+    assert(collateFailed && suggestFailed, "both scripted 429 attempts were served");
+    retry = await freezeBlock(recorded);
+    const fixtures = loadF7BlockSync(retry.dir).files.model.fixtures;
+    const suggest = fixtures.filter((f) => f.key.operationNode === "T3.suggest");
+    assert.deepEqual(suggest.map((f) => f.key.occurrence), [1, 2], "each attempt is its own occurrence");
+    assert.equal(suggest[0]!.key.requestSha256, suggest[1]!.key.requestSha256, "identical canonical preparation per attempt");
+    assert(suggest[0]!.error && !suggest[1]!.error);
+    const collate = fixtures.filter(
+      (f) => (f.request as { role?: string }).role === "collate" && String((f.request as { userMessage?: string }).userMessage).includes(Q2),
+    );
+    assert.deepEqual(collate.map((f) => f.key.occurrence), [1, 2]);
+    assert(collate[0]!.error && !collate[1]!.error);
+    assert.equal(retry.artefact.suggestRequests.length, 2, "one recorded judge request per read, not per attempt");
+    assert(
+      recorded.driver.session
+        .observations()
+        .some((o) => o.kind === "suggest-prepared" && o.node === "T3" && o.attempt === 2),
+      "the retried attempt was prepared again",
+    );
+  });
+
+  it("replays the retry block: per-attempt occurrences, accounting and canonical preparation stay exact", async () => {
+    const run = await replayBlock(retry, { name: "source" });
+    await evidence("replay-retry-source", run);
+    assertValidReplay(retry, run);
+    assert(run.observations.some((o) => o.kind === "suggest-prepared" && o.node === "T3" && o.attempt === 2));
+    assert(run.model.consumed.includes("model:T3.suggest#2"));
+  });
+
+  // ── Runtime transitions during an active visibility wait ────────────────
+
+  for (const kind of ["reload", "dispose"] as const)
+    it(`settles old owned callbacks and readers when the host ${kind === "reload" ? "reloads extensions (session_shutdown, then a successor runtime)" : "disposes the session"} during a visibility wait`, async () => {
+      const frozen = requireParallel(parallel);
+      await restoreWorkspace(frozen.snapshot, frozen.workspace);
+      const loaded = loadF7BlockSync(frozen.dir);
+      const log: Array<Record<string, unknown>> = [];
+      const mark = (event: string, extra: Record<string, unknown> = {}) =>
+        log.push({ seq: log.length + 1, event, ...extra });
+      let handle: SessionHandle | undefined;
+      let transition: Promise<void> | undefined;
+      let driverRef: F7ReplayDriver | undefined;
+      const exits = () => driverRef!.probe.log.filter((e) => e.kind === "candidates-exit").length;
+      const state = () => ({
+        inFlight: driverRef!.probe.inFlight(),
+        faults: driverRef!.faults.map((f) => f.reason),
+        exits: exits(),
+      });
+      const driver = createF7Replay({
+        loaded,
+        budgetMs: BUDGET_MS,
+        expectedInitialTreeDigest: loaded.manifest.initialTreeDigest,
+        modelDelayMs: delayP2Search(6_000),
+        probeHooks: {
+          onCandidatesEnter: ({ query }) => {
+            if (query !== Q1 || transition) return;
+            mark("old-wait-entered", state());
+            transition = new Promise<void>((resolve) => setTimeout(resolve, 150)).then(async () => {
+              mark(`${kind}-called`, state());
+              try {
+                if (kind === "reload") {
+                  await handle!.session.reload();
+                  mark("reload-resolved", state());
+                } else {
+                  handle!.session.dispose();
+                  mark("dispose-returned", state());
+                }
+              } catch (error) {
+                mark(`${kind}-rejected`, { error: String(error), ...state() });
+              }
+            });
+          },
+        },
+      });
+      driverRef = driver;
+      // The host transition is the cancellation under test; the stop only records.
+      driver.setStop(() => mark("block-stop", state()));
+      let oldCallsAfterSuccessor = 0;
+      let successorBuilt = false;
+      const oldModel: typeof driver.block.modelTransport = (registry, model, context, options) => {
+        if (successorBuilt) oldCallsAfterSuccessor++;
+        return driver.block.modelTransport(registry, model, context, options);
+      };
+      const successor = createRecording("f7-successor", pages);
+      let invocations = 0;
+      const nativeFactory = (pi: never) => {
+        invocations++;
+        if (invocations === 1)
+          return source.module.createNativeExtension({
+            mode: "transport-replay",
+            registryStreamSimple: oldModel,
+            pageTransport: driver.block.pageTransport,
+            suggestionReadView: driver.probe.controller,
+          })(pi);
+        successorBuilt = true;
+        mark("successor-factory", state());
+        return source.module.createNativeExtension({
+          mode: "unit",
+          registryStreamSimple: (registry, model, context, options) => {
+            mark("successor-model-call", state());
+            return successor.modelTransport(registry, model, context, options);
+          },
+          pageTransport: successor.pageTransport,
+        })(pi);
+      };
+      // Registered after the native extension: the host awaits handlers in order.
+      const after = (pi: { on: (name: string, handler: (event: { reason?: string }) => void) => void }) =>
+        pi.on("session_shutdown", (event) => mark("shutdown-after-native", { reason: event.reason, ...state() }));
+      const script = codemodeScript(frozen.schedule, { timeoutMs: SCRIPT_TIMEOUT_MS });
+      main.setScript([
+        { toolCalls: [{ name: "codemode", args: { code: script.script } }], usage: usage(900, 40, 300) },
+        { text: "Done.", usage: usage(1200, 6) },
+      ]);
+      const phase = `transition-${kind}`;
+      guard.setPhase(phase, []);
+      handle = await openSession({
+        host,
+        agentDir: isolation.agentDir,
+        workspace: frozen.workspace,
+        main,
+        nativeFactory: nativeFactory as never,
+        codemode: "on",
+        extraFactories: [after as never],
+        onToolEvent: driver.witnesses.onToolEvent,
+      });
+      let promptError: string | null = null;
+      const prompt = handle.session.prompt("Run the qualification workflow.").then(
+        () => mark("old-prompt-settled", state()),
+        (error) => {
+          promptError = String(error);
+          mark("old-prompt-rejected", state());
+        },
+      );
+      const settledInTime = await Promise.race([
+        prompt.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 60_000)),
+      ]);
+      await transition;
+      guard.setPhase("idle", [stage.port]);
+      const replayNetwork = guard.events(phase);
+      let successorResult: { isError: boolean } | null = null;
+      if (kind === "reload" && settledInTime) {
+        main.setScript([
+          { toolCalls: [{ name: "intelli_search", args: { query: Q3 } }] },
+          { text: "Done." },
+        ]);
+        stage.setScript(f7StageScript(corpus));
+        guard.setPhase(`${phase}-successor`, [stage.port]);
+        await handle.session.prompt("Run the successor search.");
+        guard.setPhase("idle", [stage.port]);
+        const end = [...handle.events].reverse().find(
+          (event) =>
+            (event as { type?: string }).type === "tool_execution_end" &&
+            (event as { toolName?: string }).toolName === "intelli_search",
+        ) as { isError: boolean } | undefined;
+        successorResult = end ? { isError: end.isError } : null;
+      }
+      let libraryComplete = true;
+      try {
+        driver.session.assertReplayComplete();
+      } catch {
+        libraryComplete = false;
+      }
+      mark("final", state());
+      if (kind === "reload") handle.dispose();
+      await writeEvidence(isolation.root, `transition-${kind}`, {
+        host: hostSelection,
+        settledInTime,
+        promptError,
+        log,
+        oldCallsAfterSuccessor,
+        invocations,
+        successorResult,
+        successorRegistryCalls: successor.registryCalls(),
+        replayNetwork,
+        successorViolations: guard.violations(`${phase}-successor`),
+        faults: driver.faults.map((f) => ({ reason: f.reason, message: f.message.slice(0, 240) })),
+        libraryComplete,
+        probe: driver.probe.log,
+      });
+      const at = (event: string) => log.find((entry) => entry.event === event);
+      const seqOf = (event: string) => (at(event)?.seq as number | undefined) ?? Number.POSITIVE_INFINITY;
+      assert(settledInTime, "the old prompt settled after the transition");
+      assert(at("old-wait-entered"), "P1 entered a real visibility wait");
+      assert.deepEqual(replayNetwork, [], "zero network during the replay and the transition");
+      assert.equal(driver.faults[0]?.reason, "cancelled", "the transition cancelled the active wait");
+      assert.equal(libraryComplete, false, "a cancelled block is never complete");
+      assert.deepEqual((at("final")!.inFlight as object), { callbacks: 0, reads: 0 });
+      if (kind === "reload") {
+        assert.deepEqual(
+          (at("shutdown-after-native")?.inFlight as object | undefined),
+          { callbacks: 0, reads: 0 },
+          "the native shutdown handler drained old callbacks and readers before later handlers ran",
+        );
+        assert.deepEqual(
+          (at("successor-factory")?.inFlight as object | undefined),
+          { callbacks: 0, reads: 0 },
+          "old callbacks and readers settled before the successor was built",
+        );
+        assert(seqOf("reload-called") < seqOf("shutdown-after-native"));
+        assert(seqOf("shutdown-after-native") < seqOf("successor-factory"));
+        assert(seqOf("successor-factory") < seqOf("successor-model-call"));
+        assert.equal(oldCallsAfterSuccessor, 0, "no old transport call after the successor existed");
+        assert.deepEqual(successorResult, { isError: false }, "the successor runtime ran a real search");
+        assert.deepEqual(guard.violations(`${phase}-successor`), []);
+      }
+    });
 
   let collateFirst: FrozenBlock;
 

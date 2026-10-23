@@ -258,6 +258,11 @@ export interface StageControls {
   readonly holdCollate?: (query: string) => Promise<unknown> | undefined;
   /** Observes each suggest request's current query. */
   readonly onSuggest?: (query: string) => void;
+  /**
+   * Replaces the reply for one stage call (for example a scripted 429 on a
+   * first attempt). `n` counts calls per role, as the stage fixture does.
+   */
+  readonly override?: (call: { readonly role: string; readonly user: string; readonly n: number }) => StageReply | undefined;
 }
 
 /** Deterministic loopback stage replies keyed by exact workflow query text. */
@@ -267,7 +272,9 @@ export function f7StageScript(corpus: CorpusShape, controls: StageControls = {})
     if (hits.length !== 1) throw new Error(`stage request names ${hits.length} workflow queries`);
     return hits[0]!;
   };
-  return ({ role, user }): StageReply => {
+  return ({ role, user, n }): StageReply => {
+    const replaced = controls.override?.({ role, user, n });
+    if (replaced) return replaced;
     switch (role) {
       case "search": {
         const index = corpus.workflowQueries.indexOf(queryIn(user));
