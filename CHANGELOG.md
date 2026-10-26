@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Fixed
+
+- The _Codex_ installation guide now validates the server configuration before launch, requires the same configured shell for startup, and explains why `Auth: Unsupported` is expected while `failed (0 tools)` indicates a startup failure. The generated plugin skill carries the same recovery guidance.
+- The standalone dependency lock advances _Zod_ from 4.6.5 to 4.6.7, removing the oversized constrained-collection memory-exhaustion advisory from the production dependency audit.
+
 ## [pi-0.19.0] - 2026-10-17
 
 Published on `npm`; [isolated registry installation and the packaged README](docs/COMPATIBILITY.md#published-0190-native-package-verification-2026-10-17) pass verification.

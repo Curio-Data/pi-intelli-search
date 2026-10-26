@@ -18,6 +18,8 @@ export INTELLI_SEARCH_CONFIG="$HOME/.config/mcp-intelli-search/config.json"
 export INTELLI_SEARCH_WORKSPACE="$PWD"
 ```
 
+Launch _Codex_ from this same shell. Launching from a different shell, desktop launcher or IDE does not inherit this shell's temporary exports.
+
 The snippet exports the launch directory as the workspace. For a stable per-project cache regardless of launch directory, set `INTELLI_SEARCH_WORKSPACE` to the project directory through `direnv` or another per-directory mechanism.
 
 Create the parent directory and workspace, then save the following JavaScript Object Notation (JSON) configuration to `$INTELLI_SEARCH_CONFIG`:
@@ -52,7 +54,9 @@ mkdir -p "$(dirname "$INTELLI_SEARCH_CONFIG")" "$INTELLI_SEARCH_WORKSPACE"
 
 These are explicit selections, not inherited defaults. Select OpenRouter models that pass catalogue validation for the required roles and are accessible to the configured account. Search requires `perplexity/sonar`, `perplexity/sonar-pro` or `perplexity/sonar-pro-search`, or a chat model with advertised tool support and an enabled `searchWebSearch` block. See [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#tuning) in the standalone guide.
 
-If either path selection (`INTELLI_SEARCH_CONFIG` or `INTELLI_SEARCH_WORKSPACE`) is missing, the server exits on startup with `Explicit --config and --workspace are required` on standard error and the tools never appear. Supply both paths and restart _Codex_. A missing or invalid selected configuration file does not stop connection. Each tool call reports a `CONFIGURATION` error naming the file; repair it and call again. The server rereads it until it loads successfully, then keeps it until restart.
+If either path selection (`INTELLI_SEARCH_CONFIG` or `INTELLI_SEARCH_WORKSPACE`) is missing, the server exits on startup with `Explicit --config and --workspace are required` on standard error and the tools never appear. Supply both paths and restart _Codex_ from that shell. A missing or invalid selected configuration file does not stop connection. Each tool call reports a `CONFIGURATION` error naming the file; repair it and call again. The server rereads it until it loads successfully, then keeps it until restart.
+
+The `/mcp` status `Auth: Unsupported` is expected for this stdio server. It means that MCP Open Authorization (OAuth) is not used; it does not describe the OpenRouter credential. The status `failed (0 tools)` means that startup or initialisation failed. Check the two path exports first.
 
 A missing `OPENROUTER_API_KEY` is different: credentials are validated when an operation runs, not at server startup. Export the key and restart the host so the server receives the updated environment. Host forwarding behaviour is recorded for Codex CLI 0.144.5 in the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins).
 
