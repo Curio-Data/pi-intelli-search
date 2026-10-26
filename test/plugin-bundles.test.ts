@@ -71,6 +71,7 @@ describe("plugin bundle generation", () => {
         "--package",
         `${mcpPkg.name}@${mcpPkg.version}`,
         "mcp-intelli-search",
+        ...(path.includes("codex") ? ["--host", "codex"] : []),
       ]);
     }
   });
@@ -106,11 +107,8 @@ describe("plugin bundle generation", () => {
     const server = (parse(files, "plugins/codex/.mcp.json").mcpServers as never)[
         "intelli_search"
     ] as Record<string, unknown>;
-    assert.deepStrictEqual(server.env_vars, [
-      "OPENROUTER_API_KEY",
-      "INTELLI_SEARCH_CONFIG",
-      "INTELLI_SEARCH_WORKSPACE",
-    ]);
+    assert.deepStrictEqual(server.env_vars, ["OPENROUTER_API_KEY", "XDG_CONFIG_HOME"]);
+    assert.deepStrictEqual(server.args.slice(-2), ["--host", "codex"]);
     assert.strictEqual(server.type, undefined);
     assert.strictEqual(server.env, undefined);
   });
@@ -205,13 +203,16 @@ describe("plugin bundle generation", () => {
     }
   });
 
-  it("explains Codex startup status and same-shell environment setup", () => {
+  it("explains zero-configuration Codex startup and persistent credentials", () => {
     const skill = files["plugins/codex/skills/intelli-search/SKILL.md"];
-    assert.match(skill, /Launch _Codex_ from this same shell/);
+    assert.match(skill, /No path or credential exports are required/);
+    assert.match(skill, /four tools start even when credentials are absent/);
+    assert.match(skill, /mcp-intelli-search setup/);
+    assert.match(skill, /next tool call reads a new or replacement key without a restart/);
+    assert.match(skill, /XDG_CONFIG_HOME/);
     assert.match(skill, /`Auth: Unsupported` is expected/);
     assert.match(skill, /does not describe the OpenRouter credential/);
     assert.match(skill, /`failed \(0 tools\)` means that startup or initialisation failed/);
-    assert.match(skill, /Check the two path exports first/);
   });
 
   it("makes skill loading and search-first routing visible before setup", () => {
@@ -273,6 +274,7 @@ describe("plugin bundle generation", () => {
         "/abs/vendor/node_modules/@curio-data/mcp-intelli-search/",
       ),
     );
+    assert.deepStrictEqual(codex.args.slice(-2), ["--host", "codex"]);
   });
 });
 

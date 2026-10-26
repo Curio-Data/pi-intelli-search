@@ -5,13 +5,14 @@
       "args": [
         "-y",
         "--package",
-        "@curio-data/mcp-intelli-search@0.19.0",
-        "mcp-intelli-search"
+        "@curio-data/mcp-intelli-search@0.19.1",
+        "mcp-intelli-search",
+        "--host",
+        "codex"
       ],
       "env_vars": [
         "OPENROUTER_API_KEY",
-        "INTELLI_SEARCH_CONFIG",
-        "INTELLI_SEARCH_WORKSPACE"
+        "XDG_CONFIG_HOME"
       ]
     }
   }

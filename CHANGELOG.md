@@ -8,7 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Fixed
 
-- The _Codex_ installation guide now validates the server configuration before launch, requires the same configured shell for startup, and explains why `Auth: Unsupported` is expected while `failed (0 tools)` indicates a startup failure. The generated plugin skill carries the same recovery guidance.
+- The _Codex_ launcher now uses its working root and built-in model defaults without path exports, so a fresh installation exposes all four tools even before credentials are configured. A missing key returns actionable tool-error guidance instead of causing `failed (0 tools)`. `Auth: Unsupported` remains the expected stdio status because MCP OAuth is not used. Legacy `INTELLI_SEARCH_CONFIG` and `INTELLI_SEARCH_WORKSPACE` exports are ignored in Codex mode; move any custom configuration to the per-user default path.
+- A new `mcp-intelli-search setup` command reads an [_OpenRouter_](https://openrouter.ai) key from standard input, creates missing per-user configuration and stores the credential separately with user-only permissions. The next tool call reads a new or replacement key without restart when the loaded configuration selects that path; configuration changes require restart. The canonical installation guide, generated Codex skill and troubleshooting reference document the flow.
 - The standalone dependency lock advances _Zod_ from 4.6.5 to 4.6.7, removing the oversized constrained-collection memory-exhaustion advisory from the production dependency audit.
 
 ## [pi-0.19.0] - 2026-10-17

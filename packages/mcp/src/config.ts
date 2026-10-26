@@ -10,6 +10,7 @@ import type { ModelConfig, ResearchSettings } from "../../../src/core/types.js";
 export interface StandaloneConfig {
   readonly workspace: string;
   readonly apiKeyEnv: string;
+  readonly apiKeyFile?: string;
   readonly settings: DeepReadonly<ResearchSettings>;
 }
 
@@ -244,19 +245,29 @@ export async function resolveWorkspace(workspace: string): Promise<string> {
 
 /** No credential or host-file discovery. Workspace must already exist. */
 export async function parseConfig(value: unknown, workspace: string): Promise<StandaloneConfig> {
-  const { apiKeyEnv, settings } = parseDocument(value);
-  return freeze({ workspace: await resolveWorkspace(workspace), apiKeyEnv, settings });
+  const { apiKeyEnv, apiKeyFile, settings } = parseDocument(value);
+  return freeze({ workspace: await resolveWorkspace(workspace), apiKeyEnv, apiKeyFile, settings });
 }
-function parseDocument(value: unknown): { apiKeyEnv: string; settings: ResearchSettings } {
+function parseDocument(value: unknown): {
+  apiKeyEnv: string;
+  apiKeyFile?: string;
+  settings: ResearchSettings;
+} {
   const root = object(value, "configuration");
   keys(root, ["providers", "models", "tuning"], "configuration");
   const providers = object(root.providers, "providers");
   keys(providers, ["openrouter"], "providers");
   const provider = object(providers.openrouter, "providers.openrouter");
-  keys(provider, ["apiKeyEnv"], "providers.openrouter");
+  keys(provider, ["apiKeyEnv", "apiKeyFile"], "providers.openrouter");
   const apiKeyEnv = text(provider.apiKeyEnv, "providers.openrouter.apiKeyEnv");
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(apiKeyEnv))
     throw new Error("apiKeyEnv must name an environment variable, not contain a credential");
+  const apiKeyFile =
+    provider.apiKeyFile === undefined
+      ? undefined
+      : text(provider.apiKeyFile, "providers.openrouter.apiKeyFile");
+  if (apiKeyFile !== undefined && !isAbsolute(apiKeyFile))
+    throw new Error("apiKeyFile must be an absolute path, not contain a credential");
   const models = object(root.models, "models");
   keys(models, ["search", "extract", "collate"], "models");
   const tuning = root.tuning === undefined ? {} : object(root.tuning, "tuning");
@@ -308,7 +319,7 @@ function parseDocument(value: unknown): { apiKeyEnv: string; settings: ResearchS
     throw new Error(
       "Search requires an explicitly enabled searchWebSearch tool or a supported Sonar search model",
     );
-  return { apiKeyEnv, settings };
+  return { apiKeyEnv, apiKeyFile, settings };
 }
 /**
  * Reads and validates the selected file. File defects (missing, unreadable,
@@ -359,6 +370,7 @@ export async function loadConfig(file: string, workspace: string): Promise<Stand
   return freeze({
     workspace: await resolveWorkspace(workspace),
     apiKeyEnv: parsed.apiKeyEnv,
+    apiKeyFile: parsed.apiKeyFile,
     settings: parsed.settings,
   });
 }

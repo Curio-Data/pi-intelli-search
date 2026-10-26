@@ -149,7 +149,9 @@ export function createOpenRouterClient(
     if (!value || !value.trim() || /\s/.test(value))
       throw new StandaloneError(
         "CONFIGURATION",
-        `Set the credential environment variable ${config.apiKeyEnv} before creating the runtime; restart it after changing credentials`,
+        config.apiKeyFile
+          ? `Set ${config.apiKeyEnv} before launch or supply the key at ${config.apiKeyFile}. mcp-intelli-search setup manages the default per-user configuration; restart after changing loaded configuration`
+          : `Set the credential environment variable ${config.apiKeyEnv} before creating the runtime; restart it after changing credentials`,
       );
     return value;
   }

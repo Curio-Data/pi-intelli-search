@@ -677,6 +677,92 @@ test(
   },
 );
 
+test("Codex host mode lists tools without exports and reports missing credentials on call", { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(scratchParent, "codex-zero-config-"));
+  const workspace = join(dir, "project");
+  mkdirSync(workspace);
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: ["--import", "tsx", cliPath, "--host", "codex"],
+    cwd: workspace,
+    env: {
+      PATH: process.env.PATH as string,
+      HOME: dir,
+      TMPDIR: scratchParent,
+    },
+    stderr: "pipe",
+  });
+  const client = new Client({ name: "codex-zero-config-test", version: "0.0.0" });
+  try {
+    await client.connect(transport);
+    const tools = await client.listTools();
+    assert.deepEqual(
+      tools.tools.map((tool) => tool.name).sort(),
+      ["intelli_collate", "intelli_extract", "intelli_research", "intelli_search"],
+    );
+    const result = await client.callTool({
+      name: "intelli_search",
+      arguments: { query: "test" },
+    });
+    assert.match(errorText(result), /CONFIGURATION.*mcp-intelli-search setup/);
+  } finally {
+    await client.close().catch(() => {});
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("Codex mode serves an actionable workspace error from the home directory", { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(scratchParent, "codex-home-workspace-"));
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: ["--import", "tsx", cliPath, "--host", "codex"],
+    cwd: dir,
+    env: { PATH: process.env.PATH as string, HOME: dir, TMPDIR: scratchParent },
+    stderr: "pipe",
+  });
+  const client = new Client({ name: "codex-home-workspace-test", version: "0.0.0" });
+  try {
+    await client.connect(transport);
+    assert.equal((await client.listTools()).tools.length, 4);
+    const result = await client.callTool({
+      name: "intelli_search",
+      arguments: { query: "test" },
+    });
+    assert.match(errorText(result), /WORKSPACE.*--cd <project>/);
+  } finally {
+    await client.close().catch(() => {});
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("Codex mode connects an existing environment-only default config to setup guidance", { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(scratchParent, "codex-upgrade-"));
+  const configDir = join(dir, ".config", "mcp-intelli-search");
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(join(configDir, "config.json"), JSON.stringify(document()));
+  const workspace = join(dir, "project");
+  mkdirSync(workspace);
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: ["--import", "tsx", cliPath, "--host", "codex"],
+    cwd: workspace,
+    env: { PATH: process.env.PATH as string, HOME: dir, TMPDIR: scratchParent },
+    stderr: "pipe",
+  });
+  const client = new Client({ name: "codex-upgrade-test", version: "0.0.0" });
+  try {
+    await client.connect(transport);
+    const result = await client.callTool({
+      name: "intelli_search",
+      arguments: { query: "test" },
+    });
+    assert.match(errorText(result), /CONFIGURATION.*mcp-intelli-search setup/);
+  } finally {
+    await client.close().catch(() => {});
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("fails startup without explicit configuration, keeping stdout empty", { timeout: 60_000 }, async () => {
   const raw = spawnRaw(["--import", "tsx", cliPath]);
   assert.notEqual(await exitWithin(raw.child, 15_000), 0);

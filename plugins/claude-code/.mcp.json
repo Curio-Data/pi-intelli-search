@@ -5,7 +5,7 @@
       "args": [
         "-y",
         "--package",
-        "@curio-data/mcp-intelli-search@0.19.0",
+        "@curio-data/mcp-intelli-search@0.19.1",
         "mcp-intelli-search"
       ],
       "env": {

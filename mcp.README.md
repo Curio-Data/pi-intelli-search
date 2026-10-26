@@ -43,7 +43,7 @@ Choose the installation route for the host:
 
 The install branches: [`Pi` Native Extension](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#pi-native-extension) and [MCP Server](#mcp-server), with host instructions for [Claude Code](#claude-code), [Codex](#codex) and any [Generic MCP Host](#generic-mcp-host).
 
-The native extension uses `Pi` settings and authentication. The MCP server requires explicit configuration, a per-folder workspace and an environment-supplied inference key; it does not read `Pi` settings or credentials.
+The native extension uses `Pi` settings and authentication. Generic MCP registration requires explicit configuration and a workspace; the Codex launcher supplies project and model defaults. Inference uses an OpenRouter key supplied through the configured environment variable or credential file. The MCP server does not read `Pi` settings or credentials.
 
 ## Contents
 
@@ -100,7 +100,7 @@ The native extension uses `Pi` settings and authentication. The MCP server requi
 - An [OpenRouter API key](https://openrouter.ai/keys) with credit for inference. One key covers all three model roles; charges are separate from the host subscription.
 - An existing project folder for the research cache. The server and host must be able to read the same filesystem.
 
-The server requires an explicit JavaScript Object Notation (JSON) configuration and absolute workspace path. It reads no host credential stores, `Pi` settings or discovered project configuration. Native fetch assets are verified on _Linux_ x86-64; _macOS_ and _Windows_ are not verified. See [Compatibility](#mcp-server-compatibility) for the recorded scope.
+Generic registration requires an explicit JavaScript Object Notation (JSON) configuration and absolute workspace path. The Codex launcher supplies its working root as the workspace and uses documented model defaults when no per-user configuration exists. The server reads no host credential stores, `Pi` settings or discovered project configuration. Native fetch assets are verified on _Linux_ x86-64; _macOS_ and _Windows_ are not verified. See [Compatibility](#mcp-server-compatibility) for the recorded scope.
 
 #### Claude Code
 
@@ -219,26 +219,27 @@ codex plugin marketplace add Curio-Data/pi-intelli-search
 codex plugin add intelli-search --marketplace curio-data-plugins
 ```
 
-Save the [minimal configuration](#create-the-configuration) as `.intelli-search.json` in the project folder and [supply the API key](#supply-the-api-key). From that folder, export the paths and validate the setup in the same shell:
+After installation, open a [_Bash_](https://www.gnu.org/software/bash/) shell in the project folder whose `.search/` directory will hold research results. Store the OpenRouter key with the following commands from the plugin's 0.19 release line. The key travels through standard input, not process arguments or configuration JSON:
 
 ```bash
-export INTELLI_SEARCH_CONFIG="$PWD/.intelli-search.json"
-export INTELLI_SEARCH_WORKSPACE="$PWD"
-npx -y --package @curio-data/mcp-intelli-search \
-  mcp-intelli-search \
-  --config "$INTELLI_SEARCH_CONFIG" \
-  --workspace "$INTELLI_SEARCH_WORKSPACE" \
-  --check-config
+read -r -s -p 'OpenRouter API key: ' OPENROUTER_API_KEY
+printf '\n'
+printf '%s\n' "$OPENROUTER_API_KEY" | \
+  npx -y --package @curio-data/mcp-intelli-search@0.19 \
+  mcp-intelli-search setup
+unset OPENROUTER_API_KEY
 codex
 ```
 
-Launch _Codex_ from this shell. Launching from a different shell, desktop launcher or IDE does not inherit this shell's temporary exports. Codex filters the server environment; the plugin forwards `OPENROUTER_API_KEY`, `INTELLI_SEARCH_CONFIG` and `INTELLI_SEARCH_WORKSPACE` only when they are present in the environment that launches `codex`.
+Setup creates `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search/config.json` when absent and stores the key separately as `openrouter.key` with user-only permissions. Existing model and tuning selections are preserved. Setup adds a missing `apiKeyFile` selection and honours an existing custom credential path.
 
-In the session, ask: “Use intelli_search to find the current TypeScript release and cite the official source.” Confirm a successful MCP tool call and an answer with sources. `codex mcp list` alone does not start the server or prove inference. If the tools are unavailable, the setup is incomplete: an answer from the host's own web search does not show that this server ran.
+The next tool call reads a new or replacement key without a restart when the loaded configuration selects that path. Restart after changing loaded configuration. An exported `OPENROUTER_API_KEY` remains an alternative and takes precedence over the file. Confirm that setup prints `Setup complete.` before starting or using Codex.
 
-The `/mcp` status `Auth: Unsupported` is expected. This stdio server does not use MCP Open Authorization (OAuth); provider authentication uses `OPENROUTER_API_KEY`. The status `failed (0 tools)` instead means that server startup or initialisation failed. Return to the launching shell, confirm all three variables are exported, and run the configuration check above. Missing path variables stop the server before it can expose tools. A missing key does not: it produces a provider authentication error when a tool runs.
+The plugin starts with `--host codex`, uses the Codex working root as its workspace and needs no path or credential exports. Legacy `INTELLI_SEARCH_CONFIG` and `INTELLI_SEARCH_WORKSPACE` exports are ignored in this mode; explicit command-line selections remain available. A home or filesystem-root working directory produces an actionable `WORKSPACE` tool error instead of an accidental shared cache; restart Codex from the project or with `--cd <project>`. Its four tools appear even before setup. A missing key produces an actionable `CONFIGURATION` tool error rather than a server startup failure. Customise the per-user `config.json` to override the documented default models or tuning, then restart Codex.
 
-The installed `intelli-search` skill covers persistent configuration and unattended tool approval; see the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins) for verified host behaviour.
+In the session, ask: “Use intelli_search to find the current TypeScript release and cite the official source.” Confirm a successful MCP tool call and an answer with sources. `codex mcp list` alone does not start the server or prove inference. The `/mcp` status `Auth: Unsupported` is expected because this stdio server does not use the OAuth authorization framework; it does not describe the OpenRouter credential.
+
+The installed `intelli-search` skill covers configuration and unattended tool approval; see the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins) for verified host behaviour.
 
 <a id="route-a-direct-mcp-configuration"></a>
 #### Generic MCP Host
@@ -367,12 +368,11 @@ This reference applies to `@curio-data/mcp-intelli-search` only. Installation ro
 ### Requirements
 
 - [_Node.js_](https://nodejs.org/) satisfying the `engines` range in the [standalone manifest](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/package.json).
-- An existing, explicitly selected absolute workspace directory.
-- An explicitly selected JSON configuration file.
-- A separately billed OpenRouter API key supplied through a named environment variable before constructing the runtime. Restart the runtime after changing credentials; it snapshots the environment.
+- An existing absolute workspace directory and JSON configuration file for generic registration or direct runtime use. Codex mode supplies its workspace and model defaults.
+- A separately billed OpenRouter API key supplied through a named environment variable before constructing the runtime, or through `setup` and a user-only credential file. Environment changes require a runtime restart; each operation rereads the selected credential file, so a new or replacement key takes effect on the next operation.
 - A platform supported by [_wreq-js_](https://github.com/sqdshguy/wreq-js), the browser-fingerprint fetch dependency. The installation gate exercises its native assets on the running platform; it does not establish support for other platforms.
 
-The package neither reads host credential stores nor loads project configuration automatically. Native `Pi` settings, authentication, providers and defaults remain independent.
+The package neither reads host credential stores nor loads project configuration automatically. Codex mode reads only its documented per-user configuration and credential paths. Native `Pi` settings, authentication, providers and defaults remain independent.
 
 ### Verification
 
@@ -388,7 +388,7 @@ Use the same configuration and workspace as the registered server. If a project-
 
 ### Serving the Protocol
 
-An invocation without `--check-config` validates the explicit workspace, then serves the four canonical tools (`intelli_search`, `intelli_extract`, `intelli_collate`, `intelli_research`) over stdio until the input stream closes. An explicitly selected missing, unreadable or invalid configuration file does not prevent connection: each tool call returns an actionable `CONFIGURATION` error, and the server rereads the file on each call until it loads. Repair the file and call again. Once loaded, configuration remains fixed until restart. Missing launcher arguments and invalid workspaces still fail at startup; `--check-config` remains strict. Serving performs no inference at startup; credentials are only required when an operation runs.
+An invocation without `--check-config` validates the selected workspace, then serves the four canonical tools (`intelli_search`, `intelli_extract`, `intelli_collate`, `intelli_research`) over stdio until the input stream closes. An explicitly selected missing, unreadable or invalid configuration file does not prevent connection: each tool call returns an actionable `CONFIGURATION` error, and the server rereads the file on each call until it loads. Repair the file and call again. Once loaded, configuration remains fixed until restart. Generic registration rejects missing launcher arguments and invalid workspaces at startup; `--check-config` remains strict. Codex mode selects its working root and built-in defaults when its per-user configuration is absent. Serving performs no inference at startup; credentials are only required when an operation runs.
 
 - **Registration and Schemas.** Tool names and JSON input schemas mirror the native `Pi` tools verbatim; descriptions adapt the native guidance for protocol clients (host-neutral cache wording, embedded `focusPrompt` and breadth guidance), because the protocol offers no separate guidance channel. Invalid tool arguments are reported as tool errors (`isError` results), matching the software development kit (SDK) distinction between malformed protocol requests and invalid arguments.
 - **Results.** Successful calls return the complete operation text both as text content and as `structuredContent.text`, alongside `outcome` and `details`. Hosts that prefer the structured representation receive the same answer, sources and cache suggestions. The duplication is intentional for host compatibility; a host that forwards both representations can consume extra context. Degraded research (`no-links`, `fetch-failed`, `extraction-failed`) remains a normal result. Execution failures return `isError` results tagged with the safe `StandaloneError` category rather than raw provider causes.
@@ -402,11 +402,11 @@ Startup diagnostics go to standard error. The SDK version range is declared in `
 
 ### Configuration
 
-Select the configuration with `--config FILE` or `INTELLI_SEARCH_CONFIG`. Select the workspace with `--workspace ABSOLUTE_DIRECTORY` or `INTELLI_SEARCH_WORKSPACE`. Command-line values take precedence. Relative workspace paths are rejected; existing workspace symlinks are canonicalised.
+Select the configuration with `--config FILE` or `INTELLI_SEARCH_CONFIG`. Select the workspace with `--workspace ABSOLUTE_DIRECTORY` or `INTELLI_SEARCH_WORKSPACE`. Command-line values take precedence. Relative workspace paths are rejected; existing workspace symlinks are canonicalised. `--host codex` instead selects the working root and `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search/config.json`; explicit selections still take precedence.
 
-The [minimal configuration](#create-the-configuration) explicitly selects OpenRouter for every role; add an optional `tuning` object (for example `"cacheDir": ".search"`) beside `providers` and `models`. These are example selections, not standalone defaults.
+The [minimal configuration](#create-the-configuration) explicitly selects OpenRouter for every role; add an optional `tuning` object (for example `"cacheDir": ".search"`) beside `providers` and `models`. Generic registration has no model defaults. Codex mode uses `perplexity/sonar` for search and `minimax/minimax-m3` for extraction and collation when no per-user file exists.
 
-Only `providers`, `models` and optional `tuning` are accepted at the top level. All three model roles are required. The provider object accepts only `apiKeyEnv`, an environment-variable name rather than a key value. The initial provider scope is OpenRouter at its fixed `https://openrouter.ai/api/v1` endpoint; custom endpoints, proxy settings, provider fallback and dynamic router model identifiers are not accepted.
+Only `providers`, `models` and optional `tuning` are accepted at the top level. All three model roles are required in a configuration file. The provider object accepts `apiKeyEnv`, an environment-variable name rather than a key value, and optional `apiKeyFile`, an absolute path to a separately stored key. The environment variable takes precedence. Setup writes the key with user-only permissions; each file read rejects symbolic links, hard links, other owners and group or world access on platforms with POSIX permissions. Setup manages the default per-user configuration. For a separately selected generic configuration, set `providers.openrouter.apiKeyFile` to the credential path printed by setup and restart after changing loaded configuration. The initial provider scope is OpenRouter at its fixed `https://openrouter.ai/api/v1` endpoint; custom endpoints, proxy settings, provider fallback and dynamic router model identifiers are not accepted.
 
 Configuration loading does not require working credentials. Each operation validates its required model roles against OpenRouter's model catalogue before inference. Full research validates all three roles first. Validation checks exact identifiers, text input/output, advertised reasoning efforts when supplied, and tool support for an enabled search tool. Catalogue lookup is bounded and cancellable. It establishes advertised capabilities, not account credit, per-key model access or future provider availability; inference errors remain possible.
 
@@ -517,9 +517,9 @@ Every startup failure is diagnostic-only and lands on standard error; standard o
 | Configuration rejected with an unknown-key or range error | The loader is strict: unknown keys, invalid types and out-of-range values fail validation. Correct the configuration and call again if it has not yet loaded. The [Tuning](#tuning) table lists accepted keys and ranges. |
 | Tools never appear in the host | Check absent launcher arguments, an unusable workspace or an unsafe cache. Read the host's MCP server logs for the standard-error diagnostic. Claude Code can cache a startup failure from an older server: try `/mcp` reconnect, then restart ([evidence and limits](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#claude-code-evidence-and-limits)). A connected server still needs a successful tool call to verify inference. |
 | `CONFIGURATION` persists after the file is repaired | A file that has not yet loaded is reread on the next call; once loaded, configuration changes require a restart. |
-| Diagnostic names a missing credential environment variable | Supply the named variable through the host's supported credential mechanism and restart. The server snapshots credentials at startup. |
+| Diagnostic names a missing credential environment variable | Supply the named variable before host launch. Codex users can instead run `mcp-intelli-search setup` with the key on standard input. For a separately selected configuration, set `providers.openrouter.apiKeyFile` to the printed credential path. Environment or loaded-configuration changes require restart; file credentials are reread on each call. |
 | Catalogue preflight names a model role or capability | Correct the model identifier or required capabilities using [Configuration](#configuration). Read the diagnostic; catalogue lookup failures are not proof of invalid credentials. Restart after changing loaded model selections. |
-| `PROVIDER` reports authentication, access, credit or transport failure | Follow the specific diagnostic: check credentials, model access, account credit or connectivity. Restart after changing credentials. The category alone does not identify a rejected key. |
+| `PROVIDER` reports authentication, access, credit or transport failure | Follow the specific diagnostic: check credentials, model access, account credit or connectivity. Restart after changing an environment credential. For the default Codex configuration, replace a stored key with `setup` and call again. For a separately selected configuration, replace the file named by `providers.openrouter.apiKeyFile`, or select setup's printed path and restart. The category alone does not identify a rejected key. |
 | Repeated `429` retries | Tune pacing to observed account/provider limits. For an observed limit of approximately 0.33 requests per second, try `minRequestIntervalMs: 3000` and `extractionConcurrency: 2`; adjust retry attempts as needed. Raise `llmTimeoutMs` only when its model-call timer expires. |
 | Cache paths unreadable from the host | The host must share the server's filesystem. Sandboxed or remote hosts cannot read local cache paths; run the server where the host can read the workspace. |
 
