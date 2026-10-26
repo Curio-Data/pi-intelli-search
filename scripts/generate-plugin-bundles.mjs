@@ -102,7 +102,11 @@ export function launcherFor(host, mode, mcpPkg, codexVendorDir) {
     }
     return {
       command: "node",
-      args: [`${codexVendorDir}/node_modules/@curio-data/mcp-intelli-search/dist/cli.js`],
+      args: [
+        `${codexVendorDir}/node_modules/@curio-data/mcp-intelli-search/dist/cli.js`,
+        "--host",
+        "codex",
+      ],
     };
   }
   return {
@@ -112,6 +116,7 @@ export function launcherFor(host, mode, mcpPkg, codexVendorDir) {
       "--package",
       `${mcpPkg.name}@${mcpPkg.version}`,
       "mcp-intelli-search",
+      ...(host === "codex" ? ["--host", "codex"] : []),
     ],
   };
 }
@@ -235,11 +240,7 @@ export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT)
       [SERVER_NAME]: {
         command: codexLauncher.command,
         args: codexLauncher.args,
-        env_vars: [
-          "OPENROUTER_API_KEY",
-          "INTELLI_SEARCH_CONFIG",
-          "INTELLI_SEARCH_WORKSPACE",
-        ],
+        env_vars: ["OPENROUTER_API_KEY", "XDG_CONFIG_HOME"],
       },
     },
   };

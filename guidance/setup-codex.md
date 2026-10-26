@@ -1,68 +1,31 @@
 ## Setup (One Time)
 
-The plugin launches the pinned `@curio-data/mcp-intelli-search` package through `npx`. The first start downloads the package, so it needs network access and can take half a minute; later starts reuse the `npx` cache. [Node.js](https://nodejs.org/) 22 or later must be on `PATH`.
+The plugin launches the pinned `@curio-data/mcp-intelli-search` package through `npx` with `--host codex`. The first start downloads the package, so it needs network access and can take half a minute; later starts reuse the `npx` cache. [_Node.js_](https://nodejs.org/) 22 or later must be on `PATH`.
 
-[_Codex_](https://developers.openai.com/codex/plugins) starts plugin MCP servers with a filtered environment: arbitrary parent variables are not inherited and plugin MCP configuration performs no placeholder expansion (verified on the command-line interface (CLI) version 0.144.5). The plugin therefore declares `env_vars` so Codex forwards three named variables from the shell that launches `codex`:
+No path or credential exports are required. The server uses the [_Codex_](https://developers.openai.com/codex/plugins) working root as its workspace and writes research cache below it. Launch Codex from the project folder or use its `--cd` option. Without a configuration file, Codex mode selects `perplexity/sonar` for search and `minimax/minimax-m3` for extraction and collation. Its four tools start even when credentials are absent.
 
-- `OPENROUTER_API_KEY`: the [OpenRouter](https://openrouter.ai) application programming interface (API) key. One key covers all three pipeline stages.
-- `INTELLI_SEARCH_CONFIG`: absolute path of the configuration file.
-- `INTELLI_SEARCH_WORKSPACE`: absolute path of the workspace; the default research cache is its `.search/` subdirectory.
-
-Supply the key at launch from a secret manager, or enter it at a hidden [_Bash_](https://www.gnu.org/software/bash/) prompt. Do not store a literal key in a shell profile or command history:
+From the project folder in [_Bash_](https://www.gnu.org/software/bash/), store the [OpenRouter](https://openrouter.ai) application programming interface (API) key through the setup command. Enter it at a hidden prompt and pipe it through standard input. Do not put the key in process arguments, shell history or configuration JSON. Use setup from the plugin's 0.19 release line:
 
 ```bash
 read -r -s -p 'OpenRouter API key: ' OPENROUTER_API_KEY
 printf '\n'
-export OPENROUTER_API_KEY
-export INTELLI_SEARCH_CONFIG="$HOME/.config/mcp-intelli-search/config.json"
-export INTELLI_SEARCH_WORKSPACE="$PWD"
+printf '%s\n' "$OPENROUTER_API_KEY" | \
+  npx -y --package @curio-data/mcp-intelli-search@0.19 \
+  mcp-intelli-search setup
+unset OPENROUTER_API_KEY
 ```
 
-Launch _Codex_ from this same shell. Launching from a different shell, desktop launcher or IDE does not inherit this shell's temporary exports.
+Setup creates `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search/config.json` when absent and stores the key separately as `openrouter.key` with user-only permissions. Existing model and tuning selections are preserved. Setup adds a missing `apiKeyFile` selection and honours an existing custom credential path.
 
-The snippet exports the launch directory as the workspace. For a stable per-project cache regardless of launch directory, set `INTELLI_SEARCH_WORKSPACE` to the project directory through `direnv` or another per-directory mechanism.
+The next tool call reads a new or replacement key without a restart when the loaded configuration selects that path. Restart after changing loaded configuration. An `OPENROUTER_API_KEY` exported before _Codex_ launches remains an alternative and takes precedence over the file; the plugin forwards that variable and `XDG_CONFIG_HOME`. Confirm that setup prints `Setup complete.` before starting or using _Codex_. Codex mode ignores legacy `INTELLI_SEARCH_CONFIG` and `INTELLI_SEARCH_WORKSPACE` exports; explicit command-line selections remain available. A home or filesystem-root working directory produces an actionable `WORKSPACE` tool error instead of an accidental shared cache; restart _Codex_ from the project or with `--cd <project>`.
 
-Create the parent directory and workspace, then save the following JavaScript Object Notation (JSON) configuration to `$INTELLI_SEARCH_CONFIG`:
+Edit the per-user `config.json` to override models or tuning. Custom models must pass catalogue validation for the required roles and be accessible to the configured account. Search requires a supported Sonar model or a tool-capable chat model with `searchWebSearch` enabled. This is the same explicit JSON format used by generic registration, with `providers.openrouter.apiKeyFile` set to the credential path. Configuration changes require a restart. See [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#tuning) in the standalone guide.
 
-```bash
-mkdir -p "$(dirname "$INTELLI_SEARCH_CONFIG")" "$INTELLI_SEARCH_WORKSPACE"
-```
-
-```json
-{
-  "providers": {
-    "openrouter": {
-      "apiKeyEnv": "OPENROUTER_API_KEY"
-    }
-  },
-  "models": {
-    "search": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "extract": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m3"
-    },
-    "collate": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m3"
-    }
-  }
-}
-```
-
-These are explicit selections, not inherited defaults. Select OpenRouter models that pass catalogue validation for the required roles and are accessible to the configured account. Search requires `perplexity/sonar`, `perplexity/sonar-pro` or `perplexity/sonar-pro-search`, or a chat model with advertised tool support and an enabled `searchWebSearch` block. See [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/README.md#tuning) in the standalone guide.
-
-If either path selection (`INTELLI_SEARCH_CONFIG` or `INTELLI_SEARCH_WORKSPACE`) is missing, the server exits on startup with `Explicit --config and --workspace are required` on standard error and the tools never appear. Supply both paths and restart _Codex_ from that shell. A missing or invalid selected configuration file does not stop connection. Each tool call reports a `CONFIGURATION` error naming the file; repair it and call again. The server rereads it until it loads successfully, then keeps it until restart.
-
-The `/mcp` status `Auth: Unsupported` is expected for this stdio server. It means that MCP Open Authorization (OAuth) is not used; it does not describe the OpenRouter credential. The status `failed (0 tools)` means that startup or initialisation failed. Check the two path exports first.
-
-A missing `OPENROUTER_API_KEY` is different: credentials are validated when an operation runs, not at server startup. Export the key and restart the host so the server receives the updated environment. Host forwarding behaviour is recorded for Codex CLI 0.144.5 in the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins).
+The `/mcp` status `Auth: Unsupported` is expected for this stdio server. It means that the OAuth authorization framework is not used; it does not describe the OpenRouter credential. The status `failed (0 tools)` means that startup or initialisation failed, not that the key is missing. A missing key instead produces an actionable `CONFIGURATION` tool result naming `mcp-intelli-search setup`.
 
 ### Verify Inference
 
-Start Codex from the configured shell and request a quick search with the exposed `intelli_search` tool. Confirm an actual MCP tool call and an answer with sources. `codex mcp list` only lists configuration and does not prove server startup or provider access. If these tools are unavailable, report that setup is incomplete; do not claim to have used this server while answering through built-in web search.
+Start _Codex_ normally and request a quick search with the exposed `intelli_search` tool. Confirm an actual MCP tool call and an answer with sources. `codex mcp list` only lists configuration and does not prove server startup or provider access. If these tools are unavailable, report that setup is incomplete; do not claim to have used this server while answering through built-in web search.
 
 ### Unattended Runs
 
@@ -73,4 +36,4 @@ Interactive sessions ask before each research tool call. Non-interactive `codex 
 default_tools_approval_mode = "approve"
 ```
 
-Recorded on Codex CLI 0.144.5.
+See the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins) for the host versions and evidence classes.

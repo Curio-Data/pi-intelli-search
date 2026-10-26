@@ -35,6 +35,7 @@ import { assertWorkspaceSafe, workspacePaths } from "./workspace.js";
 import { identity } from "./identity.js";
 import { withStandaloneStdout } from "./console.js";
 import { StandaloneError, type StandaloneErrorCode } from "./errors.js";
+import { resolveCredential } from "./host.js";
 
 export { loadConfig, parseConfig, identity, StandaloneError, ConfigurationError };
 export type { StandaloneConfig };
@@ -105,8 +106,13 @@ export interface ExecuteOptions {
 export async function createRuntime(config: StandaloneConfig, options: RuntimeOptions = {}) {
   const paths = await workspacePaths(config.workspace, config.settings.cacheDir);
   const env = { ...(options.env ?? process.env) };
-  const secret = env[config.apiKeyEnv];
-  const redact = (message: string) => (secret ? message.split(secret).join("[REDACTED]") : message);
+  const secrets = new Set<string>();
+  if (env[config.apiKeyEnv]) secrets.add(env[config.apiKeyEnv] as string);
+  const redact = (message: string) => {
+    let redacted = message;
+    for (const secret of secrets) if (secret) redacted = redacted.split(secret).join("[REDACTED]");
+    return redacted;
+  };
   const sink = options.logger ?? stderrLogger;
   const logger: OperationLogger = {
     error: (message) => sink.error(redact(message)),
@@ -139,10 +145,17 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
         throwIfAborted(execution.signal);
         category = "WORKSPACE";
         await assertWorkspaceSafe(paths, execution.signal);
+        category = "CONFIGURATION";
+        const operationEnv = { ...env };
+        const credential = await resolveCredential(config, operationEnv);
+        if (credential) {
+          operationEnv[config.apiKeyEnv] = credential;
+          secrets.add(credential);
+        }
         // Per-operation credentials/catalogue/citation state, never a shared mutable host context.
         const models = createOpenRouterClient(config, {
           fetch: options.fetch,
-          env,
+          env: operationEnv,
           logger,
           signal: execution.signal,
         });

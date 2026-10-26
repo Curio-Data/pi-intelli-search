@@ -162,31 +162,6 @@ else
   exit 1
 fi
 
-# Codex forwards only the env_vars the plugin names, as the skill instructs.
-CONFIG_JSON="$E2E_ROOT/config.json"
-cat > "$CONFIG_JSON" <<'EOF'
-{
-  "providers": {
-    "openrouter": {
-      "apiKeyEnv": "OPENROUTER_API_KEY"
-    }
-  },
-  "models": {
-    "search": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "extract": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m3"
-    },
-    "collate": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m3"
-    }
-  }
-}
-EOF
 # Unattended runs must pre-approve the plugin's tools: in `codex exec`, a
 # tool that would prompt is cancelled ("user cancelled MCP tool call").
 cat >> "$CODEX_HOME/config.toml" <<'EOF'
@@ -196,10 +171,35 @@ default_tools_approval_mode = "approve"
 EOF
 ok "plugin tools pre-approved for unattended exec"
 
-export OPENROUTER_API_KEY
-export INTELLI_SEARCH_CONFIG="$CONFIG_JSON"
-export INTELLI_SEARCH_WORKSPACE="$WORKSPACE"
-ok "forwarded variables exported as the skill instructs"
+# A fresh plugin needs no path or key exports to start and expose tools. The
+# missing-credential error is a tool result, not a server startup failure.
+SETUP_HOME="$E2E_ROOT/home"
+SETUP_XDG="$E2E_ROOT/xdg"
+VENDORED_CLI="$WORK/plugins/codex/vendor/node_modules/@curio-data/mcp-intelli-search/dist/cli.js"
+mkdir -p "$SETUP_HOME"
+FRESH_EVENTS="$E2E_ROOT/fresh-events.jsonl"
+(cd "$WORKSPACE" && env -u OPENROUTER_API_KEY -u INTELLI_SEARCH_CONFIG -u INTELLI_SEARCH_WORKSPACE -u XDG_CONFIG_HOME \
+  HOME="$SETUP_HOME" CODEX_HOME="$CODEX_HOME" \
+  timeout --foreground "${E2E_TIMEOUT_SECONDS}s" codex exec \
+  --json --ephemeral --skip-git-repo-check --strict-config --sandbox read-only \
+  -c approval_policy='"never"' \
+  'Call the intelli_search MCP tool once with query "test". Report its error category.' \
+  < /dev/null > "$FRESH_EVENTS" 2> "$E2E_ROOT/fresh-stderr.txt") || true
+if jq -e 'select(.type == "item.completed" and .item.type == "mcp_tool_call" and .item.server == "intelli_search" and .item.tool == "intelli_search") | .item.result.content[]?.text | select(contains("CONFIGURATION") and contains("mcp-intelli-search setup"))' \
+  "$FRESH_EVENTS" >/dev/null 2>&1; then
+  ok "fresh Codex session lists and calls tools without environment exports"
+else
+  echo "❌ fresh zero-configuration session did not return the expected credential guidance"
+  jq -c 'select(.type == "item.completed" and (.item.type == "mcp_tool_call" or .item.type == "agent_message"))' "$FRESH_EVENTS" | tail -8
+  exit 1
+fi
+
+# Persistent setup receives the secret only over stdin. The live session
+# deliberately unsets every formerly required variable before launch.
+printf '%s\n' "$OPENROUTER_API_KEY" | HOME="$SETUP_HOME" XDG_CONFIG_HOME="$SETUP_XDG" \
+  node "$VENDORED_CLI" setup >/dev/null
+ok "persistent setup stored the credential outside configuration"
+unset OPENROUTER_API_KEY INTELLI_SEARCH_CONFIG INTELLI_SEARCH_WORKSPACE
 
 # ── Live session ───────────────────────────────────────────────────
 TOOL="mcp__intelli_search__intelli_research"
@@ -216,7 +216,9 @@ completed_sidecar() {
     -exec jq -c 'select(.outcome == "completed")' {} + 2>/dev/null | rg -q .
 }
 for ATTEMPT in 1 2; do
-  (cd "$WORKSPACE" && timeout --foreground "${E2E_TIMEOUT_SECONDS}s" codex exec \
+  (cd "$E2E_ROOT" && env -u OPENROUTER_API_KEY -u INTELLI_SEARCH_CONFIG -u INTELLI_SEARCH_WORKSPACE \
+    HOME="$SETUP_HOME" XDG_CONFIG_HOME="$SETUP_XDG" CODEX_HOME="$CODEX_HOME" \
+    timeout --foreground "${E2E_TIMEOUT_SECONDS}s" codex exec --cd "$WORKSPACE" \
       --json --ephemeral --skip-git-repo-check --strict-config \
       --sandbox read-only \
       -c approval_policy='"never"' \
@@ -250,7 +252,7 @@ fi
 
 CACHE_DIR="$(find "$WORKSPACE/.search" -maxdepth 1 -mindepth 1 -type d -name '20*' 2>/dev/null | head -n 1 || true)"
 if [ -n "$CACHE_DIR" ] && [ -f "$CACHE_DIR/report.md" ] && [ -f "$CACHE_DIR/meta.json" ]; then
-  ok "cache written in the forwarded workspace: ${CACHE_DIR#"$E2E_ROOT"/}"
+  ok "cache written in the selected Codex working root: ${CACHE_DIR#"$E2E_ROOT"/}"
 else
   bad "missing cache artifacts under the workspace's .search/"
 fi
@@ -264,9 +266,9 @@ fi
 
 # ── Credential hygiene ─────────────────────────────────────────────
 if [[ "$(stat -c %Y "$OPERATOR_AUTH" 2>/dev/null || echo absent)" == "$OPERATOR_MTIME" ]]; then
-  ok "operator ~/.codex/auth.json untouched"
+  ok "operator ~/.codex/auth.json modification time unchanged"
 else
-  bad "operator ~/.codex/auth.json changed during the run"
+  bad "operator ~/.codex/auth.json modification time changed during the run"
 fi
 
 echo
