@@ -12,7 +12,7 @@
 // provenance.json beside it. It downloads registry packages only; install
 // scripts are not run. `run` executes test/native-floor-qualification.test.ts
 // against that install with private HOME/agent/TMPDIR and every API key
-// variable removed. Neither command makes an inference or page request.
+// variable removed; a missing floor install fails rather than skips. Neither command makes an inference or page request.
 
 import { spawnSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -73,7 +73,7 @@ function run(): void {
     ["--import", "tsx", "--test", "test/native-floor-qualification.test.ts"],
     {
       cwd: REPO_ROOT,
-      env: privateEnv({ PI_CODING_AGENT_DIR: join(scratch, "agent") }),
+      env: privateEnv({ PI_CODING_AGENT_DIR: join(scratch, "agent"), NATIVE_FLOOR_REQUIRED: "1" }),
       stdio: "inherit",
     },
   );
