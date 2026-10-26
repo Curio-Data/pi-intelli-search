@@ -205,6 +205,15 @@ describe("plugin bundle generation", () => {
     }
   });
 
+  it("explains Codex startup status and same-shell environment setup", () => {
+    const skill = files["plugins/codex/skills/intelli-search/SKILL.md"];
+    assert.match(skill, /Launch _Codex_ from this same shell/);
+    assert.match(skill, /`Auth: Unsupported` is expected/);
+    assert.match(skill, /does not describe the OpenRouter credential/);
+    assert.match(skill, /`failed \(0 tools\)` means that startup or initialisation failed/);
+    assert.match(skill, /Check the two path exports first/);
+  });
+
   it("makes skill loading and search-first routing visible before setup", () => {
     for (const host of ["claude-code", "codex"]) {
       const skill = files[`plugins/${host}/skills/intelli-search/SKILL.md`];

@@ -219,17 +219,26 @@ codex plugin marketplace add Curio-Data/pi-intelli-search
 codex plugin add intelli-search --marketplace curio-data-plugins
 ```
 
-Save the [minimal configuration](#create-the-configuration) as `.intelli-search.json` in the project folder and [supply the API key](#supply-the-api-key). From that folder, export the paths before launching Codex:
+Save the [minimal configuration](#create-the-configuration) as `.intelli-search.json` in the project folder and [supply the API key](#supply-the-api-key). From that folder, export the paths and validate the setup in the same shell:
 
 ```bash
 export INTELLI_SEARCH_CONFIG="$PWD/.intelli-search.json"
 export INTELLI_SEARCH_WORKSPACE="$PWD"
+npx -y --package @curio-data/mcp-intelli-search \
+  mcp-intelli-search \
+  --config "$INTELLI_SEARCH_CONFIG" \
+  --workspace "$INTELLI_SEARCH_WORKSPACE" \
+  --check-config
 codex
 ```
 
+Launch _Codex_ from this shell. Launching from a different shell, desktop launcher or IDE does not inherit this shell's temporary exports. Codex filters the server environment; the plugin forwards `OPENROUTER_API_KEY`, `INTELLI_SEARCH_CONFIG` and `INTELLI_SEARCH_WORKSPACE` only when they are present in the environment that launches `codex`.
+
 In the session, ask: “Use intelli_search to find the current TypeScript release and cite the official source.” Confirm a successful MCP tool call and an answer with sources. `codex mcp list` alone does not start the server or prove inference. If the tools are unavailable, the setup is incomplete: an answer from the host's own web search does not show that this server ran.
 
-Codex filters the server environment; the plugin forwards `OPENROUTER_API_KEY`, `INTELLI_SEARCH_CONFIG` and `INTELLI_SEARCH_WORKSPACE` explicitly. Set all three before each launch. The installed `intelli-search` skill covers persistent configuration and unattended tool approval; see the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins) for verified host behaviour.
+The `/mcp` status `Auth: Unsupported` is expected. This stdio server does not use MCP Open Authorization (OAuth); provider authentication uses `OPENROUTER_API_KEY`. The status `failed (0 tools)` instead means that server startup or initialisation failed. Return to the launching shell, confirm all three variables are exported, and run the configuration check above. Missing path variables stop the server before it can expose tools. A missing key does not: it produces a provider authentication error when a tool runs.
+
+The installed `intelli-search` skill covers persistent configuration and unattended tool approval; see the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins) for verified host behaviour.
 
 <a id="route-a-direct-mcp-configuration"></a>
 #### Generic MCP Host
