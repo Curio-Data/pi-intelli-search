@@ -35,6 +35,11 @@
 // the session-event shapes; only the skipped envelope records differ.
 
 import { asJson, canonicalJson, sha256Canonical } from "./canonical.js";
+import {
+  readMainUsageEvidenceV2,
+  tokensFromWireEvidence,
+  type MainUsageEvidenceV2Record,
+} from "./main-usage-evidence.js";
 import type { AccountingSummary, Json, ParsedUsage, TokenObservation } from "./contracts.js";
 
 interface AssistantObservation {
@@ -60,6 +65,40 @@ export function mainUsageEvidence(message: Json, observed: boolean): Json {
     messageSha256: sha256Canonical(message),
     observed,
   };
+}
+
+/** Folded schemaVersion 2 evidence for one canonical message hash. */
+interface V2EvidenceFold {
+  readonly status: "agreed" | "conflict";
+  readonly record?: MainUsageEvidenceV2Record;
+}
+
+/**
+ * Two v2 records agree when their usage claims match exactly: the tri-state
+ * `usageObserved`, the asserted api/source/cost and every wire field
+ * position (null vs value). Diagnostic fields (uncorrelated id lists,
+ * request-window counts) may differ without conflict. Disagreement folds to
+ * `conflict`, which the parser treats as unobserved, mirroring the v1 rule
+ * that conflicting evidence cannot turn an unknown observation into a known
+ * zero.
+ */
+function v2RecordsAgree(a: MainUsageEvidenceV2Record, b: MainUsageEvidenceV2Record): boolean {
+  if (a.usageObserved !== b.usageObserved) return false;
+  if (a.usageObserved === null) return true; // both make no claim
+  if (a.ambiguous !== b.ambiguous) return false;
+  if (a.usageSource !== b.usageSource || a.wireCostTotal !== b.wireCostTotal) return false;
+  const fa = a.fields;
+  const fb = b.fields;
+  if ((fa === null) !== (fb === null)) return false;
+  if (fa === null || fb === null) return true;
+  return (
+    fa.inputTokens === fb.inputTokens &&
+    fa.cachedTokens === fb.cachedTokens &&
+    fa.cacheWriteTokens === fb.cacheWriteTokens &&
+    fa.outputTokens === fb.outputTokens &&
+    fa.reasoningTokens === fb.reasoningTokens &&
+    fa.totalTokens === fb.totalTokens
+  );
 }
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
@@ -354,7 +393,17 @@ export function parseUsageEvents(events: readonly Json[], mode: "json" | "rpc"):
   const toolById = new Map<string, ToolObservation>();
   const toolOrder: string[] = [];
   const mainEvidence = new Map<string, boolean>();
+  const v2Evidence = new Map<string, V2EvidenceFold>();
   for (const event of events) {
+    const v2 = readMainUsageEvidenceV2(event);
+    if (v2 !== null) {
+      const hash = v2.messageSha256;
+      const existing = v2Evidence.get(hash);
+      if (existing === undefined) v2Evidence.set(hash, { status: "agreed", record: v2 });
+      else if (existing.status === "agreed" && existing.record !== undefined && !v2RecordsAgree(existing.record, v2))
+        v2Evidence.set(hash, { status: "conflict" });
+      continue;
+    }
     if (
       !isJsonObject(event) ||
       event["type"] !== MAIN_USAGE_EVIDENCE_TYPE ||
@@ -383,17 +432,44 @@ export function parseUsageEvents(events: readonly Json[], mode: "json" | "rpc"):
       const existing = assistantSeen.get(canonical);
       if (existing !== undefined) continue; // exact duplicate finalised message
       const candidate = tokensFromWireUsage(message["usage"]);
-      const observed = mainEvidence.get(sha256Canonical(asJson(message)));
-      // SDKs initialise required usage fields to zero when the provider sends
-      // no usage. Without a correlated wire-presence witness, all-zero SDK
-      // usage is ambiguous and must not become a zero-token H1 observation.
-      const usage =
-        observed === false ||
-        (observed !== true &&
-          candidate !== null &&
-          Object.values(candidate).every((value) => value === 0))
-          ? null
-          : candidate;
+      const hash = sha256Canonical(asJson(message));
+      const v1Observed = mainEvidence.get(hash);
+      const v2 = v2Evidence.get(hash);
+      // A schemaVersion 2 witness carries per-field wire presence. When it
+      // asserts an observation (and v1 evidence, if present, does not
+      // contradict it), the canonical tokens come from the wire fields:
+      // wire-explicit zeros are values, wire-absent fields stay unknown. A
+      // v2 record that asserts no usage (`usageObserved: false`), a folded
+      // conflict, or a v1/v2 disagreement fails closed to an unobserved null,
+      // mirroring the v1 conflicting-evidence rule. Ambiguous or unmatched
+      // v2 records make no claim and leave the v1/SDK path intact.
+      const v2Asserts =
+        v2 !== undefined &&
+        v2.status === "agreed" &&
+        v2.record !== undefined &&
+        !v2.record.ambiguous &&
+        v2.record.usageObserved === true &&
+        v1Observed !== false;
+      const v2Unobserved =
+        v2 !== undefined &&
+        (v2.status === "conflict" || (v2.record !== undefined && v2.record.usageObserved === false));
+      let usage: TokenObservation | null;
+      if (v2Asserts && v2.record !== undefined) {
+        usage = tokensFromWireEvidence(v2.record);
+      } else if (v2Unobserved) {
+        usage = null;
+      } else {
+        // SDKs initialise required usage fields to zero when the provider sends
+        // no usage. Without a correlated wire-presence witness, all-zero SDK
+        // usage is ambiguous and must not become a zero-token H1 observation.
+        usage =
+          v1Observed === false ||
+          (v1Observed !== true &&
+            candidate !== null &&
+            Object.values(candidate).every((value) => value === 0))
+            ? null
+            : candidate;
+      }
       const observation: AssistantObservation = { id: assistantId(message, usedIds), usage };
       assistantSeen.set(canonical, observation);
       assistantMessages.push(observation);
