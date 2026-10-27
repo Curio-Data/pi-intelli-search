@@ -46,6 +46,18 @@ for (const alias of ["prompt_cache_hit_tokens", "cached_tokens"]) {
   });
 }
 
+it("T16 unsupported response usage keeps input missing even when its catalogue estimate is nonzero", () => {
+  for (const event of [undefined, { type: "response.completed", response: { usage: { input_tokens: 7, output_tokens: 3 } } }]) {
+    const capture = createNativeUsageCapture();
+    if (event) capture.chunk(event);
+    const observation = capture.observation({ input: 7, output: 3, cacheRead: 0, cacheWrite: 0,
+      cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 } });
+    assert.deepEqual(observation?.tokens, { outputTotal: 3 });
+    assert.equal(observation?.costBasis, "catalogue");
+    assert.equal(observation?.cost?.input, 0.01);
+  }
+});
+
 it("T16 provider usage snapshots remain cumulative replacements, not sums or field merges", () => {
   const capture = createNativeUsageCapture();
   capture.chunk({

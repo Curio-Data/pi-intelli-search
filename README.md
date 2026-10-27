@@ -13,7 +13,7 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1434%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1472%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -1253,6 +1253,7 @@ To suppress the sidecar in the MCP server, set `"disableTelemetry": true` inside
 
 - **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. The full paced live suite passed on the merged floor-modernisation generation (2026-10-08), including research on the floor host and `Pi` 1.1.0; the [compatibility matrix](docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball checks from registry-pin verification.
 - **`Pi` 1.2.0 Verification:** A static interface audit and targeted native and MCP-client research checks are recorded on 2026-10-13, followed by the [complete paced candidate suite](docs/COMPATIBILITY.md#0180-candidate-verification-2026-10-13). The peer floor and model defaults are unchanged. This is local-candidate evidence, not installation of the published candidate. OpenRouter's per-key catalogue does not remove the extension's unconditional `models.json` registrations, which do not grant account access. See [audit evidence and limits](docs/COMPATIBILITY.md#pi-120-verification-2026-10-13).
+- **Partial Accounting:** When a host or provider does not expose usable response usage, successful calls can report partial token observations. Required numeric host fields use zero placeholders for unknown components, so input tokens can read zero while the catalogue-based input cost estimate is nonzero. On `Pi` 0.86.0, a dispatched failure delivers error text without structured details or numeric usage. Those missing fields do not establish zero charges or complete session totals.
 - User interface (UI) notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, remote procedure call (RPC)).
 - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
 - Retry and timeout are owned by the shared model policy, invoked by native `callLlm()`, independently of `Pi`'s `retry.provider.maxRetries`. Native calls force SDK `maxRetries: 0`. Configured backoff and application timeout apply inside `intelli_research`; the three standalone tools retain their one-attempt, no-application-timeout behaviour.
@@ -1276,10 +1277,14 @@ For the standalone MCP server and host plugins, including exact tested versions 
 npm install
 npm run build        # TypeScript -> dist/
 npm test             # Native unit tests
-npm run test:all     # Both packages; aggregate shown in the badge
+npm run test:all     # Default population; aggregate shown in the badge
 npm run build:all    # Native build, standalone type check and bundles
 npm run test:mcp:install # Independent standalone install/fetch gate
 npm run test:smoke   # Smoke test
+
+# Credential-free floor qualification, separate from live scenario 15
+node --import tsx scripts/qualify-native-floor.mts install
+npm run qualify:native-floor
 
 # Test in pi
 pi -e ./dist/index.js

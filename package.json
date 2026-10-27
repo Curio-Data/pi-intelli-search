@@ -43,6 +43,7 @@
     "dev": "tsc --watch",
     "test": "node scripts/run-tests.mjs native",
     "test:smoke": "node scripts/run-tests.mjs smoke",
+    "qualify:native-floor": "node --import tsx scripts/qualify-native-floor.mts run",
     "chart": "node scripts/plot-downloads.mts",
     "prepublishOnly": "node scripts/generate-package-readmes.mjs --publish-native"
   },
@@ -62,6 +63,12 @@
     "tsx": "^4.19.0",
     "typebox": "*",
     "typescript": "^5.7.0"
+  },
+  "overrides": {
+    "@earendil-works/pi-coding-agent": {
+      "undici": "8.12.2"
+    },
+    "zod": "^4.6.6"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.86.0",

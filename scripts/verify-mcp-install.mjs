@@ -160,6 +160,29 @@ try {
   const evidence = JSON.parse(result.stdout);
   assert.equal(evidence.outcome, "completed");
   await copyFile(
+    join(root, "test/probes/mcp-provider-security.mjs"),
+    join(dir, "provider-security-probe.mjs"),
+  );
+  const providerSecurity = await run(
+    process.execPath,
+    ["provider-security-probe.mjs"],
+    dir,
+    isolated,
+  );
+  assert.equal(providerSecurity.stderr, "", "installed provider transport polluted stderr");
+  assert.equal(
+    providerSecurity.stdout,
+    "mcp-provider-security-complete\n",
+    "installed default transport must complete every security assertion",
+  );
+  evidence.providerSecurity = "default-transport-healthy-encoding-abort";
+  const providerDependency = JSON.parse((await run(process.execPath, [
+    "--input-type=module", "-e",
+    `import { createRequire } from 'node:module'; const require = createRequire(${JSON.stringify(join(pkg, "package.json"))}); const manifest = require('undici/package.json'); console.log(JSON.stringify({ version: manifest.version, engines: manifest.engines }));`,
+  ], dir, isolated)).stdout);
+  assert.equal(providerDependency.version, manifest.dependencies.undici);
+  evidence.providerDependency = providerDependency;
+  await copyFile(
     join(root, "test/probes/page-transport-install.mjs"),
     join(dir, "page-transport-probe.mjs"),
   );

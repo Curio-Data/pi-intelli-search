@@ -31,6 +31,7 @@ The map distinguishes shared dependencies from native-only peers and MCP-only ru
 | Tool-output progress rendering | Pi TUI | Native-Only Peer | Preserve native rendering. |
 | JSON Schema and tool-input parameter typing | TypeBox | Shared: Native Peer, MCP Runtime | Preserve canonical tool schemas and both adapter contracts. |
 | MCP serving over stdio | MCP Server SDK | MCP-Only Runtime | Preserve protocol registration, framing, progress and cancellation. |
+| Provider and catalogue HTTP | Undici | MCP-Only Runtime | Preserve bounded response reading, cancellation, safe errors and the patched transport independently of Node's bundled fetch. |
 
 ## Runtime Dependencies
 
@@ -115,7 +116,15 @@ The `@curio-data/mcp-intelli-search` artefact shares the fetch dependencies abov
 - **Licence:** Apache-2.0 (the MCP project is transitioning from MIT to Apache-2.0; the shipped `LICENSE` is the transition notice followed by the Apache-2.0 text, and the registry metadata declares Apache-2.0)
 - **Usage:** Model Context Protocol serving over standard input/output (stdio): tool registration, input-schema validation, progress notifications, cancellation and transport framing. The software development kit (SDK) is declared only by the standalone package and never enters the native extension's runtime. The companion `@modelcontextprotocol/client` package (also Apache-2.0) is a development dependency used by the protocol test suite. Both are lockfile-pinned at 2.3.0.
 
-[_esbuild_](https://esbuild.github.io/) bundles the internal engine and adapter source during development. Its [source repository](https://github.com/evanw/esbuild) is MIT-licensed. It is a root development dependency, not a standalone runtime dependency. The standalone inference adapter uses the built-in fetch transport against the [_OpenRouter_](https://openrouter.ai) API; no provider SDK is bundled.
+### `undici`
+
+- **Repository:** https://github.com/nodejs/undici
+- **Author:** Matteo Collina and Undici contributors
+- **Licence:** MIT
+- **Usage:** [_Undici_](https://github.com/nodejs/undici) supplies the standalone adapter's default provider and catalogue requests against the [_OpenRouter_](https://openrouter.ai) API. The package pins the patched dependency independently of Node's bundled fetch. Injected test transports remain supported. No global HTTP implementation is replaced, and page fetching retains the shared browser-signature transport.
+- **Distribution:** MCP-only runtime dependency, external to the bundle with its own `LICENSE`. Its engine range includes the standalone package's declared Node range. The independent production-install gate exercises healthy requests, excessive-content-encoding refusal and stalled-body cancellation through the default provider transport with loopback fixtures. These are bounded fixture observations, not live-provider or universal security guarantees.
+
+[_esbuild_](https://esbuild.github.io/) bundles the internal engine and adapter source during development. Its [source repository](https://github.com/evanw/esbuild) is MIT-licensed. It is a root development dependency, not a standalone runtime dependency. No provider SDK is bundled.
 
 <a id="license-compliance"></a>
 ## Licence Compliance

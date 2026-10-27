@@ -48,6 +48,10 @@ bare-semver (https://github.com/holepunchto/bare-semver)
 Author: Holepunch
 License: Apache-2.0
 
+undici (https://github.com/nodejs/undici)
+Copyright Matteo Collina and Undici contributors
+License: MIT
+
 @modelcontextprotocol/server (https://github.com/modelcontextprotocol/typescript-sdk)
 Copyright Anthropic, PBC and contributors
 License: Apache-2.0

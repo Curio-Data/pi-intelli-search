@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
+import { fetch as undiciFetch } from "undici";
 import type {
   ModelBinding,
   ModelCallScope,
@@ -191,7 +192,10 @@ function buildOpenRouterClient(
 ) {
   const services = "services" in options ? options.services : undefined;
   const random = "random" in options ? options.random : Math.random;
-  const transport = options.fetch ?? globalThis.fetch;
+  // Keep provider/catalogue HTTP on the patched package, independently of the
+  // embedding Node version's bundled fetch. Only string URLs and standard
+  // GET/POST init fields cross this DOM/Undici declaration boundary.
+  const transport = options.fetch ?? (undiciFetch as unknown as FetchFunction);
   const env = { ...(options.env ?? process.env) };
   const settings = config.settings;
   const configured = [settings.searchModel, settings.extractModel, settings.collateModel];
