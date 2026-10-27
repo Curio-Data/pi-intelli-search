@@ -81,6 +81,24 @@ it("mtime-based live cache selectors ignore newer internal staging directories",
   }
 });
 
+it("completed live cache selectors ignore numbered archive remnants", async (t) => {
+  const cache = await mkdtemp(join(tmpdir(), "e2e-completed-selection-"));
+  t.after(() => rm(cache, { recursive: true, force: true }));
+  const canonical = join(cache, "entry-z");
+  const archive = join(cache, "entry-z.1");
+  await mkdir(canonical);
+  await mkdir(archive);
+  await writeFile(join(cache, ".index.json"), JSON.stringify({ searches: [{ slug: "entry-z" }] }));
+  await writeFile(join(canonical, "report.md"), "completed report");
+  await writeFile(join(canonical, "meta.json"), JSON.stringify({ outcome: "completed", stages: { fetch: { succeeded: 1 }, collate: { summaryChars: 100 } } }));
+  await writeFile(join(archive, "meta.json"), JSON.stringify({ outcome: "extraction-failed" }));
+  const legacy = spawnSync("bash", ["-c", 'find "$1" -maxdepth 1 -mindepth 1 -type d -not -name ".*" | sort -r | head -1', "fixture", cache], { encoding: "utf8" });
+  assert.equal(legacy.stdout.trim(), archive, "fixture must reproduce the archive-first ordering");
+  const selected = spawnSync("bash", ["-c", 'set -euo pipefail; source "$1"; e2e_completed_cache_entry "$2"', "fixture", resolve("test/e2e/lib.sh"), cache], { encoding: "utf8" });
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout.trim(), canonical);
+});
+
 it("E2E auth assembly sends credentials over stdin, not jq arguments", () => {
   const run = spawnSync("bash", ["-c", 'set -euo pipefail; source "$1"; E2E_LOOP_MODEL_ID=openrouter/fixture; OPENROUTER_API_KEY=fixture-secret; e2e_setup_loop_model >/dev/null; printf "%s" "$E2E_AUTH_JSON"', "fixture", resolve("test/e2e/lib.sh")], { encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);

@@ -25,6 +25,21 @@
 # Requires: OPENROUTER_API_KEY, jq, E2E_EXTENSION_PATH (set by the
 # caller before e2e_run_pi).
 
+# Select the completed canonical run through the cache index. Numbered archive
+# siblings can sort ahead of the live run and may contain only a degraded remnant.
+e2e_completed_cache_entry() {
+  local cache=$1 slug
+  [[ -r "$cache/.index.json" ]] || return 0
+  while IFS= read -r slug; do
+    [[ -n "$slug" ]] || continue
+    if jq -e 'select(.outcome == "completed" and .stages.fetch.succeeded > 0 and .stages.collate.summaryChars > 0)' \
+      "$cache/$slug/meta.json" >/dev/null 2>&1; then
+      printf '%s\n' "$cache/$slug"
+      return 0
+    fi
+  done < <(jq -r '.searches[]?.slug' "$cache/.index.json" 2>/dev/null)
+}
+
 # Fail closed: the cap scenario must actually request 12; the default scenario
 # must supply no page override. Pi normalises optional nulls to omission, but
 # tool_execution_start records the raw arguments. Extractions alone cannot

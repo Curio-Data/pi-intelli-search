@@ -212,9 +212,9 @@ echo "══ Comparison ══════════════════�
 
 ERRORS=0
 
-# Find the latest cache entry in each
-ENTRY_DEFAULT=$(find "$CACHE_DEFAULT" -maxdepth 1 -mindepth 1 -type d -not -name '.*' 2>/dev/null | sort -r | head -1)
-ENTRY_TIGHT=$(find "$CACHE_TIGHT" -maxdepth 1 -mindepth 1 -type d -not -name '.*' 2>/dev/null | sort -r | head -1)
+# Select each completed canonical run, not a numbered archive remnant.
+ENTRY_DEFAULT=$(e2e_completed_cache_entry "$CACHE_DEFAULT")
+ENTRY_TIGHT=$(e2e_completed_cache_entry "$CACHE_TIGHT")
 
 # A missing cache entry usually means the search stage returned a degraded 200
 # (a valid reply with no markdown links), so the pipeline returned early without
