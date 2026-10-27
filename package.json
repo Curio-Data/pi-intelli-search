@@ -67,6 +67,9 @@
     "@earendil-works/pi-tui": ">=0.86.0",
     "typebox": "*"
   },
+  "overrides": {
+    "undici": "8.12.3"
+  },
   "files": [
     "src/",
     "skills/",
