@@ -14,6 +14,8 @@ M3 is accepted at technical source `17eabc9e58f121805409bbd16c2184e406ed8bba`; a
 
 M4 is work in progress. Canonical/generated guidance, registered cache descriptions, direct-batch/error qualification and physical cache growth/recovery qualification remain an unaccepted engineering candidate. Reviewed floor/main-usage support and standalone provider-security changes are committed at `fdb5e3de5387e7b66ddb32ef5b6ec90c420c37b2`; its exact snapshot passes the unpaid gates. The integrated candidate's mandatory native regression passed once with clean terminal safety. Do not repeat it on the unchanged candidate. [M4 Support and Safe-Floor Checkpoint](DEVELOPMENT.md#m4-support-and-safe-floor-checkpoint) records the retained overlay, bounded private-floor evidence and independent review's live-use blockers. Unrun E2E migrations remain uncommitted. This is not M4/R1 acceptance. Other live scenarios, studies, staging, publication and main merge remain separately gated. [Cache Qualification](../../CACHE-QUALIFICATION.md) retains the physical engineering observations.
 
+The bounded credential-free floor candidate `candidate-r11.json` is independently accepted for fixtures only (report digest `eba52e58b099c4f6bdf5af2501bd8dced5738b2a47c1a749351be253baa94c99`); its live blockers stand. The remaining live scope for scenarios 10 through 15 is proposed with a USD 4 accounting ceiling and no execution. The credential-free scenario 10 through 15 tranche helper is built with passing self-tests and awaits independent exact-byte acceptance and owner approval; no live scenario, study, staging, publication or merge is approved.
+
 ## Owner Decisions
 
 | Decision | Current Disposition |
