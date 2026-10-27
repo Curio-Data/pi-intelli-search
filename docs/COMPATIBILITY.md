@@ -46,10 +46,10 @@ The software development kit (SDK) and native fetch assets are verified separate
 
 | Host | Tested Version | Evidence |
 |---|---|---|
-| Claude Code | 2.1.289, 2.1.292, 2.1.293, 2.1.294, 2.1.296, 2.1.301, 2.1.302 | Credential-free installation and key-delivery checks; credentialed local-tarball research. Latest registry-pin installation, connection and skill discovery pass on 2.1.302; historical checks and evidence limits are recorded below |
+| Claude Code | 2.1.289, 2.1.292, 2.1.293, 2.1.294, 2.1.296, 2.1.301, 2.1.302, 2.1.311 | Credential-free installation and key-delivery checks; credentialed local-tarball research. Latest registry-pin installation, connection and skill discovery pass on 2.1.311; historical checks and evidence limits are recorded below |
 | Codex CLI | 0.144.5, 0.160.1 | Credential-free installation and credentialed local-tarball research. Current-candidate zero-configuration startup, missing-key recovery and research pass on 0.160.1. Latest registry-pin installation, enabled-server listing and skill discovery pass on 0.160.1; the independent registry protocol probe is separate from the host's enabled listing |
 
-The latest [registry-pin verification](#published-0190-registry-pin-verification-2026-10-17) covers both hosts. It does not establish full registry-pin research; earlier checks remain evidence for their recorded package and host versions.
+The latest [registry-pin verification](#published-0191-registry-pin-verification-2026-10-27) covers both hosts. It does not establish full registry-pin research; earlier checks remain evidence for their recorded package and host versions.
 
 ### Claude Code Evidence and Limits
 
@@ -96,6 +96,22 @@ The 1.3.0 [upstream release](https://github.com/earendil-works/pi/releases/tag/v
 The recorded live check passed `test/e2e/01_main.sh` on 2026-10-16 against the 0.18.0 runtime (tree `a26040e`, before the classifier alignment), with the agent loop on `kimi-coding/k3`, exercising the provider's new protocol: completed outcome, `fetch.succeeded=1`, nonempty synthesis (`collate.summaryChars=1302`) and pipeline stages on the OpenRouter defaults. This is a targeted research check of the host interfaces, not a full paced-suite result; live evidence for the 0.19.0 runtime is recorded in [0.19.0 Candidate Verification](#0190-candidate-verification-2026-10-16).
 
 Three upstream changes were assessed as opportunities. Two are pure host behaviour and prompted no code change: malformed tool-call arguments now fail validation with the raw text shown to the model instead of silently running partially parsed arguments, and `--model` now prefers a credentialed provider when several providers offer the match. The third did prompt a change: the host's automatic retry now covers gateway `Unable to forward upstream stream` and `The service is temporarily unavailable` errors for its agent loop, and the extension's shared retry classifier was aligned with the full `Pi` 1.3.0 retry list, including the quota/billing fail-fast exclusions, in 0.19.0 (see the [changelog](../CHANGELOG.md#pi-0190---2026-10-17)). The peer floor remains `Pi` >= 0.86.0 and model defaults are unchanged.
+
+## 0.19.1 Candidate Verification (2026-10-27)
+
+Candidate `18781d1` passes exact-commit [release-branch CI](https://github.com/Curio-Data/pi-intelli-search/actions/runs/40480082522), both builds, 609 native and 59 standalone deterministic tests, native-contract types, generated-file checks, ShellCheck, dependency audits and both independent fresh-tarball installations. The native consumer resolves `pi-ai@1.4.0`. This MCP-only patch leaves the native package at `0.19.0`; no native release is required.
+
+Two serial full-suite attempts each passed 14 of 15 scenarios. The first exposed an archive-first cache-selector defect in scenario 05 after a successful retry; the corrected index-based selector has deterministic regression coverage, and scenarios 05 and 06 then passed on the same content. The second attempt passed every scenario except 05, whose attempts produced no completed sidecar after provider extraction timeouts. Every scenario therefore has a pass on the final content, but no single serial run achieved 15 of 15. The owner accepted that evidence scope for MCP staging and directed a future paced-parallel verification design rather than another serial rerun. Local-tarball plugin scenarios 12, 13 and 14 pass on the final content, including Codex zero-configuration startup, missing-key recovery and persistent-credential research.
+
+### Published `0.19.1` Registry-Pin Verification (2026-10-27)
+
+Following maintainer approval, the registry records MCP publication at 11:38:14 Coordinated Universal Time (UTC); `latest` resolves to `0.19.1`, and registry metadata exposes signed provenance. Both plugins install from the committed repository marketplaces into fresh profiles without copied login credentials, using a dummy inference key.
+
+- **Claude Code 2.1.311:** the exact committed `npx` pin connects, and the installed plugin exposes its skill.
+- **Codex CLI 0.160.1:** the installed cache has the expected version, the pinned server is enabled, and prompt-input inspection discovers the skill at the versioned plugin-cache path. An enabled listing alone is not a connection check.
+- **Independent Registry Launcher:** a fresh npm cache and consumer directory resolve the executable under that cache's `_npx/`, not the repository workspace. Its manifest and `--version` identify the published package. A direct standard-input/output (stdio) probe verifies server identity, returns instructions naming `intelli_search`, and lists all four tools through `initialize` and `tools/list`. Standard output contains protocol frames only; standard error contains the expected startup banner, and the process exits cleanly.
+
+Evidence is retained under gitignored `.tmp/release-0191/registry/`, with `registry-verification.log` and `registry-protocol.log`. The probes are retained as `verify-registry.sh` and `registry-probe.mjs`. These checks establish registry installation, skill discovery, connection and tool listing, not a full research call through the registry-installed package. Credentialed full-research checks remain in the local-tarball class.
 
 ## 0.19.0 Candidate Verification (2026-10-16)
 

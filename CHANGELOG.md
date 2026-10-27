@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [mcp-0.19.1] - 2026-10-27
 
+Published on `npm`; [clean-profile registry-pin verification](docs/COMPATIBILITY.md#published-0191-registry-pin-verification-2026-10-27) passes. This MCP-only patch does not require a native `Pi` release.
+
 ### Added
 
 - A new `mcp-intelli-search setup` command reads an [_OpenRouter_](https://openrouter.ai) key from standard input, creates missing per-user configuration and stores the credential separately with user-only permissions. The next tool call reads a new or replacement key without restart when the loaded configuration selects that path; configuration changes require restart. The canonical installation guide, generated Codex skill and troubleshooting reference document the flow.
