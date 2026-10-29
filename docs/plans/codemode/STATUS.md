@@ -18,6 +18,8 @@ The bounded floor fixture and subsequent helper corrections retain their separat
 
 The authorised scenario 12 through 15 tranche is terminal. Across independently reviewed helper generations r7 through r12b, window 12 verified, window 13's four sessions completed and carried, window 14 verified, and window 15 failed at egress route-probe classification with zero completed work. The tracked MCP compact-projection verifier fix is committed and pushed at `86f6802`. [M4 Scenario 12 Through 15 Terminal Tranche](DEVELOPMENT.md#m4-scenario-12-through-15-terminal-tranche) records the outcomes, accounting and carried engineering findings; the terminal handover and stopped ledgers remain immutable. No window may repeat, and no current live authority, active ledger or credential preparation remains. The 22-file README/E2E overlay stays uncommitted pending a reviewed decision. Continue the remaining M4/R1 qualification and carried C/T/K/F conditions, then native-only M5/M6/R2 at their separate gates.
 
+The credential-free P6 monitor correction is blocked at candidate R11. Its local and independently reproduced suites pass 81 parser and 149 actual-monitor tests, and its prose review passes, but fresh technical review reproduces two deterministic loopback fail-open paths through divergent shared descriptor-table maps. [P6 Monitor Correction R11](DEVELOPMENT.md#p6-monitor-correction-r11) records the exact candidate, report digests and remaining defects. Do not integrate any monitor candidate or treat this work as P6, M4, R1 or release acceptance. A successor must close sibling-sharer and clone-first-grandchild divergence with discriminating pure and actual-monitor negatives before the remaining P6 gates.
+
 ## Owner Decisions
 
 | Decision | Current Disposition |
