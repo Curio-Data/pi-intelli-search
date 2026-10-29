@@ -79,8 +79,12 @@ function verifyOperation(blocks, call, operation) {
   } else {
     assert.ok(call.input?.focusPrompt?.trim(), "research has an extraction focus");
     assert.ok(Number.isFinite(call.input?.maxUrls) && call.input.maxUrls > 0, "research chooses a breadth");
-    assert.match(text, /\*\*Cache\*\*:/);
-    assert.match(text, /\*\*Report\*\*:/);
+    // The plugin serves the MCP compact projection (accepted owner decision
+    // C18): research results append `**Report**:` with the read instruction,
+    // and the related-searches table only when the cache-suggest judge finds
+    // prior runs. The native `**Cache**:` appendix marker never appears in a
+    // plugin result, so it must not be required here.
+    assert.match(text, /\*\*Report\*\*:/, "research result names its committed report");
   }
 }
 

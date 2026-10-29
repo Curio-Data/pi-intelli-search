@@ -31,7 +31,7 @@ interface FixtureEvent {
 function fixture(operation = "intelli_search", withSkill = true): FixtureEvent[] {
   const answer = operation === "intelli_search"
     ? "A grounded fixture answer. ".repeat(8) + "\n### Sources (1)\nhttps://example.com"
-    : "A detailed fixture comparison. ".repeat(8) + "\n**Cache**: fixture\n**Report**: fixture/report.md";
+    : "A detailed fixture comparison. ".repeat(8) + "\n**Report**: fixture/report.md\nRead `fixture/report.md` with the host's file-reading capability.";
   return [
     { type: "system", subtype: "init", tools: [prefix + "intelli_search", prefix + "intelli_research"],
       slash_commands: withSkill ? [skill] : [],
