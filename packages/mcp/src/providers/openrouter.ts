@@ -342,8 +342,9 @@ export function createOpenRouterClient(
                 (reported.reasoning ? `, ${reported.reasoning} hidden reasoning` : "") + ")" : "";
             throw new Error(
               "OpenRouter exhausted the output budget without visible text" + counts +
-                " (the cap covers hidden reasoning tokens); " +
-                "increase the stage's max-tokens setting (extractionMaxTokens / collationMaxTokens) or choose a model with a smaller reasoning budget",
+                " (the cap includes any reasoning tokens). " +
+                "For extraction, review extractionMaxTokens; for synthesis, review collationMaxTokens. " +
+                "If this diagnostic came from search or cache suggestions, report the stage because those output caps are not exposed as tuning settings.",
             );
           }
           if (typeof content !== "string")

@@ -58,6 +58,7 @@ The native extension uses `Pi` settings and authentication. Generic MCP registra
     - [Customise (Optional)](#customise-optional)
 - [Tools](#tools)
   - [Evidence and Provenance](#evidence-and-provenance)
+  - [Extraction Diagnostics](#extraction-diagnostics)
 - [Usage Examples](#usage-examples)
   - [Quick Search](#quick-search)
   - [Deep Research](#deep-research)
@@ -183,6 +184,18 @@ The native `intelli_research` schema declares `minimum: 1` for `maxUrls`. `Pi` 1
 Research collation receives only successful, non-empty page extractions, not the search model's summary. Code generates the Source Assessment inventory and cache-file references from the run's evidence manifest. Synthesis uses source IDs such as `[S1]`; unknown IDs, prose URLs absent from the supplied extractions and model-generated numbered cache references fail validation before a report is committed. Cross-links present in extracted text remain content, not additional fetched pages. Fenced, indented and inline code examples remain code, not evidence declarations. These checks establish reference consistency, not factual accuracy.
 
 Manual `intelli_collate` labels its evidence as caller-supplied extractions; it does not claim the server fetched those pages. Empty or duplicate source evidence is rejected. The optional `searchSummary` input remains accepted for compatibility but does not supply synthesis evidence. Per-source relevance and contribution ratings are no longer model-generated. Read exact cache paths from the inventory; `Not cached` means no full-page file was supplied.
+
+### Extraction Diagnostics
+
+A completed research result can contain failed or incomplete sources. `details.pagesFailed` counts fetch failures; `details.extractionFailed` counts failures after a page was fetched. Inspect the failed-source list before relying on a report's coverage. A saved full-page link is provided only when that page was written to the cache. If pages were fetched but no extraction succeeds, the `extraction-failed` result returns the search summary and up to ten known failure reasons without writing a new report or saved pages. If every fetch fails, the separate `fetch-failed` result returns the search summary without a per-source reason list.
+
+Nonempty output whose reported token count reaches the configured cap is kept with a truncation warning. `intelli_extract` returns `details.truncated`; research and manual collation mark affected sources in the Source Assessment inventory. A synthesis warning applies to the summary itself. Missing usage does not establish completeness, and `outcome: "completed"` does not guarantee complete source coverage.
+
+For a budget-exhaustion diagnostic, review `extractionMaxTokens` for page extraction or `collationMaxTokens` for synthesis. On reasoning models, the budget includes reasoning as well as visible text. Increase the relevant cap within the model's output and context limits, or select a model with a smaller reasoning requirement. Lowering reasoning effort did not prevent exhaustion on the serving route identified in the investigation; it is not a guaranteed remedy. Read an available saved page before repeating paid research. Raising `llmTimeoutMs` addresses timer expiry, not an exhausted token budget or a host deadline.
+
+A higher completion cap can permit more billable output and increase OpenRouter's in-flight credit reservation. The [Cost](#cost) estimate is a planning figure, not a spending limit; raising a cap does not mean every call consumes it.
+
+Research sidecars, when enabled, record extraction-budget failures, possible truncation, available serving routes and cache-judge degradation. See [Telemetry Sidecar](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md#telemetry-sidecar) for field definitions and absence semantics. Standalone extraction and collation do not write this sidecar.
 
 <a id="quick-start"></a>
 ## Usage Examples
@@ -405,7 +418,7 @@ For an observed account limit of approximately 0.33 requests per second, the def
 }
 ```
 
-Choose pacing, concurrency and retry settings from observed account and provider rate limits, whether the key is paid, free-tier or shared. Leave the throttle off when the account handles the default fan-out without rate-limit failures.
+Choose pacing, concurrency and retry settings from observed account and provider rate limits, whether the key is paid, free-tier or shared. Leave the throttle off when the account handles the default fan-out without rate-limit failures. The explicit `llmTimeoutMs` retains the current default while this recipe changes pacing, concurrency and retry attempts.
 
 ### Recipe 8: Per-Project Override
 
@@ -618,7 +631,7 @@ The illustration shows the native pipeline with the model configuration at its c
 
 The search stage merges text links with harvested citation annotations before selecting pages (see [Source Harvesting from Citations](#source-harvesting-from-citations)). Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈30-50K for 10 pages).
 
-Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it.
+Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it. Budget diagnostics and their absence semantics are defined in [Telemetry Sidecar](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md#telemetry-sidecar); the [script guide](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md#reported-metrics) explains the available aggregates.
 
 See [docs/ARCHITECTURE.md](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md) for detailed design decisions.
 
@@ -701,12 +714,12 @@ The example below shows the default models and common tuning settings. The [Sett
 | `cacheDir` | 4, 5 | `.search` | Directory where research runs are cached. Change this to keep project-specific research separate. Example: `".my-research-cache"`. |
 | `extractMaxChars` | 3. Extract | `150000` | Maximum characters of page content fed to the extract LLM per page. Each 50K chars consumes ≈12K input tokens as a planning approximation; the model's tokenizer determines the actual count. Add prompt tokens and reserved output (`extractionMaxTokens`) before comparing with the token window. Lower this limit if that budget does not fit; raise it only with sufficient headroom. |
 | `extractionConcurrency` | 3. Extract | `4` | Number of per-page extractions sent to the extract model simultaneously. Bounded so a wide result set does not fire many concurrent LLM calls and trigger rate limiting. Raise it (6-8) on generous rate limits for faster extraction; lower it (1-2) on tight limits. |
-| `extractionMaxTokens` | 3. Extract | `8000` | Maximum output tokens for each per-page extraction. The cap covers hidden reasoning tokens as well as visible text: reasoning models can spend thousands of tokens reasoning before any visible output, and an exhausted budget returns an empty extraction (surfaced as a failed source with the token counts). 8,000 cleared the failure in live probes but the reasoning tail is route- and page-dependent, so residual exhaustion is possible and is recorded in telemetry (`extract.failureReasons`). Higher values preserve more detail at higher cost; lower this for a small-window model so output does not crowd out input, but values near the model's reasoning appetite recreate the empty-extraction failure. A higher cap also raises the in-flight cost hold OpenRouter places on low-balance keys. |
+| `extractionMaxTokens` | 3. Extract | `8000` | Per-page output-token cap. For reasoning models on OpenRouter, the budget includes reasoning as well as visible text. Exhaustion can leave an empty or incomplete extraction; the larger default reduced empty-output failures in recorded probes but does not guarantee completion on every route or page. Empty extractions fail with a reason and reported token counts when available. Nonempty extractions whose reported output reaches the configured cap are retained with a truncation warning. Reserve this output budget alongside input and prompt tokens within the model's limits. A higher cap can increase OpenRouter's in-flight credit reservation. See [Extraction Diagnostics](#extraction-diagnostics). |
 | `collationMaxTokens` | 4. Collate | `4000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. Lower this when using a collation model with a small context window (the output must fit alongside all extraction inputs). This bounds synthesis output, not the source and cache appendices added afterwards. |
 | `fetchTimeoutMs` | 2. Fetch | `20000` | Per-page fetch timeout in milliseconds. Increase for sites known to be slow. Fetches run in parallel so this does not multiply by page count. |
 | `fetchConcurrency` | 2. Fetch | `4` | Number of pages fetched simultaneously. Higher values (6-8) complete the fetch stage faster but may trigger rate limiting. Lower values (2) are gentler on target servers. |
 | `browserFingerprint` | 2. Fetch | `chrome_145` | Transport Layer Security (TLS) fingerprint used by [_wreq-js_](https://github.com/sqdshguy/wreq-js) to impersonate a browser. Determines which Hypertext Transfer Protocol (HTTP) client signature the site sees. Available profiles include `chrome_*`, `firefox_*`, `safari_*`, `edge_*`, and `opera_*` across many versions. Change this if a site blocks the default fingerprint. |
-| `llmTimeoutMs` | Research LLM | `120000` | Hard per-call timeout in milliseconds for each model request inside `intelli_research`. Bounds a stalled provider connection (common under rate limiting) so it becomes a retryable timeout instead of hanging on the software development kit (SDK)'s long default. Raised from 90s in 0.20.0 alongside `extractionMaxTokens` (8,000 tokens): at the default model's ≈100 tokens/s an 8,000-token completion takes 77-84s, so a 90s timeout would abort exactly the calls the raised cap rescues. Raise it further for slower reasoning models on large inputs; lower it to fail faster. |
+| `llmTimeoutMs` | Research LLM | `120000` | Hard per-call timeout in milliseconds for each model request inside `intelli_research`. Timer expiry aborts the call and is retryable under `llmRetryAttempts`. The default provides additional time for the larger extraction output budget; it does not guarantee completion or extend a host's tool-call deadline. Raise it for slower models only when the model-call timer expires and the host allows the longer duration; lower it to fail faster. |
 | `llmRetryAttempts` | Research LLM | `3` | Total attempts per LLM call including the first. Transient failures (HTTP 429, 5xx, timeouts) are retried with full-jitter exponential backoff that honours any Retry-After hint. Set to `1` to disable retry. |
 | `retryBaseDelayMs` | Research LLM | `1500` | Base delay for retry backoff. Attempt N waits a random duration up to `min(retryMaxDelayMs, retryBaseDelayMs * 2^(N-1))`. |
 | `retryMaxDelayMs` | Research LLM | `20000` | Upper bound on any single retry backoff, and the clamp applied to a Retry-After hint so a large hint cannot stall the pipeline. |

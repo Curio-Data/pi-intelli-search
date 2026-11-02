@@ -145,7 +145,7 @@ export function formatCacheAppendix(
   if (failedEntries.length > 0) {
     // Bold label and placement after the instruction bullet keep the failure
     // list from visually swallowing the next line a reader scans for.
-    out += `\n**Failed sources**:\n`;
+    out += `\n**Failed Sources**:\n`;
     for (const entry of failedEntries) {
       out += `- ${entry.url}`;
       if (entry.error) out += `: ${entry.error}`;
@@ -153,6 +153,6 @@ export function formatCacheAppendix(
       out += `\n`;
     }
   }
-  out += `\nChoose exact extraction and full-page paths from the Source assessment above; Not cached means no full-page file exists for that source.\n`;
+  out += `\nChoose exact extraction and full-page paths from the Source Assessment above. Not cached means no full-page file exists for that source.\n`;
   return out;
 }

@@ -92,10 +92,11 @@ it("rejects empty standalone extraction with an actionable budget message", asyn
   await assert.rejects(
     extract({ url: "https://one.example", title: "One", content: "body", query: "q" }, context),
     (error: Error) =>
-      error.message.includes("no visible evidence") &&
+      error.message.includes("no visible text") &&
       error.message.includes("extractionMaxTokens") &&
       error.message.includes("100/100") &&
-      error.message.includes("100 hidden reasoning"),
+      error.message.includes("100 hidden reasoning") &&
+      error.message.includes("output budget was exhausted"),
   );
 });
 
@@ -151,8 +152,8 @@ it("surfaces per-page failure reasons, saved sources and telemetry classificatio
   assert.equal(result.outcome, "completed");
   assert.equal(result.details.extractionFailed, 1);
   assert.match(result.text, /1 truncated at the output cap\), 1 failed/);
-  assert.match(result.text, /\*\*Failed sources\*\*:/);
-  assert.match(result.text, /https:\/\/(one|two)\.example\/page: Extraction returned no visible evidence/);
+  assert.match(result.text, /\*\*Failed Sources\*\*:/);
+  assert.match(result.text, /https:\/\/(one|two)\.example\/page: Extraction returned no visible text/);
   assert.match(result.text, /full page saved: `[^`]+\/sources\/\d+-/);
   const meta = JSON.parse(
     await readFile(join(root, result.details.cachePath as string, "meta.json"), "utf8"),

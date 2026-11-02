@@ -221,7 +221,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
       })
       .slice(0, 10)
       .join("\n");
-    const failureBlock = failureLines ? `\n\nFailed sources:\n${failureLines}` : "";
+    const failureBlock = failureLines ? `\n\nFailed Sources (up to 10 known reasons):\n${failureLines}` : "";
     return degradedReturn(
       p,
       "extraction-failed",
@@ -1008,13 +1008,17 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
     if (!extraction.trim()) {
       // A 200 response can still carry zero visible text: on reasoning models
       // the completion cap covers hidden reasoning tokens, and an exhausted
-      // call spends the whole budget before any visible output.
+      // call spends the whole budget before any visible output. Advice is
+      // conditional on the reported budget so a healthy budget is not told to
+      // raise its cap.
       const usageNote = usage?.output != null
         ? ` (${usage.output}/${p.settings.extractionMaxTokens} output tokens` +
           (usage.reasoning ? `, ${usage.reasoning} hidden reasoning` : "") + ")"
         : "";
       throw new Error(
-        `Extraction returned no visible evidence${usageNote}; increase extractionMaxTokens or choose a model with a smaller reasoning budget`,
+        exhausted
+          ? `Extraction returned no visible text${usageNote}; the output budget was exhausted. Review extractionMaxTokens or choose a model with a smaller reasoning requirement.`
+          : `Extraction returned no visible text${usageNote}. The output budget was not reported exhausted; inspect the model response before retrying.`,
       );
     }
     const firstLine = extraction.split("\n")[0] ?? "";

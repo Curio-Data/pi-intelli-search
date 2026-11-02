@@ -8,28 +8,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [pi-0.20.0] - 2026-11-02
 
-Extract-budget resilience, prompted by a 2026-11-02 investigation where the most relevant page of a research run silently failed to extract: on reasoning models the completion cap covers hidden reasoning tokens, and the default model can spend the whole 3,000-token budget before any visible text, returning an empty extraction with `finish_reason: "length"`. The exhaustion is serving-route-dependent (reproduced on the [_OpenRouter_](https://openrouter.ai) Novita route; other routes finished comfortably inside the old cap). Two implementation review rounds (Opus 5.5 and qwen3.8-max) refined the diagnostics below.
+Extraction-budget resilience and clearer incomplete-result diagnostics. In recorded probes, the default reasoning model exhausted its completion budget on one [_OpenRouter_](https://openrouter.ai) serving route before producing visible text. Other tested routes completed within the previous cap; the larger default does not guarantee completion on every route or page.
 
 ### Changed
 
-- `extractionMaxTokens` default raised from 3,000 to 8,000, and the research `llmTimeoutMs` default from 90s to 120s so a full 8,000-token completion (≈77-84s at the default model's observed rate) is not aborted by the timer that is meant to bound stalls. The new default cleared the failure in live probes; the reasoning tail is route- and page-dependent, so residual exhaustion is recorded in telemetry. Users with explicit values keep theirs: tuning keys are not part of match-based model migration. A higher cap also raises the in-flight cost hold [_OpenRouter_](https://openrouter.ai) places on low-balance keys.
-- A nonempty extraction or synthesis cut off by its output cap is no longer presented as complete. Truncated extractions are flagged in the source assessment, the tool result (`N truncated at the output cap`) and the telemetry sidecar (`extract.truncated`, `collate.truncated`); a truncated collation carries a visible warning line in the report, in both `intelli_research` and `intelli_collate`.
-- The cache-suggest judge's output cap is raised from 500 to 2,000 tokens (its reasoning budget counted against the old cap), and a judge that returns an empty or unparseable response, or throws, is recorded as `cacheSuggest.degraded` in telemetry instead of being indistinguishable from a valid "nothing related" verdict.
+- The default `extractionMaxTokens` rises from 3,000 to 8,000, and `llmTimeoutMs` from 90 to 120 seconds. The longer model-call timeout provides additional headroom for extraction. Explicit tuning values are preserved; model defaults and the minimum supported `Pi` version are unchanged. A larger output cap can increase OpenRouter's in-flight credit reservation on low-balance accounts.
+- Nonempty extraction or synthesis output whose reported token count reaches the configured cap is retained with a truncation warning. Research reports and tool results identify affected extractions and warn about capped synthesis; standalone `intelli_extract` returns `details.truncated`, which manual `intelli_collate` accepts. Missing usage does not establish completeness.
+- The cache-suggest judge's output cap rises from 500 to 2,000 tokens. Empty or unparseable responses and thrown judge calls set `stages.cacheSuggest.degraded`, distinguishing those failures from a valid zero-match verdict without discarding completed research.
 
 ### Added
 
-- Per-page extraction failures now carry an actionable reason. The tool result's cache appendix lists each failed source (including fetch failures) with its bounded, single-line reason and, when a cache was written, a pointer to the saved full page. `details.extractionFailed` counts extraction failures separately from `pagesFailed` (fetch failures), and the total-failure path lists each URL with its reason. Telemetry records aggregate `extract.failureReasons` (classified from reported token usage, never by matching provider wording) plus the serving route in `extract.provider` / `collate.provider` when every observed call agrees: the native package reads the route from the `provider` field of provider stream events (OpenRouter sends no route response header); the standalone server reads the `provider` response field.
-- Empty extractions fail with a message naming the token counts and `extractionMaxTokens` instead of a bare "no visible evidence", mirroring collation's existing guidance. Failure reasons are collapsed to a single line before they reach the tool result or report.
+- Research results list failed sources with bounded reasons when available and link to a saved full page only when one exists. `details.extractionFailed` counts extraction failures separately from fetch failures in `pagesFailed`. When fetched pages yield no successful extraction, the degraded result includes up to ten known failed-source reasons; it writes no new report or saved pages.
+- Research telemetry adds `stages.extract.truncated`, `stages.collate.truncated`, aggregate extraction `failureReasons` and serving-route fields when available. Route agreement covers observed values, not every call. The local analysis script reports extraction-budget counters, observed extraction routes and degraded-judge counts. Sidecars remain optional and are written by `intelli_research`, not the standalone tools.
+- Manual `intelli_collate` accepts an optional `truncated` boolean and `error` string on each supplied extraction, preserving warnings and caller-supplied failure reasons in its output and cache report.
 
 ### Fixed
 
-- The standalone `intelli_extract` operation no longer returns an empty extraction with `outcome: completed`: an empty response now throws the same actionable budget error.
-- The standalone server's provider guard now recognises budget exhaustion when [_OpenRouter_](https://openrouter.ai) returns `content: null` with `finish_reason: "length"`, and names the reported token counts in the message; previously the generic no-text branch shadowed the actionable message on that shape.
-- `intelli_collate` accepts optional `truncated` and `error` flags on supplied extractions (matching `intelli_extract` results) and carries them into the appendix, inventory and report instead of dropping them.
+- Standalone `intelli_extract` rejects empty output instead of returning it as a completed extraction. Extraction diagnostics include reported token counts when available and name `extractionMaxTokens` for budget recovery.
 
 ## [mcp-0.20.0] - 2026-11-02
 
-Core behaviour is shared with [pi-0.20.0] and recorded there. Adapter-specific: the provider ordering fix for `content: null` exhaustion responses, token counts in the exhaustion message, and the serving-route field in completions are standalone-server changes.
+Core behaviour is shared with [pi-0.20.0] and recorded there.
+
+### Fixed
+
+- The provider guard recognises empty output with `finish_reason: "length"` before the generic no-text check, including `content: null`. The exhaustion diagnostic includes reported token counts when available and names the extraction and collation output-budget settings. Responses with `content: null` and `finish_reason: "stop"` retain the generic no-text error.
+
+### Added
+
+- Successful completion results expose the serving route from the response's `provider` field when available.
 
 ## [mcp-0.19.1] - 2026-10-27
 

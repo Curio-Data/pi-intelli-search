@@ -63,7 +63,11 @@ PI_SESSIONS_DIR=/path scripts/analyze-sessions.sh
 | 6 | Adoption rate: host sessions using any `intelli_*` tool |
 | 7 | Cache re-reads: tool calls referencing a `.search/` path |
 | 8 | Research-cache sizes per project (from `.index.json`) |
-| 9 | Telemetry sidecars (`meta.json`, v0.11.0+): per-stage success rates, fetch-variant winners summed across sidecars, search retries and cache-suggest hits |
+| 9 | Telemetry sidecars (`meta.json`): run outcomes, fetch and extraction totals, extraction-budget diagnostics, available extraction routes, degraded cache judges, fetch-variant winners, search retries and cache-suggest hits |
+
+Section 9 adds `truncatedExtractions`, `budgetExhaustedFailures` and `otherFailures` by summing the corresponding extraction fields across parsed sidecars. These count extractions, not runs. `runsRecordingProvider` counts sidecars with `stages.extract.provider`; `providers` groups those sidecars by their recorded extraction route, not by individual model call. Cache-judge degradation counts sidecars whose `stages.cacheSuggest.degraded` is `true`. Synthesis truncation and synthesis routes are not aggregated.
+
+The script substitutes zero for absent numeric diagnostic fields. Older records, unreached stages and unavailable usage therefore contribute no recorded events, not proof that no failure or truncation occurred. Route labels are optional and cannot attribute every failed page to a provider. Interpret these totals over the selected sidecars, including any archived copies found, rather than as an incidence rate for all research calls. See [Telemetry Sidecar](../docs/ARCHITECTURE.md#telemetry-sidecar) for field definitions.
 
 ### Environment
 

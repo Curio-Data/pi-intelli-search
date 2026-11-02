@@ -37,12 +37,15 @@ export async function extract(
   // actionable message instead of returning an empty extraction as if it
   // were a result.
   if (!extraction.trim()) {
+    const exhausted = budgetExhausted(usage, settings.extractionMaxTokens);
     const usageNote = usage?.output != null
       ? ` (${usage.output}/${settings.extractionMaxTokens} output tokens` +
         (usage.reasoning ? `, ${usage.reasoning} hidden reasoning` : "") + ")"
       : "";
     throw new Error(
-      `Extraction returned no visible evidence${usageNote}; increase extractionMaxTokens or choose a model with a smaller reasoning budget`,
+      exhausted
+        ? `Extraction returned no visible text${usageNote}; the output budget was exhausted. Review extractionMaxTokens or choose a model with a smaller reasoning requirement.`
+        : `Extraction returned no visible text${usageNote}. The output budget was not reported exhausted; inspect the model response before retrying.`,
     );
   }
   const firstLine = extraction.split("\n")[0] ?? "";

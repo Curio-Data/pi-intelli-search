@@ -122,7 +122,7 @@ For a different focus per URL (for example, comparing alternatives side by side)
 
 Example: researching "KV vs Durable Objects". Extract KV pages with `focusPrompt="Extract KV read/write patterns, consistency model, and latency characteristics"`. Extract Durable Objects pages with `focusPrompt="Extract the consistency guarantees, transaction API, and single-computer model"`.
 
-When constructing a collation item from an extraction result, use the original `url` and `title`, `result.details.extraction` and `result.details.sourceType`, plus an explicit `status` such as `success`. Do not forward the entire extraction `details` object: its `currentness` field is not a collation input.
+When constructing a collation item from an extraction result, use the original `url` and `title`, `result.details.extraction` and `result.details.sourceType`, plus `status: "success"`. Copy `result.details.truncated` into the item's optional `truncated` field when present. If extraction fails, retain that source as a failed item with an empty `extraction`, an explicit `sourceType` such as `unknown`, `status: "failed"` and an optional bounded `error` string describing the failure. Failed items are listed for coverage but do not enter synthesis. Do not forward the entire extraction `details` object: its `currentness` field is not a collation input.
 
 ## Evidence and Provenance
 
@@ -148,6 +148,14 @@ Only reach into the cache when:
 - A required code example was truncated in the summary.
 - A claim in the summary needs checking against the original source.
 - The live results are insufficient and a related cached search may help.
+
+### Failed and Incomplete Sources
+
+A completed result can still have missing evidence. Check the failed-source list and truncation warnings before treating the report as complete. Fetch failures and extraction failures are separate counts; a saved full-page link exists only when that page was cached. Read that copy if it fills the evidence gap instead of repeating the whole paid pipeline.
+
+A truncation warning means reported output reached the configured stage cap; it does not prove exactly where text stopped. The absence of a warning does not establish completeness when usage is unavailable. Do not present a warned-about extraction or synthesis as complete evidence.
+
+For a budget-exhaustion diagnostic, review the matching extraction or collation token cap with the maintainer rather than retrying unchanged. The cap can include reasoning tokens, and lowering reasoning effort is not a guaranteed remedy. Standalone extraction returns `details.truncated`; carry it into manual collation. An `extraction-failed` result contains the search summary and up to ten known failure reasons, not a new cached report or saved pages. An all-fetch-failed result returns the search summary without individual reasons. A failed cache judge does not invalidate completed research, and no related-search suggestions do not establish that no relevant cache exists.
 
 ## Follow Up from Cache
 
@@ -196,7 +204,7 @@ This is also why `focusPrompt` matters. It tells the extraction model what to ke
 - **Configuration Errors** (`CONFIGURATION`, `WORKSPACE`): a tool call found incomplete setup. For a missing, unreadable or invalid selected file, repair the named file and call again; the server rereads it on each call until it loads. JSON syntax diagnostics give a location without echoing the file. After a successful load, configuration changes need a restart. Environment credentials are captured at startup and require a restart; a configured credential file is reread on each call. These preflight errors incur no inference charges.
 - **Provider Errors** (`PROVIDER`): the provider rejected or broke the call. Check credentials or permissions for `401`/`403`, and account credits for ordinary `402` credit exhaustion. The adapter treats a `402` with a valid Retry-After header as transient budget pressure and retries it under the configured bounded policy, like rate limits (`429`) and server errors (`5xx`). If transient failures persist after those attempts, wait before a manual retry rather than changing credentials.
 - **Invalid Arguments** (`INVALID_ARGUMENTS`): the call parameters failed validation. Correct the arguments; do not retry unchanged.
-- **Operation Failures** (`OPERATION`): a stage of the pipeline failed after validation. The message names the stage; retry once, then report if it persists.
+- **Operation Failures** (`OPERATION`): a stage failed after validation. Read the diagnostic before repeating paid work. For an exhausted output budget or a provenance failure, correct the cause rather than retrying unchanged. Report persistent failures with the stage and bounded diagnostic, without credentials.
 - **Cancelled** (`CANCELLED`): the client cancelled the call. Do not retry automatically.
 - **Degraded Research** (`no-links`, `fetch-failed`, `extraction-failed`): the result is still returned with what succeeded. Check the summary and decide whether a narrower query or a retry is warranted.
 - **Busy:** the eight-request queue is already full. Wait for an earlier call to finish before submitting another.

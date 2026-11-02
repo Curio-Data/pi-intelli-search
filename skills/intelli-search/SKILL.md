@@ -111,6 +111,8 @@ For a different focus per URL (for example, comparing alternatives side-by-side)
 
 Example: researching "KV vs Durable Objects". Extract KV pages with `focusPrompt="Extract KV read/write patterns, consistency model, and latency characteristics"`. Extract Durable Objects pages with `focusPrompt="Extract the consistency guarantees, transaction API, and single-computer model"`.
 
+When constructing a collation item from an extraction result, use the original `url` and `title`, `result.details.extraction` and `result.details.sourceType`, plus `status: "success"`. Copy `result.details.truncated` into the item's optional `truncated` field when present. If extraction fails, retain that source as a failed item with an empty `extraction`, an explicit `sourceType` such as `unknown`, `status: "failed"` and an optional bounded `error` string describing the failure. Failed items are listed for coverage but do not enter synthesis. Do not forward the entire extraction `details` object: its `currentness` field is not a collation input.
+
 ## Evidence and Provenance
 
 The Source Assessment inventory is generated from successful, non-empty extractions, not the search model's citations. IDs such as `[S1]` identify those evidence entries; cross-links in the synthesis are not additional fetched pages. Read exact cache paths from the inventory rather than guessing numbered filenames. `Not cached` means no full-page file exists for that source. The checks establish reference consistency, not factual accuracy.
@@ -131,6 +133,14 @@ Only reach into the cache when:
 - A complete code example is needed that was truncated in the summary.
 - The summary seems contradictory and the original source is needed.
 - The live results are insufficient and a related cached search may help.
+
+### Failed and Incomplete Sources
+
+A completed result can still have missing evidence. Check the failed-source list and truncation warnings before treating the report as complete. Fetch failures and extraction failures are separate counts; a saved full-page link exists only when that page was cached. Read that copy if it fills the evidence gap instead of repeating the whole paid pipeline.
+
+A truncation warning means reported output reached the configured stage cap; it does not prove exactly where text stopped. The absence of a warning does not establish completeness when usage is unavailable. Do not present a warned-about extraction or synthesis as complete evidence.
+
+For a budget-exhaustion diagnostic, review the matching extraction or collation token cap with the maintainer rather than retrying unchanged. The cap can include reasoning tokens, and lowering reasoning effort is not a guaranteed remedy. Standalone extraction returns `details.truncated`; carry it into manual collation. An `extraction-failed` result contains the search summary and up to ten known failure reasons, not a new cached report or saved pages. An all-fetch-failed result returns the search summary without individual reasons. A failed cache judge does not invalidate completed research, and no related-search suggestions do not establish that no relevant cache exists.
 
 ## Follow Up from Cache
 
