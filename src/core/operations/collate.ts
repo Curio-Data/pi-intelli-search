@@ -132,8 +132,18 @@ export async function collate(
     signal,
   );
 
+  const failedEntries = extractResults
+    .filter((e) => e.status !== "success")
+    .map((e) => ({
+      url: e.url,
+      ...(e.error ? { error: e.error } : {}),
+      ...(identity.sourceFileFor(e.url)
+        ? { sourceFile: `sources/${identity.sourceFileFor(e.url)}` }
+        : {}),
+    }));
+  const truncatedCount = succeeded.filter((e) => e.truncated).length;
   return {
-    text: collation + formatCacheAppendix(cachePath, succeeded.length, blocked.length),
+    text: collation + formatCacheAppendix(cachePath, succeeded.length, blocked.length, failedEntries, truncatedCount),
     outcome: "completed",
     details: { cachePath, sourcesFetched: succeeded.length + blocked.length },
   };

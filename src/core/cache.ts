@@ -544,7 +544,7 @@ export async function writeReportFile(
     for (const [i, ext] of succeeded.entries()) {
       const extractionFile = identity.extractionFileFor(ext.url);
       const sourceFile = identity.sourceFileFor(ext.url);
-      report += `| ${i + 1} | ${ext.url} | ${ext.sourceType} | ${
+      report += `| ${i + 1} | ${ext.url} | ${ext.sourceType}${ext.truncated ? " (⚠ truncated at the output cap)" : ""} | ${
         extractionFile ? `extractions/${extractionFile}` : "Not cached"
       } | ${sourceFile ? `sources/${sourceFile}` : "Not cached"} |\n`;
     }
@@ -553,8 +553,12 @@ export async function writeReportFile(
   if (blocked.length > 0) {
     report += `\n## Blocked/Failed URLs\n\n`;
     for (const entry of blocked) {
-      const error = pages.find((page) => page.url === entry.url)?.error;
-      report += `- ${entry.url}: ${error ?? (entry.status === "blocked" ? "Source marked blocked" : "Extraction failed")}\n`;
+      const fetchError = pages.find((page) => page.url === entry.url)?.error;
+      const reason = entry.error ?? fetchError ?? (entry.status === "blocked" ? "Source marked blocked" : "Extraction failed");
+      const savedSource = identity.sourceFileFor(entry.url);
+      report += `- ${entry.url}: ${reason}${
+        savedSource ? ` (full page saved: sources/${savedSource})` : ""
+      }\n`;
     }
   }
 
@@ -655,6 +659,20 @@ export function formatIndexForJudge(index: CacheIndex, excludeSlug?: string): st
   return entries
     .map((e, i) => `${i + 1}. "${e.query}" (slug: ${e.slug}, searched: ${e.timestamp})`)
     .join("\n");
+}
+
+/** True when a judge response is structurally parseable: nonempty, contains
+ *  a JSON array and that array parses. Distinguishes a failed judge (empty or
+ *  unparseable) from a valid `[]` zero-match verdict, which parseJudgeResponse
+ *  renders identically. */
+export function isWellFormedJudgeResponse(response: string): boolean {
+  const jsonMatch = response.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) return false;
+  try {
+    return Array.isArray(JSON.parse(jsonMatch[0]));
+  } catch {
+    return false;
+  }
 }
 
 /**

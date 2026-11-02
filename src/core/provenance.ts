@@ -159,7 +159,7 @@ export function finalizeCollation(
     const extractionFile = identity.extractionFileFor(source.url);
     if (!extractionFile) invalid("an evidence source has no extraction file");
     const fullPage = identity.sourceFileFor(source.url);
-    result += `| S${index + 1} | ${cell(source.url)} | ${cell(source.sourceType)} | ${evidence === "fetched" ? "Fetched and extracted" : "Caller-supplied extraction"} | ${cell(`${cachePath}/extractions/${extractionFile}`)} | ${fullPage ? cell(`${cachePath}/sources/${fullPage}`) : "Not cached"} |\n`;
+    result += `| S${index + 1} | ${cell(source.url)} | ${cell(source.sourceType)}${source.truncated ? " ⚠ truncated" : ""} | ${evidence === "fetched" ? "Fetched and extracted" : "Caller-supplied extraction"} | ${cell(`${cachePath}/extractions/${extractionFile}`)} | ${fullPage ? cell(`${cachePath}/sources/${fullPage}`) : "Not cached"} |\n`;
   }
   return result.trimEnd();
 }

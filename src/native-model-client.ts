@@ -104,6 +104,7 @@ export function createNativeModelClient(
     async complete(request) {
       const annotations = request.collectCitations ? createAnnotationSink() : undefined;
       let usage: ModelUsage | undefined;
+      let routeProvider: string | undefined;
       const text = await delegate(ctx, request.model, request.systemPrompt, request.userMessage, {
         maxTokens: request.maxTokens,
         signal: request.signal,
@@ -119,11 +120,15 @@ export function createNativeModelClient(
         onUsage: (reported) => {
           usage = { ...reported, ...(reported.cost ? { cost: { ...reported.cost } } : {}) };
         },
+        onRouteProvider: (provider) => {
+          routeProvider = provider;
+        },
       });
       return {
         text,
         citations: annotations?.citations ?? [],
         ...(usage ? { usage } : {}),
+        ...(routeProvider ? { routeProvider } : {}),
       };
     },
   };

@@ -912,7 +912,7 @@ The example below shows the default models and common tuning settings. The [Sett
     "cacheDir": ".search",
     "extractMaxChars": 150000,
     "extractionConcurrency": 4,
-    "extractionMaxTokens": 3000,
+    "extractionMaxTokens": 8000,
     "collationMaxTokens": 4000,
 
     // Fetch behaviour
@@ -936,12 +936,12 @@ The example below shows the default models and common tuning settings. The [Sett
 | `cacheDir` | 4, 5 | `.search` | Directory where research runs are cached. Change this to keep project-specific research separate. Example: `".my-research-cache"`. |
 | `extractMaxChars` | 3. Extract | `150000` | Maximum characters of page content fed to the extract LLM per page. Each 50K chars consumes ≈12K input tokens as a planning approximation; the model's tokenizer determines the actual count. Add prompt tokens and reserved output (`extractionMaxTokens`) before comparing with the token window. Lower this limit if that budget does not fit; raise it only with sufficient headroom. |
 | `extractionConcurrency` | 3. Extract | `4` | Number of per-page extractions sent to the extract model simultaneously. Bounded so a wide result set does not fire many concurrent LLM calls and trigger rate limiting. Raise it (6-8) on generous rate limits for faster extraction; lower it (1-2) on tight limits. |
-| `extractionMaxTokens` | 3. Extract | `3000` | Maximum output tokens for each per-page extraction. Higher values preserve more detail at higher cost. Lower this when using a model with a small context window so the output does not crowd out the input. The extract prompt targets 3,000-5,000 characters; 3,000 tokens covers this comfortably. |
+| `extractionMaxTokens` | 3. Extract | `8000` | Maximum output tokens for each per-page extraction. The cap covers hidden reasoning tokens as well as visible text: the default MiniMax M3 can spend 1.4K-5.2K tokens reasoning before any visible output, and an exhausted budget returns an empty extraction (surfaced as a failed source with the token counts). 8,000 leaves a ≈1.4x margin over the largest observed default-model extraction. Higher values preserve more detail at higher cost; lower this for a small-window model so output does not crowd out input, but values near the model's reasoning appetite recreate the empty-extraction failure. |
 | `collationMaxTokens` | 4. Collate | `4000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. Lower this when using a collation model with a small context window (the output must fit alongside all extraction inputs). This bounds synthesis output, not the source and cache appendices added afterwards. |
 | `fetchTimeoutMs` | 2. Fetch | `20000` | Per-page fetch timeout in milliseconds. Increase for sites known to be slow. Fetches run in parallel so this does not multiply by page count. |
 | `fetchConcurrency` | 2. Fetch | `4` | Number of pages fetched simultaneously. Higher values (6-8) complete the fetch stage faster but may trigger rate limiting. Lower values (2) are gentler on target servers. |
 | `browserFingerprint` | 2. Fetch | `chrome_145` | Transport Layer Security (TLS) fingerprint used by [_wreq-js_](https://github.com/sqdshguy/wreq-js) to impersonate a browser. Determines which Hypertext Transfer Protocol (HTTP) client signature the site sees. Available profiles include `chrome_*`, `firefox_*`, `safari_*`, `edge_*`, and `opera_*` across many versions. Change this if a site blocks the default fingerprint. |
-| `llmTimeoutMs` | Research LLM | `90000` | Hard per-call timeout in milliseconds for each model request inside `intelli_research`. Bounds a stalled provider connection (common under rate limiting) so it becomes a retryable timeout instead of hanging on the software development kit (SDK)'s long default. Raise it for slow reasoning models on large inputs; lower it to fail faster. |
+| `llmTimeoutMs` | Research LLM | `120000` | Hard per-call timeout in milliseconds for each model request inside `intelli_research`. Bounds a stalled provider connection (common under rate limiting) so it becomes a retryable timeout instead of hanging on the software development kit (SDK)'s long default. Raised from 90s in 0.20.0 alongside `extractionMaxTokens` (8,000 tokens): at the default model's ≈100 tokens/s an 8,000-token completion takes 77-84s, so a 90s timeout would abort exactly the calls the raised cap rescues. Raise it further for slower reasoning models on large inputs; lower it to fail faster. |
 | `llmRetryAttempts` | Research LLM | `3` | Total attempts per LLM call including the first. Transient failures (HTTP 429, 5xx, timeouts) are retried with full-jitter exponential backoff that honours any Retry-After hint. Set to `1` to disable retry. |
 | `retryBaseDelayMs` | Research LLM | `1500` | Base delay for retry backoff. Attempt N waits a random duration up to `min(retryMaxDelayMs, retryBaseDelayMs * 2^(N-1))`. |
 | `retryMaxDelayMs` | Research LLM | `20000` | Upper bound on any single retry backoff, and the clamp applied to a Retry-After hint so a large hint cannot stall the pipeline. |
@@ -1033,10 +1033,10 @@ Unspecified tuning comes from the canonical [shared defaults](src/core/defaults.
 | `maxUrls` | `20`: hard cap on research pages | Integer from 1 to 100 |
 | `extractMaxChars` | `150000`: per-page extraction input character limit | Integer from 1 to 2,000,000 |
 | `fetchTimeoutMs` | `20000`: page-fetch timeout in milliseconds | Integer from 1 to 600,000 |
-| `llmTimeoutMs` | `90000`: application timeout per model call in milliseconds | Integer from 1 to 600,000 |
+| `llmTimeoutMs` | `120000`: application timeout per model call in milliseconds | Integer from 1 to 600,000 |
 | `fetchConcurrency` | `4`: simultaneous page fetches | Integer from 1 to 32 |
 | `extractionConcurrency` | `4`: simultaneous per-page extractions | Integer from 1 to 32 |
-| `extractionMaxTokens` | `3000`: per-page output-token limit | Integer from 16 to 128,000 |
+| `extractionMaxTokens` | `8000`: per-page output-token limit (includes hidden reasoning tokens) | Integer from 16 to 128,000 |
 | `collationMaxTokens` | `4000`: synthesis output-token limit | Integer from 16 to 128,000 |
 | `llmRetryAttempts` | `3`: model-call attempts, including the first | Integer from 1 to 10 |
 | `searchRetryAttempts` | `2`: search attempts after a valid response with no usable links, including the first | Integer from 1 to 10 |
@@ -1057,7 +1057,7 @@ Unspecified tuning comes from the canonical [shared defaults](src/core/defaults.
 
 **Reasoning:** The adapter sends reasoning fields only when the catalogue advertises reasoning support; non-reasoning models receive neither effort nor exclusion fields.
 
-**Output Budget:** Empty output after token-budget exhaustion is an error, not a successful extraction. Empty collation is likewise rejected before a completed report is written. When these diagnostics occur, increase `collationMaxTokens`, lower reasoning effort, or choose a model with a smaller reasoning budget.
+**Output Budget:** Empty output after token-budget exhaustion is an error, not a successful extraction. Empty collation is likewise rejected before a completed report is written. Nonempty output cut off by the cap is kept but flagged as truncated in the report, the tool result and the telemetry sidecar. When these diagnostics occur, raise the matching stage setting (`extractionMaxTokens` for per-page extraction, `collationMaxTokens` for synthesis) or choose a model with a smaller reasoning budget. The cap covers hidden reasoning tokens, so a value near the model's reasoning appetite recreates the failure; lowering reasoning effort does not disable thinking on every serving route and is not a reliable remedy.
 
 ### Direct Engine Verification
 

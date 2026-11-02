@@ -115,16 +115,41 @@ export function buildCollationMessage(
   }, null, 2);
 }
 
+/** A failed source rendered in the result appendix: the URL, a bounded
+ *  reason when known, and the saved full-page file when one exists. */
+export interface FailedSourceEntry {
+  url: string;
+  error?: string;
+  sourceFile?: string;
+}
+
 /**
  * Build the result appendix pointing at the cache directory and report.
  * Appended after the collation text in both intelli_research and
- * intelli_collate results.
+ * intelli_collate results. Failed entries name the URL, the bounded failure
+ * reason when known, and the saved full-page path, so a calling agent can
+ * recover an already-fetched page instead of treating it as lost.
  */
-export function formatCacheAppendix(cachePath: string, succeeded: number, failed: number): string {
+export function formatCacheAppendix(
+  cachePath: string,
+  succeeded: number,
+  failed: number,
+  failedEntries: readonly FailedSourceEntry[] = [],
+  truncatedCount = 0,
+): string {
   let out = `\n\n---\n`;
   out += `**Cache**: \`${cachePath}/\`\n`;
   out += `**Report**: \`${cachePath}/report.md\`\n`;
-  out += `**Sources**: ${succeeded} succeeded, ${failed} failed\n`;
+  out += `**Sources**: ${succeeded} succeeded${truncatedCount > 0 ? ` (${truncatedCount} truncated at the output cap)` : ""}, ${failed} failed\n`;
+  if (failedEntries.length > 0) {
+    out += `\nFailed sources:\n`;
+    for (const entry of failedEntries) {
+      out += `- ${entry.url}`;
+      if (entry.error) out += `: ${entry.error}`;
+      if (entry.sourceFile) out += ` (full page saved: \`${cachePath}/${entry.sourceFile}\`)`;
+      out += `\n`;
+    }
+  }
   out += `\n- Read the report: \`read ${cachePath}/report.md\`\n`;
   out += `\nChoose exact extraction and full-page paths from the Source assessment above; Not cached means no full-page file exists for that source.\n`;
   return out;

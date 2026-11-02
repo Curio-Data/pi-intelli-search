@@ -6,6 +6,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [pi-0.20.0] - 2026-11-02
+
+Extract-budget resilience, prompted by a 2026-11-02 investigation where the most relevant page of a research run silently failed to extract: on reasoning models the completion cap covers hidden reasoning tokens, and the default model can spend the whole 3,000-token budget before any visible text, returning an empty extraction with `finish_reason: "length"`. The exhaustion is serving-route-dependent (reproduced on the [_OpenRouter_](https://openrouter.ai) Novita route; other routes finished comfortably inside the old cap).
+
+### Changed
+
+- `extractionMaxTokens` default raised from 3,000 to 8,000, and the research `llmTimeoutMs` default from 90s to 120s so a full 8,000-token completion (≈77-84s at the default model's observed rate) is not aborted by the timer that is meant to bound stalls. Users with explicit values keep theirs: tuning keys are not part of match-based model migration.
+- A nonempty extraction or synthesis cut off by its output cap is no longer presented as complete. Truncated extractions are flagged in the source assessment, the tool result (`N truncated at the output cap`) and the telemetry sidecar (`extract.truncated`, `collate.truncated`); a truncated collation carries a visible warning line in the report.
+- The cache-suggest judge's output cap is raised from 500 to 2,000 tokens (its reasoning budget counted against the old cap), and an empty or unparseable judge response is recorded as `cacheSuggest.degraded` in telemetry instead of being indistinguishable from a valid "nothing related" verdict.
+
+### Added
+
+- Per-page extraction failures now carry an actionable reason. The tool result's cache appendix lists each failed source with its bounded reason and a pointer to the saved full page, `details.extractionFailed` counts extraction failures separately from fetch failures, and telemetry records aggregate `extract.failureReasons` (budget-exhausted vs other) plus the serving route in `extract.provider` / `collate.provider` when every observed call agrees (native reads the `openrouter-provider` response header; the standalone server reads the `provider` response field).
+- Empty extractions fail with a message naming the token counts and `extractionMaxTokens` instead of a bare "no visible evidence", mirroring collation's existing guidance.
+
+### Fixed
+
+- The standalone `intelli_extract` operation no longer returns an empty extraction with `outcome: completed`: an empty response now throws the same actionable budget error.
+- The standalone server's provider guard now recognises budget exhaustion when [_OpenRouter_](https://openrouter.ai) returns `content: null` with `finish_reason: "length"`; previously the generic no-text branch shadowed the actionable message on that shape.
+
+## [mcp-0.20.0] - 2026-11-02
+
+Core behaviour is shared with [pi-0.20.0] and recorded there. Adapter-specific: the provider ordering fix for `content: null` exhaustion responses and the serving-route field in completions are standalone-server changes.
+
 ## [mcp-0.19.1] - 2026-10-27
 
 Published on `npm`; [clean-profile registry-pin verification](docs/COMPATIBILITY.md#published-0191-registry-pin-verification-2026-10-27) passes. This MCP-only patch does not require a native `Pi` release.

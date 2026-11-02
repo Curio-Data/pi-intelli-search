@@ -23,7 +23,7 @@ const baseSettings: ResearchSettings = {
   fetchTimeoutMs: 20_000,
   fetchConcurrency: 4,
   extractionConcurrency: 4,
-  extractionMaxTokens: 3000,
+  extractionMaxTokens: 8000,
   collationMaxTokens: 4000,
   browserFingerprint: "chrome_145",
 };
@@ -79,12 +79,12 @@ describe("loadSettings defaults", () => {
     assert.strictEqual(settings.fetchTimeoutMs, 20_000);
     assert.strictEqual(settings.fetchConcurrency, 4);
     assert.strictEqual(settings.extractionConcurrency, 4);
-    assert.strictEqual(settings.extractionMaxTokens, 3000);
+    assert.strictEqual(settings.extractionMaxTokens, 8000);
     assert.strictEqual(settings.collationMaxTokens, 4000);
     assert.strictEqual(settings.browserFingerprint, "chrome_145");
     assert.strictEqual(settings.disableLlmsFullDiscovery, false);
     assert.strictEqual(settings.disableTelemetry, false);
-    assert.strictEqual(settings.llmTimeoutMs, 90_000);
+    assert.strictEqual(settings.llmTimeoutMs, 120_000);
     assert.strictEqual(settings.llmRetryAttempts, 3);
     assert.strictEqual(settings.retryBaseDelayMs, 1500);
     assert.strictEqual(settings.retryMaxDelayMs, 20_000);

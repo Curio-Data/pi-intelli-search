@@ -23,6 +23,7 @@ import {
   writeReportFile,
   readIndex,
   formatIndexForJudge,
+  isWellFormedJudgeResponse,
   parseJudgeResponse,
   formatCacheSuggestions,
   cacheLockDir,
@@ -45,6 +46,8 @@ import {
   createRateLimiter,
   errMsg,
   throwIfAborted,
+  budgetExhausted,
+  reasoningOnlyCompletion,
 } from "../util.js";
 import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "../telemetry.js";
 import { mkdir, writeFile, rm, readdir, readFile, mkdtemp, stat } from "node:fs/promises";
@@ -260,9 +263,27 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   // Return concise injection
   // ═══════════════════════════════════════════
   const failedCount = fetched.pages.length - fetched.successPages.length;
+  const truncatedCount = succeededExtractions.filter((e) => e.truncated).length;
+  const failedEntries = allExtractions
+    .filter((e) => e.status !== "success")
+    .map((e) => ({
+      url: e.url,
+      ...(e.error ? { error: e.error } : {}),
+      // The full page stays on disk even when extraction failed; pointing
+      // the agent at it recovers work that was already paid for.
+      ...(identity.sourceFileFor(e.url)
+        ? { sourceFile: `sources/${identity.sourceFileFor(e.url)}` }
+        : {}),
+    }));
   const result =
     collation +
-    formatCacheAppendix(p.cachePath, succeededExtractions.length, allExtractions.length - succeededExtractions.length) +
+    formatCacheAppendix(
+      p.cachePath,
+      succeededExtractions.length,
+      allExtractions.length - succeededExtractions.length,
+      failedEntries,
+      truncatedCount,
+    ) +
     suggestionsAppendix;
 
   return {
@@ -273,6 +294,8 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
       urlsSearched: search.urls.length,
       pagesFetched: fetched.successPages.length,
       pagesFailed: failedCount,
+      // Extraction failures only (pagesFailed counts fetch failures).
+      extractionFailed: allExtractions.length - succeededExtractions.length,
     },
   };
 }
@@ -490,6 +513,19 @@ async function runExtractStage(
   // the returned extraction text. Blocked pages contributed no input.
   const succeededExtr = extractions.filter((e) => e.status === "success");
   const failedExtr = extractions.length - succeededExtr.length;
+  // Failure reasons aggregate after the worker pool settles, so concurrent
+  // pages cannot race a single "last error" slot. Budget exhaustion is
+  // classified from the retained error text (the call itself succeeded).
+  let budgetExhaustedFailures = 0;
+  for (const e of extractions) {
+    if (e.status !== "failed") continue;
+    if (e.error && /no visible evidence|exhausted/.test(e.error)) budgetExhaustedFailures += 1;
+  }
+  const truncatedCount = succeededExtr.filter((e) => e.truncated).length;
+  // Route provider: record it when every page that observed one agrees.
+  const routeProviders = new Set(
+    extractions.filter((e) => e.routeProvider).map((e) => e.routeProvider),
+  );
   // Input chars are not retained per-page post-call; approximate from the
   // pages that were fed in (capped at extractMaxChars each).
   const totalIn = successPages.reduce(
@@ -503,6 +539,16 @@ async function runExtractStage(
     failed: failedExtr,
     totalInputCharsApprox: totalIn,
     totalOutputChars: totalOut,
+    ...(truncatedCount > 0 ? { truncated: truncatedCount } : {}),
+    ...(failedExtr > 0
+      ? {
+          failureReasons: {
+            budgetExhausted: budgetExhaustedFailures,
+            other: failedExtr - budgetExhaustedFailures,
+          },
+        }
+      : {}),
+    ...(routeProviders.size === 1 ? { provider: [...routeProviders][0] } : {}),
   });
 
   return { extractions, blockedExtractions };
@@ -528,7 +574,7 @@ async function runCollateStage(
   );
 
   throwIfAborted(p.signal);
-  const { text } = await p.models.complete({
+  const { text, usage, routeProvider } = await p.models.complete({
     model: p.collateConfig,
     systemPrompt: COLLATION_SYSTEM_PROMPT,
     userMessage: collationUserMsg,
@@ -539,11 +585,22 @@ async function runCollateStage(
     onRetryNotice: (msg) => p.onProgress?.(progress("collate", msg)),
   });
 
-  const collation = finalizeCollation(text, p.cachePath, succeededExtractions, identity, "fetched");
+  let collation = finalizeCollation(text, p.cachePath, succeededExtractions, identity, "fetched");
+
+  // A synthesis cut off by the output cap still commits, but the reader must
+  // know it is incomplete rather than assume a clean ending.
+  const collateTruncated = budgetExhausted(usage, p.settings.collationMaxTokens);
+  if (collateTruncated) {
+    collation +=
+      `\n\n> ⚠ Collation output reached collationMaxTokens (${p.settings.collationMaxTokens}); ` +
+      `the synthesis may be cut off mid-sentence. Raise collationMaxTokens or re-run if completeness matters.`;
+  }
 
   p.tel?.recordCollate({
     model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
     summaryChars: text.trim().length,
+    ...(collateTruncated ? { truncated: true } : {}),
+    ...(routeProvider ? { provider: routeProvider } : {}),
   });
 
   return collation;
@@ -711,22 +768,34 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
   let cacheSuggestRan = false;
   let cacheSuggestSurfaced = 0;
   let cacheSuggestSlugs: string[] = [];
+  // True when the judge response was empty or unparseable, distinguishing a
+  // failed judge from a valid zero-match answer (both surface zero entries).
+  let cacheSuggestDegraded: boolean | undefined;
   try {
     const index = await readIndex(p.paths.cacheRoot);
     // Only run judge if there are other searches to compare against
     if (index.searches.some((e) => e.slug !== currentSlug)) {
       const indexText = formatIndexForJudge(index, currentSlug);
       const judgeUserMsg = `Current query: "${p.params.query}"\n\nPrevious searches:\n${indexText}`;
+      // 2,000 since 0.20.0: the extract model's hidden reasoning counts
+      // against the cap, and 500 let reasoning-only answers masquerade as a
+      // valid "no related searches" verdict.
       const { text: judgeResponse } = await p.models.complete({
         model: p.extractConfig,
         systemPrompt: CACHE_SUGGEST_PROMPT,
         userMessage: judgeUserMsg,
-        maxTokens: 500,
+        maxTokens: 2000,
         signal: p.signal,
         retry: p.retry,
         timeoutMs: p.settings.llmTimeoutMs,
         onRetryNotice: (msg) => p.onProgress?.(progress("cache", msg)),
       });
+      if (!judgeResponse.trim() || !isWellFormedJudgeResponse(judgeResponse)) {
+        cacheSuggestDegraded = true;
+        p.logger.error(
+          `Cache suggest judge returned ${judgeResponse.trim() ? "an unparseable" : "an empty"} response; treating as zero matches`,
+        );
+      }
       const matches = parseJudgeResponse(judgeResponse, index, currentSlug);
       cacheSuggestRan = true;
       cacheSuggestSurfaced = matches.length;
@@ -743,6 +812,7 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
     ran: cacheSuggestRan,
     surfaced: cacheSuggestSurfaced,
     slugs: cacheSuggestSlugs,
+    ...(cacheSuggestDegraded ? { degraded: true } : {}),
   });
 
   return suggestionsAppendix;
@@ -888,7 +958,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       p.settings.extractMaxChars,
     );
 
-    const { text: extraction } = await p.models.complete({
+    const { text: extraction, usage, routeProvider } = await p.models.complete({
       model: p.extractConfig,
       systemPrompt: EXTRACTION_SYSTEM_PROMPT,
       userMessage,
@@ -899,7 +969,18 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       onRetryNotice: (msg) => p.onProgress?.(progress("extract", msg)),
     });
 
-    if (!extraction.trim()) throw new Error("Extraction returned no visible evidence");
+    if (!extraction.trim()) {
+      // A 200 response can still carry zero visible text: on reasoning models
+      // the completion cap covers hidden reasoning tokens, and an exhausted
+      // call spends the whole budget before any visible output.
+      const usageNote = usage?.output != null
+        ? ` (${usage.output}/${p.settings.extractionMaxTokens} output tokens` +
+          (usage.reasoning != null ? `, ${usage.reasoning} hidden reasoning` : "") + ")"
+        : "";
+      throw new Error(
+        `Extraction returned no visible evidence${usageNote}; increase extractionMaxTokens or choose a model with a smaller reasoning budget`,
+      );
+    }
     const firstLine = extraction.split("\n")[0] ?? "";
     return {
       url: page.url,
@@ -908,11 +989,18 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       sourceType: inferSourceType(firstLine),
       currentness: inferCurrentness(firstLine),
       status: "success",
+      // Nonempty output cut off by the cap: kept, but flagged so the report
+      // and telemetry can say so. Missing usage never flags.
+      truncated: budgetExhausted(usage, p.settings.extractionMaxTokens) || undefined,
+      ...(routeProvider ? { routeProvider } : {}),
     };
   } catch (err: unknown) {
     throwIfAborted(p.signal);
-    // Log extraction error but don't fail the whole pipeline
-    p.logger.error(`Extraction failed for ${page.url}: ${errMsg(err)}`);
+    // Log extraction error but don't fail the whole pipeline. The bounded
+    // reason is retained on the result so the report and tool result can
+    // explain the failure instead of a bare "Extraction failed".
+    const message = errMsg(err);
+    p.logger.error(`Extraction failed for ${page.url}: ${message}`);
     return {
       url: page.url,
       title: page.title,
@@ -920,6 +1008,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       sourceType: "unknown",
       currentness: "unknown",
       status: "failed",
+      error: message.slice(0, 300),
     };
   }
 }

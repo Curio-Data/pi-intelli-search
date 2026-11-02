@@ -378,6 +378,66 @@ test("permanent and malformed errors are safe and do not retry", async () => {
   }
 });
 
+test("budget-exhausted length responses fail with an actionable message regardless of content shape", async () => {
+  const f = await fixture();
+  try {
+    // OpenRouter returns content null (not an empty string) when hidden
+    // reasoning consumes the whole completion cap; the generic no-text
+    // branch must not shadow the actionable budget message.
+    for (const content of [null, "", "   "]) {
+      let calls = 0;
+      const client = createOpenRouterClient(f.config, {
+        env: { FIXTURE_KEY: "fixture-secret" },
+        logger,
+        fetch: fakeTransport(() => {
+          calls++;
+          return json({
+            choices: [{ finish_reason: "length", message: { content } }],
+            usage: { prompt_tokens: 10, completion_tokens: 3000 },
+          });
+        }),
+      });
+      await client.preflight([{ role: "search", config: f.config.settings.searchModel }]);
+      await assert.rejects(
+        client.complete(request(f.config)),
+        (error: Error) =>
+          error.message.includes("exhausted the output budget") &&
+          error.message.includes("extractionMaxTokens"),
+        `content ${JSON.stringify(content)} should surface the budget message`,
+      );
+      assert.equal(calls, 1);
+    }
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("empty stop responses pass through and the serving route is surfaced", async () => {
+  const f = await fixture();
+  try {
+    let calls = 0;
+    const client = createOpenRouterClient(f.config, {
+      env: { FIXTURE_KEY: "fixture-secret" },
+      logger,
+      fetch: fakeTransport(() => {
+        calls++;
+        return json({
+          choices: [{ finish_reason: "stop", message: { content: "" } }],
+          provider: "FixtureRoute",
+          usage: { prompt_tokens: 10, completion_tokens: 5 },
+        });
+      }),
+    });
+    await client.preflight([{ role: "search", config: f.config.settings.searchModel }]);
+    const completion = await client.complete(request(f.config));
+    assert.equal(completion.text, "");
+    assert.equal(completion.routeProvider, "FixtureRoute");
+    assert.equal(calls, 1);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("stalled bodies time out per attempt, user cancellation never retries", async () => {
   const f = await fixture();
   try {

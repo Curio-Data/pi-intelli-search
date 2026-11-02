@@ -78,12 +78,13 @@ echo "🧪 Extension: $E2E_EXTENSION_PATH"
 RESEARCH_PROMPT='Use intelli_research with maxUrls=1 and domains=["docs.python.org"] to research: Python data model reference. Use focusPrompt="Extract the data-model details and canonical API terminology."'
 
 # ═══════════════════════════════════════════════════════════════════
-# Run 1: Default limits (extractMaxChars=150000, extractionMaxTokens=3000)
+# Run 1: Pinned legacy cap 3,000 (the 0.20.0+ default is 8,000; both runs
+# pin their caps explicitly so the truncation comparison stays deterministic)
 # ═══════════════════════════════════════════════════════════════════
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║  RUN 1: Default limits                               ║"
+echo "║  RUN 1: Pinned legacy cap 3,000                     ║"
 echo "║  extractMaxChars=150000  extractionMaxTokens=3000    ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
@@ -130,7 +131,7 @@ MEOF
 
 if ! e2e_run_pi "$ISO1" "$PROJECT_DIR" "$RESEARCH_PROMPT"; then
   echo ""
-  echo "❌ Run 1 (default) failed (no cache sidecar after retries)"
+  echo "❌ Run 1 (pinned legacy cap) failed (no cache sidecar after retries)"
   echo "$E2E_LAST_OUTPUT"
   exit 1
 fi

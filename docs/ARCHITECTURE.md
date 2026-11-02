@@ -90,7 +90,7 @@ Validation runs before rotation, downloads or cache writes. A failed collation p
 
 After the main pipeline completes, a lightweight LLM judge (using the extract model for cost efficiency) compares the current query against up to 20 recent entries in `.search/.index.json`. It returns semantically related previous searches, which are formatted as a `📚 Related cached searches` table with exact report paths appended to the tool output. Prompt generation and response parsing share the same recent-history window.
 
-This stage is supplementary and never replaces the live search. The pipeline awaits the judge under configured timeout and retry policy, so it can add latency. Judge failure is logged without discarding completed research; cancellation still propagates. The recorded cost estimate is ≈500 input tokens, or ≈$0.0002.
+This stage is supplementary and never replaces the live search. The pipeline awaits the judge under configured timeout and retry policy, so it can add latency. Judge failure is logged without discarding completed research; cancellation still propagates. The recorded cost estimate is ≈500 input tokens, or ≈$0.0002. Since 0.20.0 the judge's output cap is 2,000 tokens (raised from 500) and an empty or unparseable judge response is recorded as `degraded` in telemetry, distinguishing a failed judge from a valid zero-match verdict.
 
 ## Dependency Boundary
 

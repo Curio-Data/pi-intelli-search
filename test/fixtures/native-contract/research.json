@@ -10,7 +10,8 @@
       "cachePath": ".search/2026-01-02-fixture-research-ebdd02",
       "urlsSearched": 3,
       "pagesFetched": 3,
-      "pagesFailed": 0
+      "pagesFailed": 0,
+      "extractionFailed": 0
     }
   },
   "calls": [
@@ -150,7 +151,7 @@
           "timestamp": 1767312000000
         }
       ],
-      "maxTokens": 500,
+      "maxTokens": 2000,
       "reasoning": "low",
       "maxRetries": 0
     }

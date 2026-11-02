@@ -422,10 +422,10 @@ Unspecified tuning comes from the canonical [shared defaults](https://github.com
 | `maxUrls` | `20`: hard cap on research pages | Integer from 1 to 100 |
 | `extractMaxChars` | `150000`: per-page extraction input character limit | Integer from 1 to 2,000,000 |
 | `fetchTimeoutMs` | `20000`: page-fetch timeout in milliseconds | Integer from 1 to 600,000 |
-| `llmTimeoutMs` | `90000`: application timeout per model call in milliseconds | Integer from 1 to 600,000 |
+| `llmTimeoutMs` | `120000`: application timeout per model call in milliseconds | Integer from 1 to 600,000 |
 | `fetchConcurrency` | `4`: simultaneous page fetches | Integer from 1 to 32 |
 | `extractionConcurrency` | `4`: simultaneous per-page extractions | Integer from 1 to 32 |
-| `extractionMaxTokens` | `3000`: per-page output-token limit | Integer from 16 to 128,000 |
+| `extractionMaxTokens` | `8000`: per-page output-token limit (includes hidden reasoning tokens) | Integer from 16 to 128,000 |
 | `collationMaxTokens` | `4000`: synthesis output-token limit | Integer from 16 to 128,000 |
 | `llmRetryAttempts` | `3`: model-call attempts, including the first | Integer from 1 to 10 |
 | `searchRetryAttempts` | `2`: search attempts after a valid response with no usable links, including the first | Integer from 1 to 10 |
@@ -446,7 +446,7 @@ Unspecified tuning comes from the canonical [shared defaults](https://github.com
 
 **Reasoning:** The adapter sends reasoning fields only when the catalogue advertises reasoning support; non-reasoning models receive neither effort nor exclusion fields.
 
-**Output Budget:** Empty output after token-budget exhaustion is an error, not a successful extraction. Empty collation is likewise rejected before a completed report is written. When these diagnostics occur, increase `collationMaxTokens`, lower reasoning effort, or choose a model with a smaller reasoning budget.
+**Output Budget:** Empty output after token-budget exhaustion is an error, not a successful extraction. Empty collation is likewise rejected before a completed report is written. Nonempty output cut off by the cap is kept but flagged as truncated in the report, the tool result and the telemetry sidecar. When these diagnostics occur, raise the matching stage setting (`extractionMaxTokens` for per-page extraction, `collationMaxTokens` for synthesis) or choose a model with a smaller reasoning budget. The cap covers hidden reasoning tokens, so a value near the model's reasoning appetite recreates the failure; lowering reasoning effort does not disable thinking on every serving route and is not a reliable remedy.
 
 ### Direct Engine Verification
 

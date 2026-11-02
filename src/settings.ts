@@ -189,6 +189,17 @@ const DEFAULT_HISTORY: Record<
     collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   },
+  "0.20.0": {
+    // Extract-budget resilience (minor bump of both packages under the
+    // two-package scheme); model defaults unchanged. Non-model defaults
+    // changed this release (extractionMaxTokens 3,000 -> 8,000,
+    // llmTimeoutMs 90s -> 120s) but tuning keys are not part of match-based
+    // migration: unpinned users pick up the new values automatically, pinned
+    // users keep theirs (documented in the README Settings Reference).
+    extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+    collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  },
 };
 
 /** In-memory settings cache, isolated by the configuration source context. */

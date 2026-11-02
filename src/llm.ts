@@ -134,6 +134,10 @@ export async function callLlm(
     onRetryNotice?: (message: string) => void;
     /** Successful provider usage, retained by the host-neutral adapter. */
     onUsage?: (usage: ModelUsage) => void;
+    /** Serving route observed on the final successful attempt (for example
+     *  OpenRouter's `openrouter-provider` response header). Delivered only
+     *  when the adapter exposes the header; never an error otherwise. */
+    onRouteProvider?: (provider: string) => void;
   },
 ): Promise<string> {
   // 1. Resolve model from registry
@@ -195,6 +199,7 @@ export async function callLlm(
       // Each attempt has its own sink. Late reads from a failed attempt cannot
       // contaminate successful citations even when an old clone is still settling.
       const annotations = options?.annotations ? createAnnotationSink() : undefined;
+      let attemptRoute: string | undefined;
       if (options?.annotations) options.annotations.citations.length = 0;
       const annotationFetch = annotations
         ? wrapFetchForAnnotations(globalThis.fetch.bind(globalThis), annotations)
@@ -232,11 +237,19 @@ export async function callLlm(
             const secs = ra ? Number(ra) : NaN;
             hints.retryAfterMs = Number.isFinite(secs) ? secs * 1000 : undefined;
           }
+          // Capture the serving route for diagnostics. Purely observational:
+          // like the Retry-After capture above, a throw here would bypass
+          // the retry loop.
+          const route = res.headers["openrouter-provider"];
+          if (typeof route === "string" && route.length > 0) {
+            attemptRoute = route;
+          }
         },
       };
       const value = await __harness.registryStreamSimple(registry, model, context, streamOptions);
       if (value.stopReason === "error")
         return { value, error: value.errorMessage ?? "unknown error" };
+      if (attemptRoute) options?.onRouteProvider?.(attemptRoute);
       if (annotations) {
         await settleAnnotationSink(annotations);
         options!.annotations!.citations.push(...annotations.citations);

@@ -25,6 +25,16 @@ export interface ExtractResult {
   sourceType: string;
   currentness: string;
   status: "success" | "failed" | "blocked";
+  /** Set when the extraction text itself was cut off by the output cap.
+   *  Detected from reported usage (completion tokens at or above the cap);
+   *  absent usage never sets it. */
+  truncated?: boolean;
+  /** Bounded, safe failure reason for a status "failed" extraction
+   *  (for example a budget-exhausted or empty model response). */
+  error?: string;
+  /** OpenRouter serving route when the adapter observed it (response
+   *  header). Optional: absent on adapters or models without it. */
+  routeProvider?: string;
 }
 
 export interface ModelConfig {

@@ -132,6 +132,10 @@ export interface ModelCompletion {
   text: string;
   citations: HarvestedCitation[];
   usage?: ModelUsage;
+  /** Serving route observed by the adapter (for example OpenRouter's
+   *  `openrouter-provider` response header or `provider` response field).
+   *  Optional: adapters without route visibility omit it. */
+  routeProvider?: string;
 }
 
 export interface ModelClient {
