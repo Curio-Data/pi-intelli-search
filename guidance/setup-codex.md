@@ -4,13 +4,13 @@ The plugin launches the pinned `@curio-data/mcp-intelli-search` package through 
 
 No path or credential exports are required. The server uses the [_Codex_](https://developers.openai.com/codex/plugins) working root as its workspace and writes research cache below it. Launch Codex from the project folder or use its `--cd` option. Without a configuration file, Codex mode selects `perplexity/sonar` for search and `minimax/minimax-m3` for extraction and collation. Its four tools start even when credentials are absent.
 
-From the project folder in [_Bash_](https://www.gnu.org/software/bash/), store the [OpenRouter](https://openrouter.ai) application programming interface (API) key through the setup command. Enter it at a hidden prompt and pipe it through standard input. Do not put the key in process arguments, shell history or configuration JSON. Use setup from the plugin's 0.19 release line:
+From the project folder in [_Bash_](https://www.gnu.org/software/bash/), store the [OpenRouter](https://openrouter.ai) application programming interface (API) key through the setup command. Enter it at a hidden prompt and pipe it through standard input. Do not put the key in process arguments, shell history or configuration JSON. Run the setup command below:
 
 ```bash
 read -r -s -p 'OpenRouter API key: ' OPENROUTER_API_KEY
 printf '\n'
 printf '%s\n' "$OPENROUTER_API_KEY" | \
-  npx -y --package @curio-data/mcp-intelli-search@0.19 \
+  npx -y --package @curio-data/mcp-intelli-search \
   mcp-intelli-search setup
 unset OPENROUTER_API_KEY
 ```

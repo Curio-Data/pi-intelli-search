@@ -77,15 +77,32 @@ export interface TelemetryMeta {
       // across runs remain valid. Renamed from totalInputChars in v0.11.0.
       totalInputCharsApprox: number;
       totalOutputChars: number;
+      // Successful extractions whose visible text was cut off by the output
+      // cap (usage.output >= extractionMaxTokens). Present only when nonzero.
+      truncated?: number;
+      // Failure classification aggregated after the extract worker pool
+      // settles. Present only when at least one extraction failed.
+      failureReasons?: { budgetExhausted: number; other: number };
+      // Serving route every observed page agreed on (for example the
+      // OpenRouter "provider" behind the model). Absent when the adapter
+      // does not expose one or pages disagreed.
+      provider?: string;
     };
     collate: {
       model: string;
       summaryChars: number;
+      // True when the synthesis itself was cut off by collationMaxTokens.
+      truncated?: boolean;
+      // Serving route when the adapter observed one.
+      provider?: string;
     };
     cacheSuggest: {
       ran: boolean;
       surfaced: number; // count of related entries returned
       slugs: string[];
+      // True when the judge response was empty or unparseable: zero matches
+      // then reflect a failed judge, not a valid "nothing related" verdict.
+      degraded?: boolean;
     };
   };
 }
@@ -167,15 +184,23 @@ export class TelemetryBuilder {
     failed: number;
     totalInputCharsApprox: number;
     totalOutputChars: number;
+    truncated?: number;
+    failureReasons?: { budgetExhausted: number; other: number };
+    provider?: string;
   }): void {
     this.meta.stages.extract = { ...input };
   }
 
-  recordCollate(input: { model: string; summaryChars: number }): void {
+  recordCollate(input: {
+    model: string;
+    summaryChars: number;
+    truncated?: boolean;
+    provider?: string;
+  }): void {
     this.meta.stages.collate = { ...input };
   }
 
-  recordCacheSuggest(input: { ran: boolean; surfaced: number; slugs: string[] }): void {
+  recordCacheSuggest(input: { ran: boolean; surfaced: number; slugs: string[]; degraded?: boolean }): void {
     this.meta.stages.cacheSuggest = { ...input };
   }
 

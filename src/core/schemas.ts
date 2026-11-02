@@ -9,6 +9,11 @@ const extractionSchema = Type.Object({
   extraction: Type.String(),
   sourceType: Type.String(),
   status: Type.String(),
+  // Optional diagnostics carried from intelli_extract results: a truncation
+  // flag and the bounded failure reason. Optional so strict argument sampling
+  // that knows only the five core keys keeps working.
+  truncated: Type.Optional(Type.Boolean()),
+  error: Type.Optional(Type.String()),
 });
 const fullPageSchema = Type.Object({
   url: Type.String(),

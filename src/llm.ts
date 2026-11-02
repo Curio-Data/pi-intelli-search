@@ -134,6 +134,12 @@ export async function callLlm(
     onRetryNotice?: (message: string) => void;
     /** Successful provider usage, retained by the host-neutral adapter. */
     onUsage?: (usage: ModelUsage) => void;
+    /** Serving route observed on the final successful attempt. Delivered from
+     *  the `provider` field of provider stream events (OpenRouter sends the
+     *  route in chunk data; there is no response header for it). Optional:
+     *  hosts on pi-ai < 0.99 ignore the stream hook, so the route stays
+     *  absent there and is never an error. */
+    onRouteProvider?: (provider: string) => void;
   },
 ): Promise<string> {
   // 1. Resolve model from registry
@@ -195,6 +201,7 @@ export async function callLlm(
       // Each attempt has its own sink. Late reads from a failed attempt cannot
       // contaminate successful citations even when an old clone is still settling.
       const annotations = options?.annotations ? createAnnotationSink() : undefined;
+      let attemptRoute: string | undefined;
       if (options?.annotations) options.annotations.citations.length = 0;
       const annotationFetch = annotations
         ? wrapFetchForAnnotations(globalThis.fetch.bind(globalThis), annotations)
@@ -207,16 +214,19 @@ export async function callLlm(
         ...(annotationFetch ? { fetch: annotationFetch } : {}),
         // Supported citation channel (pi-ai >= 0.99): the OpenAI Completions
         // adapter, which serves OpenRouter, invokes this for every parsed SSE
-        // chunk before normalisation. Hosts on pi-ai < 0.99 ignore the option,
-        // which is why the fetch wrapper above stays as the fallback channel;
-        // both feed the same per-attempt sink and dedupe by URL.
-        ...(annotations
-          ? {
-              onProviderStreamEvent: (data: unknown) => {
-                harvestChunkAnnotations(data, annotations);
-              },
-            }
-          : {}),
+        // chunk before normalisation. Attached unconditionally because it is
+        // also the serving-route channel: OpenRouter carries the route in
+        // chunk data (`provider`), never in a response header. Hosts on
+        // pi-ai < 0.99 ignore the option, which is why the fetch wrapper
+        // above stays as the citation fallback; both citation paths feed the
+        // same per-attempt sink and dedupe by URL. The route capture is
+        // purely observational and must not throw (a throw would bypass the
+        // retry loop), so it guards its reads.
+        onProviderStreamEvent: (data: unknown) => {
+          if (annotations) harvestChunkAnnotations(data, annotations);
+          const route = (data as { provider?: unknown } | null)?.provider;
+          if (typeof route === "string" && route.length > 0) attemptRoute = route;
+        },
         maxTokens: options?.maxTokens,
         reasoning: options?.reasoning ?? "low",
         ...(options?.payloadPatch
@@ -237,6 +247,7 @@ export async function callLlm(
       const value = await __harness.registryStreamSimple(registry, model, context, streamOptions);
       if (value.stopReason === "error")
         return { value, error: value.errorMessage ?? "unknown error" };
+      if (attemptRoute) options?.onRouteProvider?.(attemptRoute);
       if (annotations) {
         await settleAnnotationSink(annotations);
         options!.annotations!.citations.push(...annotations.citations);

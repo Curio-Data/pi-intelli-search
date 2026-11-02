@@ -17,12 +17,22 @@ export function tuningDefaults(): Omit<
     fetchTimeoutMs: 20_000,
     fetchConcurrency: 4,
     extractionConcurrency: 4,
-    extractionMaxTokens: 3000,
+    // The completion cap covers hidden reasoning tokens on reasoning models
+    // (the default MiniMax M3 reasons for thousands of tokens before any
+    // visible text, and a budget-exhausted call returns empty output with
+    // finish_reason "length"). 8,000 cleared the failure in live probes
+    // (2026-11-02 investigation and reviews); the reasoning tail is route-
+    // and page-dependent, so telemetry records residual exhaustion
+    // (evidence/2026-11-02-extract-failure-agentskills-io).
+    extractionMaxTokens: 8000,
     collationMaxTokens: 4000,
     browserFingerprint: "chrome_145",
     disableLlmsFullDiscovery: false,
     disableTelemetry: false,
-    llmTimeoutMs: 90_000,
+    // Scaled with extractionMaxTokens in 0.20.0: an 8,000-token completion at
+    // the observed ≈95-104 tokens/s takes 77-84s, so the previous 90s default
+    // could abort exactly the calls the raised cap was meant to rescue.
+    llmTimeoutMs: 120_000,
     llmRetryAttempts: 3,
     retryBaseDelayMs: 1500,
     retryMaxDelayMs: 20_000,

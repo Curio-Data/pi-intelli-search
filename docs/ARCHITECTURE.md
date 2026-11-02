@@ -23,6 +23,16 @@ No cross-tool invocation is used. `intelli_research` is self-contained, with the
 
 Per-page extraction compresses each page independently to ≈3-5K characters of query-relevant content. The collation model then sees ≈40K total. This is comfortable for synthesis and deduplication. The optional `focusPrompt` parameter is most effective at this stage. "Extract only form validation patterns" applied to each page individually is far more targeted than asking a collation model to select that content from 500K chars.
 
+### Extraction Budgets and Partial Failures
+
+`extractionMaxTokens` bounds each page's completion, including reasoning tokens on the configured reasoning-model transport. The current value is defined in the README [Settings Reference](../README.md#settings-reference) and the shared defaults. Recorded probes show route-dependent reasoning consumption; a larger cap reduces the observed empty-output failure without guaranteeing completion for every page or route.
+
+Empty extraction output is rejected. Within research, the failure becomes a per-page failed result rather than aborting successful pages; standalone extraction throws. Nonempty output whose reported token count reaches the configured cap is retained with a possible-truncation warning. The same usage check warns about synthesis reaching `collationMaxTokens`. Missing usage cannot establish whether a response reached its cap.
+
+Completed research writes fetched pages even when extraction failed, and the failed-source appendix links to a full-page file only when one exists. Fetch failures have no fetched copy. If fetched pages yield no successful extraction, research returns the search summary and up to ten known failure reasons without writing a new report or page files. The earlier all-fetch-failed exit returns the search summary without per-source reasons. `pagesFailed` counts fetch failures; `extractionFailed` counts failed extraction calls. Manual collation accepts caller-supplied `truncated` and `error` fields but synthesises only successful, nonempty evidence.
+
+No automatic larger-budget retry is added for empty or truncated extraction output. The configured transport retries address transient failures and timer expiry; an unchanged repeat does not correct a completion-token limit. Read an available saved page or review the matching stage cap before repeating paid research.
+
 <a id="fetch-strategy-compare-dont-guess"></a>
 ### Fetch Variant Selection
 
@@ -69,7 +79,7 @@ A conditional merge based on the personalised catalogue was rejected. An offline
 
 The extension monitors `after_provider_response` events to detect Hypertext Transfer Protocol (HTTP) `429` (rate-limiting) and 5xx (server errors) from [OpenRouter](https://openrouter.ai). Rate-limit status appears in the `Pi` footer via `ctx.ui.setStatus()`, debounced to avoid flooding.
 
-Recovery is owned by `runModelWithPolicy()` in `src/core/llm.ts`, which `callLlm()` invokes once around native dispatch. Native streams receive `maxRetries: 0` so SDK retries do not compound with the shared policy. The policy's retry classifier mirrors `Pi` 1.3.0's own retry list (pi-ai `utils/retry.js`), covering transient provider load, gateway and wrapper wording, network and transport failures, premature stream endings and explicit retry guidance, while quota, budget and billing exhaustion fails fast without consuming the retry budget. Retries use full-jitter exponential backoff that honours any Retry-After hint, bounded by `llmRetryAttempts`, `retryBaseDelayMs`, and `retryMaxDelayMs`. On the [OpenRouter](https://openrouter.ai) path, the provider stream converts a failed HTTP request into `stopReason: "error"` with diagnostic text in `errorMessage`. The extension's classifier inspects that text rather than a raw HTTP response. SDK retries are disabled (`maxRetries: 0`); the shared policy owns reattempts. The `onResponse` callback only observes (it captures a Retry-After header) and never throws, because a throw would propagate out of the stream and bypass the retry loop.
+Recovery is owned by `runModelWithPolicy()` in `src/core/llm.ts`, which `callLlm()` invokes once around native dispatch. Native streams receive `maxRetries: 0` so SDK retries do not compound with the shared policy. The policy's retry classifier mirrors `Pi` 1.3.0's own retry list (pi-ai `utils/retry.js`), covering transient provider load, gateway and wrapper wording, network and transport failures, premature stream endings and explicit retry guidance, while account quota, credit-budget and billing exhaustion fail fast without consuming the retry budget. Completion-token exhaustion is a separate extraction diagnostic, not a transient transport failure. Retries use full-jitter exponential backoff that honours any Retry-After hint, bounded by `llmRetryAttempts`, `retryBaseDelayMs`, and `retryMaxDelayMs`. On the [OpenRouter](https://openrouter.ai) path, the provider stream converts a failed HTTP request into `stopReason: "error"` with diagnostic text in `errorMessage`. The extension's classifier inspects that text rather than a raw HTTP response. SDK retries are disabled (`maxRetries: 0`); the shared policy owns reattempts. The `onResponse` callback only observes (it captures a Retry-After header) and never throws, because a throw would propagate out of the stream and bypass the retry loop.
 
 A hard per-call timeout (`llmTimeoutMs`) is applied with an `AbortController` via `callWithAbortTimeout()`, combined with the tool signal so Esc still cancels. This is necessary because the SDK request timeout does not cover a stalled streaming body, which a provider can hold open after a 200 under load. Stage 1 additionally retries a degraded-200 search (a valid response with zero links) up to `searchRetryAttempts` times, and `minRequestIntervalMs` optionally spaces the concurrent extract calls for keys with tight rate limits. These configured retries and application timeouts apply inside `intelli_research`. Native standalone search, extract and collate retain one attempt without an application-level timeout. The pure helpers live in `src/core/util.ts` and are unit-tested. Only actual application timer expiry is classified as an application timeout; permanent provider exceptions are not retried as timeouts.
 
@@ -90,7 +100,7 @@ Validation runs before rotation, downloads or cache writes. A failed collation p
 
 After the main pipeline completes, a lightweight LLM judge (using the extract model for cost efficiency) compares the current query against up to 20 recent entries in `.search/.index.json`. It returns semantically related previous searches, which are formatted as a `📚 Related cached searches` table with exact report paths appended to the tool output. Prompt generation and response parsing share the same recent-history window.
 
-This stage is supplementary and never replaces the live search. The pipeline awaits the judge under configured timeout and retry policy, so it can add latency. Judge failure is logged without discarding completed research; cancellation still propagates. The recorded cost estimate is ≈500 input tokens, or ≈$0.0002.
+This stage is supplementary and never replaces the live search. The pipeline awaits the judge under the configured timeout and retry policy, so it can add latency. Its output cap is 2,000 tokens; this is a completion budget, not an input-token estimate. Empty or unparseable output and thrown attempted calls set `stages.cacheSuggest.degraded` when telemetry is enabled. A parsed empty match list is a valid zero-match verdict. Judge failure is logged without discarding completed research; cancellation still propagates. See [Telemetry Sidecar](#telemetry-sidecar) for `ran` and `degraded` semantics and the README [Cost](../README.md#cost) section for the planning estimate.
 
 ## Dependency Boundary
 
@@ -189,12 +199,14 @@ Documentation downloads stage in unique directories under the configured cache r
 
 Unless disabled, completed and documented degraded `intelli_research` paths attempt a best-effort `meta.json` write, including no links found, all fetches failed and all extractions failed. Cancellation and thrown failures do not all produce a sidecar. The `outcome` field records which exit path produced the file, so the analysis script can measure degradation rates, not just success. The schema is owned by `src/core/telemetry.ts` and is additive-only: future versions add optional fields and never rename or remove existing ones.
 
+Illustrative sidecar from an adapter version that supports the budget diagnostics below. Version and model strings are placeholders; the counts describe one completed run with partial extraction failure, possible truncation and an empty judge response.
+
 ```jsonc
 {
   "schemaVersion": 1,
-  "extensionVersion": "0.13.0",
+  "extensionVersion": "<emitting adapter version>",
   "query": "...",
-  "timestamp": "2026-06-25T12:00:00.000Z",
+  "timestamp": "2026-11-02T12:00:00.000Z",
   "durationMs": 12345,
   "outcome": "completed",
   "stages": {
@@ -217,20 +229,28 @@ Unless disabled, completed and documented degraded `intelli_research` paths atte
     },
     "extract": {
       "model": "...",
-      "succeeded": 8,
-      "failed": 0,
+      "succeeded": 7,
+      "failed": 1,
       "totalInputCharsApprox": 200000,
-      "totalOutputChars": 16000
+      "totalOutputChars": 16000,
+      "truncated": 1,
+      "failureReasons": {
+        "budgetExhausted": 1,
+        "other": 0
+      },
+      "provider": "Novita"
     },
     "collate": {
       "model": "...",
-      "summaryChars": 4000
+      "summaryChars": 4000,
+      "truncated": true,
+      "provider": "Novita"
     },
     "cacheSuggest": {
       "ran": true,
-      "surfaced": 2,
+      "surfaced": 0,
+      "degraded": true,
       "slugs": [
-        "..."
       ]
     }
   }
@@ -238,6 +258,16 @@ Unless disabled, completed and documented degraded `intelli_research` paths atte
 ```
 
 `outcome` is one of `completed`, `no-links`, `fetch-failed`, or `extraction-failed`. `schemaVersion` is decoupled from `extensionVersion` so consumers can branch on payload shape without parsing the product semver. `stages.extract.totalInputCharsApprox` is a lower bound: it sums the truncated page content fed to extraction and excludes the per-call wrapper text, so it understates real input; relative comparisons across runs remain valid. `stages.search.annotationsHarvested` counts `url_citation` entries recovered from the response body; it can include URLs already present in the text and URLs beyond the fetch limit, so it is not the number of extra pages fetched. A zero count does not distinguish a model that emits no annotations from a search that ran and cited nothing; historical records and runs that never reached the search stage omit the field entirely. Standalone `intelli_search` calls do not write this sidecar.
+
+Budget diagnostics are optional members of `stages`. Their absence must be interpreted with the emitting version and the stages reached:
+
+- `extract.truncated` counts successful extractions whose reported output-token count reached `extractionMaxTokens`. The field is written only when the count is nonzero. It warns of possible incomplete text, not a verified cut-off; missing usage cannot trigger it.
+- `extract.failureReasons` is written when at least one extraction failed. `budgetExhausted` counts failures identified by reported output reaching the cap or by the standalone adapter's empty-output exhaustion diagnostic; `other` counts the remaining extraction failures. Fetch failures are recorded separately in `fetch.failed`.
+- `collate.truncated` is written as `true` when reported synthesis output reaches `collationMaxTokens`. An absent field does not prove completeness when usage is unavailable.
+- `extract.provider` records a route only when all available per-page route observations agree; unobserved routes are not evidence of agreement. It is omitted when no route is available or observed routes differ. `collate.provider` records the synthesis route when available. Native capture reads `provider` from stream events; standalone capture reads the completion's `provider` field. A standalone completion that throws before returning does not supply a route to the core. These fields do not identify a provider for every failed page.
+- `cacheSuggest.degraded` is written as `true` when an attempted judge call returns empty or unparseable output, or throws. A thrown call can leave `ran: false` with `degraded: true`; a parsed empty match list is a valid zero-match verdict, not degradation. Older records omit this distinction.
+
+These fields are additive. Records from versions before their introduction do not establish zero truncations, zero budget failures or a healthy judge.
 
 The file is written atomically (temp file then `rename`) so a crash never leaves a partial `meta.json`, and a best-effort sweep cleans up any `.tmp` orphan left by a prior crashed write. The write is fail-safe: failures are caught and logged, never surfacing to the pipeline result or the agent.
 

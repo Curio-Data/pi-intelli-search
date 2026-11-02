@@ -18,7 +18,7 @@ import {
 import { buildCollationMessage, formatCacheAppendix } from "../messages.js";
 import { evidenceExtractions, finalizeCollation } from "../provenance.js";
 import type { ExtractResult } from "../types.js";
-import { errMsg, throwIfAborted } from "../util.js";
+import { errMsg, throwIfAborted, budgetExhausted } from "../util.js";
 import type { OperationContext, OperationResult } from "../contracts.js";
 
 export async function collate(
@@ -32,7 +32,9 @@ export async function collate(
   const paths = context.paths;
   const physicalPath = makeCachePath(params.query, paths.workspaceRoot, paths.cacheRoot);
   const cachePath = displayCachePath(paths, physicalPath);
-  // Build extract results for cache
+  // Build extract results for cache. The optional truncated/error flags a
+  // caller copied from intelli_extract results survive into cache writes,
+  // the inventory rendering and the appendix instead of being dropped.
   const extractResults: ExtractResult[] = params.extractions.map((e) => ({
     url: e.url,
     title: e.title,
@@ -41,6 +43,8 @@ export async function collate(
     currentness: "undated",
     status: e.status === "success" && !e.extraction.trim()
       ? "failed" : e.status as ExtractResult["status"],
+    ...(e.truncated ? { truncated: true } : {}),
+    ...(e.error ? { error: e.error } : {}),
   }));
   const succeeded = evidenceExtractions(extractResults);
   const blocked = extractResults.filter((e) => e.status !== "success");
@@ -70,7 +74,7 @@ export async function collate(
   );
 
   // Call LLM for collation (no lock — never hold locks across LLM calls)
-  const { text } = await models.complete({
+  const { text, usage } = await models.complete({
     model: collateConfig,
     systemPrompt: COLLATION_SYSTEM_PROMPT,
     userMessage,
@@ -78,7 +82,15 @@ export async function collate(
     signal,
   });
 
-  const collation = finalizeCollation(text, cachePath, succeeded, identity, "supplied");
+  let collation = finalizeCollation(text, cachePath, succeeded, identity, "supplied");
+
+  // Mirrors the research path: a synthesis cut off by the output cap still
+  // commits, but the reader must know it may end mid-sentence.
+  if (budgetExhausted(usage, settings.collationMaxTokens)) {
+    collation +=
+      `\n\n> ⚠ Collation output reached collationMaxTokens (${settings.collationMaxTokens}); ` +
+      `the synthesis may be cut off mid-sentence. Raise collationMaxTokens or re-run if completeness matters.`;
+  }
 
   // ═══════════════════════════════════════════════════════════════
   // Write cache artefacts under the per-cache-path lock so two
@@ -132,8 +144,18 @@ export async function collate(
     signal,
   );
 
+  const failedEntries = extractResults
+    .filter((e) => e.status !== "success")
+    .map((e) => ({
+      url: e.url,
+      ...(e.error ? { error: e.error } : {}),
+      ...(identity.sourceFileFor(e.url)
+        ? { sourceFile: `sources/${identity.sourceFileFor(e.url)}` }
+        : {}),
+    }));
+  const truncatedCount = succeeded.filter((e) => e.truncated).length;
   return {
-    text: collation + formatCacheAppendix(cachePath, succeeded.length, blocked.length),
+    text: collation + formatCacheAppendix(cachePath, succeeded.length, blocked.length, failedEntries, truncatedCount),
     outcome: "completed",
     details: { cachePath, sourcesFetched: succeeded.length + blocked.length },
   };

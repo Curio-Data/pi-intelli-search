@@ -3,6 +3,32 @@
 
 // Shared utilities
 
+import type { ModelUsage } from "./contracts.js";
+
+/** True when reported completion tokens reached the requested cap, meaning
+ *  the model's output (visible text plus any hidden reasoning) was cut off.
+ *  Missing usage is not zero usage: an absent value never reports
+ *  exhaustion. */
+export function budgetExhausted(
+  usage: ModelUsage | undefined,
+  maxTokens: number | undefined,
+): boolean {
+  if (usage?.output == null || maxTokens == null) return false;
+  return usage.output >= maxTokens;
+}
+
+/** True when the completion budget was exhausted with (almost) the whole cap
+ *  spent on hidden reasoning, i.e. a reasoning-only response with no visible
+ *  text. Used to classify a failed call as budget exhaustion rather than
+ *  another error; absent usage falls back to false. */
+export function reasoningOnlyCompletion(
+  usage: ModelUsage | undefined,
+  maxTokens: number | undefined,
+): boolean {
+  if (usage?.output == null || usage.reasoning == null || maxTokens == null) return false;
+  return usage.output >= maxTokens && usage.reasoning >= usage.output - 1;
+}
+
 export function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 }

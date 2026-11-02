@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/mcp-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/mcp-intelli-search)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-blue)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-668%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-684%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -59,6 +59,7 @@ The native extension uses `Pi` settings and authentication. Generic MCP registra
     - [Generic MCP Host](#generic-mcp-host)
 - [Tools](#tools)
   - [Evidence and Provenance](#evidence-and-provenance)
+  - [Extraction Diagnostics](#extraction-diagnostics)
 - [Usage Examples](#usage-examples)
   - [Quick Search](#quick-search)
   - [Deep Research](#deep-research)
@@ -219,13 +220,13 @@ codex plugin marketplace add Curio-Data/pi-intelli-search
 codex plugin add intelli-search --marketplace curio-data-plugins
 ```
 
-After installation, open a [_Bash_](https://www.gnu.org/software/bash/) shell in the project folder whose `.search/` directory will hold research results. Store the OpenRouter key with the following commands from the plugin's 0.19 release line. The key travels through standard input, not process arguments or configuration JSON:
+After installation, open a [_Bash_](https://www.gnu.org/software/bash/) shell in the project folder whose `.search/` directory will hold research results. Store the OpenRouter key with the setup command below. The key travels through standard input, not process arguments or configuration JSON:
 
 ```bash
 read -r -s -p 'OpenRouter API key: ' OPENROUTER_API_KEY
 printf '\n'
 printf '%s\n' "$OPENROUTER_API_KEY" | \
-  npx -y --package @curio-data/mcp-intelli-search@0.19 \
+  npx -y --package @curio-data/mcp-intelli-search \
   mcp-intelli-search setup
 unset OPENROUTER_API_KEY
 codex
@@ -287,6 +288,18 @@ Research collation receives only successful, non-empty page extractions, not the
 
 Manual `intelli_collate` labels its evidence as caller-supplied extractions; it does not claim the server fetched those pages. Empty or duplicate source evidence is rejected. The optional `searchSummary` input remains accepted for compatibility but does not supply synthesis evidence. Per-source relevance and contribution ratings are no longer model-generated. Read exact cache paths from the inventory; `Not cached` means no full-page file was supplied.
 
+### Extraction Diagnostics
+
+A completed research result can contain failed or incomplete sources. `details.pagesFailed` counts fetch failures; `details.extractionFailed` counts failures after a page was fetched. Inspect the failed-source list before relying on a report's coverage. A saved full-page link is provided only when that page was written to the cache. If pages were fetched but no extraction succeeds, the `extraction-failed` result returns the search summary and up to ten known failure reasons without writing a new report or saved pages. If every fetch fails, the separate `fetch-failed` result returns the search summary without a per-source reason list.
+
+Nonempty output whose reported token count reaches the configured cap is kept with a truncation warning. `intelli_extract` returns `details.truncated`; research and manual collation mark affected sources in the Source Assessment inventory. A synthesis warning applies to the summary itself. Missing usage does not establish completeness, and `outcome: "completed"` does not guarantee complete source coverage.
+
+For a budget-exhaustion diagnostic, review `extractionMaxTokens` for page extraction or `collationMaxTokens` for synthesis. On reasoning models, the budget includes reasoning as well as visible text. Increase the relevant cap within the model's output and context limits, or select a model with a smaller reasoning requirement. Lowering reasoning effort did not prevent exhaustion on the serving route identified in the investigation; it is not a guaranteed remedy. Read an available saved page before repeating paid research. Raising `llmTimeoutMs` addresses timer expiry, not an exhausted token budget or a host deadline.
+
+A higher completion cap can permit more billable output and increase OpenRouter's in-flight credit reservation. The [Cost](#cost) estimate is a planning figure, not a spending limit; raising a cap does not mean every call consumes it.
+
+Research sidecars, when enabled, record extraction-budget failures, possible truncation, available serving routes and cache-judge degradation. See [Telemetry Sidecar](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md#telemetry-sidecar) for field definitions and absence semantics. Standalone extraction and collation do not write this sidecar.
+
 <a id="quick-start"></a>
 ## Usage Examples
 
@@ -341,7 +354,7 @@ The illustration shows the native pipeline with the model configuration at its c
 
 The search stage merges text links with harvested citation annotations before selecting pages (see [Source Harvesting from Citations](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#source-harvesting-from-citations)). Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈30-50K for 10 pages).
 
-Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it.
+Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it. Budget diagnostics and their absence semantics are defined in [Telemetry Sidecar](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md#telemetry-sidecar); the [script guide](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md#reported-metrics) explains the available aggregates.
 
 See [docs/ARCHITECTURE.md](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md) for detailed design decisions.
 
@@ -422,10 +435,10 @@ Unspecified tuning comes from the canonical [shared defaults](https://github.com
 | `maxUrls` | `20`: hard cap on research pages | Integer from 1 to 100 |
 | `extractMaxChars` | `150000`: per-page extraction input character limit | Integer from 1 to 2,000,000 |
 | `fetchTimeoutMs` | `20000`: page-fetch timeout in milliseconds | Integer from 1 to 600,000 |
-| `llmTimeoutMs` | `90000`: application timeout per model call in milliseconds | Integer from 1 to 600,000 |
+| `llmTimeoutMs` | `120000`: application timeout per model call in milliseconds | Integer from 1 to 600,000 |
 | `fetchConcurrency` | `4`: simultaneous page fetches | Integer from 1 to 32 |
 | `extractionConcurrency` | `4`: simultaneous per-page extractions | Integer from 1 to 32 |
-| `extractionMaxTokens` | `3000`: per-page output-token limit | Integer from 16 to 128,000 |
+| `extractionMaxTokens` | `8000`: per-page output-token limit (includes hidden reasoning tokens) | Integer from 16 to 128,000 |
 | `collationMaxTokens` | `4000`: synthesis output-token limit | Integer from 16 to 128,000 |
 | `llmRetryAttempts` | `3`: model-call attempts, including the first | Integer from 1 to 10 |
 | `searchRetryAttempts` | `2`: search attempts after a valid response with no usable links, including the first | Integer from 1 to 10 |
@@ -446,7 +459,7 @@ Unspecified tuning comes from the canonical [shared defaults](https://github.com
 
 **Reasoning:** The adapter sends reasoning fields only when the catalogue advertises reasoning support; non-reasoning models receive neither effort nor exclusion fields.
 
-**Output Budget:** Empty output after token-budget exhaustion is an error, not a successful extraction. Empty collation is likewise rejected before a completed report is written. When these diagnostics occur, increase `collationMaxTokens`, lower reasoning effort, or choose a model with a smaller reasoning budget.
+**Output Budget:** Empty extraction output fails instead of becoming successful evidence; empty synthesis is rejected before a completed report is written. When reported output reaches the configured stage cap, nonempty output is retained with a truncation warning. Standalone `intelli_extract` returns `details.truncated`; pass it into manual `intelli_collate` to preserve the warning in its inventory and report. A capped synthesis is warned about in the report and tool result. Only `intelli_research` writes the telemetry sidecar, and only when enabled. Missing usage does not establish completeness. See [Extraction Diagnostics](#extraction-diagnostics) for recovery and the limits of these signals.
 
 ### Direct Engine Verification
 
@@ -487,7 +500,7 @@ This example incurs inference and search charges when run with a real credential
 
 Standalone validation rejects unknown argument keys, empty queries, nonpositive or fractional `maxUrls`, arrays exceeding 100 entries, strings exceeding 2,000,000 characters and unsupported extraction statuses. Most of these standalone validation rules are separate from the native tool schemas; the exception is the rejection of `maxUrls` values below 1, which the shared core schema also declares as `minimum: 1`, so it fails schema validation before the runtime's specific message. Positive fractional values at or above 1 still fail the standalone integer check.
 
-For manual extraction followed by collation, construct each collation item from the original `url` and `title`, `result.details.extraction` and `result.details.sourceType`, plus an explicit `status` such as `success`. Do not forward the entire extraction `details` object: its `currentness` field is not a collation input.
+For manual extraction followed by collation, construct each successful collation item from the original `url` and `title`, `result.details.extraction` and `result.details.sourceType`, plus `status: "success"`. Copy `result.details.truncated` into the item's optional `truncated` field when present. If extraction fails, retain that source as a failed item with an empty `extraction`, an explicit `sourceType` such as `unknown`, `status: "failed"` and an optional bounded `error` string describing the failure. Failed items are listed for coverage but do not enter synthesis. Do not forward the entire extraction `details` object: its `currentness` field is not a collation input. Supply actual content in `fullPages` if the full-page file must be cached.
 
 `mcp-intelli-search --help` and `--version` need no configuration. `--check-config` validates explicit configuration and workspace syntax without credentials or inference, returning exit status 0 for valid configuration and 1 for invalid input. Neither starts a protocol connection. `loadConfig()` throws an exported `ConfigurationError` for file defects, with a `reason` of `missing`, `unreadable`, `invalid-json` or `invalid`; workspace failures remain separate. JSON syntax diagnostics include a location without echoing file contents. The runtime entrypoint is experimental and has no published TypeScript declaration contract. Execution failures expose a safe `StandaloneError.code`: `INVALID_ARGUMENTS`, `CONFIGURATION`, `WORKSPACE`, `PROVIDER`, `OPERATION` or `CANCELLED`. Cancellation uses the `AbortError` name. Raw provider causes are deliberately not retained. Some shared operations wrap provider exceptions, which become `OPERATION` errors; protocol mapping must not depend on exact diagnostic strings.
 

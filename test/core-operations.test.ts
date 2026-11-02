@@ -6,6 +6,7 @@ import { it } from "node:test";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { search, extract, collate, research, MissingModelsError } from "../src/core/index.js";
+import type { ResearchDependencies } from "../src/core/operations/research.js";
 import { cacheLockDir, makeCachePath, readIndex } from "../src/core/cache.js";
 import { coreContext } from "./helpers/core-context.js";
 import type { OperationProgress } from "../src/core/contracts.js";
@@ -76,6 +77,239 @@ it("runs all four operations with per-instance dependencies and no host context"
   assert.equal(meta.packageName, context.identity.name);
   assert.equal(meta.adapter, "mcp");
   assert.equal((await readIndex(context.paths.cacheRoot)).searches.length, 2);
+});
+
+it("rejects empty standalone extraction with an actionable budget message", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root);
+  const context = {
+    ...base.context,
+    models: {
+      ...base.context.models,
+      complete: async () => ({ text: "", citations: [], usage: { output: 100, reasoning: 100 } }),
+    },
+  };
+  await assert.rejects(
+    extract({ url: "https://one.example", title: "One", content: "body", query: "q" }, context),
+    (error: Error) =>
+      error.message.includes("no visible text") &&
+      error.message.includes("extractionMaxTokens") &&
+      error.message.includes("100/100") &&
+      error.message.includes("100 hidden reasoning") &&
+      error.message.includes("output budget was exhausted"),
+  );
+});
+
+it("flags truncated standalone extraction instead of reporting it as complete", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root);
+  const context = {
+    ...base.context,
+    models: {
+      ...base.context.models,
+      complete: async () => ({
+        text: "official docs, current\nExtracted partially",
+        citations: [],
+        usage: { output: 100 },
+      }),
+    },
+  };
+  const result = await extract(
+    { url: "https://one.example", title: "One", content: "body", query: "q" },
+    context,
+  );
+  assert.match(result.text, /reached extractionMaxTokens/);
+  assert.match(result.text, /cut off mid-sentence/);
+  assert.equal(result.details.truncated, true);
+});
+
+it("surfaces per-page failure reasons, saved sources and telemetry classification", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root);
+  const exhaustedUsage = { output: 100, reasoning: 100 };
+  // The extract fan-out is concurrent, so key the fixture on the number of
+  // extract-model calls seen: the first page exhausts the budget with zero
+  // visible text, the second extracts cleanly but its text is cut off at
+  // the cap (both at usage.output === extractionMaxTokens = 100).
+  let extractCalls = 0;
+  const complete = async (request: { model: { model: string }; userMessage: string }) => {
+    if (request.model.model === "search")
+      return { text: "Answer. [One](https://one.example/page) [Two](https://two.example/page)", citations: [] };
+    if (request.model.model === "collate") return { text: "Summary.", citations: [] };
+    if (request.userMessage.startsWith("Current query:")) return { text: "[]", citations: [] };
+    extractCalls += 1;
+    if (extractCalls === 1)
+      return { text: "", citations: [], usage: exhaustedUsage, routeProvider: "FixtureRoute" };
+    return {
+      text: "official docs, current\nExtracted.",
+      citations: [],
+      usage: { output: 100 },
+      routeProvider: "FixtureRoute",
+    };
+  };
+  const context = { ...base.context, models: { ...base.context.models, complete } };
+  const result = await research({ query: "per-page diagnostics" }, context, base.dependencies);
+  assert.equal(result.outcome, "completed");
+  assert.equal(result.details.extractionFailed, 1);
+  assert.match(result.text, /1 truncated at the output cap\), 1 failed/);
+  assert.match(result.text, /\*\*Failed Sources\*\*:/);
+  assert.match(result.text, /https:\/\/(one|two)\.example\/page: Extraction returned no visible text/);
+  assert.match(result.text, /full page saved: `[^`]+\/sources\/\d+-/);
+  const meta = JSON.parse(
+    await readFile(join(root, result.details.cachePath as string, "meta.json"), "utf8"),
+  );
+  assert.equal(meta.stages.extract.failureReasons.budgetExhausted, 1);
+  assert.equal(meta.stages.extract.failureReasons.other, 0);
+  assert.equal(meta.stages.extract.truncated, 1);
+  assert.equal(meta.stages.extract.provider, "FixtureRoute");
+  const report = await readFile(join(root, result.details.cachePath as string, "report.md"), "utf8");
+  assert.match(report, /⚠ truncated/);
+  assert.match(report, /full page saved: sources\//);
+});
+
+it("counts fetch and extraction failures separately with fetch reasons in the appendix", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root);
+  const dependencies: ResearchDependencies = {
+    ...base.dependencies,
+    fetchPages: async (urls): Promise<import("../src/core/types.js").FetchedPage[]> =>
+      urls.map((url) =>
+        url.startsWith("https://one")
+          ? {
+              url,
+              title: url,
+              content: "Page body",
+              status: "success",
+              source: "markdown",
+            }
+          : {
+              url,
+              title: url,
+              content: "",
+              status: "error" as const,
+              error: "HTTP 403 Forbidden",
+            },
+      ),
+  };
+  const context = {
+    ...base.context,
+    models: {
+      ...base.context.models,
+      complete: async (request: { model: { model: string }; userMessage: string }) => {
+        if (request.model.model === "search")
+          return { text: "Answer. [One](https://one.example/page) [Two](https://two.example/page)", citations: [] };
+        return { text: "official docs, current\nExtracted.", citations: [] };
+      },
+    },
+  };
+  const result = await research({ query: "fetch vs extract failure accounting" }, context, dependencies);
+  assert.equal(result.outcome, "completed");
+  assert.equal(result.details.pagesFailed, 1, "the fetch failure");
+  assert.equal(result.details.extractionFailed, 0, "no extraction ran for the failed page");
+  // The failed-source line carries the fetch error, not a bare URL.
+  assert.match(result.text, /https:\/\/two\.example\/page: HTTP 403 Forbidden/);
+  const meta = JSON.parse(
+    await readFile(join(root, result.details.cachePath as string, "meta.json"), "utf8"),
+  );
+  assert.equal(meta.stages.extract.failed, 0);
+  assert.equal(meta.stages.fetch.failed, 1);
+});
+
+it("distinguishes a degraded cache judge from a valid zero-match verdict", async (t) => {
+  const root = await workspace(t);
+  // First run populates the index so the second run's judge has candidates.
+  const first = coreContext(root);
+  await research({ query: "first query" }, first.context, first.dependencies);
+  const base = coreContext(root);
+  const context = {
+    ...base.context,
+    models: {
+      ...base.context.models,
+      complete: async (request: { model: { model: string }; userMessage: string }) => {
+        if (request.userMessage.startsWith("Current query:"))
+          return { text: "", citations: [] };
+        if (request.model.model === "search")
+          return { text: "Answer. [One](https://one.example/page)", citations: [] };
+        return { text: "official docs, current\nExtracted.", citations: [] };
+      },
+    },
+  };
+  const result = await research({ query: "second query" }, context, base.dependencies);
+  const meta = JSON.parse(
+    await readFile(join(root, result.details.cachePath as string, "meta.json"), "utf8"),
+  );
+  assert.equal(meta.stages.cacheSuggest.ran, true);
+  assert.equal(meta.stages.cacheSuggest.surfaced, 0);
+  assert.equal(meta.stages.cacheSuggest.degraded, true);
+});
+
+it("marks a thrown cache judge as degraded too, not only an empty response", async (t) => {
+  const root = await workspace(t);
+  // First run populates the index so the second run's judge has candidates.
+  const first = coreContext(root);
+  await research({ query: "first query" }, first.context, first.dependencies);
+  const base = coreContext(root);
+  const context = {
+    ...base.context,
+    models: {
+      ...base.context.models,
+      complete: async (request: { model: { model: string }; userMessage: string }) => {
+        if (request.userMessage.startsWith("Current query:"))
+          throw new Error("LLM call failed: timeout");
+        if (request.model.model === "search")
+          return { text: "Answer. [One](https://one.example/page)", citations: [] };
+        return { text: "official docs, current\nExtracted.", citations: [] };
+      },
+    },
+  };
+  const result = await research({ query: "second query" }, context, base.dependencies);
+  assert.equal(result.outcome, "completed", "judge failure never degrades research");
+  const meta = JSON.parse(
+    await readFile(join(root, result.details.cachePath as string, "meta.json"), "utf8"),
+  );
+  assert.equal(meta.stages.cacheSuggest.ran, false);
+  assert.equal(meta.stages.cacheSuggest.degraded, true);
+});
+
+it("carries caller truncation flags into collate and warns on its own truncated synthesis", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root);
+  const context = {
+    ...base.context,
+    models: {
+      ...base.context.models,
+      complete: async (request: { model: { model: string }; userMessage: string }) => {
+        if (request.model.model === "collate")
+          return { text: "Summary.", citations: [], usage: { output: 100 } };
+        return { text: "Answer.", citations: [] };
+      },
+    },
+  };
+  const result = await collate(
+    {
+      query: "collate truncation",
+      extractions: [
+        {
+          url: "https://one.example",
+          title: "One",
+          extraction: "body",
+          sourceType: "docs",
+          status: "success",
+          truncated: true,
+        },
+      ],
+    },
+    context,
+  );
+  // Supplied truncation flag survives into the appendix count.
+  assert.match(result.text, /1 truncated at the output cap\), 0 failed/);
+  // The synthesis itself hit collationMaxTokens (100): warning appended.
+  assert.match(result.text, /Collation output reached collationMaxTokens/);
+  const report = await readFile(
+    join(root, result.details.cachePath as string, "report.md"),
+    "utf8",
+  );
+  assert.match(report, /⚠ truncated/, "inventory flags the supplied extraction");
 });
 
 it("rejects empty collation instead of reporting a completed cache", async (t) => {

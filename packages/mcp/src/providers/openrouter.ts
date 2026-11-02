@@ -328,17 +328,35 @@ export function createOpenRouterClient(
           const message = record(choice.message);
           if (message.refusal || choice.finish_reason === "content_filter")
             throw new Error("OpenRouter declined the request under provider policy");
-          if (typeof message.content !== "string")
-            throw new Error("OpenRouter returned no text completion");
-          if (!message.content.trim() && choice.finish_reason === "length")
+          // Budget exhaustion first: OpenRouter returns content null (or an
+          // empty string) with finish_reason "length" when hidden reasoning
+          // consumed the whole completion cap, so the generic no-text branch
+          // below must not shadow it with an unactionable message.
+          const content = message.content;
+          const emptyish =
+            content == null || (typeof content === "string" && !content.trim());
+          if (emptyish && choice.finish_reason === "length") {
+            const reported = usage(data.usage);
+            const counts =
+              reported?.output != null ? ` (${reported.output} output tokens` +
+                (reported.reasoning ? `, ${reported.reasoning} hidden reasoning` : "") + ")" : "";
             throw new Error(
-              "OpenRouter exhausted the output budget without visible text; increase token limits or lower reasoning effort",
+              "OpenRouter exhausted the output budget without visible text" + counts +
+                " (the cap includes any reasoning tokens). " +
+                "For extraction, review extractionMaxTokens; for synthesis, review collationMaxTokens. " +
+                "If this diagnostic came from search or cache suggestions, report the stage because those output caps are not exposed as tuning settings.",
             );
+          }
+          if (typeof content !== "string")
+            throw new Error("OpenRouter returned no text completion");
           return {
             value: {
-              text: message.content,
+              text: content,
               citations: request.collectCitations ? parseCitations(raw) : [],
               usage: usage(data.usage),
+              ...(typeof data.provider === "string" && data.provider
+                ? { routeProvider: data.provider }
+                : {}),
             },
           };
         },

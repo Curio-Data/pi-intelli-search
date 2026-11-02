@@ -95,12 +95,23 @@ try {
       assert.equal(body.messages[0].role, "system");
       assert.equal(body.stream, false);
       modelCalls++;
+      // The cache-suggest judge also runs on the extract model; answer its
+      // prompt with a well-formed empty array so the run records a valid
+      // zero-match verdict rather than a degraded judge diagnostic.
+      const judgeCall = body.messages.some(
+        (message) =>
+          message.role === "user" &&
+          (typeof message.content === "string"
+            ? message.content.startsWith("Current query:")
+            : Array.isArray(message.content) && message.content[0]?.text?.startsWith("Current query:")),
+      );
       return Response.json({
         choices: [
           {
             message: {
-              content:
-                body.model === selected.search
+              content: judgeCall
+                ? "[]"
+                : body.model === selected.search
                   ? `[Fixture](${url})`
                   : body.model === selected.extract
                     ? "Official documentation, current.\nVerified fixture content."
