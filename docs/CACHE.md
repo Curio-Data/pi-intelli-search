@@ -2,7 +2,7 @@
 
 This guide describes the run cache that the registered `intelli_research` and `intelli_collate` tools write in both packages, how a reader decides that a saved run is valid, and the non-destructive operator responses to persistence diagnostics. It covers the native `Pi` extension and the standalone Model Context Protocol (MCP) server. The [README Cache Structure](../README.md#cache-structure) summarises the layout; [Architecture](ARCHITECTURE.md#cache-structure) explains the design.
 
-Every procedure here preserves existing reports, allocation history and incomplete runs. No step deletes a run, edits the allocation journal or removes the lock file. The packages provide no automatic retention, compaction or history reset, and no packaged command that validates a journal or rebuilds the index. The procedures are derived from the source behaviour; they have not been exercised end to end as a recovery drill.
+Every procedure here preserves existing reports, allocation history and incomplete runs. No step deletes a run, edits the allocation journal or removes the lock file. The packages provide no automatic retention, compaction or history reset, and no packaged command that validates a journal or rebuilds the index. [Cache Qualification](CACHE-QUALIFICATION.md#isolation-and-recovery-proofs) records synthetic drills of secondary-index rebuilding, damaged-history refusal and both offline namespace choices. Those drills do not verify this operator guide end to end, repair unknown allocation history or establish power-loss recovery.
 
 ## Layout
 

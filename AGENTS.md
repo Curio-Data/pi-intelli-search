@@ -4,6 +4,19 @@ This is a **`Pi` extension** that adds intelligent web research tools to the `Pi
 
 The strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
 
+## Research-First Branch Instructions
+
+On `feat/codemode-research` and its research worktrees, start with [Codemode Resume](docs/plans/codemode/RESUME.md). The [2 November 2026 Owner Decisions](docs/plans/codemode/OWNER-REFOCUS.md) and [Research Plan](docs/plans/codemode/RESEARCH-PLAN.md) supersede conflicting older delivery, security, compatibility and live-gate instructions below and in historical plan/evidence files.
+
+- Completion requires experimental code, a fair same-build Codemode-off/on measured dataset, correct metadata, reproducible analysis and a publication-ready report. Synthetic tests or a pilot alone do not complete this branch. Main-package integration is considered only after a worthwhile measured benefit.
+- Use the pinned current host and prescribed models in Owner Decisions. Do not change package support floors or revive old-host qualification during the study. Security investigation and monitor development are stopped; report an encountered concern plainly for the owner's version/risk decision rather than starting another workstream.
+- Preserve ordinary credential care, finite calls, cancellation, truthful accounting and the existing USD 30 ceiling. Reconcile prior attributable spend and unknown exposure; a new session does not reset the budget. Study readiness follows the new protocol, not an expired legacy preparer or a per-call approval loop.
+- Build, deterministic tests, types, applicable generator checks and historical `check:codemode-plan` integrity checks remain required. Do not automatically run the old paid E2E suite, floor installers, halted helpers or security probes. The old audit/floor release blockers are disclosed history, not reasons to resume security exploration or prerequisites for the experiment. This is not a declaration that those checks passed.
+- The pending legacy-harness overlay is parked under ignored evidence, outside its active working paths, as recorded in Status. Restored old E2E scripts are not the study driver; do not run them against the new cache as a shortcut. No historical live window repeats to repair its outcome.
+- Retain raw study data under `evidence/benchmarks/<series-id>/`, never solely under `.tmp/`. Produce a versioned shareable dataset and commands that regenerate the report's figures without model calls. Evidence is never deleted. No package staging, publication or main merge is authorised.
+
+The existing `evidence/` directory also holds the timestamped pre-refocus snapshots and parked harness patch. These are durable local records, not new scratch folders. Frozen old contract/method files remain intact for accepted-code integrity; current scope and sequencing come from the owner decisions above.
+
 ---
 
 ## Shell Tool Preferences
@@ -601,6 +614,8 @@ No E2E script may be committed without being executed at least once to completio
 CI does not run E2E scripts (they require API keys and a live `pi` binary). The only gate is the developer running the script. If it is not run, it is not tested. If it is not tested, it rots.
 
 ### Must Run After Every Change
+
+For the research-first branch, the scoped validation instructions above replace the automatic live E2E and security-investigation requirements in this general package checklist. The full checklist remains relevant to a separately approved package-integration/release task.
 
 1. **Build:** `npm run build`
 2. **Unit tests:** `npm test`

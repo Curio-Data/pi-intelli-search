@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Changed
+
+- Registered research and collation in both packages save immutable reports below `<cacheDir>/.intelli-v1/runs/`. Repeating a query creates a new run instead of rotating or replacing the previous report. Legacy reports remain readable for related-search suggestions. [Cache and Recovery](docs/CACHE.md) covers retained incomplete runs, growth and non-destructive operator responses.
+- Registered research uses bounded model and page admission, streaming extraction and configurable page deadlines. A deadline freezes the evidence used for synthesis; late extractions are excluded from synthesis evidence. Calls drain their owned work before returning. Native standalone search, extract and collate retain their one-attempt policy without an application timeout.
+- Native research calls in the same assistant turn can run in parallel. A batch containing sequential collation remains sequential, and host-wide sequential control takes precedence. The standalone MCP server also admits bounded parallel operations; runtime capacities and pacing apply across calls.
+- Degraded research publishes no report. When allocation succeeds, its reserved directory remains; failed-attempt telemetry is optional and best-effort. Related-search suggestions also run on degraded outcomes and can incur a further model call. Completed answers remain available when report persistence fails.
+
 ## [pi-0.19.0] - 2026-10-16
 
 Prepared for publication; not published.

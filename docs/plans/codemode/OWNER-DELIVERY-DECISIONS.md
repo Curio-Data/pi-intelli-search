@@ -1,4 +1,6 @@
-# Delivery Decisions
+# Earlier Delivery Decisions
+
+These decisions are preserved history. The [2 November 2026 Research-First Decisions](OWNER-REFOCUS.md) supersede conflicting sequencing, old-host/security gates and scope. Use [Resume](RESUME.md) for current continuation. Earlier technical acceptance remains recorded; earlier release or helper instructions are not authority to restart stopped work.
 
 ## Authority
 
