@@ -50,6 +50,8 @@
     "native-suggestion-view.test.ts",
     "codemode-plan-revision.test.ts",
     "native-replay*.test.ts",
+    "native-study.test.ts",
+    "benchmark-study-*.test.ts",
     "helpers/native-replay*.ts",
     "workspace-paths.test.ts",
     "../scripts/capture-native-contract.mts"

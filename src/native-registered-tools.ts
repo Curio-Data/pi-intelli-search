@@ -2,9 +2,8 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { OperationInputs } from "./core/contracts.js";
 import type { OnUpdate } from "./host-types.js";
-import type { createNativeOperationRuntime } from "./native-operation-runtime.js";
+import type { createNativeOperationRuntime, NativeOperationInputs } from "./native-operation-runtime.js";
 import { intelliSearchTool } from "./tools/intelli-search.js";
 import { intelliExtractTool } from "./tools/intelli-extract.js";
 import { intelliCollateTool } from "./tools/intelli-collate.js";
@@ -15,10 +14,10 @@ export function createRegisteredNativeTools(
   runtime: ReturnType<typeof createNativeOperationRuntime>,
 ) {
   const execute =
-    <Name extends keyof OperationInputs>(name: Name) =>
+    <Name extends keyof NativeOperationInputs>(name: Name) =>
     (
       _toolCallId: string,
-      params: OperationInputs[Name],
+      params: NativeOperationInputs[Name],
       signal: AbortSignal | undefined,
       onUpdate: OnUpdate | undefined,
       ctx: ExtensionContext,

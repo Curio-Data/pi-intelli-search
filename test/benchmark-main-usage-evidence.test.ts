@@ -363,14 +363,14 @@ describe("responses-family wire shapes", () => {
   const responsesEvent = (data: unknown): ProviderStreamEventLike =>
     streamEvent(data, "openai-codex-responses");
 
-  it("correlates response.created id with response.completed usage", () => {
+  for (const terminal of ["response.completed", "response.done"]) it(`correlates response.created id with ${terminal} usage`, () => {
     const collector = createMainUsageEvidenceCollector();
     collector.onProviderStreamEvent(responsesEvent(asJson({ type: "response.created", response: { id: "resp_9" } })));
     collector.onProviderStreamEvent(responsesEvent(asJson({ type: "response.output_text.delta", delta: "hi" })));
     collector.onProviderStreamEvent(
       responsesEvent(
         asJson({
-          type: "response.completed",
+          type: terminal,
           response: {
             id: "resp_9",
             usage: {

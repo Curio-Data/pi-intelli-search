@@ -19,6 +19,7 @@ import type {
   PageTransport,
   Context,
   EngineOperations,
+  FetchParams,
 } from "./core/contracts.js";
 import { createRuntimeGenerations, type OperationRuntime } from "./core/operation-runtime.js";
 import { AdmissionError } from "./core/execution-coordinator.js";
@@ -35,6 +36,7 @@ import { capturePageFetchFactory, capturePageEnvironment } from "./core/page-run
 import { resolveWorkspacePaths } from "./core/paths.js";
 import { search } from "./core/operations/search.js";
 import { extract } from "./core/operations/extract.js";
+import { fetchPage } from "./core/operations/fetch.js";
 import { research } from "./core/operations/research.js";
 import { createScopedNativeModelClient, describeModelCatalog } from "./native-model-client.js";
 import { getNativeIdentity } from "./native-identity.js";
@@ -44,6 +46,11 @@ import type { OnUpdate } from "./host-types.js";
 import { errMsg, textContent } from "./util.js";
 import { captureSuggestionReadView, type NativeSuggestionReadView, type RegistryStreamSimple } from "./native-injection.js";
 import { withNativeSuggestionReadView } from "./native-suggestion-view.js";
+
+/** Fetch is dispatched only by the branch-only experimental registration. */
+export type NativeOperationInputs = OperationInputs & {
+  intelli_fetch: FetchParams;
+};
 
 interface SessionKey {
   readonly owner: object;
@@ -100,7 +107,7 @@ export class NativeExecutionError extends Error {
 /** One closure per extension registration. Construction starts no work. */
 export function createNativeOperationRuntime(options: NativeRuntimeOptions = {}) {
   options = { ...options, suggestionReadView: captureSuggestionReadView(options.suggestionReadView) };
-  const operations = Object.freeze({ search, extract, collate, research, ...options.operations });
+  const operations = Object.freeze({ search, extract, collate, research, fetchPage, ...options.operations });
   const generations = createRuntimeGenerations();
   const sessions = new WeakMap<object, Map<string | undefined, SessionState>>();
   const diagnostics = new Map<string, (diagnostic: Diagnostic) => void>();
@@ -257,9 +264,9 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
       }
       return closing;
     },
-    async execute<Name extends keyof OperationInputs>(
+    async execute<Name extends keyof NativeOperationInputs>(
       name: Name,
-      params: OperationInputs[Name],
+      params: NativeOperationInputs[Name],
       signal: AbortSignal | undefined,
       onUpdate: OnUpdate | undefined,
       ctx: ExtensionContext,
@@ -372,6 +379,13 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
                 }),
             };
             switch (name) {
+              case "intelli_fetch":
+                return boundary.run(() =>
+                  operations.fetchPage(
+                    params as FetchParams,
+                    operationContext(context),
+                  ),
+                );
               case "intelli_search":
                 return boundary!.run(() =>
                   operations.search(

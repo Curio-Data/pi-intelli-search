@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "kind": "codemode-branch-openrouter-spend-baseline",
+  "revision": "spend-baseline-3",
+  "recordedUtc": "2026-11-02T15:30:45Z",
+  "revisedUtc": "2026-11-02T16:01:52Z",
+  "revisionNote": "r3 per prose review: the USD 1 mcp-wiring hold is described as a chosen admission hold, not a demonstrated upper bound; amounts, rows and approval scope unchanged from r2.",
+  "recordedBy": "cm-design builder, run codemode-study-20261102T152129Z",
+  "authority": {
+    "ownerDecision": "OWNER-REFOCUS.md D5, 2026-11-02: hard ceiling USD 30; before new paid work count all known OpenRouter charges and retained unknown-charge exposure from this branch's programme, study and engineering expense separate; deduplicate original invocation identities; never assume the whole ceiling remains",
+    "planReference": "docs/plans/codemode/RESEARCH-PLAN.md Budget section",
+    "notAccountDebitAudit": true
+  },
+  "scope": {
+    "inScope": "Cash OpenRouter pipeline charges (Sonar search, MiniMax M3 extract/collate/suggest) incurred by the feat/codemode-research branch programme, first commit 2026-10-18, through this baseline date",
+    "outOfScope": [
+      {
+        "item": "September 2026 extract/collate model benchmark series",
+        "reason": "Main-package engineering recorded in docs/BENCHMARKS.md (2026-09-07 series); predates the branch (2026-10-18) and the USD 30 codemode envelope. Disclosed boundary, not silently dropped; the owner may overrule."
+      },
+      {
+        "item": "Subscription usage (openai-codex gpt-6.1-sol main/judge, claude-opus-5-5 and claude-sonnet-5-5 judges, zai glm-5.3 coordinator)",
+        "reason": "Not cash spend; reported separately per owner decision. Retained in per-run ledger main.usage records with subscriptionNotCash markers."
+      },
+      {
+        "item": "Synthetic selftest ledgers (r8 selftest-runs, reconciliation launcher logs, precommit/post-review verifications without cost fields)",
+        "reason": "No provider dispatch; flat 0.01 selftest values or no cost records at all."
+      }
+    ]
+  },
+  "deduplication": {
+    "identityRule": "An original invocation is identified by (window/scenario, startedUtc) where timestamps exist. Carried ledger rows (scenario 10-15 rows appear identically in the r4, r5, r7, r10, r11 and r12 ledgers) are counted once by startedUtc equality; all carried copies were compared and match. P4-era rows are identified by the log mapping in identityResolution, not by distinct charge values.",
+    "carriedRowsNotDoubleCounted": "Scenario 10 rows 1-6 and scenario 11 row 7 appear in 6 retained ledgers; window 13 rows 8-11 and window 14 row 12 appear in 3; each counted once here.",
+    "crossCheckWithTerminalRecord": "The terminal tranche's reported slice USD 0.213437388 equals this baseline's recipe + scenario11 + window13 + window14 subtotals exactly.",
+    "limitsOfProof": "startedUtc equality and exact carried-value equality establish identity where timestamps exist. Where neither exists (P4 era), identity rests on the one-to-one log mapping below; residual ambiguity is retained, not resolved by assumption."
+  },
+  "identityResolution": {
+    "p4Era": [
+      {"row": "K05", "verification": "p4-native-wiring", "reportedUsd": 0.00996715, "log": "e2e-main-20261020-124649.log", "utcStart": "2026-10-20T10:46:49Z", "method": "verification total appears in exactly this log"},
+      {"row": "K07", "verification": "p4-results", "reportedUsd": 0.01056273, "log": "e2e-main-20261020-165359.log", "utcStart": "2026-10-20T14:53:59Z", "method": "verification total appears in exactly this log"},
+      {"row": "K03", "verification": "p4-full-results", "reportedUsd": 0.011974604, "log": "e2e-main-20261020-190801.log", "utcStart": "2026-10-20T17:08:01Z", "method": "verification total appears in exactly this log"},
+      {"row": "K02", "verification": "p4-collate-results", "reportedUsd": 0.0105421, "log": "e2e-main-20261021-093754.log", "utcStart": "2026-10-21T07:37:54Z", "method": "verification total appears in exactly this log"},
+      {"row": "K06", "verification": "p4-process-transport", "reportedUsd": 0.01117492, "log": "e2e-main-20261021-135637.log", "utcStart": "2026-10-21T11:56:37Z", "method": "verification total appears in exactly this log"},
+      {"row": "K01", "verification": "p4-bounded-client", "reportedUsd": 0.00813439, "log": "e2e-main-20261021-204728.log", "utcStart": "2026-10-21T18:47:28Z", "method": "verification total appears in exactly this log"},
+      {"row": "K04", "verification": "p4-mcp-admission", "reportedUsd": 0.00925715, "log": "e2e-main-20261021-220329.log", "utcStart": "2026-10-21T20:03:29Z", "method": "verification total appears in exactly this log"},
+      {"row": "U02", "verification": "p4-mcp-wiring", "reportedUsd": null, "log": "e2e-main-20261019-231714.log", "utcStart": "2026-10-19T21:17:14Z", "method": "by elimination: the only remaining 19-21 Oct e2e-main log with live pipeline attempt costs; corroborated by the verification's recorded completion of one research with one page"}
+    ],
+    "logTimezone": "Log filename timestamps are Central European Summer Time (UTC+2); the 26 Oct logs are CET (UTC+1) after the 25 Oct daylight-saving end, which reproduces the ledger startedUtc values exactly.",
+    "residualAmbiguity": "The seven cost-matched mappings are exact-string matches of a retained verification total inside exactly one log. The mcp-wiring mapping is by elimination; if an unlogged ninth run existed it would be invisible to both the logs and the verifications, and this baseline cannot exclude that. No such run is recorded anywhere in the retained programme records."
+  },
+  "sources": [
+    {"id": "S01", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/p4-bounded-client-verification.json", "sha256": "9eda35f6bdf6a32e99b9a14ddf00656a683c0493fb650691e1615d378c5e4a50"},
+    {"id": "S02", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/p4-collate-results-verification.json", "sha256": "54a73183e16de42476bbc3054c6c786f6c9a2a3a4c60ee5c5da6dd390363cec1"},
+    {"id": "S03", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/p4-full-results-verification.json", "sha256": "752c3fc284948af593ce40ff5f739b29825c0bcab579d44579b804e50cf74f42"},
+    {"id": "S04", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/p4-mcp-admission-verification.json", "sha256": "86298270b707b25540d37acccc662e56393a3df5542aaf2a84354101c2e2dfff"},
+    {"id": "S05", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/p4-mcp-wiring-verification.json", "sha256": "55006476cd84c59f2d4d9aa8b2fa7fe1aa9264647b61a12b4618deb7170c3e28"},
+    {"id": "S06", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/p4-native-wiring-verification.json", "sha256": "23253b2304bf7729e44d8e6211a910f9c451a95bc627918be10c2e354ab8c7a4"},
+    {"id": "S07", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/p4-process-transport-verification.json", "sha256": "088f06c143a9fcfe1875139722c9b8c1933a5d5ac0a4295df804d19ccbdcfc3f"},
+    {"id": "S08", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/p4-results-verification.json", "sha256": "eacbca87540c961ee614e049d93d4cd1d3bc5f7fba2784c5d7563aa0ad75585e"},
+    {"id": "S09", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/m1-regression-verification.json", "sha256": "332913c8f807943be754a21f661910ea49b4024ec5dbdfc7afbef303cd71238c", "note": "hash matches the Development record"},
+    {"id": "S10", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/m2-regression-verification.json", "sha256": "129b1abe369f42fc4abc06a371ddd440b7d17df3c30ebf12218c3d19bbdaa688", "note": "hash matches the Development record"},
+    {"id": "S11", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/config-slice-verification.json", "sha256": "8a94d5b20f4ec991006d45daeb485c66c89ec05d38d0b9e7e265526b2fb743ac", "note": "configuration-slice regression at acknowledged e159f78, source e775123"},
+    {"id": "S12", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/m3-regression-verification.json", "sha256": "073efb322badf1d2668694ebdfef3c76a8633f6196773430bf30309bf30ef13d", "note": "hash matches the Development record"},
+    {"id": "S13", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/m4-integrated-ledger.json", "sha256": "a6426a2b01606b884b5feec7b433d4a818f393e9b283c72ac1be59ce46a27c72"},
+    {"id": "S14", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/security-native-ledger.json", "sha256": "b895c26f7043e11c11dc319aae3bcda1aaa3f66c773650ae503bb08c5c3ceb60", "note": "security-lane native 01 run, ceiling USD 2"},
+    {"id": "S15", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/tranche-02-04-ledger.json", "sha256": "dcc4379bf858ccc574112b1a0a51520b00937158309bd62eb19fedbb075898aa"},
+    {"id": "S16", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/tranche-05-09-ledger.json", "sha256": "26a3674aed22bb0f4ce1505405cf61371608eb19d288b203b7e67ef64a38fa08"},
+    {"id": "S17", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/tranche-12-15-r12-ledger.json", "sha256": "a3ebe014cf12bff5900e5d2435f8f4352f940f2a25d2c1b4bcfe04115d651479", "note": "terminal tranche ledger; carries recipes, scenario 11, windows 13-15"},
+    {"id": "S18", "evidencePath": "evidence/codemode/20261029T170000Z-tranche-12-15-terminal-handover/TRANCHE-RECORD.json", "sha256": "62bffb3eb2b6f34244986ebed0666ff2f56329bb57fe304061733545bc11b104"},
+    {"id": "S19", "evidencePath": "evidence/codemode/20261028T115952Z-r5b-fresh-execution/REPORT.md", "sha256": "d885e32aa193a740a69de4dbc0c89044f24998365d65ef53debf6baa8ec9e0f9"},
+    {"id": "S20", "evidencePath": "evidence/codemode/20261028T125528Z-scenario11-correction/ACCEPTANCE-r6b.json", "sha256": "1758a9b519a20a5692a3948898d4c4a8c6b26eda2d3e909e56f798ec601c4fa2"},
+    {"id": "S21", "evidencePath": "evidence/benchmarks/spend-baseline-20261102T152129Z/sources/logs/", "note": "eight original 19-21 Oct e2e-main run logs; per-file SHA-256 in SHA256SUMS beside this baseline; P4-era identity witnesses"}
+  ],
+  "knownCharges": [
+    {"id": "K01", "category": "engineering", "label": "P4 bounded-client regression 01_main", "startedUtc": "2026-10-21T18:47:28Z", "log": "e2e-main-20261021-204728.log", "reportedUsd": 0.00813439, "basis": "provider-reported pipeline cost in retained verification", "source": "S01"},
+    {"id": "K02", "category": "engineering", "label": "P4 collate-results regression 01_main", "startedUtc": "2026-10-21T07:37:54Z", "log": "e2e-main-20261021-093754.log", "reportedUsd": 0.0105421, "basis": "provider-reported pipeline cost in retained verification", "source": "S02"},
+    {"id": "K03", "category": "engineering", "label": "P4 full-results regression 01_main", "startedUtc": "2026-10-20T17:08:01Z", "log": "e2e-main-20261020-190801.log", "reportedUsd": 0.011974604, "basis": "provider-reported pipeline cost in retained verification", "source": "S03"},
+    {"id": "K04", "category": "engineering", "label": "P4 mcp-admission regression 01_main", "startedUtc": "2026-10-21T20:03:29Z", "log": "e2e-main-20261021-220329.log", "reportedUsd": 0.00925715, "basis": "provider-reported pipeline cost in retained verification", "source": "S04"},
+    {"id": "K05", "category": "engineering", "label": "P4 native-wiring regression 01_main", "startedUtc": "2026-10-20T10:46:49Z", "log": "e2e-main-20261020-124649.log", "reportedUsd": 0.00996715, "basis": "provider-reported pipeline cost in retained verification", "source": "S06"},
+    {"id": "K06", "category": "engineering", "label": "P4 process-transport regression 01_main", "startedUtc": "2026-10-21T11:56:37Z", "log": "e2e-main-20261021-135637.log", "reportedUsd": 0.01117492, "basis": "provider-reported pipeline cost in retained verification", "source": "S07"},
+    {"id": "K07", "category": "engineering", "label": "P4 results regression 01_main", "startedUtc": "2026-10-20T14:53:59Z", "log": "e2e-main-20261020-165359.log", "reportedUsd": 0.01056273, "basis": "provider-reported pipeline cost in retained verification", "source": "S08"},
+    {"id": "K08", "category": "engineering", "label": "M1 mandatory native regression 01_main", "startedUtc": "2026-10-22T10:40:30Z", "log": "e2e-main-20261022-124030.log (unpromoted; identity by startedUtc and Development record)", "reportedUsd": 0.01080926, "basis": "provider-reported pipeline cost in retained verification", "source": "S09"},
+    {"id": "K09", "category": "engineering", "label": "M2 mandatory native regression 01_main", "startedUtc": "2026-10-22T17:10:14Z", "log": "e2e-main-20261022-191010.log (unpromoted; identity by startedUtc and Development record)", "reportedUsd": 0.0104406, "basis": "provider-reported pipeline cost in retained verification", "source": "S10"},
+    {"id": "K10", "category": "engineering", "label": "Configuration-slice regression 01_main", "startedUtc": "2026-10-23T17:14:21Z", "log": "e2e-main-20261023-191415.log (unpromoted; identity by startedUtc)", "reportedUsd": 0.00837808, "basis": "provider-reported pipeline cost in retained verification", "source": "S11"},
+    {"id": "K11", "category": "engineering", "label": "M3 mandatory native regression 01_main", "startedUtc": "2026-10-23T11:14:55Z", "log": "e2e-main-20261023-131450.log (unpromoted; identity by startedUtc and Development record)", "reportedUsd": 0.008248384, "basis": "provider-reported pipeline cost in retained verification", "source": "S12"},
+    {"id": "K12", "category": "engineering", "label": "M4 integrated-candidate regression 01_main", "startedUtc": "2026-10-26T20:56:05Z", "log": "e2e-main-20261026-215600.log (unpromoted; identity by startedUtc)", "reportedUsd": 0.00829534, "basis": "provider-reported pipeline cost in retained ledger", "source": "S13"},
+    {"id": "K13", "category": "engineering", "label": "Security-lane native 01 run", "startedUtc": "2026-10-26T14:51:11Z", "log": "e2e-main-20261026-155111.log (unpromoted; identity by startedUtc)", "reportedUsd": 0.00895338, "basis": "provider-reported pipeline cost in retained ledger", "source": "S14"},
+    {"id": "K14", "category": "engineering", "label": "E2E scenario 02 run 1", "startedUtc": "2026-10-26T10:31:55Z", "log": "e2e-cap-20261026-113155.log (unpromoted)", "reportedUsd": 0.01215265, "basis": "provider-reported pipeline cost in retained ledger", "source": "S15"},
+    {"id": "K15", "category": "engineering", "label": "E2E scenario 02 run 2", "startedUtc": "2026-10-26T10:33:29Z", "reportedUsd": 0.01807158, "basis": "provider-reported pipeline cost in retained ledger", "source": "S15"},
+    {"id": "K16", "category": "engineering", "label": "E2E scenario 03", "startedUtc": "2026-10-26T10:35:00Z", "log": "e2e-model-override-20261026-113459.log (unpromoted)", "reportedUsd": 0.026179, "basis": "provider-reported pipeline cost in retained ledger", "source": "S15"},
+    {"id": "K17", "category": "engineering", "label": "E2E scenario 04", "startedUtc": "2026-10-26T10:35:58Z", "log": "e2e-migration-20261026-113558.log (unpromoted)", "reportedUsd": 0.02367032, "basis": "provider-reported pipeline cost in retained ledger", "source": "S15"},
+    {"id": "K18", "category": "engineering", "label": "E2E scenario 05 run 1", "startedUtc": "2026-10-26T15:30:41Z", "log": "e2e-collation-limits-20261026-163041.log (unpromoted)", "reportedUsd": 0.0240559, "basis": "provider-reported pipeline cost in retained ledger", "source": "S16"},
+    {"id": "K19", "category": "engineering", "label": "E2E scenario 05 run 2", "startedUtc": "2026-10-26T15:32:38Z", "reportedUsd": 0.01865915, "basis": "provider-reported pipeline cost in retained ledger", "source": "S16"},
+    {"id": "K20", "category": "engineering", "label": "E2E scenario 06 run 1", "startedUtc": "2026-10-26T15:34:25Z", "log": "extract-limits-20261026-163425.log (unpromoted)", "reportedUsd": 0.01371431, "basis": "provider-reported pipeline cost in retained ledger", "source": "S16"},
+    {"id": "K21", "category": "engineering", "label": "E2E scenario 06 run 2", "startedUtc": "2026-10-26T15:36:33Z", "reportedUsd": 0.00683963, "basis": "provider-reported pipeline cost in retained ledger", "source": "S16"},
+    {"id": "K22", "category": "engineering", "label": "E2E scenario 07", "startedUtc": "2026-10-26T15:37:41Z", "log": "e2e-llmsfull-20261026-163740.log (unpromoted)", "reportedUsd": 0.00830159, "basis": "provider-reported pipeline cost in retained ledger", "source": "S16"},
+    {"id": "K23", "category": "engineering", "label": "E2E scenario 08", "startedUtc": "2026-10-26T15:38:53Z", "log": "e2e-websearch-tool-20261026-163853.log (unpromoted)", "reportedUsd": 0.01322249, "basis": "provider-reported pipeline cost in retained ledger", "source": "S16"},
+    {"id": "K24", "category": "engineering", "label": "E2E scenario 09", "startedUtc": "2026-10-26T15:40:27Z", "log": "e2e-sonar-pro-search-20261026-164026.log (unpromoted)", "reportedUsd": 0.04094269, "basis": "provider-reported pipeline cost in retained ledger", "source": "S16"},
+    {"id": "K25", "category": "engineering", "label": "Recipe R1 (config-recipes window, tranche ledger row 1)", "startedUtc": "2026-10-27T22:19:19Z", "log": "e2e-config-recipes-20261027-231848.log (unpromoted)", "reportedUsd": 0.01286143, "basis": "provider-reported pipeline cost in terminal ledger", "source": "S17"},
+    {"id": "K26", "category": "engineering", "label": "Recipe tranche row 2 (R4-R8 set)", "startedUtc": "2026-10-28T10:47:15Z", "reportedUsd": 0.026466818, "basis": "provider-reported pipeline cost in terminal ledger", "source": "S17"},
+    {"id": "K27", "category": "engineering", "label": "Recipe tranche row 3 (R4-R8 set)", "startedUtc": "2026-10-28T10:49:11Z", "reportedUsd": 0.03380775, "basis": "provider-reported pipeline cost in terminal ledger", "source": "S17"},
+    {"id": "K28", "category": "engineering", "label": "Recipe tranche row 4 (R4-R8 set)", "startedUtc": "2026-10-28T10:50:42Z", "reportedUsd": 0.01956713, "basis": "provider-reported pipeline cost in terminal ledger", "source": "S17"},
+    {"id": "K29", "category": "engineering", "label": "Recipe tranche row 5 (R4-R8 set)", "startedUtc": "2026-10-28T10:52:06Z", "reportedUsd": 0.0169058, "basis": "provider-reported pipeline cost in terminal ledger", "source": "S17"},
+    {"id": "K30", "category": "engineering", "label": "Recipe tranche row 6 (R4-R8 set)", "startedUtc": "2026-10-28T10:53:49Z", "reportedUsd": 0.04664077, "basis": "provider-reported pipeline cost in terminal ledger", "source": "S17"},
+    {"id": "K31", "category": "engineering", "label": "Scenario 11 standalone MCP research (resolved by r6b review)", "startedUtc": "2026-10-28T12:44:18Z", "log": "e2e-mcp-stdio-20261028-134416.log (unpromoted)", "reportedUsd": 0.00707577, "basis": "contemporaneous verified receipt and matching execution attestation, accepted by r6b review; the ledger row's pre-resolution 0 is superseded, not additive", "source": "S17 S19 S20"},
+    {"id": "K32", "category": "engineering", "label": "Window 13 Claude Code plugin session 1", "startedUtc": "2026-10-29T11:34:34Z", "reportedUsd": 0.00565, "basis": "provider-reported pipeline cost in terminal ledger", "source": "S17"},
+    {"id": "K33", "category": "engineering", "label": "Window 13 Claude Code plugin session 2", "startedUtc": "2026-10-29T11:35:20Z", "reportedUsd": 0.00562, "basis": "provider-reported pipeline cost in terminal ledger", "source": "S17"},
+    {"id": "K34", "category": "engineering", "label": "Window 13 Claude Code plugin session 3", "startedUtc": "2026-10-29T11:36:07Z", "reportedUsd": 0.00535, "basis": "provider-reported pipeline cost in terminal ledger", "source": "S17"},
+    {"id": "K35", "category": "engineering", "label": "Window 13 Claude Code plugin session 4", "startedUtc": "2026-10-29T11:36:54Z", "reportedUsd": 0.02537814, "basis": "provider-reported pipeline cost in terminal ledger", "source": "S17"},
+    {"id": "K36", "category": "engineering", "label": "Window 14 Codex plugin research", "startedUtc": "2026-10-29T13:09:18Z", "reportedUsd": 0.00811378, "basis": "provider-reported pipeline cost in terminal ledger", "source": "S17"}
+  ],
+  "unknownExposure": [
+    {
+      "id": "U01",
+      "label": "Window 15 dispatched-then-killed research (egress route-probe classification stop; zero completed work; never re-dispatches)",
+      "startedUtc": "2026-10-29T13:31:42Z",
+      "pendingHoldUsd": 0.5,
+      "actualCharge": "unknown",
+      "basis": "Held reserve carried unchanged from the terminal tranche record; the charge is unknown rather than zero. Evidence: evidence/codemode/20261029T164500Z-r12-window15-egress-stop/",
+      "source": "S17 S18"
+    },
+    {
+      "id": "U02",
+      "label": "P4 mcp-wiring regression 01_main (completed research, one page; retained verification records reportedTotalUsd null, completeness unknown)",
+      "startedUtc": "2026-10-19T21:17:14Z",
+      "pendingHoldUsd": 1.0,
+      "observedFloorUsd": 0.009314,
+      "actualCharge": "unknown",
+      "basis": "Pending admission hold chosen for admission arithmetic; not a demonstrated upper bound on the unknown charge. No provider cost report was retained for this run. The retained run log preserves two distinct pipeline attempt costs totalling USD 0.009314 (a floor, not the charge). The hold counts against admission until an account statement or owner decision releases it; prose does not release it.",
+      "source": "S05 S21"
+    }
+  ],
+  "totals": {
+    "knownChargeCount": 36,
+    "knownReportedUsd": 0.545984786,
+    "pendingHoldsUsd": 1.5,
+    "conservativeExposureUsd": 2.045984786,
+    "ceilingUsd": 30,
+    "remainingUnderCeilingConservativeUsd": 27.954015214,
+    "studyExpenseUsd": 0,
+    "engineeringExpenseUsd": 0.545984786,
+    "engineeringSubtotals": {
+      "p4SliceRegressions": 0.071613044,
+      "milestoneAndConfigRegressions": 0.055125044,
+      "e2eScenarios02To09": 0.20580931,
+      "recipesScenario10": 0.156249698,
+      "scenario11": 0.00707577,
+      "window13": 0.04199814,
+      "window14": 0.00811378
+    }
+  },
+  "empiricalPipelineCostDistributionUsd": {
+    "n": 36,
+    "min": 0.00535,
+    "median": 0.01099209,
+    "mean": 0.01516624,
+    "p75": 0.01934013,
+    "max": 0.04664077,
+    "note": "Per-invocation provider-reported pipeline cost across the branch programme; used by SCHEDULE.md forecasts"
+  },
+  "knownLimitations": [
+    "Values are provider-reported ledger observations, not an account-debit audit; actual billed amounts may differ.",
+    "The recipe-to-row mapping (which of R4-R8 corresponds to ledger rows 2-6) is not recorded in the ledger; rows are identified by startedUtc only. R1 is row 1 by the r3-window date.",
+    "Scenario 12 (window 12) records no new pipeline charge in the terminal ledger and its retained verification carries no cost fields; it is counted as zero new charge, matching the terminal record's arithmetic.",
+    "No historical ledger, log or window was executed or reopened to produce this baseline; all figures are read from retained records and their byte-identical promoted copies.",
+    "Logs named '(unpromoted)' are identified by filename only; the corresponding charge evidence is the promoted verification or ledger cited in the same row."
+  ]
+}

@@ -402,7 +402,7 @@ export function createMainUsageEvidenceCollector(
         applyObservation(streamKey, api, event, safeResponseId(response?.["id"]), null, null);
         return;
       }
-      if (eventType === "response.completed" || eventType === "response.failed" || eventType === "response.incomplete") {
+      if (eventType === "response.completed" || eventType === "response.done" || eventType === "response.failed" || eventType === "response.incomplete") {
         const responseUsage = response !== null && isJsonObject(response["usage"]) ? response["usage"] : null;
         applyObservation(
           streamKey,

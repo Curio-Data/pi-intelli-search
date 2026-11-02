@@ -39,6 +39,7 @@ import {
   createNativeOperationRuntime,
   NativeExecutionError,
   type NativeRuntimeOptions,
+  type NativeOperationInputs,
 } from "../src/native-operation-runtime.js";
 import { createRegisteredNativeTools } from "../src/native-registered-tools.js";
 import { invalidateSettingsCache, clearMigrationContext } from "../src/settings.js";
@@ -156,9 +157,9 @@ async function fixture(transport: Transport, options: NativeRuntimeOptions = {},
     }) as unknown as ExtensionContext;
   const ctx = makeContext("first");
   const tools = createRegisteredNativeTools(runtime);
-  const run = <Name extends keyof OperationInputs>(
+  const run = <Name extends keyof NativeOperationInputs>(
     name: Name,
-    params: OperationInputs[Name],
+    params: NativeOperationInputs[Name],
     signal?: AbortSignal,
     context = ctx,
   ) => runtime.execute(name, params, signal, (value) => updates.push(value), context);

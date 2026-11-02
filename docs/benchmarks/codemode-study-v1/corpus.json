@@ -1,0 +1,639 @@
+{
+  "schemaVersion": 2,
+  "study": "codemode-study-v1",
+  "revision": "corpus-v1-r3",
+  "purpose": "Frozen public inputs for the research-first Codemode off/on comparison; no fixture capture, human gold acceptance, paid run or powered sample claimed",
+  "workflowTypes": ["single", "breadth", "manual", "followup"],
+  "partitions": ["development", "pilot", "measured-series", "reserve"],
+  "provenanceRule": "Every item names retained (old corpus identifier) or fresh (composed for this study). Retained items keep their original exposure status; they are never relabelled unseen. Fresh items were composed without web search.",
+  "queryRoleRule": "The query text is the live-session task intent: a concrete, answerable question that names products but never prescribes tool names or manual steps. The forced workflow (searches, pages, extractions, collation, read steps) lives only in manualPlan and followupPlan.",
+  "pageBudgets": {
+    "single": 4,
+    "breadth": { "totalPages": 12, "angles": 3, "perAngle": 4 },
+    "manual": "2 search calls, 4 attempted pages total, 4 extractions, 1 collation",
+    "followup": "base research 4 attempted pages; the follow-up is answered after reading the saved base-research report through the built-in read operation; controlled replay adds zero pages and live behaviour is observed, not prescribed"
+  },
+  "queries": [
+    {
+      "id": "CS-DEV-01",
+      "partition": "development",
+      "workflow": "single",
+      "provenance": {"origin": "retained", "originalId": "CM-D01", "originalCorpus": "docs/benchmarks/corpus/codemode.json"},
+      "query": "What does satisfies check, and how does it differ from a type assertion?",
+      "domains": ["typescriptlang.org"],
+      "focusPrompt": "Extract evidence about TypeScript satisfies: what it checks, how it differs from type assertions, exact syntax and limitations.",
+      "taskClass": "single-research",
+      "workflowQueries": ["What does satisfies check, and how does it differ from a type assertion?"],
+      "exposureFamily": "TypeScript satisfies (old CM-D01; exposed development material)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-DEV-02",
+      "partition": "development",
+      "workflow": "breadth",
+      "provenance": {"origin": "retained", "originalId": "CM-D02", "originalCorpus": "docs/benchmarks/corpus/codemode.json"},
+      "query": "Design a bounded concurrent fetch workflow with cancellation, partial results and shutdown.",
+      "domains": ["nodejs.org", "developer.mozilla.org"],
+      "focusPrompt": "Extract evidence about bounded concurrent fetching: admission limits, AbortController cancellation, partial-result collection, graceful shutdown.",
+      "taskClass": "multi-angle",
+      "workflowQueries": [
+        "How does AbortController cancel ongoing fetch operations?",
+        "How is bounded concurrency implemented for asynchronous work?",
+        "How are partial results collected when some operations fail?"
+      ],
+      "exposureFamily": "Node HTTP cancellation (old CM-D02, cross-experiment group node-http-cancellation; exposed development material)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-DEV-03",
+      "partition": "development",
+      "workflow": "manual",
+      "provenance": {"origin": "fresh", "basis": "composed for manual-workflow coverage in this study"},
+      "query": "Compare the documented connection options of ClickHouse and RabbitMQ: required parameters, defaults, TLS controls and pool or heartbeat settings.",
+      "manualPlan": {
+        "searches": 2,
+        "searchQueries": [
+          "ClickHouse documented connection settings, defaults and TLS controls",
+          "RabbitMQ documented connection settings, defaults and heartbeat configuration"
+        ],
+        "pages": 4,
+        "extract": 4,
+        "collate": 1,
+        "note": "Arms differ only in tool exposure: direct tool calls in off, script calls in on. Operations are capability-matched with fixed per-arm catalogues; page budget, models and limits are equal."
+      },
+      "domains": ["clickhouse.com", "rabbitmq.com"],
+      "focusPrompt": "Extract documented connection options: scheme, required parameters, defaults, TLS controls and pool or heartbeat settings.",
+      "taskClass": "manual-search-fetch-extract-collate",
+      "workflowQueries": ["Compare the documented connection options of ClickHouse and RabbitMQ."],
+      "exposureFamily": "Connection-option comparison (fresh, development)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-DEV-04",
+      "partition": "development",
+      "workflow": "followup",
+      "provenance": {"origin": "fresh", "basis": "composed for followup-workflow coverage in this study"},
+      "query": "Explain how Docker build layers are cached, then answer a follow-up about invalidating that cache without rebuilding everything.",
+      "followupPlan": {
+        "base": "Explain how Docker image build layers are cached and reused.",
+        "read": "Read the saved base-research report through the built-in read operation.",
+        "followup": "Which documented flag or instruction invalidates the layer cache from a specific point without rebuilding the base stages?"
+      },
+      "domains": ["docs.docker.com"],
+      "focusPrompt": "Extract evidence about build cache layers, cache reuse rules and selective cache invalidation.",
+      "taskClass": "research-then-followup",
+      "workflowQueries": ["Explain how Docker build layers are cached, then answer the follow-up after reading the saved report."],
+      "exposureFamily": "Container build caching (fresh, development)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-PIL-01",
+      "partition": "pilot",
+      "workflow": "single",
+      "provenance": {"origin": "fresh", "basis": "composed for pilot single-workflow coverage"},
+      "query": "Explain Playwright's auto-waiting behaviour, when it applies and when to disable it, citing the documentation.",
+      "domains": ["playwright.dev"],
+      "focusPrompt": "Extract evidence about auto-waiting: which actions wait, what conditions are checked, and the documented way to opt out.",
+      "taskClass": "single-research",
+      "workflowQueries": ["Explain Playwright's auto-waiting behaviour, when it applies and when to disable it, citing the documentation."],
+      "exposureFamily": "Playwright auto-waiting (fresh, pilot)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-PIL-02",
+      "partition": "pilot",
+      "workflow": "single",
+      "provenance": {"origin": "fresh", "basis": "composed for pilot single-workflow coverage"},
+      "query": "Explain the difference between CMD and ENTRYPOINT in Docker images, with the documented combination behaviours.",
+      "domains": ["docs.docker.com"],
+      "focusPrompt": "Extract evidence about CMD and ENTRYPOINT semantics, their interaction and documented examples.",
+      "taskClass": "single-research",
+      "workflowQueries": ["Explain the difference between CMD and ENTRYPOINT in Docker images, with the documented combination behaviours."],
+      "exposureFamily": "Container entrypoint semantics (fresh, pilot)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-PIL-03",
+      "partition": "pilot",
+      "workflow": "breadth",
+      "provenance": {"origin": "fresh", "basis": "composed for pilot breadth-workflow coverage"},
+      "query": "Explain how Vite handles dependency pre-bundling, code splitting and browser compatibility targets in builds.",
+      "domains": ["vite.dev"],
+      "focusPrompt": "Extract evidence about dependency pre-bundling, manual chunk splitting and build target configuration.",
+      "taskClass": "multi-angle",
+      "workflowQueries": [
+        "How does Vite pre-bundle dependencies and when is the cache invalidated?",
+        "How are manual chunks and code splitting configured in Vite?",
+        "How is the browser compatibility target configured for Vite builds?"
+      ],
+      "exposureFamily": "Vite build pipeline (fresh, pilot)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-PIL-04",
+      "partition": "pilot",
+      "workflow": "breadth",
+      "provenance": {"origin": "fresh", "basis": "composed for pilot breadth-workflow coverage"},
+      "query": "Explain Kubernetes resource requests and limits, quality-of-service classes and eviction behaviour.",
+      "domains": ["kubernetes.io"],
+      "focusPrompt": "Extract evidence about requests versus limits, QoS class derivation and eviction ordering.",
+      "taskClass": "multi-angle",
+      "workflowQueries": [
+        "How do Kubernetes resource requests and limits differ?",
+        "How is a pod quality-of-service class derived?",
+        "Under node pressure, in what order are pods evicted?"
+      ],
+      "exposureFamily": "Kubernetes resource management (fresh, pilot)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-PIL-05",
+      "partition": "pilot",
+      "workflow": "manual",
+      "provenance": {"origin": "fresh", "basis": "composed for pilot manual-workflow coverage"},
+      "query": "Compare the documented permission models of Deno and Bun: permission flags, grant syntax, defaults and revocation behaviour.",
+      "manualPlan": {
+        "searches": 2,
+        "searchQueries": [
+          "Deno documented permission flags, grant syntax and revocation",
+          "Bun documented permission flags and sandbox configuration"
+        ],
+        "pages": 4,
+        "extract": 4,
+        "collate": 1,
+        "note": "Same exposure rule as CS-DEV-03: capability-matched operations with fixed per-arm catalogues and equal budgets; only direct versus script callability differs."
+      },
+      "domains": ["docs.deno.com", "bun.sh"],
+      "focusPrompt": "Extract documented permission flags, grant syntax, defaults and revocation behaviour.",
+      "taskClass": "manual-search-fetch-extract-collate",
+      "workflowQueries": ["Compare the documented permission models of Deno and Bun."],
+      "exposureFamily": "Runtime permission models (fresh, pilot)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-PIL-06",
+      "partition": "pilot",
+      "workflow": "manual",
+      "provenance": {"origin": "fresh", "basis": "composed for pilot manual-workflow coverage"},
+      "query": "Compare the documented schema migration workflows of Prisma and Drizzle ORM and what each command changes.",
+      "manualPlan": {
+        "searches": 2,
+        "searchQueries": [
+          "Prisma documented schema migration commands and their effects",
+          "Drizzle ORM documented migration commands and their effects"
+        ],
+        "pages": 4,
+        "extract": 4,
+        "collate": 1
+      },
+      "domains": ["prisma.io", "orm.drizzle.team"],
+      "focusPrompt": "Extract the documented migration commands, generated artefacts and drift or resolution behaviour.",
+      "taskClass": "manual-search-fetch-extract-collate",
+      "workflowQueries": ["Compare the documented schema migration workflows of Prisma and Drizzle ORM."],
+      "exposureFamily": "Schema migration workflows (fresh, pilot)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-PIL-07",
+      "partition": "pilot",
+      "workflow": "followup",
+      "provenance": {"origin": "fresh", "basis": "composed for pilot followup-workflow coverage"},
+      "query": "Explain gRPC deadline propagation, then answer a follow-up about keepalive configuration from the saved report.",
+      "followupPlan": {
+        "base": "Explain how deadlines are propagated and enforced across gRPC calls.",
+        "read": "Read the saved base-research report through the built-in read operation.",
+        "followup": "Which channel arguments control keepalive timing, and what does the documentation say about aggressive defaults?"
+      },
+      "domains": ["grpc.io"],
+      "focusPrompt": "Extract evidence about deadline propagation, cancellation and keepalive channel arguments.",
+      "taskClass": "research-then-followup",
+      "workflowQueries": ["Explain gRPC deadline propagation, then answer the keepalive follow-up after reading the saved report."],
+      "exposureFamily": "gRPC deadlines and keepalive (fresh, pilot)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-PIL-08",
+      "partition": "pilot",
+      "workflow": "followup",
+      "provenance": {"origin": "fresh", "basis": "composed for pilot followup-workflow coverage"},
+      "query": "Explain the Git reflog and recovering lost commits, then answer a follow-up about dangling objects from the saved report.",
+      "followupPlan": {
+        "base": "Explain what the reflog records and how it helps recover lost commits.",
+        "read": "Read the saved base-research report through the built-in read operation.",
+        "followup": "Which git command lists dangling commits, and how does its output differ from the reflog?"
+      },
+      "domains": ["git-scm.com"],
+      "focusPrompt": "Extract evidence about reflog contents, expiry and dangling object discovery.",
+      "taskClass": "research-then-followup",
+      "workflowQueries": ["Explain the Git reflog and recovering lost commits, then answer the dangling-objects follow-up after reading the saved report."],
+      "exposureFamily": "Git reflog and recovery (fresh, pilot)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-SER-01",
+      "partition": "measured-series",
+      "workflow": "single",
+      "provenance": {"origin": "fresh", "basis": "composed for measured-series single-workflow coverage; frozen at series freeze"},
+      "query": "Explain what changes when an ESLint configuration migrates to flat config files, citing the documentation.",
+      "domains": ["eslint.org"],
+      "focusPrompt": "Extract evidence about flat config file naming, exported configuration format and ignored-file behaviour.",
+      "taskClass": "single-research",
+      "workflowQueries": ["Explain what changes when an ESLint configuration migrates to flat config files, citing the documentation."],
+      "exposureFamily": "Flat config migration (fresh, measured-series)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-SER-02",
+      "partition": "measured-series",
+      "workflow": "single",
+      "provenance": {"origin": "fresh", "basis": "composed for measured-series single-workflow coverage; frozen at series freeze"},
+      "query": "Explain the documented differences between Vitest browser mode and the jsdom environment for component tests.",
+      "domains": ["vitest.dev"],
+      "focusPrompt": "Extract evidence about browser mode versus jsdom: setup, capability differences and documented limitations.",
+      "taskClass": "single-research",
+      "workflowQueries": ["Explain the documented differences between Vitest browser mode and the jsdom environment for component tests."],
+      "exposureFamily": "Browser versus emulated DOM testing (fresh, measured-series)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-SER-03",
+      "partition": "measured-series",
+      "workflow": "single",
+      "provenance": {"origin": "fresh", "basis": "composed for measured-series single-workflow coverage; frozen at series freeze"},
+      "query": "Explain how optional fields and default values behave in protobuf's proto3 wire format and generated APIs, citing the documentation.",
+      "domains": ["protobuf.dev"],
+      "focusPrompt": "Extract evidence about proto3 optional fields, presence tracking and default-value behaviour.",
+      "taskClass": "single-research",
+      "workflowQueries": ["Explain how optional fields and default values behave in protobuf's proto3 wire format and generated APIs, citing the documentation."],
+      "exposureFamily": "Protobuf field presence (fresh, measured-series)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-SER-04",
+      "partition": "measured-series",
+      "workflow": "breadth",
+      "provenance": {"origin": "fresh", "basis": "composed for measured-series breadth-workflow coverage; frozen at series freeze"},
+      "query": "Explain row-level security, authentication methods and storage access policies in Supabase.",
+      "domains": ["supabase.com"],
+      "focusPrompt": "Extract evidence about RLS policy definition, auth provider configuration and storage access control.",
+      "taskClass": "multi-angle",
+      "workflowQueries": [
+        "How are row-level security policies defined and evaluated in Supabase?",
+        "Which authentication methods does Supabase support and how are they configured?",
+        "How is Supabase storage access controlled relative to database policies?"
+      ],
+      "exposureFamily": "Hosted Postgres security (fresh, measured-series)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-SER-05",
+      "partition": "measured-series",
+      "workflow": "breadth",
+      "provenance": {"origin": "fresh", "basis": "composed for measured-series breadth-workflow coverage; frozen at series freeze"},
+      "query": "Explain dependency injection, request validation and async handling in FastAPI, citing the documentation.",
+      "domains": ["fastapi.tiangolo.com"],
+      "focusPrompt": "Extract evidence about dependency injection declaration, validation error behaviour and async endpoint rules.",
+      "taskClass": "multi-angle",
+      "workflowQueries": [
+        "How are FastAPI dependencies declared and cached?",
+        "How does FastAPI validate request bodies and parameters, and what do validation errors return?",
+        "When must a FastAPI endpoint be async versus sync?"
+      ],
+      "exposureFamily": "Python web framework dependencies (fresh, measured-series)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-SER-06",
+      "partition": "measured-series",
+      "workflow": "breadth",
+      "provenance": {"origin": "fresh", "basis": "composed for measured-series breadth-workflow coverage; frozen at series freeze"},
+      "query": "Explain tokenizer construction, pipeline abstraction and model repository versioning in the Hugging Face ecosystem.",
+      "domains": ["huggingface.co"],
+      "focusPrompt": "Extract evidence about tokenizer training and loading, pipeline task abstraction and model revision pinning.",
+      "taskClass": "multi-angle",
+      "workflowQueries": [
+        "How are Hugging Face tokenizers constructed and saved or loaded?",
+        "What does the Hugging Face pipeline abstraction provide and what are its inputs and outputs?",
+        "How are Hugging Face model repository revisions pinned and referenced?"
+      ],
+      "exposureFamily": "Machine-learning hub usage (fresh, measured-series)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-SER-07",
+      "partition": "measured-series",
+      "workflow": "manual",
+      "provenance": {"origin": "fresh", "basis": "composed for measured-series manual-workflow coverage; frozen at series freeze"},
+      "query": "Compare task spawning, cancellation and timeout handling in Tokio: spawn semantics, cooperative cancellation and select behaviour.",
+      "manualPlan": {
+        "searches": 2,
+        "searchQueries": [
+          "Tokio documented task spawning and JoinHandle behaviour",
+          "Tokio documented cancellation, timeout combinators and select semantics"
+        ],
+        "pages": 4,
+        "extract": 4,
+        "collate": 1
+      },
+      "domains": ["tokio.rs"],
+      "focusPrompt": "Extract evidence about spawn semantics, cooperative cancellation, timeout combinators and select behaviour.",
+      "taskClass": "manual-search-fetch-extract-collate",
+      "workflowQueries": ["Compare task spawning, cancellation and timeout handling in Tokio."],
+      "exposureFamily": "Rust async cancellation (fresh, measured-series)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-SER-08",
+      "partition": "measured-series",
+      "workflow": "manual",
+      "provenance": {"origin": "fresh", "basis": "composed for measured-series manual-workflow coverage; frozen at series freeze"},
+      "query": "Extract the documented steps for schema migration and database introspection in Prisma and state what each command changes.",
+      "manualPlan": {
+        "searches": 2,
+        "searchQueries": [
+          "Prisma documented schema migration commands and their effects",
+          "Prisma documented introspection or pull commands and their effects"
+        ],
+        "pages": 4,
+        "extract": 4,
+        "collate": 1
+      },
+      "domains": ["prisma.io"],
+      "focusPrompt": "Extract evidence about migration generation, applied-state records and introspection output.",
+      "taskClass": "manual-search-fetch-extract-collate",
+      "workflowQueries": ["Extract the documented steps for schema migration and database introspection in Prisma."],
+      "exposureFamily": "ORM migration commands (fresh, measured-series; shares prisma.io domain with CS-PIL-06)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-SER-09",
+      "partition": "measured-series",
+      "workflow": "manual",
+      "provenance": {"origin": "fresh", "basis": "composed for measured-series manual-workflow coverage; frozen at series freeze"},
+      "query": "Compare ClickHouse MergeTree and Log-family storage engines: when each is chosen, compression behaviour and merge semantics.",
+      "manualPlan": {
+        "searches": 2,
+        "searchQueries": [
+          "ClickHouse documented MergeTree engine selection guidance",
+          "ClickHouse documented Log-family engine selection guidance"
+        ],
+        "pages": 4,
+        "extract": 4,
+        "collate": 1
+      },
+      "domains": ["clickhouse.com"],
+      "focusPrompt": "Extract evidence about engine families, insertion patterns, compression and background merge behaviour.",
+      "taskClass": "manual-search-fetch-extract-collate",
+      "workflowQueries": ["Compare ClickHouse MergeTree and Log-family storage engines."],
+      "exposureFamily": "Analytical storage engines (fresh, measured-series; shares clickhouse.com domain with CS-DEV-03)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-SER-10",
+      "partition": "measured-series",
+      "workflow": "followup",
+      "provenance": {"origin": "fresh", "basis": "composed for measured-series followup-workflow coverage; frozen at series freeze"},
+      "query": "Explain React server components and their data flow, then answer a follow-up about streaming and suspense boundaries from the saved report.",
+      "followupPlan": {
+        "base": "Explain how React server components fetch data and what the client receives.",
+        "read": "Read the saved base-research report through the built-in read operation.",
+        "followup": "How do streaming responses and suspense boundaries change what is sent and when?"
+      },
+      "domains": ["react.dev"],
+      "focusPrompt": "Extract evidence about server component execution, serialization boundaries, streaming and suspense integration.",
+      "taskClass": "research-then-followup",
+      "workflowQueries": ["Explain React server components and data flow, then answer the streaming follow-up after reading the saved report."],
+      "exposureFamily": "React server components (fresh, measured-series; react.dev shared domain with old CM-P02)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-SER-11",
+      "partition": "measured-series",
+      "workflow": "followup",
+      "provenance": {"origin": "fresh", "basis": "composed for measured-series followup-workflow coverage; frozen at series freeze"},
+      "query": "Explain the gRPC error model and status codes, then answer a follow-up about retry policy configuration from the saved report.",
+      "followupPlan": {
+        "base": "Explain the standard gRPC error model, status codes and rich error details.",
+        "read": "Read the saved base-research report through the built-in read operation.",
+        "followup": "Where are retry policies configured, and which codes are retryable by default?"
+      },
+      "domains": ["grpc.io"],
+      "focusPrompt": "Extract evidence about status codes, error details, service configuration and retry policy semantics.",
+      "taskClass": "research-then-followup",
+      "workflowQueries": ["Explain the gRPC error model and status codes, then answer the retry-policy follow-up after reading the saved report."],
+      "exposureFamily": "gRPC errors and retries (fresh, measured-series; shares grpc.io domain with CS-PIL-07)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-SER-12",
+      "partition": "measured-series",
+      "workflow": "followup",
+      "provenance": {"origin": "fresh", "basis": "composed for measured-series followup-workflow coverage; frozen at series freeze"},
+      "query": "Explain message delivery guarantees in RabbitMQ, then answer a follow-up about publisher confirms from the saved report.",
+      "followupPlan": {
+        "base": "Explain at-least-once delivery and how RabbitMQ consumers acknowledge messages.",
+        "read": "Read the saved base-research report through the built-in read operation.",
+        "followup": "How do publisher confirms differ from transacted publishing, and what do they guarantee?"
+      },
+      "domains": ["rabbitmq.com"],
+      "focusPrompt": "Extract evidence about delivery guarantees, acknowledgements, publisher confirms and transactions.",
+      "taskClass": "research-then-followup",
+      "workflowQueries": ["Explain message delivery guarantees in RabbitMQ, then answer the publisher-confirms follow-up after reading the saved report."],
+      "exposureFamily": "Broker delivery guarantees (fresh, measured-series; shares rabbitmq.com domain with CS-DEV-03)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-RES-01",
+      "partition": "reserve",
+      "workflow": "single",
+      "provenance": {"origin": "fresh", "basis": "composed reserve material; used only by a later owner-approved revision"},
+      "query": "Explain the documented structure of a pnpm workspace manifest and how dependency hoisting is configured.",
+      "domains": ["pnpm.io"],
+      "focusPrompt": "Extract evidence about pnpm workspace manifest fields and hoisting configuration.",
+      "taskClass": "single-research",
+      "workflowQueries": ["Explain the documented structure of a pnpm workspace manifest and how dependency hoisting is configured."],
+      "exposureFamily": "Workspace manifests (fresh, reserve)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-RES-02",
+      "partition": "reserve",
+      "workflow": "single",
+      "provenance": {"origin": "fresh", "basis": "composed reserve material"},
+      "query": "Explain the documented rules for null and absent values in the JSONata query language.",
+      "domains": ["jsonata.org"],
+      "focusPrompt": "Extract evidence about null versus absent handling in JSONata expressions and predicates.",
+      "taskClass": "single-research",
+      "workflowQueries": ["Explain the documented rules for null and absent values in the JSONata query language."],
+      "exposureFamily": "JSON query null semantics (fresh, reserve)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-RES-03",
+      "partition": "reserve",
+      "workflow": "breadth",
+      "provenance": {"origin": "fresh", "basis": "composed reserve material"},
+      "query": "Explain Kubernetes ingress routing, TLS termination and path rewriting.",
+      "domains": ["kubernetes.io"],
+      "focusPrompt": "Extract evidence about ingress resource structure, TLS configuration and rewrite annotations.",
+      "taskClass": "multi-angle",
+      "workflowQueries": [
+        "How does a Kubernetes ingress resource route requests to services?",
+        "How is TLS termination configured in Kubernetes ingress?",
+        "How are request paths rewritten before reaching the service?"
+      ],
+      "exposureFamily": "Ingress routing (fresh, reserve; shares kubernetes.io domain with CS-PIL-04)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-RES-04",
+      "partition": "reserve",
+      "workflow": "breadth",
+      "provenance": {"origin": "fresh", "basis": "composed reserve material"},
+      "query": "Explain static analysis, automatic fixing and rule configuration in Stylelint.",
+      "domains": ["stylelint.io"],
+      "focusPrompt": "Extract evidence about rule severity configuration, autofix behaviour and ignore mechanisms.",
+      "taskClass": "multi-angle",
+      "workflowQueries": [
+        "How are Stylelint rules configured and categorised?",
+        "What does the Stylelint automatic fixer change and what does it refuse?",
+        "How are files and lines ignored in Stylelint?"
+      ],
+      "exposureFamily": "Document linting configuration (fresh, reserve)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-RES-05",
+      "partition": "reserve",
+      "workflow": "manual",
+      "provenance": {"origin": "fresh", "basis": "composed reserve material"},
+      "query": "Compare documented approaches to background jobs and scheduled tasks in GitHub Actions workflows.",
+      "manualPlan": {
+        "searches": 2,
+        "searchQueries": [
+          "GitHub Actions documented workflow job execution and concurrency",
+          "GitHub Actions documented scheduled event configuration"
+        ],
+        "pages": 4,
+        "extract": 4,
+        "collate": 1
+      },
+      "domains": ["docs.github.com"],
+      "focusPrompt": "Extract evidence about workflow-triggered jobs, scheduling syntax and concurrency controls.",
+      "taskClass": "manual-search-fetch-extract-collate",
+      "workflowQueries": ["Compare background job and scheduled task approaches in GitHub Actions."],
+      "exposureFamily": "Scheduled task workflows (fresh, reserve)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-RES-06",
+      "partition": "reserve",
+      "workflow": "manual",
+      "provenance": {"origin": "fresh", "basis": "composed reserve material"},
+      "query": "Compare Trino's documented configuration for legacy-syntax strictness and migration, and state what each step changes.",
+      "manualPlan": {
+        "searches": 2,
+        "searchQueries": [
+          "Trino documented legacy syntax and strict mode configuration",
+          "Trino documented migration guidance for deprecated syntax"
+        ],
+        "pages": 4,
+        "extract": 4,
+        "collate": 1
+      },
+      "domains": ["trino.io"],
+      "focusPrompt": "Extract evidence about strictness toggles, legacy syntax and migration steps.",
+      "taskClass": "manual-search-fetch-extract-collate",
+      "workflowQueries": ["Compare strictness and migration configuration in Trino."],
+      "exposureFamily": "SQL strictness configuration (fresh, reserve)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-RES-07",
+      "partition": "reserve",
+      "workflow": "followup",
+      "provenance": {"origin": "fresh", "basis": "composed reserve material"},
+      "query": "Explain HTTP caching directives, then answer a follow-up about revalidation strategies from the saved report.",
+      "followupPlan": {
+        "base": "Explain the caching directives that control freshness and storage.",
+        "read": "Read the saved base-research report through the built-in read operation.",
+        "followup": "How do the documented revalidation strategies differ when a response has become stale?"
+      },
+      "domains": ["developer.mozilla.org"],
+      "focusPrompt": "Extract evidence about cache-control directives, freshness lifetime and revalidation headers.",
+      "taskClass": "research-then-followup",
+      "workflowQueries": ["Explain HTTP caching directives, then answer the revalidation follow-up after reading the saved report."],
+      "exposureFamily": "HTTP caching (fresh, reserve; developer.mozilla.org shared domain with old corpus)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    },
+    {
+      "id": "CS-RES-08",
+      "partition": "reserve",
+      "workflow": "followup",
+      "provenance": {"origin": "fresh", "basis": "composed reserve material"},
+      "query": "Explain linked worktrees in Git, then answer a follow-up about cleaning them up from the saved report.",
+      "followupPlan": {
+        "base": "Explain what linked worktrees are and how they are created.",
+        "read": "Read the saved base-research report through the built-in read operation.",
+        "followup": "Which documented commands list and remove linked worktrees, and what happens to uncommitted files?"
+      },
+      "domains": ["git-scm.com"],
+      "focusPrompt": "Extract evidence about worktree creation, listing, removal and data retention.",
+      "taskClass": "research-then-followup",
+      "workflowQueries": ["Explain linked worktrees in Git, then answer the cleanup follow-up after reading the saved report."],
+      "exposureFamily": "Linked worktrees (fresh, reserve; shares git-scm.com domain with CS-PIL-08)",
+      "rubric": "STANDARD-RUBRIC",
+      "goldStatus": "no gold answer claimed"
+    }
+  ],
+  "standardRubric": {
+    "id": "STANDARD-RUBRIC",
+    "criteria": [
+      {"id": "coverage", "criterion": "Answer the requested facets using the captured evidence; distinguish unsupported or unavailable facts.", "critical": true},
+      {"id": "provenance", "criterion": "Support material claims with the recorded successful sources; do not invent source paths or citations.", "critical": true},
+      {"id": "limitations", "criterion": "State relevant version, configuration and uncertainty boundaries without converting missing evidence into a guarantee.", "critical": true},
+      {"id": "usefulness", "criterion": "Give a coherent actionable answer or comparison rather than a union of duplicated source summaries.", "critical": false}
+    ],
+    "note": "Identical to the old corpus rubric so historical and new material stay comparable; quoted by reference from each query."
+  },
+  "oldCorpusRelationship": {
+    "retainedInThisStudy": ["CM-D01 as CS-DEV-01", "CM-D02 as CS-DEV-02"],
+    "notRetained": "CM-P01..CM-P04, CM-H01..CM-H03, CM-C01..CM-C03 remain frozen in docs/benchmarks/corpus/ with their exposure labels; their topics are treated as exposed development-adjacent material and are not relabelled unseen",
+    "rule": "Historical hashes and exposure labels are never rewritten; this file is a new versioned corpus, not an edit of the old one"
+  },
+  "confirmation": {
+    "status": "declared population; sample sizes and margins freeze at the post-pilot series freeze (see PROTOCOL.md), not here",
+    "expansionRule": "Adjustments before capture require a new manifest revision; never relabel exposed material as unseen"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "study": "codemode-study-v1",
+  "revision": "manifest-v1-r3",
+  "recordedUtc": "2026-11-02T16:02:19Z",
+  "reboundUtc": "2026-11-02T16:18:42Z",
+  "revisionNote": "r3 applies the prose-review correction round: phase-specific prerequisites, one canonical admission rule referenced from the protocol, admission-hold (not upper-bound) wording, unscorable calibration handling, total-input secondary kept as planned, one-request qualification beside the endpoint, capability-matched corpus wording, current helper status, counted pilot replay smoke, explicitly unscheduled only-arm, blank multiline human template, CAL-03 scope wording, and actual UTC timestamps from date -u. Amounts and approval scope unchanged. Rebind: helper wording corrected to implemented (nothing is git committed), total-input completeness and paired analysis now described as implemented with synthetic tests (actual run-to-dataset integration pending), and hashes rebound.",
+  "status": "reviewed bounded draft, not execution-ready; no capture, scoring, paid study run or human label approval exists",
+  "coordinatorCorrections": "Breadth explicitly binds twelve total pages to three four-page calls in both arms; the original-attempt, no-substitution missingness rule is prespecified before pilot capture. Local-only metadata evidence is identified by its immutable manifest hash.",
+  "authority": {
+    "ownerDecisions": "docs/plans/codemode/OWNER-REFOCUS.md (2026-11-02)",
+    "researchPlan": "docs/plans/codemode/RESEARCH-PLAN.md",
+    "resume": "docs/plans/codemode/RESUME.md"
+  },
+  "inputs": [
+    {"path": "corpus.json", "sha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed", "revision": "corpus-v1-r3", "note": "32 concrete named tasks: 4 development, 8 pilot, 12 measured-series, 8 reserve; workflows single/breadth/manual/followup; live queries name products and never prescribe tool names; forced workflow lives in manualPlan/followupPlan; arm notes state capability-matched operations with fixed per-arm catalogues"},
+    {"path": "calibration.json", "sha256": "c0abba11206d841d692a09c69f2d59b75bca85d1934948f50db702f301fb0a11", "revision": "calibration-v1-r3", "note": "four disjoint synthetic calibration cases; approval needs explicit usable verdicts (A, B or tie) for all four case IDs; unscorable completes review but supplies no label and requires revision or recorded exclusion; CAL-03 describes an unverified scope relationship, not a proven conflict"},
+    {"path": "PROTOCOL.md", "sha256": "41a1b00c3accc4937da5d3941baec64d65bd509be153a5e686500e13ff6a78c7", "revision": "study-v1-r3", "note": "primary endpoint max(0, input_tokens - cached_tokens - cache_write_tokens) mirroring tokensFromWireEvidence, all three fields required, qualified by the single no-tool observation (nonzero-cache and multi-turn coverage unobserved); total-input completeness and paired analysis implemented in study-analysis.ts with synthetic tests, actual run-to-dataset integration pending; built-in read in every arm; follow-up = base research, read saved report, answer, zero additional pages in controlled replay; implemented helper (not git committed) with scripted host check, full session orchestration and follow-up replay integration pending; SSE pinned both arms; canonical admission owned by SCHEDULE.md; only-arm explicitly unscheduled"},
+    {"path": "SCHEDULE.md", "sha256": "7711907fd4139013d125894be31a89eb52ab6d03b2b10361dbf88d56ca01087f", "revision": "schedule-v1-r3", "note": "single canonical admission rule (committed spend + outstanding holds + requested work + remaining phases <= ceiling); pilot replay smoke counted (8 executions); measured replay = 12 captures + 48 replay executions; live = 48 paid; conservative forecasts labelled assumptions with observed-max floor; affordability conditional, not a demonstrated result; only-arm unscheduled"},
+    {"path": "SPEND-BASELINE.json", "sha256": "b3dffbba4cd500a19247be505f619545d71675948c52191070b4f4afd58deea3", "revision": "spend-baseline-3", "note": "amounts, rows and approval scope unchanged; USD 1 hold described as a chosen admission hold, not a demonstrated upper bound; cites durable evidence copies under evidence/benchmarks/spend-baseline-20261102T152129Z/"},
+    {"path": "CALIBRATION-REVIEW.md", "sha256": "ce81efe7b224f7e99e633d192a5f831375b34fe251316d409896723a09c30562", "revision": "calibration-review-v1-r3", "note": "completion distinguished from approval; unscorable supplies no usable label; blank multiline null-verdict template labelled as not an approval record; verdict strings explained in text"}
+  ],
+  "historicalInputsUnchanged": {
+    "oldCorpusManifest": "docs/benchmarks/corpus/manifest.json (revision P0-1, corpusSha256 e9b3a96658ae0c11bfd39230212affc0789621d2a5191e258ba7d21228bfb1ef)",
+    "oldCodemodeMethod": "docs/benchmarks/codemode/METHOD.md (revision P0-2)",
+    "rule": "historical hashes, exposure labels and acceptance files are preserved; this study version-new inputs rather than editing old ones"
+  },
+  "measurementPrerequisiteEvidence": {
+    "metadataCheck": "evidence/benchmarks/metadata-20261102T152129Z/metadata-20261102T153207Z-e9116d51/assessment.json",
+    "result": "one no-tool request on the pinned host: input_tokens=2817, cached_tokens=0, cache_write_tokens=0 on the wire, response-ID correlated, zero absent usage fields; nonzero-cache and multi-turn coverage unobserved (n=1)",
+    "endpointDerivation": "max(0, input_tokens - cached_tokens - cache_write_tokens), mirroring scripts/benchmarks/main-usage-evidence.ts tokensFromWireEvidence; all three fields required",
+    "secondaryEndpoint": "total main-model input: independent completeness rule and paired analysis implemented in scripts/benchmarks/study-analysis.ts with synthetic tests; actual run-to-dataset integration pending"
+  },
+  "pendingByPhase": {
+    "beforeDevelopmentAndPilotCapture": [
+      "full session runner integration on the pinned host (structured native results, script fetch, matched direct fetch, follow-up replay wiring, recording and analysis wiring); the host session runner, one metadata observation, the implemented follow-up script helper and a scripted actual-host wrapper check exist"
+    ],
+    "beforeJudgeCalibrationAndFinalSeriesScoring": [
+      "human calibration decisions with explicit usable verdicts for all four case IDs at evidence/benchmarks/codemode-study-v1/calibration/decisions.json"
+    ],
+    "beforeMeasuredSeriesCapture": [
+      "post-pilot series freeze as manifest revision v1-r4 (margins, final size, stopping rule); the pilot itself is paid work preceding the freeze"
+    ]
+  },
+  "freezeRule": "After the series freeze (v1-r4), changes to population, endpoints, order, margins or judging require a new manifest revision; exposed material is never relabelled unseen."
+}

@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "kind": "codemode-study-v1-calibration-packet",
+  "revision": "calibration-v1-r3",
+  "calibrationOnly": true,
+  "labelling": {
+    "synthetic": "All sources, answers and expectations in this packet are synthetic material composed for calibration. Nothing here is a live research result, a captured page or a pipeline output.",
+    "disjointness": "The four cases are disjoint from each other, from every corpus question in corpus.json, from the old corpus in docs/benchmarks/corpus/ and from the old J-01..J-04 calibration items.",
+    "labelStatus": "proposed expectations only; unapproved until a decisions file records an explicit usable verdict (A, B or tie) for every case ID (CAL-01 through CAL-04) with reviewer identity, date and the reviewed input hashes; an unscorable verdict completes that case's review but supplies no usable label and requires revision or recorded exclusion before judge calibration",
+    "use": "Judge-prompt calibration and human label-checking only. No case enters any measured population, and no judge score on this packet is reported as a study result."
+  },
+  "rubricReference": "The standard rubric in corpus.json (coverage, provenance, limitations, usefulness). Each case primarily exercises the rubric dimensions named in its focus.",
+  "items": [
+    {
+      "id": "CAL-01",
+      "workflowType": "single",
+      "focus": ["provenance", "coverage"],
+      "syntheticSources": [
+        {
+          "sourceId": "SYN-A",
+          "label": "Synthetic documentation page (invented product, composed 2026-11-02)",
+          "content": "Meridian Cache configuration. maxConnections: maximum simultaneous upstream connections. Default: 16. Override: environment variable MERIDIAN_MAX_CONN (integer). ttlSeconds: entry lifetime after last write. Default: 300. No other connection settings are documented on this page."
+        }
+      ],
+      "question": "What is the default maximum connection count, and how is it changed?",
+      "answerA": "The default maximum connection count is 16. It is changed by setting the environment variable MERIDIAN_MAX_CONN to an integer. The page also documents ttlSeconds with a default of 300, which is a separate setting.",
+      "answerB": "The default maximum connection count is 32. It can be raised by editing the maxConnections field in the configuration file. The documentation recommends 32 for production.",
+      "proposedPreference": "A",
+      "rationale": "B asserts a default of 32, a configuration-file mechanism and a production recommendation, none of which appear in the source. A states exactly what the source documents and marks the adjacent setting as separate.",
+      "humanCheckPrompt": "Confirm from SYN-A alone: is 16 the documented default, is MERIDIAN_MAX_CONN the documented override, and does the source support anything B claims beyond that?"
+    },
+    {
+      "id": "CAL-02",
+      "workflowType": "breadth",
+      "focus": ["coverage", "usefulness"],
+      "syntheticSources": [
+        {
+          "sourceId": "SYN-B1",
+          "label": "Synthetic scheduler API page",
+          "content": "Scheduler API. fireOnce(task): runs a task one time, returns a handle. fireEvery(task, intervalMs): repeats a task at a fixed interval until cancelled. Handles are objects; cancelling uses the cancellation page's token."
+        },
+        {
+          "sourceId": "SYN-B2",
+          "label": "Synthetic cancellation page",
+          "content": "Cancellation. CancelToken.stop() halts the work it was passed to. A stopped token cannot be restarted; create a new token for further work. Stop is cooperative: in-flight steps finish their current unit."
+        },
+        {
+          "sourceId": "SYN-B3",
+          "label": "Synthetic error-handling page",
+          "content": "Error handling. Failed tasks retry up to 3 times with a fixed 2-second delay. After the final retry the task is marked failed and reported to the registered error sink. Retry counts are per task, not per step."
+        }
+      ],
+      "question": "Explain how recurring work is scheduled, how it is cancelled, and what happens when it fails.",
+      "answerA": "Recurring work uses fireEvery(task, intervalMs), which repeats at a fixed interval. Cancellation goes through CancelToken.stop(): the work halts, a stopped token cannot be restarted, and stop is cooperative, so in-flight steps finish their current unit. On failure, tasks retry up to 3 times at a fixed 2-second delay; after the final retry the task is marked failed and reported to the error sink.",
+      "answerB": "Recurring work uses fireOnce(task), which repeats at a fixed interval. fireOnce returns a handle that repeats the task. Cancellation is available. Errors retry a few times and then stop.",
+      "proposedPreference": "A",
+      "rationale": "A covers all three facets with the documented specifics. B misattributes repetition to fireOnce (the source gives fireOnce one-shot semantics), omits the cancellation mechanism and its restart limit, and replaces the retry policy numbers with vague phrasing.",
+      "humanCheckPrompt": "Check each facet against SYN-B1/B2/B3: repetition (fireEvery, not fireOnce), cancellation (CancelToken.stop, no restart, cooperative), failure (3 retries, 2-second delay, error sink). Does B get any facet right in substance?"
+    },
+    {
+      "id": "CAL-03",
+      "workflowType": "manual",
+      "focus": ["limitations", "provenance"],
+      "syntheticSources": [
+        {
+          "sourceId": "SYN-C1",
+          "label": "Synthetic extraction fragment, driver page 1",
+          "content": "Driver configuration. requestTimeoutMs: default 30000. The fragment is from the connection section of the driver manual, revision R4."
+        },
+        {
+          "sourceId": "SYN-C2",
+          "label": "Synthetic extraction fragment, driver page 2",
+          "content": "Driver defaults. The default request timeout is 25 seconds for clustered connections. Single-node connections follow the base default. Fragment revision R4, defaults table."
+        }
+      ],
+      "question": "Compare the fragments and state the documented default request timeout.",
+      "answerA": "The fragments give different scoped defaults. SYN-C1 states a 30-second default in the connection section; SYN-C2 states a 25-second default for clustered connections, with single-node connections following the base default. The fragments do not state how the two defaults relate, so the relationship (for example a general default with a clustered override) remains to be verified against the full manual; both recorded values stand as written.",
+      "answerB": "The documented default request timeout is 30 seconds. Both fragments describe the same setting and 30 seconds is the correct value; the 25-second figure applies only to an undocumented mode.",
+      "proposedPreference": "A",
+      "rationale": "A preserves both recorded values, marks the relationship between them as unverified and names the verification step. B silently discards one recorded value and explains it away with an unsupported undocumented-mode claim.",
+      "humanCheckPrompt": "Read SYN-C1 and SYN-C2. Do the fragments state the relationship between the 30-second and 25-second defaults anywhere? Does either fragment support B's undocumented-mode explanation? Is A's relationship reading labelled as unverified?"
+    },
+    {
+      "id": "CAL-04",
+      "workflowType": "followup",
+      "focus": ["limitations", "coverage"],
+      "syntheticSources": [
+        {
+          "sourceId": "SYN-D1",
+          "label": "Synthetic cached prior-research summary (invented product)",
+          "content": "Prior research summary (captured results, no version-3 material). Lantern Queue 2.4 introduced strict ordering for fan-out consumers and the queue.drain() API. The captured sources cover versions 2.3 and 2.4 release notes only. No version 3.0 material was captured."
+        },
+        {
+          "sourceId": "SYN-D2",
+          "label": "Synthetic follow-up instruction",
+          "content": "Follow-up question: does version 3.0 change the drain semantics?"
+        }
+      ],
+      "question": "Using the captured results, answer whether version 3.0 changes the drain semantics.",
+      "answerA": "The captured results cannot answer this: they cover versions 2.3 and 2.4 release notes only, and version 3.0 material was not captured. What is established from the cache is that queue.drain() arrived in 2.4 alongside strict ordering for fan-out consumers. Answering the version 3.0 question requires new evidence.",
+      "answerB": "Version 3.0 keeps drain semantics unchanged for compatibility. The release notes state that queue.drain() behaviour is preserved from 2.4, and strict ordering still applies to fan-out consumers.",
+      "proposedPreference": "A",
+      "rationale": "A uses the cached evidence for what it establishes and states the version 3.0 gap explicitly. B invents version 3.0 statements and attributes them to release notes that the cache does not contain.",
+      "humanCheckPrompt": "From SYN-D1 alone: which versions were captured, and is any version 3.0 statement present? Does B's compatibility claim have any support in the captured material?"
+    }
+  ],
+  "reviewRecordDestination": "evidence/benchmarks/codemode-study-v1/calibration/decisions.json (approval = explicit usable verdicts for all four case IDs plus reviewed input hashes; an unscorable verdict supplies no usable label and requires revision or recorded exclusion; file existence alone is not approval)",
+  "reviewInstructions": "CALIBRATION-REVIEW.md"
+}

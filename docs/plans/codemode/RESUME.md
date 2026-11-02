@@ -22,10 +22,10 @@ The experiment host is pinned in Owner Decisions. Verify its actual loaded imple
 
 Deliver one bounded measurement/integration candidate, not another generic prerequisite programme:
 
-- Connect the existing main-usage collector to the selected host and verify one real metadata observation before defining the paired token endpoint.
+- Reuse the completed single-request metadata observation linked in Status. It establishes explicit cache fields for that request, not multi-turn coverage. Keep per-message wire-evidence checks in every study run; do not repeat the metadata request merely to resume.
 - Specify equivalent direct and script workflows, including manual fetch/extract and a follow-up. Preserve equal source budgets and distinguish controlled replay from live routing.
-- Complete the native structured-result, script-fetch and matched direct-fetch integration and the runner using the existing public core and recording libraries. Test the actual wrappers; do not claim a test-only substitute is the experimental implementation.
-- Write a versioned protocol, expanded question set and costed schedule, including early owner/designated-human review of a disjoint calibration sample. Keep the original frozen inputs unchanged. Reconcile the available budget before the first new paid pipeline request.
+- Continue from the branch-only structured-result and matched-fetch entrypoint in `src/experimental/codemode-study.ts` and its actual-wrapper tests. Complete session orchestration, finite paid admission and recording/replay wiring using the existing libraries. Do not treat the new scripted checks as a measured comparison.
+- Review and finish the draft protocol, expanded question set, spend baseline and costed schedule in `docs/benchmarks/codemode-study-v1/`. Human review of its disjoint calibration sample remains pending. Keep the original frozen inputs unchanged; verify the baseline and record subsequent spend before the first new paid pipeline request.
 
 Use the host's normal credential resolution. If an isolated subscription profile is required, follow the selective access-only constraints recorded in [M3 Native Regression](DEVELOPMENT.md#m3-native-regression), without executing its historical scenario or helper; never copy a refresh chain or execute an expired preparer. This is a runner-design input, not a new security workstream.
 
