@@ -1,0 +1,96 @@
+[
+  {
+    "runId": "CS-DEV-01-capture-on-r1-20261102T192244448Z-a2b99b",
+    "mode": "capture",
+    "purpose": "fixture-capture",
+    "arm": "on",
+    "limits": {
+      "mainRequests": 2,
+      "modelAttempts": 6,
+      "toolCalls": 2,
+      "pagesReserved": 4,
+      "toolCallsByName": {
+        "codemode": 1,
+        "intelli_research": 1
+      },
+      "refusals": 0,
+      "stopReason": null
+    },
+    "durationMs": 61184.36961
+  },
+  {
+    "runId": "CS-DEV-01-replay-on-r1-20261102T192421382Z-2adb8d",
+    "mode": "replay",
+    "purpose": "comparative-task",
+    "arm": "on",
+    "limits": {
+      "mainRequests": 2,
+      "modelAttempts": 0,
+      "toolCalls": 2,
+      "pagesReserved": 4,
+      "toolCallsByName": {
+        "codemode": 1,
+        "intelli_research": 1
+      },
+      "refusals": 0,
+      "stopReason": null
+    },
+    "durationMs": 60206.874694000006
+  },
+  {
+    "runId": "CS-DEV-01-replay-off-r1-20261102T192521731Z-96df7f",
+    "mode": "replay",
+    "purpose": "comparative-task",
+    "arm": "off",
+    "limits": {
+      "mainRequests": 2,
+      "modelAttempts": 0,
+      "toolCalls": 1,
+      "pagesReserved": 4,
+      "toolCallsByName": {
+        "intelli_research": 1
+      },
+      "refusals": 0,
+      "stopReason": null
+    },
+    "durationMs": 65447.071614
+  },
+  {
+    "runId": "CS-DEV-01-live-on-r1-20261102T192638248Z-741735",
+    "mode": "live",
+    "purpose": "comparative-task",
+    "arm": "on",
+    "limits": {
+      "mainRequests": 3,
+      "modelAttempts": 0,
+      "toolCalls": 5,
+      "pagesReserved": 3,
+      "toolCallsByName": {
+        "codemode": 2,
+        "intelli_fetch": 3
+      },
+      "refusals": 0,
+      "stopReason": null
+    },
+    "durationMs": 26797.590507
+  },
+  {
+    "runId": "CS-DEV-01-live-off-r1-20261102T192705089Z-e759df",
+    "mode": "live",
+    "purpose": "comparative-task",
+    "arm": "off",
+    "limits": {
+      "mainRequests": 5,
+      "modelAttempts": 3,
+      "toolCalls": 5,
+      "pagesReserved": 2,
+      "toolCallsByName": {
+        "intelli_search": 3,
+        "intelli_fetch": 2
+      },
+      "refusals": 0,
+      "stopReason": null
+    },
+    "durationMs": 53909.522506
+  }
+]

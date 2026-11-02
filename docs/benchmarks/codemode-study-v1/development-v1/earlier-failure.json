@@ -1,0 +1,10 @@
+{
+  "runId": "CS-DEV-01-capture-on-r1-20261102T185138672Z-687749",
+  "candidateCommit": "44d614e68501f0d0fcd2555dcd6080b1732b6990",
+  "queryId": "CS-DEV-01",
+  "status": "aborted",
+  "mainUsage": null,
+  "reportedPipelineUsd": 0.02296366,
+  "error": "Operation intelli_research ended error; SuggestionViewError: A failed-before-allocation witness arrived for producer \"CS-DEV-01.base\", which already allocated or failed through notifications; Main prompt cancelled: ; Incomplete fixture capture: A failed-before-allocation witness arrived for producer \"CS-DEV-01.base\", which already allocated or failed through notifications; assistant-message-count:2!=1-requests; message-without-response-id:message-2; Main response did not finish: error",
+  "reason": "Reasoning exhausted the original collation cap; a recorder allocation-witness bug then cancelled the main session. Retained engineering failure, not replaced by the corrected capture."
+}

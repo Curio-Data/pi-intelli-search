@@ -12,6 +12,7 @@ import type { ResearchSettings } from "../../src/core/types.js";
 import { createAttemptLedger } from "../../src/core/usage.js";
 import { asJson, sha256Canonical } from "./canonical.js";
 import { appendRunObservation } from "./run-observation.js";
+import { observeToolCatalogue } from "./observer.js";
 import { createStudyLimits, summariseAttemptCharges, attemptHoldUsd, type StudySpendLedger } from "./study-budget.js";
 import { createStudyCapture, createStudyReplay, studyBundleSha256, type StudyCapture, type StudyReplay, type StudyReplayBundle, type StudyCaptureOptions } from "./study-transports.js";
 import { createStudyPlan, studyPipelineSettings, studyPrompts, STUDY_SYSTEM_PROMPT, type StudyTask } from "./study-design.js";
@@ -313,6 +314,16 @@ export async function runStudyTask(options: StudyRunOptions): Promise<StudyRunRe
   const last=assessment.messages.at(-1);
   if(last?.stopReason!=="stop") issues.push(`Main response did not finish: ${last?.stopReason??"missing"}`);
   if(promptOutcomes.length!==prompts.length) issues.push("Task follow-up sequence incomplete");
+  const requestText = await readFile(collector.observer.outPath, "utf8").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return ""; throw error; });
+  const catalogues = requestText.split("\n").filter(Boolean).map((line) => observeToolCatalogue(asJson(JSON.parse(line).payload)));
+  const catalogue = catalogues[0]?.sha256 ?? sha256Canonical(asJson([]));
+  const expectedNames = [...(options.arm === "only" ? ["codemode"] : native.studyActiveTools(options.arm))].sort();
+  const catalogueObserved = catalogues.length > 0 && catalogues.every((entry) => {
+    const names = Array.isArray(entry.declarations) ? entry.declarations.map((tool) => record(tool) ? typeof tool.name === "string" ? tool.name : record(tool.function) ? tool.function.name : null : null).sort() : [];
+    return entry.status === "observed" && entry.sha256 === catalogue && JSON.stringify(names) === JSON.stringify(expectedNames);
+  });
+  if (collector.requestWindows > 0 && !catalogueObserved) issues.push("Missing, unsupported or changing tool catalogue declarations");
+  await writeNewJson(join(runDir, "catalogue-observation.json"), catalogues.map(({declarations, ...entry}) => entry));
   const endedAt=new Date().toISOString();
   const durationMs=performance.now()-start;
   const errors=[...new Set(issues)];
@@ -326,14 +337,11 @@ export async function runStudyTask(options: StudyRunOptions): Promise<StudyRunRe
   const captureRoot=join(options.seriesRoot,`${options.runId}-workspace`);
   await cp(options.workspace,captureRoot,{recursive:true,errorOnExist:true,force:false});
   await writeNewJson(join(runDir,"workspace.json"),{path:captureRoot,sha256:await studyTreeDigest(captureRoot)});
-  const requestText = await readFile(collector.observer.outPath, "utf8").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return ""; throw error; });
-  const captures = requestText.split("\n").filter(Boolean).map((line) => JSON.parse(line) as {toolCatalogueSha256:string});
-  const catalogue=captures[0]?.toolCatalogueSha256??sha256Canonical(asJson([]));
   const observation:StudyAnalysisRun={
     runId:options.runId,queryId:options.task.id,experiment:"codemode",purpose,arm:options.arm,repeat:options.repeat,seed:options.seed,order:options.order,
     methodSha256:options.methodSha256,corpusSha256:options.corpusSha256,fixtureSha256:options.bundle?studyBundleSha256(options.bundle):null,
     candidateCommit:options.candidateCommit,lockfileSha256:options.lockfileSha256,host:asJson(options.hostSelection) as Record<string,string>,effectiveSettings:asJson(settings),
-    toolCatalogueSha256:catalogue,promptSha256:sha256Canonical(asJson({system:STUDY_SYSTEM_PROMPT,prompts})),status,replayValidity,
+    toolCatalogueSha256:catalogue,toolCatalogueObserved:catalogueObserved,promptSha256:sha256Canonical(asJson({system:STUDY_SYSTEM_PROMPT,prompts})),status,replayValidity,
     ...(options.rerunOf ? {rerunOf:options.rerunOf,rerunReason:options.rerunReason,rerunSeries:options.rerunSeries} : {}),
     observerComplete:collector.observer.complete,mainUsage:main.usage,pipelineUsage:ledger.summary(),reportedPipelineUsd:options.mode==="replay"?0:charges.missingCharges?null:charges.reportedUsd,estimatedPipelineUsd:null,
     subscriptionQuota:asJson(collector.providerResponses.map((p)=>p.visibleHeaders)),artifacts:[],...(errors.length?{error:errors.join("; ")} : {}),

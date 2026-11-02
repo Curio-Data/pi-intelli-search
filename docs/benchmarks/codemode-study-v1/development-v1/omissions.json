@@ -1,0 +1,18 @@
+{
+  "version": "development-v1",
+  "scope": "One development task, one comparative pair per population; not a pilot or measured-series publication",
+  "unchanged": "Token counts, missingness, settings, source/model identities, outcomes, timings, answers and provider-reported cash figures",
+  "corrected": {
+    "field": "toolCatalogueSha256",
+    "basis": "Recomputed from retained Responses input additional_tools declarations. Original digests and source-file hashes are in metadata-corrections.json; declarations are in tool-catalogues.json.",
+    "newObservationFlag": "toolCatalogueObserved=true only after every request in the run yielded the same observed catalogue",
+    "rawEvidence": "Original requests, observations and manifests are unchanged"
+  },
+  "omitted": [
+    "Local host and executable paths",
+    "Private account quota headers",
+    "Raw provider request/response identifiers and message histories",
+    "Full fetched-source snapshots and pipeline transport fixtures, retained privately pending redistribution review"
+  ],
+  "effect": "The shareable data reproduces numerical analysis and reported token-component arithmetic. It does not independently reproduce private request/hash correlation, source-backed quality scoring, or remote-service outputs. Quality is unscored. Captures and the earlier failed generation are retained but excluded from comparative cells."
+}

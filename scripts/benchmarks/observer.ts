@@ -71,14 +71,36 @@ export function sanitiseProviderPayload(payload: unknown, path = "$"): Json {
   return out as Json;
 }
 
-/**
- * sha256 of the canonical sanitised tool declarations carried by a provider
- * payload. Payloads without a tools array hash the canonical empty array so
- * captures remain comparable across arms.
- */
+export interface ToolCatalogueObservation {
+  readonly status: "observed" | "absent" | "unsupported-history";
+  readonly locations: readonly string[];
+  readonly declarations: Json;
+  readonly sha256: string;
+}
+
+/** Recognise both Completions tools and the pinned Responses additional_tools item. */
+export function observeToolCatalogue(payload: Json): ToolCatalogueObservation {
+  const blocks: Array<{ location: string; tools: Json[] }> = [];
+  if (isJsonObject(payload)) {
+    if (Array.isArray(payload.tools)) blocks.push({ location: "tools", tools: payload.tools });
+    if (Array.isArray(payload.input)) payload.input.forEach((item, index) => {
+      if (isJsonObject(item) && item.type === "additional_tools" && Array.isArray(item.tools))
+        blocks.push({ location: `input[${index}].tools`, tools: item.tools });
+    });
+  }
+  // Multiple declaration blocks need host-specific update semantics; preserve
+  // their transcript rather than pretending it is one effective catalogue.
+  const declarations: Json = blocks.length === 1 ? blocks[0]!.tools : blocks.length === 0 ? [] : blocks.map((block) => ({ location: block.location, tools: block.tools }));
+  return {
+    status: blocks.length === 1 ? "observed" : blocks.length === 0 ? "absent" : "unsupported-history",
+    locations: blocks.map((block) => block.location), declarations,
+    sha256: sha256Canonical(declarations),
+  };
+}
+
+/** Frozen hash API; capture records also carry an explicit observation status. */
 export function toolCatalogueSha256(sanitisedPayload: Json): string {
-  const tools = isJsonObject(sanitisedPayload) ? sanitisedPayload["tools"] : undefined;
-  return sha256Canonical(tools ?? []);
+  return observeToolCatalogue(sanitisedPayload).sha256;
 }
 
 /** sha256 of the canonical sanitised payload itself. */
@@ -191,12 +213,14 @@ export function captureProviderPayload(
   assistantRequestId: string,
 ): RequestCapture {
   const sanitised = sanitiseProviderPayload(payload);
-  const record: RequestCapture = {
+  const catalogue = observeToolCatalogue(sanitised);
+  const record: RequestCapture & { toolCatalogueObservation: Json } = {
     sequence: observer.captured + 1,
     assistantRequestId,
     payload: sanitised,
     payloadSha256: payloadSha256(sanitised),
-    toolCatalogueSha256: toolCatalogueSha256(sanitised),
+    toolCatalogueSha256: catalogue.sha256,
+    toolCatalogueObservation: { status: catalogue.status, locations: [...catalogue.locations] },
   };
   observer.capture(record);
   return record;

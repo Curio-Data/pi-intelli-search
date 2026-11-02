@@ -1,0 +1,32 @@
+{
+  "basis": "Provider-reported charges, not an account-debit audit; subscription usage is not cash",
+  "historicalReportedUsd": 0.545984786,
+  "historicalUnknownHoldUsd": 1.5,
+  "study": [
+    {
+      "runId": "CS-DEV-01-capture-on-r1-20261102T185138672Z-687749",
+      "reportedUsd": 0.02296366,
+      "unknownHoldUsd": 0
+    },
+    {
+      "runId": "CS-DEV-01-capture-on-r1-20261102T192244448Z-a2b99b",
+      "reportedUsd": 0.02000478,
+      "unknownHoldUsd": 0
+    },
+    {
+      "runId": "CS-DEV-01-live-on-r1-20261102T192638248Z-741735",
+      "reportedUsd": 0,
+      "unknownHoldUsd": 0
+    },
+    {
+      "runId": "CS-DEV-01-live-off-r1-20261102T192705089Z-e759df",
+      "reportedUsd": 0.01687,
+      "unknownHoldUsd": 0
+    }
+  ],
+  "studyReportedUsd": 0.05983844,
+  "studyUnknownHoldUsd": 0,
+  "ceilingUsd": 30,
+  "programmeExposureUsd": 2.105823226,
+  "remainingUnderCeilingUsd": 27.894176774
+}

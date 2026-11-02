@@ -5,6 +5,7 @@ import { after, before, test } from "node:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sha256Canonical, asJson } from "../scripts/benchmarks/canonical.js";
 import { openStudySpendLedger } from "../scripts/benchmarks/study-budget.js";
 import { createMainFixture, createRecording, importHost, isolateProcess, selectHost, startStageFixture, syntheticPage, MAIN_PROVIDER, type MainTurn } from "./helpers/native-replay.js";
 import { runStudyTask } from "../scripts/benchmarks/study-runner.js";
@@ -194,7 +195,14 @@ test("the matched fetch character cap applies when the model omits maxChars",asy
 test("offline export checks retained artifacts and refuses orphaned runs without new model calls",async()=>{
   const count=stage.requests.length;
   await writeFile(join(seriesRoot,"series.json"),JSON.stringify({candidateCommit:"synthetic",design:{methodSha256:hash,corpusSha256:hash,tasks:[task]}}));
+  const legacyRows=(await readFile(join(seriesRoot,"observations.ndjson"),"utf8")).trim().split("\n").map((line)=>({...JSON.parse(line),toolCatalogueSha256:sha256Canonical(asJson([])),toolCatalogueObserved:undefined}));
+  const legacyText=legacyRows.map((row)=>JSON.stringify(row)).join("\n")+"\n";
+  await writeFile(join(seriesRoot,"observations.ndjson"),legacyText);
   const exported=await analyseStudySeries(seriesRoot,"development");
+  const corrected=JSON.parse(await readFile(exported.datasetPath,"utf8"));
+  assert(corrected.metadataCorrections.length>0);
+  assert(corrected.runs.every((run:{toolCatalogueObserved:boolean})=>run.toolCatalogueObserved));
+  assert.equal(await readFile(join(seriesRoot,"observations.ndjson"),"utf8"),legacyText,"normalisation does not mutate the original observations");
   const analysis=JSON.parse(await readFile(join(exported.output,"analysis.json"),"utf8"));
   assert.match(analysis.analysisClass,/development: diagnostic/);
   assert.equal(stage.requests.length,count);

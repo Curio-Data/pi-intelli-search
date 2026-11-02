@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "edition": "development-v1-metadata-corrected",
+  "scope": "diagnostic, one task, not the measured series",
+  "files": [
+    {
+      "path": "answers.json",
+      "sha256": "06b23e1b8a216ed7c7c3e7c7cb6470c0ac8a77add806c80584e5039179f6e2dc"
+    },
+    {
+      "path": "dataset.json",
+      "sha256": "20a9189198876e0cb2593cad629b80b3d2f5ca6194660959e63a4997751ed09c"
+    },
+    {
+      "path": "derived/analysis.json",
+      "sha256": "1eed09abb5fe2056a5956794f6b7cf02dfa22dfb9705331702035b29e74b62e1"
+    },
+    {
+      "path": "derived/effects.csv",
+      "sha256": "6fcbc64a443d43e1d8aed6712ed8fa7a5a4dcc09b05f1aacaafc17cd196f23a4"
+    },
+    {
+      "path": "earlier-failure.json",
+      "sha256": "a69a3c2de592e305fccfe1b06349b83cca1201673247f246835f9cb410d1bfb1"
+    },
+    {
+      "path": "environment.json",
+      "sha256": "dcaf5cfd4813077fb5ab9ca60f88b297742a3aa78eedeb156ffe359c598e2dcd"
+    },
+    {
+      "path": "metadata-corrections.json",
+      "sha256": "c4d23624216f64739b9016be42482586fc9ac58624134a3c130fc91831b77131"
+    },
+    {
+      "path": "omissions.json",
+      "sha256": "a87e198de15e79a1619f79a2371638636ccce3135f036cef7d7110de6e4eee02"
+    },
+    {
+      "path": "per-request-usage.json",
+      "sha256": "97d595395c08501c236ebbe4e89dac2c21ce0c5168bcce261afd3f5cdf87794c"
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "cd648ee975dbfb8ae0efe7e595815ba1e3af0fed08cb3e1cc8f08ad3175bd702"
+    },
+    {
+      "path": "README.md",
+      "sha256": "7a68bdc7c2d3095c793df194be8d381825db4580a9c9444ff8e908ca9ebc3a2d"
+    },
+    {
+      "path": "routing.json",
+      "sha256": "e749f40005454349b8ea754899581c814a7108e8f3c25d54188d57ca2a45308f"
+    },
+    {
+      "path": "spend.json",
+      "sha256": "9aff8b0ce72b6eb37bf0aff8ab9f97cdb910957752b7ab057d0bdfa0e941064d"
+    },
+    {
+      "path": "task.json",
+      "sha256": "9af9cf15d03e603da62608fa3dedf78182730360026768ee93c672739955797e"
+    },
+    {
+      "path": "tool-catalogues.json",
+      "sha256": "070cfc69267ba5ac6e98edd9cb57040bbb1e37e39e3e9842c4812407c211c422"
+    }
+  ]
+}

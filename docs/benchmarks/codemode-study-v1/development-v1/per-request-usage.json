@@ -1,0 +1,359 @@
+[
+  {
+    "runId": "CS-DEV-01-capture-on-r1-20261102T192244448Z-a2b99b",
+    "requestWindows": 2,
+    "evidenceConsistent": true,
+    "requests": [
+      {
+        "messageSha256": "88cb3f37b33ca4b4dab87f9bd04ff08e95718eb0e58037e705b068f1dc5b23cb",
+        "stopReason": "toolUse",
+        "wireFields": {
+          "inputTokens": 3673,
+          "cachedTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 143,
+          "reasoningTokens": 0,
+          "totalTokens": 3816
+        },
+        "parsedTokens": {
+          "inputTotal": 3673,
+          "inputUncached": 3673,
+          "outputTotal": 143,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 3816
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      },
+      {
+        "messageSha256": "1d317232178fccace41918ed7881974d77207ec11d80ba77c596a9baf1567172",
+        "stopReason": "stop",
+        "wireFields": {
+          "inputTokens": 6009,
+          "cachedTokens": 3712,
+          "cacheWriteTokens": 0,
+          "outputTokens": 467,
+          "reasoningTokens": 0,
+          "totalTokens": 6476
+        },
+        "parsedTokens": {
+          "inputTotal": 6009,
+          "inputUncached": 2297,
+          "outputTotal": 467,
+          "cacheRead": 3712,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 6476
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      }
+    ]
+  },
+  {
+    "runId": "CS-DEV-01-replay-on-r1-20261102T192421382Z-2adb8d",
+    "requestWindows": 2,
+    "evidenceConsistent": true,
+    "requests": [
+      {
+        "messageSha256": "c130393021e01cad0b33b34501d9288da15b6d8456dbe0c21469176de75446c2",
+        "stopReason": "toolUse",
+        "wireFields": {
+          "inputTokens": 3673,
+          "cachedTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 143,
+          "reasoningTokens": 0,
+          "totalTokens": 3816
+        },
+        "parsedTokens": {
+          "inputTotal": 3673,
+          "inputUncached": 3673,
+          "outputTotal": 143,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 3816
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      },
+      {
+        "messageSha256": "68df94c062578251873da1656e015ac4a57515d1236db9f8eb50f43b775e1aa2",
+        "stopReason": "stop",
+        "wireFields": {
+          "inputTokens": 5997,
+          "cachedTokens": 3712,
+          "cacheWriteTokens": 0,
+          "outputTokens": 483,
+          "reasoningTokens": 28,
+          "totalTokens": 6480
+        },
+        "parsedTokens": {
+          "inputTotal": 5997,
+          "inputUncached": 2285,
+          "outputTotal": 483,
+          "cacheRead": 3712,
+          "cacheWrite": 0,
+          "reasoning": 28,
+          "totalTokens": 6480
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      }
+    ]
+  },
+  {
+    "runId": "CS-DEV-01-replay-off-r1-20261102T192521731Z-96df7f",
+    "requestWindows": 2,
+    "evidenceConsistent": true,
+    "requests": [
+      {
+        "messageSha256": "446522f4f7cae6cc65fdfbf49959765319dfd75cb833747021fded0d70f6742b",
+        "stopReason": "toolUse",
+        "wireFields": {
+          "inputTokens": 1226,
+          "cachedTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 73,
+          "reasoningTokens": 0,
+          "totalTokens": 1299
+        },
+        "parsedTokens": {
+          "inputTotal": 1226,
+          "inputUncached": 1226,
+          "outputTotal": 73,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 1299
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      },
+      {
+        "messageSha256": "8a21b22a910d960cd206e058b15f3aaccf8b2096f95ff2d1e4ea4edc5f7a8282",
+        "stopReason": "stop",
+        "wireFields": {
+          "inputTokens": 3489,
+          "cachedTokens": 1152,
+          "cacheWriteTokens": 0,
+          "outputTokens": 504,
+          "reasoningTokens": 0,
+          "totalTokens": 3993
+        },
+        "parsedTokens": {
+          "inputTotal": 3489,
+          "inputUncached": 2337,
+          "outputTotal": 504,
+          "cacheRead": 1152,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 3993
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      }
+    ]
+  },
+  {
+    "runId": "CS-DEV-01-live-on-r1-20261102T192638248Z-741735",
+    "requestWindows": 3,
+    "evidenceConsistent": true,
+    "requests": [
+      {
+        "messageSha256": "685f069c94073b3f49ed782ccd68047bce79c43e89f3c630c6ea5d17fb5a7306",
+        "stopReason": "toolUse",
+        "wireFields": {
+          "inputTokens": 3513,
+          "cachedTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 105,
+          "reasoningTokens": 0,
+          "totalTokens": 3618
+        },
+        "parsedTokens": {
+          "inputTotal": 3513,
+          "inputUncached": 3513,
+          "outputTotal": 105,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 3618
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      },
+      {
+        "messageSha256": "b0d3c599a838b4d44a39e3b599ddc7e85e6caa816bf6defc82b7594b64d1db85",
+        "stopReason": "toolUse",
+        "wireFields": {
+          "inputTokens": 12769,
+          "cachedTokens": 3328,
+          "cacheWriteTokens": 0,
+          "outputTokens": 91,
+          "reasoningTokens": 21,
+          "totalTokens": 12860
+        },
+        "parsedTokens": {
+          "inputTotal": 12769,
+          "inputUncached": 9441,
+          "outputTotal": 91,
+          "cacheRead": 3328,
+          "cacheWrite": 0,
+          "reasoning": 21,
+          "totalTokens": 12860
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      },
+      {
+        "messageSha256": "417609fbca42ad2b1adb2fe684cfc3b77adf45cce5d8d890ccafca52cf7a2914",
+        "stopReason": "stop",
+        "wireFields": {
+          "inputTokens": 16835,
+          "cachedTokens": 12672,
+          "cacheWriteTokens": 0,
+          "outputTokens": 574,
+          "reasoningTokens": 0,
+          "totalTokens": 17409
+        },
+        "parsedTokens": {
+          "inputTotal": 16835,
+          "inputUncached": 4163,
+          "outputTotal": 574,
+          "cacheRead": 12672,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 17409
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      }
+    ]
+  },
+  {
+    "runId": "CS-DEV-01-live-off-r1-20261102T192705089Z-e759df",
+    "requestWindows": 5,
+    "evidenceConsistent": true,
+    "requests": [
+      {
+        "messageSha256": "829d35d4df0fd1f78d871fd5713d55cecdd2d08272327b246997e115da60ab9e",
+        "stopReason": "toolUse",
+        "wireFields": {
+          "inputTokens": 1141,
+          "cachedTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 38,
+          "reasoningTokens": 0,
+          "totalTokens": 1179
+        },
+        "parsedTokens": {
+          "inputTotal": 1141,
+          "inputUncached": 1141,
+          "outputTotal": 38,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 1179
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      },
+      {
+        "messageSha256": "aab0ffad1393a043f67f2a2971c88398d2529757a710cf526e56482c7a37749e",
+        "stopReason": "toolUse",
+        "wireFields": {
+          "inputTokens": 1548,
+          "cachedTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 100,
+          "reasoningTokens": 0,
+          "totalTokens": 1648
+        },
+        "parsedTokens": {
+          "inputTotal": 1548,
+          "inputUncached": 1548,
+          "outputTotal": 100,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 1648
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      },
+      {
+        "messageSha256": "3450dd345e83898135bd2e66438c0a18f4a3261f6e609fa51ac7e9ae18d3c7e2",
+        "stopReason": "toolUse",
+        "wireFields": {
+          "inputTokens": 10777,
+          "cachedTokens": 1536,
+          "cacheWriteTokens": 0,
+          "outputTokens": 52,
+          "reasoningTokens": 0,
+          "totalTokens": 10829
+        },
+        "parsedTokens": {
+          "inputTotal": 10777,
+          "inputUncached": 9241,
+          "outputTotal": 52,
+          "cacheRead": 1536,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 10829
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      },
+      {
+        "messageSha256": "65b6c4164aa82bc0d207fe355e7b418616a2d72b5496aeee7d70b9048068715e",
+        "stopReason": "toolUse",
+        "wireFields": {
+          "inputTokens": 11305,
+          "cachedTokens": 10624,
+          "cacheWriteTokens": 0,
+          "outputTokens": 53,
+          "reasoningTokens": 10,
+          "totalTokens": 11358
+        },
+        "parsedTokens": {
+          "inputTotal": 11305,
+          "inputUncached": 681,
+          "outputTotal": 53,
+          "cacheRead": 10624,
+          "cacheWrite": 0,
+          "reasoning": 10,
+          "totalTokens": 11358
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      },
+      {
+        "messageSha256": "9bba1e882c5fd9d2cf6bed96965c6a2bba39ba310b797fd648f1d07bc4bbc52d",
+        "stopReason": "stop",
+        "wireFields": {
+          "inputTokens": 12134,
+          "cachedTokens": 11264,
+          "cacheWriteTokens": 0,
+          "outputTokens": 576,
+          "reasoningTokens": 0,
+          "totalTokens": 12710
+        },
+        "parsedTokens": {
+          "inputTotal": 12134,
+          "inputUncached": 870,
+          "outputTotal": 576,
+          "cacheRead": 11264,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12710
+        },
+        "fieldsAbsentOnWire": [],
+        "correlation": "response-id"
+      }
+    ]
+  }
+]

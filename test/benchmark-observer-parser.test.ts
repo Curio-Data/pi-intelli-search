@@ -10,6 +10,7 @@ import {
   createRequestObserver,
   sanitiseProviderPayload,
   toolCatalogueSha256,
+  observeToolCatalogue,
 } from "../scripts/benchmarks/observer.js";
 import { parseUsageEvents, tokensFromWireUsage } from "../scripts/benchmarks/usage-parser.js";
 import type { Json } from "../scripts/benchmarks/contracts.js";
@@ -41,6 +42,19 @@ describe("payload sanitisation", () => {
     const bareArray = sanitiseProviderPayload([big, "short"]) as Json[];
     assert.deepEqual(bareArray[0], { redacted: "inline-bytes", bytes: 1024 });
     assert.equal(bareArray[1], "short");
+  });
+
+  it("recognises Responses additional_tools declarations and distinguishes absent or unsupported catalogues", () => {
+    const off = sanitiseProviderPayload({input:[{type:"additional_tools",role:"developer",tools:[{type:"function",name:"intelli_fetch",parameters:{type:"object"}}]}]});
+    const on = sanitiseProviderPayload({input:[{type:"additional_tools",role:"developer",tools:[{type:"custom",name:"codemode",format:{type:"text"}}]}]});
+    const observed = observeToolCatalogue(off);
+    assert.equal(observed.status,"observed");
+    assert.deepEqual(observed.locations,["input[0].tools"]);
+    assert.notEqual(toolCatalogueSha256(off),toolCatalogueSha256(on));
+    assert.notEqual(toolCatalogueSha256(off),toolCatalogueSha256(sanitiseProviderPayload({})));
+    assert.equal(observeToolCatalogue(sanitiseProviderPayload({})).status,"absent");
+    assert.equal(observeToolCatalogue(sanitiseProviderPayload({tools:[]})).status,"observed");
+    assert.equal(observeToolCatalogue(sanitiseProviderPayload({tools:[],input:[{type:"additional_tools",tools:[]}]})).status,"unsupported-history");
   });
 
   it("keeps tool declarations exact and hashes them canonically", () => {

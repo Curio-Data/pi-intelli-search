@@ -1,0 +1,451 @@
+{
+  "datasetSha256": "20a9189198876e0cb2593cad629b80b3d2f5ca6194660959e63a4997751ed09c",
+  "schemaVersion": 1,
+  "analysisClass": "development: diagnostic only, not confirmatory",
+  "design": {
+    "methodSha256": "3d707d14960d561c28cb1165397db1b9f9634eea50281045bdce4eb0bfdc9c3a",
+    "corpusSha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed",
+    "candidateCommit": "68303cc9855f1816e6c0eed0c1b5e2545af33ed8",
+    "analysisPartition": "development",
+    "populations": {
+      "replay": {
+        "queryIds": [
+          "CS-DEV-01",
+          "CS-DEV-02",
+          "CS-DEV-03",
+          "CS-DEV-04"
+        ],
+        "repeats": [
+          1
+        ]
+      },
+      "live": {
+        "queryIds": [
+          "CS-DEV-01",
+          "CS-DEV-02",
+          "CS-DEV-03",
+          "CS-DEV-04"
+        ],
+        "repeats": [
+          1
+        ]
+      }
+    },
+    "bootstrapSeed": 20261102,
+    "bootstrapDraws": 10000,
+    "confidence": 0.95,
+    "humanCalibrationApproved": false
+  },
+  "inventory": [
+    {
+      "runId": "CS-DEV-01-capture-on-r1-20261102T192244448Z-a2b99b",
+      "purpose": "fixture-capture",
+      "population": "replay",
+      "partition": "development",
+      "arm": "on",
+      "status": "completed",
+      "rerunOf": "CS-DEV-01-capture-on-r1-20261102T185138672Z-687749",
+      "mainInputTotal": 9682,
+      "mainUsageComplete": true,
+      "mainInputTotalComplete": true
+    },
+    {
+      "runId": "CS-DEV-01-replay-on-r1-20261102T192421382Z-2adb8d",
+      "purpose": "comparative-task",
+      "population": "replay",
+      "partition": "development",
+      "arm": "on",
+      "status": "completed",
+      "rerunOf": null,
+      "mainInputTotal": 9670,
+      "mainUsageComplete": true,
+      "mainInputTotalComplete": true
+    },
+    {
+      "runId": "CS-DEV-01-replay-off-r1-20261102T192521731Z-96df7f",
+      "purpose": "comparative-task",
+      "population": "replay",
+      "partition": "development",
+      "arm": "off",
+      "status": "completed",
+      "rerunOf": null,
+      "mainInputTotal": 4715,
+      "mainUsageComplete": true,
+      "mainInputTotalComplete": true
+    },
+    {
+      "runId": "CS-DEV-01-live-on-r1-20261102T192638248Z-741735",
+      "purpose": "comparative-task",
+      "population": "live",
+      "partition": "development",
+      "arm": "on",
+      "status": "completed",
+      "rerunOf": null,
+      "mainInputTotal": 33117,
+      "mainUsageComplete": true,
+      "mainInputTotalComplete": true
+    },
+    {
+      "runId": "CS-DEV-01-live-off-r1-20261102T192705089Z-e759df",
+      "purpose": "comparative-task",
+      "population": "live",
+      "partition": "development",
+      "arm": "off",
+      "status": "completed",
+      "rerunOf": null,
+      "mainInputTotal": 36905,
+      "mainUsageComplete": true,
+      "mainInputTotalComplete": true
+    }
+  ],
+  "populations": {
+    "replay": {
+      "expectedRuns": 8,
+      "observedOriginalRuns": 2,
+      "outcomes": {
+        "completed": 2,
+        "failed": 0,
+        "aborted": 0,
+        "not-started": 0
+      },
+      "metrics": {
+        "mainInputUncached": {
+          "pairs": [
+            {
+              "queryId": "CS-DEV-01",
+              "controlMean": 3563,
+              "treatmentMean": 5958,
+              "pairedRepeats": 1
+            }
+          ],
+          "missingQueries": [
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": 1.6721863598091509,
+          "difference": 2395,
+          "metric": "log-ratio",
+          "intervalScale": "ratio",
+          "completePopulation": false,
+          "primaryAvailable": false,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
+        },
+        "mainInputTotal": {
+          "pairs": [
+            {
+              "queryId": "CS-DEV-01",
+              "controlMean": 4715,
+              "treatmentMean": 9670,
+              "pairedRepeats": 1
+            }
+          ],
+          "missingQueries": [
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": 2.050901378579001,
+          "difference": 4955,
+          "metric": "log-ratio",
+          "intervalScale": "ratio",
+          "completePopulation": false,
+          "primaryAvailable": false,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
+        },
+        "qualityJudge1": {
+          "pairs": [],
+          "missingQueries": [
+            "CS-DEV-01",
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": null,
+          "difference": null,
+          "metric": "difference",
+          "intervalScale": "difference",
+          "completePopulation": false,
+          "primaryAvailable": false,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
+        },
+        "qualityJudge2": {
+          "pairs": [],
+          "missingQueries": [
+            "CS-DEV-01",
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": null,
+          "difference": null,
+          "metric": "difference",
+          "intervalScale": "difference",
+          "completePopulation": false,
+          "primaryAvailable": false,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
+        },
+        "returnedMs": {
+          "pairs": [],
+          "missingQueries": [
+            "CS-DEV-01",
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": null,
+          "difference": null,
+          "metric": "difference",
+          "intervalScale": "difference",
+          "completePopulation": false,
+          "primaryAvailable": false,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "interpretation": "Not a live-latency measure"
+        },
+        "reportedPipelineUsd": {
+          "pairs": [
+            {
+              "queryId": "CS-DEV-01",
+              "controlMean": 0,
+              "treatmentMean": 0,
+              "pairedRepeats": 1
+            }
+          ],
+          "missingQueries": [
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [
+            "CS-DEV-01"
+          ],
+          "ratio": null,
+          "difference": 0,
+          "metric": "difference",
+          "intervalScale": "difference",
+          "completePopulation": false,
+          "primaryAvailable": false,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
+        }
+      }
+    },
+    "live": {
+      "expectedRuns": 8,
+      "observedOriginalRuns": 2,
+      "outcomes": {
+        "completed": 2,
+        "failed": 0,
+        "aborted": 0,
+        "not-started": 0
+      },
+      "metrics": {
+        "mainInputUncached": {
+          "pairs": [
+            {
+              "queryId": "CS-DEV-01",
+              "controlMean": 13481,
+              "treatmentMean": 17117,
+              "pairedRepeats": 1
+            }
+          ],
+          "missingQueries": [
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": 1.269712929307915,
+          "difference": 3636,
+          "metric": "log-ratio",
+          "intervalScale": "ratio",
+          "completePopulation": false,
+          "primaryAvailable": false,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
+        },
+        "mainInputTotal": {
+          "pairs": [
+            {
+              "queryId": "CS-DEV-01",
+              "controlMean": 36905,
+              "treatmentMean": 33117,
+              "pairedRepeats": 1
+            }
+          ],
+          "missingQueries": [
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": 0.8973580815607635,
+          "difference": -3788,
+          "metric": "log-ratio",
+          "intervalScale": "ratio",
+          "completePopulation": false,
+          "primaryAvailable": false,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
+        },
+        "qualityJudge1": {
+          "pairs": [],
+          "missingQueries": [
+            "CS-DEV-01",
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": null,
+          "difference": null,
+          "metric": "difference",
+          "intervalScale": "difference",
+          "completePopulation": false,
+          "primaryAvailable": false,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
+        },
+        "qualityJudge2": {
+          "pairs": [],
+          "missingQueries": [
+            "CS-DEV-01",
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": null,
+          "difference": null,
+          "metric": "difference",
+          "intervalScale": "difference",
+          "completePopulation": false,
+          "primaryAvailable": false,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
+        },
+        "returnedMs": {
+          "pairs": [
+            {
+              "queryId": "CS-DEV-01",
+              "controlMean": 53909.522506,
+              "treatmentMean": 26797.590507,
+              "pairedRepeats": 1
+            }
+          ],
+          "missingQueries": [
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": 0.4970845457593786,
+          "difference": -27111.931999,
+          "metric": "difference",
+          "intervalScale": "difference",
+          "completePopulation": false,
+          "primaryAvailable": false,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
+        },
+        "reportedPipelineUsd": {
+          "pairs": [
+            {
+              "queryId": "CS-DEV-01",
+              "controlMean": 0.01687,
+              "treatmentMean": 0,
+              "pairedRepeats": 1
+            }
+          ],
+          "missingQueries": [
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [
+            "CS-DEV-01"
+          ],
+          "ratio": null,
+          "difference": -0.01687,
+          "metric": "difference",
+          "intervalScale": "difference",
+          "completePopulation": false,
+          "primaryAvailable": false,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
+        }
+      }
+    }
+  },
+  "qualityAvailable": false,
+  "note": "Reported pipeline cost is not an account-debit audit. Subscription usage is not cash spend. No superiority conclusion follows from token usage alone. The only arm is retained in the inventory but is not analysed in this version."
+}

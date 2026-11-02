@@ -13,6 +13,7 @@ import { sha256Text } from "./canonical.js";
 export type Population = "replay" | "live";
 export interface StudyAnalysisRun extends RunObservation {
   readonly population: Population;
+  readonly toolCatalogueObserved?: boolean;
   readonly rerunSeries?: string;
   readonly purpose?: "comparative-task" | "fixture-capture" | "synthetic-driver-integration";
   readonly partition: "calibration" | "development" | "pilot" | "measured-series";
@@ -39,6 +40,7 @@ export interface StudyDataset {
     readonly humanCalibrationApproved: boolean;
   };
   readonly runs: readonly StudyAnalysisRun[];
+  readonly metadataCorrections?: readonly { runId: string; field: string; recorded: string; derived: string; sourceFileSha256: string }[];
 }
 const endpoints = ["mainInputUncached", "mainInputTotal", "qualityJudge1", "qualityJudge2", "returnedMs", "reportedPipelineUsd"] as const;
 function observed(value: unknown, label: string): number | null {
@@ -74,7 +76,7 @@ export function analyseStudy(dataset: StudyDataset) {
     for (const run of originals) if (!expected.queryIds.includes(run.queryId) || !expected.repeats.includes(run.repeat)) throw new Error("Unscheduled measured observation");
     const samples: QuerySample[] = originals.map((r) => ({
       queryId: r.queryId, repeat: r.repeat, arm: r.arm,
-      valid: r.status === "completed" && r.observerComplete && (population === "replay" ? r.replayValidity === "valid" : r.replayValidity === "not-replay"),
+      valid: r.status === "completed" && r.observerComplete && r.toolCatalogueObserved !== false && (population === "replay" ? r.replayValidity === "valid" : r.replayValidity === "not-replay"),
       mainInputUncached: r.mainUsageComplete ? observed(r.mainUsage?.inputUncached, "uncached input") : null,
       qualityJudge1: dataset.design.humanCalibrationApproved ? r.qualityJudge1 : null,
       qualityJudge2: dataset.design.humanCalibrationApproved ? r.qualityJudge2 : null,

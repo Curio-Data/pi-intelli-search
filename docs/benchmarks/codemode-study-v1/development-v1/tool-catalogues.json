@@ -1,0 +1,618 @@
+[
+  {
+    "sha256": "1d77bc623176dee09846e5342c895ffe527f02c4eb8e0b11e9633faf3a3c915a",
+    "names": [
+      "read",
+      "intelli_search",
+      "intelli_extract",
+      "intelli_collate",
+      "intelli_research",
+      "codemode"
+    ],
+    "declarations": [
+      {
+        "description": "Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.\n\nCodemode: `tools.read(args)` resolves to `string | { data: string; mimeType: string; note: string; type: \"image\"; }`.",
+        "name": "read",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "anyOf": [
+                {
+                  "description": "Maximum number of lines to read",
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "offset": {
+              "anyOf": [
+                {
+                  "description": "Line number to start reading from (1-indexed)",
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "path": {
+              "description": "Path to the file to read (relative or absolute)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "offset",
+            "limit"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+      },
+      {
+        "description": "Search the web and return a concise answer with source URLs. For multi-page deep research, use intelli_research instead.\n\nCodemode: `tools.intelli_search(args)` resolves to `{ schemaVersion, operation, operationId, outcome, text, details, summary, sources, cache, related, counts: { candidates, fetched, extracted, used, late, failed, cancelled, effectivePageConcurrency }, timing: { startedUtc, elapsedMs, allWorkSettledMs, summaryReadyMs?, cutoffMs?, abortToSettledMs? }, accounting: { attempts, observedAttempts, missingAttempts, tokens, reportedCost, estimatedCost, missingTokenFields, costComplete, parentDelivery }, attempts, deadline: { enabled, reason, minimumMet } }`.",
+        "name": "intelli_search",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "domains": {
+              "anyOf": [
+                {
+                  "description": "Restrict to these domains",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "query": {
+              "description": "Search query",
+              "type": "string"
+            }
+          },
+          "required": [
+            "query",
+            "domains"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+      },
+      {
+        "description": "Extract query-relevant content from a web page. Compresses full page content to the parts that matter for a given query, preserving code blocks, API signatures, and technical detail verbatim. Use this for individual pages you already have; for end-to-end research, use intelli_research.\n\nCodemode: `tools.intelli_extract(args)` resolves to `{ schemaVersion, operation, operationId, outcome, text, details, summary, sources, cache, related, counts: { candidates, fetched, extracted, used, late, failed, cancelled, effectivePageConcurrency }, timing: { startedUtc, elapsedMs, allWorkSettledMs, summaryReadyMs?, cutoffMs?, abortToSettledMs? }, accounting: { attempts, observedAttempts, missingAttempts, tokens, reportedCost, estimatedCost, missingTokenFields, costComplete, parentDelivery }, attempts, deadline: { enabled, reason, minimumMet } }`.",
+        "name": "intelli_extract",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "content": {
+              "description": "Full page content in markdown",
+              "type": "string"
+            },
+            "focusPrompt": {
+              "anyOf": [
+                {
+                  "description": "Optional focus guidance for extraction",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "query": {
+              "description": "The original search query",
+              "type": "string"
+            },
+            "title": {
+              "description": "Page title",
+              "type": "string"
+            },
+            "url": {
+              "description": "URL of the page to extract from",
+              "type": "string"
+            }
+          },
+          "required": [
+            "url",
+            "title",
+            "content",
+            "query",
+            "focusPrompt"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+      },
+      {
+        "description": "Deduplicate and synthesise multiple per-page extractions into a single concise summary. A saved report goes into a new run directory under .search/.intelli-v1/runs/ (or the configured cacheDir), without replacing earlier reports. A valid answer is still returned when persistence is unavailable. Use this after extracting multiple pages with intelli_extract; for end-to-end research, use intelli_research.\n\nCodemode: `tools.intelli_collate(args)` resolves to `{ schemaVersion, operation, operationId, outcome, text, details, summary, sources, cache, related, counts: { candidates, fetched, extracted, used, late, failed, cancelled, effectivePageConcurrency }, timing: { startedUtc, elapsedMs, allWorkSettledMs, summaryReadyMs?, cutoffMs?, abortToSettledMs? }, accounting: { attempts, observedAttempts, missingAttempts, tokens, reportedCost, estimatedCost, missingTokenFields, costComplete, parentDelivery }, attempts, deadline: { enabled, reason, minimumMet } }`.",
+        "name": "intelli_collate",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "extractions": {
+              "description": "Array of per-page extraction results from intelli_extract",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "extraction": {
+                    "type": "string"
+                  },
+                  "sourceType": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url",
+                  "title",
+                  "extraction",
+                  "sourceType",
+                  "status"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "fullPages": {
+              "anyOf": [
+                {
+                  "description": "Full page content for caching (not sent to LLM)",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "content": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "url",
+                      "title",
+                      "content"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "query": {
+              "description": "The original search query",
+              "type": "string"
+            },
+            "searchSummary": {
+              "anyOf": [
+                {
+                  "description": "Summary from the initial search step; accepted for compatibility, not used as synthesis evidence",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "extractions",
+            "query",
+            "searchSummary",
+            "fullPages"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+      },
+      {
+        "description": "Search the web, fetch top results, extract relevant content from each page, and deduplicate into a concise summary. A saved report goes into a new run directory under .search/.intelli-v1/runs/ (or the configured cacheDir), without replacing earlier reports. Degraded results save no report; a valid answer is still returned when persistence is unavailable. This is the primary research tool; for quick factual lookups, use intelli_search instead.\n\nCodemode: `tools.intelli_research(args)` resolves to `{ schemaVersion, operation, operationId, outcome, text, details, summary, sources, cache, related, counts: { candidates, fetched, extracted, used, late, failed, cancelled, effectivePageConcurrency }, timing: { startedUtc, elapsedMs, allWorkSettledMs, summaryReadyMs?, cutoffMs?, abortToSettledMs? }, accounting: { attempts, observedAttempts, missingAttempts, tokens, reportedCost, estimatedCost, missingTokenFields, costComplete, parentDelivery }, attempts, deadline: { enabled, reason, minimumMet } }`.",
+        "name": "intelli_research",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "domains": {
+              "anyOf": [
+                {
+                  "description": "Restrict search to these domains",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "focusPrompt": {
+              "anyOf": [
+                {
+                  "description": "Focus guidance for all extractions",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxUrls": {
+              "anyOf": [
+                {
+                  "description": "Max URLs to fetch (default: 10, capped by settings.maxUrls)",
+                  "minimum": 1,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "query": {
+              "description": "What to research",
+              "type": "string"
+            }
+          },
+          "required": [
+            "query",
+            "maxUrls",
+            "domains",
+            "focusPrompt"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+      },
+      {
+        "description": "Run JavaScript that calls other tools. The input is raw JavaScript (not JSON, no code fence), run as an async function body in a QuickJS sandbox: top-level `await` and `return` work. No Node, file system, network, or timers.\n- `await tools.<name>({ ...args })` resolves to a string, or an object if the tool's declaration says so, and rejects with an Error on failure. A tool whose declaration returns an object resolves on failure too when it returned that object; check its fields. Calls still running when the script ends are cancelled.\n- Optional first line: `// @options: {\"max_output_tokens\": 10000, \"timeout_ms\": 60000}`\n\nGlobals:\n- `text(value)`, `image(dataUrlOrImageBlock)`, `console.log(...)`, and top-level `return` add output; `exit()` ends the script. With several text items, each starts with a `==> text N/M <==` line, and `console` lines follow the other output in one `<console_output>` block. `image()` also saves the image to a temp file and the result names its path.\n- `store(key, value)` and `load(key)` keep JSON values across codemode calls.\n- `ALL_TOOLS`, `await searchTools(query, { limit?, namespace? })`, `await describeTool(name)`, `await describeNamespace(name)`: find unlisted tools, such as MCP tools.\n\nNested tools:\n\n### `intelli_fetch`\nFetch one web page with the bounded research page client. Returns page content for extraction, source identity and fetch outcome. It makes no model call.\n\ncodemode tool declaration:\n```ts\ndeclare const tools: { intelli_fetch(args: {\n  // Maximum returned page characters\n  // @integer @minimum 1\n  maxChars?: number;\n  // Page URL\n  url: string;\n}): Promise<{\n  accounting: {\n    // @integer @minimum 0 @maximum 9007199254740991\n    attempts: number;\n    costComplete: boolean;\n    estimatedCost: {\n      // @minimum 0\n      cacheRead?: number;\n      // @minimum 0\n      cacheWrite?: number;\n      // @minimum 0\n      input?: number;\n      // @minimum 0\n      output?: number;\n      // @minimum 0\n      total?: number;\n    };\n    // @integer @minimum 0 @maximum 9007199254740991\n    missingAttempts: number;\n    // @uniqueItems\n    missingTokenFields: Array<\"inputTotal\" | \"inputUncached\" | \"outputTotal\" | \"cacheRead\" | \"cacheWrite\" | \"cacheWrite1h\" | \"reasoning\" | \"totalTokens\">;\n    // @integer @minimum 0 @maximum 9007199254740991\n    observedAttempts: number;\n    parentDelivery: \"available\" | \"unavailable-after-parent-cancel\" | \"unknown\";\n    reportedCost: {\n      // @minimum 0\n      cacheRead?: number;\n      // @minimum 0\n      cacheWrite?: number;\n      // @minimum 0\n      input?: number;\n      // @minimum 0\n      output?: number;\n      // @minimum 0\n      total?: number;\n    };\n    tokens: {\n      // @minimum 0\n      cacheRead?: number;\n      // @minimum 0\n      cacheWrite?: number;\n      // @minimum 0\n      cacheWrite1h?: number;\n      // @minimum 0\n      inputTotal?: number;\n      // @minimum 0\n      inputUncached?: number;\n      // @minimum 0\n      outputTotal?: number;\n      // @minimum 0\n      reasoning?: number;\n      // @minimum 0\n      totalTokens?: number;\n    };\n  };\n  attempts: Array<{\n    // @integer @minimum 1 @maximum 9007199254740991\n    attempt: number;\n    // @minLength 1 @maxLength 128 @pattern ^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]+$\n    callId: string;\n    model: { model: string; provider: string; };\n    observation?: { cost?: {\n      // @minimum 0\n      cacheRead?: number;\n      // @minimum 0\n      cacheWrite?: number;\n      // @minimum 0\n      input?: number;\n      // @minimum 0\n      output?: number;\n      // @minimum 0\n      total?: number;\n    }; costBasis: \"reported\" | \"catalogue\" | \"unknown\"; providerRequestId?: string; source: \"provider-response\" | \"sdk-normalized\"; tokens: {\n      // @minimum 0\n      cacheRead?: number;\n      // @minimum 0\n      cacheWrite?: number;\n      // @minimum 0\n      cacheWrite1h?: number;\n      // @minimum 0\n      inputTotal?: number;\n      // @minimum 0\n      inputUncached?: number;\n      // @minimum 0\n      outputTotal?: number;\n      // @minimum 0\n      reasoning?: number;\n      // @minimum 0\n      totalTokens?: number;\n    }; };\n    // @minLength 1 @maxLength 128 @pattern ^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]+$\n    operationId: string;\n    // @minLength 1 @maxLength 128 @pattern ^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]+$\n    pageId?: string;\n    // @minimum 0\n    queueMs: number;\n    role: \"search\" | \"extract\" | \"collate\" | \"suggest\";\n    settledAtMs: number;\n    startedAtMs: number;\n    state: \"succeeded\" | \"failed\" | \"aborted\" | \"timed-out\";\n  }>;\n  cache: { status: \"not-requested\"; } | { diagnostic: { code: string; message: string; }; status: \"unavailable\"; } | { accountingPath?: string; diagnostic?: { code: string; message: string; }; index: \"updated\" | \"unavailable\"; reportPath: string; runId: string; status: \"committed\"; };\n  counts: {\n    // @integer @minimum 0 @maximum 9007199254740991\n    cancelled: number;\n    // @integer @minimum 0 @maximum 9007199254740991\n    candidates: number;\n    // @integer @minimum 0 @maximum 9007199254740991\n    effectivePageConcurrency: number;\n    // @integer @minimum 0 @maximum 9007199254740991\n    extracted: number;\n    // @integer @minimum 0 @maximum 9007199254740991\n    failed: number;\n    // @integer @minimum 0 @maximum 9007199254740991\n    fetched: number;\n    // @integer @minimum 0 @maximum 9007199254740991\n    late: number;\n    // @integer @minimum 0 @maximum 9007199254740991\n    used: number;\n  };\n  deadline: { enabled: boolean; minimumMet: boolean; reason: \"disabled\" | \"all-terminal\" | \"adaptive\" | \"minimum\" | \"ceiling\" | \"not-applicable\"; };\n  details: { [key: string]: unknown; };\n  operation: \"intelli_fetch\";\n  // @minLength 1 @maxLength 128\n  operationId: string;\n  outcome: \"completed\" | \"no-links\" | \"fetch-failed\" | \"extraction-failed\" | \"error\" | \"aborted\";\n  related: Array<{ namespace: \"v1\" | \"legacy\"; query: string; relevance: string; reportPath: string; }>;\n  schemaVersion: 1;\n  sources: Array<{\n    // @maxLength 500000\n    content?: string;\n    diagnostic?: string;\n    id: string;\n    sourceType?: string;\n    state: \"fetched\" | \"empty\" | \"fetch-failed\" | \"cancelled\";\n    title: string;\n    truncated?: boolean;\n    url: string;\n  }>;\n  summary: string;\n  text: string;\n  timing: {\n    // @minimum 0\n    abortToSettledMs?: number;\n    // @minimum 0\n    allWorkSettledMs: number;\n    // @minimum 0\n    cutoffMs?: number;\n    // @minimum 0\n    elapsedMs: number;\n    startedUtc: string;\n    // @minimum 0\n    summaryReadyMs?: number;\n  };\n}>; };\n```",
+        "format": {
+          "definition": "\nstart: options_source | plain_source\noptions_source: OPTIONS_LINE NEWLINE SOURCE\nplain_source: SOURCE\n\nOPTIONS_LINE: /[ \\t]*\\/\\/ @options:[^\\r\\n]*/\nNEWLINE: /\\r?\\n/\nSOURCE: /[\\s\\S]+/\n",
+          "syntax": "lark",
+          "type": "grammar"
+        },
+        "name": "codemode",
+        "type": "custom"
+      }
+    ]
+  },
+  {
+    "sha256": "f2aeaf22f5a0f0cadd87613b2476f5063c30e8d713a4e74fd39f8f2ea8eb82aa",
+    "names": [
+      "read",
+      "intelli_search",
+      "intelli_extract",
+      "intelli_collate",
+      "intelli_research",
+      "intelli_fetch"
+    ],
+    "declarations": [
+      {
+        "description": "Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.",
+        "name": "read",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "anyOf": [
+                {
+                  "description": "Maximum number of lines to read",
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "offset": {
+              "anyOf": [
+                {
+                  "description": "Line number to start reading from (1-indexed)",
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "path": {
+              "description": "Path to the file to read (relative or absolute)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "offset",
+            "limit"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+      },
+      {
+        "description": "Search the web and return a concise answer with source URLs. For multi-page deep research, use intelli_research instead.",
+        "name": "intelli_search",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "domains": {
+              "anyOf": [
+                {
+                  "description": "Restrict to these domains",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "query": {
+              "description": "Search query",
+              "type": "string"
+            }
+          },
+          "required": [
+            "query",
+            "domains"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+      },
+      {
+        "description": "Extract query-relevant content from a web page. Compresses full page content to the parts that matter for a given query, preserving code blocks, API signatures, and technical detail verbatim. Use this for individual pages you already have; for end-to-end research, use intelli_research.",
+        "name": "intelli_extract",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "content": {
+              "description": "Full page content in markdown",
+              "type": "string"
+            },
+            "focusPrompt": {
+              "anyOf": [
+                {
+                  "description": "Optional focus guidance for extraction",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "query": {
+              "description": "The original search query",
+              "type": "string"
+            },
+            "title": {
+              "description": "Page title",
+              "type": "string"
+            },
+            "url": {
+              "description": "URL of the page to extract from",
+              "type": "string"
+            }
+          },
+          "required": [
+            "url",
+            "title",
+            "content",
+            "query",
+            "focusPrompt"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+      },
+      {
+        "description": "Deduplicate and synthesise multiple per-page extractions into a single concise summary. A saved report goes into a new run directory under .search/.intelli-v1/runs/ (or the configured cacheDir), without replacing earlier reports. A valid answer is still returned when persistence is unavailable. Use this after extracting multiple pages with intelli_extract; for end-to-end research, use intelli_research.",
+        "name": "intelli_collate",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "extractions": {
+              "description": "Array of per-page extraction results from intelli_extract",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "extraction": {
+                    "type": "string"
+                  },
+                  "sourceType": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url",
+                  "title",
+                  "extraction",
+                  "sourceType",
+                  "status"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "fullPages": {
+              "anyOf": [
+                {
+                  "description": "Full page content for caching (not sent to LLM)",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "content": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "url",
+                      "title",
+                      "content"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "query": {
+              "description": "The original search query",
+              "type": "string"
+            },
+            "searchSummary": {
+              "anyOf": [
+                {
+                  "description": "Summary from the initial search step; accepted for compatibility, not used as synthesis evidence",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "extractions",
+            "query",
+            "searchSummary",
+            "fullPages"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+      },
+      {
+        "description": "Search the web, fetch top results, extract relevant content from each page, and deduplicate into a concise summary. A saved report goes into a new run directory under .search/.intelli-v1/runs/ (or the configured cacheDir), without replacing earlier reports. Degraded results save no report; a valid answer is still returned when persistence is unavailable. This is the primary research tool; for quick factual lookups, use intelli_search instead.",
+        "name": "intelli_research",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "domains": {
+              "anyOf": [
+                {
+                  "description": "Restrict search to these domains",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "focusPrompt": {
+              "anyOf": [
+                {
+                  "description": "Focus guidance for all extractions",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxUrls": {
+              "anyOf": [
+                {
+                  "description": "Max URLs to fetch (default: 10, capped by settings.maxUrls)",
+                  "minimum": 1,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "query": {
+              "description": "What to research",
+              "type": "string"
+            }
+          },
+          "required": [
+            "query",
+            "maxUrls",
+            "domains",
+            "focusPrompt"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "function"
+      },
+      {
+        "description": "Fetch one web page with the bounded research page client. Returns page content for extraction, source identity and fetch outcome. It makes no model call.",
+        "name": "intelli_fetch",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "maxChars": {
+              "description": "Maximum returned page characters",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "url": {
+              "description": "Page URL",
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "type": "object"
+        },
+        "strict": null,
+        "type": "function"
+      }
+    ]
+  }
+]

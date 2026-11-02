@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "kind": "offline-tool-catalogue-correction",
+  "reason": "The old observer hashed only top-level tools; Pi 1.4.0 Responses declarations are in input[*].tools on additional_tools items.",
+  "derivingSourceSha256": "de300e335fd3ac300b191e60370467818fb87b0450d0b8de6f7e57739736f687",
+  "recordingSourceSha256": "d2d432b6bbb72e40158401749bee24b0b9d39d0f9bb6bb4a7fce7f78ccd6c2b5",
+  "draftSnapshotBoundary": "The preserved draft snapshot is immediately before the catalogue correction, after correcting the routing label from replay to capture. The original routing label is recorded in the independent review; original run identities always recorded capture correctly.",
+  "rule": "Canonical hash of the single observed declaration array; absent and unsupported-history states are explicit. Every request in each retained run has the same observed catalogue.",
+  "originalEvidence": "Unchanged: requests, observation rows, run manifests, charges and outcomes. No new model call.",
+  "numericalResultsChanged": false,
+  "corrections": [
+    {
+      "runId": "CS-DEV-01-capture-on-r1-20261102T192244448Z-a2b99b",
+      "series": "codemode-development-20261102-r2",
+      "field": "toolCatalogueSha256",
+      "recorded": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "derived": "1d77bc623176dee09846e5342c895ffe527f02c4eb8e0b11e9633faf3a3c915a",
+      "status": "observed",
+      "locations": [
+        "input[0].tools"
+      ],
+      "requestCount": 2,
+      "retainedRequestFileSha256": "292614afa3d92f2d1cd11a0c0f186a6f3fc673f3ce783a2abc39b0bc0865c58b"
+    },
+    {
+      "runId": "CS-DEV-01-replay-on-r1-20261102T192421382Z-2adb8d",
+      "series": "codemode-development-20261102-r2",
+      "field": "toolCatalogueSha256",
+      "recorded": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "derived": "1d77bc623176dee09846e5342c895ffe527f02c4eb8e0b11e9633faf3a3c915a",
+      "status": "observed",
+      "locations": [
+        "input[0].tools"
+      ],
+      "requestCount": 2,
+      "retainedRequestFileSha256": "6b8a8da11c13088d61bb7b4ed9ef7603233ceded29b591437d3dedd6e5566cd2"
+    },
+    {
+      "runId": "CS-DEV-01-replay-off-r1-20261102T192521731Z-96df7f",
+      "series": "codemode-development-20261102-r2",
+      "field": "toolCatalogueSha256",
+      "recorded": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "derived": "f2aeaf22f5a0f0cadd87613b2476f5063c30e8d713a4e74fd39f8f2ea8eb82aa",
+      "status": "observed",
+      "locations": [
+        "input[0].tools"
+      ],
+      "requestCount": 2,
+      "retainedRequestFileSha256": "f85c36f5b81721237a87c865e09f18f35e0088b501a8ddd2082f11047e61bb05"
+    },
+    {
+      "runId": "CS-DEV-01-live-on-r1-20261102T192638248Z-741735",
+      "series": "codemode-development-20261102-r2",
+      "field": "toolCatalogueSha256",
+      "recorded": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "derived": "1d77bc623176dee09846e5342c895ffe527f02c4eb8e0b11e9633faf3a3c915a",
+      "status": "observed",
+      "locations": [
+        "input[0].tools"
+      ],
+      "requestCount": 3,
+      "retainedRequestFileSha256": "1aa281e9e3efdcd704bc8909b6fe53833cb418b21fb8ee325121d8a626868585"
+    },
+    {
+      "runId": "CS-DEV-01-live-off-r1-20261102T192705089Z-e759df",
+      "series": "codemode-development-20261102-r2",
+      "field": "toolCatalogueSha256",
+      "recorded": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "derived": "f2aeaf22f5a0f0cadd87613b2476f5063c30e8d713a4e74fd39f8f2ea8eb82aa",
+      "status": "observed",
+      "locations": [
+        "input[0].tools"
+      ],
+      "requestCount": 5,
+      "retainedRequestFileSha256": "2ad44306c223391ace0f651d3d1d37226c4cdb38d9dd4e32e48b15096789c110"
+    },
+    {
+      "runId": "CS-DEV-01-capture-on-r1-20261102T185138672Z-687749",
+      "series": "codemode-development-20261102",
+      "field": "toolCatalogueSha256",
+      "recorded": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "derived": "1d77bc623176dee09846e5342c895ffe527f02c4eb8e0b11e9633faf3a3c915a",
+      "status": "observed",
+      "locations": [
+        "input[0].tools"
+      ],
+      "requestCount": 1,
+      "retainedRequestFileSha256": "8c872c5b1151d3a5fc7bcf75b28ad96dd67517d3a2882a0ff080c013927f5be4"
+    }
+  ]
+}

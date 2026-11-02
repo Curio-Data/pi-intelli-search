@@ -1,0 +1,11 @@
+{
+  "node": "v24.19.0",
+  "sourceCommit": "68303cc9855f1816e6c0eed0c1b5e2545af33ed8",
+  "lockfileSha256": "e6963d2ef6fdd17dcdc59eb2377e580fa3106612cb441b592e370449d2b39ffb",
+  "mainModel": {
+    "provider": "openai-codex",
+    "model": "gpt-6.1-sol",
+    "billing": "subscription"
+  },
+  "analysisCommand": "node --import tsx scripts/benchmarks/study-analysis.ts DATASET OUTPUT_DIRECTORY"
+}

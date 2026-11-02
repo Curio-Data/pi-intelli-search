@@ -1,0 +1,649 @@
+{
+  "schemaVersion": 1,
+  "design": {
+    "methodSha256": "3d707d14960d561c28cb1165397db1b9f9634eea50281045bdce4eb0bfdc9c3a",
+    "corpusSha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed",
+    "candidateCommit": "68303cc9855f1816e6c0eed0c1b5e2545af33ed8",
+    "analysisPartition": "development",
+    "populations": {
+      "replay": {
+        "queryIds": [
+          "CS-DEV-01",
+          "CS-DEV-02",
+          "CS-DEV-03",
+          "CS-DEV-04"
+        ],
+        "repeats": [
+          1
+        ]
+      },
+      "live": {
+        "queryIds": [
+          "CS-DEV-01",
+          "CS-DEV-02",
+          "CS-DEV-03",
+          "CS-DEV-04"
+        ],
+        "repeats": [
+          1
+        ]
+      }
+    },
+    "bootstrapSeed": 20261102,
+    "bootstrapDraws": 10000,
+    "confidence": 0.95,
+    "humanCalibrationApproved": false
+  },
+  "runs": [
+    {
+      "arm": "on",
+      "artifacts": [],
+      "candidateCommit": "68303cc9855f1816e6c0eed0c1b5e2545af33ed8",
+      "corpusSha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed",
+      "effectiveSettings": {
+        "browserFingerprint": "chrome_145",
+        "cacheDir": ".search",
+        "collateModel": {
+          "model": "minimax/minimax-m3",
+          "provider": "openrouter"
+        },
+        "collationMaxTokens": 8000,
+        "defaultUrls": 4,
+        "disableLlmsFullDiscovery": true,
+        "disableTelemetry": false,
+        "execution": {
+          "aggregateFetchConcurrency": 4,
+          "criticalReserve": 1,
+          "deadline": {
+            "enabled": false
+          },
+          "docsMaxResponseBytes": 16777216,
+          "fetchMaxChars": 16000,
+          "fetchMaxResponseBytes": 8388608,
+          "lateDrainMs": 0,
+          "modelConcurrency": 5,
+          "pageExecution": "streaming"
+        },
+        "extractMaxChars": 16000,
+        "extractModel": {
+          "model": "minimax/minimax-m3",
+          "provider": "openrouter"
+        },
+        "extractionConcurrency": 4,
+        "extractionMaxTokens": 3000,
+        "fetchConcurrency": 4,
+        "fetchTimeoutMs": 20000,
+        "llmRetryAttempts": 1,
+        "llmTimeoutMs": 90000,
+        "maxUrls": 12,
+        "minRequestIntervalMs": 0,
+        "retryBaseDelayMs": 1500,
+        "retryMaxDelayMs": 20000,
+        "searchModel": {
+          "model": "perplexity/sonar",
+          "provider": "openrouter"
+        },
+        "searchRetryAttempts": 1,
+        "searchWebSearch": {
+          "enabled": false,
+          "engine": "auto",
+          "maxResults": 8,
+          "reasoning": "minimal"
+        }
+      },
+      "estimatedPipelineUsd": null,
+      "experiment": "codemode",
+      "fixtureSha256": null,
+      "host": {
+        "version": "1.4.0",
+        "source": "managed-install"
+      },
+      "lockfileSha256": "e6963d2ef6fdd17dcdc59eb2377e580fa3106612cb441b592e370449d2b39ffb",
+      "mainInputTotalComplete": true,
+      "mainUsage": {
+        "cacheRead": 3712,
+        "cacheWrite": 0,
+        "inputTotal": 9682,
+        "inputUncached": 5970,
+        "outputTotal": 610,
+        "reasoning": 0,
+        "totalTokens": 10292
+      },
+      "mainUsageComplete": true,
+      "methodSha256": "3d707d14960d561c28cb1165397db1b9f9634eea50281045bdce4eb0bfdc9c3a",
+      "observerComplete": true,
+      "order": 1,
+      "partition": "development",
+      "pipelineUsage": {
+        "attempts": 6,
+        "costComplete": true,
+        "estimatedCost": {},
+        "missingAttempts": 0,
+        "missingTokenFields": [
+          "cacheWrite1h"
+        ],
+        "observedAttempts": 6,
+        "parentDelivery": "unknown",
+        "reportedCost": {
+          "total": 0.02000478
+        },
+        "tokens": {
+          "cacheRead": 7424,
+          "cacheWrite": 0,
+          "inputTotal": 17548,
+          "inputUncached": 10124,
+          "outputTotal": 10578,
+          "reasoning": 4177,
+          "totalTokens": 28126
+        }
+      },
+      "population": "replay",
+      "promptSha256": "1a28296839a508eb8a3fc3f570bc015b8cbd2ec9a7336e7c5326b9f494d5048d",
+      "purpose": "fixture-capture",
+      "qualityJudge1": null,
+      "qualityJudge2": null,
+      "queryId": "CS-DEV-01",
+      "repeat": 1,
+      "replayValidity": "not-replay",
+      "reportedPipelineUsd": 0.02000478,
+      "rerunOf": "CS-DEV-01-capture-on-r1-20261102T185138672Z-687749",
+      "rerunReason": "Correct allocation-witness classification and give matched collation/script output headroom after recorded reasoning-budget exhaustion",
+      "rerunSeries": "codemode-development-20261102",
+      "returnedMs": 61184.36961,
+      "runId": "CS-DEV-01-capture-on-r1-20261102T192244448Z-a2b99b",
+      "seed": 20261102,
+      "status": "completed",
+      "subscriptionQuota": {
+        "omitted": "Private account/quota details"
+      },
+      "toolCatalogueSha256": "1d77bc623176dee09846e5342c895ffe527f02c4eb8e0b11e9633faf3a3c915a",
+      "workflow": "single",
+      "toolCatalogueObserved": true
+    },
+    {
+      "arm": "on",
+      "artifacts": [],
+      "candidateCommit": "68303cc9855f1816e6c0eed0c1b5e2545af33ed8",
+      "corpusSha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed",
+      "effectiveSettings": {
+        "browserFingerprint": "chrome_145",
+        "cacheDir": ".search",
+        "collateModel": {
+          "model": "minimax/minimax-m3",
+          "provider": "openrouter"
+        },
+        "collationMaxTokens": 8000,
+        "defaultUrls": 4,
+        "disableLlmsFullDiscovery": true,
+        "disableTelemetry": false,
+        "execution": {
+          "aggregateFetchConcurrency": 4,
+          "criticalReserve": 1,
+          "deadline": {
+            "enabled": false
+          },
+          "docsMaxResponseBytes": 16777216,
+          "fetchMaxChars": 16000,
+          "fetchMaxResponseBytes": 8388608,
+          "lateDrainMs": 0,
+          "modelConcurrency": 5,
+          "pageExecution": "streaming"
+        },
+        "extractMaxChars": 16000,
+        "extractModel": {
+          "model": "minimax/minimax-m3",
+          "provider": "openrouter"
+        },
+        "extractionConcurrency": 4,
+        "extractionMaxTokens": 3000,
+        "fetchConcurrency": 4,
+        "fetchTimeoutMs": 20000,
+        "llmRetryAttempts": 1,
+        "llmTimeoutMs": 90000,
+        "maxUrls": 12,
+        "minRequestIntervalMs": 0,
+        "retryBaseDelayMs": 1500,
+        "retryMaxDelayMs": 20000,
+        "searchModel": {
+          "model": "perplexity/sonar",
+          "provider": "openrouter"
+        },
+        "searchRetryAttempts": 1,
+        "searchWebSearch": {
+          "enabled": false,
+          "engine": "auto",
+          "maxResults": 8,
+          "reasoning": "minimal"
+        }
+      },
+      "estimatedPipelineUsd": null,
+      "experiment": "codemode",
+      "fixtureSha256": "dabe21c236cf2c348a1056ea3857d00c8809904b77a5f60120a89d1579836b2b",
+      "host": {
+        "version": "1.4.0",
+        "source": "managed-install"
+      },
+      "lockfileSha256": "e6963d2ef6fdd17dcdc59eb2377e580fa3106612cb441b592e370449d2b39ffb",
+      "mainInputTotalComplete": true,
+      "mainUsage": {
+        "cacheRead": 3712,
+        "cacheWrite": 0,
+        "inputTotal": 9670,
+        "inputUncached": 5958,
+        "outputTotal": 626,
+        "reasoning": 28,
+        "totalTokens": 10296
+      },
+      "mainUsageComplete": true,
+      "methodSha256": "3d707d14960d561c28cb1165397db1b9f9634eea50281045bdce4eb0bfdc9c3a",
+      "observerComplete": true,
+      "order": 2,
+      "partition": "development",
+      "pipelineUsage": {
+        "attempts": 6,
+        "costComplete": true,
+        "estimatedCost": {},
+        "missingAttempts": 0,
+        "missingTokenFields": [
+          "cacheWrite1h"
+        ],
+        "observedAttempts": 6,
+        "parentDelivery": "unknown",
+        "reportedCost": {
+          "total": 0.02000478
+        },
+        "tokens": {
+          "cacheRead": 7424,
+          "cacheWrite": 0,
+          "inputTotal": 17548,
+          "inputUncached": 10124,
+          "outputTotal": 10578,
+          "reasoning": 4177,
+          "totalTokens": 28126
+        }
+      },
+      "population": "replay",
+      "promptSha256": "1a28296839a508eb8a3fc3f570bc015b8cbd2ec9a7336e7c5326b9f494d5048d",
+      "purpose": "comparative-task",
+      "qualityJudge1": null,
+      "qualityJudge2": null,
+      "queryId": "CS-DEV-01",
+      "repeat": 1,
+      "replayValidity": "valid",
+      "reportedPipelineUsd": 0,
+      "returnedMs": 60206.874694000006,
+      "runId": "CS-DEV-01-replay-on-r1-20261102T192421382Z-2adb8d",
+      "seed": 20261102,
+      "status": "completed",
+      "subscriptionQuota": {
+        "omitted": "Private account/quota details"
+      },
+      "toolCatalogueSha256": "1d77bc623176dee09846e5342c895ffe527f02c4eb8e0b11e9633faf3a3c915a",
+      "workflow": "single",
+      "toolCatalogueObserved": true
+    },
+    {
+      "arm": "off",
+      "artifacts": [],
+      "candidateCommit": "68303cc9855f1816e6c0eed0c1b5e2545af33ed8",
+      "corpusSha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed",
+      "effectiveSettings": {
+        "browserFingerprint": "chrome_145",
+        "cacheDir": ".search",
+        "collateModel": {
+          "model": "minimax/minimax-m3",
+          "provider": "openrouter"
+        },
+        "collationMaxTokens": 8000,
+        "defaultUrls": 4,
+        "disableLlmsFullDiscovery": true,
+        "disableTelemetry": false,
+        "execution": {
+          "aggregateFetchConcurrency": 4,
+          "criticalReserve": 1,
+          "deadline": {
+            "enabled": false
+          },
+          "docsMaxResponseBytes": 16777216,
+          "fetchMaxChars": 16000,
+          "fetchMaxResponseBytes": 8388608,
+          "lateDrainMs": 0,
+          "modelConcurrency": 5,
+          "pageExecution": "streaming"
+        },
+        "extractMaxChars": 16000,
+        "extractModel": {
+          "model": "minimax/minimax-m3",
+          "provider": "openrouter"
+        },
+        "extractionConcurrency": 4,
+        "extractionMaxTokens": 3000,
+        "fetchConcurrency": 4,
+        "fetchTimeoutMs": 20000,
+        "llmRetryAttempts": 1,
+        "llmTimeoutMs": 90000,
+        "maxUrls": 12,
+        "minRequestIntervalMs": 0,
+        "retryBaseDelayMs": 1500,
+        "retryMaxDelayMs": 20000,
+        "searchModel": {
+          "model": "perplexity/sonar",
+          "provider": "openrouter"
+        },
+        "searchRetryAttempts": 1,
+        "searchWebSearch": {
+          "enabled": false,
+          "engine": "auto",
+          "maxResults": 8,
+          "reasoning": "minimal"
+        }
+      },
+      "estimatedPipelineUsd": null,
+      "experiment": "codemode",
+      "fixtureSha256": "dabe21c236cf2c348a1056ea3857d00c8809904b77a5f60120a89d1579836b2b",
+      "host": {
+        "version": "1.4.0",
+        "source": "managed-install"
+      },
+      "lockfileSha256": "e6963d2ef6fdd17dcdc59eb2377e580fa3106612cb441b592e370449d2b39ffb",
+      "mainInputTotalComplete": true,
+      "mainUsage": {
+        "cacheRead": 1152,
+        "cacheWrite": 0,
+        "inputTotal": 4715,
+        "inputUncached": 3563,
+        "outputTotal": 577,
+        "reasoning": 0,
+        "totalTokens": 5292
+      },
+      "mainUsageComplete": true,
+      "methodSha256": "3d707d14960d561c28cb1165397db1b9f9634eea50281045bdce4eb0bfdc9c3a",
+      "observerComplete": true,
+      "order": 3,
+      "partition": "development",
+      "pipelineUsage": {
+        "attempts": 6,
+        "costComplete": true,
+        "estimatedCost": {},
+        "missingAttempts": 0,
+        "missingTokenFields": [
+          "cacheWrite1h"
+        ],
+        "observedAttempts": 6,
+        "parentDelivery": "unknown",
+        "reportedCost": {
+          "total": 0.02000478
+        },
+        "tokens": {
+          "cacheRead": 7424,
+          "cacheWrite": 0,
+          "inputTotal": 17548,
+          "inputUncached": 10124,
+          "outputTotal": 10578,
+          "reasoning": 4177,
+          "totalTokens": 28126
+        }
+      },
+      "population": "replay",
+      "promptSha256": "3623a8b9d60a3863b216f328e5749dc1e2a28a3bb7ebee29949ab1400ec4b322",
+      "purpose": "comparative-task",
+      "qualityJudge1": null,
+      "qualityJudge2": null,
+      "queryId": "CS-DEV-01",
+      "repeat": 1,
+      "replayValidity": "valid",
+      "reportedPipelineUsd": 0,
+      "returnedMs": 65447.071614,
+      "runId": "CS-DEV-01-replay-off-r1-20261102T192521731Z-96df7f",
+      "seed": 20261102,
+      "status": "completed",
+      "subscriptionQuota": {
+        "omitted": "Private account/quota details"
+      },
+      "toolCatalogueSha256": "f2aeaf22f5a0f0cadd87613b2476f5063c30e8d713a4e74fd39f8f2ea8eb82aa",
+      "workflow": "single",
+      "toolCatalogueObserved": true
+    },
+    {
+      "arm": "on",
+      "artifacts": [],
+      "candidateCommit": "68303cc9855f1816e6c0eed0c1b5e2545af33ed8",
+      "corpusSha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed",
+      "effectiveSettings": {
+        "browserFingerprint": "chrome_145",
+        "cacheDir": ".search",
+        "collateModel": {
+          "model": "minimax/minimax-m3",
+          "provider": "openrouter"
+        },
+        "collationMaxTokens": 8000,
+        "defaultUrls": 4,
+        "disableLlmsFullDiscovery": true,
+        "disableTelemetry": false,
+        "execution": {
+          "aggregateFetchConcurrency": 4,
+          "criticalReserve": 1,
+          "deadline": {
+            "enabled": false
+          },
+          "docsMaxResponseBytes": 16777216,
+          "fetchMaxChars": 16000,
+          "fetchMaxResponseBytes": 8388608,
+          "lateDrainMs": 0,
+          "modelConcurrency": 5,
+          "pageExecution": "streaming"
+        },
+        "extractMaxChars": 16000,
+        "extractModel": {
+          "model": "minimax/minimax-m3",
+          "provider": "openrouter"
+        },
+        "extractionConcurrency": 4,
+        "extractionMaxTokens": 3000,
+        "fetchConcurrency": 4,
+        "fetchTimeoutMs": 20000,
+        "llmRetryAttempts": 1,
+        "llmTimeoutMs": 90000,
+        "maxUrls": 12,
+        "minRequestIntervalMs": 0,
+        "retryBaseDelayMs": 1500,
+        "retryMaxDelayMs": 20000,
+        "searchModel": {
+          "model": "perplexity/sonar",
+          "provider": "openrouter"
+        },
+        "searchRetryAttempts": 1,
+        "searchWebSearch": {
+          "enabled": false,
+          "engine": "auto",
+          "maxResults": 8,
+          "reasoning": "minimal"
+        }
+      },
+      "estimatedPipelineUsd": null,
+      "experiment": "codemode",
+      "fixtureSha256": null,
+      "host": {
+        "version": "1.4.0",
+        "source": "managed-install"
+      },
+      "lockfileSha256": "e6963d2ef6fdd17dcdc59eb2377e580fa3106612cb441b592e370449d2b39ffb",
+      "mainInputTotalComplete": true,
+      "mainUsage": {
+        "cacheRead": 16000,
+        "cacheWrite": 0,
+        "inputTotal": 33117,
+        "inputUncached": 17117,
+        "outputTotal": 770,
+        "reasoning": 21,
+        "totalTokens": 33887
+      },
+      "mainUsageComplete": true,
+      "methodSha256": "3d707d14960d561c28cb1165397db1b9f9634eea50281045bdce4eb0bfdc9c3a",
+      "observerComplete": true,
+      "order": 4,
+      "partition": "development",
+      "pipelineUsage": {
+        "attempts": 0,
+        "costComplete": true,
+        "estimatedCost": {},
+        "missingAttempts": 0,
+        "missingTokenFields": [],
+        "observedAttempts": 0,
+        "parentDelivery": "unknown",
+        "reportedCost": {},
+        "tokens": {
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "cacheWrite1h": 0,
+          "inputTotal": 0,
+          "inputUncached": 0,
+          "outputTotal": 0,
+          "reasoning": 0,
+          "totalTokens": 0
+        }
+      },
+      "population": "live",
+      "promptSha256": "607c9a4d2320d71f6883f58b85fc823642cc679fb7d1ada8e6fca2f464cdc2e4",
+      "purpose": "comparative-task",
+      "qualityJudge1": null,
+      "qualityJudge2": null,
+      "queryId": "CS-DEV-01",
+      "repeat": 1,
+      "replayValidity": "not-replay",
+      "reportedPipelineUsd": 0,
+      "returnedMs": 26797.590507,
+      "runId": "CS-DEV-01-live-on-r1-20261102T192638248Z-741735",
+      "seed": 20261102,
+      "status": "completed",
+      "subscriptionQuota": {
+        "omitted": "Private account/quota details"
+      },
+      "toolCatalogueSha256": "1d77bc623176dee09846e5342c895ffe527f02c4eb8e0b11e9633faf3a3c915a",
+      "workflow": "single",
+      "toolCatalogueObserved": true
+    },
+    {
+      "arm": "off",
+      "artifacts": [],
+      "candidateCommit": "68303cc9855f1816e6c0eed0c1b5e2545af33ed8",
+      "corpusSha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed",
+      "effectiveSettings": {
+        "browserFingerprint": "chrome_145",
+        "cacheDir": ".search",
+        "collateModel": {
+          "model": "minimax/minimax-m3",
+          "provider": "openrouter"
+        },
+        "collationMaxTokens": 8000,
+        "defaultUrls": 4,
+        "disableLlmsFullDiscovery": true,
+        "disableTelemetry": false,
+        "execution": {
+          "aggregateFetchConcurrency": 4,
+          "criticalReserve": 1,
+          "deadline": {
+            "enabled": false
+          },
+          "docsMaxResponseBytes": 16777216,
+          "fetchMaxChars": 16000,
+          "fetchMaxResponseBytes": 8388608,
+          "lateDrainMs": 0,
+          "modelConcurrency": 5,
+          "pageExecution": "streaming"
+        },
+        "extractMaxChars": 16000,
+        "extractModel": {
+          "model": "minimax/minimax-m3",
+          "provider": "openrouter"
+        },
+        "extractionConcurrency": 4,
+        "extractionMaxTokens": 3000,
+        "fetchConcurrency": 4,
+        "fetchTimeoutMs": 20000,
+        "llmRetryAttempts": 1,
+        "llmTimeoutMs": 90000,
+        "maxUrls": 12,
+        "minRequestIntervalMs": 0,
+        "retryBaseDelayMs": 1500,
+        "retryMaxDelayMs": 20000,
+        "searchModel": {
+          "model": "perplexity/sonar",
+          "provider": "openrouter"
+        },
+        "searchRetryAttempts": 1,
+        "searchWebSearch": {
+          "enabled": false,
+          "engine": "auto",
+          "maxResults": 8,
+          "reasoning": "minimal"
+        }
+      },
+      "estimatedPipelineUsd": null,
+      "experiment": "codemode",
+      "fixtureSha256": null,
+      "host": {
+        "version": "1.4.0",
+        "source": "managed-install"
+      },
+      "lockfileSha256": "e6963d2ef6fdd17dcdc59eb2377e580fa3106612cb441b592e370449d2b39ffb",
+      "mainInputTotalComplete": true,
+      "mainUsage": {
+        "cacheRead": 23424,
+        "cacheWrite": 0,
+        "inputTotal": 36905,
+        "inputUncached": 13481,
+        "outputTotal": 819,
+        "reasoning": 10,
+        "totalTokens": 37724
+      },
+      "mainUsageComplete": true,
+      "methodSha256": "3d707d14960d561c28cb1165397db1b9f9634eea50281045bdce4eb0bfdc9c3a",
+      "observerComplete": true,
+      "order": 5,
+      "partition": "development",
+      "pipelineUsage": {
+        "attempts": 3,
+        "costComplete": true,
+        "estimatedCost": {},
+        "missingAttempts": 0,
+        "missingTokenFields": [
+          "cacheWrite1h"
+        ],
+        "observedAttempts": 3,
+        "parentDelivery": "unknown",
+        "reportedCost": {
+          "total": 0.01687
+        },
+        "tokens": {
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "inputTotal": 263,
+          "inputUncached": 263,
+          "outputTotal": 1600,
+          "reasoning": 0,
+          "totalTokens": 1863
+        }
+      },
+      "population": "live",
+      "promptSha256": "607c9a4d2320d71f6883f58b85fc823642cc679fb7d1ada8e6fca2f464cdc2e4",
+      "purpose": "comparative-task",
+      "qualityJudge1": null,
+      "qualityJudge2": null,
+      "queryId": "CS-DEV-01",
+      "repeat": 1,
+      "replayValidity": "not-replay",
+      "reportedPipelineUsd": 0.01687,
+      "returnedMs": 53909.522506,
+      "runId": "CS-DEV-01-live-off-r1-20261102T192705089Z-e759df",
+      "seed": 20261102,
+      "status": "completed",
+      "subscriptionQuota": {
+        "omitted": "Private account/quota details"
+      },
+      "toolCatalogueSha256": "f2aeaf22f5a0f0cadd87613b2476f5063c30e8d713a4e74fd39f8f2ea8eb82aa",
+      "workflow": "single",
+      "toolCatalogueObserved": true
+    }
+  ]
+}

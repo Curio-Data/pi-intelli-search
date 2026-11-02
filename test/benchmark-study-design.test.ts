@@ -5,8 +5,24 @@ import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { breadthResearchScript } from "../scripts/benchmarks/study-workflows.js";
+import { analyseStudy, type StudyDataset } from "../scripts/benchmarks/study-analysis.js";
+import { observeToolCatalogue } from "../scripts/benchmarks/observer.js";
+import { asJson } from "../scripts/benchmarks/canonical.js";
 
 const root = new URL("../docs/benchmarks/codemode-study-v1/", import.meta.url);
+
+test("the shared development edition binds its data, corrected catalogues and reproduced analysis", async () => {
+  const bundle=new URL("development-v1/",root);
+  const manifest=JSON.parse(await readFile(new URL("manifest.json",bundle),"utf8")) as {files:Array<{path:string;sha256:string}>};
+  for(const file of manifest.files)assert.equal(createHash("sha256").update(await readFile(new URL(file.path,bundle))).digest("hex"),file.sha256,file.path);
+  const bytes=await readFile(new URL("dataset.json",bundle),"utf8");
+  const dataset=JSON.parse(bytes) as StudyDataset;
+  const saved=JSON.parse(await readFile(new URL("derived/analysis.json",bundle),"utf8"));
+  assert.deepEqual(saved,{datasetSha256:createHash("sha256").update(bytes).digest("hex"),...analyseStudy(dataset)});
+  const catalogues=JSON.parse(await readFile(new URL("tool-catalogues.json",bundle),"utf8")) as Array<{sha256:string;declarations:unknown}>;
+  for(const catalogue of catalogues)assert.equal(observeToolCatalogue(asJson({input:[{type:"additional_tools",tools:catalogue.declarations}]})).sha256,catalogue.sha256);
+  assert.equal(new Set(dataset.runs.filter((run)=>run.purpose==="comparative-task").map((run)=>run.toolCatalogueSha256)).size,2);
+});
 
 test("draft study manifest binds every declared input without changing historical files", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", root), "utf8")) as { inputs: Array<{path: string; sha256: string}> };

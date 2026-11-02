@@ -1,0 +1,22 @@
+{
+  "id": "CS-DEV-01",
+  "partition": "development",
+  "workflow": "single",
+  "provenance": {
+    "origin": "retained",
+    "originalId": "CM-D01",
+    "originalCorpus": "docs/benchmarks/corpus/codemode.json"
+  },
+  "query": "What does satisfies check, and how does it differ from a type assertion?",
+  "domains": [
+    "typescriptlang.org"
+  ],
+  "focusPrompt": "Extract evidence about TypeScript satisfies: what it checks, how it differs from type assertions, exact syntax and limitations.",
+  "taskClass": "single-research",
+  "workflowQueries": [
+    "What does satisfies check, and how does it differ from a type assertion?"
+  ],
+  "exposureFamily": "TypeScript satisfies (old CM-D01; exposed development material)",
+  "rubric": "STANDARD-RUBRIC",
+  "goldStatus": "no gold answer claimed"
+}
