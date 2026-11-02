@@ -21,6 +21,7 @@ import type {
   EngineOperations,
   FetchParams,
 } from "./core/contracts.js";
+import type { ResearchSettings } from "./core/types.js";
 import { createRuntimeGenerations, type OperationRuntime } from "./core/operation-runtime.js";
 import { AdmissionError } from "./core/execution-coordinator.js";
 import { createSystemClock } from "./core/clock.js";
@@ -73,6 +74,8 @@ interface SessionState {
 
 /** Internal runtime options; the public factory captures and validates its injection. */
 export interface NativeRuntimeOptions {
+  /** Explicit settings for the branch-only study; production still discovers settings normally. */
+  readonly settings?: ResearchSettings;
   readonly clock?: Clock;
   /** Detected on the host API, never inferred from the extension's peer install. */
   readonly supportsErrorResults?: boolean;
@@ -106,7 +109,11 @@ export class NativeExecutionError extends Error {
 
 /** One closure per extension registration. Construction starts no work. */
 export function createNativeOperationRuntime(options: NativeRuntimeOptions = {}) {
-  options = { ...options, suggestionReadView: captureSuggestionReadView(options.suggestionReadView) };
+  options = {
+    ...options,
+    settings: options.settings === undefined ? undefined : structuredClone(options.settings),
+    suggestionReadView: captureSuggestionReadView(options.suggestionReadView),
+  };
   const operations = Object.freeze({ search, extract, collate, research, fetchPage, ...options.operations });
   const generations = createRuntimeGenerations();
   const sessions = new WeakMap<object, Map<string | undefined, SessionState>>();
@@ -175,8 +182,9 @@ export function createNativeOperationRuntime(options: NativeRuntimeOptions = {})
         let settings: Awaited<ReturnType<typeof loadSettings>>;
         let execution;
         try {
-          settings = structuredClone(await loadSettings({ cwd, projectTrusted }));
+          settings = structuredClone(options.settings ?? await loadSettings({ cwd, projectTrusted }));
           execution = parseExecutionSettings(settings.execution, "pi-intelli-search.execution");
+          settings.execution = execution;
           validateRequestInterval(
             settings.minRequestIntervalMs,
             "pi-intelli-search.minRequestIntervalMs (deprecated intelliMinRequestIntervalMs)",

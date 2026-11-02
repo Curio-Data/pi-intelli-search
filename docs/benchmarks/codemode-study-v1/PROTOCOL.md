@@ -1,6 +1,6 @@
 # Codemode Study v1 Protocol
 
-Revision: `study-v1-r3`. Status: reviewed draft for the bounded integration candidate; not execution-ready or executed. No task in this study has been captured, scored or paid for. Authority: [Owner Decisions](../../plans/codemode/OWNER-REFOCUS.md) (2 November 2026), [Research Plan](../../plans/codemode/RESEARCH-PLAN.md), [Resume](../../plans/codemode/RESUME.md). This protocol supersession note: the frozen historical method ([`docs/benchmarks/codemode/METHOD.md`](../codemode/METHOD.md) revision `P0-2`) remains intact as a reference; this document defines the new versioned study required by the owner refocus. Arm names follow the plan: `off`, `on`, `only`, mapping to the old method's A2, B and C. Old A0/A remain historical engine baselines, not arms of this study.
+Revision: `study-v1-r4-prepilot`. Status: integrated-driver candidate; independent measured-series execution remains subject to the post-pilot freeze. No task in this study has been captured, scored or paid for. Authority: [Owner Decisions](../../plans/codemode/OWNER-REFOCUS.md) (2 November 2026), [Research Plan](../../plans/codemode/RESEARCH-PLAN.md), [Resume](../../plans/codemode/RESUME.md). This protocol supersession note: the frozen historical method ([`docs/benchmarks/codemode/METHOD.md`](../codemode/METHOD.md) revision `P0-2`) remains intact as a reference; this document defines the new versioned study required by the owner refocus. Arm names follow the plan: `off`, `on`, `only`, mapping to the old method's A2, B and C. Old A0/A remain historical engine baselines, not arms of this study.
 
 ## Purpose
 
@@ -36,6 +36,8 @@ Rules:
 3. Arm switching is configuration on the same build (`openSession({ codemode })` host-selection seam), never a different build.
 4. Any catalogue or capability change after series freeze invalidates the frozen series and requires a new protocol revision.
 
+The [runner profile](RUNNER.md#matched-settings-and-limits) fixes both arms to the same captured settings, including bounded page content, a single pipeline attempt, disabled documentation-file discovery and the same final-answer instruction. Codemode's classifier/image-model namespace is disabled to avoid giving the script arm additional inference capabilities. These are declared experimental settings, not untouched package defaults. Paid-call limits and the shared spend ledger are enforced by the integrated driver.
+
 ## Workflows
 
 Every task belongs to one of four workflow types, present in every partition except where noted:
@@ -47,7 +49,7 @@ Every task belongs to one of four workflow types, present in every partition exc
 | `manual` | Prescribed manual steps: two searches, four pages fetched and extracted, one collation; no single research call | Direct-tool versus script-tool composition at equal budgets |
 | `followup` | One base research; a read of the saved base-research report through the built-in read operation; then the follow-up answer | Incremental work after prior results exist |
 
-The follow-up is answered from the read saved report, not from the cache-suggest stage: cache suggest supplements the live search result and never replaces live work. In controlled replay the follow-up adds zero additional pages; the base research's recorded responses and the saved report are the whole evidence. In the live population the follow-up sequence is the task intent, tool choice is unforced, and any additional fetching is an observation. The follow-up script helper is implemented (`followupBaseScript` and `followupReadScript` in `scripts/benchmarks/study-workflows.ts`; not git committed), and a scripted actual-host committed-report read check passed in both primary arms; full session orchestration and follow-up replay integration remain pending (see Pending Prerequisites). That scripted check is not a measured follow-up result.
+The follow-up is answered from the read saved report, not from the cache-suggest stage: cache suggest supplements the live search result and never replaces live work. In controlled replay the follow-up adds zero additional pages; the base research's recorded responses and the saved report are the whole evidence. In the live population the follow-up sequence is the task intent, tool choice is unforced, and any additional fetching is an observation. The follow-up script helper is implemented (`followupBaseScript` and `followupReadScript` in `scripts/benchmarks/study-workflows.ts`), and a scripted actual-host committed-report read check passed in both primary arms; the integrated driver now exercises both turns and their replay in scripted host tests. Live-main follow-up behaviour still requires observation. That scripted check is not a measured follow-up result.
 
 Manual tasks in `off` call `intelli_fetch` and the manual operations directly; in `on` the same steps run inside a script. The workflow prompts express task intent without dictating tool names in the live population; the forced replay population prescribes arguments.
 
@@ -61,7 +63,7 @@ Prescribed workflows receive recorded pipeline model, page, catalogue and sugges
 
 ### Live Tasks
 
-Prompts express the task without naming tools. Tool choice, routing and automatic skill discovery are observations, not requirements. An `on` session that chooses direct tools stays in the `on` population. Paired runs are interleaved with recorded order; service variability, failures and cancellations are retained. This population establishes practical behaviour separately from replay.
+Prompts express the task without naming tools. Tool choice and routing are observations, not requirements. Discovered skills, extensions, templates and context files are disabled in both arms; automatic skill discovery is not evaluated. An `on` session that chooses direct tools stays in the `on` population. Paired runs are interleaved with recorded order; service variability, failures and cancellations are retained. This population establishes practical behaviour separately from replay.
 
 ## Measurements
 
@@ -75,7 +77,7 @@ Endpoint rules, frozen before any comparison data:
 
 1. Every measured response must carry all three per-message wire fields (`input_tokens`, `cached_tokens`, `cache_write_tokens`), response-ID correlated; only then does `inputUncached` exist for that response. A response missing any field is recorded with its missingness; the task's endpoint value is `unknown`, not zero. Raw observed field values are always retained alongside the derived value.
 2. `inputUncached = max(0, input_tokens - cached_tokens - cache_write_tokens)` is the endpoint derivation, mirroring the collector's `tokensFromWireEvidence` computation exactly and documented separately from the raw observations it is computed from.
-3. Total main-model input tokens remain the planned secondary endpoint, reported wherever observed. Independent total-input completeness and paired analysis are implemented in `scripts/benchmarks/study-analysis.ts` (an independent `mainInputTotalComplete` rule and a `mainInputTotal` paired endpoint), covered by synthetic tests; actual run-to-dataset integration is pending. Total-input completeness follows its own observation rule rather than being withheld because uncached-input evidence is incomplete.
+3. Total main-model input tokens remain the planned secondary endpoint, reported wherever observed. Independent total-input completeness and paired analysis are implemented in `scripts/benchmarks/study-analysis.ts` (an independent `mainInputTotalComplete` rule and a `mainInputTotal` paired endpoint), covered by synthetic tests and connected to the series exporter; live-main verification remains to be recorded. Total-input completeness follows its own observation rule rather than being withheld because uncached-input evidence is incomplete.
 4. The historical 50% saving hypothesis (H1) is retained as the stated hypothesis on the primary endpoint, not a completion condition.
 
 ### Transport Pin
@@ -106,7 +108,7 @@ Each run records: run/task/repeat/arm identifiers; population and partition; sou
 | Measured series | Frozen primary population | 12 (three per workflow) |
 | Reserve | Later owner-approved revision only | 8 (two per workflow) |
 
-Repeats: two per task per arm in both populations, to expose within-task main-model variability. Order: interleaved paired runs with a recorded seed; replay blocks additionally record their frozen schedule. The pilot precedes the series freeze; the freeze (a new manifest revision, `v1-r4`) fixes final sample size, stopping rule, margins, uncertainty calculation and intended claims, retaining the missing-data rule below.
+Repeats: two per task per arm in both populations, to expose within-task main-model variability. Order: interleaved paired runs with a recorded seed; replay blocks additionally record their frozen schedule. The pilot precedes the series freeze; the freeze (a new manifest revision, `measured-series-1`) fixes final sample size, stopping rule, margins, uncertainty calculation and intended claims, retaining the missing-data rule below.
 
 The missing-data rule is prespecified before pilot capture: retain every original attempt, and never substitute a technical rerun into its paired cell. A missing, failed or invalid cell makes that endpoint's primary interval unavailable for the population. Complete-case estimates remain labelled diagnostics; reliability counts retain all outcomes. Extra repeats do not override this complete-population rule. The final freeze carries this rule forward; any alternative requires a declared revision before collecting the affected independent series, not a post-result choice. This policy can yield an inconclusive primary result without making the retained failed trials disappear.
 
@@ -115,7 +117,7 @@ Codemode-only mode (`only`) is a secondary arm of the study design, not a schedu
 ## Judging and Calibration
 
 1. Both judges score every measured-series final answer against the task rubric with identical blinded evidence and balanced answer order, in fresh sessions. Neither judge sees the other's output.
-2. Before judge calibration and before final-series scoring, the owner or an owner-designated human checks the four-item calibration packet ([calibration.json](calibration.json), instructions in [CALIBRATION-REVIEW.md](CALIBRATION-REVIEW.md)). Review completion and approval are distinct: approval for calibration requires an explicit usable verdict (`A`, `B` or `tie`) for every one of the four case IDs (`CAL-01` through `CAL-04`), together with the reviewed input hashes, reviewer identity and date. An `unscorable` verdict completes the review of that case but supplies no gold preference: that case provides no calibration label, and it must be either revised under a new versioned calibration revision and re-reviewed, or explicitly excluded by a recorded decision, before judge calibration runs against the packet. The existence of a decisions file alone is not approval.
+2. The owner supplied A verdicts for all four cases in [calibration.json](calibration.json), and criticised their triviality and uniformly positioned winners. The explicit decisions and input hashes are retained in `evidence/benchmarks/codemode-study-v1/calibration/decisions.json`. These are sanity-check labels, not evidence of judge reliability. No repeat review of these cases is requested. Source-backed blinded scoring and retained disagreements remain required before any quality claim.
 3. Disagreements between judges and between either judge and the human-checked labels are retained and inspected, not adjudicated by preference.
 4. Judge prompts are frozen before final-series scoring.
 
@@ -151,9 +153,9 @@ This protocol is prepared, not running. The following prerequisites remain pendi
 
 | Prerequisite | Required Before | State | Owner |
 |---|---|---|---|
-| Full session runner integration (structured native results, script fetch, matched direct fetch, follow-up replay wiring, recording and analysis wiring on the pinned host) | Development and pilot capture | Pending; a measurement-builder host session runner, one completed metadata observation, the implemented follow-up script helper and a scripted actual-host wrapper check exist; full session orchestration and follow-up replay integration remain | Coordinator/integration builders |
-| Human calibration decisions (explicit usable verdicts for all four case IDs, with reviewed input hashes) | Judge calibration and final-series scoring | Pending | Owner or owner-designated human |
-| Post-pilot series freeze (manifest `v1-r4`: margins, final size, stopping rule) | Measured-series capture only | Pending; the pilot itself is paid work that precedes the freeze | Coordinator |
+| Independent driver review, then bounded development verification | Remaining development and pilot work | The first `CS-DEV-01` capture, replay pair and live pair form the verification sequence after review and passing gates; no prior live comparison is required | Coordinator |
+| Independent source-backed quality scoring | Quality claims | Human sanity-check labels are recorded; judge calibration, blinded scoring and disagreement analysis remain | Coordinator and prescribed judges |
+| Post-pilot series freeze (manifest `measured-series-1`: margins, final size, stopping rule) | Measured-series capture only | Pending; the pilot itself is paid work that precedes the freeze | Coordinator |
 
 ## Change Control
 

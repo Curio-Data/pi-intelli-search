@@ -13,6 +13,7 @@ import { sha256Text } from "./canonical.js";
 export type Population = "replay" | "live";
 export interface StudyAnalysisRun extends RunObservation {
   readonly population: Population;
+  readonly purpose?: "comparative-task" | "fixture-capture" | "synthetic-driver-integration";
   readonly partition: "calibration" | "development" | "pilot" | "measured-series";
   readonly workflow: "single" | "breadth" | "manual" | "followup";
   /** Requires correlated version-2 witnesses and all uncached-input components. */
@@ -29,6 +30,7 @@ export interface StudyDataset {
     readonly methodSha256: string;
     readonly corpusSha256: string;
     readonly candidateCommit: string;
+    readonly analysisPartition?: "development" | "pilot" | "measured-series";
     readonly populations: Readonly<Record<Population, { queryIds: readonly string[]; repeats: readonly number[] }>>;
     readonly bootstrapSeed: number;
     readonly bootstrapDraws: number;
@@ -46,6 +48,8 @@ function observed(value: unknown, label: string): number | null {
 
 export function analyseStudy(dataset: StudyDataset) {
   if (dataset.schemaVersion !== 1 || !dataset.design || !Array.isArray(dataset.runs)) throw new Error("Unsupported study dataset");
+  const partition = dataset.design.analysisPartition ?? "measured-series";
+  if (!["development", "pilot", "measured-series"].includes(partition)) throw new Error("Invalid analysis partition");
   const ids = new Set<string>();
   for (const run of dataset.runs) {
     validateRunObservation(run);
@@ -56,7 +60,7 @@ export function analyseStudy(dataset: StudyDataset) {
     if (!["off", "on", "only"].includes(run.arm)) throw new Error("Unknown study arm");
     if (!["single", "breadth", "manual", "followup"].includes(run.workflow)) throw new Error("Unknown workflow");
     if (typeof run.mainUsageComplete !== "boolean" || typeof run.mainInputTotalComplete !== "boolean") throw new Error("Missing main usage completeness");
-    if (run.partition === "measured-series" && (run.methodSha256 !== dataset.design.methodSha256 || run.corpusSha256 !== dataset.design.corpusSha256 || run.candidateCommit !== dataset.design.candidateCommit))
+    if (run.partition === partition && (run.methodSha256 !== dataset.design.methodSha256 || run.corpusSha256 !== dataset.design.corpusSha256 || run.candidateCommit !== dataset.design.candidateCommit))
       throw new Error("Measured run differs from frozen design");
     for (const value of [run.returnedMs, run.qualityJudge1, run.qualityJudge2, run.reportedPipelineUsd]) observed(value, "metric");
     if (run.mainUsage) for (const value of Object.values(run.mainUsage)) observed(value, "token component");
@@ -65,7 +69,7 @@ export function analyseStudy(dataset: StudyDataset) {
     const expected = dataset.design.populations[population];
     // Reruns are retained in the inventory, never silently substituted for an
     // original failed observation. A replacement policy needs a design revision.
-    const originals = dataset.runs.filter((r) => r.population === population && r.partition === "measured-series" && !r.rerunOf && r.arm !== "only");
+    const originals = dataset.runs.filter((r) => r.population === population && r.partition === partition && r.purpose !== "fixture-capture" && r.purpose !== "synthetic-driver-integration" && !r.rerunOf && r.arm !== "only");
     for (const run of originals) if (!expected.queryIds.includes(run.queryId) || !expected.repeats.includes(run.repeat)) throw new Error("Unscheduled measured observation");
     const samples: QuerySample[] = originals.map((r) => ({
       queryId: r.queryId, repeat: r.repeat, arm: r.arm,
@@ -91,7 +95,8 @@ export function analyseStudy(dataset: StudyDataset) {
       return [endpoint, {
         ...estimate, metric,
         intervalScale: metric === "log-ratio" ? "ratio" : "difference",
-        primaryAvailable: primaryAvailable(estimate, expected, metric),
+        completePopulation: primaryAvailable(estimate, expected, metric),
+        primaryAvailable: partition === "measured-series" && primaryAvailable(estimate, expected, metric),
         interval: metric === "log-ratio" ? { ...interval, lower: interval.lower === null ? null : Math.exp(interval.lower), upper: interval.upper === null ? null : Math.exp(interval.upper) } : interval,
         interpretation: population === "replay" && endpoint === "returnedMs" ? "Not a live-latency measure" : "Complete-case estimates are diagnostic when primaryAvailable is false",
       }];
@@ -105,8 +110,9 @@ export function analyseStudy(dataset: StudyDataset) {
   }));
   return {
     schemaVersion: 1,
+    analysisClass: partition === "measured-series" ? "measured-series" : `${partition}: diagnostic only, not confirmatory`,
     design: dataset.design,
-    inventory: dataset.runs.map((r) => ({ runId: r.runId, population: r.population, partition: r.partition, arm: r.arm, status: r.status, rerunOf: r.rerunOf ?? null, mainInputTotal: r.mainInputTotalComplete ? r.mainUsage?.inputTotal ?? null : null, mainUsageComplete: r.mainUsageComplete, mainInputTotalComplete: r.mainInputTotalComplete })),
+    inventory: dataset.runs.map((r) => ({ runId: r.runId, purpose: r.purpose ?? "comparative-task", population: r.population, partition: r.partition, arm: r.arm, status: r.status, rerunOf: r.rerunOf ?? null, mainInputTotal: r.mainInputTotalComplete ? r.mainUsage?.inputTotal ?? null : null, mainUsageComplete: r.mainUsageComplete, mainInputTotalComplete: r.mainInputTotalComplete })),
     populations,
     qualityAvailable: dataset.design.humanCalibrationApproved,
     note: "Reported pipeline cost is not an account-debit audit. Subscription usage is not cash spend. No superiority conclusion follows from token usage alone. The only arm is retained in the inventory but is not analysed in this version.",

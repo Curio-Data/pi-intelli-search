@@ -76,6 +76,18 @@ test("missing wire evidence and unapproved human calibration never become zero o
   assert.equal(totalMissing.inventory[0].mainInputTotal, null);
   assert.equal(totalMissing.populations.replay.metrics.mainInputTotal.primaryAvailable, false);
 });
+test("pilot analysis retains captures but excludes them from comparative cells and primary claims", () => {
+  const data=dataset();
+  const runs=data.runs.map((run)=>({...run,partition:"pilot" as const,purpose:"comparative-task" as const}));
+  const capture={...runs[0],runId:"capture-only",purpose:"fixture-capture" as const};
+  const result=analyseStudy({...data,design:{...data.design,analysisPartition:"pilot"},runs:[...runs,capture]});
+  assert.equal(result.inventory.length,9);
+  assert.equal(result.populations.replay.observedOriginalRuns,4);
+  assert.equal(result.populations.replay.metrics.mainInputUncached.completePopulation,true);
+  assert.equal(result.populations.replay.metrics.mainInputUncached.primaryAvailable,false);
+  assert.match(result.analysisClass,/diagnostic only/);
+});
+
 test("analysis regenerates byte-identical outputs without a model call", async () => {
   const root = await mkdtemp(join(tmpdir(), "study-analysis-"));
   try {

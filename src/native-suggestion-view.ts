@@ -18,6 +18,12 @@ const runCopy = (run: CommittedRun): CommittedRun => Object.freeze({
   files: Object.freeze(run.files.map((file) => Object.freeze({ ...file }))),
 });
 
+// An index rename can become visible to a sibling reader before updateIndex
+// finishes releasing its lock and delivers the indexed notification. Share only
+// those notification-completion promises across one captured controller. Reads
+// retain their actual snapshot; no operation or publication is serialised.
+const indexNotices = new WeakMap<NativeSuggestionReadView, Set<Promise<void>>>();
+
 /** F7-1 native-only read seam. The production store and all writes remain authoritative. */
 export function withNativeSuggestionReadView(
   store: RunStore,
@@ -25,6 +31,9 @@ export function withNativeSuggestionReadView(
   operation: OperationLease,
 ): RunStore {
   const pending = new Set<Promise<unknown>>();
+  let notices = indexNotices.get(controller);
+  if (!notices) indexNotices.set(controller, (notices = new Set()));
+  const pendingIndexNotices = notices;
   let poisoned = false;
   let allocated = false;
   let indexed = false;
@@ -103,6 +112,9 @@ export function withNativeSuggestionReadView(
     },
     async updateIndex(run, inputQuery, signal) {
       query ??= inputQuery;
+      let notified!: () => void;
+      const notice = new Promise<void>((resolve) => { notified = resolve; });
+      pendingIndexNotices.add(notice);
       try {
         const result = await store.updateIndex(run, inputQuery, signal);
         if (result === "updated") {
@@ -114,6 +126,9 @@ export function withNativeSuggestionReadView(
       } catch (error) {
         unavailable("index");
         throw error;
+      } finally {
+        pendingIndexNotices.delete(notice);
+        notified();
       }
     },
     recordAccounting: (run, records, summary, signal) => store.recordAccounting(run, records, summary, signal),
@@ -137,6 +152,9 @@ export function withNativeSuggestionReadView(
           const task = own(async () => {
             assertOpen(signal);
             const rows = await store.candidates(current, inputQuery, signal);
+            // Preserve exactly these rows, but let already-visible publishers
+            // finish their synchronous notifications before F7 classifies them.
+            await Promise.all([...pendingIndexNotices]);
             assertOpen(signal);
             latest = Object.freeze(rows.map((row) => Object.freeze({ ...row })));
             return latest;

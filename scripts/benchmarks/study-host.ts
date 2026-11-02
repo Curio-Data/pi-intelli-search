@@ -272,6 +272,7 @@ interface StudyModelRuntime {
 
 export interface StudyHostModule {
   readonly VERSION: string;
+  createCodemodeExtension(options: { mode: "on" | "only"; models?: boolean; inlineBudget?: number }): StudyExtensionFactory;
   getAgentDir(): string;
   readonly ModelRuntime: { create(options?: Record<string, unknown>): Promise<StudyModelRuntime> };
   readonly DefaultResourceLoader: new (options: Record<string, unknown>) => {
@@ -634,6 +635,8 @@ export interface StudySessionOptions {
   /** Tool names to activate. Empty means no tools of any kind. */
   readonly tools: readonly string[];
   readonly extensionFactories: readonly StudyExtensionFactory[];
+  /** Optional study-local model declarations; credentials still resolve normally. */
+  readonly modelsPath?: string;
 }
 
 export interface StudySessionHandle {
@@ -678,7 +681,7 @@ export async function openStudySession(options: StudySessionOptions): Promise<St
   const loadErrors = resourceLoader.getExtensions().errors;
   if (loadErrors.length > 0)
     throw new StudyRefusalError(`Extension load errors: ${JSON.stringify(loadErrors)}`);
-  const modelRuntime = await host.ModelRuntime.create();
+  const modelRuntime = await host.ModelRuntime.create(options.modelsPath ? { modelsPath: options.modelsPath } : undefined);
   const known = modelRuntime.getModel(options.model.provider, options.model.id);
   const { session } = await host.createAgentSession({
     cwd: options.workspace,
@@ -1115,11 +1118,22 @@ export async function saveRunObservations(options: {
   return assessment;
 }
 
+async function runFiles(root: string, prefix = ""): Promise<string[]> {
+  const names: string[] = [];
+  for (const entry of (await readdir(join(root, prefix), {withFileTypes:true})).sort((a,b) => a.name.localeCompare(b.name))) {
+    const name = join(prefix, entry.name);
+    if (entry.isDirectory()) names.push(...await runFiles(root, name));
+    else if (entry.isFile()) names.push(name);
+    else throw new StudyRefusalError("Run evidence must contain regular files, not links");
+  }
+  return names;
+}
+
 /** Final integrity list: sha256 and size of every retained file in the run. */
 export async function writeRunManifest(
   runDir: string,
 ): Promise<{ readonly path: string; readonly sha256: string }> {
-  const names = (await readdir(runDir)).filter((name) => name !== "manifest.json").sort();
+  const names = (await runFiles(runDir)).filter((name) => name !== "manifest.json");
   const files = [];
   for (const name of names) {
     const bytes = await readFile(join(runDir, name));
@@ -1227,7 +1241,7 @@ export async function scanRunForCredentials(
   values: readonly string[],
 ): Promise<{ readonly filesScanned: number; readonly matchedFiles: readonly string[] }> {
   const matchedFiles: string[] = [];
-  const names = (await readdir(runDir)).sort();
+  const names = await runFiles(runDir);
   for (const name of names) {
     const text = await readFile(join(runDir, name), "utf8");
     if (

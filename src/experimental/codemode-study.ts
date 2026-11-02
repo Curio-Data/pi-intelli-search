@@ -6,6 +6,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type, type TSchema } from "typebox";
 import type { JsonValue } from "@earendil-works/pi-ai";
 import type { FullData, OperationInputs } from "../core/contracts.js";
+import type { ResearchSettings } from "../core/types.js";
 import { operationOutputSchemas } from "../core/index.js";
 import { captureNativeInjection, type NativeTestInjection } from "../native-injection.js";
 import { createNativeOperationRuntime } from "../native-operation-runtime.js";
@@ -27,13 +28,16 @@ function jsonData(data: FullData | undefined): JsonValue | undefined {
 }
 
 /** One fixed catalogue per arm, independent of task and replay/live population. */
-export function createStudyExtension(arm: StudyArm, injection?: NativeTestInjection) {
+export function createStudyExtension(arm: StudyArm, injection?: NativeTestInjection, settings?: ResearchSettings) {
   if (!["off", "on", "only"].includes(arm)) throw new TypeError("Unknown study arm");
   const captured = captureNativeInjection(injection);
-  return (pi: ExtensionAPI): void => {
+  const capturedSettings = settings === undefined ? undefined : structuredClone(settings);
+  const runtimes = new Set<ReturnType<typeof createNativeOperationRuntime>>();
+  const factory = (pi: ExtensionAPI): void => {
     if (typeof pi.registerMcpServer !== "function")
       throw new Error("The experimental study requires the pinned current Pi host");
-    const runtime = createNativeOperationRuntime({ ...captured, supportsErrorResults: true });
+    const runtime = createNativeOperationRuntime({ ...captured, settings: capturedSettings, supportsErrorResults: true });
+    runtimes.add(runtime);
     for (const tool of createRegisteredNativeTools(runtime)) {
       const name = tool.name as keyof OperationInputs;
       pi.registerTool<TSchema, Record<string, unknown> | undefined>({
@@ -77,4 +81,10 @@ export function createStudyExtension(arm: StudyArm, injection?: NativeTestInject
     });
     pi.on("session_shutdown", async (_event, ctx) => runtime.shutdown(ctx));
   };
+  return Object.assign(factory, {
+    /** Runner-owned final drain, including cancellation before session disposal. */
+    async close(): Promise<void> {
+      await Promise.all([...runtimes].map((runtime) => runtime.close("Study run finished")));
+    },
+  });
 }

@@ -87,6 +87,42 @@ describe("F7 native verified suggestion read seam", () => {
     await f.finish();
   });
 
+  it("keeps a sibling's actual read snapshot until an already-visible publisher delivers its index notice", async () => {
+    const index = deferred<"updated">();
+    const read = deferred<void>();
+    const coordinator = createExecutionCoordinator({ generation: 1, clock: createSystemClock(), modelConcurrency: 5, criticalReserve: 1, fetchConcurrency: 4, minRequestIntervalMs: 0 });
+    const producer = coordinator.begin("publisher");
+    const consumer = coordinator.begin("reader");
+    let notified = false;
+    let classified = false;
+    let snapshot = [row("published")];
+    const controller: NativeSuggestionReadView = {
+      allocated() {}, unavailable() {}, indexed() { notified = true; },
+      async candidates({readVerified}) { const rows = await readVerified(); classified = true; assert(notified); return rows; },
+    };
+    const store: RunStore = {
+      allocate: async () => ({ status: "allocated", reservation }),
+      commit: async () => ({ status: "committed", run }),
+      updateIndex: () => index.promise,
+      recordAccounting: async () => ({ status: "unavailable", diagnostic: {code:"TEST",message:"unused"} }),
+      candidates: async () => { read.resolve(); return snapshot; },
+      settle: async () => {},
+    };
+    const publisher = withNativeSuggestionReadView(store, controller, producer);
+    const reader = withNativeSuggestionReadView(store, controller, consumer);
+    const publishing = publisher.updateIndex(run, "published", producer.signal);
+    const selecting = reader.candidates(undefined, "reader", consumer.signal);
+    await read.promise;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(classified, false, "the verified row must not be misclassified before its publisher's callback");
+    snapshot = [row("later-not-in-snapshot")]; // A new store view must not replace the retained read.
+    index.resolve("updated");
+    await publishing;
+    assert.deepEqual((await selecting).map((r) => r.query), ["published"]);
+    await publisher.settle(); await reader.settle();
+    await producer.settle(); await consumer.settle(); await coordinator.close();
+  });
+
   it("permits ordered immutable reference projection but rejects invented, duplicate and unread selections", async () => {
     for (const kind of ["valid", "foreign", "duplicate", "unread"] as const) {
       const f = fixture({}, { candidates: async ({ readVerified }) => {

@@ -327,6 +327,41 @@ async function recordCanonicalBlock(): Promise<SuggestionViewArtefact> {
   return session.exportArtefact({ fixtureFiles: FIXTURE_FILES });
 }
 
+it("keeps read/publication phases distinct when parallel producers see each other's published reports", async () => {
+  const recording = createSuggestionViewRecorder({ scenario:SCENARIO, block:"mutual-publications", scheduleManifestSha256:SCHEDULE_MANIFEST_SHA256, workflow:WORKFLOW.slice(0,2), baseline:[], displayRoot:DISPLAY_ROOT, initialTreeDigest:"1".repeat(64), onInvalid:()=>{} });
+  let rows: readonly IndexCandidate[] = [];
+  const recorded = harness(recording.controller, { reservations:{"alpha query":[RES_ALPHA],"beta query":[RES_BETA]}, rows:()=>rows });
+  const a=await allocateOn(recorded,"alpha query");
+  const b=await allocateOn(recorded,"beta query");
+  await Promise.all([a,b].map(async (entry)=>{
+    await entry.wrapper.commit(entry.reservation!,[],entry.operation.signal);
+    await entry.wrapper.updateIndex(runOf(entry.reservation!),entry===a?"alpha query":"beta query",entry.operation.signal);
+  }));
+  rows=[ROW_BETA];
+  recording.prepare(suggestRequest("alpha query",await a.wrapper.candidates(a.reservation,"alpha query",a.operation.signal)));
+  rows=[ROW_ALPHA];
+  recording.prepare(suggestRequest("beta query",await b.wrapper.candidates(b.reservation,"beta query",b.operation.signal)));
+  await recorded.finish();
+  const artefact=recording.exportArtefact({fixtureFiles:FIXTURE_FILES});
+  assert.deepEqual(artefact.reads.map((read)=>read.dependencies),[["research-beta"],["research-alpha"]]);
+  verifySuggestionArtefact(artefact);
+  const replay=createSuggestionViewReplay({artefact,displayRoot:DISPLAY_ROOT,budgetMs:5000,expectedFixtureFiles:FIXTURE_FILES,onInvalid:()=>{}});
+  const freshA=freshReservation(RES_ALPHA,"fresh-mutual-alpha");
+  const freshB=freshReservation(RES_BETA,"fresh-mutual-beta");
+  const replayed=harness(replay.controller,{reservations:{"alpha query":[freshA],"beta query":[freshB]},rows:()=>rows});
+  const ra=await allocateOn(replayed,"alpha query"), rb=await allocateOn(replayed,"beta query");
+  await Promise.all([ra,rb].map(async (entry)=>{
+    await entry.wrapper.commit(entry.reservation!,[],entry.operation.signal);
+    await entry.wrapper.updateIndex(runOf(entry.reservation!),entry===ra?"alpha query":"beta query",entry.operation.signal);
+  }));
+  rows=[freshRow(ROW_BETA,freshB.runId)];
+  replay.prepare(suggestRequest("alpha query",await ra.wrapper.candidates(ra.reservation,"alpha query",ra.operation.signal)));
+  rows=[freshRow(ROW_ALPHA,freshA.runId)];
+  replay.prepare(suggestRequest("beta query",await rb.wrapper.candidates(rb.reservation,"beta query",rb.operation.signal)));
+  await replayed.finish();
+  replay.assertValid(); replay.assertReplayComplete();
+});
+
 describe("segment builder fidelity (production formatter mirror)", () => {
   it("renders byte-for-byte what formatIndexForJudge plus the call site produce", () => {
     for (const rows of [

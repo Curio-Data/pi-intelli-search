@@ -11,6 +11,9 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const mode = process.argv[2];
 if (!["native", "mcp", "smoke"].includes(mode)) throw new Error("Expected native, mcp or smoke");
 const cwd = mode === "mcp" ? join(root, "packages/mcp") : root;
+const concurrency = process.env.PI_TEST_CONCURRENCY;
+if (concurrency !== undefined && !/^[1-9][0-9]*$/.test(concurrency))
+  throw new Error("PI_TEST_CONCURRENCY must be a positive integer");
 await mkdir(join(root, ".tmp"), { recursive: true });
 const scratch = await mkdtemp(join(root, ".tmp/tests-"));
 const home = join(scratch, "home");
@@ -31,7 +34,7 @@ try {
           .map((name) => `test/${name}`);
   const child = spawn(
     process.execPath,
-    ["--import", "tsx", ...(mode === "smoke" ? [] : ["--test"]), ...files],
+    ["--import", "tsx", ...(mode === "smoke" ? [] : ["--test", ...(concurrency ? [`--test-concurrency=${concurrency}`] : [])]), ...files],
     { cwd, env, stdio: "inherit" },
   );
   for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => child.kill(signal));

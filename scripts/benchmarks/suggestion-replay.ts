@@ -926,11 +926,16 @@ export function verifySuggestionArtefact(artefact: SuggestionViewArtefact): void
     if (read.view.length === 0 && read.matchedSuggestRequest !== null)
       fail(`The empty read view of "${read.readerNode}" must not reference a suggest request`);
   }
-  // Dependency graph: existence, self-dependency and acyclicity. Reads only
-  // point at producers and producers point at nothing, so a cycle requires a
-  // self-dependency; the explicit DFS below still guards future extensions.
+  // Dependencies are candidate-read -> prior-publication edges, not whole
+  // operation -> whole-operation edges. Two parallel operations can both
+  // publish before either reads, then legitimately see each other's reports.
+  // Collapsing those distinct phases invents a cycle. Producer existence and
+  // forbidden self-membership have already been checked above.
   const graphEdges = new Map<string, readonly string[]>();
-  for (const read of artefact.reads) graphEdges.set(read.readerNode, read.dependencies);
+  for (const read of artefact.reads) graphEdges.set(
+    `read:${read.readerNode}`,
+    read.dependencies.map((producer) => `publication:${producer}`),
+  );
   const visiting = new Set<string>();
   const visited = new Set<string>();
   const visit = (node: string): void => {
