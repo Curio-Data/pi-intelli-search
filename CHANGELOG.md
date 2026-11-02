@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [pi-0.20.0] - 2026-11-02
 
+Published on `npm`; [isolated registry installation](docs/COMPATIBILITY.md#published-0200-native-package-verification-2026-11-02) passes. The tarball checksum matches registry metadata and the packaged README matches the native release tag.
+
 Extraction-budget resilience and clearer incomplete-result diagnostics. In recorded probes, the default reasoning model exhausted its completion budget on one [_OpenRouter_](https://openrouter.ai) serving route before producing visible text. Other tested routes completed within the previous cap; the larger default does not guarantee completion on every route or page.
 
 ### Changed
@@ -27,6 +29,8 @@ Extraction-budget resilience and clearer incomplete-result diagnostics. In recor
 - Standalone `intelli_extract` rejects empty output instead of returning it as a completed extraction. Extraction diagnostics include reported token counts when available and name `extractionMaxTokens` for budget recovery.
 
 ## [mcp-0.20.0] - 2026-11-02
+
+Published on `npm`; [clean-profile registry-pin verification](docs/COMPATIBILITY.md#published-0200-registry-pin-verification-2026-11-02) passes.
 
 Core behaviour is shared with [pi-0.20.0] and recorded there.
 
