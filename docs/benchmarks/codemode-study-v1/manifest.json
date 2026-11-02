@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "study": "codemode-study-v1",
-  "revision": "manifest-v1-r4-prepilot",
+  "revision": "manifest-v1-r5-prepilot",
   "recordedUtc": "2026-11-02T17:49:03Z",
-  "reboundUtc": "2026-11-02T18:30:00Z",
-  "revisionNote": "Integrates the actual session driver, finite programme admission, real transport capture, F7 replay and diagnostic exports. Retains unchanged corpus, calibration inputs, historical baseline and original token endpoint. Adds one development live pair to the costed schedule. Human verdicts are sanity-check labels only.",
+  "reboundUtc": "2026-11-02T19:19:45Z",
+  "revisionNote": "Preserves the failed first development capture and its reported charge. Corrects allocation-witness classification, raises collation allowance equally in both arms, and records cross-series technical-rerun provenance. Corpus, calibration inputs, historical baseline, models, reasoning, source budgets and token endpoint are unchanged. Human verdicts remain sanity checks only.",
   "status": "pre-pilot driver candidate; independent measured-series execution requires its later freeze",
   "revisionPolicy": "Pre-pilot drafts may rebind before capture. Each executed series binds exact source commit and input hashes; no existing run is relabelled when a later draft changes.",
   "authority": {
@@ -15,11 +15,11 @@
   "inputs": [
     {"path": "corpus.json", "sha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed", "revision": "corpus-v1-r3"},
     {"path": "calibration.json", "sha256": "c0abba11206d841d692a09c69f2d59b75bca85d1934948f50db702f301fb0a11", "revision": "calibration-v1-r3"},
-    {"path": "PROTOCOL.md", "sha256": "2b05f3972e2ffa59dbf45000cc686401aaf8a7620a10013723d7c8cb7914f1ba", "revision": "study-v1-r4-prepilot"},
+    {"path": "PROTOCOL.md", "sha256": "3d707d14960d561c28cb1165397db1b9f9634eea50281045bdce4eb0bfdc9c3a", "revision": "study-v1-r5-prepilot"},
     {"path": "SCHEDULE.md", "sha256": "2b1564302ae50e178b5170fb02c09cc73fca600fd1baa9466ffba4b967aa4672", "revision": "schedule-v1-r4-prepilot"},
     {"path": "SPEND-BASELINE.json", "sha256": "b3dffbba4cd500a19247be505f619545d71675948c52191070b4f4afd58deea3", "revision": "spend-baseline-3"},
     {"path": "CALIBRATION-REVIEW.md", "sha256": "ce81efe7b224f7e99e633d192a5f831375b34fe251316d409896723a09c30562", "revision": "calibration-review-v1-r3"},
-    {"path": "RUNNER.md", "sha256": "38a84a235f399d64013b3644cbbc4fbeec7f87bddb6495352d498512f5779878", "revision": "runner-v1"}
+    {"path": "RUNNER.md", "sha256": "d5e1f3004aea967581a23b4e8ff831be7fc5aa143135456b15a67a951ecc40cc", "revision": "runner-v2"}
   ],
   "historicalInputsUnchanged": {
     "oldCorpusManifest": "docs/benchmarks/corpus/manifest.json",

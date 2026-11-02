@@ -14,7 +14,7 @@ export interface ScriptBudget {
   readonly maxOutputTokens: number;
 }
 function checkedBudget(budget: ScriptBudget): ScriptBudget {
-  for (const [key, max] of [["maxPages", 16], ["maxChars", 100_000], ["timeoutMs", 600_000], ["maxOutputTokens", 16_000]] as const) {
+  for (const [key, max] of [["maxPages", 16], ["maxChars", 100_000], ["timeoutMs", 600_000], ["maxOutputTokens", 65_536]] as const) {
     if (!Number.isSafeInteger(budget[key]) || budget[key] < 1 || budget[key] > max)
       throw new TypeError(`Invalid study script budget: ${key}`);
   }

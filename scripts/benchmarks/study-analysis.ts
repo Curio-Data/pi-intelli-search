@@ -13,6 +13,7 @@ import { sha256Text } from "./canonical.js";
 export type Population = "replay" | "live";
 export interface StudyAnalysisRun extends RunObservation {
   readonly population: Population;
+  readonly rerunSeries?: string;
   readonly purpose?: "comparative-task" | "fixture-capture" | "synthetic-driver-integration";
   readonly partition: "calibration" | "development" | "pilot" | "measured-series";
   readonly workflow: "single" | "breadth" | "manual" | "followup";

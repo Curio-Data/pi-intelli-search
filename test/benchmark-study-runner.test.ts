@@ -161,6 +161,24 @@ test("a settlement error preserves the reservation and still writes the failed r
   assert.equal(journal.filter((entry)=>entry.kind==="admitted-before-dispatch").length,journal.filter((entry)=>entry.kind==="settled").length);
 });
 
+test("failed collation after allocation is witnessed as settled, not falsely before allocation",async()=>{
+  await reset();
+  stage.setScript(({role})=>({text:role==="search"?`See [Runner](${url})`:role==="collate"?"":role==="suggest"?"[]":"The documented limit is seven.",usage}));
+  try{
+    main.setScript(turns([{name:"codemode",args:{code:createStudyPlan(task).script}}]));
+    const result=await runStudyTask({...base(),runId:"empty-collation",mode:"capture",arm:"on"});
+    assert.equal(result.observation.status,"failed",await readFile(join(result.runDir,"outcome.json"),"utf8"));
+    assert(!result.observation.error?.includes("failed-before-allocation witness"));
+    const capture=JSON.parse(await readFile(join(result.runDir,"capture/attempts.json"),"utf8"));
+    assert(capture.suggestionObservations.some((event:{kind:string})=>event.kind==="allocated"));
+    assert.equal(capture.hostWitnesses[0].outcome,"settled");
+    assert(capture.faults.every((fault:string)=>!fault.includes("failed-before-allocation witness")));
+    const manifest=JSON.parse(await readFile(join(result.runDir,"capture/manifest.json"),"utf8"));
+    assert.equal(manifest.complete,false);
+    assert.match(manifest.incompleteReason,/without its frozen candidate read/,"the failed workflow still cannot masquerade as a complete replay bundle");
+  }finally{stage.setScript(({role})=>({text:role==="search"?`See [Runner](${url})`:role==="suggest"?"[]":"The documented limit is seven.",usage}));}
+});
+
 test("the matched fetch character cap applies when the model omits maxChars",async()=>{
   await reset();
   const largeUrl="https://docs.example.test/large";

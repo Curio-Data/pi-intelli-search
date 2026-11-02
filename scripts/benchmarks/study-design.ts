@@ -57,7 +57,7 @@ export function studyPipelineSettings(): ResearchSettings {
     extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     defaultUrls: 4, maxUrls: 12, extractMaxChars: 16_000,
-    extractionMaxTokens: 3000, collationMaxTokens: 4000,
+    extractionMaxTokens: 3000, collationMaxTokens: 8000,
     cacheDir: ".search", disableLlmsFullDiscovery: true,
     llmRetryAttempts: 1, searchRetryAttempts: 1,
     execution: parseExecutionSettings({ fetchMaxChars: 16_000 }, "study.execution"),
@@ -93,7 +93,7 @@ export async function readStudyDesign(root: string): Promise<{
 export function createStudyPlan(task: StudyTask): StudyPlan {
   if (!/^[A-Za-z0-9_-]+$/.test(task.id) || !task.query.trim() || !task.focusPrompt.trim() || !["single", "breadth", "manual", "followup"].includes(task.workflow)) throw new Error("Invalid study task");
   const maxPages = task.workflow === "breadth" ? 12 : 4;
-  const budget: ScriptBudget = { maxPages, maxChars: 16_000, timeoutMs: 300_000, maxOutputTokens: 4000 };
+  const budget: ScriptBudget = { maxPages, maxChars: 16_000, timeoutMs: 300_000, maxOutputTokens: task.workflow === "breadth" ? 48_000 : 16_000 };
   const args = { query: task.query, focusPrompt: task.focusPrompt, domains: task.domains };
   let workflow: SuggestionWorkflowOperation[];
   let script: string;
@@ -118,18 +118,18 @@ export function createStudyPlan(task: StudyTask): StudyPlan {
     maxModelAttempts: task.workflow === "breadth" ? 24 : 10,
     maxMainRequests: task.workflow === "manual" ? 18 : 8,
     maxToolCalls: task.workflow === "manual" ? 20 : 12,
-    maxInputBytes: 128_000, maxOutputTokens: 4096, maxQueryChars: 2000, defaultPages: 4,
+    maxInputBytes: 128_000, maxOutputTokens: 8192, maxQueryChars: 2000, defaultPages: 4,
     timeoutMs: 300_000, abortGraceMs: 15_000,
     scheduleSha256: sha256Canonical(asJson(schedule)),
   };
 }
 
-export const STUDY_SYSTEM_PROMPT = "Answer the user's research task using the available research tools and captured source evidence. Cite sources for material factual claims. State gaps and uncertainty. Do not invent evidence. Keep the final answer within 500 words. Use no more than the task's attempted-page allowance. Use the given focus when extracting evidence. A script, if used, must have a finite timeout_ms no greater than 300000 and max_output_tokens no greater than 4000. Do not call classifier or image models. Do not read files outside the workspace. Stop after a failed operation if the remaining evidence cannot answer the task.";
+export const STUDY_SYSTEM_PROMPT = "Answer the user's research task using the available research tools and captured source evidence. Cite sources for material factual claims. State gaps and uncertainty. Do not invent evidence. Keep the final answer within 500 words. Use no more than the task's attempted-page allowance. Use the given focus when extracting evidence. A script, if used, must have a finite timeout_ms no greater than 300000 and max_output_tokens no greater than 65536 and within the task's stated script-output allowance. Do not call classifier or image models. Do not read files outside the workspace. Stop after a failed operation if the remaining evidence cannot answer the task.";
 
 export function studyPrompts(plan: StudyPlan, arm: "off" | "on" | "only", controlled: boolean): readonly string[] {
   const task = plan.task;
   const question = task.workflow === "followup" ? task.followupPlan!.base : task.query;
-  const common = `Task: ${question}\nSource domains: ${task.domains.join(", ")}.\nExtraction focus: ${task.focusPrompt}\nAttempted-page allowance: ${plan.maxPages} total across the task. Each fetched page is limited to 16000 characters. Final answer: at most 500 words.`;
+  const common = `Task: ${question}\nSource domains: ${task.domains.join(", ")}.\nExtraction focus: ${task.focusPrompt}\nAttempted-page allowance: ${plan.maxPages} total across the task. Each fetched page is limited to 16000 characters. Script-output allowance, if a script is used: ${plan.scriptBudget.maxOutputTokens} estimated tokens. Final answer: at most 500 words.`;
   let first = common;
   if (controlled && arm !== "off") first += `\nControlled workflow: execute this exact script once with codemode, then answer from its returned evidence. Do not alter arguments or make extra research calls.\n${plan.script}`;
   if (controlled && arm === "off") {

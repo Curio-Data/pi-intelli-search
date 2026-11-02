@@ -22,7 +22,7 @@ const REMAINING_PLANNED_USD=STUDY_REMAINING_PLANNED_USD;
 export async function studyMain(argv=process.argv.slice(2)):Promise<void>{
   const {values}=parseArgs({args:argv,options:{
     check:{type:"boolean",default:false},"init-spend":{type:"boolean",default:false},
-    analyse:{type:"string"},"rerun-of":{type:"string"},"rerun-reason":{type:"string"},
+    analyse:{type:"string"},"rerun-of":{type:"string"},"rerun-reason":{type:"string"},"rerun-series":{type:"string"},
     series:{type:"string"},task:{type:"string"},mode:{type:"string",default:"replay"},
     arm:{type:"string",default:"off"},pair:{type:"boolean",default:false},bundle:{type:"string"},
     repeat:{type:"string",default:"1"},seed:{type:"string",default:"20261102"},order:{type:"string"},
@@ -91,8 +91,10 @@ export async function studyMain(argv=process.argv.slice(2)):Promise<void>{
   if(repeat>(task.partition==="pilot"?2:1))throw new Error("Repeat lies outside the declared development/pilot schedule");
   if(Boolean(values["rerun-of"])!==Boolean(values["rerun-reason"]?.trim()) || (values.pair&&values["rerun-of"]))throw new Error("A technical rerun needs its original identity, reason and one explicit arm");
   const sameCell=(run:typeof priorRuns[number],arm:string)=>run.queryId===task.id&&run.arm===arm&&run.repeat===repeat&&(mode==="capture"?run.purpose==="fixture-capture":run.purpose!=="fixture-capture"&&run.population===(mode==="live"?"live":"replay"));
+  if(values["rerun-series"]&&(!values["rerun-of"]||!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(values["rerun-series"])))throw new Error("A cross-series rerun requires a plain source series name and predecessor identity");
   if(values["rerun-of"]){
-    const previous=priorRuns.find((run)=>run.runId===values["rerun-of"]);
+    const predecessors=values["rerun-series"]?(await readFile(join(REPO_ROOT,"evidence/benchmarks",values["rerun-series"],"observations.ndjson"),"utf8")).trim().split("\n").map((line)=>JSON.parse(line) as typeof priorRuns[number]):priorRuns;
+    const previous=predecessors.find((run)=>run.runId===values["rerun-of"]);
     if(!previous||!sameCell(previous,values.arm))throw new Error("Rerun does not name this series' original cell");
   }else if(priorRuns.some((run)=>(values.pair?["off","on"]:[values.arm]).some((arm)=>sameCell(run,arm))))throw new Error("This cell already has an outcome; retain it and declare any technical rerun explicitly");
   const bundle=values.bundle?await loadStudyReplayBundle(resolve(values.bundle)):undefined;
@@ -143,7 +145,7 @@ export async function studyMain(argv=process.argv.slice(2)):Promise<void>{
       if(i>0)await mkdir(workspace);
       safeToClean=false;
       const runId=`${task.id}-${mode}-${arms[i]}-r${repeat}-${new Date().toISOString().replace(/[-:.]/g,"")}-${randomBytes(3).toString("hex")}`;
-      const result=await runStudyTask({host,hostSelection:selection,runId,seriesRoot,workspace,task,arm:arms[i],mode,repeat,order:order+i,seed,rerunOf:values["rerun-of"],rerunReason:values["rerun-reason"],methodSha256:design.methodSha256,corpusSha256:design.corpusSha256,candidateCommit:source.commit,lockfileSha256:source.lockfileSha256,bundle,spend,remainingPlannedUsd:REMAINING_PLANNED_USD,signal:signal.signal});
+      const result=await runStudyTask({host,hostSelection:selection,runId,seriesRoot,workspace,task,arm:arms[i],mode,repeat,order:order+i,seed,rerunOf:values["rerun-of"],rerunReason:values["rerun-reason"],rerunSeries:values["rerun-series"],methodSha256:design.methodSha256,corpusSha256:design.corpusSha256,candidateCommit:source.commit,lockfileSha256:source.lockfileSha256,bundle,spend,remainingPlannedUsd:REMAINING_PLANNED_USD,signal:signal.signal});
       const dependencies=await reportLoadedDependencies({urls:modules.urls(),hostRoot:selection.root,repoRoot:REPO_ROOT});
       // Separate append-only receipt: the run manifest was finalised by the runner.
       const credentialsAfter=await readCredentialFileState(join(agentDir,"auth.json"),STUDY_MAIN_MODEL.provider);

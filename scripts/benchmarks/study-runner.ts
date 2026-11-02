@@ -70,6 +70,7 @@ export interface StudyRunOptions {
   readonly seed: number;
   readonly rerunOf?: string;
   readonly rerunReason?: string;
+  readonly rerunSeries?: string;
   readonly methodSha256: string;
   readonly corpusSha256: string;
   readonly candidateCommit: string;
@@ -160,7 +161,7 @@ export async function runStudyTask(options: StudyRunOptions): Promise<StudyRunRe
   const identity = {
     schemaVersion: 1, runId: options.runId, purpose, mode: options.mode, arm: options.arm,
     task: options.task, repeat: options.repeat, order: options.order, seed: options.seed,
-    rerunOf: options.rerunOf ?? null, rerunReason: options.rerunReason ?? null,
+    rerunOf: options.rerunOf ?? null, rerunReason: options.rerunReason ?? null, rerunSeries: options.rerunSeries ?? null,
     candidateCommit: options.candidateCommit, host: options.hostSelection,
     initialTreeDigest, scheduleSha256: plan.scheduleSha256, settings, plan,
     main: options.testing?.main ?? STUDY_MAIN_MODEL, transport: "sse", systemPrompt: STUDY_SYSTEM_PROMPT,
@@ -213,7 +214,13 @@ export async function runStudyTask(options: StudyRunOptions): Promise<StudyRunRe
       if (data.operation === "intelli_research" || data.operation === "intelli_collate") {
         const args = argsById.get(String(copy.toolCallId));
         if (typeof args?.query !== "string") { issues.push("Missing query for settled host witness"); return; }
-        try { (capture ?? replay)?.reportHostWitness({query:args.query, operationId:data.operationId, outcome: data.cache.status === "not-requested" && data.outcome !== "completed" ? "failed-before-allocation" : data.cache.status === "committed" && data.cache.index === "unavailable" ? "commit-succeeded" : "settled"}); }
+        const notices = capture?.snapshot().suggestionObservations ?? replay?.suggestionSession?.observations() ?? [];
+        const hasStoreNotice = notices.some((notice) => (notice.kind === "allocated" || notice.kind === "producer-failed") && notice.query === args.query);
+        const hasF7 = capture?.suggestionMode === "f7" || replay?.suggestionMode === "f7";
+        // not-requested describes publication output, not whether allocation
+        // occurred. A failed collation can allocate and then publish nothing.
+        const failedBeforeAllocation = hasF7 && !hasStoreNotice && data.outcome !== "completed";
+        try { (capture ?? replay)?.reportHostWitness({query:args.query, operationId:data.operationId, outcome: failedBeforeAllocation ? "failed-before-allocation" : data.cache.status === "committed" && data.cache.index === "unavailable" ? "commit-succeeded" : "settled"}); }
         catch (error) { invalidate(error as Error); }
       }
     };
@@ -309,7 +316,8 @@ export async function runStudyTask(options: StudyRunOptions): Promise<StudyRunRe
   const endedAt=new Date().toISOString();
   const durationMs=performance.now()-start;
   const errors=[...new Set(issues)];
-  const status:StudyAnalysisRun["status"]=collector.requestWindows===0&&captureAttempts.length===0?"not-started":cancelled.signal.aborted?"aborted":errors.length?"failed":"completed";
+  const interrupted = options.signal?.aborted || promptOutcomes.some((outcome) => ["cancelled", "timed-out", "abort-unsettled"].includes(outcome.settlement));
+  const status:StudyAnalysisRun["status"]=collector.requestWindows===0&&captureAttempts.length===0?"not-started":interrupted?"aborted":errors.length?"failed":"completed";
   const answers=collector.sessionEvents.flatMap((e)=>record(e)&&e.type==="message_end"&&record(e.message)&&e.message.role==="assistant"?[e.message]:[]);
   await writeNewJson(join(runDir,"answers.json"),answers);
   await writeNewJson(join(runDir,"tool-events.json"),toolEvents);
@@ -326,7 +334,7 @@ export async function runStudyTask(options: StudyRunOptions): Promise<StudyRunRe
     methodSha256:options.methodSha256,corpusSha256:options.corpusSha256,fixtureSha256:options.bundle?studyBundleSha256(options.bundle):null,
     candidateCommit:options.candidateCommit,lockfileSha256:options.lockfileSha256,host:asJson(options.hostSelection) as Record<string,string>,effectiveSettings:asJson(settings),
     toolCatalogueSha256:catalogue,promptSha256:sha256Canonical(asJson({system:STUDY_SYSTEM_PROMPT,prompts})),status,replayValidity,
-    ...(options.rerunOf ? {rerunOf:options.rerunOf,rerunReason:options.rerunReason} : {}),
+    ...(options.rerunOf ? {rerunOf:options.rerunOf,rerunReason:options.rerunReason,rerunSeries:options.rerunSeries} : {}),
     observerComplete:collector.observer.complete,mainUsage:main.usage,pipelineUsage:ledger.summary(),reportedPipelineUsd:options.mode==="replay"?0:charges.missingCharges?null:charges.reportedUsd,estimatedPipelineUsd:null,
     subscriptionQuota:asJson(collector.providerResponses.map((p)=>p.visibleHeaders)),artifacts:[],...(errors.length?{error:errors.join("; ")} : {}),
     population:options.mode==="live"?"live":"replay",partition:options.task.partition,workflow:options.task.workflow,
