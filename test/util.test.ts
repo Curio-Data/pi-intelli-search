@@ -19,6 +19,8 @@ import {
   withMuzzledConsole,
   type RetryDecision,
   stripTrailingSourcesSection,
+  budgetExhausted,
+  reasoningOnlyCompletion,
 } from "../src/util.js";
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 5));
@@ -894,5 +896,32 @@ describe("stripTrailingSourcesSection", () => {
   it("does not strip when Sources appears mid-text but not as a trailing section", () => {
     const text = "Sources say X.\n\nMore prose about https://a.example/1 follows here.\n";
     assert.strictEqual(stripTrailingSourcesSection(text), text);
+  });
+});
+
+describe("budgetExhausted", () => {
+  it("reports exhaustion only when reported output reached the cap", () => {
+    assert.equal(budgetExhausted({ output: 3000 }, 3000), true);
+    assert.equal(budgetExhausted({ output: 3001 }, 3000), true);
+    assert.equal(budgetExhausted({ output: 2999 }, 3000), false);
+  });
+
+  it("never reports exhaustion from missing usage or a missing cap", () => {
+    assert.equal(budgetExhausted(undefined, 3000), false, "missing usage is not zero usage");
+    assert.equal(budgetExhausted({}, 3000), false, "no output field");
+    assert.equal(budgetExhausted({ output: 3000 }, undefined), false, "no cap to compare against");
+  });
+});
+
+describe("reasoningOnlyCompletion", () => {
+  it("classifies a completion spent almost entirely on hidden reasoning", () => {
+    assert.equal(reasoningOnlyCompletion({ output: 3000, reasoning: 2999 }, 3000), true);
+    assert.equal(reasoningOnlyCompletion({ output: 3000, reasoning: 3000 }, 3000), true);
+    assert.equal(reasoningOnlyCompletion({ output: 3000, reasoning: 1500 }, 3000), false, "half the budget was visible output");
+  });
+
+  it("falls back to false when usage lacks the reasoning breakdown", () => {
+    assert.equal(reasoningOnlyCompletion({ output: 3000 }, 3000), false);
+    assert.equal(reasoningOnlyCompletion(undefined, 3000), false);
   });
 });

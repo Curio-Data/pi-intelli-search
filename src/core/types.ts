@@ -29,11 +29,16 @@ export interface ExtractResult {
    *  Detected from reported usage (completion tokens at or above the cap);
    *  absent usage never sets it. */
   truncated?: boolean;
-  /** Bounded, safe failure reason for a status "failed" extraction
+  /** Bounded, single-line failure reason for a status "failed" extraction
    *  (for example a budget-exhausted or empty model response). */
   error?: string;
-  /** OpenRouter serving route when the adapter observed it (response
-   *  header). Optional: absent on adapters or models without it. */
+  /** Structured failure classification: "budget" for output-cap exhaustion,
+   *  "other" for anything else. Set by the pipeline from reported usage or
+   *  its own adapter messages, never from free provider text. */
+  failureKind?: "budget" | "other";
+  /** OpenRouter serving route when the adapter observed it (the `provider`
+   *  stream-event or response field). Optional: absent on adapters, hosts
+   *  or models without it. */
   routeProvider?: string;
 }
 

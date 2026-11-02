@@ -438,6 +438,32 @@ test("empty stop responses pass through and the serving route is surfaced", asyn
   }
 });
 
+test("null content with finish_reason stop stays the generic no-text error (not budget exhaustion)", async () => {
+  const f = await fixture();
+  try {
+    const client = createOpenRouterClient(f.config, {
+      env: { FIXTURE_KEY: "fixture-secret" },
+      logger,
+      fetch: fakeTransport(() =>
+        json({
+          choices: [{ finish_reason: "stop", message: { content: null } }],
+          usage: { prompt_tokens: 10, completion_tokens: 3 },
+        }),
+      ),
+    });
+    await client.preflight([{ role: "search", config: f.config.settings.searchModel }]);
+    await assert.rejects(
+      client.complete(request(f.config)),
+      (error: Error) =>
+        error.message.includes("no text completion") &&
+        !error.message.includes("exhausted"),
+      "null with stop is a malformed response, not a budget event",
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("stalled bodies time out per attempt, user cancellation never retries", async () => {
   const f = await fixture();
   try {

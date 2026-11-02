@@ -18,11 +18,12 @@ export function tuningDefaults(): Omit<
     fetchConcurrency: 4,
     extractionConcurrency: 4,
     // The completion cap covers hidden reasoning tokens on reasoning models
-    // (the default MiniMax M3 spends 1.4K-5.2K before any visible text, and a
-    // budget-exhausted call returns empty output with finish_reason "length").
-    // 8,000 leaves a ≈1.4x margin over the largest observed uncapped
-    // extraction (5,617 completion tokens on the Novita route,
-    // 2026-11-02 investigation; evidence/2026-11-02-extract-failure-agentskills-io).
+    // (the default MiniMax M3 reasons for thousands of tokens before any
+    // visible text, and a budget-exhausted call returns empty output with
+    // finish_reason "length"). 8,000 cleared the failure in live probes
+    // (2026-11-02 investigation and reviews); the reasoning tail is route-
+    // and page-dependent, so telemetry records residual exhaustion
+    // (evidence/2026-11-02-extract-failure-agentskills-io).
     extractionMaxTokens: 8000,
     collationMaxTokens: 4000,
     browserFingerprint: "chrome_145",

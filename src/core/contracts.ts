@@ -39,15 +39,22 @@ export interface ExtractParams {
   focusPrompt?: string;
 }
 
+export interface CollateExtraction {
+  url: string;
+  title: string;
+  extraction: string;
+  sourceType: string;
+  status: string;
+  /** Optional caller-supplied flags carried through from intelli_extract
+   *  results so a manual collation keeps the diagnostics the extract step
+   *  reported (truncation flag and bounded failure reason). */
+  truncated?: boolean;
+  error?: string;
+}
+
 export interface CollateParams {
   // Preserve native permissiveness; standalone validation is a later adapter concern.
-  extractions: Array<{
-    url: string;
-    title: string;
-    extraction: string;
-    sourceType: string;
-    status: string;
-  }>;
+  extractions: CollateExtraction[];
   query: string;
   searchSummary?: string;
   fullPages?: Array<{ url: string; title: string; content: string }>;
@@ -133,8 +140,8 @@ export interface ModelCompletion {
   citations: HarvestedCitation[];
   usage?: ModelUsage;
   /** Serving route observed by the adapter (for example OpenRouter's
-   *  `openrouter-provider` response header or `provider` response field).
-   *  Optional: adapters without route visibility omit it. */
+   *  `provider` stream-event or response field). Optional: adapters
+   *  without route visibility omit it. */
   routeProvider?: string;
 }
 

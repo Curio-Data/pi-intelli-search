@@ -134,9 +134,11 @@ export async function callLlm(
     onRetryNotice?: (message: string) => void;
     /** Successful provider usage, retained by the host-neutral adapter. */
     onUsage?: (usage: ModelUsage) => void;
-    /** Serving route observed on the final successful attempt (for example
-     *  OpenRouter's `openrouter-provider` response header). Delivered only
-     *  when the adapter exposes the header; never an error otherwise. */
+    /** Serving route observed on the final successful attempt. Delivered from
+     *  the `provider` field of provider stream events (OpenRouter sends the
+     *  route in chunk data; there is no response header for it). Optional:
+     *  hosts on pi-ai < 0.99 ignore the stream hook, so the route stays
+     *  absent there and is never an error. */
     onRouteProvider?: (provider: string) => void;
   },
 ): Promise<string> {
@@ -212,16 +214,19 @@ export async function callLlm(
         ...(annotationFetch ? { fetch: annotationFetch } : {}),
         // Supported citation channel (pi-ai >= 0.99): the OpenAI Completions
         // adapter, which serves OpenRouter, invokes this for every parsed SSE
-        // chunk before normalisation. Hosts on pi-ai < 0.99 ignore the option,
-        // which is why the fetch wrapper above stays as the fallback channel;
-        // both feed the same per-attempt sink and dedupe by URL.
-        ...(annotations
-          ? {
-              onProviderStreamEvent: (data: unknown) => {
-                harvestChunkAnnotations(data, annotations);
-              },
-            }
-          : {}),
+        // chunk before normalisation. Attached unconditionally because it is
+        // also the serving-route channel: OpenRouter carries the route in
+        // chunk data (`provider`), never in a response header. Hosts on
+        // pi-ai < 0.99 ignore the option, which is why the fetch wrapper
+        // above stays as the citation fallback; both citation paths feed the
+        // same per-attempt sink and dedupe by URL. The route capture is
+        // purely observational and must not throw (a throw would bypass the
+        // retry loop), so it guards its reads.
+        onProviderStreamEvent: (data: unknown) => {
+          if (annotations) harvestChunkAnnotations(data, annotations);
+          const route = (data as { provider?: unknown } | null)?.provider;
+          if (typeof route === "string" && route.length > 0) attemptRoute = route;
+        },
         maxTokens: options?.maxTokens,
         reasoning: options?.reasoning ?? "low",
         ...(options?.payloadPatch
@@ -236,13 +241,6 @@ export async function callLlm(
             const ra = res.headers["retry-after"];
             const secs = ra ? Number(ra) : NaN;
             hints.retryAfterMs = Number.isFinite(secs) ? secs * 1000 : undefined;
-          }
-          // Capture the serving route for diagnostics. Purely observational:
-          // like the Retry-After capture above, a throw here would bypass
-          // the retry loop.
-          const route = res.headers["openrouter-provider"];
-          if (typeof route === "string" && route.length > 0) {
-            attemptRoute = route;
           }
         },
       };

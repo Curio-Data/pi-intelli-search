@@ -39,7 +39,7 @@ export async function extract(
   if (!extraction.trim()) {
     const usageNote = usage?.output != null
       ? ` (${usage.output}/${settings.extractionMaxTokens} output tokens` +
-        (usage.reasoning != null ? `, ${usage.reasoning} hidden reasoning` : "") + ")"
+        (usage.reasoning ? `, ${usage.reasoning} hidden reasoning` : "") + ")"
       : "";
     throw new Error(
       `Extraction returned no visible evidence${usageNote}; increase extractionMaxTokens or choose a model with a smaller reasoning budget`,

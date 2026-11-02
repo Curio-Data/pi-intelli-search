@@ -211,15 +211,27 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
       fetchFailed > 0
         ? `${fetchFailed} page(s) failed to fetch`
         : `${extractFailed} extraction(s) failed`;
+    // Per-page reasons: the worst outcome must still explain itself. No cache
+    // is written on this path, so there is no saved source to point at.
+    const failureLines = allExtractions
+      .filter((e) => e.status !== "success" && (e.error || fetched.pages.find((pg) => pg.url === e.url)?.error))
+      .map((e) => {
+        const detail = e.error ?? fetched.pages.find((pg) => pg.url === e.url)?.error;
+        return `- ${e.url}: ${String(detail).replace(/\s+/g, " ").slice(0, 200)}`;
+      })
+      .slice(0, 10)
+      .join("\n");
+    const failureBlock = failureLines ? `\n\nFailed sources:\n${failureLines}` : "";
     return degradedReturn(
       p,
       "extraction-failed",
-      `${reason}. No content was extracted.\n\nSearch summary:\n${search.searchResult}`,
+      `${reason}. No content was extracted.${failureBlock}\n\nSearch summary:\n${search.searchResult}`,
       {
         cachePath: "",
         urlsSearched: search.urls.length,
         pagesFetched: fetched.successPages.length,
         pagesFailed: fetched.pages.length - fetched.successPages.length,
+        extractionFailed: extractFailed,
       },
     );
   }
@@ -263,18 +275,27 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   // Return concise injection
   // ═══════════════════════════════════════════
   const failedCount = fetched.pages.length - fetched.successPages.length;
+  // Extraction failures only: pages that never fetched carry status
+  // "blocked" and are already counted by pagesFailed / fetch.failed.
+  const extractionFailures = allExtractions.filter((e) => e.status === "failed").length;
   const truncatedCount = succeededExtractions.filter((e) => e.truncated).length;
   const failedEntries = allExtractions
     .filter((e) => e.status !== "success")
-    .map((e) => ({
-      url: e.url,
-      ...(e.error ? { error: e.error } : {}),
-      // The full page stays on disk even when extraction failed; pointing
-      // the agent at it recovers work that was already paid for.
-      ...(identity.sourceFileFor(e.url)
-        ? { sourceFile: `sources/${identity.sourceFileFor(e.url)}` }
-        : {}),
-    }));
+    .map((e) => {
+      const savedSource = identity.sourceFileFor(e.url);
+      return {
+        url: e.url,
+        // Extraction reason when the extract call failed; fetch error when
+        // the page never made it that far (blocked entries carry none).
+        ...(e.error ? { error: e.error } : {}),
+        ...(fetched.pages.find((page) => page.url === e.url)?.error
+          ? { error: fetched.pages.find((page) => page.url === e.url)!.error!.slice(0, 300) }
+          : {}),
+        // The full page stays on disk even when extraction failed; pointing
+        // the agent at it recovers work that was already paid for.
+        ...(savedSource ? { sourceFile: `sources/${savedSource}` } : {}),
+      };
+    });
   const result =
     collation +
     formatCacheAppendix(
@@ -294,8 +315,9 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
       urlsSearched: search.urls.length,
       pagesFetched: fetched.successPages.length,
       pagesFailed: failedCount,
-      // Extraction failures only (pagesFailed counts fetch failures).
-      extractionFailed: allExtractions.length - succeededExtractions.length,
+      // Extraction failures only (status "failed"); pagesFailed counts fetch
+      // failures (status "blocked"), so the two never double-count a page.
+      extractionFailed: extractionFailures,
     },
   };
 }
@@ -513,13 +535,12 @@ async function runExtractStage(
   // the returned extraction text. Blocked pages contributed no input.
   const succeededExtr = extractions.filter((e) => e.status === "success");
   const failedExtr = extractions.length - succeededExtr.length;
-  // Failure reasons aggregate after the worker pool settles, so concurrent
-  // pages cannot race a single "last error" slot. Budget exhaustion is
-  // classified from the retained error text (the call itself succeeded).
+  // Failure classification aggregates after the worker pool settles from the
+  // structured per-result kind, never from re-parsing error text (a quota
+  // message containing "exhausted" must not count as budget exhaustion).
   let budgetExhaustedFailures = 0;
   for (const e of extractions) {
-    if (e.status !== "failed") continue;
-    if (e.error && /no visible evidence|exhausted/.test(e.error)) budgetExhaustedFailures += 1;
+    if (e.status === "failed" && e.failureKind === "budget") budgetExhaustedFailures += 1;
   }
   const truncatedCount = succeededExtr.filter((e) => e.truncated).length;
   // Route provider: record it when every page that observed one agrees.
@@ -771,10 +792,15 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
   // True when the judge response was empty or unparseable, distinguishing a
   // failed judge from a valid zero-match answer (both surface zero entries).
   let cacheSuggestDegraded: boolean | undefined;
+  // True once the judge call is actually issued; a throw after that point is
+  // a failed judge (adapter exhaustion, timeout, transport), not "no previous
+  // searches to compare against".
+  let judgeAttempted = false;
   try {
     const index = await readIndex(p.paths.cacheRoot);
     // Only run judge if there are other searches to compare against
     if (index.searches.some((e) => e.slug !== currentSlug)) {
+      judgeAttempted = true;
       const indexText = formatIndexForJudge(index, currentSlug);
       const judgeUserMsg = `Current query: "${p.params.query}"\n\nPrevious searches:\n${indexText}`;
       // 2,000 since 0.20.0: the extract model's hidden reasoning counts
@@ -805,6 +831,8 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
   } catch (err: unknown) {
     throwIfAborted(p.signal);
     // Cache suggest is purely additive; user cancellation still propagates.
+    // A judge that was issued and threw is degraded, never a valid zero-match.
+    if (judgeAttempted) cacheSuggestDegraded = true;
     p.logger.error(`Cache suggest failed: ${errMsg(err)}`);
   }
 
@@ -950,6 +978,9 @@ async function writeTelemetrySidecar(
  */
 async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractResult> {
   throwIfAborted(p.signal);
+  // Set inside try while usage is in scope; read by the catch to classify.
+  let exhausted: boolean | undefined;
+  let routeProvider: string | undefined;
   try {
     const userMessage = buildExtractionMessage(
       page.content,
@@ -958,7 +989,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       p.settings.extractMaxChars,
     );
 
-    const { text: extraction, usage, routeProvider } = await p.models.complete({
+    const completion = await p.models.complete({
       model: p.extractConfig,
       systemPrompt: EXTRACTION_SYSTEM_PROMPT,
       userMessage,
@@ -968,14 +999,19 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       timeoutMs: p.settings.llmTimeoutMs,
       onRetryNotice: (msg) => p.onProgress?.(progress("extract", msg)),
     });
+    const { text: extraction, usage } = completion;
+    routeProvider = completion.routeProvider;
 
+    // Classification signal, computed while usage is in scope so the catch
+    // below can label the failure without re-parsing error text.
+    exhausted = budgetExhausted(usage, p.settings.extractionMaxTokens);
     if (!extraction.trim()) {
       // A 200 response can still carry zero visible text: on reasoning models
       // the completion cap covers hidden reasoning tokens, and an exhausted
       // call spends the whole budget before any visible output.
       const usageNote = usage?.output != null
         ? ` (${usage.output}/${p.settings.extractionMaxTokens} output tokens` +
-          (usage.reasoning != null ? `, ${usage.reasoning} hidden reasoning` : "") + ")"
+          (usage.reasoning ? `, ${usage.reasoning} hidden reasoning` : "") + ")"
         : "";
       throw new Error(
         `Extraction returned no visible evidence${usageNote}; increase extractionMaxTokens or choose a model with a smaller reasoning budget`,
@@ -991,15 +1027,16 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       status: "success",
       // Nonempty output cut off by the cap: kept, but flagged so the report
       // and telemetry can say so. Missing usage never flags.
-      truncated: budgetExhausted(usage, p.settings.extractionMaxTokens) || undefined,
+      truncated: exhausted || undefined,
       ...(routeProvider ? { routeProvider } : {}),
     };
   } catch (err: unknown) {
     throwIfAborted(p.signal);
-    // Log extraction error but don't fail the whole pipeline. The bounded
-    // reason is retained on the result so the report and tool result can
-    // explain the failure instead of a bare "Extraction failed".
-    const message = errMsg(err);
+    // Log extraction error but don't fail the whole pipeline. The bounded,
+    // single-line reason is retained on the result so the report and tool
+    // result can explain the failure instead of a bare "Extraction failed";
+    // provider bodies often carry newlines and markup that would break both.
+    const message = errMsg(err).replace(/\s+/g, " ").trim().slice(0, 300) || "extraction failed";
     p.logger.error(`Extraction failed for ${page.url}: ${message}`);
     return {
       url: page.url,
@@ -1008,7 +1045,14 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       sourceType: "unknown",
       currentness: "unknown",
       status: "failed",
-      error: message.slice(0, 300),
+      error: message + (errMsg(err).length > 300 ? "…" : ""),
+      // Structured classification: usage-based when the call completed, else
+      // a match against our own adapter messages (never free provider text).
+      failureKind:
+        exhausted === true || /exhausted the output budget/.test(message)
+          ? "budget"
+          : "other",
+      ...(routeProvider ? { routeProvider } : {}),
     };
   }
 }

@@ -199,7 +199,7 @@ describe("callLlm registry-facade dispatch (single transport, Pi >= 0.86)", () =
     assert.strictEqual(receivedOptions?.maxTokens, 123);
   });
 
-  it("forwards an annotation fetch wrapper and stream-event hook only when a sink is provided", async () => {
+  it("forwards an annotation fetch wrapper only when a sink is provided; the stream-event hook is always attached", async () => {
     const captured: Array<SimpleStreamOptions | undefined> = [];
     __harness.registryStreamSimple = (async (
       _registry: unknown,
@@ -220,10 +220,14 @@ describe("callLlm registry-facade dispatch (single transport, Pi >= 0.86)", () =
 
     assert.strictEqual(captured.length, 2);
     assert.strictEqual(captured[0]?.fetch, undefined, "no sink: no fetch wrapper");
+    // The stream-event hook is unconditional: besides citations it carries
+    // the serving-route capture (OpenRouter reports the route in chunk data,
+    // never in a response header). Without an annotation sink it must not
+    // harvest citations.
     assert.strictEqual(
-      captured[0]?.onProviderStreamEvent,
-      undefined,
-      "no sink: no stream-event hook",
+      typeof captured[0]?.onProviderStreamEvent,
+      "function",
+      "stream-event hook attached without a sink for route capture",
     );
     assert.strictEqual(typeof captured[1]?.fetch, "function", "sink present: wrapper forwarded");
     assert.strictEqual(
@@ -231,6 +235,51 @@ describe("callLlm registry-facade dispatch (single transport, Pi >= 0.86)", () =
       "function",
       "sink present: stream-event hook forwarded",
     );
+  });
+
+  it("captures the serving route from provider stream events and reports it via onRouteProvider", async () => {
+    __harness.registryStreamSimple = (async (
+      _registry: unknown,
+      _model: Model<Api>,
+      _context: Context,
+      options?: SimpleStreamOptions,
+    ) => {
+      const hook = options?.onProviderStreamEvent as (data: unknown) => void | Promise<void>;
+      await hook({ id: "gen-1", provider: "Novita" });
+      await hook({ id: "gen-1", choices: [] });
+      await hook({ provider: "Together" }); // last chunk wins
+      await hook("not-an-object");
+      return successfulResponse();
+    }) as typeof __harness.registryStreamSimple;
+
+    const ctx = contextFor({ ok: true, apiKey: "secret" });
+    const seen: string[] = [];
+    await callLlm(ctx, CFG, "system", "user", {
+      maxTokens: 10,
+      onRouteProvider: (provider) => seen.push(provider),
+    });
+    assert.deepEqual(seen, ["Together"], "the last provider field observed on the successful attempt");
+  });
+
+  it("captures no route when the provider events carry none", async () => {
+    __harness.registryStreamSimple = (async (
+      _registry: unknown,
+      _model: Model<Api>,
+      _context: Context,
+      options?: SimpleStreamOptions,
+    ) => {
+      const hook = options?.onProviderStreamEvent as (data: unknown) => void | Promise<void>;
+      await hook({ id: "gen-1", choices: [] });
+      return successfulResponse();
+    }) as typeof __harness.registryStreamSimple;
+
+    const ctx = contextFor({ ok: true, apiKey: "secret" });
+    const seen: string[] = [];
+    await callLlm(ctx, CFG, "system", "user", {
+      maxTokens: 10,
+      onRouteProvider: (provider) => seen.push(provider),
+    });
+    assert.deepEqual(seen, [], "no provider field: no route delivered, never an error");
   });
 
   it("harvests citations through both channels into one deduplicated sink", async () => {

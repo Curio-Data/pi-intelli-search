@@ -84,7 +84,7 @@ RESEARCH_PROMPT='Use intelli_research with maxUrls=1 and domains=["docs.python.o
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║  RUN 1: Pinned legacy cap 3,000                     ║"
+echo "║  RUN 1: Pinned legacy cap 3,000                      ║"
 echo "║  extractMaxChars=150000  extractionMaxTokens=3000    ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
@@ -226,7 +226,7 @@ DEGRADED_RE="degraded|parseable links|no usable links|no markdown links|returned
 
 if [ -z "$ENTRY_DEFAULT" ]; then
   if echo "${OUTPUT1:-}" | grep -qiE "$DEGRADED_RE"; then
-    echo "⚠️  Default run: search returned 0 URLs (degraded LLM response), not a fetch/extract bug — rerun"
+    echo "⚠️  Cap3000 run: search returned 0 URLs (degraded LLM response), not a fetch/extract bug — rerun"
   else
     echo "❌ No cache entry found in .e2e-extract-default/"
     ERRORS=$((ERRORS + 1))
@@ -243,8 +243,8 @@ if [ -z "$ENTRY_TIGHT" ]; then
 fi
 
 # ── Diagnostic: read source counts from each report ──
-for label in "Default" "Tight"; do
-  if [ "$label" = "Default" ]; then
+for label in "Cap3000" "Tight"; do
+  if [ "$label" = "Cap3000" ]; then
     ENTRY="$ENTRY_DEFAULT"
   else
     ENTRY="$ENTRY_TIGHT"
@@ -289,10 +289,10 @@ if [ -n "$ENTRY_DEFAULT" ] && [ -n "$ENTRY_TIGHT" ]; then
         echo "   Check report.md Blocked/Failed section above for per-URL details."
         echo "   Rerun the test; if it persists, the target URLs may have changed."
       elif [ "$SUCC_DEFAULT" -eq 0 ]; then
-        echo "⚠️  Default run had 0 extractions (fetch failure). Tight run cannot be compared."
+        echo "⚠️  Cap3000 run had 0 extractions (check the report: fetch or extraction-budget failure). Tight run cannot be compared."
         echo "   Rerun the test."
       elif [ "$SUCC_TIGHT" -eq 0 ]; then
-        echo "⚠️  Tight run had 0 extractions (fetch failure). Default run cannot be compared."
+        echo "⚠️  Tight run had 0 extractions (check the report: fetch or extraction-budget failure). Cap3000 run cannot be compared."
         echo "   Rerun the test."
       elif [ -n "$FILE_DEFAULT" ] && [ -z "$FILE_TIGHT" ]; then
         # Pages fetched, but the tight run wrote no extraction file. With a very
@@ -313,7 +313,7 @@ if [ -n "$ENTRY_DEFAULT" ] && [ -n "$ENTRY_TIGHT" ]; then
       CHARS_DEFAULT=$(wc -m < "$FILE_DEFAULT" || echo "0")
       CHARS_TIGHT=$(wc -m < "$FILE_TIGHT" || echo "0")
 
-      echo "📄 Default extraction: ${SIZE_DEFAULT} bytes, ${CHARS_DEFAULT} chars"
+      echo "📄 Cap3000 extraction: ${SIZE_DEFAULT} bytes, ${CHARS_DEFAULT} chars"
       echo "📄 Tight extraction:   ${SIZE_TIGHT} bytes, ${CHARS_TIGHT} chars"
 
       # Tight extraction must be smaller than default
@@ -334,7 +334,7 @@ if [ -n "$ENTRY_DEFAULT" ] && [ -n "$ENTRY_TIGHT" ]; then
 
       # Show first 200 chars of each for manual inspection
       echo ""
-      echo "── Default extraction (first 200 chars) ──"
+      echo "── Cap3000 extraction (first 200 chars) ──"
       head -c 200 "$FILE_DEFAULT" 2>/dev/null || echo "(empty)"
       echo ""
       echo "── Tight extraction (first 200 chars) ──"
@@ -358,7 +358,7 @@ echo ""
 echo "── Report sizes ──"
 if [ -n "$ENTRY_DEFAULT" ] && [ -f "$ENTRY_DEFAULT/report.md" ]; then
   SIZE_RPT_DEFAULT=$(wc -c < "$ENTRY_DEFAULT/report.md")
-  echo "   Default report: ${SIZE_RPT_DEFAULT} bytes"
+  echo "   Cap3000 report: ${SIZE_RPT_DEFAULT} bytes"
 fi
 if [ -n "$ENTRY_TIGHT" ] && [ -f "$ENTRY_TIGHT/report.md" ]; then
   SIZE_RPT_TIGHT=$(wc -c < "$ENTRY_TIGHT/report.md")

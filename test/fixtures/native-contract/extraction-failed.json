@@ -3,14 +3,15 @@
     "content": [
       {
         "type": "text",
-        "text": "3 extraction(s) failed. No content was extracted.\n\nSearch summary:\nFixture answer.\n"
+        "text": "3 extraction(s) failed. No content was extracted.\n\nFailed sources:\n- https://example.com/a: LLM call failed (openrouter/fixture-extract): fixture extraction refused\n- https://example.org/b: LLM call failed (openrouter/fixture-extract): fixture extraction refused\n- https://example.net/c: LLM call failed (openrouter/fixture-extract): fixture extraction refused\n\nSearch summary:\nFixture answer.\n"
       }
     ],
     "details": {
       "cachePath": "",
       "urlsSearched": 3,
       "pagesFetched": 3,
-      "pagesFailed": 0
+      "pagesFailed": 0,
+      "extractionFailed": 3
     }
   },
   "calls": [

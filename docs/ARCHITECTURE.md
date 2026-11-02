@@ -220,15 +220,21 @@ Unless disabled, completed and documented degraded `intelli_research` paths atte
       "succeeded": 8,
       "failed": 0,
       "totalInputCharsApprox": 200000,
-      "totalOutputChars": 16000
+      "totalOutputChars": 16000,
+      "truncated": 1,
+      "failureReasons": { "budgetExhausted": 0, "other": 0 },
+      "provider": "Novita"
     },
     "collate": {
       "model": "...",
-      "summaryChars": 4000
+      "summaryChars": 4000,
+      "truncated": false,
+      "provider": "Novita"
     },
     "cacheSuggest": {
       "ran": true,
       "surfaced": 2,
+      "degraded": false,
       "slugs": [
         "..."
       ]
@@ -238,6 +244,8 @@ Unless disabled, completed and documented degraded `intelli_research` paths atte
 ```
 
 `outcome` is one of `completed`, `no-links`, `fetch-failed`, or `extraction-failed`. `schemaVersion` is decoupled from `extensionVersion` so consumers can branch on payload shape without parsing the product semver. `stages.extract.totalInputCharsApprox` is a lower bound: it sums the truncated page content fed to extraction and excludes the per-call wrapper text, so it understates real input; relative comparisons across runs remain valid. `stages.search.annotationsHarvested` counts `url_citation` entries recovered from the response body; it can include URLs already present in the text and URLs beyond the fetch limit, so it is not the number of extra pages fetched. A zero count does not distinguish a model that emits no annotations from a search that ran and cited nothing; historical records and runs that never reached the search stage omit the field entirely. Standalone `intelli_search` calls do not write this sidecar.
+
+Since 0.20.0 four optional fields record budget diagnostics: `extract.truncated` counts successful extractions whose visible text was cut off at `extractionMaxTokens`; `extract.failureReasons` classifies each failed extraction as `budgetExhausted` (from reported token usage, never by matching provider wording) or `other`; `extract.provider` / `collate.provider` record the serving route when every observed call agreed (the route is route- and page-dependent: the 2026-11-02 investigation pinned exhaustion to one OpenRouter route); and `cacheSuggest.degraded` distinguishes a failed judge (empty, unparseable or thrown) from a valid zero-match verdict. All four are additive and absent on older records.
 
 The file is written atomically (temp file then `rename`) so a crash never leaves a partial `meta.json`, and a best-effort sweep cleans up any `.tmp` orphan left by a prior crashed write. The write is fail-safe: failures are caught and logged, never surfacing to the pipeline result or the agent.
 

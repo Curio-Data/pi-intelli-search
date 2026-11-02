@@ -123,6 +123,12 @@
                 },
                 "status": {
                   "type": "string"
+                },
+                "truncated": {
+                  "type": "boolean"
+                },
+                "error": {
+                  "type": "string"
                 }
               }
             },

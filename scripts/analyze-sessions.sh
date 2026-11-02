@@ -289,6 +289,17 @@ else
           | {succeeded: (map(.succeeded // 0) | add),
               failed: (map(.failed // 0) | add)}' "$tmp_meta" 2>/dev/null
   echo ""
+  echo "extract budget diagnostics (0.20.0+ sidecars; absent on older records):"
+  jq -rs 'map(.stages.extract // {})
+          | {truncatedExtractions: (map(.truncated // 0) | add),
+              budgetExhaustedFailures: (map(.failureReasons.budgetExhausted // 0) | add),
+              otherFailures: (map(.failureReasons.other // 0) | add),
+              runsRecordingProvider: (map(select(.provider != null)) | length),
+              providers: (map(.provider // empty) | group_by(.) | map("\(.[0]): \(length)"))}' "$tmp_meta" 2>/dev/null
+  echo ""
+  echo "cache-judge degradation (0.20.0+ sidecars):"
+  jq -rs '[.[] | select(.stages.cacheSuggest.degraded == true)] | length' "$tmp_meta" 2>/dev/null
+  echo ""
   echo "Defuddle vs Markdown fetch winners (summed across sidecars):"
   jq -rs 'map(.stages.fetch.winners // {})
           | reduce .[] as $obj ({};

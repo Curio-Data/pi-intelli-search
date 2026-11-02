@@ -335,11 +335,17 @@ export function createOpenRouterClient(
           const content = message.content;
           const emptyish =
             content == null || (typeof content === "string" && !content.trim());
-          if (emptyish && choice.finish_reason === "length")
+          if (emptyish && choice.finish_reason === "length") {
+            const reported = usage(data.usage);
+            const counts =
+              reported?.output != null ? ` (${reported.output} output tokens` +
+                (reported.reasoning ? `, ${reported.reasoning} hidden reasoning` : "") + ")" : "";
             throw new Error(
-              "OpenRouter exhausted the output budget without visible text (the cap covers hidden reasoning tokens); " +
+              "OpenRouter exhausted the output budget without visible text" + counts +
+                " (the cap covers hidden reasoning tokens); " +
                 "increase the stage's max-tokens setting (extractionMaxTokens / collationMaxTokens) or choose a model with a smaller reasoning budget",
             );
+          }
           if (typeof content !== "string")
             throw new Error("OpenRouter returned no text completion");
           return {
