@@ -6,6 +6,8 @@ Native `Pi` extension release notes, generated from the repository `CHANGELOG.md
 
 ## [0.21.0] - 2026-11-03
 
+Published on `npm`; [isolated registry installation](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#published-0210-native-package-verification-2026-11-03) passes. The tarball checksum matches registry metadata, the packaged README matches the native release tag, and the tarball ships `PI_CHANGELOG.md` with the manifest's `changelogPath` intact.
+
 ### Changed
 
 - Native `intelli_research` stops retrying recognised _ChatGPT Business_ workspace-cap errors and _Zhipu/Z.ai_ plan-limit errors (code `1308`), even when the message also carries an HTTP `429` status: these limits are not resolved by the short retry loop. The standalone MCP adapter reduces provider error bodies to generic rate-limit text, so it retries these limits until its configured attempts run out, as it already did for `insufficient_quota`.

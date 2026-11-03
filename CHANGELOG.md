@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [pi-0.21.0] - 2026-11-03
 
+Published on `npm`; [isolated registry installation](docs/COMPATIBILITY.md#published-0210-native-package-verification-2026-11-03) passes. The tarball checksum matches registry metadata, the packaged README matches the native release tag, and the tarball ships `PI_CHANGELOG.md` with the manifest's `changelogPath` intact.
+
 ### Changed
 
 - Native `intelli_research` stops retrying recognised _ChatGPT Business_ workspace-cap errors and _Zhipu/Z.ai_ plan-limit errors (code `1308`), even when the message also carries an HTTP `429` status: these limits are not resolved by the short retry loop. The standalone MCP adapter reduces provider error bodies to generic rate-limit text, so it retries these limits until its configured attempts run out, as it already did for `insufficient_quota`.
@@ -20,6 +22,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - On `Pi` 1.5.0, the next fresh launch after a native package update shows newer release notes under Extension Updates; the first time `Pi` sees a package it records the version without showing notes. The native package now ships a generated `PI_CHANGELOG.md` (declared through `pi.changelogPath`) with parseable native release headings and release-tag-pinned links. The canonical `CHANGELOG.md` headings exposed only historical entries to the host parser, so recent updates showed no notes and upgrades from older versions could show stale notes. The README `Pi` install section documents the display and the host's `collapseChangelog` setting.
 
 ## [mcp-0.21.0] - 2026-11-03
+
+Published on `npm`; [clean-profile registry-pin verification](docs/COMPATIBILITY.md#published-0210-registry-pin-verification-2026-11-03) passes.
 
 Core behaviour is shared with [pi-0.21.0] and recorded there, with one reachability limit: the new fail-fast classifications trigger only on the native `Pi` path. The standalone [_OpenRouter_](https://openrouter.ai) adapter discards provider response bodies, so a Zhipu usage-limit or workspace-cap HTTP `429` response surfaces as generic rate-limit text and continues to retry until attempts run out, as `insufficient_quota` already did. This release carries no standalone-specific changes.
 
