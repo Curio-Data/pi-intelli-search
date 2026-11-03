@@ -37,6 +37,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { generateToc, scanHeadings } from "./generate-toc.mjs";
+import { FENCE, closesFence, mapLinks, isExternal } from "./lib/markdown-links.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const REPO_URL = "https://github.com/Curio-Data/pi-intelli-search";
@@ -61,9 +62,6 @@ export const PACKAGES = {
 const OPEN = /^<!-- packages:([a-z,]+) -->$/;
 const OPEN_HIDDEN = /^<!-- packages:([a-z,]+) hidden$/;
 const CLOSE = "<!-- /packages -->";
-const FENCE = /^ {0,3}(`{3,}|~{3,})/;
-const closesFence = (line, fence) =>
-  /^ {0,3}[`~]{3,}\s*$/.test(line) && line.trim()[0] === fence[0] && line.trim().length >= fence.length;
 const IMAGE = /\.(png|svg|webp|jpe?g|gif|avif)$/i;
 
 export function isGenerated(markdown) {
@@ -156,31 +154,6 @@ export function anchorsOf(markdown) {
   for (const match of markdown.matchAll(/<a\s+(?:id|name)="([^"]+)"/g)) anchors.add(match[1]);
   return anchors;
 }
-
-// Apply fn(target) to every link target outside code fences: Markdown links
-// and images, plus HTML href, src and srcset attributes.
-function mapLinks(markdown, fn) {
-  let fence = null;
-  return markdown
-    .split("\n")
-    .map((line) => {
-      if (fence) {
-        if (closesFence(line, fence)) fence = null;
-        return line;
-      }
-      const open = line.match(FENCE);
-      if (open) {
-        fence = open[1];
-        return line;
-      }
-      return line
-        .replace(/\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g, (_, url, title) => `](${fn(url)}${title})`)
-        .replace(/\b(href|src|srcset)="([^"]+)"/g, (_, attr, url) => `${attr}="${fn(url)}"`);
-    })
-    .join("\n");
-}
-
-const isExternal = (url) => /^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith("//");
 
 function rewriteFor(anchors) {
   return (url) => {

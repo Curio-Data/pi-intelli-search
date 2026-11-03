@@ -53,6 +53,27 @@ PKG_ROOT="$TEST_DIR/node_modules/@curio-data/pi-intelli-search"
 INSTALLED_INDEX="$PKG_ROOT/dist/index.js"
 [ -f "$INSTALLED_INDEX" ] || { echo "❌ dist/index.js not found in installed package"; exit 1; }
 
+# The extension-changelog feature resolves pi.changelogPath inside the package
+# root and silently disables itself (no fallback, no warning) when the file is
+# missing from the tarball, so the packed artefact is the only real gate. The
+# manifest must also still declare its extension and skill resources: a broken
+# pi object would unregister the tools with no error anywhere.
+CHANGELOG_PATH=$(jq -r '.pi.changelogPath // "CHANGELOG.md"' "$PKG_ROOT/package.json")
+case "$CHANGELOG_PATH" in
+  /*|*..*) echo "❌ pi.changelogPath escapes the package root: $CHANGELOG_PATH"; exit 1 ;;
+esac
+[ -n "$CHANGELOG_PATH" ] || { echo "❌ pi.changelogPath is empty (feature disabled)"; exit 1; }
+[ -f "$PKG_ROOT/$CHANGELOG_PATH" ] || { echo "❌ packed changelog missing: $PKG_ROOT/$CHANGELOG_PATH"; exit 1; }
+PKG_VERSION=$(jq -r '.version' "$PKG_ROOT/package.json")
+FIRST_HEADING=$(grep -m1 '^## ' "$PKG_ROOT/$CHANGELOG_PATH" | sed 's/^## \[\([0-9.]*\)\].*/\1/')
+[ "$FIRST_HEADING" = "$PKG_VERSION" ] || { echo "❌ newest changelog heading $FIRST_HEADING does not match package version $PKG_VERSION"; exit 1; }
+EXT_COUNT=$(jq -r '.pi.extensions // [] | length' "$PKG_ROOT/package.json")
+[ "$EXT_COUNT" -ge 1 ] || { echo "❌ pi.extensions missing from the packed manifest"; exit 1; }
+for EXT in $(jq -r '.pi.extensions // [] | .[]' "$PKG_ROOT/package.json"); do
+  [ -f "$PKG_ROOT/$EXT" ] || { echo "❌ packed extension entry point missing: $EXT"; exit 1; }
+done
+echo "📋 Packed changelog present: $CHANGELOG_PATH (newest entry $FIRST_HEADING); manifest declares $EXT_COUNT extension(s)"
+
 INSTALLED_VERSION=$(jq -r '.version' "$PKG_ROOT/package.json")
 RESOLVED_PI_AI=$(jq -r '.version' "$TEST_DIR/node_modules/@earendil-works/pi-ai/package.json")
 echo "📋 Installed: @curio-data/pi-intelli-search@$INSTALLED_VERSION (resolved pi-ai@$RESOLVED_PI_AI)"

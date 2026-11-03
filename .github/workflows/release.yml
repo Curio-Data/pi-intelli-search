@@ -122,6 +122,7 @@ jobs:
           npm run check:toc
           npm run check:plugins
           npm run check:readmes
+          npm run check:changelog
           node_modules/.bin/tsc -p test/tsconfig.native-contract.json
 
       - name: Verify both independent tarball installs

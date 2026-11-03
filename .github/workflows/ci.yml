@@ -69,11 +69,14 @@ jobs:
       - name: Verify package READMEs match the root README
         run: npm run check:readmes
 
+      - name: Verify native changelog matches the generator
+        run: npm run check:changelog
+
       - name: Install standalone tarball and exercise native fetch assets
         run: npm run test:mcp:install
 
-      - name: Verify package tarball
-        run: npm pack --dry-run
+      - name: Verify package tarball carries the native changelog
+        run: npm pack --dry-run --json | jq -e '.[0].files[].path | select(. == "PI_CHANGELOG.md")' >/dev/null
 
       - name: Install-fresh smoke test (peer-dep drift guard)
         run: ./test/run-e2e-publish-local.sh

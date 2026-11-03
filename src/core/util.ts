@@ -244,18 +244,23 @@ export async function withRetry<T>(
 // Provider error text that indicates a transient, retryable condition. The
 // OpenRouter path surfaces 429/5xx only as an errorMessage string (no status or
 // headers post-hoc), so classification is necessarily text-based. The lists
-// below mirror Pi 1.3.0's own retry classifier (pi-ai utils/retry.js), which
-// the host applies to its agent-loop calls; this policy owns the extension's
-// pipeline calls and keeps the same coverage, including the 1.3.0 additions
-// ("unable to forward upstream", gateway 520/524) and the quota/billing
-// exclusions that must fail fast instead of consuming the retry budget.
-// Divergences are documented inline: word-bounded status codes (the host
-// pre-filters context overflow; this policy does not) and retained historical
-// extras (raw Node transport codes, the standalone adapter's transient 402
-// wording, and the separator-tolerant busy phrasings).
-// Exported for the parity gate in test/util.test.ts, which diffs these lists
-// against the captured pi-ai 1.3.0 fixture so a future host bump that changes
-// the upstream classifier fails loudly instead of drifting unnoticed.
+// below mirror the audited host's retry classifier (pi-ai utils/retry.js,
+// captured for 1.5.0), which the host applies to its agent-loop calls; this
+// policy owns the extension's pipeline calls and keeps the same coverage,
+// including the quota/billing exclusions that must fail fast instead of
+// consuming the retry budget.
+// Divergences are documented inline: the status-code group is upstream's
+// verbatim and guards digit and letter adjacency on both sides. This policy
+// has no host-side context-overflow pre-filter, so a delimited token count
+// such as "128,500 tokens" can still match and retry (known limitation; bare
+// digit runs like "150293" do not match). Retained historical extras: raw
+// Node transport codes, the standalone adapter's transient 402 wording, and
+// separator-tolerant busy phrasings.
+// Exported for the parity gate in test/util.test.ts, which holds these lists
+// to the captured fixture (test/fixtures/pi-ai-retry-1.5.0.json). The gate
+// does not read the installed host: run
+// scripts/capture-retry-fixture.mjs --check <retry.js> at each host bump to
+// detect upstream drift.
 export const NON_RETRYABLE_LIMIT_PATTERNS = [
   // Subscription or account limits returned as 429 JSON error types. These are
   // permanent for the purposes of a retry loop, not transient throttles.
@@ -272,6 +277,13 @@ export const NON_RETRYABLE_LIMIT_PATTERNS = [
   // Sign in with ChatGPT: the subscription's shared usage limit, which resets
   // after hours rather than seconds.
   "subscription_sharing_usage_limit_exceeded",
+  // Sign in with ChatGPT on a ChatGPT Business plan: a usage limit set by the
+  // workspace admin. Only the admin can raise it.
+  "subscription_sharing_workplace_individual_usage_limit_exceeded",
+  // Zhipu/Z.ai (open.bigmodel.cn) error code 1308: the plan's usage limit is
+  // reached, sent as HTTP 429. It resets after hours, not seconds (pi #11537).
+  // The lookahead keeps a different code such as 13089 from matching.
+  '"code"\\s*:\\s*"?1308(?![0-9])',
 ];
 
 export const RETRYABLE_PATTERNS = [
@@ -283,12 +295,13 @@ export const RETRYABLE_PATTERNS = [
   "model is at capacity",
   "rate.?limit",
   "too many requests",
-  // Deliberate divergence from upstream: the bare status codes keep word
-  // boundaries. The host filters context-overflow errors before classifying,
-  // so upstream can match bare digits; this policy has no such pre-filter, and
-  // an unbounded "502" would retry a permanent context-length error whose
-  // token counts embed a matching run (for example "150293 tokens").
-  "\\b(?:429|500|502|503|504|520|524)\\b",
+  // Status codes, upstream's verbatim form: the lookarounds reject codes
+  // embedded in digits or letters (request ids, token counts such as
+  // "150293 tokens") while still matching delimited ones. Underscore-adjacent
+  // tokens ("HTTP_502_BAD_GATEWAY") match too; that is upstream's accepted
+  // trade. This policy keeps no context-overflow pre-filter, so a delimited
+  // count such as "128,500 tokens" can still retry (known limitation).
+  "(?<![a-z0-9])(?:429|500|502|503|504|520|524)(?![a-z0-9])",
   // Also matches "The service is temporarily unavailable" (pi #10965).
   "service.?(?:is.?)?(?:temporarily.?)?unavailable",
   "server.?error",
@@ -301,6 +314,12 @@ export const RETRYABLE_PATTERNS = [
   // Gateway failure relaying the upstream response stream, sent as an OpenAI
   // Responses `response.failed` event without an error code (pi #10920).
   "unable to forward upstream",
+  // Other gateway upstream failures relayed as `response.failed` error codes
+  // (pi #10920).
+  "upstream.?request.?failed",
+  "upstream_stream_read_error",
+  "stream was interrupted",
+  "http/?2 stream failed",
   // Network, proxy, and fetch transport failures, including raw-fetch failures
   // such as "upstream connect", "connection refused", and "reset before
   // headers" (pi #733), plus OpenRouter connection drops (pi #3317).
@@ -310,6 +329,9 @@ export const RETRYABLE_PATTERNS = [
   "connection.?lost",
   "other side closed",
   "fetch failed",
+  // node-fetch system errors, e.g. the Google ADC OAuth token refresh used by
+  // google-vertex. The reason is often empty (pi #10996).
+  "request to \\S+ failed, reason:",
   "getaddrinfo",
   "ENOTFOUND",
   "EAI_AGAIN",
@@ -342,6 +364,10 @@ export const RETRYABLE_PATTERNS = [
   "stream ended before message_stop",
   "stream ended before a terminal response event",
   "http2 request did not get a response",
+  // Codex CLI mid-stream disconnect, relayed by proxies that wrap the Codex
+  // CLI, e.g. "stream disconnected before completion: stream closed before
+  // response.completed" (pi #11057).
+  "stream disconnected before completion",
   // Node ERR_HTTP2_STREAM_CANCEL: the HTTP/2 session died before the request
   // was sent, for example after the Bedrock SDK's session timeout (pi #10379).
   "pending stream has been canceled",

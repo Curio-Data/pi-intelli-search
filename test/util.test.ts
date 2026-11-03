@@ -3,6 +3,7 @@ import { getAgentDir } from "../src/agent-dir.js";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { parseRetryLists } from "../scripts/capture-retry-fixture.mjs";
 import {
   textContent,
   extractSourceUrls,
@@ -362,9 +363,10 @@ describe("isRetryableMessage", () => {
     "request timed out",
     "ETIMEDOUT",
     "ECONNRESET while reading",
-    // Parity with Pi 1.3.0's own retry classifier (pi-ai utils/retry.js): the
-    // host applies this list to its agent-loop calls; the extension's pipeline
-    // calls own their retry and keep the same coverage.
+    // Parity with the audited host's own retry classifier (pi-ai
+    // utils/retry.js, captured for 1.5.0): the host applies this list to its
+    // agent-loop calls; the extension's pipeline calls own their retry and
+    // keep the same coverage.
     "server_busy",
     "servers are currently busy",
     "error code: server_busy, try again later",
@@ -374,11 +376,26 @@ describe("isRetryableMessage", () => {
     "internal error",
     "HTTP 520",
     "524 gateway timeout",
+    // The status-code group is upstream's lookaround form: underscore-adjacent
+    // tokens match (upstream's accepted trade), digits and letters do not.
+    "HTTP_502_BAD_GATEWAY",
+    "status_503",
+    "Model not found: acme/foo_500",
+    // Known limitation, pinned: this policy has no context-overflow pre-filter,
+    // so a delimited token count still matches the status group and retries.
+    "This model's maximum context length is 128,500 tokens. However, you requested 2000 tokens.",
     // Gateway and wrapper wording for transient upstream failures.
     "Unable to forward upstream stream",
     "Provider returned error",
     "The upstream provider returned an error",
     "exceeded request buffer limit while retrying upstream",
+    // Gateway upstream failures relayed as response.failed error codes (pi
+    // #10920) and the Codex mid-stream disconnect (pi #11057).
+    "upstream request failed",
+    "upstream_stream_read_error",
+    "stream was interrupted",
+    "http/2 stream failed",
+    "stream disconnected before completion: stream closed before response.completed",
     // Network, proxy and fetch transport failures.
     "network error",
     "connection error",
@@ -386,6 +403,9 @@ describe("isRetryableMessage", () => {
     "connection lost",
     "other side closed",
     "fetch failed",
+    // The reason is often empty (upstream pi #10996); this form discriminates
+    // because nothing else in the message matches a retryable pattern.
+    "request to https://oauth2.googleapis.com/token failed, reason: certificate has expired",
     "getaddrinfo ENOTFOUND api.openrouter.ai",
     "upstream connect error or disconnect/reset before headers",
     "socket hang up",
@@ -406,26 +426,50 @@ describe("isRetryableMessage", () => {
     "The server is currently busy",
     "server busy, try later",
     "server-busy",
+    // The Zhipu 1308 lookahead keeps a different code (13089) from matching,
+    // so this stays retryable through its 429 status; the escaped body alone
+    // (no unescaped 1308 JSON) also stays retryable: the fail-fast pattern
+    // depends on the native path's unescaped raw append, not the formatted
+    // body.
+    "429 {\"code\":13089}",
+    "429 {\"message\":\"escaped body \\\"code\\\":\\\"1308\\\" only\"}",
   ];
   const nonRetryable = [
     "No API key for openrouter/x. Run /login.",
     "Model not found: openrouter/minimax/M3.7",
     "invalid_request_error: max_tokens too large",
     // Permanent errors whose digit runs would match unbounded status patterns:
-    // the host pre-filters context overflow before classifying, this policy
-    // does not, so the status codes stay word-bounded.
+    // the lookaround form (upstream's) rejects codes embedded in digits or
+    // letters, so these stay non-retryable without a context pre-filter.
     "invalid_request_error: max_tokens 5000 exceeds limit 4096",
     "This model's maximum context length is 128000 tokens. However, you requested 150293 tokens.",
     "Error code: 400 - prompt too long: 205000 tokens > 200000",
     "Model not found: openrouter/x (id gen-1729429500)",
+    // Codes embedded in digits or letters never match, under the lookaround
+    // form as under the previous word-bound form.
+    "id_429x",
+    "x429_",
+    "A429",
+    "4290",
     // Quota, budget and billing exhaustion is permanent: it must fail fast
     // even when the message also carries a retryable-looking 429 status.
     "Error code: 429 - insufficient_quota",
     "HTTP 429: quota exceeded",
-    "out of budget",
-    "Monthly usage limit reached; enable available balance usage to continue",
-    "subscription_sharing_usage_limit_exceeded",
-    "FreeUsageLimitError",
+    // Quota exhaustion must fail fast even when the same message carries a
+    // retryable-looking status; one pattern per case so each discriminates.
+    "429 out of budget",
+    "429 Monthly usage limit reached; please upgrade the plan",
+    "429 enable available balance usage to continue",
+    "429 subscription_sharing_usage_limit_exceeded",
+    "429 FreeUsageLimitError",
+    // ChatGPT Business workspace admin cap and the Zhipu/Z.ai plan usage
+    // limit (HTTP 429 resetting after hours, pi #11537): the fail-fast list
+    // must win over the retryable status text in the same message.
+    "429 subscription_sharing_workplace_individual_usage_limit_exceeded",
+    "429 {\"error\":{\"code\":\"1308\",\"message\":\"Usage limit reached for 5 hour.\"}}",
+    // The native OpenRouter path appends error.error.metadata.raw unescaped,
+    // so the pattern sees the raw JSON even when the formatted body escapes it.
+    "429: {\"message\":\"Provider returned error\",\"code\":429,\"metadata\":{\"raw\":\"{\\\"error\\\":{\\\"code\\\":\\\"1308\\\"...}\"}}\n{\"error\":{\"code\":\"1308\"}}",
     "",
     undefined,
   ];
@@ -442,23 +486,22 @@ describe("isRetryableMessage", () => {
   }
 });
 
-describe("retry classifier parity with the captured pi-ai 1.3.0 fixture", () => {
+describe("retry classifier parity with the captured pi-ai 1.5.0 fixture", () => {
   // The fixture is a machine capture of the upstream classifier lists from the
-  // installed pi-ai 1.3.0 dist/utils/retry.js (comment lines excluded). A host
-  // bump that changes the upstream classifier fails here loudly instead of
-  // drifting unnoticed; update the fixture deliberately, with the release
-  // audit, when that happens.
+  // installed pi-ai 1.5.0 dist/utils/retry.js (scripts/capture-retry-fixture.mjs).
+  // This gate holds the extension lists to that capture; it does not read the
+  // installed host, so a host bump cannot fail here by itself. Run
+  // scripts/capture-retry-fixture.mjs --check <retry.js> during every host-bump
+  // audit, and recapture the fixture deliberately when upstream drifts.
   const fixture = JSON.parse(
-    readFileSync(new URL("./fixtures/pi-ai-retry-1.3.0.json", import.meta.url), "utf8"),
+    readFileSync(new URL("./fixtures/pi-ai-retry-1.5.0.json", import.meta.url), "utf8"),
   ) as { nonRetryable: string[]; retryable: string[] };
 
-  // Deliberate divergences, documented inline in src/core/util.ts: the host
-  // pre-filters context overflow before classifying, so it can match bare
-  // status digits; this policy word-bounds them instead.
-  const UPSTREAM_BARE_CODES = ["429", "500", "502", "503", "504", "520", "524"];
-  const BOUNDED_CODES = "\\b(?:429|500|502|503|504|520|524)\\b";
+  // Deliberate divergences, documented inline in src/core/util.ts: retained
+  // historical extras beyond the upstream list (raw Node transport codes, the
+  // standalone adapter's transient 402 wording, separator-tolerant busy
+  // phrasings). The status-code group is upstream's verbatim lookaround form.
   const DOCUMENTED_EXTRAS = [
-    BOUNDED_CODES,
     "ETIMEDOUT",
     "ECONNRESET",
     "ECONNREFUSED",
@@ -471,22 +514,50 @@ describe("retry classifier parity with the captured pi-ai 1.3.0 fixture", () => 
     assert.deepStrictEqual(NON_RETRYABLE_LIMIT_PATTERNS, fixture.nonRetryable);
   });
 
-  it("every upstream retryable pattern is present, with bare codes word-bounded", () => {
+  it("every upstream retryable pattern is present, including the lookaround status group", () => {
     for (const pattern of fixture.retryable) {
-      if (UPSTREAM_BARE_CODES.includes(pattern)) {
-        assert.ok(
-          RETRYABLE_PATTERNS.includes(BOUNDED_CODES),
-          `bounded group covers upstream bare code ${pattern}`,
-        );
-      } else {
-        assert.ok(RETRYABLE_PATTERNS.includes(pattern), `missing upstream pattern: ${pattern}`);
-      }
+      assert.ok(RETRYABLE_PATTERNS.includes(pattern), `missing upstream pattern: ${pattern}`);
     }
   });
 
   it("divergences from upstream are exactly the documented extras", () => {
     const extras = RETRYABLE_PATTERNS.filter((p) => !fixture.retryable.includes(p));
     assert.deepStrictEqual(extras, DOCUMENTED_EXTRAS);
+  });
+});
+
+describe("capture-retry-fixture script", () => {
+  const SYNTHETIC = [
+    "// Build the pattern lists. A comment with \"quoted text\" and `])` inside.",
+    "const NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN = buildProviderErrorPattern([",
+    "    // Comment \"with quotes\" and a (?![0-9]) lookahead.",
+    "    'GoUsageLimitError',",
+    `    '"code"\\\\s*:\\\\s*"?1308(?![0-9])',`,
+    "]);",
+    "const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([",
+    "    \"overloaded\",",
+    "    \"(?<![a-z0-9])(?:429|500)(?![a-z0-9])\",",
+    "]);",
+  ].join("\n");
+
+  it("parses single-quoted literals, patterns containing ]), and comments with quotes", () => {
+    const lists = parseRetryLists(SYNTHETIC);
+    assert.deepStrictEqual(lists.nonRetryable, [
+      "GoUsageLimitError",
+      String.raw`"code"\s*:\s*"?1308(?![0-9])`,
+    ]);
+    assert.deepStrictEqual(lists.retryable, [
+      "overloaded",
+      "(?<![a-z0-9])(?:429|500)(?![a-z0-9])",
+    ]);
+  });
+
+  it("fails hard on a missing declaration and a non-literal element", () => {
+    assert.throws(() => parseRetryLists("const X = 1;"), /declaration not found/);
+    assert.throws(
+      () => parseRetryLists("const NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN = buildProviderErrorPattern([f()]);"),
+      /non-literal element/,
+    );
   });
 });
 
