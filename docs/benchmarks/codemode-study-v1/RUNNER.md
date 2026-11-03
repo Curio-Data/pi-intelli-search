@@ -1,6 +1,6 @@
 # Study Runner
 
-Revision: `runner-v2`. The driver executes the branch-only experiment on pinned `Pi` 1.4.0. It is not the historical end-to-end harness or a release gate. `scripts/benchmarks/study.ts` is the entrypoint; `study-runner.ts` owns one actual session, and `study-transports.ts` captures or replays the pipeline beneath its real policy and accounting.
+Revision: `runner-v3`. The driver executes the branch-only experiment on pinned `Pi` 1.4.0. It is not the historical end-to-end harness or a release gate. `scripts/benchmarks/study.ts` is the entrypoint; `study-runner.ts` owns one actual session, and `study-transports.ts` captures or replays the pipeline beneath its real policy and accounting.
 
 ## Execution Scope
 
@@ -31,6 +31,16 @@ Check the pinned host, prescribed model availability and design hashes without m
 ```bash
 node --import tsx scripts/benchmarks/study.ts --check
 ```
+
+If the managed installation advances while the study remains pinned, select the retained release explicitly. The version check still refuses any other host, and the run records `explicit-root` provenance:
+
+```bash
+node --import tsx scripts/benchmarks/study.ts \
+  --host-root ~/.pi/agent/install/releases/1.4.0/node_modules/@earendil-works/pi-coding-agent \
+  --check
+```
+
+Pass the same `--host-root` option to capture, replay and live commands in that source-frozen series. Do not change the managed installation's current-version file to continue a study.
 
 Initialise the programme ledger once, after reviewing the baseline. An existing directory refuses rather than resetting it:
 

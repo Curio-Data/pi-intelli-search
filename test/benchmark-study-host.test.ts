@@ -32,6 +32,7 @@ import {
   readRepositoryIdentity,
   reportLoadedDependencies,
   resolveManagedHostRoot,
+  resolveStudyHostSelection,
   runBoundedPrompt,
   saveRunObservations,
   scanRunForCredentials,
@@ -526,6 +527,22 @@ it("refuses a wrong host, foreign package or missing model, with no fallback", a
   assert.equal(
     await resolveManagedHostRoot(agentDir),
     join(agentDir, "install/releases/9.9.9/node_modules/@earendil-works/pi-coding-agent"),
+  );
+  const explicit = await resolveStudyHostSelection({
+    installedAgentDir: agentDir,
+    explicitRoot: selection.root,
+    expectedVersion: selection.version,
+  });
+  assert.equal(explicit.root, selection.root);
+  assert.equal(explicit.source, "explicit-root");
+  assert.equal(explicit.launcher, null);
+  await assert.rejects(
+    resolveStudyHostSelection({
+      installedAgentDir: agentDir,
+      explicitRoot: " ",
+      expectedVersion: selection.version,
+    }),
+    /must not be empty/,
   );
   await writeFile(join(agentDir, "install/current-version"), "../escape\n");
   await assert.rejects(resolveManagedHostRoot(agentDir), StudyRefusalError);

@@ -32,7 +32,7 @@
 import { execFile } from "node:child_process";
 import { open, readFile, readdir } from "node:fs/promises";
 import { registerHooks } from "node:module";
-import { dirname, join, sep } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { asJson, canonicalJson, sha256Bytes, sha256Canonical } from "./canonical.js";
@@ -128,6 +128,30 @@ export async function selectStudyHost(options: {
     source: options.source,
     launcher: options.launcher ?? null,
   };
+}
+
+/** Selects the pinned release explicitly when the managed install advances mid-study. */
+export async function resolveStudyHostSelection(options: {
+  readonly installedAgentDir: string;
+  readonly explicitRoot?: string;
+  readonly expectedVersion: string | null;
+}): Promise<StudyHostSelection> {
+  if (options.explicitRoot !== undefined) {
+    if (options.explicitRoot.trim() === "")
+      throw new StudyRefusalError("The explicit host root must not be empty");
+    return selectStudyHost({
+      root: resolve(options.explicitRoot),
+      source: "explicit-root",
+      expectedVersion: options.expectedVersion,
+      launcher: null,
+    });
+  }
+  return selectStudyHost({
+    root: await resolveManagedHostRoot(options.installedAgentDir),
+    source: "managed-install",
+    expectedVersion: options.expectedVersion,
+    launcher: join(options.installedAgentDir, "bin/pi"),
+  });
 }
 
 export interface ModuleLoadRecorder {

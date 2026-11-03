@@ -11,7 +11,7 @@ import { openStudySpendLedger, PROGRAMME_SPEND_ROOT } from "./study-budget.js";
 import { readStudyDesign, studyPipelineSettings, STUDY_PHASE_FORECAST, STUDY_REMAINING_PLANNED_USD } from "./study-design.js";
 import { loadStudyReplayBundle } from "./study-transports.js";
 import { runStudyTask, importStudyNative, REPO_ROOT, type StudyRunMode } from "./study-runner.js";
-import { resolveManagedHostRoot, selectStudyHost, importStudyHost, installModuleLoadRecorder, reportLoadedDependencies, readRepositoryIdentity, readCredentialFileState, scanRunForCredentials, writeNewJson, PINNED_HOST_VERSION, STUDY_MAIN_MODEL } from "./study-host.js";
+import { resolveStudyHostSelection, importStudyHost, installModuleLoadRecorder, reportLoadedDependencies, readRepositoryIdentity, readCredentialFileState, scanRunForCredentials, writeNewJson, PINNED_HOST_VERSION, STUDY_MAIN_MODEL } from "./study-host.js";
 import { sha256Canonical, asJson } from "./canonical.js";
 import { mulberry32 } from "./statistics.js";
 import { analyseStudySeries, assertSeriesInventoryComplete } from "./study-series.js";
@@ -25,7 +25,7 @@ export async function studyMain(argv=process.argv.slice(2)):Promise<void>{
     analyse:{type:"string"},"rerun-of":{type:"string"},"rerun-reason":{type:"string"},"rerun-series":{type:"string"},
     series:{type:"string"},task:{type:"string"},mode:{type:"string",default:"replay"},
     arm:{type:"string",default:"off"},pair:{type:"boolean",default:false},bundle:{type:"string"},
-    repeat:{type:"string",default:"1"},seed:{type:"string",default:"20261102"},order:{type:"string"},
+    repeat:{type:"string",default:"1"},seed:{type:"string",default:"20261102"},order:{type:"string"},"host-root":{type:"string"},
   }});
   if (values.analyse) {
     if (!values.series || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(values.series) || !["development", "pilot"].includes(values.analyse)) throw new Error("Offline analysis requires --series and --analyse development|pilot");
@@ -44,7 +44,7 @@ export async function studyMain(argv=process.argv.slice(2)):Promise<void>{
   Object.assign(process.env,{PI_OFFLINE:"1",PI_SKIP_VERSION_CHECK:"1",PI_TELEMETRY:"0"});
   const modules=installModuleLoadRecorder();
   const agentDir=process.env.PI_CODING_AGENT_DIR??join(homedir(),".pi/agent");
-  const selection=await selectStudyHost({root:await resolveManagedHostRoot(agentDir),source:"managed-install",expectedVersion:PINNED_HOST_VERSION,launcher:join(agentDir,"bin/pi")});
+  const selection=await resolveStudyHostSelection({installedAgentDir:agentDir,explicitRoot:values["host-root"],expectedVersion:PINNED_HOST_VERSION});
   const host=await importStudyHost(selection);
   await importStudyNative(selection);
   const loadedBefore=await reportLoadedDependencies({urls:modules.urls(),hostRoot:selection.root,repoRoot:REPO_ROOT});

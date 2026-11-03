@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "study": "codemode-study-v1",
-  "revision": "manifest-v1-r5-prepilot",
+  "revision": "manifest-v1-r6-prepilot",
   "recordedUtc": "2026-11-02T17:49:03Z",
-  "reboundUtc": "2026-11-02T19:19:45Z",
-  "revisionNote": "Preserves the failed first development capture and its reported charge. Corrects allocation-witness classification, raises collation allowance equally in both arms, and records cross-series technical-rerun provenance. Corpus, calibration inputs, historical baseline, models, reasoning, source budgets and token endpoint are unchanged. Human verdicts remain sanity checks only.",
+  "reboundUtc": "2026-11-03T07:47:09Z",
+  "revisionNote": "Adds an explicit pinned-host root option so a managed-host upgrade cannot change the study host mid-programme. The comparison protocol, corpus, calibration inputs, historical baseline, models, reasoning, source budgets and token endpoint are unchanged. Previous series retain their original host and source identities.",
   "status": "pre-pilot driver candidate; independent measured-series execution requires its later freeze",
   "revisionPolicy": "Pre-pilot drafts may rebind before capture. Each executed series binds exact source commit and input hashes; no existing run is relabelled when a later draft changes.",
   "authority": {
@@ -19,7 +19,7 @@
     {"path": "SCHEDULE.md", "sha256": "2b1564302ae50e178b5170fb02c09cc73fca600fd1baa9466ffba4b967aa4672", "revision": "schedule-v1-r4-prepilot"},
     {"path": "SPEND-BASELINE.json", "sha256": "b3dffbba4cd500a19247be505f619545d71675948c52191070b4f4afd58deea3", "revision": "spend-baseline-3"},
     {"path": "CALIBRATION-REVIEW.md", "sha256": "ce81efe7b224f7e99e633d192a5f831375b34fe251316d409896723a09c30562", "revision": "calibration-review-v1-r3"},
-    {"path": "RUNNER.md", "sha256": "d5e1f3004aea967581a23b4e8ff831be7fc5aa143135456b15a67a951ecc40cc", "revision": "runner-v2"}
+    {"path": "RUNNER.md", "sha256": "f08a834b816f15ff04aeec89632ea2c75b93dfc78974ad0f4f11771450d279b6", "revision": "runner-v3"}
   ],
   "historicalInputsUnchanged": {
     "oldCorpusManifest": "docs/benchmarks/corpus/manifest.json",
