@@ -13,11 +13,11 @@
     },
     {
       "path": "derived/analysis.json",
-      "sha256": "a7d57ecd006a32ab30a4d71b4899de618c4e0bed9cec020dfeaa8f7ec3bb89fe"
+      "sha256": "5037105858ebbfe27cd3c1a00896e1544b6d3641408c7c6f6473bcc9bfdf99aa"
     },
     {
       "path": "derived/effects.csv",
-      "sha256": "24ef85756662515f770a04d5f9d450c047c236b4e915d795289036594fda13df"
+      "sha256": "2bbc4260fae9b8330d8d797e71455a73d135525de74783fe5c0971e35991ba59"
     },
     {
       "path": "earlier-failure.json",

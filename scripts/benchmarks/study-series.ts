@@ -4,11 +4,11 @@
 import { readFile, mkdir, readdir, lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { reproduceAnalysis, type StudyAnalysisRun, type StudyDataset } from "./study-analysis.js";
+import { declaredTaskOutcomeIssues, reproduceAnalysis, type StudyAnalysisRun, type StudyDataset } from "./study-analysis.js";
 import type { StudyTask } from "./study-design.js";
 import { writeNewJson } from "./study-host.js";
 import { studyTreeDigest, REPO_ROOT } from "./study-runner.js";
-import { applyQualityScores, humanCalibrationApproved } from "./study-quality.js";
+import { applyQualityScores, humanCalibrationApproved, visibleAnswerTurns } from "./study-quality.js";
 import { observeToolCatalogue } from "./observer.js";
 import { asJson } from "./canonical.js";
 
@@ -26,10 +26,10 @@ export async function assertSeriesInventoryComplete(seriesRoot: string, observed
 }
 
 /** Offline development/pilot export. No relabelling into the measured partition. */
-export async function analyseStudySeries(seriesRoot: string, partition: "development" | "pilot") {
+export async function analyseStudySeries(seriesRoot: string, partition: "development" | "pilot" | "measured-series") {
   const series = JSON.parse(await readFile(join(seriesRoot,"series.json"),"utf8")) as {
     candidateCommit:string;
-    design:{methodSha256:string;corpusSha256:string;tasks:StudyTask[]};
+    design:{methodSha256:string;corpusSha256:string;tasks:StudyTask[];measuredSeries?:{population?:{replayPrimaryQueryIds?:string[];manualReplayQueryIds?:string[]};quality?:{meaningfulLossMargin?:number}}|null};
   };
   const runs = (await readFile(join(seriesRoot,"observations.ndjson"),"utf8")).split("\n").filter(Boolean).map((line)=>JSON.parse(line) as StudyAnalysisRun);
   await assertSeriesInventoryComplete(seriesRoot,runs.map((run)=>run.runId));
@@ -62,7 +62,15 @@ export async function analyseStudySeries(seriesRoot: string, partition: "develop
     const known=Boolean(first&&observed.every((item)=>item.status==="observed"&&item.sha256===first.sha256));
     const derived=first?.sha256??run.toolCatalogueSha256;
     if(known&&derived!==run.toolCatalogueSha256)metadataCorrections.push({runId:run.runId,field:"toolCatalogueSha256",recorded:run.toolCatalogueSha256,derived,sourceFileSha256:createHash("sha256").update(text).digest("hex")});
-    normalisedRuns.push({...run,toolCatalogueSha256:derived,toolCatalogueObserved:known});
+    const answerText=await readFile(join(seriesRoot,run.runId,"answers.json"),"utf8");
+    const finalAnswerCount=visibleAnswerTurns(JSON.parse(answerText)).length;
+    const answerDelivered=run.answerDelivered??finalAnswerCount>0;
+    const outcomeText=await readFile(join(seriesRoot,run.runId,"outcome.json"),"utf8");
+    const outcome=JSON.parse(outcomeText) as {status:string;errors:string[];promptOutcomes:{settlement:string}[]};
+    const validTaskOutcome=run.validTaskOutcome??(outcome.status==="failed"&&outcome.promptOutcomes.every((prompt)=>prompt.settlement==="resolved")&&finalAnswerCount===outcome.promptOutcomes.length&&declaredTaskOutcomeIssues(outcome.errors));
+    if(run.answerDelivered===undefined)metadataCorrections.push({runId:run.runId,field:"answerDelivered",recorded:"undefined",derived:String(answerDelivered),sourceFileSha256:createHash("sha256").update(answerText).digest("hex")});
+    if(run.validTaskOutcome===undefined)metadataCorrections.push({runId:run.runId,field:"validTaskOutcome",recorded:"undefined",derived:String(validTaskOutcome),sourceFileSha256:createHash("sha256").update(outcomeText).digest("hex")});
+    normalisedRuns.push({...run,toolCatalogueSha256:derived,toolCatalogueObserved:known,answerDelivered,validTaskOutcome});
   }
   const quality=await applyQualityScores(seriesRoot,normalisedRuns);
   const scored=quality.judgeCounts.some((count)=>count>0);
@@ -71,9 +79,9 @@ export async function analyseStudySeries(seriesRoot: string, partition: "develop
   const qualityManifest=await readFile(join(seriesRoot,"quality-v1","manifest.json"),"utf8").catch((error:NodeJS.ErrnoException)=>{if(error.code==="ENOENT")return null;throw error;});
   if(qualityManifest&&(JSON.parse(qualityManifest) as {partition?:string}).partition!==partition)throw new Error("Quality packet partition differs from the requested analysis");
   const queryIds=series.design.tasks.filter((task)=>task.partition===partition).map((task)=>task.id);
-  const population={queryIds,repeats:partition==="pilot"?[1,2]:[1]};
+  const population={queryIds,repeats:partition==="development"?[1]:[1,2]};
   const gatedRuns=approved?quality.runs:quality.runs.map((run)=>({...run,qualityJudge1:null,qualityJudge2:null}));
-  const dataset:StudyDataset={schemaVersion:1,design:{methodSha256:series.design.methodSha256,corpusSha256:series.design.corpusSha256,candidateCommit:series.candidateCommit,analysisPartition:partition,populations:{replay:population,live:population},bootstrapSeed:20261102,bootstrapDraws:10_000,confidence:0.95,humanCalibrationApproved:approved},runs:gatedRuns,...(qualityManifest?{quality:{manifestSha256:createHash("sha256").update(qualityManifest).digest("hex"),judges:quality.judgeIds,records:approved?quality.records:[],disagreements:approved?quality.disagreements:[],calibration:approved?quality.calibration:[]}}:{}),metadataCorrections};
+  const dataset:StudyDataset={schemaVersion:1,design:{methodSha256:series.design.methodSha256,corpusSha256:series.design.corpusSha256,candidateCommit:series.candidateCommit,analysisPartition:partition,populations:{replay:{...population,replayPrimaryQueryIds:series.design.measuredSeries?.population?.replayPrimaryQueryIds,manualReplayQueryIds:series.design.measuredSeries?.population?.manualReplayQueryIds},live:population},bootstrapSeed:20261102,bootstrapDraws:10_000,confidence:0.95,qualityLossMargin:series.design.measuredSeries?.quality?.meaningfulLossMargin??0.5,humanCalibrationApproved:approved},runs:gatedRuns,...(qualityManifest?{quality:{manifestSha256:createHash("sha256").update(qualityManifest).digest("hex"),judges:quality.judgeIds,records:approved?quality.records:[],disagreements:approved?quality.disagreements:[],calibration:approved?quality.calibration:[]}}:{}),metadataCorrections};
   const stamp=new Date().toISOString().replace(/[-:.]/g,"");
   const datasetPath=join(seriesRoot,`dataset-${partition}-${stamp}.json`);
   const output=join(seriesRoot,`analysis-${partition}-${stamp}`);

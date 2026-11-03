@@ -17,7 +17,7 @@ import { createStudyLimits, summariseAttemptCharges, attemptHoldUsd, type StudyS
 import { createStudyCapture, createStudyReplay, studyBundleSha256, type StudyCapture, type StudyReplay, type StudyReplayBundle, type StudyCaptureOptions } from "./study-transports.js";
 import { createStudyPlan, studyPipelineSettings, studyPrompts, STUDY_SYSTEM_PROMPT, type StudyTask } from "./study-design.js";
 import { createStudyRecorder, openStudySession, runBoundedPrompt, saveRunObservations, writeNewJson, writeRunManifest, readRepositoryIdentity, STUDY_MAIN_MODEL, type StudyHostModule, type StudyHostSelection, type StudyExtensionFactory, type StudySessionHandle, type RunAssessment } from "./study-host.js";
-import type { StudyAnalysisRun } from "./study-analysis.js";
+import { declaredTaskOutcomeIssues, type StudyAnalysisRun } from "./study-analysis.js";
 
 export const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 export type StudyRunMode = "capture" | "replay" | "live";
@@ -330,6 +330,9 @@ export async function runStudyTask(options: StudyRunOptions): Promise<StudyRunRe
   const interrupted = options.signal?.aborted || promptOutcomes.some((outcome) => ["cancelled", "timed-out", "abort-unsettled"].includes(outcome.settlement));
   const status:StudyAnalysisRun["status"]=collector.requestWindows===0&&captureAttempts.length===0?"not-started":interrupted?"aborted":errors.length?"failed":"completed";
   const answers=collector.sessionEvents.flatMap((e)=>record(e)&&e.type==="message_end"&&record(e.message)&&e.message.role==="assistant"?[e.message]:[]);
+  const finalAnswerCount=answers.filter((message)=>message.stopReason==="stop"&&Array.isArray(message.content)&&message.content.some((part:unknown)=>record(part)&&part.type==="text"&&typeof part.text==="string"&&part.text.trim()!=="")).length;
+  const answerDelivered=finalAnswerCount>0;
+  const validTaskOutcome=errors.length>0&&promptOutcomes.length===prompts.length&&promptOutcomes.every((outcome)=>outcome.settlement==="resolved")&&finalAnswerCount===prompts.length&&declaredTaskOutcomeIssues(errors);
   await writeNewJson(join(runDir,"answers.json"),answers);
   await writeNewJson(join(runDir,"tool-events.json"),toolEvents);
   await writeNewJson(join(runDir,"pipeline.json"),{attempts:[...attempts.values()],accounting:ledger.summary(),operations:[...dataByOperation.values()],newCash:options.mode==="replay"?{reportedUsd:0,unknownUsd:0}:charges});
@@ -346,7 +349,7 @@ export async function runStudyTask(options: StudyRunOptions): Promise<StudyRunRe
     observerComplete:collector.observer.complete,mainUsage:main.usage,pipelineUsage:ledger.summary(),reportedPipelineUsd:options.mode==="replay"?0:charges.missingCharges?null:charges.reportedUsd,estimatedPipelineUsd:null,
     subscriptionQuota:asJson(collector.providerResponses.map((p)=>p.visibleHeaders)),artifacts:[],...(errors.length?{error:errors.join("; ")} : {}),
     population:options.mode==="live"?"live":"replay",partition:options.task.partition,workflow:options.task.workflow,
-    mainUsageComplete:main.uncachedComplete,mainInputTotalComplete:main.totalComplete,returnedMs:durationMs,qualityJudge1:null,qualityJudge2:null,
+    mainUsageComplete:main.uncachedComplete,mainInputTotalComplete:main.totalComplete,returnedMs:durationMs,qualityJudge1:null,qualityJudge2:null,answerDelivered,validTaskOutcome,
   };
   const manifest=await writeRunManifest(runDir);
   const bound={...observation,artifacts:[{path:manifest.path,sha256:manifest.sha256},{path:captureRoot,sha256:await studyTreeDigest(captureRoot)}]};

@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "study": "codemode-study-v1",
-  "revision": "corpus-v1-r3",
-  "purpose": "Frozen public inputs for the research-first Codemode off/on comparison; no fixture capture, human gold acceptance, paid run or powered sample claimed",
+  "revision": "corpus-v2-r4-owner-expanded",
+  "purpose": "Frozen public inputs for the research-first Codemode off/on comparison; task text and exposure labels are not measured results or human gold answers",
   "workflowTypes": ["single", "breadth", "manual", "followup"],
   "partitions": ["development", "pilot", "measured-series", "reserve"],
   "provenanceRule": "Every item names retained (old corpus identifier) or fresh (composed for this study). Retained items keep their original exposure status; they are never relabelled unseen. Fresh items were composed without web search.",
@@ -468,7 +468,7 @@
     },
     {
       "id": "CS-RES-01",
-      "partition": "reserve",
+      "partition": "measured-series",
       "workflow": "single",
       "provenance": {"origin": "fresh", "basis": "composed reserve material; used only by a later owner-approved revision"},
       "query": "Explain the documented structure of a pnpm workspace manifest and how dependency hoisting is configured.",
@@ -482,7 +482,7 @@
     },
     {
       "id": "CS-RES-02",
-      "partition": "reserve",
+      "partition": "measured-series",
       "workflow": "single",
       "provenance": {"origin": "fresh", "basis": "composed reserve material"},
       "query": "Explain the documented rules for null and absent values in the JSONata query language.",
@@ -496,7 +496,7 @@
     },
     {
       "id": "CS-RES-03",
-      "partition": "reserve",
+      "partition": "measured-series",
       "workflow": "breadth",
       "provenance": {"origin": "fresh", "basis": "composed reserve material"},
       "query": "Explain Kubernetes ingress routing, TLS termination and path rewriting.",
@@ -514,7 +514,7 @@
     },
     {
       "id": "CS-RES-04",
-      "partition": "reserve",
+      "partition": "measured-series",
       "workflow": "breadth",
       "provenance": {"origin": "fresh", "basis": "composed reserve material"},
       "query": "Explain static analysis, automatic fixing and rule configuration in Stylelint.",
@@ -532,7 +532,7 @@
     },
     {
       "id": "CS-RES-05",
-      "partition": "reserve",
+      "partition": "measured-series",
       "workflow": "manual",
       "provenance": {"origin": "fresh", "basis": "composed reserve material"},
       "query": "Compare documented approaches to background jobs and scheduled tasks in GitHub Actions workflows.",
@@ -556,7 +556,7 @@
     },
     {
       "id": "CS-RES-06",
-      "partition": "reserve",
+      "partition": "measured-series",
       "workflow": "manual",
       "provenance": {"origin": "fresh", "basis": "composed reserve material"},
       "query": "Compare Trino's documented configuration for legacy-syntax strictness and migration, and state what each step changes.",
@@ -580,7 +580,7 @@
     },
     {
       "id": "CS-RES-07",
-      "partition": "reserve",
+      "partition": "measured-series",
       "workflow": "followup",
       "provenance": {"origin": "fresh", "basis": "composed reserve material"},
       "query": "Explain HTTP caching directives, then answer a follow-up about revalidation strategies from the saved report.",
@@ -599,7 +599,7 @@
     },
     {
       "id": "CS-RES-08",
-      "partition": "reserve",
+      "partition": "measured-series",
       "workflow": "followup",
       "provenance": {"origin": "fresh", "basis": "composed reserve material"},
       "query": "Explain linked worktrees in Git, then answer a follow-up about cleaning them up from the saved report.",
@@ -633,7 +633,7 @@
     "rule": "Historical hashes and exposure labels are never rewritten; this file is a new versioned corpus, not an edit of the old one"
   },
   "confirmation": {
-    "status": "declared population; sample sizes and margins freeze at the post-pilot series freeze (see PROTOCOL.md), not here",
+    "status": "owner-approved 20-task population; measured-series-2 expands the original 12 with all 8 reserve rows without relabelling exposure",
     "expansionRule": "Adjustments before capture require a new manifest revision; never relabel exposed material as unseen"
   }
 }

@@ -1,6 +1,6 @@
 # Codemode Study v1 Protocol
 
-Revision: `study-v1-r6-postpilot`. Status: pilot observations are retained; independent measured-series execution remains subject to the post-pilot freeze. Authority: [Owner Decisions](../../plans/codemode/OWNER-REFOCUS.md) (2 November 2026), [Research Plan](../../plans/codemode/RESEARCH-PLAN.md), [Resume](../../plans/codemode/RESUME.md). This protocol supersession note: the frozen historical method ([`docs/benchmarks/codemode/METHOD.md`](../codemode/METHOD.md) revision `P0-2`) remains intact as a reference; this document defines the new versioned study required by the owner refocus. Arm names follow the plan: `off`, `on`, `only`, mapping to the old method's A2, B and C. Old A0/A remain historical engine baselines, not arms of this study.
+Revision: `study-v1-r8-measured-series-2`. Status: pilot observations and scores are retained; the owner-approved 20-task measured-series design is frozen in [MEASURED-SERIES.json](MEASURED-SERIES.json). Authority: [Owner Decisions](../../plans/codemode/OWNER-REFOCUS.md) (2 November 2026), [Research Plan](../../plans/codemode/RESEARCH-PLAN.md), [Resume](../../plans/codemode/RESUME.md). This protocol supersession note: the frozen historical method ([`docs/benchmarks/codemode/METHOD.md`](../codemode/METHOD.md) revision `P0-2`) remains intact as a reference; this document defines the new versioned study required by the owner refocus. Arm names follow the plan: `off`, `on`, `only`, mapping to the old method's A2, B and C. Old A0/A remain historical engine baselines, not arms of this study.
 
 ## Purpose
 
@@ -49,7 +49,7 @@ Every task belongs to one of four workflow types, present in every partition exc
 | `manual` | Prescribed manual steps: two searches, four pages fetched and extracted, one collation; no single research call | Direct-tool versus script-tool composition at equal budgets |
 | `followup` | One base research; a read of the saved base-research report through the built-in read operation; then the follow-up answer | Incremental work after prior results exist |
 
-The follow-up is answered from the read saved report, not from the cache-suggest stage: cache suggest supplements the live search result and never replaces live work. In controlled replay the follow-up adds zero additional pages; the base research's recorded responses and the saved report are the whole evidence. In the live population the follow-up sequence is the task intent, tool choice is unforced, and any additional fetching is an observation. The follow-up script helper is implemented (`followupBaseScript` and `followupReadScript` in `scripts/benchmarks/study-workflows.ts`), and a scripted actual-host committed-report read check passed in both primary arms; the integrated driver now exercises both turns and their replay in scripted host tests. Live-main follow-up behaviour still requires observation. That scripted check is not a measured follow-up result.
+The follow-up is answered from the read saved report, not from the cache-suggest stage: cache suggest supplements the live search result and never replaces live work. In controlled replay the follow-up adds zero additional pages; the base research's recorded responses and the saved report are the whole evidence. In the live population the follow-up sequence is the task intent, tool choice is unforced, and any additional fetching is an observation. The follow-up script helper is implemented (`followupBaseScript` and `followupReadScript` in `scripts/benchmarks/study-workflows.ts`), and a scripted actual-host committed-report read check passed in both primary arms; the integrated driver now exercises both turns and their replay in scripted host tests. The pilot subsequently observed both turns in live follow-up tasks. That scripted check is not a measured follow-up result.
 
 Manual tasks in `off` call `intelli_fetch` and the manual operations directly; in `on` the same steps run inside a script. The workflow prompts express task intent without dictating tool names in the live population; the forced replay population prescribes arguments.
 
@@ -71,13 +71,13 @@ Record actual requests sent to the main model, not transcript bulk. Count each u
 
 ### Primary Token Endpoint
 
-The primary endpoint is **uncached main-model input tokens per task**, `inputUncached`, computed exactly as the existing collector computes it: `max(0, input_tokens - cached_tokens - cache_write_tokens)`, with all three wire fields required for the value to exist. This is an observed capability on the pinned host, established by one no-tool request: the 2 November 2026 metadata check recorded `input_tokens=2817`, `cached_tokens=0` and `cache_write_tokens=0` explicitly on the wire with response-ID correlation and zero absent usage fields (local-only [assessment](../../../evidence/benchmarks/metadata-20261102T152129Z/metadata-20261102T153207Z-e9116d51/assessment.json), Observed, n=1 response; run manifest SHA-256 `038de199a117fe2b77d74a449456a6496ed1cd72561e321393f40b2a75fddd94`). The ignored raw evidence is available in this retained worktree, not in a clean clone or a public bundle. That request supports retaining the unchanged endpoint for the pilot. Nonzero-cache and multi-turn coverage remain unobserved, and every contributing response must meet the field and correlation checks below. No additional owner decision is required merely to retain the unchanged endpoint.
+The primary endpoint is **uncached main-model input tokens per task**, `inputUncached`, computed exactly as the existing collector computes it: `max(0, input_tokens - cached_tokens - cache_write_tokens)`, with all three wire fields required for the value to exist. This is an observed capability on the pinned host, established by one no-tool request: the 2 November 2026 metadata check recorded `input_tokens=2817`, `cached_tokens=0` and `cache_write_tokens=0` explicitly on the wire with response-ID correlation and zero absent usage fields (local-only [assessment](../../../evidence/benchmarks/metadata-20261102T152129Z/metadata-20261102T153207Z-e9116d51/assessment.json), Observed, n=1 response; run manifest SHA-256 `038de199a117fe2b77d74a449456a6496ed1cd72561e321393f40b2a75fddd94`). The ignored raw evidence is available in this retained worktree, not in a clean clone or a public bundle. That request supports retaining the unchanged endpoint for the pilot. The pilot observed nonzero cache-read fields and multi-turn sessions, and every contributing response must meet the field and correlation checks below. Cache-write remained zero throughout the pilot, so that term has not been exercised. No additional owner decision is required merely to retain the unchanged endpoint.
 
 Endpoint rules, frozen before any comparison data:
 
 1. Every measured response must carry all three per-message wire fields (`input_tokens`, `cached_tokens`, `cache_write_tokens`), response-ID correlated; only then does `inputUncached` exist for that response. A response missing any field is recorded with its missingness; the task's endpoint value is `unknown`, not zero. Raw observed field values are always retained alongside the derived value.
 2. `inputUncached = max(0, input_tokens - cached_tokens - cache_write_tokens)` is the endpoint derivation, mirroring the collector's `tokensFromWireEvidence` computation exactly and documented separately from the raw observations it is computed from.
-3. Total main-model input tokens remain the planned secondary endpoint, reported wherever observed. Independent total-input completeness and paired analysis are implemented in `scripts/benchmarks/study-analysis.ts` (an independent `mainInputTotalComplete` rule and a `mainInputTotal` paired endpoint), covered by synthetic tests and connected to the series exporter; live-main verification remains to be recorded. Total-input completeness follows its own observation rule rather than being withheld because uncached-input evidence is incomplete.
+3. Total main-model input tokens remain the planned secondary endpoint, reported wherever observed. Independent total-input completeness and paired analysis are implemented in `scripts/benchmarks/study-analysis.ts` (an independent `mainInputTotalComplete` rule and a `mainInputTotal` paired endpoint), covered by synthetic tests and connected to the series exporter. Total-input completeness follows its own observation rule rather than being withheld because uncached-input evidence is incomplete. Live-main verification is recorded across all 32 pilot runs.
 4. The historical 50% saving hypothesis (H1) is retained as the stated hypothesis on the primary endpoint, not a completion condition.
 
 ### Transport Pin
@@ -105,12 +105,12 @@ Each run records: run/task/repeat/arm identifiers; population and partition; sou
 |---|---|---|
 | Development | Fixture capture, harness tuning, prompt freeze | 4 (one per workflow) |
 | Pilot | Cost and variability estimation; calibration disagreement inspection | 8 (two per workflow) |
-| Measured series | Frozen primary population | 12 (three per workflow) |
-| Reserve | Later owner-approved revision only | 8 (two per workflow) |
+| Measured series | Frozen primary population | 20 (five per workflow) |
+| Reserve | Included by owner decision D3 without exposure relabelling | 0 remaining |
 
-Repeats: two per task per arm in both populations, to expose within-task main-model variability. Order: interleaved paired runs with a recorded seed; replay blocks additionally record their frozen schedule. The pilot precedes the series freeze; the freeze (a new manifest revision, `measured-series-1`) fixes final sample size, stopping rule, margins, uncertainty calculation and intended claims, retaining the missing-data rule below.
+Repeats: two per task per arm in both populations, to expose within-task main-model variability. Order: interleaved paired runs with a recorded seed; replay blocks additionally record their frozen schedule. The completed pilot preceded the series freeze. [MEASURED-SERIES.json](MEASURED-SERIES.json) fixes final sample size, stopping rule, margins, uncertainty calculation and intended claims, including the missing-data rule below and a 0.5-point quality-loss margin per judge. Manual replay is descriptive reliability evidence outside the 15-task replay primary analysis. Preserved-quality claims require the lower confidence bound above -0.5 for each judge.
 
-The missing-data rule is prespecified before pilot capture: retain every original attempt, and never substitute a technical rerun into its paired cell. A missing, failed or invalid cell makes that endpoint's primary interval unavailable for the population. Complete-case estimates remain labelled diagnostics; reliability counts retain all outcomes. Extra repeats do not override this complete-population rule. The final freeze carries this rule forward; any alternative requires a declared revision before collecting the affected independent series, not a post-result choice. This policy can yield an inconclusive primary result without making the retained failed trials disappear.
+The owner revised the missing-data rule before measured capture. Technical missingness includes incomplete usage or catalogue evidence, replay misses, unfinished responses, interruptions and absent answers. It makes the affected endpoint's primary interval unavailable. A failed operation with a settled visible answer remains a valid observation in its arm and a reliability outcome. Retain every original attempt and never substitute a technical rerun into its paired cell. Complete-case intervals remain labelled diagnostics; sensitivity estimates include failed answers without replacing primary cells. This policy can yield an inconclusive primary result without making retained failed trials disappear.
 
 Codemode-only mode (`only`) is a secondary arm of the study design, not a scheduled comparison: no `only` execution is budgeted in this costed primary series. Scheduling it later requires a schedule revision admitting its cost under the canonical admission rule. The measured-series rows above are the declared population, not a tuned sample: no row is added, removed or swapped after the freeze, and the corpus's exposure families are never relabelled unseen.
 
@@ -133,7 +133,7 @@ The programme ceiling is USD 30, with the reconciled baseline in [SPEND-BASELINE
 
 ## Data Management
 
-Durable raw study data is written directly under `evidence/benchmarks/codemode-study-v1/` (gitignored); nothing needed for a result stays only in `.tmp/`. The publication bundle carries task inputs and rubrics, prompts/scripts/settings, per-run metrics and completeness, final answers and judge outputs where shareable, provenance manifests, analysis source, environment pins and exact regeneration commands. A fresh environment regenerates every published table and figure from the bundle without model calls. Omissions and redactions are documented with their reproducibility effect. No credentials or private session data enter any shareable artefact.
+Durable raw study data is written directly under `evidence/benchmarks/<series-id>/` (gitignored); nothing needed for a result stays only in `.tmp/`. The publication bundle carries task inputs and rubrics, prompts/scripts/settings, per-run metrics and completeness, final answers and judge outputs where shareable, provenance manifests, analysis source, environment pins and exact regeneration commands. A fresh environment regenerates every published table and figure from the bundle without model calls. Omissions and redactions are documented with their reproducibility effect. No credentials or private session data enter any shareable artefact.
 
 ## Validity Threats and Disclosures
 
@@ -142,9 +142,10 @@ Durable raw study data is written directly under `evidence/benchmarks/codemode-s
 | Shared main/judge model | Separate sessions, both judges analysed separately, limitation disclosed in every claim |
 | Replay is not live latency | Populations never pooled; no replay timing becomes a speed claim |
 | Single host and build | Scope of every claim is this build and host; no cross-host generality claimed |
-| Small per-workflow samples | Uncertainty reported per workflow; a null result stays null |
+| Small per-workflow samples | Per-workflow estimates are descriptive with no interval; a null result stays null |
 | Exposed corpus material | Retained items carry exposure labels; fresh items were composed without web search |
 | Live web variability | Live population records fetched-source identities; analysis does not treat two live arms' differing sources as noise |
+| Branch-only fetch dominance | Live claims are restricted to the observed behaviour; controlled replay carries full-pipeline evidence. The owner makes the final integration judgement after assessment |
 | Declaration bytes differ by arm | Catalogue bytes counted in main-model input of the arm that carries them; declared here, not hidden |
 
 ## Pending Prerequisites
@@ -154,8 +155,8 @@ The development and pilot observations are retained. The following prerequisites
 | Prerequisite | Required Before | State | Owner |
 |---|---|---|---|
 | Independent driver review and bounded development verification | Remaining development and pilot work | Complete; all four development workflows have captures and replay attempts, with the invalid manual cell retained | Coordinator |
-| Independent source-backed quality scoring | Quality claims | Human sanity-check labels are recorded; blinded pilot scoring and disagreement analysis remain before quality claims | Coordinator and prescribed judges |
-| Post-pilot series freeze (manifest `measured-series-1`: margins, final size, stopping rule) | Measured-series capture only | Pending; the pilot itself is paid work that precedes the freeze | Coordinator |
+| Independent source-backed quality scoring | Quality claims | Complete for the pilot; both judges and calibration labels agree, with score disagreements and the shared-model limitation retained | Coordinator and prescribed judges |
+| Post-pilot series freeze (manifest `measured-series-2`: margins, final size, stopping rule) | Measured-series capture only | Frozen after owner decisions D1 to D4; execution still requires source, accounting and fixture checks | Coordinator |
 
 ## Change Control
 

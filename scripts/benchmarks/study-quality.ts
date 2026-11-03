@@ -169,7 +169,7 @@ function offFirst(cell: Cell, seed: string, taskIndex: number, repeatIndex: numb
   return (start + taskIndex + repeatIndex) % 2 === 0;
 }
 
-function neutralTask(task: StudyTask) {
+function neutralTask(task: StudyTask, population: "replay" | "live") {
   const constraints = {
     sourceDomains: task.domains,
     extractionFocus: task.focusPrompt,
@@ -186,7 +186,7 @@ function neutralTask(task: StudyTask) {
     constraints,
     turns: [
       { turn: 1, question: task.followupPlan!.base },
-      { turn: 2, question: task.followupPlan!.followup, evidenceRule: "Use the saved base-research report. No additional pages are allowed. State if that evidence is insufficient." },
+      { turn: 2, question: task.followupPlan!.followup, evidenceRule: population === "replay" ? "Use the saved base-research report. No additional pages are allowed. State if that evidence is insufficient." : "Use the saved base-research report if one exists; otherwise use captured base evidence. Additional fetching is observed, not prescribed." },
     ],
   };
   return { workflow: task.workflow, constraints, turns: [{ turn: 1, question: task.query }] };
@@ -256,7 +256,7 @@ export async function prepareQualityPackets(seriesRoot: string, partition: "deve
       schemaVersion: 1,
       kind: "blinded-quality-packet",
       packetId: id,
-      task: neutralTask(task),
+      task: neutralTask(task, cell.population),
       rubric: corpus.standardRubric,
       judgePrompt,
       candidates: packetCandidates,

@@ -8,15 +8,15 @@ import type { ResearchSettings } from "../../src/core/types.js";
 import { tuningDefaults } from "../../src/core/defaults.js";
 import { parseExecutionSettings } from "../../src/core/execution-settings.js";
 import type { SuggestionWorkflowOperation } from "./suggestion-replay.js";
-import { sha256Canonical, asJson } from "./canonical.js";
+import { canonicalJson, sha256Canonical, asJson } from "./canonical.js";
 import { singleResearchScript, breadthResearchScript, manualResearchScript, followupBaseScript, followupReadScript, type ScriptBudget } from "./study-workflows.js";
 
 export const STUDY_PHASE_FORECAST = {
   development: { paidRuns: 6, expectedUsd: 0.2, conservativeUsd: 0.5 },
   pilot: { paidRuns: 32, expectedUsd: 1.28, conservativeUsd: 3.2 },
-  "measured-series": { paidRuns: 60, expectedUsd: 2.4, conservativeUsd: 6 },
+  "measured-series": { paidRuns: 100, expectedUsd: 1.1, conservativeUsd: 10 },
 } as const;
-export const STUDY_REMAINING_PLANNED_USD = 10.7; // Phase forecasts plus USD 1 retry/unknown reserve.
+export const STUDY_REMAINING_PLANNED_USD = 11.0; // Phase forecasts plus USD 1 retry/unknown reserve.
 
 export type StudyWorkflow = "single" | "breadth" | "manual" | "followup";
 export type StudyPartition = "development" | "pilot" | "measured-series" | "reserve";
@@ -64,8 +64,14 @@ export function studyPipelineSettings(): ResearchSettings {
   };
 }
 
+interface FrozenMeasuredSeries {
+  revision: string;
+  population: { queryIds: string[]; repeats: number[]; populations: string[]; replayPrimaryQueryIds?: string[]; manualReplayQueryIds?: string[] };
+}
+
 export async function readStudyDesign(root: string): Promise<{
   tasks: readonly StudyTask[]; methodSha256: string; corpusSha256: string; manifestSha256: string;
+  measuredSeries: FrozenMeasuredSeries | null;
 }> {
   const digest = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
   const manifestBytes = await readFile(join(root, "manifest.json"));
@@ -87,7 +93,15 @@ export async function readStudyDesign(root: string): Promise<{
     ids.add(task.id);
     createStudyPlan(task);
   }
-  return { tasks: corpus.queries, methodSha256: digest(await readFile(join(root, "PROTOCOL.md"))), corpusSha256: digest(corpusBytes), manifestSha256: digest(manifestBytes) };
+  const measuredText = await readFile(join(root, "MEASURED-SERIES.json"), "utf8").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return null; throw error; });
+  let measuredSeries: FrozenMeasuredSeries | null = null;
+  if (measuredText) {
+    const measured = JSON.parse(measuredText) as FrozenMeasuredSeries;
+    const expected = corpus.queries.filter((task) => task.partition === "measured-series").map((task) => task.id);
+    if (measured.revision !== "measured-series-2" || canonicalJson(measured.population.queryIds) !== canonicalJson(expected) || canonicalJson(measured.population.repeats) !== canonicalJson([1, 2]) || canonicalJson(measured.population.populations) !== canonicalJson(["replay", "live"])) throw new Error("Measured-series freeze does not match the declared corpus population");
+    measuredSeries = measured;
+  }
+  return { tasks: corpus.queries, methodSha256: digest(await readFile(join(root, "PROTOCOL.md"))), corpusSha256: digest(corpusBytes), manifestSha256: digest(manifestBytes), measuredSeries };
 }
 
 export function createStudyPlan(task: StudyTask): StudyPlan {
@@ -139,7 +153,7 @@ export function studyPrompts(plan: StudyPlan, arm: "off" | "on" | "only", contro
     else first += `\nControlled workflow: call intelli_research exactly once with ${JSON.stringify(queryArgs)}, then answer from its returned evidence. Do not alter arguments or make extra research calls.`;
   }
   if (task.workflow !== "followup") return [first];
-  let second = `Follow-up: ${task.followupPlan!.followup}\nUse the saved base-research report. No additional pages are allowed. State if that evidence is insufficient. Final answer: at most 500 words.`;
+  let second = `Follow-up: ${task.followupPlan!.followup}\n${controlled ? "Use the saved base-research report. No additional pages are allowed. State if that evidence is insufficient." : "Use the saved base-research report if one exists; otherwise use the captured base evidence. Additional fetching is observed, not prescribed. State if the available evidence is insufficient."} Final answer: at most 500 words.`;
   if (controlled) second += arm === "off"
     ? "\nRead the committed reportPath from the preceding result using read. Do not invoke the research pipeline again."
     : `\nExecute this exact script once with codemode, then answer from the returned report.\n${plan.followupScript}`;

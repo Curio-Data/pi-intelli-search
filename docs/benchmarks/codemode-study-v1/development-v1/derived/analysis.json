@@ -102,6 +102,19 @@
     "replay": {
       "expectedRuns": 8,
       "observedOriginalRuns": 2,
+      "manualReplay": {
+        "queryIds": [],
+        "outcomes": [],
+        "estimates": {}
+      },
+      "claimAssessment": {
+        "tokenClaim": "unavailable",
+        "fiftyPercentHypothesis": "not-established",
+        "qualityClaim": "insufficient-precision",
+        "overallSavingClaim": "not-established",
+        "qualityLossMargin": 0.5,
+        "basis": "Primary confidence bounds only; complete-case diagnostic intervals are not claim evidence"
+      },
       "outcomes": {
         "completed": 2,
         "failed": 0,
@@ -136,6 +149,12 @@
             "draws": 10000,
             "seed": 20261102
           },
+          "diagnosticInterval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
           "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
         },
         "mainInputTotal": {
@@ -165,6 +184,12 @@
             "draws": 10000,
             "seed": 20261102
           },
+          "diagnosticInterval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
           "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
         },
         "qualityJudge1": {
@@ -188,6 +213,12 @@
             "draws": 10000,
             "seed": 20261102
           },
+          "diagnosticInterval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
           "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
         },
         "qualityJudge2": {
@@ -206,6 +237,12 @@
           "completePopulation": false,
           "primaryAvailable": false,
           "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "diagnosticInterval": {
             "lower": null,
             "upper": null,
             "draws": 10000,
@@ -234,32 +271,36 @@
             "draws": 10000,
             "seed": 20261102
           },
+          "diagnosticInterval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
           "interpretation": "Not a live-latency measure"
         },
         "reportedPipelineUsd": {
-          "pairs": [
-            {
-              "queryId": "CS-DEV-01",
-              "controlMean": 0,
-              "treatmentMean": 0,
-              "pairedRepeats": 1
-            }
-          ],
+          "pairs": [],
           "missingQueries": [
+            "CS-DEV-01",
             "CS-DEV-02",
             "CS-DEV-03",
             "CS-DEV-04"
           ],
-          "undefinedRatioQueries": [
-            "CS-DEV-01"
-          ],
+          "undefinedRatioQueries": [],
           "ratio": null,
-          "difference": 0,
+          "difference": null,
           "metric": "difference",
           "intervalScale": "difference",
           "completePopulation": false,
           "primaryAvailable": false,
           "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "diagnosticInterval": {
             "lower": null,
             "upper": null,
             "draws": 10000,
@@ -280,6 +321,12 @@
           "undefinedRatioQueries": [],
           "ratio": null,
           "difference": null,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
           "interpretation": "Includes scored failed and invalid runs; diagnostic sensitivity only, never a primary endpoint"
         },
         "qualityJudge2": {
@@ -293,6 +340,12 @@
           "undefinedRatioQueries": [],
           "ratio": null,
           "difference": null,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
           "interpretation": "Includes scored failed and invalid runs; diagnostic sensitivity only, never a primary endpoint"
         }
       }
@@ -300,6 +353,15 @@
     "live": {
       "expectedRuns": 8,
       "observedOriginalRuns": 2,
+      "manualReplay": null,
+      "claimAssessment": {
+        "tokenClaim": "unavailable",
+        "fiftyPercentHypothesis": "not-established",
+        "qualityClaim": "insufficient-precision",
+        "overallSavingClaim": "not-established",
+        "qualityLossMargin": 0.5,
+        "basis": "Primary confidence bounds only; complete-case diagnostic intervals are not claim evidence"
+      },
       "outcomes": {
         "completed": 2,
         "failed": 0,
@@ -334,6 +396,12 @@
             "draws": 10000,
             "seed": 20261102
           },
+          "diagnosticInterval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
           "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
         },
         "mainInputTotal": {
@@ -363,6 +431,12 @@
             "draws": 10000,
             "seed": 20261102
           },
+          "diagnosticInterval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
           "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
         },
         "qualityJudge1": {
@@ -386,6 +460,12 @@
             "draws": 10000,
             "seed": 20261102
           },
+          "diagnosticInterval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
           "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
         },
         "qualityJudge2": {
@@ -404,6 +484,12 @@
           "completePopulation": false,
           "primaryAvailable": false,
           "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "diagnosticInterval": {
             "lower": null,
             "upper": null,
             "draws": 10000,
@@ -433,6 +519,12 @@
           "completePopulation": false,
           "primaryAvailable": false,
           "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
+          "diagnosticInterval": {
             "lower": null,
             "upper": null,
             "draws": 10000,
@@ -469,6 +561,12 @@
             "draws": 10000,
             "seed": 20261102
           },
+          "diagnosticInterval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
           "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
         }
       },
@@ -484,6 +582,12 @@
           "undefinedRatioQueries": [],
           "ratio": null,
           "difference": null,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
           "interpretation": "Includes scored failed and invalid runs; diagnostic sensitivity only, never a primary endpoint"
         },
         "qualityJudge2": {
@@ -497,6 +601,12 @@
           "undefinedRatioQueries": [],
           "ratio": null,
           "difference": null,
+          "interval": {
+            "lower": null,
+            "upper": null,
+            "draws": 10000,
+            "seed": 20261102
+          },
           "interpretation": "Includes scored failed and invalid runs; diagnostic sensitivity only, never a primary endpoint"
         }
       }
@@ -506,5 +616,6 @@
   "qualityProvenance": null,
   "qualityDisagreements": [],
   "judgeHumanCalibration": [],
+  "qualityAgreement": null,
   "note": "Reported pipeline cost is not an account-debit audit. Subscription usage is not cash spend. No superiority conclusion follows from token usage alone. The only arm is retained in the inventory but is not analysed in this version."
 }

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "study": "codemode-study-v1",
-  "revision": "manifest-v1-r9-postpilot",
+  "revision": "manifest-v1-r12-measured-series-2",
   "recordedUtc": "2026-11-02T17:49:03Z",
-  "reboundUtc": "2026-11-03T09:41:00Z",
-  "revisionNote": "Freezes the reviewed judge-launch and output contract after two independent reviews and witnessed dry runs. Adds atomic packet preparation, isolated coordinator-owned processes, exact output schemas, per-file provenance, unique sessions and decoded quotation checks. The arms, corpus, calibration inputs, models, source budgets and token endpoint are unchanged.",
-  "status": "post-pilot quality scoring; independent measured-series execution requires its later freeze",
+  "reboundUtc": "2026-11-03T11:13:23Z",
+  "revisionNote": "Adds owner-approved capture-rerun and budget-outcome rules, positive task-outcome validation, interrupted-pair completion and corrected remaining-phase admission. Claim evaluation uses both token and quality bounds. No measured capture has started.",
+  "status": "measured-series-2 frozen after owner decisions; execution requires source and accounting checks",
   "revisionPolicy": "Pre-freeze revisions bind exact preparer and input hashes. Each executed series retains its original source and design identities; no existing run is relabelled when a later revision changes.",
   "authority": {
     "ownerDecisions": "docs/plans/codemode/OWNER-REFOCUS.md",
@@ -13,16 +13,17 @@
     "resume": "docs/plans/codemode/RESUME.md"
   },
   "inputs": [
-    {"path": "corpus.json", "sha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed", "revision": "corpus-v1-r3"},
+    {"path": "corpus.json", "sha256": "695ba07dc665dcf81168117f84497e5e2fd9362bc02a5fa7270bad4d59ec89cb", "revision": "corpus-v2-r4-owner-expanded"},
     {"path": "calibration.json", "sha256": "c0abba11206d841d692a09c69f2d59b75bca85d1934948f50db702f301fb0a11", "revision": "calibration-v1-r3"},
-    {"path": "PROTOCOL.md", "sha256": "bd9a444ab542e965efee30c7f612e2f22e182b02f21dd12a312acc3e99481848", "revision": "study-v1-r6-postpilot"},
+    {"path": "PROTOCOL.md", "sha256": "b11529093290094792fa4079cfe7009d3189ebdf9585f2c113cb4ce29b1c25d3", "revision": "study-v1-r8-measured-series-2"},
+    {"path": "MEASURED-SERIES.json", "sha256": "3b77616a62133cc95c01008494b73e5a5acf468d465e094615dab34f2117a151", "revision": "measured-series-2"},
     {"path": "JUDGING.md", "sha256": "1da52b404ac782f41abb728b86ad56e9151b7741a81f59d721405c5a4928844d", "revision": "judging-v4"},
     {"path": "judge-prompt.json", "sha256": "61fda097504071e347f5211736d4c8df9d0558c81c213a1076b9eaf78c8153a3", "revision": "judge-prompt-v2"},
     {"path": "calibration-prompt.json", "sha256": "84a9240a509afc6871a602eebb33dc528f7412d8b5fe4c9eade6c12bb50a380f", "revision": "calibration-prompt-v1"},
-    {"path": "SCHEDULE.md", "sha256": "2b1564302ae50e178b5170fb02c09cc73fca600fd1baa9466ffba4b967aa4672", "revision": "schedule-v1-r4-prepilot"},
+    {"path": "SCHEDULE.md", "sha256": "72331f86dabd3beb0f717345fc0b900ae317822946dc8134e0759673d1ee70c3", "revision": "schedule-v1-r6-measured-series-2"},
     {"path": "SPEND-BASELINE.json", "sha256": "b3dffbba4cd500a19247be505f619545d71675948c52191070b4f4afd58deea3", "revision": "spend-baseline-3"},
     {"path": "CALIBRATION-REVIEW.md", "sha256": "ce81efe7b224f7e99e633d192a5f831375b34fe251316d409896723a09c30562", "revision": "calibration-review-v1-r3"},
-    {"path": "RUNNER.md", "sha256": "68ec5fa2758f985a2db0c79f19d97b213a0b44249504a5556e93b04f7dd12f46", "revision": "runner-v4"}
+    {"path": "RUNNER.md", "sha256": "8cd1d2fd168c88a485d81be80135c058fa19f1d475522cec9a7adb1f7ba0d6af", "revision": "runner-v5"}
   ],
   "historicalInputsUnchanged": {
     "oldCorpusManifest": "docs/benchmarks/corpus/manifest.json",

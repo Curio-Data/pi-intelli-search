@@ -60,6 +60,28 @@ test("failed runs and reruns stay in inventory without replacing the original", 
   assert.equal(result.populations.replay.qualitySensitivity.qualityJudge1.pairs.length, 2);
   assert.match(result.populations.replay.qualitySensitivity.qualityJudge1.interpretation, /diagnostic sensitivity/);
 });
+test("a settled failed answer stays valid while technical missingness remains invalid", () => {
+  const data = dataset();
+  const settled = { ...data.runs[0], status: "failed" as const, answerDelivered: true, validTaskOutcome: true, error: "synthetic settled operation failure" };
+  const result = analyseStudy({ ...data, runs: [settled, ...data.runs.slice(1)] });
+  assert.equal(result.populations.replay.outcomes.failed, 1);
+  assert.equal(result.populations.replay.metrics.mainInputUncached.primaryAvailable, true);
+  assert.equal(result.populations.replay.claimAssessment.qualityLossMargin, 0.5);
+  assert(result.populations.replay.metrics.mainInputUncached.diagnosticInterval);
+  const missing = analyseStudy({ ...data, runs: [{ ...data.runs[0], status: "failed", answerDelivered: true, validTaskOutcome: false, error: "synthetic missing answer" }, ...data.runs.slice(1)] });
+  assert.equal(missing.populations.replay.metrics.mainInputUncached.primaryAvailable, false);
+});
+
+test("manual replay is descriptive and excluded from the replay primary population", () => {
+  const data = dataset();
+  const runs = data.runs.map((run) => run.population === "replay" && run.queryId === "two" ? { ...run, workflow: "manual" as const } : run);
+  const result = analyseStudy({ ...data, runs });
+  assert.deepEqual(result.populations.replay.manualReplay?.queryIds, ["two"]);
+  assert.equal(result.populations.replay.metrics.mainInputUncached.pairs.length, 1);
+  assert.equal(result.populations.replay.metrics.mainInputUncached.primaryAvailable, true);
+  assert.equal(result.populations.replay.metrics.reportedPipelineUsd.pairs.length, 0, "replay cash is not applicable");
+});
+
 test("analysis refuses duplicate identities, mismatched freeze and invalid values", () => {
   const data = dataset();
   assert.throws(() => analyseStudy({ ...data, runs: [...data.runs, data.runs[0]] }), /Duplicate run identity/);

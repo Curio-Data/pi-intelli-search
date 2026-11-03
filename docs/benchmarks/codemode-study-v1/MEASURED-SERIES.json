@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "study": "codemode-study-v1",
+  "revision": "measured-series-2",
+  "frozenUtc": "2026-11-03T11:13:23Z",
+  "status": "Frozen after owner decisions D1 to D4 and before measured-series capture",
+  "ownerDecisions": {
+    "D1": "A settled answer with an operation failure is a valid observation in its arm. Incomplete usage, changed catalogues, replay misses, unfinished responses and interruptions remain technical missingness.",
+    "D2": "Manual replay is reported separately from the 15-task replay primary analysis. Off-arm copy mismatches remain reliability findings. A replay block is one task, arm and repeat cell.",
+    "D3": "Include all eight reserve rows for 20 measured tasks without changing their exposure labels.",
+    "D4": "Accept a live population dominated by branch-only fetch for now, with claims restricted accordingly. The owner will make a final integration judgement after assessment.",
+    "D1Capture": "Permit one failed-capture rerun with a new identity and recorded reason. Its replay cells can use the recaptured fixture while the failed capture remains retained.",
+    "D2Budget": "A budget-limited tool call with a settled answer for every prompt is a valid task outcome. Provider, transport, catalogue, replay, usage and unfinished-response failures remain technical missingness."
+  },
+  "population": {
+    "queryIds": ["CS-SER-01", "CS-SER-02", "CS-SER-03", "CS-SER-04", "CS-SER-05", "CS-SER-06", "CS-SER-07", "CS-SER-08", "CS-SER-09", "CS-SER-10", "CS-SER-11", "CS-SER-12", "CS-RES-01", "CS-RES-02", "CS-RES-03", "CS-RES-04", "CS-RES-05", "CS-RES-06", "CS-RES-07", "CS-RES-08"],
+    "arms": ["off", "on"],
+    "populations": ["replay", "live"],
+    "repeats": [1, 2],
+    "orderSeed": 20261102,
+    "orderRule": "Interleave arms by seed 20261102, task and repeat. Require paired measured live and replay executions. Retain global order in the append-only inventory. Do not add, remove or substitute tasks or repeats.",
+    "replayPrimaryQueryIds": ["CS-SER-01", "CS-SER-02", "CS-SER-03", "CS-SER-04", "CS-SER-05", "CS-SER-06", "CS-SER-10", "CS-SER-11", "CS-SER-12", "CS-RES-01", "CS-RES-02", "CS-RES-03", "CS-RES-04", "CS-RES-07", "CS-RES-08"],
+    "manualReplayQueryIds": ["CS-SER-07", "CS-SER-08", "CS-SER-09", "CS-RES-05", "CS-RES-06"]
+  },
+  "endpoints": {
+    "primary": "mainInputUncached",
+    "secondary": ["mainInputTotal", "qualityJudge1", "qualityJudge2", "returnedMs", "reportedPipelineUsd"],
+    "historicalHypothesis": "50% uncached-input saving is a hypothesis, not a completion requirement",
+    "uncertainty": {
+      "method": "Paired task-cluster bootstrap with task means over repeats",
+      "draws": 10000,
+      "confidence": 0.95,
+      "seed": 20261102,
+      "completeCaseRule": "Also emit complete-case intervals explicitly labelled diagnostic. Per-workflow estimates are descriptive and carry no interval."
+    },
+    "claimRules": {
+      "saving": "Report an uncached-input saving only when the primary ratio upper bound is below 1 and both judges meet the quality rule.",
+      "fiftyPercentSaving": "Support the historical 50% hypothesis only when the primary ratio upper bound is at most 0.5 and both judges meet the quality rule.",
+      "increasedInput": "Report increased uncached input when the primary ratio lower bound exceeds 1.",
+      "noDemonstratedEffect": "A primary interval including 1 is no demonstrated token effect, not proof of no effect.",
+      "insufficientPrecision": "An unavailable interval or a quality interval that cannot exclude the declared margin is insufficient precision, not a small demonstrated effect.",
+      "qualityConflict": "If judges disagree about the quality rule, report the conflict and do not average or select a judge.",
+      "cacheReporting": "Report total input alongside uncached input. Do not interpret an uncached-only change as a total-context reduction."
+    }
+  },
+  "quality": {
+    "scale": "Integer 0 to 4, holistic overall score treated as an ordinal diagnostic difference scale",
+    "meaningfulLossMargin": 0.5,
+    "rule": "Analyse each judge separately. Preserved quality requires the on-minus-off lower confidence bound above -0.5. A point estimate below -0.5 is a descriptive loss; use bounds for claims.",
+    "disagreementInspectionThreshold": 2,
+    "inspectionRule": "Inspect every answer whose overall judge scores differ by at least 2 points and every task whose paired off-minus-on direction differs between judges by at least 2 points. Retain all disagreements and do not adjudicate by preference.",
+    "agreementReporting": "Report exact agreement, within-one agreement, tie-direction disagreements and skew. Do not present high within-one agreement as proof of judge reliability.",
+    "calibrationDisposition": "Both judges matched the owner on all four trivial synthetic sanity checks. This is weak prompt-following evidence, not judge validation.",
+    "judges": ["claude-opus-5-5[1m]", "openai-codex/gpt-6.1-sol"],
+    "judgeHarnessRule": "Record harness versions. Judge 2 may use Pi 1.5.0 while study execution remains pinned to Pi 1.4.0; disclose this asymmetry.",
+    "judgePromptSha256": "61fda097504071e347f5211736d4c8df9d0558c81c213a1076b9eaf78c8153a3",
+    "calibrationPromptSha256": "84a9240a509afc6871a602eebb33dc528f7412d8b5fe4c9eade6c12bb50a380f",
+    "reasoning": "low",
+    "sessionRule": "One isolated fresh session per packet and judge, with tools disabled and coordinator-owned provenance",
+    "searchSummaryRule": "A material claim supported only by a search summary caps provenance at 2. Retain this pilot rule because summaries are discovery leads, not independent source evidence; report its arm-distribution limitation."
+  },
+  "missingData": {
+    "primaryRule": "Technical missingness makes the affected endpoint unavailable. A failed operation with a settled visible answer remains a valid observation and a reliability outcome.",
+    "technicalMissingness": ["incomplete usage or catalogue evidence", "replay miss or invalid fixture", "unfinished main response", "interruption", "no settled visible answer"],
+    "sensitivity": "Scored failed and invalid answers also enter the separately labelled diagnostic sensitivity estimates with complete-case intervals.",
+    "captureFailure": "A failed capture has no replay fixture. One technical recapture gets a new identity and recorded reason; its fixture is shared by both replay arms while the failed capture remains retained.",
+    "completion": "An inconclusive or unavailable primary result is reportable and does not permit selective deletion or replacement of trials."
+  },
+  "contextExposure": {
+    "measure": "rawPageCharacters",
+    "definition": "Count characters from retrieved page material in actual main-model requests, including tool arguments, results, script output, errors and spill-file reads. Count repeated exposure per request. Exact quotations of retrieved page text are identified separately from whole-page exposure.",
+    "source": "actual-requests.ndjson correlated with captured source identities and canonical messages"
+  },
+  "claims": [
+    "Estimate effects only for this build, pinned Pi 1.4.0 host, prescribed models and declared 20-task population.",
+    "Keep controlled replay and unforced live populations separate. Replay timing and replay pipeline cash are not live speed or new-cash measures.",
+    "Manual replay is descriptive reliability evidence outside the 15-task replay primary analysis.",
+    "Live claims are restricted to the observed branch-only-fetch-dominated behaviour; controlled replay carries full-pipeline evidence.",
+    "Per-workflow estimates are descriptive with no interval.",
+    "Report neutral, negative and inconclusive results, quality disagreements, missing data and spend.",
+    "Make no cross-host, cross-model, general-superiority or preserved-quality claim from token counts alone."
+  ],
+  "pilotBasis": {
+    "series": "codemode-pilot-20261103-r1",
+    "datasetSha256": "ad6b2e9ee3f282a47384c8aa988efa3433e63192010e7e71ab447dd19f4a317b",
+    "analysisSha256": "67cf72508a0d4b139624f09d22e4362baaa2d609d735654072e04cab5bcb9450",
+    "runs": 32,
+    "failedRuns": 2,
+    "primaryAvailableUnderPriorRule": false,
+    "overallAgreement": "18 of 32 exact; 32 of 32 within one point; maximum difference 1; tie-direction disagreements are also reported",
+    "quotations": "0 unmatched; 0 empty quotation lists",
+    "scorerCommit": "e0ea32741308c9e8f6bd354d5e3b55957a204803",
+    "precisionDisposition": "The owner accepted the reserve expansion after reviewing precision limits of the 12-task design."
+  },
+  "execution": {
+    "captureTasks": 20,
+    "paidLiveExecutions": 80,
+    "replayExecutions": 80,
+    "expectedPipelineUsd": 1.1,
+    "conservativePipelineUsd": 10.0,
+    "retryAndUnknownReserveUsd": 1.0,
+    "stoppingRule": "Apply the canonical admission rule and the existing phase cost, fixture-validity and failure-retention rules. Do not infer zero from missing charges."
+  }
+}

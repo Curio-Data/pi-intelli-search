@@ -14,7 +14,7 @@ The accepted foundations remain in this branch. They are not experimental result
 | Structured Native Output, Matched Fetch Interfaces and Examples | Branch-only entrypoint and bounded single, breadth, manual and cache-follow-up scripts implemented; actual-host scripted wrapper tests pass |
 | Main-Usage Metadata | Correlated per-request input/cache fields observed in completed multi-turn development sessions; checks remain mandatory for every future run |
 | Experiment Runner | Integrated driver and bounded real single-task capture/replay/live sequence verified; remaining workflows have scripted host coverage |
-| Research Data and Findings | Development observations and a 32-run pilot inventory exist; blinded quality scoring and the independent measured series remain |
+| Research Data and Findings | Development observations and a scored 32-run pilot exist; the 20-task measured series remains |
 
 Production `src/native-registered-tools.ts` still registers four tools without output schemas or fetch. The separate `src/experimental/codemode-study.ts` registers structured results and capability-matched fetch through the actual native runtime, without the old prototype's search-operation substitution. `test/native-study.test.ts` exercises its direct and script paths, transport replay and cache follow-up on the pinned host. `test/native-replay-r2.test.ts` remains historical prototype evidence, not proof of the new entrypoint.
 
@@ -58,7 +58,7 @@ Series `codemode-pilot-20261103-r1` contains all 32 scheduled unforced live exec
 
 The offline pilot analysis marks the primary endpoint unavailable under the prespecified missing-data rule. Complete-case diagnostics have an on/off uncached-input ratio of 0.9394 and total-input ratio of 1.0159. These are not confirmatory estimates and establish no quality or superiority claim. A separate sensitivity path includes scored failed runs without repairing primary cells.
 
-Independent reviews found and prompted corrections to packet content, order balance, evidence fidelity, judge isolation, model provenance and score validation. The current candidate prepares 16 balanced study packets and four calibration packets, with per-packet judge processes, frozen prompts and raw attempt receipts. Blinded scoring and disagreement inspection come next, followed by the measured-series freeze.
+Independent reviews found and prompted corrections to packet content, order balance, evidence fidelity, judge isolation, model provenance and score validation. All 40 judge sessions completed on the first attempt. Both judges agreed with the owner on all four calibration cases, all quotations matched, overall scores agreed exactly for 18 of 32 answers and differed by at most one point for every answer. Pilot quality estimates remain diagnostic and show no demonstrated quality loss. The owner then approved valid settled answers, separate manual replay reliability, a 20-task population and restricted live claims. `measured-series-2` is frozen; capture has not started.
 
 ## Scope Removed from the Critical Path
 

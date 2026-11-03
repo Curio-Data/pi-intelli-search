@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { breadthResearchScript } from "../scripts/benchmarks/study-workflows.js";
+import { readStudyDesign } from "../scripts/benchmarks/study-design.js";
 import { analyseStudy, type StudyDataset } from "../scripts/benchmarks/study-analysis.js";
 import { observeToolCatalogue } from "../scripts/benchmarks/observer.js";
 import { asJson } from "../scripts/benchmarks/canonical.js";
@@ -36,6 +37,14 @@ test("draft study manifest binds every declared input without changing historica
     assert.equal(createHash("sha256").update(bytes).digest("hex"), input.sha256, input.path);
   }
 });
+test("the measured-series freeze binds the declared population and repeats", async () => {
+  const design = await readStudyDesign(new URL(".", root).pathname);
+  assert.equal(design.measuredSeries?.revision, "measured-series-2");
+  assert.equal(design.measuredSeries?.population.queryIds.length, 20);
+  assert.deepEqual(design.measuredSeries?.population.repeats, [1, 2]);
+  assert.deepEqual(design.measuredSeries?.population.populations, ["replay", "live"]);
+});
+
 test("all declared breadth tasks pass the same total and per-angle budgets to the script", async () => {
   const corpus = JSON.parse(await readFile(new URL("corpus.json", root), "utf8")) as {
     pageBudgets: { breadth: { totalPages: number; angles: number; perAngle: number } };

@@ -2,7 +2,7 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
 import { mkdir, open, readFile, readdir, rm, unlink } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
@@ -28,8 +28,8 @@ export async function studyMain(argv=process.argv.slice(2)):Promise<void>{
     repeat:{type:"string",default:"1"},seed:{type:"string",default:"20261102"},order:{type:"string"},"host-root":{type:"string"},
   }});
   if (values.analyse) {
-    if (!values.series || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(values.series) || !["development", "pilot"].includes(values.analyse)) throw new Error("Offline analysis requires --series and --analyse development|pilot");
-    console.log(JSON.stringify(await analyseStudySeries(join(REPO_ROOT,"evidence/benchmarks",values.series),values.analyse as "development"|"pilot"),null,2));
+    if (!values.series || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(values.series) || !["development", "pilot", "measured-series"].includes(values.analyse)) throw new Error("Offline analysis requires --series and --analyse development|pilot|measured-series");
+    console.log(JSON.stringify(await analyseStudySeries(join(REPO_ROOT,"evidence/benchmarks",values.series),values.analyse as "development"|"pilot"|"measured-series"),null,2));
     return;
   }
   const design=await readStudyDesign(DESIGN_ROOT);
@@ -74,35 +74,49 @@ export async function studyMain(argv=process.argv.slice(2)):Promise<void>{
   if(!values.series||!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(values.series))throw new Error("--series must be a plain new study series name");
   const task=design.tasks.find((t)=>t.id===values.task);
   if(!task)throw new Error("--task must identify a versioned corpus task");
-  if(task.partition!=="development"&&task.partition!=="pilot")throw new Error("This driver currently admits development and pilot tasks only; freeze the independent series before enabling measured tasks");
+  if(!["development","pilot","measured-series"].includes(task.partition))throw new Error("Only declared development, pilot and frozen measured-series tasks are admitted");
+  if(task.partition==="measured-series"&&!design.measuredSeries)throw new Error("Measured-series capture requires the frozen measured-series-2 design");
   if(!["capture","replay","live"].includes(values.mode))throw new Error("--mode must be capture, replay or live");
   const mode=values.mode as StudyRunMode;
-  if(mode==="capture"&&task.partition!=="development")throw new Error("Only development fixture captures are in the current paid schedule");
+  if(mode==="capture"&&!["development","measured-series"].includes(task.partition))throw new Error("Fixture captures are admitted only for development and the frozen measured series");
   if(mode==="live"&&task.partition==="development"&&task.id!=="CS-DEV-01")throw new Error("Development live checks are scheduled only for CS-DEV-01; broader live tasks belong to the pilot");
   if(!["off","on"].includes(values.arm))throw new Error("Only off/on are scheduled; the only arm needs a declared schedule revision");
   if(mode==="capture"&&(values.pair||values.arm!=="on"))throw new Error("Capture is one on-arm prescribed workflow, not a pair");
+  if(mode==="capture"&&task.partition==="measured-series"&&Number(values.repeat)!==1)throw new Error("A measured task has one capture; repeats belong to replay, not capture");
   const repeat=Number(values.repeat),seed=Number(values.seed);
+  if(task.partition==="measured-series"&&seed!==20261102)throw new Error("Measured-series order is frozen to seed 20261102");
   const previousText = await readFile(join(REPO_ROOT,"evidence/benchmarks",values.series,"observations.ndjson"),"utf8").catch((error:NodeJS.ErrnoException)=>{if(error.code==="ENOENT")return "";throw error;});
-  const priorRuns=previousText.split("\n").filter(Boolean).map((line)=>JSON.parse(line) as {runId:string;queryId:string;arm:string;repeat:number;population:string;purpose?:string});
+  const priorRuns=previousText.split("\n").filter(Boolean).map((line)=>JSON.parse(line) as {runId:string;queryId:string;arm:string;repeat:number;population:string;purpose?:string;fixtureSha256?:string|null});
   await assertSeriesInventoryComplete(join(REPO_ROOT,"evidence/benchmarks",values.series),priorRuns.map((run)=>run.runId));
   const order=priorRuns.length+1;
   if(values.order!==undefined && Number(values.order)!==order)throw new Error("Requested order differs from the append-only run inventory");
   if(!Number.isSafeInteger(repeat)||repeat<1||!Number.isSafeInteger(order)||order<1||!Number.isSafeInteger(seed)||seed<0||seed>0xffffffff)throw new Error("Invalid repeat, order or seed");
-  if(repeat>(task.partition==="pilot"?2:1))throw new Error("Repeat lies outside the declared development/pilot schedule");
+  if(repeat>(task.partition==="development"?1:2))throw new Error("Repeat lies outside the declared partition schedule");
   if(Boolean(values["rerun-of"])!==Boolean(values["rerun-reason"]?.trim()) || (values.pair&&values["rerun-of"]))throw new Error("A technical rerun needs its original identity, reason and one explicit arm");
   const sameCell=(run:typeof priorRuns[number],arm:string)=>run.queryId===task.id&&run.arm===arm&&run.repeat===repeat&&(mode==="capture"?run.purpose==="fixture-capture":run.purpose!=="fixture-capture"&&run.population===(mode==="live"?"live":"replay"));
+  const pairCompletion=task.partition==="measured-series"&&mode!=="capture"&&!values.pair&&["off","on"].some((arm)=>arm!==values.arm&&priorRuns.some((run)=>sameCell(run,arm)))&&!priorRuns.some((run)=>sameCell(run,values.arm));
+  if(task.partition==="measured-series"&&mode!=="capture"&&!values.pair&&!values["rerun-of"]&&!pairCompletion)throw new Error("A new measured cell requires --pair; a single arm is admitted only to complete an interrupted pair or as a declared rerun");
   if(values["rerun-series"]&&(!values["rerun-of"]||!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(values["rerun-series"])))throw new Error("A cross-series rerun requires a plain source series name and predecessor identity");
   if(values["rerun-of"]){
     const predecessors=values["rerun-series"]?(await readFile(join(REPO_ROOT,"evidence/benchmarks",values["rerun-series"],"observations.ndjson"),"utf8")).trim().split("\n").map((line)=>JSON.parse(line) as typeof priorRuns[number]):priorRuns;
     const previous=predecessors.find((run)=>run.runId===values["rerun-of"]);
     if(!previous||!sameCell(previous,values.arm))throw new Error("Rerun does not name this series' original cell");
   }else if(priorRuns.some((run)=>(values.pair?["off","on"]:[values.arm]).some((arm)=>sameCell(run,arm))))throw new Error("This cell already has an outcome; retain it and declare any technical rerun explicitly");
+  const seriesRoot=join(REPO_ROOT,"evidence/benchmarks",values.series);
   const bundle=values.bundle?await loadStudyReplayBundle(resolve(values.bundle)):undefined;
   if(mode==="replay"&&!bundle)throw new Error("Replay requires --bundle; no live pipeline fallback exists");
   if(bundle&&bundle.scenario!==task.id)throw new Error("Fixture scenario differs from task identity");
+  if(bundle&&task.partition==="measured-series"){
+    const bundlePath=resolve(values.bundle!);
+    if(!bundlePath.startsWith(seriesRoot+sep))throw new Error("Measured replay requires a capture from the same series");
+    const captureManifest=JSON.parse(await readFile(join(dirname(bundlePath),"manifest.json"),"utf8")) as {complete?:boolean};
+    if(captureManifest.complete!==true)throw new Error("Measured replay requires a complete capture manifest");
+    const fixtureSha256=sha256Canonical(asJson(bundle));
+    const previousFixture=priorRuns.find((run)=>run.queryId===task.id&&run.population==="replay"&&run.purpose!=="fixture-capture"&&run.fixtureSha256)?.fixtureSha256;
+    if(previousFixture&&previousFixture!==fixtureSha256)throw new Error("All measured replay cells for a task must use the same fixture");
+  }
   const credentials=await readCredentialFileState(join(agentDir,"auth.json"),STUDY_MAIN_MODEL.provider);
   if(credentials.providerEntryType!=="oauth")throw new Error("Main model requires the prescribed subscription login");
-  const seriesRoot=join(REPO_ROOT,"evidence/benchmarks",values.series);
   await mkdir(seriesRoot,{recursive:true});
   const seriesIdentity={schemaVersion:1,series:values.series,candidateCommit:source.commit,lockfileSha256:source.lockfileSha256,host:selection,models:available,design,remainingPlannedUsd:REMAINING_PLANNED_USD};
   const seriesPath=join(seriesRoot,"series.json");
@@ -118,7 +132,7 @@ export async function studyMain(argv=process.argv.slice(2)):Promise<void>{
     const rows=(await readFile(spend.path,"utf8")).trim().split("\n").map((line)=>JSON.parse(line) as {kind:string;runId?:string;reportedNanoUsd?:number});
     const ids=design.tasks.filter((t)=>t.partition===task.partition).map((t)=>t.id+"-");
     const settlements=rows.filter((row)=>row.kind==="settle"&&ids.some((id)=>row.runId?.startsWith(id)));
-    const phase=STUDY_PHASE_FORECAST[task.partition as "development"|"pilot"];
+    const phase=STUDY_PHASE_FORECAST[task.partition as "development"|"pilot"|"measured-series"];
     const reported=settlements.reduce((sum,row)=>sum+(row.reportedNanoUsd??0),0)/1e9;
     if(settlements.length>=Math.ceil(phase.paidRuns/2)&&reported>3*phase.expectedUsd)throw new Error("Observed phase spending exceeds the declared halfway threshold; no next paid run admitted");
   };

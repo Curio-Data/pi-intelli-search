@@ -1,6 +1,6 @@
 # Codemode Study v1 Costed Schedule
 
-Revision: `schedule-v1-r4-prepilot`. Status: driver-integration schedule; measured-series admission remains pending. Cash figures are [OpenRouter](https://openrouter.ai) pipeline forecasts in United States dollars (USD), not charges. Authority: [Protocol](PROTOCOL.md), [SPEND-BASELINE.json](SPEND-BASELINE.json), owner decision D5.
+Revision: `schedule-v1-r6-measured-series-2`. Status: owner approved the 20-task expansion; admission remains conditional on source and accounting checks. Cash figures are [OpenRouter](https://openrouter.ai) pipeline forecasts in United States dollars (USD), not charges. Authority: [Protocol](PROTOCOL.md), [SPEND-BASELINE.json](SPEND-BASELINE.json), owner decision D5.
 
 ## Budget Position
 
@@ -11,7 +11,7 @@ Revision: `schedule-v1-r4-prepilot`. Status: driver-integration schedule; measur
 | Pending holds (window 15 reserve 0.50; mcp-wiring hold 1.00; actual charges unknown) | 1.500000000 |
 | **Remaining under the conservative bound** | **27.954015214** |
 
-The table is the historical starting balance, not a live account statement. Subsequent study charges and holds are appended to `evidence/benchmarks/programme-spend/spend-ledger.jsonl`; subscription usage is reported separately. [Runner](RUNNER.md) describes the executable admission checks.
+The table is the historical starting balance, not a live account statement. Pilot charges were USD 0.17298914 and study charges through the pilot total USD 0.34526505, with no unknown-charge hold or active reservation. Subsequent study charges and holds are appended to `evidence/benchmarks/programme-spend/spend-ledger.jsonl`; subscription usage is reported separately. [Runner](RUNNER.md) describes the executable admission checks.
 
 ## Cost Basis
 
@@ -42,15 +42,15 @@ Batch admission inside a phase uses the same comparison, with "every remaining p
 | 1. Human Sanity Check | Owner verdicts are recorded for all four synthetic cases. The owner criticised their triviality; no judge reliability is established and no repeat review is requested | 0 | 0 | 0 | 0 |
 | 2. Development Capture and Live Check | Four workflow captures plus one off/on live pair on `CS-DEV-01`; the pair is integration evidence, not a measured-series result | 6 | 0 | 0.200 | 0.500 |
 | 3. Pilot | 8 tasks × 2 primary arms × 2 repeats live (32 paid executions); pilot replay smoke on the 4 development fixtures × 2 primary arms × 1 repeat = 8 replay executions (no pipeline cash) | 32 | 8 | 1.280 | 3.200 |
-| 4. Series freeze | Post-pilot review; freeze margins, size and stopping rule in manifest `measured-series-1`; re-derive cost forecasts | 0 | 0 | 0 | 0 |
-| 5. Measured series | Replay population: 12 captures (paid) plus 12 tasks × 2 primary arms × 2 repeats = 48 measured replay executions (no pipeline cash); live population: 12 tasks × 2 primary arms × 2 repeats = 48 paid executions | 12 + 48 | 48 | 2.400 | 6.000 |
+| 4. Series freeze | Post-pilot review and owner decisions; freeze margins, size and stopping rule in manifest `measured-series-2`; re-derive aggregate cost forecasts from observed development and pilot rates | 0 | 0 | 0 | 0 |
+| 5. Measured series | Replay population: 20 captures (paid) plus 20 tasks × 2 primary arms × 2 repeats = 80 measured replay executions (no pipeline cash); live population: 20 tasks × 2 primary arms × 2 repeats = 80 paid executions | 20 + 80 | 80 | 1.100 | 10.000 |
 | 6. Reserve for retries and unknown-charge events | Modelled reserve, not a proven bound; sized on the programme's observed failure pattern (window 15 precedent) | n/a | n/a | 0.300 | 1.000 |
 | 7. Analysis and publication package | Regeneration without model calls; judge sessions are subscription | 0 | 0 | 0 | 0 |
-| **Totals** | | 98 paid | 8 smoke + 48 measured | **4.180** | **10.700** |
+| **Totals** | | 138 paid | 8 smoke + 80 measured | **2.880** | **14.700** |
 
 The `only` arm is not scheduled: no `only` execution is budgeted in this costed primary series. Scheduling it requires a schedule revision admitted under the canonical admission rule above.
 
-Under these forecasts and the historical holds, the schedule leaves USD 17.254015214 of the ceiling before subsequent study charges. The executable phase forecasts are in `STUDY_PHASE_FORECAST` and `STUDY_REMAINING_PLANNED_USD` in `study-design.ts`. Admission uses a larger per-run reservation of USD 0.50 per allowed model attempt, plus the remaining-phase forecast. Affordability remains conditional on reported charges, retained unknowns and pilot costs; neither forecast nor hold is a guaranteed billing bound.
+The owner expanded the measured design to 20 tasks after pilot review. The expected forecast is USD 1.100, derived from observed capture and pilot rates with variability retained. Conservative admission is USD 10.000. The unexecuted measured-series and retry reserve is USD 11.000, leaving USD 16.954015214 of the ceiling before subsequent study charges. Completed development and pilot charges are counted only in exposure, not again in remaining planned work. The executable phase forecasts are in `STUDY_PHASE_FORECAST` and `STUDY_REMAINING_PLANNED_USD` in `study-design.ts`. Admission uses a larger per-run reservation of USD 0.50 per allowed model attempt, plus the remaining-phase forecast. Affordability remains conditional on reported charges, retained unknowns and pilot costs; neither forecast nor hold is a guaranteed billing bound.
 
 ## Uncertainty and Stopping Rules
 

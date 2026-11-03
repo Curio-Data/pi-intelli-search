@@ -71,6 +71,19 @@ The owner explicitly stopped exploring security implications and required a retu
 
 Separate deadline and query-expansion studies, broader platform qualification, package release preparation and a polished interactive progress display are not prerequisites for the core comparison. Keep the existing engine capabilities equal between arms. Preserve ordinary credential care, bounded calls, cancellation, spend accounting and scientific validity checks; stopping the security work does not authorise exposing credentials or inventing observations.
 
+## Measured-Series Decisions, 3 November 2026
+
+After reviewing the scored pilot and the proposed measured-series freeze, the owner made four further decisions before capture:
+
+- **D1:** Settled answers with operation failures count as valid observations in their arm. Incomplete usage, changed catalogues, replay misses, unfinished responses and interruptions remain technical missingness.
+- **D2:** Manual replay is reported separately from the replay primary analysis. Off-arm copy mismatches remain reliability findings rather than being hidden or repaired by live fallback.
+- **D3:** Include all eight reserve tasks for a 20-task measured population. Exposure labels remain unchanged.
+- **D4:** Accept a live population dominated by branch-only fetch for now, with claims restricted accordingly. The owner will make a final integration judgement after assessment.
+- **D1 (capture):** Permit one failed-capture rerun with a new identity and recorded reason. Its replay cells can use the recaptured fixture while the failed capture remains retained.
+- **D2 (budgets):** A budget-limited tool call with a settled answer for every prompt counts as a valid task outcome. Provider, transport, catalogue, replay, usage and unfinished-response failures remain technical missingness.
+
+These decisions revise the pre-capture protocol and schedule. They do not reopen historical runs, change prescribed models, increase the USD 30 ceiling or authorise package integration or publication.
+
 ## Authority and Preservation
 
 This decision record and the Research Plan govern current scope, sequencing and completion. Earlier contract/API declarations retain their value as accepted implementation references; their release-first sequencing, old-host gates and earlier paid-canary order do not govern this research continuation. The frozen old method and corpus remain unchanged as historical inputs. New protocol and corpus revisions must identify what is retained, extended or superseded before capture; historical hashes and accepted results are never rewritten.
