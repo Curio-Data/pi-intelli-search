@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "study": "codemode-study-v1",
-  "revision": "manifest-v1-r6-prepilot",
+  "revision": "manifest-v1-r9-postpilot",
   "recordedUtc": "2026-11-02T17:49:03Z",
-  "reboundUtc": "2026-11-03T07:47:09Z",
-  "revisionNote": "Adds an explicit pinned-host root option so a managed-host upgrade cannot change the study host mid-programme. The comparison protocol, corpus, calibration inputs, historical baseline, models, reasoning, source budgets and token endpoint are unchanged. Previous series retain their original host and source identities.",
-  "status": "pre-pilot driver candidate; independent measured-series execution requires its later freeze",
-  "revisionPolicy": "Pre-pilot drafts may rebind before capture. Each executed series binds exact source commit and input hashes; no existing run is relabelled when a later draft changes.",
+  "reboundUtc": "2026-11-03T09:41:00Z",
+  "revisionNote": "Freezes the reviewed judge-launch and output contract after two independent reviews and witnessed dry runs. Adds atomic packet preparation, isolated coordinator-owned processes, exact output schemas, per-file provenance, unique sessions and decoded quotation checks. The arms, corpus, calibration inputs, models, source budgets and token endpoint are unchanged.",
+  "status": "post-pilot quality scoring; independent measured-series execution requires its later freeze",
+  "revisionPolicy": "Pre-freeze revisions bind exact preparer and input hashes. Each executed series retains its original source and design identities; no existing run is relabelled when a later revision changes.",
   "authority": {
     "ownerDecisions": "docs/plans/codemode/OWNER-REFOCUS.md",
     "researchPlan": "docs/plans/codemode/RESEARCH-PLAN.md",
@@ -15,11 +15,14 @@
   "inputs": [
     {"path": "corpus.json", "sha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed", "revision": "corpus-v1-r3"},
     {"path": "calibration.json", "sha256": "c0abba11206d841d692a09c69f2d59b75bca85d1934948f50db702f301fb0a11", "revision": "calibration-v1-r3"},
-    {"path": "PROTOCOL.md", "sha256": "3d707d14960d561c28cb1165397db1b9f9634eea50281045bdce4eb0bfdc9c3a", "revision": "study-v1-r5-prepilot"},
+    {"path": "PROTOCOL.md", "sha256": "bd9a444ab542e965efee30c7f612e2f22e182b02f21dd12a312acc3e99481848", "revision": "study-v1-r6-postpilot"},
+    {"path": "JUDGING.md", "sha256": "1da52b404ac782f41abb728b86ad56e9151b7741a81f59d721405c5a4928844d", "revision": "judging-v4"},
+    {"path": "judge-prompt.json", "sha256": "61fda097504071e347f5211736d4c8df9d0558c81c213a1076b9eaf78c8153a3", "revision": "judge-prompt-v2"},
+    {"path": "calibration-prompt.json", "sha256": "84a9240a509afc6871a602eebb33dc528f7412d8b5fe4c9eade6c12bb50a380f", "revision": "calibration-prompt-v1"},
     {"path": "SCHEDULE.md", "sha256": "2b1564302ae50e178b5170fb02c09cc73fca600fd1baa9466ffba4b967aa4672", "revision": "schedule-v1-r4-prepilot"},
     {"path": "SPEND-BASELINE.json", "sha256": "b3dffbba4cd500a19247be505f619545d71675948c52191070b4f4afd58deea3", "revision": "spend-baseline-3"},
     {"path": "CALIBRATION-REVIEW.md", "sha256": "ce81efe7b224f7e99e633d192a5f831375b34fe251316d409896723a09c30562", "revision": "calibration-review-v1-r3"},
-    {"path": "RUNNER.md", "sha256": "f08a834b816f15ff04aeec89632ea2c75b93dfc78974ad0f4f11771450d279b6", "revision": "runner-v3"}
+    {"path": "RUNNER.md", "sha256": "68ec5fa2758f985a2db0c79f19d97b213a0b44249504a5556e93b04f7dd12f46", "revision": "runner-v4"}
   ],
   "historicalInputsUnchanged": {
     "oldCorpusManifest": "docs/benchmarks/corpus/manifest.json",

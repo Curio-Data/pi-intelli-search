@@ -5,9 +5,13 @@ replay,qualityJudge1,difference,0,4,,,,,false
 replay,qualityJudge2,difference,0,4,,,,,false
 replay,returnedMs,difference,0,4,,,,,false
 replay,reportedPipelineUsd,difference,1,3,,0,,,false
+replay,qualityJudge1IncludingFailed,difference,0,4,,,,,false
+replay,qualityJudge2IncludingFailed,difference,0,4,,,,,false
 live,mainInputUncached,ratio,1,3,1.269712929307915,3636,,,false
 live,mainInputTotal,ratio,1,3,0.8973580815607635,-3788,,,false
 live,qualityJudge1,difference,0,4,,,,,false
 live,qualityJudge2,difference,0,4,,,,,false
 live,returnedMs,difference,1,3,0.4970845457593786,-27111.931999,,,false
 live,reportedPipelineUsd,difference,1,3,,-0.01687,,,false
+live,qualityJudge1IncludingFailed,difference,0,4,,,,,false
+live,qualityJudge2IncludingFailed,difference,0,4,,,,,false

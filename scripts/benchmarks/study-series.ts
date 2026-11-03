@@ -7,7 +7,8 @@ import { createHash } from "node:crypto";
 import { reproduceAnalysis, type StudyAnalysisRun, type StudyDataset } from "./study-analysis.js";
 import type { StudyTask } from "./study-design.js";
 import { writeNewJson } from "./study-host.js";
-import { studyTreeDigest } from "./study-runner.js";
+import { studyTreeDigest, REPO_ROOT } from "./study-runner.js";
+import { applyQualityScores, humanCalibrationApproved } from "./study-quality.js";
 import { observeToolCatalogue } from "./observer.js";
 import { asJson } from "./canonical.js";
 
@@ -63,14 +64,21 @@ export async function analyseStudySeries(seriesRoot: string, partition: "develop
     if(known&&derived!==run.toolCatalogueSha256)metadataCorrections.push({runId:run.runId,field:"toolCatalogueSha256",recorded:run.toolCatalogueSha256,derived,sourceFileSha256:createHash("sha256").update(text).digest("hex")});
     normalisedRuns.push({...run,toolCatalogueSha256:derived,toolCatalogueObserved:known});
   }
+  const quality=await applyQualityScores(seriesRoot,normalisedRuns);
+  const scored=quality.judgeCounts.some((count)=>count>0);
+  const calibrationSha256=createHash("sha256").update(await readFile(join(REPO_ROOT,"docs/benchmarks/codemode-study-v1/calibration.json"))).digest("hex");
+  const approved=scored&&await humanCalibrationApproved(join(REPO_ROOT,"evidence/benchmarks/codemode-study-v1/calibration/decisions.json"),series.design.corpusSha256,calibrationSha256);
+  const qualityManifest=await readFile(join(seriesRoot,"quality-v1","manifest.json"),"utf8").catch((error:NodeJS.ErrnoException)=>{if(error.code==="ENOENT")return null;throw error;});
+  if(qualityManifest&&(JSON.parse(qualityManifest) as {partition?:string}).partition!==partition)throw new Error("Quality packet partition differs from the requested analysis");
   const queryIds=series.design.tasks.filter((task)=>task.partition===partition).map((task)=>task.id);
   const population={queryIds,repeats:partition==="pilot"?[1,2]:[1]};
-  const dataset:StudyDataset={schemaVersion:1,design:{methodSha256:series.design.methodSha256,corpusSha256:series.design.corpusSha256,candidateCommit:series.candidateCommit,analysisPartition:partition,populations:{replay:population,live:population},bootstrapSeed:20261102,bootstrapDraws:10_000,confidence:0.95,humanCalibrationApproved:false},runs:normalisedRuns,metadataCorrections};
+  const gatedRuns=approved?quality.runs:quality.runs.map((run)=>({...run,qualityJudge1:null,qualityJudge2:null}));
+  const dataset:StudyDataset={schemaVersion:1,design:{methodSha256:series.design.methodSha256,corpusSha256:series.design.corpusSha256,candidateCommit:series.candidateCommit,analysisPartition:partition,populations:{replay:population,live:population},bootstrapSeed:20261102,bootstrapDraws:10_000,confidence:0.95,humanCalibrationApproved:approved},runs:gatedRuns,...(qualityManifest?{quality:{manifestSha256:createHash("sha256").update(qualityManifest).digest("hex"),judges:quality.judgeIds,records:approved?quality.records:[],disagreements:approved?quality.disagreements:[],calibration:approved?quality.calibration:[]}}:{}),metadataCorrections};
   const stamp=new Date().toISOString().replace(/[-:.]/g,"");
   const datasetPath=join(seriesRoot,`dataset-${partition}-${stamp}.json`);
   const output=join(seriesRoot,`analysis-${partition}-${stamp}`);
   await writeNewJson(datasetPath,dataset);
   await mkdir(output);
   await reproduceAnalysis(datasetPath,output);
-  return {datasetPath,output,analysisPartition:partition,qualityScored:false};
+  return {datasetPath,output,analysisPartition:partition,qualityScored:Object.fromEntries(quality.judgeIds.map((id,index)=>[id,quality.judgeCounts[index]])),humanCalibrationApproved:approved};
 }

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "revision": "calibration-prompt-v1",
+  "instructions": [
+    "Compare candidates A and B using only the question, synthetic sources and rubric in this packet. Do not use other files, the web or original labels.",
+    "Return preference A, B or tie using coverage, provenance, limitations and usefulness. Prefer the answer whose material claims are supported and whose uncertainty is represented faithfully.",
+    "Return only a JSON object with caseId, preference, rationale and evidenceQuotes. The coordinator adds model and session identity.",
+    "evidenceQuotes contains exact short quotations from the sources or either candidate answer, or an empty array."
+  ],
+  "outputSchema": {
+    "caseId": "CAL-case-identifier",
+    "preference": "A | B | tie",
+    "rationale": "Concise evidence-backed rationale",
+    "evidenceQuotes": ["Exact quotation"]
+  }
+}

@@ -14,7 +14,7 @@ The accepted foundations remain in this branch. They are not experimental result
 | Structured Native Output, Matched Fetch Interfaces and Examples | Branch-only entrypoint and bounded single, breadth, manual and cache-follow-up scripts implemented; actual-host scripted wrapper tests pass |
 | Main-Usage Metadata | Correlated per-request input/cache fields observed in completed multi-turn development sessions; checks remain mandatory for every future run |
 | Experiment Runner | Integrated driver and bounded real single-task capture/replay/live sequence verified; remaining workflows have scripted host coverage |
-| Research Data and Findings | Versioned one-task development diagnostic bundle exists; pilot, quality scoring and the independent measured series remain |
+| Research Data and Findings | Development observations and a 32-run pilot inventory exist; blinded quality scoring and the independent measured series remain |
 
 Production `src/native-registered-tools.ts` still registers four tools without output schemas or fetch. The separate `src/experimental/codemode-study.ts` registers structured results and capability-matched fetch through the actual native runtime, without the old prototype's search-operation substitution. `test/native-study.test.ts` exercises its direct and script paths, transport replay and cache follow-up on the pinned host. `test/native-replay-r2.test.ts` remains historical prototype evidence, not proof of the new entrypoint.
 
@@ -50,7 +50,15 @@ The managed installation then advanced to `Pi` 1.5.0. The next capture refused b
 
 Manual capture and on-arm replay completed. Off-arm replay is retained as aborted and invalid after the main model omitted `strconv.Itoa(i + 3)` while copying a fetched page into `intelli_extract`. The exact request hash therefore had no fixture. The runner did not weaken replay matching or retry against live services. This cell has no paired token estimate. Its on-arm replay consumed every fixture and reported no new pipeline cash.
 
-Follow-up capture and both replay arms completed, including the saved-report read and complete fixture consumption. Uncached main input was 7,533 tokens off and 6,717 on; total input was 12,141 off and 21,949 on. These are one-repeat development observations, not evidence of a general effect. Manual and follow-up captures reported USD 0.0298143 and USD 0.02054659 respectively. Study charges now total USD 0.17227591, with no new unknown-charge hold or active reservation. The offline development exports retain missing cells and unscored quality. Next work is the pilot's unforced live population and independent source-backed scoring, followed by the measured-series freeze.
+Follow-up capture and both replay arms completed, including the saved-report read and complete fixture consumption. Uncached main input was 7,533 tokens off and 6,717 on; total input was 12,141 off and 21,949 on. These are one-repeat development observations, not evidence of a general effect. Manual and follow-up captures reported USD 0.0298143 and USD 0.02054659 respectively. Study charges then totalled USD 0.17227591, with no new unknown-charge hold or active reservation. The offline development exports retain missing cells and unscored quality.
+
+## Pilot Observations
+
+Series `codemode-pilot-20261103-r1` contains all 32 scheduled unforced live executions on build `f470f03`: eight tasks, two repeats and two arms. Thirty runs completed and two on-arm runs failed after one fetch failure each, while still producing visible answers and complete usage evidence. No run was repeated or replaced. Pilot pipeline charges are USD 0.17298914, bringing study charges to USD 0.34526505 with no unknown-charge hold or active reservation.
+
+The offline pilot analysis marks the primary endpoint unavailable under the prespecified missing-data rule. Complete-case diagnostics have an on/off uncached-input ratio of 0.9394 and total-input ratio of 1.0159. These are not confirmatory estimates and establish no quality or superiority claim. A separate sensitivity path includes scored failed runs without repairing primary cells.
+
+Independent reviews found and prompted corrections to packet content, order balance, evidence fidelity, judge isolation, model provenance and score validation. The current candidate prepares 16 balanced study packets and four calibration packets, with per-packet judge processes, frozen prompts and raw attempt receipts. Blinded scoring and disagreement inspection come next, followed by the measured-series freeze.
 
 ## Scope Removed from the Critical Path
 

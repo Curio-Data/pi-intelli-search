@@ -267,6 +267,34 @@
           },
           "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
         }
+      },
+      "qualitySensitivity": {
+        "qualityJudge1": {
+          "pairs": [],
+          "missingQueries": [
+            "CS-DEV-01",
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": null,
+          "difference": null,
+          "interpretation": "Includes scored failed and invalid runs; diagnostic sensitivity only, never a primary endpoint"
+        },
+        "qualityJudge2": {
+          "pairs": [],
+          "missingQueries": [
+            "CS-DEV-01",
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": null,
+          "difference": null,
+          "interpretation": "Includes scored failed and invalid runs; diagnostic sensitivity only, never a primary endpoint"
+        }
       }
     },
     "live": {
@@ -443,9 +471,40 @@
           },
           "interpretation": "Complete-case estimates are diagnostic when primaryAvailable is false"
         }
+      },
+      "qualitySensitivity": {
+        "qualityJudge1": {
+          "pairs": [],
+          "missingQueries": [
+            "CS-DEV-01",
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": null,
+          "difference": null,
+          "interpretation": "Includes scored failed and invalid runs; diagnostic sensitivity only, never a primary endpoint"
+        },
+        "qualityJudge2": {
+          "pairs": [],
+          "missingQueries": [
+            "CS-DEV-01",
+            "CS-DEV-02",
+            "CS-DEV-03",
+            "CS-DEV-04"
+          ],
+          "undefinedRatioQueries": [],
+          "ratio": null,
+          "difference": null,
+          "interpretation": "Includes scored failed and invalid runs; diagnostic sensitivity only, never a primary endpoint"
+        }
       }
     }
   },
   "qualityAvailable": false,
+  "qualityProvenance": null,
+  "qualityDisagreements": [],
+  "judgeHumanCalibration": [],
   "note": "Reported pipeline cost is not an account-debit audit. Subscription usage is not cash spend. No superiority conclusion follows from token usage alone. The only arm is retained in the inventory but is not analysed in this version."
 }

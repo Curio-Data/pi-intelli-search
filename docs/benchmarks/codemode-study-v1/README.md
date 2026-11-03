@@ -1,6 +1,6 @@
 # Codemode Study v1
 
-Versioned protocol, corpus, calibration packet, costed schedule and spend baseline for the research-first Codemode `off`/`on` comparison. Authority: [Owner Decisions](../../plans/codemode/OWNER-REFOCUS.md), [Research Plan](../../plans/codemode/RESEARCH-PLAN.md), [Resume](../../plans/codemode/RESUME.md). Status: pre-pilot integrated-driver candidate. Current execution outcomes are recorded in [Status](../../plans/codemode/STATUS.md); no measured-series benefit is claimed.
+Versioned protocol, corpus, calibration packet, costed schedule and spend baseline for the research-first Codemode `off`/`on` comparison. Authority: [Owner Decisions](../../plans/codemode/OWNER-REFOCUS.md), [Research Plan](../../plans/codemode/RESEARCH-PLAN.md), [Resume](../../plans/codemode/RESUME.md). Status: post-pilot quality scoring and measured-series preparation. Current execution outcomes are recorded in [Status](../../plans/codemode/STATUS.md); no measured-series benefit is claimed.
 
 ## Files
 
@@ -12,6 +12,8 @@ Versioned protocol, corpus, calibration packet, costed schedule and spend baseli
 | [calibration.json](calibration.json) | Four disjoint synthetic calibration cases, one per workflow; calibration only, never live research results; approval needs explicit usable verdicts for all four IDs |
 | [CALIBRATION-REVIEW.md](CALIBRATION-REVIEW.md) | Original sanity-check procedure; the owner's verdicts and criticism are now recorded |
 | [RUNNER.md](RUNNER.md) | Executable driver, bounded admission, capture/replay and offline analysis commands |
+| [JUDGING.md](JUDGING.md) | Blinded source-backed quality packets, scoring scale, judge outputs and offline score ingestion |
+| [judge-prompt.json](judge-prompt.json), [calibration-prompt.json](calibration-prompt.json) | Frozen scoring and calibration instructions with exact output schemas |
 | [SCHEDULE.md](SCHEDULE.md) | Costed phase schedule with the canonical admission rule and stopping rules |
 | [SPEND-BASELINE.json](SPEND-BASELINE.json) | Machine-readable deduplicated reconciliation of the branch's historical OpenRouter expense and pending holds (`spend-baseline-3`), citing durable evidence copies |
 

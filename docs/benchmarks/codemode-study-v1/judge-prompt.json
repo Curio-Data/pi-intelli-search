@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "revision": "judge-prompt-v2",
+  "instructions": [
+    "Score candidates A and B independently using only the task, rubric, answers and captured evidence in this packet. Do not use the web, other files or prior answers.",
+    "Do not infer or reward an experimental arm, tool route, verbosity or answer position. Evidence composition can differ because it records what the run's operations retrieved.",
+    "Use per-turn task questions to assess the corresponding terminal answer for that turn. Apply the stated citation, uncertainty and word requirements to provenance, limitations and usefulness. Do not assess tool timing or require a saved-report read in a live follow-up when other captured base evidence answers the task.",
+    "A search-summary is a discovery lead, not independent source evidence. A material claim supported only by a search-summary has provenance at most 2. A retrieved page or extraction can corroborate the claim instead.",
+    "Treat research-synthesis, collation-synthesis and read-report as derived material, not independent primary evidence. Check their claims against pages and extractions where available.",
+    "A source-record documents a candidate, unavailable page or other state without supplying content. Do not treat it as fetched evidence. Account for truncated pages and failed operations when assessing provenance and limitations.",
+    "Score every criterion and overall from 0 to 4 as defined in scoreScale. The overall score is holistic, not an arithmetic mean.",
+    "Give a concise evidence-backed rationale and exact short evidenceQuotes copied from the candidate answer or evidence. Use an empty array when no quotation is needed.",
+    "Return only a JSON object with packetId, A and B. Each candidate value has overall, coverage, provenance, limitations, usefulness, rationale and evidenceQuotes. The coordinator adds model and session identity."
+  ],
+  "scoreScale": {
+    "4": "Satisfies the criterion; any omission is minor and does not mislead.",
+    "3": "Useful with limited omissions or imprecision that do not undermine central claims.",
+    "2": "Material omissions, unsupported claims or uncertainty handling, but useful supported content remains.",
+    "1": "Central requirements are missing or severe unsupported material leaves little usable content.",
+    "0": "Unusable, absent or centrally contradicts the captured evidence."
+  },
+  "outputSchema": {
+    "packetId": "Q-packet-identifier",
+    "A": "score object",
+    "B": "score object"
+  },
+  "scoreObjectFields": ["overall", "coverage", "provenance", "limitations", "usefulness", "rationale", "evidenceQuotes"],
+  "criticalCriteria": ["coverage", "provenance", "limitations"],
+  "overallRules": [
+    "If any critical criterion is 0, overall is 0.",
+    "Overall is at most one point above the lowest critical criterion score.",
+    "A material claim supported only by a search-summary caps provenance at 2."
+  ]
+}

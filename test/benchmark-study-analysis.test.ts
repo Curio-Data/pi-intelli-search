@@ -57,6 +57,8 @@ test("failed runs and reruns stay in inventory without replacing the original", 
   assert.equal(result.inventory.length, 9);
   assert.equal(result.populations.replay.outcomes.failed, 1);
   assert.equal(result.populations.replay.metrics.mainInputUncached.primaryAvailable, false);
+  assert.equal(result.populations.replay.qualitySensitivity.qualityJudge1.pairs.length, 2);
+  assert.match(result.populations.replay.qualitySensitivity.qualityJudge1.interpretation, /diagnostic sensitivity/);
 });
 test("analysis refuses duplicate identities, mismatched freeze and invalid values", () => {
   const data = dataset();

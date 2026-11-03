@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "edition": "development-v1-metadata-corrected",
+  "edition": "development-v1-analysis-v2",
   "scope": "diagnostic, one task, not the measured series",
   "files": [
     {
@@ -13,11 +13,11 @@
     },
     {
       "path": "derived/analysis.json",
-      "sha256": "1eed09abb5fe2056a5956794f6b7cf02dfa22dfb9705331702035b29e74b62e1"
+      "sha256": "a7d57ecd006a32ab30a4d71b4899de618c4e0bed9cec020dfeaa8f7ec3bb89fe"
     },
     {
       "path": "derived/effects.csv",
-      "sha256": "6fcbc64a443d43e1d8aed6712ed8fa7a5a4dcc09b05f1aacaafc17cd196f23a4"
+      "sha256": "24ef85756662515f770a04d5f9d450c047c236b4e915d795289036594fda13df"
     },
     {
       "path": "earlier-failure.json",

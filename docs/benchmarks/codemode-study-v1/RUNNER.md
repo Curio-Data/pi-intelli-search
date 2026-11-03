@@ -1,6 +1,6 @@
 # Study Runner
 
-Revision: `runner-v3`. The driver executes the branch-only experiment on pinned `Pi` 1.4.0. It is not the historical end-to-end harness or a release gate. `scripts/benchmarks/study.ts` is the entrypoint; `study-runner.ts` owns one actual session, and `study-transports.ts` captures or replays the pipeline beneath its real policy and accounting.
+Revision: `runner-v4`. The driver executes the branch-only experiment on pinned `Pi` 1.4.0. It is not the historical end-to-end harness or a release gate. `scripts/benchmarks/study.ts` is the entrypoint; `study-runner.ts` owns one actual session, and `study-transports.ts` captures or replays the pipeline beneath its real policy and accounting.
 
 ## Execution Scope
 
@@ -93,4 +93,4 @@ Raw data belongs under `evidence/benchmarks/<series>/`. Each run retains identit
 
 Replay timing is not production latency. Recorded cancellations can yield incomplete replay accounting, and mid-body failures can replay earlier than their original failure point; the original capture remains the accounting witness for those cases. Failed or wire-incomplete comparative cells make their primary endpoint unavailable under the prespecified rule. Observing less input is not evidence of preserved quality or of superiority.
 
-The owner labelled the four synthetic calibration cases and criticised their triviality and uniformly positioned winners. Those labels are retained as sanity checks only. They do not validate the judges; no repeat of that exercise is requested. Source-backed, independently blinded quality scoring and the publication bundle remain later study work.
+The owner labelled the four synthetic calibration cases and criticised their triviality and uniformly positioned winners. Those labels are retained as sanity checks only. They do not validate the judges; no repeat of that exercise is requested. [Blinded Quality Judging](JUDGING.md) owns source-backed packet preparation, independent judge outputs and offline score ingestion. The publication bundle remains later study work.

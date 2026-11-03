@@ -40,6 +40,13 @@ export interface StudyDataset {
     readonly humanCalibrationApproved: boolean;
   };
   readonly runs: readonly StudyAnalysisRun[];
+  readonly quality?: {
+    readonly manifestSha256: string;
+    readonly judges: readonly string[];
+    readonly records: readonly unknown[];
+    readonly disagreements: readonly unknown[];
+    readonly calibration: readonly unknown[];
+  };
   readonly metadataCorrections?: readonly { runId: string; field: string; recorded: string; derived: string; sourceFileSha256: string }[];
 }
 const endpoints = ["mainInputUncached", "mainInputTotal", "qualityJudge1", "qualityJudge2", "returnedMs", "reportedPipelineUsd"] as const;
@@ -109,6 +116,12 @@ export function analyseStudy(dataset: StudyDataset) {
       observedOriginalRuns: originals.length,
       outcomes: Object.fromEntries(["completed", "failed", "aborted", "not-started"].map((status) => [status, originals.filter((r) => r.status === status).length])),
       metrics,
+      qualitySensitivity: Object.fromEntries(([1, 2] as const).map((judge) => {
+        const endpoint = judge === 1 ? "qualityJudge1" : "qualityJudge2";
+        const values = samples.map((sample) => ({ ...sample, valid: sample[endpoint] !== null }));
+        const estimate = estimatePairedQueries(values, "off", "on", endpoint, expected);
+        return [endpoint, { ...estimate, interpretation: "Includes scored failed and invalid runs; diagnostic sensitivity only, never a primary endpoint" }];
+      })),
     }];
   }));
   return {
@@ -118,6 +131,9 @@ export function analyseStudy(dataset: StudyDataset) {
     inventory: dataset.runs.map((r) => ({ runId: r.runId, purpose: r.purpose ?? "comparative-task", population: r.population, partition: r.partition, arm: r.arm, status: r.status, rerunOf: r.rerunOf ?? null, mainInputTotal: r.mainInputTotalComplete ? r.mainUsage?.inputTotal ?? null : null, mainUsageComplete: r.mainUsageComplete, mainInputTotalComplete: r.mainInputTotalComplete })),
     populations,
     qualityAvailable: dataset.design.humanCalibrationApproved,
+    qualityProvenance: dataset.quality ? { manifestSha256: dataset.quality.manifestSha256, judges: dataset.quality.judges } : null,
+    qualityDisagreements: dataset.design.humanCalibrationApproved ? dataset.quality?.disagreements ?? [] : [],
+    judgeHumanCalibration: dataset.design.humanCalibrationApproved ? dataset.quality?.calibration ?? [] : [],
     note: "Reported pipeline cost is not an account-debit audit. Subscription usage is not cash spend. No superiority conclusion follows from token usage alone. The only arm is retained in the inventory but is not analysed in this version.",
   };
 }
@@ -133,6 +149,9 @@ export async function reproduceAnalysis(input: string, output: string): Promise<
   for (const [population, summary] of Object.entries(analysis.populations)) {
     for (const [endpoint, metric] of Object.entries(summary.metrics)) {
       rows.push([population, endpoint, metric.intervalScale, metric.pairs.length, metric.missingQueries.length, metric.ratio ?? "", metric.difference ?? "", metric.interval.lower ?? "", metric.interval.upper ?? "", metric.primaryAvailable].join(","));
+    }
+    for (const [endpoint, metric] of Object.entries(summary.qualitySensitivity)) {
+      rows.push([population, `${endpoint}IncludingFailed`, "difference", metric.pairs.length, metric.missingQueries.length, metric.ratio ?? "", metric.difference ?? "", "", "", false].join(","));
     }
   }
   await writeFile(join(output, "effects.csv"), rows.join("\n") + "\n");

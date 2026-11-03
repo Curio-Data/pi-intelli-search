@@ -1,6 +1,6 @@
 # Codemode Study v1 Protocol
 
-Revision: `study-v1-r5-prepilot`. Status: integrated-driver candidate; independent measured-series execution remains subject to the post-pilot freeze. No task in this study has been captured, scored or paid for. Authority: [Owner Decisions](../../plans/codemode/OWNER-REFOCUS.md) (2 November 2026), [Research Plan](../../plans/codemode/RESEARCH-PLAN.md), [Resume](../../plans/codemode/RESUME.md). This protocol supersession note: the frozen historical method ([`docs/benchmarks/codemode/METHOD.md`](../codemode/METHOD.md) revision `P0-2`) remains intact as a reference; this document defines the new versioned study required by the owner refocus. Arm names follow the plan: `off`, `on`, `only`, mapping to the old method's A2, B and C. Old A0/A remain historical engine baselines, not arms of this study.
+Revision: `study-v1-r6-postpilot`. Status: pilot observations are retained; independent measured-series execution remains subject to the post-pilot freeze. Authority: [Owner Decisions](../../plans/codemode/OWNER-REFOCUS.md) (2 November 2026), [Research Plan](../../plans/codemode/RESEARCH-PLAN.md), [Resume](../../plans/codemode/RESUME.md). This protocol supersession note: the frozen historical method ([`docs/benchmarks/codemode/METHOD.md`](../codemode/METHOD.md) revision `P0-2`) remains intact as a reference; this document defines the new versioned study required by the owner refocus. Arm names follow the plan: `off`, `on`, `only`, mapping to the old method's A2, B and C. Old A0/A remain historical engine baselines, not arms of this study.
 
 ## Purpose
 
@@ -116,7 +116,7 @@ Codemode-only mode (`only`) is a secondary arm of the study design, not a schedu
 
 ## Judging and Calibration
 
-1. Both judges score every measured-series final answer against the task rubric with identical blinded evidence and balanced answer order, in fresh sessions. Neither judge sees the other's output.
+1. Both judges score every measured-series final answer against the task rubric with identical blinded evidence and balanced answer order, in fresh sessions. Neither judge sees the other's output. [Blinded Quality Judging](JUDGING.md) owns the 0–4 scoring scale, packet preparation and score-file contract.
 2. The owner supplied A verdicts for all four cases in [calibration.json](calibration.json), and criticised their triviality and uniformly positioned winners. The explicit decisions and input hashes are retained in `evidence/benchmarks/codemode-study-v1/calibration/decisions.json`. These are sanity-check labels, not evidence of judge reliability. No repeat review of these cases is requested. Source-backed blinded scoring and retained disagreements remain required before any quality claim.
 3. Disagreements between judges and between either judge and the human-checked labels are retained and inspected, not adjudicated by preference.
 4. Judge prompts are frozen before final-series scoring.
@@ -149,12 +149,12 @@ Durable raw study data is written directly under `evidence/benchmarks/codemode-s
 
 ## Pending Prerequisites
 
-This protocol is prepared, not running. The following prerequisites remain pending; preparation is not execution:
+The development and pilot observations are retained. The following prerequisites remain for quality claims and measured-series execution:
 
 | Prerequisite | Required Before | State | Owner |
 |---|---|---|---|
-| Independent driver review, then bounded development verification | Remaining development and pilot work | The first `CS-DEV-01` capture, replay pair and live pair form the verification sequence after review and passing gates; no prior live comparison is required | Coordinator |
-| Independent source-backed quality scoring | Quality claims | Human sanity-check labels are recorded; judge calibration, blinded scoring and disagreement analysis remain | Coordinator and prescribed judges |
+| Independent driver review and bounded development verification | Remaining development and pilot work | Complete; all four development workflows have captures and replay attempts, with the invalid manual cell retained | Coordinator |
+| Independent source-backed quality scoring | Quality claims | Human sanity-check labels are recorded; blinded pilot scoring and disagreement analysis remain before quality claims | Coordinator and prescribed judges |
 | Post-pilot series freeze (manifest `measured-series-1`: margins, final size, stopping rule) | Measured-series capture only | Pending; the pilot itself is paid work that precedes the freeze | Coordinator |
 
 ## Change Control
