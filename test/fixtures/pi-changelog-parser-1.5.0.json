@@ -1,0 +1,21 @@
+{
+  "source": "@earendil-works/pi-coding-agent 1.5.0 dist/utils/changelog.js",
+  "captured": "2026-11-03",
+  "note": "Captured parseChangelog heading regex and golden-sample parse result. test/native-changelog.test.ts asserts the generated PI_CHANGELOG.md against this capture; it does not read the installed host. Recapture deliberately during the host-bump audit when the parser changes.",
+  "headingRegexSource": "##\\s+\\[?(\\d+)\\.(\\d+)\\.(\\d+)\\]?",
+  "goldenMarkdown": "# Golden sample\n\n## [1.2.3]\nfirst body\n### Sub-heading stays in the entry\n\n## 1.4.0 - 2026-01-01\nsecond body\n\n## v1.5.0\nrejected: leading v\n\n## [pi-1.6.0] - 2026-02-02\nrejected: package prefix\n\n## [Unreleased]\nrejected: no version\n\n## [0.13.0-alpha.1]\ncollapsed onto 0.13.0\n",
+  "goldenEntries": [
+    {
+      "version": "1.2.3",
+      "content": "## [1.2.3]\nfirst body\n### Sub-heading stays in the entry"
+    },
+    {
+      "version": "1.4.0",
+      "content": "## 1.4.0 - 2026-01-01\nsecond body"
+    },
+    {
+      "version": "0.13.0",
+      "content": "## [0.13.0-alpha.1]\ncollapsed onto 0.13.0"
+    }
+  ]
+}

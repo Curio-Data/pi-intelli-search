@@ -13,7 +13,7 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-684%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-725%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -78,6 +78,7 @@ The native extension uses `Pi` settings and authentication. Generic MCP registra
     - [Prerequisites](#prerequisites)
     - [Install the Extension](#install-the-extension)
     - [Verify Installation](#verify-installation)
+    - [Release Notes After an Update](#release-notes-after-an-update)
     - [Customise (Optional)](#customise-optional)
   - [MCP Server](#mcp-server)
     - [MCP Prerequisites](#mcp-prerequisites)
@@ -192,6 +193,10 @@ On first load, `Pi` shows `Added models:` followed by any missing models: on a f
 #### Verify Installation
 
 Start `Pi` and type `/model`. Confirm that `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search` appear in the model list. If they are missing after a manual edit, reopen `/model`: since `Pi` 0.82.0 the picker reloads `models.json` on open. Restart `Pi` only if they are still absent. Registration does not select a pipeline model; `searchModel` in settings does that.
+
+#### Release Notes After an Update
+
+On `Pi` 1.5.0 and later, the next fresh launch after a package update shows newer package release notes under Extension Updates. The first time `Pi` sees the package, it records the version without showing release notes. Notes come from [`PI_CHANGELOG.md`](PI_CHANGELOG.md), a native-only changelog generated from the canonical [Changelog](CHANGELOG.md) and declared to the host through `pi.changelogPath`. Hosts before 1.5.0 ignore the field and the file, so the package behaves the same on the supported floor of `Pi` 0.86.0. Set the top-level `Pi` setting `collapseChangelog` to `true` in `~/.pi/agent/settings.json` to show one line per updated package.
 
 #### Customise (Optional)
 
@@ -1243,6 +1248,7 @@ pi install /path/to/pi-intelli-search
 - [Components](docs/COMPONENTS.md): Third-party dependencies and licence attribution.
 <!-- packages:pi -->
 - [Native skill guide](skills/intelli-search/SKILL.md): Agent-facing usage instructions for `Pi`.
+- [Native release notes](PI_CHANGELOG.md): The generated native-only changelog that `Pi` 1.5.0 shows under Extension Updates after an update; derived from the [Changelog](CHANGELOG.md).
 <!-- /packages -->
 <!-- packages:mcp -->
 - [Claude Code skill](plugins/claude-code/skills/intelli-search/SKILL.md) and [Codex skill](plugins/codex/skills/intelli-search/SKILL.md): Host-specific setup and agent-facing usage instructions.

@@ -165,7 +165,7 @@ The "Customise (Optional)" and "Model Configuration" sections in README.md use t
 
 ### 12. One Hand-Edited README
 
-The root `README.md` is the only README to edit by hand. `scripts/generate-package-readmes.mjs` derives each package's README from it: `packages/mcp/README.md` and the root previews `pi.README.md` and `mcp.README.md` are real generated files (never symlinks: npm drops a symlinked README and GitHub does not render one), committed and drift-checked in CI (`npm run check:readmes`), which also fails when a derived link does not resolve. The native package ships the root path itself, so its `prepublishOnly` hook writes the same derivation over the root README at publish time. Never edit `packages/mcp/README.md` or the root `*.README.md` previews directly. Tag package-specific sections with `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, repository-only sections with `<!-- packages:none -->`, and content only a package shows (its title and badges) with a hidden `<!-- packages:mcp hidden` ... `-->` block. Untagged content goes to both packages. The root `README.md` section `Development` documents the syntax. After any README edit run `npm run generate:toc` and `npm run generate:readmes`.
+The root `README.md` is the only README to edit by hand. `PI_CHANGELOG.md` is also generated and must not be edited directly; see Changelog Conventions. `scripts/generate-package-readmes.mjs` derives each package's README from the root `README.md`: `packages/mcp/README.md` and the root previews `pi.README.md` and `mcp.README.md` are real generated files (never symlinks: npm drops a symlinked README and GitHub does not render one), committed and drift-checked in CI (`npm run check:readmes`), which also fails when a derived link does not resolve. The native package ships the root path itself, so its `prepublishOnly` hook writes the same derivation over the root README at publish time. Never edit `packages/mcp/README.md` or the root `*.README.md` previews directly. Tag package-specific sections with `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, repository-only sections with `<!-- packages:none -->`, and content only a package shows (its title and badges) with a hidden `<!-- packages:mcp hidden` ... `-->` block. Untagged content goes to both packages. The root `README.md` section `Development` documents the syntax. After any README edit run `npm run generate:toc` and `npm run generate:readmes`.
 
 ---
 
@@ -189,6 +189,7 @@ This repository versions two packages that share the core engine in `src/core/`:
 One canonical `CHANGELOG.md` at the repository root covers both packages. The audiences overlap and core changes appear in both histories, so splitting the file would duplicate entries or force readers to open two files.
 
 - Native sections are `## [pi-X.Y.Z]`, MCP sections `## [mcp-X.Y.Z]`; a horizontal rule and note below the newest entries separate the prefixed era from the historical unprefixed native entries.
+- **`PI_CHANGELOG.md` is generated, never hand-edited.** `scripts/generate-native-changelog.mjs` derives it from `CHANGELOG.md` for `Pi` 1.5.0's Extension Updates feature (`package.json` `pi.changelogPath`): native sections only, headings rewritten to the parseable `## [X.Y.Z]` form, relative links pinned to release-tag URLs, with prereleases, the `Unreleased` section and sections explicitly marked `Not Published` excluded. CI and release gates run `npm run check:changelog`; the drift-checked artefact ships in the native tarball.
 - **Write core changes once, under the native section.** The matching MCP section carries a one-line pointer ("Core behaviour is shared with [pi-X.Y.Z] and recorded there") plus only its adapter-specific entries.
 
 ### Changelog Principles
@@ -228,6 +229,7 @@ All `Pi` SDK packages are **peer dependencies**. They are provided by the hostin
 
 ```
 pi.README.md                  # Generated native package README preview; never edit by hand
+PI_CHANGELOG.md               # Generated native package changelog for Pi 1.5.0 Extension Updates; never edit by hand
 mcp.README.md                 # Generated MCP package README preview; never edit by hand
 src/
 ├── index.ts                  # Extension entry: registers tools, events, model setup
@@ -311,6 +313,10 @@ scripts/
 ├── run-tests.mjs            # Isolated unit-test runner for npm test and test:all
 ├── build-mcp.mjs            # Audited standalone bundles and legal-file copies
 ├── generate-package-readmes.mjs # Package READMEs from the root README; --check is the drift gate
+├── generate-native-changelog.mjs # PI_CHANGELOG.md from CHANGELOG.md; --check is the drift gate
+├── capture-retry-fixture.mjs  # Capture/audit the pi-ai retry classifier lists (--check at each host bump)
+├── capture-changelog-fixture.mjs # Capture the Pi changelog parser behaviour into a test fixture
+├── lib/markdown-links.mjs    # Shared fence-aware, inline-code-aware link mapping for generators
 ├── generate-toc.mjs         # README contents generator; --check is the drift gate
 ├── generate-plugin-bundles.mjs # Plugin/marketplace generator; --check is the drift gate
 ├── verify-mcp-install.mjs    # Production-only install and native-fetch verification
@@ -335,6 +341,8 @@ test/
 ├── llm.test.ts
 ├── native-contract.test.ts
 ├── fixtures/native-contract/ # Frozen tool, prompt, result, cache and telemetry contracts
+├── fixtures/pi-ai-retry-1.5.0.json     # Captured pi-ai retry classifier lists (parity gate)
+├── fixtures/pi-changelog-parser-1.5.0.json # Captured Pi changelog parser regex and golden parse
 ├── helpers/native-contract.ts # Isolated native contract capture
 ├── helpers/core-context.ts   # Host-free deterministic operation context
 ├── probes/mcp-sdk.mjs         # Optional isolated SDK interface probe
@@ -370,7 +378,8 @@ test/
 ├── run-e2e-publish-local.sh
 ├── settings.test.ts
 ├── smoke.ts
-└── util.test.ts
+├── util.test.ts
+└── native-changelog.test.ts # PI_CHANGELOG.md drift, parser-parity and packaging gates
 ```
 
 ## Architecture
@@ -395,7 +404,7 @@ The pipeline is self-contained in `src/core/operations/research.ts`. Former shar
 - **Citation Channels:** When `annotations` is passed, `callLlm()` attaches `onProviderStreamEvent` and a wrapped `fetch` through `ProviderRequestOptions.fetch`. The stream option receives every parsed chat-completions chunk before normalisation on `pi-ai` >= 0.99.0; the fetch-tee wrapper remains the fallback for hosts whose `pi-ai` predates 0.99.0, which ignore that option. Both feed one sink, deduplicated by exact URL, per attempt. Late reads from failed attempts cannot contaminate successful citations. `callLlm()` awaits successful background reads (bounded at 2 seconds) before copying citations to the caller; clone and background-read failures are swallowed. Re-check `onProviderStreamEvent`, `ProviderRequestOptions.fetch`, `onPayload` and the local `FetchFunction` compatibility on each peer-dependency bump. `test/annotations.test.ts` covers parsing and chunk harvesting; `test/llm.test.ts` covers injection and shared-sink behaviour; `test/e2e/15_pi_floor.sh` guards live fallback recovery on the floor host.
 - **Native Tool Metadata:** All four tools declare MCP-parity permission hints and `constrainedSampling: { type: "json_schema", strict: "prefer" }`. Search and extract are read-only; collate and research carry `destructiveHint: true` because they write and archive cache output. Hints do not enforce permissions. Unsupported models or schemas fall back to ordinary argument sampling. Missing-model research diagnostics list same-provider alternatives only when compatible catalogue methods are exposed; diagnostic lookup failures leave the original error intact.
 - Auth flows through `Pi`'s native system (`auth.json`, env vars, OAuth). No API key management happens in this code.
-- **Retry and timeout are owned by `src/core/llm.ts`, not the SDK.** Native `callLlm()` passes `maxRetries: 0` to the provider stream and invokes the shared policy, which wraps each call in `withRetry()` (full-jitter exponential backoff, honours Retry-After, bounded by `llmRetryAttempts`/`retryBaseDelayMs`/`retryMaxDelayMs`). On the OpenRouter path the provider stream converts a failed HTTP request into `stopReason: "error"` with the diagnostic text in `errorMessage`, which the retry classifier inspects. The classifier mirrors the host's own retry list (pi-ai `utils/retry.js`, captured for 1.3.0 in `test/fixtures/pi-ai-retry-1.3.0.json` and enforced by a parity gate in `test/util.test.ts`), including its quota/billing fail-fast exclusions, with documented divergences: word-bounded status codes (the host pre-filters context overflow; this policy does not) and retained historical extras. The `onResponse` callback only observes (it captures a Retry-After header); it must never throw, because a throw propagates out of the stream and bypasses retry.
+- **Retry and timeout are owned by `src/core/llm.ts`, not the SDK.** Native `callLlm()` passes `maxRetries: 0` to the provider stream and invokes the shared policy, which wraps each call in `withRetry()` (full-jitter exponential backoff, honours Retry-After, bounded by `llmRetryAttempts`/`retryBaseDelayMs`/`retryMaxDelayMs`). On the OpenRouter path the provider stream converts a failed HTTP request into `stopReason: "error"` with the diagnostic text in `errorMessage`, which the retry classifier inspects. The classifier mirrors the host's own retry list (pi-ai `utils/retry.js`, captured for 1.5.0 in `test/fixtures/pi-ai-retry-1.5.0.json` and held to a parity gate in `test/util.test.ts`), including its quota/billing fail-fast exclusions, with documented divergences: no host-side context-overflow pre-filter (so a delimited token count can still match the status group) and retained historical extras. The parity gate does not read the installed host: run `scripts/capture-retry-fixture.mjs --check <retry.js>` during every host-bump audit. The `onResponse` callback only observes (it captures a Retry-After header); it must never throw, because a throw propagates out of the stream and bypasses retry.
 - **Per-call timeout via `callWithAbortTimeout()` (`src/core/util.ts`).** The SDK request timeout does not cover a stalled streaming body, so the shared model policy aborts the whole call with an `AbortController` after `llmTimeoutMs`, combined with the tool's signal so Esc still cancels. Actual timer expiry is retryable; permanent provider exceptions are not classified as timeouts. Cancellation also propagates through stage boundaries and cache-lock waits.
 - **Routine fetch and retry notices must not write directly to the console.** Raw terminal writes bypass the `Pi` TUI renderer. The branch removes routine fetch-comparison output and routes native retries through `ModelRequest.onRetryNotice` into stage progress; when no callback is supplied, the native model client provides a no-op and native `callLlm()` uses a silent policy logger. The shared policy retains its logger fallback for other adapters; MCP research can send retry progress while catalogue preflight and one-shot calls use stderr. Telemetry records aggregate variant winners (`fetch.winners`), not per-page scores. Native operation error logging remains outside this targeted fix. The source audit covers direct console calls, not transitive logger calls. These fixes shipped in the previous stable generation.
 - **Policy Scope.** Configured model retries and application timeouts apply inside `intelli_research`. The native standalone search, extract and collate operations retain one attempt and no application-level timeout for compatibility. The standalone MCP adapter must apply explicit policy defaults for all its model calls before exposing tools.
@@ -448,6 +457,10 @@ npm run generate:plugins # Regenerate plugin bundles and marketplaces after a ve
 npm run check:plugins    # Fail if committed plugin files drift from the generator
 npm run generate:readmes # Regenerate packages/mcp/README.md and the root *.README.md previews
 npm run check:readmes    # Fail if package READMEs drift from the root README
+npm run generate:changelog # Regenerate PI_CHANGELOG.md from CHANGELOG.md
+npm run check:changelog  # Fail if the native changelog drifts from CHANGELOG.md
+node scripts/capture-retry-fixture.mjs --check <retry.js>       # Host-bump audit: classifier drift vs installed pi-ai
+node scripts/capture-changelog-fixture.mjs --check <changelog.js> # Host-bump audit: parser drift vs installed Pi
 npm run restore:readme   # Restore the root README after a local publish or publish dry run
 npm run test:smoke       # Smoke test (structural validation)
 ./test/e2e/01_main.sh        # End-to-end test (live LLM calls, isolated env)
@@ -495,7 +508,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | **Structural/smoke** | Extension loads, tools register, events bind | `smoke.ts` | No |
 | **Shared Engine** | Host boundary, injected operations, policy, concurrent cache writes and console scopes | `core-*.test.ts`, `native-model-client.test.ts`, `workspace-paths.test.ts` | No |
 | **Unit (pure logic)** | Functions without filesystem or network deps | `annotations.test.ts`, `cache.test.ts`, `telemetry.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
-| **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts` | No |
+| **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts`, `native-changelog.test.ts` (also reads git refs) | No |
 | **E2E** | Full pipeline with real LLM calls in isolated Pi env | `e2e/01_main.sh`, `e2e/02_cap.sh`, `e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`, `e2e/07_llms_full.sh`, `e2e/04_migration.sh`, `e2e/03_model_override.sh`, `e2e/08_websearch_tool.sh`, `e2e/09_sonar_pro_search.sh`, `e2e/10_config_recipes.sh`, `e2e/11_mcp_stdio.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
 | **Publish** | Validates the published npm package structure | `run-e2e-publish.sh` (registry install), `run-e2e-publish-local.sh` (local tarball install; CI gate for peer-dep drift) | Yes (npm only) |
 
@@ -644,7 +657,7 @@ All tools use the `intelli_` prefix to avoid collisions with other `Pi` extensio
 
 ## Compatibility
 
-- **`Pi` >= 0.86.0:** All native model calls use the `ctx.modelRegistry.streamSimple()` facade, with host context normalisation, authentication and endpoint overrides. There is no legacy provider transport. Citation recovery uses `onProviderStreamEvent` on `pi-ai` >= 0.99.0 and the fetch-tee fallback on older supported hosts, sharing one deduplicated per-attempt sink. The full paced live suite passed on merged commit `99fea6f` on 2026-10-08, including research on the floor host and `Pi` 1.1.0; [Compatibility](docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball and registry-pin evidence. A static interface audit and targeted native/MCP-client research checks are recorded for `Pi` 1.2.0 on 2026-10-13, separately from that full suite; see [`Pi` 1.2.0 Verification](docs/COMPATIBILITY.md#pi-120-verification-2026-10-13). A static audit, shipped-declaration type check and the full paced live suite are recorded for `Pi` 1.3.0 on 2026-10-16; see [`Pi` 1.3.0 Verification](docs/COMPATIBILITY.md#pi-130-verification-2026-10-16). The peer floor and model defaults are unchanged. Final research rendering uses `durationMs` on `Pi` >= 1.1.0 when supplied and at least one second; older hosts omit the duration line.
+- **`Pi` >= 0.86.0:** All native model calls use the `ctx.modelRegistry.streamSimple()` facade, with host context normalisation, authentication and endpoint overrides. There is no legacy provider transport. Citation recovery uses `onProviderStreamEvent` on `pi-ai` >= 0.99.0 and the fetch-tee fallback on older supported hosts, sharing one deduplicated per-attempt sink. The full paced live suite passed on merged commit `99fea6f` on 2026-10-08, including research on the floor host and `Pi` 1.1.0; [Compatibility](docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball and registry-pin evidence. A static interface audit and targeted native/MCP-client research checks are recorded for `Pi` 1.2.0 on 2026-10-13, separately from that full suite; see [`Pi` 1.2.0 Verification](docs/COMPATIBILITY.md#pi-120-verification-2026-10-13). A static audit, shipped-declaration type check and the full paced live suite are recorded for `Pi` 1.3.0 on 2026-10-16; see [`Pi` 1.3.0 Verification](docs/COMPATIBILITY.md#pi-130-verification-2026-10-16). A static interface audit, a type check against the shipped 1.5.0 declarations, the deterministic suite and targeted live native and MCP-client research are recorded for `Pi` 1.5.0 on 2026-11-03, together with the 0.21.0 classifier alignment and the generated `PI_CHANGELOG.md`; see [`Pi` 1.5.0 Verification](docs/COMPATIBILITY.md#pi-150-verification-2026-11-03). The peer floor and model defaults are unchanged. Final research rendering uses `durationMs` on `Pi` >= 1.1.0 when supplied and at least one second; older hosts omit the duration line.
 
 ## Repository Folders
 

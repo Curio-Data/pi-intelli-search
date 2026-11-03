@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [pi-0.21.0] - 2026-11-03
+
+### Changed
+
+- Native `intelli_research` stops retrying recognised _ChatGPT Business_ workspace-cap errors and _Zhipu/Z.ai_ plan-limit errors (code `1308`), even when the message also carries an HTTP `429` status: these limits are not resolved by the short retry loop. The standalone MCP adapter reduces provider error bodies to generic rate-limit text, so it retries these limits until its configured attempts run out, as it already did for `insufficient_quota`.
+- The shared retry classifier is aligned with the audited `Pi` 1.5.0 host list and additionally recognises upstream-request, interrupted-stream and `node-fetch` transport failures. Configured attempt limits are unchanged.
+- Status codes adjacent to underscores, such as `HTTP_502_BAD_GATEWAY`, now match the retry classifier; codes embedded in letters or longer digit runs still do not. A delimited token count such as `128,500 tokens` can still trigger a retry, because this policy applies no context-overflow pre-filter (known limitation, pinned by test).
+- Verified against `Pi` 1.5.0 through a static interface audit, a type check against the shipped declarations, the deterministic suite, and live native and MCP-client research on the final 0.21.0 tree; see [verification evidence and limits](docs/COMPATIBILITY.md#pi-150-verification-2026-11-03). The minimum supported host remains `Pi` 0.86.0; model defaults are unchanged. The host's tool-argument validator changed; a probe using the extension's schema shape preserved extra-property acceptance and numeric-string coercion in the checked cases.
+
+### Added
+
+- On `Pi` 1.5.0, the next fresh launch after a native package update shows newer release notes under Extension Updates; the first time `Pi` sees a package it records the version without showing notes. The native package now ships a generated `PI_CHANGELOG.md` (declared through `pi.changelogPath`) with parseable native release headings and release-tag-pinned links. The canonical `CHANGELOG.md` headings exposed only historical entries to the host parser, so recent updates showed no notes and upgrades from older versions could show stale notes. The README `Pi` install section documents the display and the host's `collapseChangelog` setting.
+
+## [mcp-0.21.0] - 2026-11-03
+
+Core behaviour is shared with [pi-0.21.0] and recorded there, with one reachability limit: the new fail-fast classifications trigger only on the native `Pi` path. The standalone [_OpenRouter_](https://openrouter.ai) adapter discards provider response bodies, so a Zhipu usage-limit or workspace-cap HTTP `429` response surfaces as generic rate-limit text and continues to retry until attempts run out, as `insufficient_quota` already did. This release carries no standalone-specific changes.
+
 ## [pi-0.20.0] - 2026-11-02
 
 Published on `npm`; [isolated registry installation](docs/COMPATIBILITY.md#published-0200-native-package-verification-2026-11-02) passes. The tarball checksum matches registry metadata and the packaged README matches the native release tag.
@@ -68,7 +85,7 @@ Published on `npm`; [isolated registry installation and the packaged README](doc
 
 ### Changed
 
-- The shared retry classifier now mirrors `Pi` 1.3.0's own retry list (`pi-ai`, `utils/retry.js`), which the host applies to its agent-loop calls. Newly retryable transient failures include gateway stream-relay errors (`unable to forward upstream`), [_OpenRouter_](https://openrouter.ai) wrapper wording (`provider returned error`), [_Cloudflare_](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/) gateway statuses (`520`, `524`), capacity messages (`currently experiencing high demand`, `model is at capacity`), network and transport failures (`fetch failed`, `socket hang up`, `reset before headers`, `ENOTFOUND`), premature stream endings, and explicit provider retry guidance. Divergences are deliberate and documented inline: the bare status codes stay word-bounded (the host pre-filters context-overflow errors before classifying; this policy does not, so unbounded digits would retry permanent context-length errors), and the extension keeps its historical extras: the raw Node transport codes (`ETIMEDOUT`, `ECONNRESET`, `ECONNREFUSED`), the standalone adapter's transient 402 wording (bare `temporarily unavailable`), and the separator-tolerant busy phrasings (`server busy`, `server-busy`, `currently busy`). A fixture-based parity gate (`test/fixtures/pi-ai-retry-1.3.0.json`) fails loudly when a future host release changes the upstream list.
+- The shared retry classifier now mirrors `Pi` 1.3.0's own retry list (`pi-ai`, `utils/retry.js`), which the host applies to its agent-loop calls. Newly retryable transient failures include gateway stream-relay errors (`unable to forward upstream`), [_OpenRouter_](https://openrouter.ai) wrapper wording (`provider returned error`), [_Cloudflare_](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/) gateway statuses (`520`, `524`), capacity messages (`currently experiencing high demand`, `model is at capacity`), network and transport failures (`fetch failed`, `socket hang up`, `reset before headers`, `ENOTFOUND`), premature stream endings, and explicit provider retry guidance. Divergences are deliberate and documented inline: the bare status codes stay word-bounded (the host pre-filters context-overflow errors before classifying; this policy does not, so unbounded digits would retry permanent context-length errors), and the extension keeps its historical extras: the raw Node transport codes (`ETIMEDOUT`, `ECONNRESET`, `ECONNREFUSED`), the standalone adapter's transient 402 wording (bare `temporarily unavailable`), and the separator-tolerant busy phrasings (`server busy`, `server-busy`, `currently busy`). A fixture-based parity gate (`test/fixtures/pi-ai-retry-1.3.0.json`) holds the extension lists to the captured list. It does not read the installed host or detect changes in a later host release; those require a separate comparison with that host's retry list.
 
 ### Fixed
 
@@ -565,6 +582,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[mcp-0.21.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.21.0
+[pi-0.21.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.21.0
 [mcp-0.20.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.20.0
 [pi-0.20.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.20.0
 [mcp-0.19.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.19.1
