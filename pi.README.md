@@ -55,6 +55,7 @@ The native extension uses `Pi` settings and authentication. Generic MCP registra
     - [Prerequisites](#prerequisites)
     - [Install the Extension](#install-the-extension)
     - [Verify Installation](#verify-installation)
+    - [Release Notes After an Update](#release-notes-after-an-update)
     - [Customise (Optional)](#customise-optional)
 - [Tools](#tools)
   - [Evidence and Provenance](#evidence-and-provenance)
@@ -147,6 +148,10 @@ On first load, `Pi` shows `Added models:` followed by any missing models: on a f
 #### Verify Installation
 
 Start `Pi` and type `/model`. Confirm that `perplexity/sonar`, `perplexity/sonar-pro`, and `perplexity/sonar-pro-search` appear in the model list. If they are missing after a manual edit, reopen `/model`: since `Pi` 0.82.0 the picker reloads `models.json` on open. Restart `Pi` only if they are still absent. Registration does not select a pipeline model; `searchModel` in settings does that.
+
+#### Release Notes After an Update
+
+On `Pi` 1.5.0 and later, the next fresh launch after a package update shows newer package release notes under Extension Updates. The first time `Pi` sees the package, it records the version without showing release notes. Notes come from [`PI_CHANGELOG.md`](https://github.com/Curio-Data/pi-intelli-search/blob/main/PI_CHANGELOG.md), a native-only changelog generated from the canonical [Changelog](https://github.com/Curio-Data/pi-intelli-search/blob/main/CHANGELOG.md) and declared to the host through `pi.changelogPath`. Hosts before 1.5.0 ignore the field and the file, so the package behaves the same on the supported floor of `Pi` 0.86.0. Set the top-level `Pi` setting `collapseChangelog` to `true` in `~/.pi/agent/settings.json` to show one line per updated package.
 
 #### Customise (Optional)
 
@@ -800,6 +805,7 @@ To suppress the sidecar in the native extension, set `disableTelemetry: true` in
 - [Compatibility](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md): Tested host versions and artefacts for the native extension, MCP server and plugins.
 - [Components](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPONENTS.md): Third-party dependencies and licence attribution.
 - [Native skill guide](https://github.com/Curio-Data/pi-intelli-search/blob/main/skills/intelli-search/SKILL.md): Agent-facing usage instructions for `Pi`.
+- [Native release notes](https://github.com/Curio-Data/pi-intelli-search/blob/main/PI_CHANGELOG.md): The generated native-only changelog that `Pi` 1.5.0 shows under Extension Updates after an update; derived from the [Changelog](https://github.com/Curio-Data/pi-intelli-search/blob/main/CHANGELOG.md).
 - [Contributor guide](https://github.com/Curio-Data/pi-intelli-search/blob/main/AGENTS.md): Coding conventions and project structure.
 
 ## Downloads

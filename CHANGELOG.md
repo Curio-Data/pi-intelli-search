@@ -17,7 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
-- On `Pi` 1.5.0, the next fresh launch after a native package update shows newer release notes under Extension Updates; the first time `Pi` sees a package it records the version without showing notes. The native package now ships a generated `PI_CHANGELOG.md` (declared through `pi.changelogPath`) with parseable native release headings and release-tag-pinned links. The canonical `CHANGELOG.md` headings exposed only historical entries to the host parser, so recent updates showed no notes and upgrades from older versions could show stale notes.
+- On `Pi` 1.5.0, the next fresh launch after a native package update shows newer release notes under Extension Updates; the first time `Pi` sees a package it records the version without showing notes. The native package now ships a generated `PI_CHANGELOG.md` (declared through `pi.changelogPath`) with parseable native release headings and release-tag-pinned links. The canonical `CHANGELOG.md` headings exposed only historical entries to the host parser, so recent updates showed no notes and upgrades from older versions could show stale notes. The README `Pi` install section documents the display and the host's `collapseChangelog` setting.
 
 ## [mcp-0.21.0] - 2026-11-03
 
