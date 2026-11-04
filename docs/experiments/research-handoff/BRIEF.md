@@ -1,6 +1,6 @@
 # Research Handoff Experiment Brief
 
-Status: proposed experiment, not an execution authorisation. Created 4 November 2026 from the owner's clarified objectives. Start with this brief and [Feasibility](FEASIBILITY.md), not the previous Codemode study's protocol.
+Status: owner-agreed direction and `Pi` 1.5.0 host pin, recorded 4 November 2026. The exact collection protocol still needs freezing before paid execution. Start with [Handover](HANDOVER.md), this brief and [Feasibility](FEASIBILITY.md), not the previous Codemode study's protocol.
 
 ## Objective
 
@@ -16,8 +16,9 @@ This is a fresh experiment. Do not reuse previous study queries, captures, obser
 
 ## Branch and Authority
 
-- Branch: `study/research-handoff`, created from `main` at `d2ec50611ede2f5d46c062b7e568b13203015c22`.
-- Worktree: `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/research-handoff`.
+- Planning branch: `study/research-handoff`, created from `main` at `d2ec50611ede2f5d46c062b7e568b13203015c22`.
+- Planning worktree: `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/research-handoff`.
+- The incoming lead agent creates `study/research-handoff-runner` in a new sibling worktree from the committed planning tip, following [Handover](HANDOVER.md). Do not branch from the former Codemode study or start again from `main`, which lacks this handover.
 - Initial assignment: prepare the fresh protocol, required measurement path and collection plan. Implement only the bounded benchmark adapter, main-request observer, attribution analysis and deterministic checks needed after the coordinator accepts that plan. Do not start live capture from this brief alone.
 - No package release, version bump, main merge, old-host qualification or security-investigation work is commissioned.
 - The owner uses speech-to-text. Resolve obvious transcription errors from context; surface ambiguities that change the experiment.
@@ -32,7 +33,9 @@ The model assignments below carry forward the owner's model selection, not the p
 | Common Search Capture | `openrouter/perplexity/sonar` |
 | Extraction, Collation and Any Cache Suggestion | `openrouter/minimax/minimax-m3` |
 
-A paid quality judge is not a prerequisite. Freeze the answer-adequacy method and who checks it in the new plan; do not inherit previous judge scores, calibration or reliability claims. The host pin remains a decision before collection, not an implicit selection of the installed version.
+A paid quality judge is not a prerequisite. Freeze the answer-adequacy method and who checks it in the new plan; do not inherit previous judge scores, calibration or reliability claims.
+
+The owner approved `Pi` 1.5.0 for both arms on 4 November 2026. Use the retained release at `/home/miah0x41/.pi/agent/install/releases/1.5.0/node_modules/@earendil-works/pi-coding-agent`, not a moving `pi` launcher or the former study's host. Record and verify the actual loaded host and peer identities. If this release or a prescribed model is unavailable, report the blocker; do not substitute silently.
 
 The standing programme ceiling remains USD 30. The retained append-only financial record is `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-research/evidence/benchmarks/programme-spend/spend-ledger.jsonl`. Before accepting a costed schedule, the coordinator must supply a dated balance covering prior known charges, historical unknown-charge holds, active reservations and the remaining allowance. Read that record only for financial continuity, not as experimental data. No balance was re-audited for this brief, and the new branch does not imply that USD 30 is unspent. If the record is unavailable, obtain the balance from the coordinator rather than assuming a fresh allocation. This narrow financial exception does not permit reuse of old scientific material.
 
@@ -111,7 +114,7 @@ Deliver an offline analysis command and a compact result table that explains any
 1. Read this brief and the feasibility note. Inspect the current source and installed host documentation directly. Do not read the old study as an execution guide.
 2. Write the exact arm definitions, source-capture design, response contract, measurement and attribution method, query/usefulness rubric, missing-data rule, model/host pins and bounded cost estimate. Identify decisions that affect interpretation. Obtain coordinator acceptance of this implementation plan before Step 3.
 3. Build the bounded adapter, main-request observer and attribution analysis; prove their accounting with new synthetic inputs and traces. Show that both arms consume identical source bytes, preserve the baseline behaviour under the adapter, write real reports and expose the intended result boundary through the actual host. These checks are not measured results.
-4. Obtain coordinator acceptance of the frozen protocol and costed collection schedule. Retain the previously prescribed model roles unless the owner changes them. Resolve the host pin explicitly rather than inheriting either an old study pin or a moving installed version. Reconcile existing programme spend against the standing USD 30 ceiling; do not reset it or request approval for every routine call in an accepted batch.
+4. Obtain coordinator acceptance of the frozen protocol and costed collection schedule. Retain the previously prescribed model roles unless the owner changes them. Verify the approved `Pi` 1.5.0 pin and actual loaded dependencies rather than inheriting a moving installed version. Reconcile existing programme spend against the standing USD 30 ceiling; do not reset it or request approval for every routine call in an accepted batch.
 5. Collect fresh common inputs, then the declared paired runs. Record deviations and stop on violated input controls. Do not broaden the study to manual/breadth/follow-up workflows as a prerequisite.
 6. Produce fresh raw evidence, shareable data where permitted, offline analysis and a findings note. Obtain an independent check that the conclusions follow from the recorded main-thread traffic and answer adequacy.
 
@@ -119,8 +122,8 @@ Deliver an offline analysis command and a compact result table that explains any
 
 Tracked design and analysis documentation belongs under `docs/experiments/research-handoff/`. New raw inputs, requests, responses, run manifests and results belong under `evidence/benchmarks/research-handoff/<new-series-id>/`. Agent briefs and reports belong under `evidence/agents/<new-run-id>/`. These durable directories are never deleted by agents. Scratch belongs only in task-owned `.tmp/`, never `/tmp`, and no report may cite scratch paths.
 
-Do not copy credentials or refresh-token chains into a profile, alter global host settings, overwrite old evidence, modify another worktree, or run release/publish steps. A data-collection agent does not spawn agents or create worktrees. Commit or push only when the coordinator authorises it. The coordinator owns the validation lane; no concurrent full-suite runs.
+Do not copy credentials or refresh-token chains into a profile, alter global host settings, overwrite old evidence, modify another worktree, or run release/publish steps. The incoming lead agent may create the single implementation branch and worktree described in Handover. A delegated builder or data-collection agent does not spawn agents or create worktrees. Commit or push only when the coordinator authorises it. The coordinator owns the validation lane; no concurrent full-suite runs.
 
-The new worktree is planning-only and has no provisioned dependencies or copied ignored data. Provision from the branch's lockfile before implementation. Do not copy `.env`, `.e2e-auth/`, `.search/`, old evidence or mutable state from another checkout. Production code changes require build, deterministic tests, relevant types and applicable generator checks. The general package live-suite/audit checklist is not authority to launch paid calls or a security workstream for this experiment.
+The existing `research-handoff` planning worktree has no provisioned dependencies or copied ignored data. Provision the new `research-handoff-runner` implementation worktree from its branch's lockfile before implementation. Do not copy `.env`, `.e2e-auth/`, `.search/`, old evidence or mutable state from another checkout. Production code changes require build, deterministic tests, relevant types and applicable generator checks. The general package live-suite/audit checklist is not authority to launch paid calls or a security workstream for this experiment.
 
 The agent's report must identify what was observed, inferred, proposed and left untested; name the exact dataset and reproduction command; and state whether one-handoff behaviour, lower traffic and adequate answers were established. Write the report before sending the final chat summary. The final line is `STATUS: COMPLETE` only when the assigned deliverables are present; that marker does not mean the hypothesis passed.

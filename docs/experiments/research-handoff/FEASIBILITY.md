@@ -56,7 +56,7 @@ For a reduced candidate response, use an explicit and tested result projection. 
 
 ## Host Capabilities and Measurement
 
-The installed `Pi` documentation was inspected at `/home/miah0x41/.pi/agent/install/releases/1.5.0/node_modules/@earendil-works/pi-coding-agent/docs/`. This is evidence about that installed version, not selection of the new experiment's host pin.
+The installed `Pi` documentation was inspected at `/home/miah0x41/.pi/agent/install/releases/1.5.0/node_modules/@earendil-works/pi-coding-agent/docs/`. This inspection was evidence about that installed version, not a host-selection decision. The owner subsequently approved the same version for both arms, as recorded in [the brief](BRIEF.md#retained-model-roles-and-budget).
 
 - `codemode.md`, opening and Call Tools: scripts execute tool calls internally and return printed or returned values to the model. Tools without an output schema resolve to text. The `on` mode retains direct declarations; `only` changes their exposure. A concrete mode must be frozen for the candidate.
 - `extensions.md`, Calling Other Tools: nested calls carry `parentToolCallId` and emit tool events but do not create ordinary nested tool-result transcript entries. Therefore tool-event counts are not main-model resumption counts.
