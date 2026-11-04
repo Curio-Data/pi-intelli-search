@@ -6,6 +6,12 @@ The strict generic configuration, zero-configuration [_Codex_](https://developer
 
 ---
 
+## Research Handoff Branch
+
+On `study/research-handoff`, start with [Research Handoff Brief](docs/experiments/research-handoff/BRIEF.md) and [Feasibility](docs/experiments/research-handoff/FEASIBILITY.md). These govern the new fixed-source, single-handoff experiment. Do not import the previous study's observations, fixtures, protocols or experimental runtime. The current task is planning and feasibility, not paid collection or package integration.
+
+For this branch, documentation-only changes require link, whitespace and prose checks. Implementation requires build, deterministic tests, relevant types and applicable generator checks; actual-host and paid collection follow the accepted new protocol. The general live E2E, audit and release checklist below does not authorise automatic paid runs or a security workstream. No package publication or main merge is authorised. Raw new evidence belongs under `evidence/benchmarks/research-handoff/`; timestamped feasibility probes may use `evidence/benchmarks/research-handoff-feasibility-<timestamp>/`. Dependencies and ignored data are not provisioned in this planning worktree.
+
 ## Shell Tool Preferences
 
 Always prefer these over Unix defaults. All are installed and available.
