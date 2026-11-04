@@ -1,6 +1,6 @@
 # Fresh-Agent Resume Checkpoint
 
-Status: M3 implementation readiness accepted on 4 November 2026 for code digest `59b550ca92cf0ad4f1f4e5d224cc1d884e8634c4346be8f395d11035ecf5d379` and protocol digest `4485f00a5f7af58389fa8e0f76f0c174725bbaa760840b68055f02205662c8ba`. The next gate is the separately accepted two-conversation subscription-main diagnostic schedule. No live study diagnostic, paid source capture, measured conversation, programme reservation or settlement has run. The pause record below preserves the entry history and handoff verification requirements.
+Status: M3 implementation readiness and the two-conversation subscription-main observer diagnostic are accepted on 4 November 2026 for code digest `59b550ca92cf0ad4f1f4e5d224cc1d884e8634c4346be8f395d11035ecf5d379` and protocol digest `4485f00a5f7af58389fa8e0f76f0c174725bbaa760840b68055f02205662c8ba`. The next gate is owner resolution of D1 before financial admission. No paid source capture, measured conversation, programme reservation or settlement has run. The pause record below preserves the entry history and handoff verification requirements.
 
 ## Resume Here
 
@@ -106,7 +106,7 @@ Historical pause state: the following changes had not yet been independently rec
 6. I-10/I-11/I-13/I-14/I-15: collection validates its live root before writes; OAuth validity now covers the worker ceiling plus refresh margin; invalid budget receipts retain their error detail; stale-lock recovery and conservative-budget fragility are documented; the explicit study commands are named in branch guidance.
 7. Additional coordinator finding: correct tool topology alone did not prove an unchanged candidate return. `return-contract.ts` now checks the actual text and core hash; analysis and worker classification use it. New tests cover exact return/console envelopes and rejection of projection, duplication and changed native text. At the pause this addition needed fresh technical review and actual-host qualification; the M3 evidence below records its acceptance.
 
-Residual deliberate limitations: mixed host guidance remains partly unallocated rather than being labelled overhead; full-catalogue financial reservations can stop a batch on an unknown charge while other extractions remain active. No per-message cost estimate replaces that conservative bound. Live Codex transport/usage and actual Sonar/M3 reported-charge channels remain untested.
+Residual deliberate limitations: mixed host guidance remains partly unallocated rather than being labelled overhead; full-catalogue financial reservations can stop a batch on an unknown charge while other extractions remain active. No per-message cost estimate replaces that conservative bound. The accepted observer diagnostic has since qualified the selected live SSE main transport and its usage coverage, not WebSocket transport. Actual Sonar/M3 reported-charge channels remain untested.
 
 ## M3 Acceptance Evidence
 
@@ -123,16 +123,20 @@ Bind M3 to these current artefacts under `evidence/agents/20261104T164114Z-resea
 
 The coordinator accepted the reviewer's recommended D-1 disposition without another code change. Descriptive pair statistics can include a failed conversation only when its provider usage is complete; its failed status remains visible, it cannot enter the positive-claim subset, and `FINDINGS.md` must isolate any such pair rather than describe its difference as a benefit. Financial admission must also accept that missing terminal observer coverage or an unknown-charge hold can stop the batch, as Reproduction records.
 
+## Observer Diagnostic Acceptance
+
+The accepted implementation is committed as `86ba13f8aedeb1c33f54d9696b295cb88a3b8aa2`. The separate diagnostic series is `evidence/benchmarks/research-handoff/20261104T172343Z-observer-diagnostic/`, with offline analysis in the adjacent `-offline/` directory. Its `diagnostic-result.json` is the coordinator acceptance receipt and binds the same code and protocol digests.
+
+Both prescribed `openai-codex/gpt-6.1-sol` conversations completed with two logical requests, two observed SSE attempts, one assigned handoff and one answer-producing resumption. Fixed inputs, usage coverage, route conformance and readable reports passed. `diagnostic-verification.json` independently checks the native hashes and transmitted return bytes: the baseline returned exact native text, and the candidate returned it once under the pinned Codemode envelope with the documented separator. The operator auth file remained unchanged and 301 retained files contained no scanned credential value. These are observer facts, not measured-dataset savings or answer-adequacy results.
+
 ## Exact Next Assignment
 
-Continue the full plan from M3. Do not start another broad design exercise or edit the six identity-bearing governing documents during accepted live work.
+Continue the full plan from the accepted observer diagnostic. Do not repeat M3 or the diagnostic, start another broad design exercise, or edit the six identity-bearing governing documents during accepted live work.
 
-1. Commit the accepted implementation bytes and record the commit beside the M3 code and protocol digests. Keep the independent review files immutable after hashing them.
-2. Accept and execute the separate two-conversation subscription-main diagnostic schedule using the fresh synthetic inputs from the accepted synthetic series. Use the prescribed main model and transport with synthetic downstream work. These conversations are not the measured dataset and require no paid pipeline reservation. Check both routes, fixed inputs, complete observer coverage, unchanged recorded and transmitted returns, usage reconciliation and readable reports before accepting the diagnostics. Collection finishing is not itself acceptance.
-3. Resolve D1, reconcile finance and writer coordination, refresh current rates, and accept the finite reservation. Preserve the existing ceiling and obligations. Explicitly accept the documented budget-stop and missing-observer stop behaviour.
-4. Capture one fresh common corpus, assess topic/version coverage, qualify Sonar and M3 charge reporting, then freeze the accepted measured batch. If a validity-affecting change is required, preserve the failed diagnostic and qualify a new revision; do not silently amend an accepted batch.
-5. Execute the ten balanced pairs sequentially through the accepted driver. Retain failed, nonconforming and not-run observations. Do not request per-call approval inside an accepted batch and do not replace scheduled failures. An interrupted parent leaves partial evidence, not terminal collection or settlement authority.
-6. Grade the final answers against the frozen rubric, obtain independent review, join assessment bundles without modifying raw records, run offline analysis, settle charges and holds, and deliver the findings and reproduction inventory. Isolate failed-but-numeric descriptive pairs as recorded above. No-benefit or increased-overhead results are valid outcomes.
+1. Resolve D1, reconcile finance and writer coordination, refresh current rates, and accept the finite reservation. Preserve the existing ceiling and obligations. Explicitly accept the documented budget-stop and missing-observer stop behaviour. The accepted diagnostic supplies no ledger-append permission.
+2. Capture one fresh common corpus, assess topic/version coverage, qualify Sonar and M3 charge reporting, then freeze the accepted measured batch. If a validity-affecting change is required, preserve the failed diagnostic and qualify a new revision; do not silently amend an accepted batch.
+3. Execute the ten balanced pairs sequentially through the accepted driver. Retain failed, nonconforming and not-run observations. Do not request per-call approval inside an accepted batch and do not replace scheduled failures. An interrupted parent leaves partial evidence, not terminal collection or settlement authority.
+4. Grade the final answers against the frozen rubric, obtain independent review, join assessment bundles without modifying raw records, run offline analysis, settle charges and holds, and deliver the findings and reproduction inventory. Isolate failed-but-numeric descriptive pairs as recorded above. No-benefit or increased-overhead results are valid outcomes.
 
 ## Agent and Workspace State
 
@@ -142,4 +146,4 @@ For renewed parallel work, use one workspace for this existing worktree and one 
 
 ## Suggested Resume Prompt
 
-> Read `docs/experiments/research-handoff/CHECKPOINT.md` in the existing `study/research-handoff-runner` worktree and act as the incoming lead. M3 is accepted against the recorded code and protocol digests; do not repeat its implementation or review cycle. Continue with the separately accepted subscription-main diagnostics and the remaining gates in Exact Next Assignment. Do not write the cross-worktree financial ledger or make paid calls until the pending owner permission and collection prerequisites are resolved. Do not import old scientific material, recreate the worktree, rerun historical entry manifests as a current gate, or infer savings from synthetic usage.
+> Read `docs/experiments/research-handoff/CHECKPOINT.md` in the existing `study/research-handoff-runner` worktree and act as the incoming lead. M3 and the subscription-main observer diagnostic are accepted against the recorded identities; do not repeat them. Resume at owner decision D1 and the remaining financial, preparation, collection and analysis gates in Exact Next Assignment. Do not write the cross-worktree financial ledger or make paid calls until the pending owner permission and collection prerequisites are resolved. Do not import old scientific material, recreate the worktree, rerun historical entry manifests as a current gate, or infer savings from synthetic or diagnostic usage.
