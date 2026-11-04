@@ -10,14 +10,14 @@ import { createNativeOperationContext } from "../../src/native-operation-context
 import { fetchPages } from "../../src/core/fetch.js";
 import { buildExtractionMessage } from "../../src/core/messages.js";
 import { EXTRACTION_SYSTEM_PROMPT } from "../../src/core/prompts.js";
-import { studySettings, studyParams, taskPrompt, pairedSchedule, MAIN_MODEL, BUDGET, BASELINE_COMMIT, PROGRAMME_LEDGER } from "./config.js";
+import { studySettings, studyParams, taskPrompt, pairedSchedule, MAIN_MODEL, BUDGET, BASELINE_COMMIT } from "./config.js";
 import { createGuardedCallLlm, providerReportedCost } from "./pipeline-client.js";
 import { assertStoredCredentialReady } from "./credentials.js";
-import { AttemptBudget, readProgrammeLedger, appendProgrammeSettlement, appendProgrammeReservation } from "./budget.js";
+import { AttemptBudget } from "./budget.js";
 import { captureCommonInputs } from "./capture.js";
 import { loadFrozenInputs, assertCorpusAcceptable } from "./common-inputs.js";
 import { DurableJournal, createRunDirectory, digestFile, digestObject, digestText, sourceIdentity, writeNewJson, unavailableRecord } from "./storage.js";
-import { executeWorker, REPO_ROOT, assertLiveEvidenceRoot, type LiveAcceptance, type WorkerConfig } from "./runner.js";
+import { executeWorker, REPO_ROOT, assertLiveEvidenceRoot, assertFixedAdmissionIdentity, type LiveAcceptance, type WorkerConfig } from "./runner.js";
 import type { Arm, RunManifest, RunRecord, JournalEvent, FrozenInputs } from "./contracts.js";
 
 export interface PreparationAcceptance {
@@ -29,39 +29,51 @@ export interface PreparationAcceptance {
   protocolSha256: string;
   technicalReviewPath: string;
   technicalReviewSha256: string;
-  programmeLedgerPath: string;
-  programmeReservationId: string;
-  writerLockPath: string;
-  writerCoordinationConfirmed: boolean;
-  ownerLedgerApprovalPath: string;
-  ownerLedgerApprovalSha256: string;
+  financialMode: "fixed-envelope";
+  fixedEnvelopeNanoUsd: number;
+  ownerFinancialApprovalPath: string;
+  ownerFinancialApprovalSha256: string;
   /** Independent observer diagnostics must already be retained and accepted. */
   diagnosticAcceptancePath: string;
 }
 const protocolFile = join(REPO_ROOT, "docs/experiments/research-handoff/PROTOCOL.md");
 
-async function verifyPreparationIdentity(path: string): Promise<PreparationAcceptance> {
+export function assertFixedEnvelopeApproval(owner: unknown): void {
+  const approval = owner as { schemaVersion?: unknown; approvedAt?: unknown; approvedBy?: unknown; approved?: unknown; scope?: unknown; maximumExperimentEnvelopeNanoUsd?: unknown };
+  if (approval.schemaVersion !== 1 || typeof approval.approvedAt !== "string" || !approval.approvedAt
+    || approval.approvedBy !== "owner" || approval.approved !== true || approval.scope !== "continue-without-programme-ledger"
+    || approval.maximumExperimentEnvelopeNanoUsd !== BUDGET.batchNanoUsd) {
+    throw new Error("Owner approval does not cover the bounded no-ledger experiment");
+  }
+}
+
+type RootCheck = (path: string) => Promise<void>;
+async function verifyPreparationIdentity(path: string, rootCheck: RootCheck): Promise<PreparationAcceptance> {
   const a = JSON.parse(await readFile(path, "utf8")) as PreparationAcceptance;
-  if (a.schemaVersion !== 1 || a.phase !== "preparation" || a.acceptedBy !== "coordinator" || !a.writerCoordinationConfirmed) throw new Error("Preparation authority is unresolved");
-  await assertLiveEvidenceRoot(a.seriesRoot);
-  if (a.programmeLedgerPath !== PROGRAMME_LEDGER) throw new Error("A copied ledger cannot create a programme allowance");
-  if (!a.ownerLedgerApprovalPath || await digestFile(a.ownerLedgerApprovalPath) !== a.ownerLedgerApprovalSha256) throw new Error("Owner approval for the cross-worktree ledger append is missing");
-  const owner = JSON.parse(await readFile(a.ownerLedgerApprovalPath, "utf8"));
-  if (owner.approved !== true || owner.scope !== "append-reservation-settlement-only" || owner.ledgerPath !== PROGRAMME_LEDGER) throw new Error("Owner approval does not cover these ledger appends");
+  if (a.schemaVersion !== 1 || a.phase !== "preparation" || a.acceptedBy !== "coordinator"
+    || a.financialMode !== "fixed-envelope" || a.fixedEnvelopeNanoUsd !== BUDGET.batchNanoUsd
+    || "programmeLedgerPath" in a || "programmeReservationId" in a) throw new Error("Preparation authority is not the accepted fixed-envelope mode");
+  await rootCheck(a.seriesRoot);
+  if (!a.ownerFinancialApprovalPath || await digestFile(a.ownerFinancialApprovalPath) !== a.ownerFinancialApprovalSha256) {
+    throw new Error("Fixed-envelope financial approval is missing or changed");
+  }
+  assertFixedEnvelopeApproval(JSON.parse(await readFile(a.ownerFinancialApprovalPath, "utf8")));
   if ((await sourceIdentity(REPO_ROOT)).digest !== a.codeSha256 || await digestFile(protocolFile) !== a.protocolSha256) throw new Error("Preparation code/protocol identity changed");
   if (await digestFile(a.technicalReviewPath) !== a.technicalReviewSha256) throw new Error("Technical review identity changed");
   const diagnostic = JSON.parse(await readFile(a.diagnosticAcceptancePath, "utf8"));
-  if (diagnostic.accepted !== true || diagnostic.codeSha256 !== a.codeSha256 || diagnostic.protocolSha256 !== a.protocolSha256) throw new Error("Actual-provider observer diagnostics are not accepted");
+  if (diagnostic.accepted !== true || diagnostic.codeSha256 !== a.codeSha256 || diagnostic.protocolSha256 !== a.protocolSha256) {
+    throw new Error(`Actual-provider observer diagnostics are not accepted: expected ${a.codeSha256}/${a.protocolSha256}, received ${String(diagnostic.codeSha256)}/${String(diagnostic.protocolSha256)}`);
+  }
   return a;
 }
-export async function verifyPreparationAuthority(path: string): Promise<PreparationAcceptance> {
-  const a = await verifyPreparationIdentity(path);
-  const ledger = await readProgrammeLedger(a.programmeLedgerPath);
-  if (ledger.active[a.programmeReservationId] !== BUDGET.batchNanoUsd || ledger.availableNanoUsd < 0) throw new Error("The programme reservation is not active and solvent");
+export async function verifyPreparationAuthority(path: string, rootCheck: RootCheck = assertLiveEvidenceRoot): Promise<PreparationAcceptance> {
+  const a = await verifyPreparationIdentity(path, rootCheck);
+  const admission = JSON.parse(await readFile(join(a.seriesRoot, "financial-admission-receipt.json"), "utf8"));
+  assertFixedAdmissionIdentity(admission, a.codeSha256, a.protocolSha256);
   return a;
 }
-export async function reserveAcceptedProgramme(path: string): Promise<void> {
-  const a = await verifyPreparationIdentity(path);
+export async function admitAcceptedPreparation(path: string, rootCheck: RootCheck = assertLiveEvidenceRoot): Promise<void> {
+  const a = await verifyPreparationIdentity(path, rootCheck);
   const response = await fetch("https://openrouter.ai/api/v1/models");
   if (!response.ok) throw new Error(`Rate catalogue unavailable (${response.status})`);
   const data = await response.json() as { data: Array<{ id: string; context_length: number; pricing: Record<string, string> }> };
@@ -73,13 +85,12 @@ export async function reserveAcceptedProgramme(path: string): Promise<void> {
     || [sonar.pricing.prompt, sonar.pricing.completion, sonar.pricing.web_search, m3.pricing.prompt, m3.pricing.completion].some(v => typeof v !== "string" || v.trim() === "" || !Number.isFinite(Number(v)) || Number(v) < 0)) {
     throw new Error("Current catalogue exceeds or does not establish the accepted cost bounds");
   }
-  await mkdir(join(a.seriesRoot, "reservation-admission"));
-  writeNewJson(join(a.seriesRoot, "rates-at-reservation.json"), { observedAt: new Date().toISOString(), sonar, m3 });
-  const balance = await readProgrammeLedger(a.programmeLedgerPath);
-  const receipt = await appendProgrammeReservation({ path: a.programmeLedgerPath, lockPath: a.writerLockPath,
-    expectedSha256: balance.sha256, runId: a.programmeReservationId, reserveNanoUsd: BUDGET.batchNanoUsd,
-    writerCoordinationConfirmed: a.writerCoordinationConfirmed });
-  writeNewJson(join(a.seriesRoot, "reservation-receipt.json"), receipt);
+  await mkdir(join(a.seriesRoot, "financial-admission"));
+  writeNewJson(join(a.seriesRoot, "rates-at-admission.json"), { observedAt: new Date().toISOString(), sonar, m3 });
+  writeNewJson(join(a.seriesRoot, "financial-admission-receipt.json"), {
+    accepted: true, mode: "fixed-envelope", codeSha256: a.codeSha256, protocolSha256: a.protocolSha256,
+    envelopeNanoUsd: BUDGET.batchNanoUsd, programmeLedgerCreated: false,
+  });
 }
 export async function assertCredentialReady(authPath: string, provider: string): Promise<void> {
   const { sdk } = await loadPinnedHost();
@@ -247,8 +258,8 @@ export async function collectAcceptedSeries(acceptancePath: string, authPath: st
 }
 
 /** Explicit close-out only: an absent started-stage receipt is held at its full ceiling. */
-export async function settleAcceptedSeries(authorityPath: string): Promise<void> {
-  const a = await verifyPreparationAuthority(authorityPath);
+export async function settleAcceptedSeries(authorityPath: string, rootCheck: RootCheck = assertLiveEvidenceRoot): Promise<void> {
+  const a = await verifyPreparationAuthority(authorityPath, rootCheck);
   let terminal = false;
   try { const outcome = JSON.parse(await readFile(join(a.seriesRoot, "collection-outcome.json"), "utf8")); terminal = typeof outcome.stopped === "boolean"; } catch { /* preparation may have stopped first */ }
   if (!terminal) {
@@ -282,10 +293,10 @@ export async function settleAcceptedSeries(authorityPath: string): Promise<void>
     }
   }
   writeNewJson(join(a.seriesRoot, "settlement-review.json"), { reportedNanoUsd: reported, unknownNanoUsd: unknown, receipts });
-  const balance = await readProgrammeLedger(a.programmeLedgerPath);
-  const next = await appendProgrammeSettlement({ path: a.programmeLedgerPath, lockPath: a.writerLockPath,
-    expectedSha256: balance.sha256, runId: a.programmeReservationId, reportedNanoUsd: reported, unknownNanoUsd: unknown,
-    note: `Research handoff rh-v2; retained settlement review at ${join(a.seriesRoot, "settlement-review.json")}`,
-    writerCoordinationConfirmed: a.writerCoordinationConfirmed });
-  writeNewJson(join(a.seriesRoot, "settlement-receipt.json"), next);
+  const liability = reported + unknown;
+  writeNewJson(join(a.seriesRoot, "settlement-receipt.json"), {
+    mode: "fixed-envelope", reportedNanoUsd: reported, unknownNanoUsd: unknown,
+    releasedNanoUsd: Math.max(0, BUDGET.batchNanoUsd - liability),
+    overrunNanoUsd: Math.max(0, liability - BUDGET.batchNanoUsd), programmeLedgerCreated: false,
+  });
 }

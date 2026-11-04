@@ -7,7 +7,7 @@ import { loadPinnedHost } from "./host.js";
 import { runWorker, runSyntheticSeries, reproduce, REPO_ROOT, type WorkerConfig } from "./runner.js";
 import { sourceIdentity, writeNewJson } from "./storage.js";
 import type { Phase } from "./contracts.js";
-import { reserveAcceptedProgramme, prepareCapture, qualifyDownstreamCost, collectAcceptedSeries, settleAcceptedSeries } from "./collection.js";
+import { admitAcceptedPreparation, prepareCapture, qualifyDownstreamCost, collectAcceptedSeries, settleAcceptedSeries } from "./collection.js";
 
 const USAGE = [
   "Research handoff runner",
@@ -17,7 +17,7 @@ const USAGE = [
   "  analyse <inventory.json> <new-dir> [synthetic|diagnostic|measured] [assessments.json]",
   "  Analysis phase defaults to measured.",
   "Recorded live/financial acceptance required:",
-  "  reserve <preparation-acceptance.json>",
+  "  admit <preparation-acceptance.json>",
   "  capture <preparation-acceptance.json> <auth-file>",
   "  qualify-cost <preparation-acceptance.json> <auth-file> <corpus-acceptance.json>",
   "  collect <conversation-acceptance.json> <auth-file> <frozen-inputs.json>",
@@ -46,9 +46,9 @@ async function main() {
   } else if (command === "analyse" && first && second && (!phase || ["synthetic", "diagnostic", "measured"].includes(phase))) {
     await reproduce(first, second, (phase ?? "measured") as Phase, assessments);
     console.log(`Offline analysis: ${resolve(second)}`);
-  } else if (command === "reserve" && first && !second) {
-    await reserveAcceptedProgramme(first);
-    console.log("Programme reservation recorded.");
+  } else if (command === "admit" && first && !second) {
+    await admitAcceptedPreparation(first);
+    console.log("Financial admission recorded.");
   } else if (command === "capture" && first && second && !phase) {
     console.log(await prepareCapture(first, second));
   } else if (command === "qualify-cost" && first && second && phase) {
@@ -56,11 +56,11 @@ async function main() {
   } else if (command === "collect" && first && second && phase) {
     const result = await collectAcceptedSeries(first, second, phase);
     console.log(`${result.stopped ? "Collection stopped" : "Collection finished"}. Outcome: ${result.outcomePath}`);
-    console.log("Programme settlement remains a separate accepted operation; unknown charges stay held.");
+    console.log("Financial close-out remains a separate accepted operation; unknown charges stay held.");
     if (result.stopped) process.exitCode = 1;
   } else if (command === "settle" && first && !second) {
     await settleAcceptedSeries(first);
-    console.log("Programme settlement recorded.");
+    console.log("Financial close-out recorded.");
   } else {
     throw new Error(USAGE);
   }

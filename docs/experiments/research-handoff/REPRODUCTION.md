@@ -85,15 +85,15 @@ Follow the gates in this order. Each entry requires the evidence in its own row,
 |---|---|---|---|
 | Implementation | Independent technical acceptance | Frozen candidate, deterministic checks and actual-host synthetic proof | Accepted candidate and measurement boundary |
 | Main Diagnostics | `collect`, diagnostic acceptance | Accepted candidate and a separately accepted two-conversation diagnostic schedule using synthetic downstream inputs | Real main-provider observer evidence; no programme reservation required for this subscription-only step |
-| Financial Admission | `reserve` | Accepted diagnostic evidence, owner permission for cross-worktree ledger appends, writer coordination and a current bounded schedule | One active programme reservation; a copied ledger creates no allowance |
-| Common Capture | `capture` | Accepted preparation and active reservation | Fresh search/pages and Sonar's numeric-charge check |
+| Financial Admission | `admit` | Accepted diagnostic evidence, owner approval for the fixed-envelope amendment and current public rates | One bounded local admission; no replacement programme ledger |
+| Common Capture | `capture` | Accepted preparation and fixed-envelope admission | Fresh search/pages and Sonar's numeric-charge check |
 | Corpus Review | Coordinator decision | Retained common capture | Accepted topic coverage and source-version applicability |
-| Downstream Qualification | `qualify-cost` | Accepted corpus and Sonar reporting, within the reserved qualification allowance | M3 reported-charge evidence |
-| Measured Acceptance | Coordinator decision | Accepted diagnostics, corpus, cost reporting and reservation | Frozen measured schedule and all input/runtime identities |
+| Downstream Qualification | `qualify-cost` | Accepted corpus and Sonar reporting, within the bounded qualification allowance | M3 reported-charge evidence |
+| Measured Acceptance | Coordinator decision | Accepted diagnostics, corpus, charge reporting and financial admission | Frozen measured schedule and all input/runtime identities |
 | Measured Conversations | `collect`, measured acceptance | That exact measured acceptance | Full retained inventory, including failures or not-run rows |
-| Financial Close-Out | `settle` | Terminal collection or preparation-failure evidence and reviewed receipts | Programme settlement with unknown charges still held |
+| Financial Close-Out | `settle` | Terminal collection or preparation-failure evidence and reviewed receipts | Local settlement receipt with unknown charges still held |
 
-Unresolved owner ledger permission blocks financial appends and paid stages. It does not make a synthetic test or subscription-only observer diagnostic a paid research observation.
+The owner's `rh-v3` amendment removes the unavailable programme-ledger prerequisite and fixes the maximum experiment envelope at USD 25.81. It does not make a synthetic test or subscription-only observer diagnostic a paid research observation. No replacement ledger or fresh USD 30 allowance is created.
 
 For the main diagnostics, create a fresh credential-free synthetic series under the accepted code and pass its `frozen-inputs.json` to `collect`. The diagnostic acceptance review must verify both assigned routes, complete observer coverage, fixed-input equality and unchanged-return preservation. Compare the candidate's recorded return with its transmitted `function_call_output`, accounting for the pinned host's newline envelope. A nonconforming or unreviewed diagnostic is not accepted merely because `collect` reports that collection finished. These conversations establish observation and return behaviour, not factual answer adequacy.
 
@@ -101,11 +101,11 @@ The authority structures are defined by `PreparationAcceptance` in [`collection.
 
 | Entry | Purpose |
 |---|---|
-| `reserve <preparation-acceptance.json>` | Refresh public rates and append the accepted programme reservation |
+| `admit <preparation-acceptance.json>` | Refresh public rates and record the accepted fixed-envelope admission |
 | `capture <preparation-acceptance.json> <auth-file>` | Run fresh common search and page acquisition behind the financial guard |
 | `qualify-cost <preparation-acceptance.json> <auth-file> <corpus-acceptance.json>` | Qualify M3's reported-charge channel on one frozen source |
 | `collect <conversation-acceptance.json> <auth-file> <frozen-inputs.json>` | Execute the exact diagnostic or measured schedule sequentially |
-| `settle <preparation-acceptance.json>` | Reconcile retained stage receipts and append programme settlement, keeping unknown holds |
+| `settle <preparation-acceptance.json>` | Reconcile retained stage receipts and write local settlement, keeping unknown holds |
 
 `collect` reports whether collection finished or stopped and names `collection-outcome.json`. It does not perform programme settlement; `settle` remains a separate accepted operation.
 
@@ -117,9 +117,9 @@ A missing stage budget after a started operation is held conservatively during c
 
 The full-catalogue reservation bounds remain deliberately conservative. An unknown charge from even one failed extraction can prevent a retry while other extractions remain active. The run and batch then stop as budget-limited, even when known charges are small. This is a financial-control outcome, not evidence for either research arm. No unverified per-message tokenizer estimate replaces these bounds. Financial admission must explicitly accept this stop behaviour; it is not renegotiated after seeing failures.
 
-The collection driver appends `collection-progress.jsonl` after every retained row. If its parent is interrupted, that journal preserves completed row identities, but the absence of a final inventory and outcome is not a terminal collection result. Keep the programme reservation and all run directories intact. Confirm that no collector or worker remains active, inspect the progress journal and financial receipts, and obtain separately recorded coordinator acceptance for any recovery. Do not restart the same observation identities or synthesise a terminal outcome for automatic settlement. A post-session finalisation failure or worker kill can likewise leave only `started.json`, `events.jsonl` and `process.log`; settlement retains the conservative full-stage hold when the final budget is unavailable.
+The collection driver appends `collection-progress.jsonl` after every retained row. If its parent is interrupted, that journal preserves completed row identities, but the absence of a final inventory and outcome is not a terminal collection result. Keep the financial admission and all run directories intact. Confirm that no collector or worker remains active, inspect the progress journal and financial receipts, and obtain separately recorded coordinator acceptance for any recovery. Do not restart the same observation identities or synthesise a terminal outcome for automatic settlement. A post-session finalisation failure or worker kill can likewise leave only `started.json`, `events.jsonl` and `process.log`; settlement retains the conservative full-stage hold when the final budget is unavailable.
 
-`writerLockPath` is an agreed operational lock location, not a financial record. Keep it in shared, task-owned encrypted scratch and require every programme writer to use the same path. A killed writer can leave an empty lock directory. Do not remove it merely because a command reports `EEXIST`: first confirm that no writer is active, inspect the authoritative ledger and retained receipts, and obtain operator confirmation. Remove only the verified empty lock with `rmdir`; never remove the ledger or evidence, and never force-remove a nonempty path.
+The runner supports only fixed-envelope admission. It writes no programme ledger and needs no writer lock or ledger-recovery procedure. Interruption recovery remains limited to the retained local receipts and coordinator-approved path described above.
 
 The attribution leaves mixed host guidance unallocated rather than labelling it avoidable overhead. Provider totals and raw request contents remain available; the component estimates do not establish an exact semantic split or a causal explanation for every token difference.
 

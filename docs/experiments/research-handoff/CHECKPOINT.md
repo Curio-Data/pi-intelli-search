@@ -1,6 +1,6 @@
 # Fresh-Agent Resume Checkpoint
 
-Status: M3 implementation readiness and the two-conversation subscription-main observer diagnostic are accepted on 4 November 2026 for code digest `59b550ca92cf0ad4f1f4e5d224cc1d884e8634c4346be8f395d11035ecf5d379` and protocol digest `4485f00a5f7af58389fa8e0f76f0c174725bbaa760840b68055f02205662c8ba`. The next gate is owner resolution of D1 before financial admission. No paid source capture, measured conversation, programme reservation or settlement has run. The pause record below preserves the entry history and handoff verification requirements.
+Status: the `rh-v3` implementation is accepted for code digest `1c420c9027dac6b10b0294db1407cc8fff09eb562a922f312f9d4b39ef804e73` and protocol digest `0f252090b0c2910f33212af62f5b734716d670c6e73bde4b651be1e2bb94f530`. The next gate is a renewed two-conversation subscription-main observer diagnostic bound to that revision. No paid source capture, measured conversation or financial close-out has run. The pause record below preserves the entry history and handoff verification requirements.
 
 ## Resume Here
 
@@ -33,9 +33,9 @@ sha256sum -c evidence/agents/20261104T160000Z-research-handoff-resume/evidence-f
 
 `source-final.sha256` covers every changed handoff/source file from that pause, including the historical checkpoint bytes. `implementation-final.sha256` covers the broader pause implementation identity, including unchanged production source, governing documents and adapter dependency manifests. `evidence-final.sha256` covers the retained reports and synthetic evidence. The original unsuffixed manifests and `candidate.json` preserve the first cold-reader submission; the final inventories and `receipt.json` remain immutable historical evidence.
 
-Do not rerun those manifests as a current-tree gate after the recorded M3 delta. The current verification basis is `candidate-revised.json` and its named evidence under `evidence/agents/20261104T164114Z-research-handoff-m3/`. An unexplained mismatch against that current receipt stops changes for read-only diagnosis and owner direction. Preserve both snapshots; neither re-baselines the other.
+Do not rerun those manifests as a current-tree gate after the recorded M3 and `rh-v3` deltas. The current verification basis is `candidate-rh-v3-r4.json` and its named evidence under `evidence/agents/20261104T192721Z-research-handoff-m4/`. An unexplained mismatch against that current receipt stops changes for read-only diagnosis and owner direction. Preserve all snapshots; none re-baselines another.
 
-## Owner Authority and Pending Decision
+## Owner Authority and Financial Amendment
 
 The owner accepted the plan and said:
 
@@ -43,15 +43,9 @@ The owner accepted the plan and said:
 
 This accepts the unchanged-text Codemode candidate, the proposed PostgreSQL 17 query and three parallel implementation tracks. The incoming lead owns integration, validation and acceptance of a bounded later batch within the existing authority. Do not ask again whether to implement those accepted choices.
 
-The outgoing lead asked the following decision, which remains unanswered:
+The owner first approved reservation-and-settlement appends, then reported that the historical ledger was permanently unavailable and directed continuation without it. The retained `owner-financial-amendment.json` under `evidence/agents/20261104T192721Z-research-handoff-m4/` records that decision. The accepted `rh-v3` boundary is a fixed USD 25.81 maximum experiment envelope with current-rate admission, per-attempt reservations and unknown-charge holds, plus local close-out. It is not a fresh USD 30 allowance or a claim about prior or external billing. No replacement ledger, writer lock or ledger-recovery procedure applies.
 
-> D1) May I append only this experiment's reservation and settlement records to that ledger, preserving every existing entry?
-
-The authoritative ledger is the path in `config.ts` and the Brief, inside the old `codemode-research` worktree. The brief permits reading it for financial continuity but prohibits modifying another worktree. Do not infer an answer to D1 from the general execution approval or the request for a fresh handover. Do not create an owner-permission receipt until the owner resolves it. No such receipt, live acceptance or programme reservation was created.
-
-The standing programme ceiling is USD 30, not a fresh allowance. The last inspected balance and conservative preliminary envelope are in the Protocol and `preliminary-budget-v2.json`; refresh them before acceptance. The envelope includes a separate M3 charge-reporting qualification because synthetic downstream calls cannot prove the live charge channel. A reservation is not expected spend, and unknown charges remain held.
-
-No package integration, publication, version bump, main merge, old-host qualification or security workstream is authorised. No prior study queries, observations, fixtures, analysis rules, runtime or scripts may be imported. Reading the financial ledger is the sole historical-data exception.
+No package integration, publication, version bump, main merge, old-host qualification or security workstream is authorised. No prior study queries, observations, fixtures, analysis rules, runtime or scripts may be imported. The historical financial inspection was the sole historical-data exception and is not a current input.
 
 ## Current Implementation
 
@@ -129,14 +123,20 @@ The accepted implementation is committed as `86ba13f8aedeb1c33f54d9696b295cb88a3
 
 Both prescribed `openai-codex/gpt-6.1-sol` conversations completed with two logical requests, two observed SSE attempts, one assigned handoff and one answer-producing resumption. Fixed inputs, usage coverage, route conformance and readable reports passed. `diagnostic-verification.json` independently checks the native hashes and transmitted return bytes: the baseline returned exact native text, and the candidate returned it once under the pinned Codemode envelope with the documented separator. The operator auth file remained unchanged and 301 retained files contained no scanned credential value. These are observer facts, not measured-dataset savings or answer-adequacy results.
 
+## RH-V3 Amendment Acceptance
+
+The `rh-v3` candidate and its proof are retained under `evidence/agents/20261104T192721Z-research-handoff-m4/candidate-rh-v3-r4.json` and `evidence/benchmarks/research-handoff/20261104T201721Z-rh-v3-synthetic-r4/`, with the adjacent `-offline/` reproduction. `reports/rh-v3-validation-r4.log` binds the complete deterministic lane before and after the same code digest. `reports/technical-r3.md` accepts the implementation correction and `reports/technical-r4.md` verifies its documentation-only successor. `reports/prose-r4.md` records the final prose disposition.
+
+Earlier M3 and observer-diagnostic evidence remains valid for its recorded `rh-v2` identity but cannot authorise paid work under `rh-v3`. Renew the observer diagnostic against the R4 code and protocol, using the R4 synthetic `frozen-inputs.json` and a fresh `diagnostic-result.json` receipt.
+
 ## Exact Next Assignment
 
-Continue the full plan from the accepted observer diagnostic. Do not repeat M3 or the diagnostic, start another broad design exercise, or edit the six identity-bearing governing documents during accepted live work.
+Continue the full plan from the accepted `rh-v3` candidate. Do not repeat completed design or review cycles or edit identity-bearing governing documents during accepted live work.
 
-1. Resolve D1, reconcile finance and writer coordination, refresh current rates, and accept the finite reservation. Preserve the existing ceiling and obligations. Explicitly accept the documented budget-stop and missing-observer stop behaviour. The accepted diagnostic supplies no ledger-append permission.
-2. Capture one fresh common corpus, assess topic/version coverage, qualify Sonar and M3 charge reporting, then freeze the accepted measured batch. If a validity-affecting change is required, preserve the failed diagnostic and qualify a new revision; do not silently amend an accepted batch.
+1. Commit the accepted implementation and run the renewed two-conversation subscription-main observer diagnostic. Accept it only after fixed-input, route, observer, usage, unchanged-return and report checks pass.
+2. Run `admit` against current public rates, then capture one fresh common corpus, assess topic/version coverage and qualify Sonar and M3 charge reporting. Freeze the accepted measured batch. Preserve failed diagnostics or preparation under distinct identities rather than silently replacing them.
 3. Execute the ten balanced pairs sequentially through the accepted driver. Retain failed, nonconforming and not-run observations. Do not request per-call approval inside an accepted batch and do not replace scheduled failures. An interrupted parent leaves partial evidence, not terminal collection or settlement authority.
-4. Grade the final answers against the frozen rubric, obtain independent review, join assessment bundles without modifying raw records, run offline analysis, settle charges and holds, and deliver the findings and reproduction inventory. Isolate failed-but-numeric descriptive pairs as recorded above. No-benefit or increased-overhead results are valid outcomes.
+4. Grade the final answers against the frozen rubric, obtain independent review, join assessment bundles without modifying raw records, run offline analysis and local financial close-out, and deliver the findings and reproduction inventory. Isolate failed-but-numeric descriptive pairs as recorded above. No-benefit or increased-overhead results are valid outcomes. Keep raw evidence in this worktree and commit the compact findings and reproduction guidance to this branch.
 
 ## Agent and Workspace State
 
@@ -146,4 +146,4 @@ For renewed parallel work, use one workspace for this existing worktree and one 
 
 ## Suggested Resume Prompt
 
-> Read `docs/experiments/research-handoff/CHECKPOINT.md` in the existing `study/research-handoff-runner` worktree and act as the incoming lead. M3 and the subscription-main observer diagnostic are accepted against the recorded identities; do not repeat them. Resume at owner decision D1 and the remaining financial, preparation, collection and analysis gates in Exact Next Assignment. Do not write the cross-worktree financial ledger or make paid calls until the pending owner permission and collection prerequisites are resolved. Do not import old scientific material, recreate the worktree, rerun historical entry manifests as a current gate, or infer savings from synthetic or diagnostic usage.
+> Read `docs/experiments/research-handoff/CHECKPOINT.md` in the existing `study/research-handoff-runner` worktree and act as the incoming lead. The `rh-v3` implementation is accepted against the recorded R4 identities. Resume with the renewed subscription-main observer diagnostic, then fixed-envelope admission, capture, charge qualification, measured collection and analysis. Do not recreate the unavailable ledger or treat its historical balance as an allowance. Do not import old scientific material, recreate the worktree, rerun historical entry manifests as a current gate, or infer savings from synthetic or diagnostic usage. Keep raw evidence in this worktree and commit compact findings and reproduction guidance to the branch.

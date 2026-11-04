@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 import { loadPinnedHost, createStudySession, createRecorder, allowedToolsForArm, SYNTHETIC_MODEL_ID, SYNTHETIC_PROVIDER_ID, type SyntheticScript } from "./host.js";
 import { createBenchmarkResearchExtension } from "./registration.js";
 import { loadFrozenInputs, settleInputIntegrity, assertCorpusAcceptable } from "./common-inputs.js";
-import { studySettings, taskPrompt, MAIN_MODEL, BUDGET, PROGRAMME_LEDGER } from "./config.js";
+import { studySettings, taskPrompt, MAIN_MODEL, BUDGET } from "./config.js";
 import { syntheticInputs, syntheticDownstream } from "./fixtures.js";
-import { AttemptBudget, readProgrammeLedger } from "./budget.js";
+import { AttemptBudget } from "./budget.js";
 import { createGuardedCallLlm } from "./pipeline-client.js";
 import { assertStoredCredentialReady } from "./credentials.js";
 import { analyseRun, analysePairs, renderAnalysisMarkdown } from "./analyse.js";
@@ -46,9 +46,9 @@ export interface LiveAcceptance {
   seriesRoot: string;
   costQualificationPath?: string;
   corpusAcceptancePath?: string;
-  programmeLedgerPath?: string;
-  programmeReservationId?: string;
-  programmeReservationNanoUsd?: number;
+  financialMode?: "fixed-envelope";
+  financialAdmissionPath?: string;
+  financialAdmissionSha256?: string;
 }
 
 export async function assertLiveEvidenceRoot(path: string): Promise<void> {
@@ -59,10 +59,18 @@ export async function assertLiveEvidenceRoot(path: string): Promise<void> {
     throw new Error("Live series must use a distinct real evidence directory in this checkout, never a scratch clone");
   }
 }
-export async function validateLiveAcceptance(cfg: WorkerConfig): Promise<void> {
+export function assertFixedAdmissionIdentity(admission: unknown, codeSha256: string, protocolSha256: string): void {
+  const value = admission as { accepted?: unknown; mode?: unknown; codeSha256?: unknown; protocolSha256?: unknown; envelopeNanoUsd?: unknown };
+  if (value.accepted !== true || value.mode !== "fixed-envelope" || value.codeSha256 !== codeSha256
+    || value.protocolSha256 !== protocolSha256 || value.envelopeNanoUsd !== BUDGET.batchNanoUsd) {
+    throw new Error("Fixed-envelope financial admission is missing or changed");
+  }
+}
+
+export async function validateLiveAcceptance(cfg: WorkerConfig, rootCheck: (path: string) => Promise<void> = assertLiveEvidenceRoot): Promise<void> {
   if (!cfg.acceptancePath || !cfg.authPath) throw new Error("Live inference requires a recorded acceptance and an explicit credential reference");
   const acceptance = JSON.parse(await readFile(cfg.acceptancePath, "utf8")) as LiveAcceptance;
-  await assertLiveEvidenceRoot(acceptance.seriesRoot);
+  await rootCheck(acceptance.seriesRoot);
   if (acceptance.schemaVersion !== 1 || acceptance.acceptedBy !== "coordinator" || acceptance.phase !== cfg.manifest.phase
     || acceptance.protocolSha256 !== cfg.manifest.protocolSha256 || acceptance.codeSha256 !== cfg.manifest.codeSha256
     || acceptance.corpusSha256 !== cfg.manifest.corpusSha256 || !acceptance.runIds.includes(cfg.manifest.runId)) {
@@ -73,8 +81,11 @@ export async function validateLiveAcceptance(cfg: WorkerConfig): Promise<void> {
   if (resolve(cfg.directory) !== expectedDirectory || resolve(cfg.workspace) !== join(expectedDirectory, "workspace")
     || resolve(cfg.agentDir) !== join(expectedDirectory, "agent")) throw new Error("Worker paths differ from the accepted series");
   if (cfg.manifest.phase === "measured") {
-    if (acceptance.programmeLedgerPath !== PROGRAMME_LEDGER || !acceptance.programmeReservationId
-      || acceptance.programmeReservationNanoUsd !== BUDGET.batchNanoUsd) throw new Error("Programme reservation is not accepted");
+    if (acceptance.financialMode !== "fixed-envelope") throw new Error("Fixed-envelope financial admission is required");
+    if (!acceptance.financialAdmissionPath || await digestFile(acceptance.financialAdmissionPath) !== acceptance.financialAdmissionSha256) {
+      throw new Error("Fixed-envelope financial admission is missing or changed");
+    }
+    assertFixedAdmissionIdentity(JSON.parse(await readFile(acceptance.financialAdmissionPath, "utf8")), cfg.manifest.codeSha256, cfg.manifest.protocolSha256);
     if (!acceptance.costQualificationPath || !acceptance.corpusAcceptancePath) throw new Error("Cost/corpus qualification is missing");
     const cost = JSON.parse(await readFile(acceptance.costQualificationPath, "utf8"));
     const corpus = JSON.parse(await readFile(acceptance.corpusAcceptancePath, "utf8"));
@@ -82,8 +93,6 @@ export async function validateLiveAcceptance(cfg: WorkerConfig): Promise<void> {
       if (receipt.accepted !== true || receipt.codeSha256 !== cfg.manifest.codeSha256 || receipt.protocolSha256 !== cfg.manifest.protocolSha256
         || receipt.corpusSha256 !== cfg.manifest.corpusSha256) throw new Error("Cost/corpus qualification differs from the accepted batch");
     }
-    const ledger = await readProgrammeLedger(acceptance.programmeLedgerPath);
-    if (ledger.active[acceptance.programmeReservationId] !== BUDGET.batchNanoUsd) throw new Error("Programme reservation is not active");
   }
   const admissions = join(resolve(acceptance.seriesRoot), "admissions");
   await mkdir(admissions, { recursive: true });

@@ -9,7 +9,7 @@ import type { Arm, Phase } from "./contracts.js";
 export const HOST_PATH = "/home/miah0x41/.pi/agent/install/releases/1.5.0/node_modules/@earendil-works/pi-coding-agent";
 export const HOST_VERSION = "1.5.0";
 export const BASELINE_COMMIT = "d2ec50611ede2f5d46c062b7e568b13203015c22";
-export const PROTOCOL_REVISION = "rh-v2";
+export const PROTOCOL_REVISION = "rh-v3";
 export const PRIMARY_METRIC = "cumulativeTotalTokens" as const;
 export const MAIN_MODEL = { provider: "openai-codex", model: "gpt-6.1-sol" } as const;
 export const QUERY = "For a PostgreSQL 17 job table with several concurrent workers, explain how FOR UPDATE SKIP LOCKED differs from transaction-level advisory locks, where LISTEN/NOTIFY helps, and what is still needed to avoid lost jobs or duplicate external side effects.";
@@ -24,7 +24,6 @@ export const BUDGET = {
   extractAttemptNanoUsd: 324_172_800,
   collateAttemptNanoUsd: 319_372_800,
 } as const;
-export const PROGRAMME_LEDGER = "/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-research/evidence/benchmarks/programme-spend/spend-ledger.jsonl";
 export function studySettings(): ResearchSettings {
   return {
     ...tuningDefaults(),

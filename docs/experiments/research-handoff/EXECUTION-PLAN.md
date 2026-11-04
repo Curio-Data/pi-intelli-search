@@ -1,16 +1,16 @@
 # Research Handoff Execution Plan
 
-Status: accepted for execution by the owner on 4 November 2026, with the unchanged-text candidate, proposed query and parallel build tracks. The owner instructed the coordinator to validate delegated work as it arrives. The [Protocol](PROTOCOL.md) records the accepted implementation choices. Implementation-entry, diagnostic and paid-collection gates remain binding; acceptance of this plan alone does not establish that those gates have passed.
+Status: accepted for execution by the owner on 4 November 2026, with the unchanged-text candidate, proposed query and parallel build tracks. The owner instructed the coordinator to validate delegated work as it arrives and later directed continuation without the permanently unavailable historical cost ledger. The [Protocol](PROTOCOL.md) records the accepted implementation choices and the `rh-v3` fixed-envelope amendment. Implementation-entry, diagnostic and paid-collection gates remain binding; acceptance of this plan alone does not establish that those gates have passed.
 
 ## Purpose and Authority
 
 Deliver one bounded experiment comparing a direct `intelli_research` call with a Codemode call to the same operation. Establish source equality, measurement correctness and evidence access before spending on collection. Report equal resumptions or increased Codemode traffic if that is what the evidence shows.
 
-The [Handover](HANDOVER.md), [Brief](BRIEF.md) and [Feasibility](FEASIBILITY.md) govern the work. In particular, the Brief's Comparison Section states:
+The [Handover](HANDOVER.md), [Brief](BRIEF.md) and [Feasibility](FEASIBILITY.md) govern the work, subject to the owner's `rh-v3` amendment superseding their historical ledger-reconciliation prerequisites. In particular, the Brief's Comparison Section states:
 
 > The candidate changes the main-thread invocation and return boundary, not the research evidence or model quality.
 
-No prior scientific material, execution scripts or experimental runtime will be imported. The existing financial ledger is the sole historical-data exception. Package integration, publication, version changes, a merge to `main`, old-host qualification and a security workstream remain outside scope.
+No prior scientific material, execution scripts or experimental runtime will be imported. The historical financial inspection was the sole historical-data exception; the ledger is now unavailable and must not be read or recreated. Package integration, publication, version changes, a merge to `main`, old-host qualification and a security workstream remain outside scope.
 
 ## Inspected Starting State
 
@@ -155,15 +155,15 @@ Exit: implementation-readiness report with code identity, actual-host evidence, 
 
 ### M4: Accept the Costed Batch and Verify Live Coverage
 
-Reconcile the financial ledger again, refresh rate information without paid inference, and calculate maximum admitted exposure from implemented request bounds and retry limits. Accept a bounded diagnostic schedule against an identified candidate code revision and protocol hash before any live inference. The planned measured batch must already have a checked cost envelope, but is not yet authorised to start.
+Under the owner's `rh-v3` amendment, use the fixed USD 25.81 experiment envelope without creating a replacement programme ledger. Refresh rate information without paid inference and calculate maximum admitted exposure from implemented request bounds and retry limits. Accept a bounded diagnostic schedule against an identified candidate code revision and protocol hash before any live inference. The planned measured batch must already have a checked cost envelope, but is not yet authorised to start.
 
 Include two non-measured, subscription-main diagnostic conversations in that schedule: one direct and one Codemode, both using new synthetic research inputs. Their purpose is to verify the prescribed main model's selected transport, request observation and usage reconciliation. They do not establish adequacy on the research query. Record their main usage separately and do not fold them into the ten pairs.
 
-Distinguish a provider-boundary payload hook from on-wire coverage. Inspect the actual provider implementation and test the selected transport, including whether it sends full history or delta requests. If a public, symmetric transport setting is needed to make the boundary observable, treat that change as a new candidate revision. Retain the failed diagnostic, update code/settings/protocol identities, refresh costs, obtain independent review of the affected measurement boundary and accept an additional bounded diagnostic allowance before rerunning both routes. Do not patch the host or claim wire-level coverage from hook counts alone. Missing attempt coverage blocks measured collection. After observer qualification, the coordinator may accept the bounded preparation reservation against the identified code and protocol. Final measured-batch acceptance waits for the accepted corpus and charge-reporting qualifications. The per-entry sequence in [Reproduction](REPRODUCTION.md#live-gates) governs these distinct gates; any later validity-affecting change invalidates the relevant acceptance.
+Distinguish a provider-boundary payload hook from on-wire coverage. Inspect the actual provider implementation and test the selected transport, including whether it sends full history or delta requests. If a public, symmetric transport setting is needed to make the boundary observable, treat that change as a new candidate revision. Retain the failed diagnostic, update code/settings/protocol identities, refresh costs, obtain independent review of the affected measurement boundary and accept an additional bounded diagnostic allowance before rerunning both routes. Do not patch the host or claim wire-level coverage from hook counts alone. Missing attempt coverage blocks measured collection. After observer qualification, the coordinator may accept the bounded fixed-envelope preparation admission against the identified code and protocol. Final measured-batch acceptance waits for the accepted corpus and charge-reporting qualifications. The per-entry sequence in [Reproduction](REPRODUCTION.md#live-gates) governs these distinct gates; any later validity-affecting change invalidates the relevant acceptance.
 
-After these checks, capture common search and pages once under the accepted financial reservation. Retain unsuccessful preparation attempts under distinct identities. Accept a usable corpus only if at least two selected pages are readable and the frozen source material supports assessment of the declared topics for PostgreSQL 17. Record version labels and justify applicability for any unversioned source. Unresolved applicability fails preparation. Assess these conditions before seeing any arm result, then bind the accepted corpus digest to the frozen batch. A failed preparation is retained; another capture needs an explicit additional allowance within the accepted schedule, not an unlimited retry loop.
+After these checks, capture common search and pages once under the accepted fixed-envelope admission. Retain unsuccessful preparation attempts under distinct identities. Accept a usable corpus only if at least two selected pages are readable and the frozen source material supports assessment of the declared topics for PostgreSQL 17. Record version labels and justify applicability for any unversioned source. Unresolved applicability fails preparation. Assess these conditions before seeing any arm result, then bind the accepted corpus digest to the frozen batch. A failed preparation is retained; another capture needs an explicit additional allowance within the accepted schedule, not an unlimited retry loop.
 
-Exit: live observer coverage, verified immutable common inputs and an accepted costed schedule. No per-call owner approval is needed within that accepted batch.
+Exit: live observer coverage, verified immutable common inputs and an accepted bounded schedule. No per-call owner approval is needed within that accepted batch.
 
 ### M5: Collect the Ten Pairs
 
@@ -221,7 +221,7 @@ Publish every scheduled row. Numeric pair summaries use pairs where the relevant
 
 ## Budget
 
-The programme ceiling and financial-ledger path remain those in the [Brief](BRIEF.md#retained-model-roles-and-budget). A planning-only read at `2026-11-04T10:59:35Z` found:
+The following ledger inspection is historical. The owner's `rh-v3` amendment supersedes its balance-reconciliation and writer-coordination prerequisites with fixed-envelope admission and local settlement. A planning-only read at `2026-11-04T10:59:35Z` found:
 
 | Financial Item | Recorded USD |
 |---|---:|
@@ -230,7 +230,7 @@ The programme ceiling and financial-ledger path remain those in the [Brief](BRIE
 | Active Reservations | 0.000000000 |
 | Remaining Ledger Allowance | 26.418949454 |
 
-The inspected ledger had 279 records, ending at sequence 278, with digest `72bf6b92f906fc28c2e7f711a4fb6256926fa0f1ad7530ae6991a81ed3984725`. Sequence continuity, previous-record hashes, reservation pairing and settlement arithmetic passed the planning check. This establishes the balance recorded in that file, not completeness of external billing or absence of unrecorded commitments. Reconcile both before approval. No ledger entry was changed during planning.
+The inspected ledger had 279 records, ending at sequence 278, with digest `72bf6b92f906fc28c2e7f711a4fb6256926fa0f1ad7530ae6991a81ed3984725`. Sequence continuity, previous-record hashes, reservation pairing and settlement arithmetic passed the planning check. This established the balance recorded in that file, not completeness of external billing or absence of unrecorded commitments. No ledger entry was changed during planning. The file was subsequently reported permanently unavailable; do not recreate it.
 
 Do not use previous-run costs to predict this experiment. Derive its estimate from current rates and this new protocol:
 
@@ -243,7 +243,7 @@ Do not use previous-run costs to predict this experiment. Derive its estimate fr
 
 Compute input bounds from the complete constructed prompts, not page characters alone; include maximum output, reasoning treatment, all retry attempts and outstanding parallel extraction calls. Reserve before dispatch, then replace reservations with reported charges and retained unknown holds. The first schedule should request only its justified envelope, not the entire remaining programme allowance.
 
-No numerical collection estimate is approved yet: current rates, full prompt bounds and the final attempt policy have not been verified. A conservative preliminary estimate is an M1 prerequisite before coding; refreshing and independently checking it against implemented bounds is an M4 prerequisite before live qualification or collection. The writer must preserve one authoritative programme balance and coordinate with any other ledger writer; a new branch-local ledger cannot create a second allowance. Financial compatibility may be implemented from the record format without importing old execution code.
+No numerical collection estimate is approved yet: current rates, full prompt bounds and the final attempt policy have not been verified. A conservative preliminary estimate is an M1 prerequisite before coding; refreshing and independently checking it against implemented bounds is an M4 prerequisite before live qualification or collection. Under `rh-v3`, the coordinator binds the fixed USD 25.81 experiment envelope to current rates and exact implementation identities, retains every per-attempt reservation and unknown hold, and writes local close-out evidence. No replacement ledger or fresh USD 30 allowance is created.
 
 ## Parallel Herdr Plan
 
