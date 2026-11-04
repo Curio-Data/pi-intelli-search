@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 // Tests never discover operator settings or write scratch outside this checkout.
 const root = fileURLToPath(new URL("../", import.meta.url));
 const mode = process.argv[2];
-if (!["native", "mcp", "smoke"].includes(mode)) throw new Error("Expected native, mcp or smoke");
+if (!["native", "mcp", "smoke", "handoff"].includes(mode)) throw new Error("Expected native, mcp, smoke or handoff");
 const cwd = mode === "mcp" ? join(root, "packages/mcp") : root;
 await mkdir(join(root, ".tmp"), { recursive: true });
 const scratch = await mkdtemp(join(root, ".tmp/tests-"));
@@ -27,6 +27,8 @@ try {
       ? ["test/smoke.ts"]
       : (await readdir(join(cwd, "test")))
           .filter((name) => name.endsWith(".test.ts"))
+          // Actual-host experiment checks are an explicit, pinned-host lane.
+          .filter((name) => mode === "handoff" ? name.startsWith("handoff-") : mode !== "native" || !name.startsWith("handoff-"))
           .sort()
           .map((name) => `test/${name}`);
   const child = spawn(

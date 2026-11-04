@@ -2,6 +2,8 @@
 
 Ready for a new lead agent to prepare and implement the bounded experiment. This is not a claim that its runner exists or that paid collection is ready. The owner agreed the new direction and approved `Pi` 1.5.0 for both arms on 4 November 2026.
 
+The implementation branch now contains a bounded runner. Read [Checkpoint](CHECKPOINT.md), [Protocol](PROTOCOL.md) and [Reproduction](REPRODUCTION.md) for its current evidence and remaining gates. The commissioning instructions below remain the scope record; they are not a claim that collection has been accepted.
+
 ## Read First
 
 1. [Brief](BRIEF.md): objectives, baseline, shared-source control, measurements, model roles, budget and collection conditions.

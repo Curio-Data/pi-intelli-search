@@ -1,0 +1,17 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "composite": false,
+    "noEmit": true,
+    "declaration": false,
+    "baseUrl": "..",
+    "paths": {
+      "@earendil-works/pi-coding-agent": ["/home/miah0x41/.pi/agent/install/releases/1.5.0/node_modules/@earendil-works/pi-coding-agent/dist/index.d.ts"],
+      "@earendil-works/pi-ai": ["/home/miah0x41/.pi/agent/install/releases/1.5.0/node_modules/@earendil-works/pi-ai/dist/index.d.ts"],
+      "@earendil-works/pi-agent-core": ["/home/miah0x41/.pi/agent/install/releases/1.5.0/node_modules/@earendil-works/pi-agent-core/dist/index.d.ts"]
+    }
+  },
+  "include": ["handoff-*.test.ts", "helpers/handoff-fixtures.ts", "../scripts/research-handoff/*.ts"],
+  "exclude": []
+}

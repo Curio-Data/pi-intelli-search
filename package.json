@@ -45,6 +45,9 @@
     "dev": "tsc --watch",
     "test": "node scripts/run-tests.mjs native",
     "test:smoke": "node scripts/run-tests.mjs smoke",
+    "test:handoff": "node scripts/run-tests.mjs handoff",
+    "typecheck:handoff": "tsc -p test/tsconfig.research-handoff.json",
+    "study:handoff": "node --import tsx scripts/research-handoff/cli.ts",
     "chart": "node scripts/plot-downloads.mts",
     "prepublishOnly": "node scripts/generate-package-readmes.mjs --publish-native"
   },
@@ -58,6 +61,7 @@
     "@earendil-works/pi-coding-agent": "^1.1.0",
     "@earendil-works/pi-tui": "^1.1.0",
     "esbuild": "0.28.2",
+    "js-tiktoken": "1.0.21",
     "prettier": "^3.9.6",
     "roughjs": "^4.6.6",
     "tsx": "^4.19.0",
