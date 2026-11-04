@@ -135,6 +135,62 @@ test("matching hook and wire digests pass and the attempt completes on terminal 
   assert.equal(finalOutput.observerCoverage.verified, true, JSON.stringify(finalOutput.observerCoverage.problems));
 });
 
+test("pinned Codex response.done is a successful terminal event with usage", () => {
+  const recorder = makeRecorder();
+  const handle = recorder.beginMainRequest({});
+  recorder.noteProviderPayload({ model: "gpt-6.1-sol" });
+  const attemptId = recorder.beginAttempt(handle.index, "identity");
+  recorder.noteWireBody(attemptId, { model: "gpt-6.1-sol" }, "identity");
+  recorder.noteProviderResponse(200);
+  recorder.noteProviderStreamEvent({ type: "response.done", response: { usage: { input_tokens: 40, output_tokens: 6 } } });
+  recorder.noteAssistantMessageEnd(assistantMessage([{ type: "text", text: "done" }]));
+  recorder.noteAgentSettled(false);
+  const output = recorder.output();
+  assert.equal(output.requests[0].attempts[0].status, "completed");
+  assert.deepEqual(output.requests[0].attempts[0].usage, { input: 40, output: 6 });
+  assert.equal(output.observerCoverage.verified, true, JSON.stringify(output.observerCoverage.problems));
+});
+
+test("pinned Codex failure events terminate attempts without inventing usage or missing coverage", () => {
+  for (const event of [
+    { type: "response.failed", response: { error: { message: "overloaded" } } },
+    { type: "error", error: { message: "stream failed" } },
+  ]) {
+    const recorder = makeRecorder();
+    const handle = recorder.beginMainRequest({});
+    recorder.noteProviderPayload({ model: "gpt-6.1-sol" });
+    const attemptId = recorder.beginAttempt(handle.index, "identity");
+    recorder.noteWireBody(attemptId, { model: "gpt-6.1-sol" }, "identity");
+    recorder.noteProviderResponse(200);
+    recorder.noteProviderStreamEvent(event);
+    recorder.noteAssistantMessageEnd(assistantMessage([{ type: "text", text: "" }], "error"));
+    recorder.noteAgentSettled(false);
+    const output = recorder.output();
+    const attempt = output.requests[0].attempts[0];
+    assert.equal(attempt.status, "error");
+    assert.equal(attempt.usage, undefined);
+    assert.equal(output.observerCoverage.verified, true, JSON.stringify(output.observerCoverage.problems));
+    assert.equal(recorder.outcome(), "failed");
+  }
+});
+
+test("a failed Codex terminal event retains any usage the provider supplied", () => {
+  const recorder = makeRecorder();
+  const handle = recorder.beginMainRequest({});
+  recorder.noteProviderPayload({ model: "gpt-6.1-sol" });
+  const attemptId = recorder.beginAttempt(handle.index, "identity");
+  recorder.noteWireBody(attemptId, { model: "gpt-6.1-sol" }, "identity");
+  recorder.noteProviderStreamEvent({ type: "response.failed", response: {
+    error: { message: "failed after usage" }, usage: { input_tokens: 25, output_tokens: 3 },
+  } });
+  recorder.noteAssistantMessageEnd(assistantMessage([{ type: "text", text: "" }], "error"));
+  recorder.noteAgentSettled(false);
+  const attempt = recorder.output().requests[0].attempts[0];
+  assert.equal(attempt.status, "error");
+  assert.deepEqual(attempt.usage, { input: 25, output: 3 });
+  assert.equal(recorder.output().observerCoverage.verified, true);
+});
+
 test("a 2xx attempt that never terminates is flagged, not silently completed", () => {
   const recorder = makeRecorder();
   const handle = recorder.beginMainRequest({});

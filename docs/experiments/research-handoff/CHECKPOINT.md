@@ -1,6 +1,6 @@
 # Fresh-Agent Resume Checkpoint
 
-Status: paused at the owner's context-window break on 4 November 2026. The bounded runner is implemented, but the latest close-out edits are not yet independently accepted. M3 is not complete. No live study diagnostic, paid source capture, measured conversation, programme reservation or settlement has run.
+Status: M3 implementation readiness accepted on 4 November 2026 for code digest `59b550ca92cf0ad4f1f4e5d224cc1d884e8634c4346be8f395d11035ecf5d379` and protocol digest `4485f00a5f7af58389fa8e0f76f0c174725bbaa760840b68055f02205662c8ba`. The next gate is the separately accepted two-conversation subscription-main diagnostic schedule. No live study diagnostic, paid source capture, measured conversation, programme reservation or settlement has run. The pause record below preserves the entry history and handoff verification requirements.
 
 ## Resume Here
 
@@ -11,7 +11,7 @@ Continue in the existing checkout:
 branch: study/research-handoff-runner
 ```
 
-Do not recreate, reset or retire this worktree. Preserve its ignored evidence. The outgoing lead was `Pi`, `openai-codex/gpt-6-astra`. Identify the incoming lead's actual model before choosing a new agent pool; the experimental main model is a separate, fixed assignment.
+Do not recreate, reset or retire this worktree. Preserve its ignored evidence. The outgoing handoff lead was `Pi`, `openai-codex/gpt-6-astra`. The incoming lead is `Pi`, `kimi-coding/k3.1-pro`; that coordinator model is excluded from the new review pool. The experimental main model is a separate, fixed assignment.
 
 Read in this order:
 
@@ -23,7 +23,7 @@ Read in this order:
 
 The evidence directories are gitignored. They survive in this retained checkout, not in a clean clone or a newly created worktree. Do not clean them or substitute older scientific material when something is absent.
 
-From this checkout, verify the handoff inventories before any change:
+Historical entry verification was completed by the incoming lead before any authorised change. These commands passed against the committed pause snapshot at `065173b`:
 
 ```bash
 sha256sum -c evidence/agents/20261104T160000Z-research-handoff-resume/source-final.sha256
@@ -31,9 +31,9 @@ sha256sum -c evidence/agents/20261104T160000Z-research-handoff-resume/implementa
 sha256sum -c evidence/agents/20261104T160000Z-research-handoff-resume/evidence-final.sha256
 ```
 
-`source-final.sha256` covers every changed handoff/source file, including this checkpoint. `implementation-final.sha256` covers the broader implementation identity, including unchanged production source, governing documents and adapter dependency manifests. `evidence-final.sha256` covers the retained reports and synthetic evidence. The original unsuffixed manifests and `candidate.json` preserve the first cold-reader submission; use the final inventories and `receipt.json` for entry.
+`source-final.sha256` covers every changed handoff/source file from that pause, including the historical checkpoint bytes. `implementation-final.sha256` covers the broader pause implementation identity, including unchanged production source, governing documents and adapter dependency manifests. `evidence-final.sha256` covers the retained reports and synthetic evidence. The original unsuffixed manifests and `candidate.json` preserve the first cold-reader submission; the final inventories and `receipt.json` remain immutable historical evidence.
 
-A missing or mismatched entry stops changes for read-only diagnosis and owner direction. After successful entry verification, authorised development can change the tree; bind the next candidate separately rather than overwriting this handoff inventory.
+Do not rerun those manifests as a current-tree gate after the recorded M3 delta. The current verification basis is `candidate-revised.json` and its named evidence under `evidence/agents/20261104T164114Z-research-handoff-m3/`. An unexplained mismatch against that current receipt stops changes for read-only diagnosis and owner direction. Preserve both snapshots; neither re-baselines the other.
 
 ## Owner Authority and Pending Decision
 
@@ -83,7 +83,7 @@ The last comprehensive passing lane before the latest close-out edits is:
 
 Those are synthetic facts. Their usage values are programmed, not measured processing or savings. That source revision is historical: later code, tests and documentation changed. Never use its green log or proof to accept the current tree without rerunning and binding a new candidate.
 
-At the pause, the coordinator ran one fresh complete checkpoint lane. It passed build, 663 native tests, 62 standalone tests, 126 study tests, both type projects and all generator checks. The exact log is `evidence/agents/20261104T160000Z-research-handoff-resume/reports/checkpoint-validation.log`. This covers the latest code, including the return-contract and close-out edits. It is checkpoint validation, not independent implementation acceptance. A new driver-level actual-host synthetic series and exact-revision review are still required; the historical proof above does not cover the latest bytes.
+Historical pause state: the coordinator ran one fresh complete checkpoint lane. It passed build, 663 native tests, 62 standalone tests, 126 study tests, both type projects and all generator checks. The exact log is `evidence/agents/20261104T160000Z-research-handoff-resume/reports/checkpoint-validation.log`. It covered the then-current code, including the return-contract and close-out edits, but was not independent implementation acceptance. At that pause a new driver-level actual-host synthetic series and exact-revision review were still required. The M3 Acceptance Evidence below records their subsequent completion.
 
 ## Reviews and Close-Out Work
 
@@ -96,7 +96,7 @@ All following reports are in `evidence/agents/20261104T112537Z-research-handoff-
 - `technical-integrated.md`: independent Qwen review. Its final verdict against the historical digest above was **not ready**, with I-4 as its sole blocking code issue. I-0, I-1 and I-2 were closed. It also records residual medium/low findings.
 - `prose-implementation.md`: Sol review. P2 was closed; P1, P3, P4, P5 and P6 remained open at its final inspection.
 
-Changes made after those final review verdicts, not yet independently rechecked:
+Historical pause state: the following changes had not yet been independently rechecked. Their M3 disposition is recorded below:
 
 1. I-4: `persistRunRecord` writes the budget receipt first and catches strict analysis rejection, retaining the full record with `analysisError`. A new worker-retention regression passed in targeted testing.
 2. P1/P6: `collect` now distinguishes finished/stopped collection, names the outcome, and states that financial settlement is separate. Help is multiline, names the populations and separates gated operations. Help regression passed.
@@ -104,24 +104,35 @@ Changes made after those final review verdicts, not yet independently rechecked:
 4. P4/P5 and I-3/I-5: Markdown now labels provider counts, estimates, units and difference direction; missing observations and unassessed/review-incomplete answers are distinct; healthy rows show no analysis error; counts and per-run limitations were added.
 5. I-6/I-8: identity coverage now includes study tests, their runner/configuration and governing/reproduction documents. Reproduction receipts disclose a mismatch between record identities and the analysing implementation.
 6. I-10/I-11/I-13/I-14/I-15: collection validates its live root before writes; OAuth validity now covers the worker ceiling plus refresh margin; invalid budget receipts retain their error detail; stale-lock recovery and conservative-budget fragility are documented; the explicit study commands are named in branch guidance.
-7. Additional coordinator finding: correct tool topology alone did not prove an unchanged candidate return. `return-contract.ts` now checks the actual text and core hash; analysis and worker classification use it. New tests cover exact return/console envelopes and rejection of projection, duplication and changed native text. This addition needs fresh technical review and actual-host qualification.
+7. Additional coordinator finding: correct tool topology alone did not prove an unchanged candidate return. `return-contract.ts` now checks the actual text and core hash; analysis and worker classification use it. New tests cover exact return/console envelopes and rejection of projection, duplication and changed native text. At the pause this addition needed fresh technical review and actual-host qualification; the M3 evidence below records its acceptance.
 
 Residual deliberate limitations: mixed host guidance remains partly unallocated rather than being labelled overhead; full-catalogue financial reservations can stop a batch on an unknown charge while other extractions remain active. No per-message cost estimate replaces that conservative bound. Live Codex transport/usage and actual Sonar/M3 reported-charge channels remain untested.
 
+## M3 Acceptance Evidence
+
+The incoming lead verified all three final handoff inventories before changing the tree. The first fresh candidate received unconditional prose acceptance but a technical blocker for unrecognised Codex terminal events. The accepted revision preserves that failed review and candidate evidence, then makes only the recorded recorder, collection-driver, test and reproduction-guide changes.
+
+Bind M3 to these current artefacts under `evidence/agents/20261104T164114Z-research-handoff-m3/` and `evidence/benchmarks/research-handoff/`:
+
+- `candidate-revised.json`: exact implementation, host and protocol identities.
+- `reports/revised-validation.log`: serial build, native, standalone and study tests, both type projects and all generator checks, with matching code digests before and after.
+- `20261104T170500Z-revised-synthetic/`: fresh actual-host baseline and Codemode proof with fixed-input equality, unchanged returns, complete request accounting and readable reports.
+- `20261104T170500Z-revised-offline/`: byte-identical offline `analysis.json` and a matching-identity receipt.
+- `reports/technical-final.md` and `reports/technical-recheck.md`: the blocking review and its bounded delta closure. The final verdict is **ACCEPTED FOR M3** against the digests above.
+- `reports/prose-final.md` and `reports/prose-recheck.md`: unconditional initial and delta prose acceptance.
+
+The coordinator accepted the reviewer's recommended D-1 disposition without another code change. Descriptive pair statistics can include a failed conversation only when its provider usage is complete; its failed status remains visible, it cannot enter the positive-claim subset, and `FINDINGS.md` must isolate any such pair rather than describe its difference as a benefit. Financial admission must also accept that missing terminal observer coverage or an unknown-charge hold can stop the batch, as Reproduction records.
+
 ## Exact Next Assignment
 
-Finish the bounded implementation checkpoint, then continue the full plan. Do not start another broad design exercise.
+Continue the full plan from M3. Do not start another broad design exercise or edit the six identity-bearing governing documents during accepted live work.
 
-1. Inspect the handoff receipt, checkout state and preserved file inventory. Verify before changing anything. If the checkpoint bytes do not match, diagnose read-only and ask the owner rather than resetting or silently re-baselining.
-2. Review the latest close-out edits listed above. The outgoing checkpoint lane passed; rerun the serial commands in Reproduction after any code change, and at the final acceptance boundary. Retain failures; do not loop until green while losing their identity.
-3. Create a fresh synthetic series and a new offline reproduction directory. Assert exact source/protocol identity, both routes, input equality, unchanged-return preservation, readable reports, request accounting and byte-identical offline analysis. Do not overwrite an earlier series.
-4. Commission a focused independent technical recheck of the final candidate, especially I-4 and the new return-contract check, plus a prose follow-up for P1/P3–P6 and the current checkpoint. Validate their evidence as it arrives. Do not treat a complete review report as an acceptance when its verdict remains conditional or negative.
-5. Record M3 acceptance only after those gates pass. Bind the actual code and protocol identities, tests and reviews. A WIP handoff commit is not that acceptance.
-6. Accept the separate two-conversation subscription-main diagnostic schedule and verify the real prescribed main transport with synthetic downstream work. These conversations are not the measured dataset and do not require a paid pipeline reservation.
-7. Resolve D1, reconcile finance and writer coordination, refresh current rates, and accept the finite reservation. Preserve the existing ceiling and obligations.
-8. Capture one fresh common corpus, assess topic/version coverage, qualify Sonar and M3 charge reporting, then freeze the accepted measured batch. If a validity-affecting change is required, preserve the failed diagnostic and qualify a new revision; do not silently amend an accepted batch.
-9. Execute the ten balanced pairs sequentially through the accepted driver. Retain failed, nonconforming and not-run observations. Do not request per-call approval inside an accepted batch and do not replace scheduled failures.
-10. Grade the final answers against the frozen rubric, obtain independent review, join assessment bundles without modifying raw records, run offline analysis, settle charges and holds, and deliver the findings and reproduction inventory. No-benefit or increased-overhead results are valid outcomes.
+1. Commit the accepted implementation bytes and record the commit beside the M3 code and protocol digests. Keep the independent review files immutable after hashing them.
+2. Accept and execute the separate two-conversation subscription-main diagnostic schedule using the fresh synthetic inputs from the accepted synthetic series. Use the prescribed main model and transport with synthetic downstream work. These conversations are not the measured dataset and require no paid pipeline reservation. Check both routes, fixed inputs, complete observer coverage, unchanged recorded and transmitted returns, usage reconciliation and readable reports before accepting the diagnostics. Collection finishing is not itself acceptance.
+3. Resolve D1, reconcile finance and writer coordination, refresh current rates, and accept the finite reservation. Preserve the existing ceiling and obligations. Explicitly accept the documented budget-stop and missing-observer stop behaviour.
+4. Capture one fresh common corpus, assess topic/version coverage, qualify Sonar and M3 charge reporting, then freeze the accepted measured batch. If a validity-affecting change is required, preserve the failed diagnostic and qualify a new revision; do not silently amend an accepted batch.
+5. Execute the ten balanced pairs sequentially through the accepted driver. Retain failed, nonconforming and not-run observations. Do not request per-call approval inside an accepted batch and do not replace scheduled failures. An interrupted parent leaves partial evidence, not terminal collection or settlement authority.
+6. Grade the final answers against the frozen rubric, obtain independent review, join assessment bundles without modifying raw records, run offline analysis, settle charges and holds, and deliver the findings and reproduction inventory. Isolate failed-but-numeric descriptive pairs as recorded above. No-benefit or increased-overhead results are valid outcomes.
 
 ## Agent and Workspace State
 
@@ -131,4 +142,4 @@ For renewed parallel work, use one workspace for this existing worktree and one 
 
 ## Suggested Resume Prompt
 
-> Read `docs/experiments/research-handoff/CHECKPOINT.md` in the existing `study/research-handoff-runner` worktree, then verify its handoff receipt and named authority. Act as the incoming lead. Finish and independently validate the current bounded candidate, preserving the latest unreviewed edits and historical proof. Continue the full experiment through its existing gates, but do not write the cross-worktree financial ledger or make paid calls until the pending owner permission and collection prerequisites are resolved. Do not import old scientific material, recreate the worktree, or infer savings from synthetic usage.
+> Read `docs/experiments/research-handoff/CHECKPOINT.md` in the existing `study/research-handoff-runner` worktree and act as the incoming lead. M3 is accepted against the recorded code and protocol digests; do not repeat its implementation or review cycle. Continue with the separately accepted subscription-main diagnostics and the remaining gates in Exact Next Assignment. Do not write the cross-worktree financial ledger or make paid calls until the pending owner permission and collection prerequisites are resolved. Do not import old scientific material, recreate the worktree, rerun historical entry manifests as a current gate, or infer savings from synthetic usage.

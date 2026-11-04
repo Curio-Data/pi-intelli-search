@@ -2,6 +2,7 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
 import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
+import { appendFileSync, writeFileSync } from "node:fs";
 import { join, resolve, relative, basename } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadPinnedHost, writeIsolatedModelsOverlay, readOnlyFileCredentialStore } from "./host.js";
@@ -17,7 +18,7 @@ import { captureCommonInputs } from "./capture.js";
 import { loadFrozenInputs, assertCorpusAcceptable } from "./common-inputs.js";
 import { DurableJournal, createRunDirectory, digestFile, digestObject, digestText, sourceIdentity, writeNewJson, unavailableRecord } from "./storage.js";
 import { executeWorker, REPO_ROOT, assertLiveEvidenceRoot, type LiveAcceptance, type WorkerConfig } from "./runner.js";
-import type { RunManifest, RunRecord, JournalEvent, FrozenInputs } from "./contracts.js";
+import type { Arm, RunManifest, RunRecord, JournalEvent, FrozenInputs } from "./contracts.js";
 
 export interface PreparationAcceptance {
   schemaVersion: 1;
@@ -169,6 +170,61 @@ export async function qualifyDownstreamCost(authorityPath: string, authPath: str
   return join(paths.directory, "outcome.json");
 }
 
+/** Sequential schedule driver with injected boundaries for deterministic positive-path tests. */
+export async function driveAcceptedSchedule(options: {
+  root: string;
+  phase: LiveAcceptance["phase"];
+  schedule: Array<{ pair: number; arm: Arm }>;
+  ids: string[];
+  manifests: RunManifest[];
+  acceptancePath: string;
+  authPath: string;
+  frozenPath: string;
+  execute?: typeof executeWorker;
+  credentialCheck?: typeof assertCredentialReady;
+  sleep?: (milliseconds: number) => Promise<void>;
+}): Promise<{ stopped: boolean; reason?: string; outcomePath: string }> {
+  const { root, phase, schedule, ids, manifests, acceptancePath, authPath, frozenPath } = options;
+  const execute = options.execute ?? executeWorker;
+  const credentialCheck = options.credentialCheck ?? assertCredentialReady;
+  const sleep = options.sleep ?? (milliseconds => new Promise<void>(resolveGap => setTimeout(resolveGap, milliseconds)));
+  const progressPath = join(root, "collection-progress.jsonl");
+  writeFileSync(progressPath, "", { flag: "wx", mode: 0o600 });
+  const inventory: string[] = [];
+  let stop: string | undefined;
+  for (const [index] of schedule.entries()) {
+    const paths = createRunDirectory(join(root, "runs"), ids[index]);
+    const manifest = manifests[index];
+    let record: RunRecord;
+    if (stop) {
+      record = unavailableRecord(manifest.runId, phase, `Not run: ${stop}`, manifest);
+      record.manifest.status = "not-run";
+      writeNewJson(join(paths.directory, "record.json"), record);
+    } else {
+      try {
+        await credentialCheck(authPath, "openai-codex");
+        const cfg: WorkerConfig = { schemaVersion: 1, manifest, ...paths, frozenPath, acceptancePath, authPath };
+        record = await execute(cfg);
+        if (record.analysisError || !record.inputIntegrity.matched || !record.observerCoverage.verified
+          || record.financialControl?.budgetLimited || record.financialControl?.overrun || record.financialControl?.activeReservations) {
+          stop = `Control/accounting failure in ${manifest.runId}`;
+        }
+      } catch (error) {
+        stop = String(error); record = unavailableRecord(manifest.runId, phase, stop, manifest);
+        try { await stat(join(paths.directory, "record.json")); } catch { writeNewJson(join(paths.directory, "record.json"), record); }
+      }
+    }
+    const recordPath = relative(root, join(paths.directory, "record.json"));
+    inventory.push(recordPath);
+    appendFileSync(progressPath, JSON.stringify({ index, runId: manifest.runId, recordPath, status: record.manifest.status, stop: stop ?? null }) + "\n", { flush: true });
+    if (!stop && index + 1 < schedule.length) await sleep(30_000);
+  }
+  writeNewJson(join(root, "inventory.json"), inventory);
+  const outcomePath = join(root, "collection-outcome.json");
+  writeNewJson(outcomePath, { stopped: stop !== undefined, reason: stop, observations: inventory.length, progressPath });
+  return { stopped: stop !== undefined, reason: stop, outcomePath };
+}
+
 /** Sequential owner-accepted schedule. No replacement observations or automatic diagnostic reruns. */
 export async function collectAcceptedSeries(acceptancePath: string, authPath: string, frozenPath: string): Promise<{ stopped: boolean; reason?: string; outcomePath: string }> {
   const a = JSON.parse(await readFile(acceptancePath, "utf8")) as LiveAcceptance;
@@ -182,41 +238,12 @@ export async function collectAcceptedSeries(acceptancePath: string, authPath: st
   const schedule = a.phase === "measured" ? pairedSchedule() : [{ pair: 1, arm: "baseline" as const }, { pair: 1, arm: "candidate" as const }];
   const ids = schedule.map(({ pair, arm }) => `${basename(root)}-${a.phase}-${String(pair).padStart(2, "0")}-${arm}`);
   if (JSON.stringify(ids) !== JSON.stringify(a.runIds)) throw new Error("Accepted run IDs/order do not match the frozen schedule");
+  const manifests: RunManifest[] = schedule.map((item, index) => ({ schemaVersion: 1, runId: ids[index], arm: item.arm, phase: a.phase, pair: item.pair,
+    status: "scheduled", host: host.identity, mainModel: MAIN_MODEL,
+    protocolSha256, codeSha256: code.digest, corpusSha256: frozen.digest,
+    settingsSha256: digestObject(studySettings()), promptSha256: digestText(taskPrompt(item.arm, frozen.capture.params, a.phase)) }));
   writeNewJson(join(root, "schedule.json"), schedule.map((item, index) => ({ ...item, runId: ids[index] })));
-  const inventory: string[] = [];
-  let stop: string | undefined;
-  for (const [index, item] of schedule.entries()) {
-    const paths = createRunDirectory(join(root, "runs"), ids[index]);
-    const manifest: RunManifest = { schemaVersion: 1, runId: ids[index], arm: item.arm, phase: a.phase, pair: item.pair,
-      status: "scheduled", host: host.identity, mainModel: MAIN_MODEL,
-      protocolSha256, codeSha256: code.digest, corpusSha256: frozen.digest,
-      settingsSha256: digestObject(studySettings()), promptSha256: digestText(taskPrompt(item.arm, frozen.capture.params, a.phase)) };
-    let record: RunRecord;
-    if (stop) {
-      record = unavailableRecord(manifest.runId, a.phase, `Not run: ${stop}`, manifest);
-      record.manifest.status = "not-run";
-      writeNewJson(join(paths.directory, "record.json"), record);
-    } else {
-      try {
-        await assertCredentialReady(authPath, "openai-codex");
-        const cfg: WorkerConfig = { schemaVersion: 1, manifest, ...paths, frozenPath, acceptancePath, authPath };
-        record = await executeWorker(cfg);
-        if (record.analysisError || !record.inputIntegrity.matched || !record.observerCoverage.verified
-          || record.financialControl?.budgetLimited || record.financialControl?.overrun || record.financialControl?.activeReservations) {
-          stop = `Control/accounting failure in ${manifest.runId}`;
-        }
-      } catch (error) {
-        stop = String(error); record = unavailableRecord(manifest.runId, a.phase, stop, manifest);
-        try { await stat(join(paths.directory, "record.json")); } catch { writeNewJson(join(paths.directory, "record.json"), record); }
-      }
-    }
-    inventory.push(relative(root, join(paths.directory, "record.json")));
-    if (!stop && index + 1 < schedule.length) await new Promise(resolveGap => setTimeout(resolveGap, 30_000));
-  }
-  writeNewJson(join(root, "inventory.json"), inventory);
-  const outcomePath = join(root, "collection-outcome.json");
-  writeNewJson(outcomePath, { stopped: stop !== undefined, reason: stop, observations: inventory.length });
-  return { stopped: stop !== undefined, reason: stop, outcomePath };
+  return driveAcceptedSchedule({ root, phase: a.phase, schedule, ids, manifests, acceptancePath, authPath, frozenPath });
 }
 
 /** Explicit close-out only: an absent started-stage receipt is held at its full ceiling. */

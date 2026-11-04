@@ -19,8 +19,9 @@
 // - output() never fabricates settlement: an unsettled session reports
 //   status "started" with explicit problems, and only a settled run with a
 //   real non-empty final text can be "completed".
-// - Every event is forwarded synchronously to the optional durable journal
-//   so a crash retains attempts, payloads and raw usage.
+// - Every event is forwarded synchronously to the optional durable journal,
+//   so a crash retains attempt boundaries and terminal usage events. Full
+//   payloads and the assembled record still depend on worker persistence.
 
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type {
@@ -354,38 +355,49 @@ export class RunRecorder implements AdapterJournal {
   }
 
   noteProviderStreamEvent(data: unknown): void {
-    const event = data as { type?: string; response?: { usage?: unknown } } | null;
+    const event = data as {
+      type?: string;
+      message?: string;
+      error?: { code?: string; message?: string };
+      response?: { usage?: unknown; error?: { code?: string; message?: string } };
+    } | null;
     if (!event || typeof event.type !== "string") return;
     const attempt = latestAttempt(this.openRequest);
     if (event.type === "response.created") {
       if (!attempt) this.observerProblems.push("response.created without a recorded attempt");
       return;
     }
-    if (event.type === "response.completed" || event.type === "response.incomplete") {
-      if (!attempt) {
-        this.observerProblems.push(`${event.type} without a recorded attempt`);
-        return;
-      }
-      if (attempt.status !== "started") {
-        this.observerProblems.push(`attempt ${attempt.id}: terminal stream event after attempt already ${attempt.status}`);
-        return;
-      }
-      if (attempt.rawUsage !== undefined) {
-        this.observerProblems.push(`attempt ${attempt.id}: duplicate terminal usage event`);
-        return;
-      }
-      const raw = event.response?.usage;
-      attempt.rawUsage = raw;
-      const reported = rawUsageToReported(raw);
-      if (reported) attempt.usage = reported;
-      else this.observerProblems.push(`attempt ${attempt.id}: terminal response carried no usage`);
-      attempt.status = "completed";
-      attempt.endedAt = nowIso();
-      this.emit({
-        kind: "observer/main-attempt",
-        data: { attemptId: attempt.id, phase: "ended", status: "completed", usage: reported ?? null },
-      });
+    const succeeded = event.type === "response.completed" || event.type === "response.incomplete" || event.type === "response.done";
+    const failed = event.type === "response.failed" || event.type === "error";
+    if (!succeeded && !failed) return;
+    if (!attempt) {
+      this.observerProblems.push(`${event.type} without a recorded attempt`);
+      return;
     }
+    if (attempt.status !== "started") {
+      this.observerProblems.push(`attempt ${attempt.id}: terminal stream event after attempt already ${attempt.status}`);
+      return;
+    }
+    if (attempt.rawUsage !== undefined) {
+      this.observerProblems.push(`attempt ${attempt.id}: duplicate terminal usage event`);
+      return;
+    }
+    const raw = event.response?.usage;
+    attempt.rawUsage = raw;
+    const reported = rawUsageToReported(raw);
+    if (reported) attempt.usage = reported;
+    else if (succeeded) this.observerProblems.push(`attempt ${attempt.id}: terminal response carried no usage`);
+    const error = failed
+      ? event.message ?? event.error?.message ?? event.response?.error?.message
+        ?? event.error?.code ?? event.response?.error?.code ?? event.type
+      : undefined;
+    attempt.status = succeeded ? "completed" : "error";
+    attempt.endedAt = nowIso();
+    if (error) attempt.error = error;
+    this.emit({
+      kind: "observer/main-attempt",
+      data: { attemptId: attempt.id, phase: "ended", status: attempt.status, usage: reported ?? null, error: error ?? null },
+    });
   }
 
   noteAssistantMessageEnd(message: unknown): void {

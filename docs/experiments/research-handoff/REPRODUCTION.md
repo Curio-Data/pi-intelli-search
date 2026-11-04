@@ -95,6 +95,8 @@ Follow the gates in this order. Each entry requires the evidence in its own row,
 
 Unresolved owner ledger permission blocks financial appends and paid stages. It does not make a synthetic test or subscription-only observer diagnostic a paid research observation.
 
+For the main diagnostics, create a fresh credential-free synthetic series under the accepted code and pass its `frozen-inputs.json` to `collect`. The diagnostic acceptance review must verify both assigned routes, complete observer coverage, fixed-input equality and unchanged-return preservation. Compare the candidate's recorded return with its transmitted `function_call_output`, accounting for the pinned host's newline envelope. A nonconforming or unreviewed diagnostic is not accepted merely because `collect` reports that collection finished. These conversations establish observation and return behaviour, not factual answer adequacy.
+
 The authority structures are defined by `PreparationAcceptance` in [`collection.ts`](../../../scripts/research-handoff/collection.ts) and `LiveAcceptance` in [`runner.ts`](../../../scripts/research-handoff/runner.ts). Credential arguments are explicit file references, never token values. Credentials are read through a non-refreshing store. OAuth access must have at least 35 minutes remaining, covering the 30-minute worker ceiling and the host's refresh window; expiry requires the operator's own login workflow. No credential is written into a run profile.
 
 | Entry | Purpose |
@@ -113,7 +115,9 @@ A missing stage budget after a started operation is held conservatively during c
 
 ## Operational Limits
 
-The full-catalogue reservation bounds remain deliberately conservative. An unknown charge from even one failed extraction can prevent a retry while other extractions remain active. The run and batch then stop as budget-limited, even when known charges are small. This is a financial-control outcome, not evidence for either research arm. No unverified per-message tokenizer estimate replaces these bounds.
+The full-catalogue reservation bounds remain deliberately conservative. An unknown charge from even one failed extraction can prevent a retry while other extractions remain active. The run and batch then stop as budget-limited, even when known charges are small. This is a financial-control outcome, not evidence for either research arm. No unverified per-message tokenizer estimate replaces these bounds. Financial admission must explicitly accept this stop behaviour; it is not renegotiated after seeing failures.
+
+The collection driver appends `collection-progress.jsonl` after every retained row. If its parent is interrupted, that journal preserves completed row identities, but the absence of a final inventory and outcome is not a terminal collection result. Keep the programme reservation and all run directories intact. Confirm that no collector or worker remains active, inspect the progress journal and financial receipts, and obtain separately recorded coordinator acceptance for any recovery. Do not restart the same observation identities or synthesise a terminal outcome for automatic settlement. A post-session finalisation failure or worker kill can likewise leave only `started.json`, `events.jsonl` and `process.log`; settlement retains the conservative full-stage hold when the final budget is unavailable.
 
 `writerLockPath` is an agreed operational lock location, not a financial record. Keep it in shared, task-owned encrypted scratch and require every programme writer to use the same path. A killed writer can leave an empty lock directory. Do not remove it merely because a command reports `EEXIST`: first confirm that no writer is active, inspect the authoritative ledger and retained receipts, and obtain operator confirmation. Remove only the verified empty lock with `rmdir`; never remove the ledger or evidence, and never force-remove a nonempty path.
 
