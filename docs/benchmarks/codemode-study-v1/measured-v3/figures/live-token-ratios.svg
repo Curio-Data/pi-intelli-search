@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="300" viewBox="0 0 760 300" role="img" aria-label="live: measured-series input-token ratios">
+<rect width="760" height="300" fill="#ffffff"/>
+<text x="24.0" y="34.0" font-size="15" text-anchor="start" fill="#111827" font-weight="600">live: measured-series input-token ratios</text>
+<text x="24.0" y="52.0" font-size="12" text-anchor="start" fill="#6b7280">on relative to off; 95% intervals; endpoint availability below</text>
+<line x1="465.0" y1="54" x2="465.0" y2="254" stroke="#111827" stroke-width="1.5"/>
+<text x="469.0" y="50.0" font-size="11" text-anchor="start" fill="#111827">1.0</text>
+<line x1="252.5" y1="54" x2="252.5" y2="254" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="256.5" y="50.0" font-size="11" text-anchor="start" fill="#6b7280">0.5 hypothesis</text>
+<text x="200.0" y="114.0" font-size="12" text-anchor="end" fill="#111827">uncached input (primary)</text>
+<line x1="408.9" y1="110" x2="575.8" y2="110" stroke="#2563eb" stroke-width="3"/>
+<line x1="408.9" y1="103" x2="408.9" y2="117" stroke="#2563eb" stroke-width="2"/>
+<line x1="575.8" y1="103" x2="575.8" y2="117" stroke="#2563eb" stroke-width="2"/>
+<circle cx="487.9" cy="110" r="4.5" fill="#1d4ed8"/>
+<text x="210.0" y="136.0" font-size="11" text-anchor="start" fill="#374151">ratio 1.054; 95% complete-case diagnostic interval [0.868, 1.261]; Diagnostic Only; Not Claim Evidence</text>
+<text x="200.0" y="204.0" font-size="12" text-anchor="end" fill="#111827">total input (secondary)</text>
+<line x1="449.3" y1="200" x2="665.8" y2="200" stroke="#2563eb" stroke-width="3"/>
+<line x1="449.3" y1="193" x2="449.3" y2="207" stroke="#2563eb" stroke-width="2"/>
+<line x1="665.8" y1="193" x2="665.8" y2="207" stroke="#2563eb" stroke-width="2"/>
+<circle cx="555.8" cy="200" r="4.5" fill="#1d4ed8"/>
+<text x="210.0" y="226.0" font-size="11" text-anchor="start" fill="#374151">ratio 1.214; 95% complete-case diagnostic interval [0.963, 1.473]; Diagnostic Only; Not Claim Evidence</text>
+<line x1="252.5" y1="254" x2="252.5" y2="258" stroke="#111827" stroke-width="1"/>
+<text x="252.5" y="274.0" font-size="11" text-anchor="middle" fill="#374151">0.5</text>
+<line x1="465.0" y1="254" x2="465.0" y2="258" stroke="#111827" stroke-width="1"/>
+<text x="465.0" y="274.0" font-size="11" text-anchor="middle" fill="#374151">1.0</text>
+<line x1="677.5" y1="254" x2="677.5" y2="258" stroke="#111827" stroke-width="1"/>
+<text x="677.5" y="274.0" font-size="11" text-anchor="middle" fill="#374151">1.5</text>
+<text x="465.0" y="292.0" font-size="11" text-anchor="middle" fill="#6b7280">geometric mean of per-query on/off ratios (axis linear)</text>
+</svg>

@@ -1,0 +1,3958 @@
+diff --git a/NOTICE b/NOTICE
+index f0c0164..bb5d1ee 100644
+--- a/NOTICE
++++ b/NOTICE
+@@ -48,6 +48,10 @@ bare-semver (https://github.com/holepunchto/bare-semver)
+ Author: Holepunch
+ License: Apache-2.0
+ 
++undici (https://github.com/nodejs/undici)
++Copyright Matteo Collina and Undici contributors
++License: MIT
++
+ @modelcontextprotocol/server (https://github.com/modelcontextprotocol/typescript-sdk)
+ Copyright Anthropic, PBC and contributors
+ License: Apache-2.0
+diff --git a/README.md b/README.md
+index a22ba71..ed8636f 100644
+--- a/README.md
++++ b/README.md
+@@ -13,7 +13,7 @@
+ [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
+ <!-- /packages -->
+ [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
+-![tests](https://img.shields.io/badge/test%3Aall-1434%20passing-brightgreen)
++![tests](https://img.shields.io/badge/test%3Aall-1472%20passing-brightgreen)
+ 
+ Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
+ 
+@@ -1253,6 +1253,7 @@ To suppress the sidecar in the MCP server, set `"disableTelemetry": true` inside
+ 
+ - **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. The full paced live suite passed on the merged floor-modernisation generation (2026-10-08), including research on the floor host and `Pi` 1.1.0; the [compatibility matrix](docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball checks from registry-pin verification.
+ - **`Pi` 1.2.0 Verification:** A static interface audit and targeted native and MCP-client research checks are recorded on 2026-10-13, followed by the [complete paced candidate suite](docs/COMPATIBILITY.md#0180-candidate-verification-2026-10-13). The peer floor and model defaults are unchanged. This is local-candidate evidence, not installation of the published candidate. OpenRouter's per-key catalogue does not remove the extension's unconditional `models.json` registrations, which do not grant account access. See [audit evidence and limits](docs/COMPATIBILITY.md#pi-120-verification-2026-10-13).
++- **Partial Accounting:** When a host or provider does not expose usable response usage, successful calls can report partial token observations. Required numeric host fields use zero placeholders for unknown components, so input tokens can read zero while the catalogue-based input cost estimate is nonzero. On `Pi` 0.86.0, a dispatched failure delivers error text without structured details or numeric usage. Those missing fields do not establish zero charges or complete session totals.
+ - User interface (UI) notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, remote procedure call (RPC)).
+ - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
+ - Retry and timeout are owned by the shared model policy, invoked by native `callLlm()`, independently of `Pi`'s `retry.provider.maxRetries`. Native calls force SDK `maxRetries: 0`. Configured backoff and application timeout apply inside `intelli_research`; the three standalone tools retain their one-attempt, no-application-timeout behaviour.
+@@ -1276,11 +1277,15 @@ For the standalone MCP server and host plugins, including exact tested versions
+ npm install
+ npm run build        # TypeScript -> dist/
+ npm test             # Native unit tests
+-npm run test:all     # Both packages; aggregate shown in the badge
++npm run test:all     # Default population; aggregate shown in the badge
+ npm run build:all    # Native build, standalone type check and bundles
+ npm run test:mcp:install # Independent standalone install/fetch gate
+ npm run test:smoke   # Smoke test
+ 
++# Credential-free floor qualification, separate from live scenario 15
++node --import tsx scripts/qualify-native-floor.mts install
++npm run qualify:native-floor
++
+ # Test in pi
+ pi -e ./dist/index.js
+ 
+diff --git a/docs/COMPONENTS.md b/docs/COMPONENTS.md
+index 188dd66..9230a3a 100644
+--- a/docs/COMPONENTS.md
++++ b/docs/COMPONENTS.md
+@@ -31,6 +31,7 @@ The map distinguishes shared dependencies from native-only peers and MCP-only ru
+ | Tool-output progress rendering | Pi TUI | Native-Only Peer | Preserve native rendering. |
+ | JSON Schema and tool-input parameter typing | TypeBox | Shared: Native Peer, MCP Runtime | Preserve canonical tool schemas and both adapter contracts. |
+ | MCP serving over stdio | MCP Server SDK | MCP-Only Runtime | Preserve protocol registration, framing, progress and cancellation. |
++| Provider and catalogue HTTP | Undici | MCP-Only Runtime | Preserve bounded response reading, cancellation, safe errors and the patched transport independently of Node's bundled fetch. |
+ 
+ ## Runtime Dependencies
+ 
+@@ -115,7 +116,15 @@ The `@curio-data/mcp-intelli-search` artefact shares the fetch dependencies abov
+ - **Licence:** Apache-2.0 (the MCP project is transitioning from MIT to Apache-2.0; the shipped `LICENSE` is the transition notice followed by the Apache-2.0 text, and the registry metadata declares Apache-2.0)
+ - **Usage:** Model Context Protocol serving over standard input/output (stdio): tool registration, input-schema validation, progress notifications, cancellation and transport framing. The software development kit (SDK) is declared only by the standalone package and never enters the native extension's runtime. The companion `@modelcontextprotocol/client` package (also Apache-2.0) is a development dependency used by the protocol test suite. Both are lockfile-pinned at 2.3.0.
+ 
+-[_esbuild_](https://esbuild.github.io/) bundles the internal engine and adapter source during development. Its [source repository](https://github.com/evanw/esbuild) is MIT-licensed. It is a root development dependency, not a standalone runtime dependency. The standalone inference adapter uses the built-in fetch transport against the [_OpenRouter_](https://openrouter.ai) API; no provider SDK is bundled.
++### `undici`
++
++- **Repository:** https://github.com/nodejs/undici
++- **Author:** Matteo Collina and Undici contributors
++- **Licence:** MIT
++- **Usage:** [_Undici_](https://github.com/nodejs/undici) supplies the standalone adapter's default provider and catalogue requests against the [_OpenRouter_](https://openrouter.ai) API. The package pins the patched dependency independently of Node's bundled fetch. Injected test transports remain supported. No global HTTP implementation is replaced, and page fetching retains the shared browser-signature transport.
++- **Distribution:** MCP-only runtime dependency, external to the bundle with its own `LICENSE`. Its engine range includes the standalone package's declared Node range. The independent production-install gate exercises healthy requests, excessive-content-encoding refusal and stalled-body cancellation through the default provider transport with loopback fixtures. These are bounded fixture observations, not live-provider or universal security guarantees.
++
++[_esbuild_](https://esbuild.github.io/) bundles the internal engine and adapter source during development. Its [source repository](https://github.com/evanw/esbuild) is MIT-licensed. It is a root development dependency, not a standalone runtime dependency. No provider SDK is bundled.
+ 
+ <a id="license-compliance"></a>
+ ## Licence Compliance
+diff --git a/mcp.README.md b/mcp.README.md
+index 48bc13d..31c1176 100644
+--- a/mcp.README.md
++++ b/mcp.README.md
+@@ -6,7 +6,7 @@
+ [![npm downloads](https://img.shields.io/npm/dt/@curio-data/mcp-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/mcp-intelli-search)
+ [![node](https://img.shields.io/badge/node-%E2%89%A522-blue)](https://nodejs.org/)
+ [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
+-![tests](https://img.shields.io/badge/test%3Aall-1434%20passing-brightgreen)
++![tests](https://img.shields.io/badge/test%3Aall-1472%20passing-brightgreen)
+ 
+ Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
+ 
+diff --git a/package-lock.json b/package-lock.json
+index 68e41b9..df24509 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -642,16 +642,6 @@
+       "dev": true,
+       "license": "MIT"
+     },
+-    "node_modules/@earendil-works/pi-coding-agent/node_modules/undici": {
+-      "version": "8.10.2",
+-      "resolved": "https://registry.npmjs.org/undici/-/undici-8.10.2.tgz",
+-      "integrity": "sha512-/y4/bH9YNU5hi9NIrpOuvGXFcxrj3CMrV+/AYpowAYTpHn8gX/XPFjNy766FPoYY0miQhdW977JFWKGNhBdwyQ==",
+-      "dev": true,
+-      "license": "MIT",
+-      "engines": {
+-        "node": ">=22.19.0"
+-      }
+-    },
+     "node_modules/@earendil-works/pi-mcp": {
+       "version": "1.1.0",
+       "resolved": "https://registry.npmjs.org/@earendil-works/pi-mcp/-/pi-mcp-1.1.0.tgz",
+@@ -2694,6 +2684,16 @@
+       "integrity": "sha512-qz3o9CHXmJJPGBdqzab7qAYuW8kQGKNEuoHFYrBwV6hWIMcpAmxDLXojcHfFr9US1Pe6zUswEIJIbLI610fuqA==",
+       "license": "ISC"
+     },
++    "node_modules/undici": {
++      "version": "8.12.2",
++      "resolved": "https://registry.npmjs.org/undici/-/undici-8.12.2.tgz",
++      "integrity": "sha512-XtuDWVdqTLr3NAxm2ly9/hU6kUsJOgGh1RASzMBbsw6aWCOaQzHdW+QQDfdERjfJ2V5vL5pRPa4RetO9UfivDg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=22.19.0"
++      }
++    },
+     "node_modules/undici-types": {
+       "version": "8.9.0",
+       "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-8.9.0.tgz",
+@@ -2787,9 +2787,9 @@
+       }
+     },
+     "node_modules/zod": {
+-      "version": "4.6.5",
+-      "resolved": "https://registry.npmjs.org/zod/-/zod-4.6.5.tgz",
+-      "integrity": "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==",
++      "version": "4.6.7",
++      "resolved": "https://registry.npmjs.org/zod/-/zod-4.6.7.tgz",
++      "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==",
+       "license": "MIT",
+       "funding": {
+         "url": "https://github.com/sponsors/colinhacks"
+@@ -2805,6 +2805,7 @@
+         "fs-native-extensions": "1.5.1",
+         "linkedom": "^0.18.12",
+         "typebox": "^1.3.7",
++        "undici": "7.30.1",
+         "wreq-js": "^2.3.0"
+       },
+       "bin": {
+@@ -2816,6 +2817,15 @@
+       "engines": {
+         "node": ">=22"
+       }
++    },
++    "packages/mcp/node_modules/undici": {
++      "version": "7.30.1",
++      "resolved": "https://registry.npmjs.org/undici/-/undici-7.30.1.tgz",
++      "integrity": "sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=20.18.1"
++      }
+     }
+   }
+ }
+diff --git a/package.json b/package.json
+index 4b3e75d..c4d8826 100644
+--- a/package.json
++++ b/package.json
+@@ -43,6 +43,7 @@
+     "dev": "tsc --watch",
+     "test": "node scripts/run-tests.mjs native",
+     "test:smoke": "node scripts/run-tests.mjs smoke",
++    "qualify:native-floor": "node --import tsx scripts/qualify-native-floor.mts run",
+     "chart": "node scripts/plot-downloads.mts",
+     "prepublishOnly": "node scripts/generate-package-readmes.mjs --publish-native"
+   },
+@@ -63,6 +64,12 @@
+     "typebox": "*",
+     "typescript": "^5.7.0"
+   },
++  "overrides": {
++    "@earendil-works/pi-coding-agent": {
++      "undici": "8.12.2"
++    },
++    "zod": "^4.6.6"
++  },
+   "peerDependencies": {
+     "@earendil-works/pi-ai": ">=0.86.0",
+     "@earendil-works/pi-coding-agent": ">=0.86.0",
+diff --git a/packages/mcp/README.md b/packages/mcp/README.md
+index 48bc13d..31c1176 100644
+--- a/packages/mcp/README.md
++++ b/packages/mcp/README.md
+@@ -6,7 +6,7 @@
+ [![npm downloads](https://img.shields.io/npm/dt/@curio-data/mcp-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/mcp-intelli-search)
+ [![node](https://img.shields.io/badge/node-%E2%89%A522-blue)](https://nodejs.org/)
+ [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
+-![tests](https://img.shields.io/badge/test%3Aall-1434%20passing-brightgreen)
++![tests](https://img.shields.io/badge/test%3Aall-1472%20passing-brightgreen)
+ 
+ Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
+ 
+diff --git a/packages/mcp/package.json b/packages/mcp/package.json
+index f16ac8c..338a83e 100644
+--- a/packages/mcp/package.json
++++ b/packages/mcp/package.json
+@@ -37,6 +37,7 @@
+     "fs-native-extensions": "1.5.1",
+     "linkedom": "^0.18.12",
+     "typebox": "^1.3.7",
++    "undici": "7.30.1",
+     "wreq-js": "^2.3.0"
+   },
+   "devDependencies": {
+diff --git a/packages/mcp/src/providers/openrouter.ts b/packages/mcp/src/providers/openrouter.ts
+index f3bec4a..44ebbb1 100644
+--- a/packages/mcp/src/providers/openrouter.ts
++++ b/packages/mcp/src/providers/openrouter.ts
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
+ 
++import { fetch as undiciFetch } from "undici";
+ import type {
+   ModelBinding,
+   ModelCallScope,
+@@ -191,7 +192,10 @@ function buildOpenRouterClient(
+ ) {
+   const services = "services" in options ? options.services : undefined;
+   const random = "random" in options ? options.random : Math.random;
+-  const transport = options.fetch ?? globalThis.fetch;
++  // Keep provider/catalogue HTTP on the patched package, independently of the
++  // embedding Node version's bundled fetch. Only string URLs and standard
++  // GET/POST init fields cross this DOM/Undici declaration boundary.
++  const transport = options.fetch ?? (undiciFetch as unknown as FetchFunction);
+   const env = { ...(options.env ?? process.env) };
+   const settings = config.settings;
+   const configured = [settings.searchModel, settings.extractModel, settings.collateModel];
+diff --git a/packages/mcp/test/provider-security.test.ts b/packages/mcp/test/provider-security.test.ts
+new file mode 100644
+index 0000000..7179524
+--- /dev/null
++++ b/packages/mcp/test/provider-security.test.ts
+@@ -0,0 +1,48 @@
++// SPDX-License-Identifier: Apache-2.0
++// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
++import assert from "node:assert/strict";
++import { test } from "node:test";
++import { spawnSync } from "node:child_process";
++import { createRequire } from "node:module";
++import { readFileSync } from "node:fs";
++import { fileURLToPath } from "node:url";
++import { fixture } from "./helpers.js";
++
++test("the default provider uses the patched MCP dependency, not Node-bundled fetch", async () => {
++  const require = createRequire(new URL("../src/providers/openrouter.ts", import.meta.url));
++  const installed = require("undici/package.json") as {
++    version: string;
++    engines: { node: string };
++  };
++  const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
++  assert.equal(installed.version, manifest.dependencies.undici);
++  assert.equal(
++    installed.engines.node,
++    ">=20.18.1",
++    "Review Node >=22 compatibility when changing Undici",
++  );
++  const f = await fixture();
++  try {
++    const result = spawnSync(
++      process.execPath,
++      [
++        "--import",
++        "tsx",
++        fileURLToPath(new URL("../../../test/probes/mcp-provider-security.mjs", import.meta.url)),
++        new URL("../src/runtime.ts", import.meta.url).href,
++      ],
++      { cwd: f.dir, encoding: "utf8", timeout: 20_000 },
++    );
++    assert.equal(result.error, undefined);
++    assert.equal(result.signal, null);
++    assert.equal(result.status, 0, result.stderr);
++    assert.equal(result.stderr, "");
++    assert.equal(
++      result.stdout,
++      "mcp-provider-security-complete\n",
++      "Every default-transport assertion must finish",
++    );
++  } finally {
++    await f.cleanup();
++  }
++});
+diff --git a/pi.README.md b/pi.README.md
+index f8aa70a..4b6d6e3 100644
+--- a/pi.README.md
++++ b/pi.README.md
+@@ -6,7 +6,7 @@
+ [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
+ [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
+ [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
+-![tests](https://img.shields.io/badge/test%3Aall-1434%20passing-brightgreen)
++![tests](https://img.shields.io/badge/test%3Aall-1472%20passing-brightgreen)
+ 
+ Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
+ 
+@@ -848,6 +848,7 @@ To suppress the sidecar in the native extension, set `disableTelemetry: true` in
+ 
+ - **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. The full paced live suite passed on the merged floor-modernisation generation (2026-10-08), including research on the floor host and `Pi` 1.1.0; the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball checks from registry-pin verification.
+ - **`Pi` 1.2.0 Verification:** A static interface audit and targeted native and MCP-client research checks are recorded on 2026-10-13, followed by the [complete paced candidate suite](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#0180-candidate-verification-2026-10-13). The peer floor and model defaults are unchanged. This is local-candidate evidence, not installation of the published candidate. OpenRouter's per-key catalogue does not remove the extension's unconditional `models.json` registrations, which do not grant account access. See [audit evidence and limits](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#pi-120-verification-2026-10-13).
++- **Partial Accounting:** When a host or provider does not expose usable response usage, successful calls can report partial token observations. Required numeric host fields use zero placeholders for unknown components, so input tokens can read zero while the catalogue-based input cost estimate is nonzero. On `Pi` 0.86.0, a dispatched failure delivers error text without structured details or numeric usage. Those missing fields do not establish zero charges or complete session totals.
+ - User interface (UI) notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, remote procedure call (RPC)).
+ - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
+ - Retry and timeout are owned by the shared model policy, invoked by native `callLlm()`, independently of `Pi`'s `retry.provider.maxRetries`. Native calls force SDK `maxRetries: 0`. Configured backoff and application timeout apply inside `intelli_research`; the three standalone tools retain their one-attempt, no-application-timeout behaviour.
+diff --git a/scripts/benchmarks/README.md b/scripts/benchmarks/README.md
+index f311ae2..828ddfa 100644
+--- a/scripts/benchmarks/README.md
++++ b/scripts/benchmarks/README.md
+@@ -13,6 +13,7 @@ Benchmark recorder, replay, observer, parser and paired-statistics libraries for
+ | `suggestion-replay.ts` | F7 recorder/replay sessions, verified candidate read views, typed generated-value identity and replay completeness |
+ | `observer.ts` | Read-only `before_provider_request` observer with payload sanitisation and tool-catalogue hashing |
+ | `usage-parser.ts` | `parseUsageEvents` canonical assistant/tool populations from JSON and Remote Procedure Call (RPC) session event streams |
++| `main-usage-evidence.ts` | Read-only session-hook collector, response-ID correlation and per-field wire-presence records |
+ | `statistics.ts` | `estimatePairedQueries`, `primaryAvailable` and seeded query-clustered `bootstrapPairedQueries` |
+ | `run-observation.ts` | Append-only immutable `RunObservation` manifests |
+ | `testing.ts` | Isolated scratch, synthetic record builders, scenario resolvers and the network guard used by tests |
+@@ -62,11 +63,21 @@ The frozen API declares signatures; the following behaviours are implementation
+ - Assistant dedupe identity: canonical bytes of the whole finalised message; ids from `responseId` else `provider/model@timestamp` with `#n` collision suffixes. Replay timestamps are wall-clock, so replayed transcripts are not byte-reproducible.
+ - The pipeline tool population is intelli executions only: the five known intelli tool names, their `mcp__<server>__intelli_*` registrations, shortened MCP names with explicit host `details.tool` identity, or any tool whose result carries an explicit intelli identity marker (full `schemaVersion` plus a known `operation` from FullData, the compact `meta` pair, or the legacy `details.intelli` pair). `Pi`'s Model Context Protocol (MCP) client places the whole `CallToolResult` in `structuredContent`, so the parser also recognises the data one level deeper. A known MCP intelli execution with a missing marker is retained as missing, never silently excluded. Compact summaries expose no token components: all canonical token fields are marked missing, and absent or invalid required attempt-coverage fields make the observation missing. Shape resemblance alone never admits a foreign tool. `bash`, `read`, `edit`, the `codemode` tool itself and other extensions never enter the pipeline population or the `missing` list; `missing` means an expected observation is absent. The pi-ai `usage` field on tool results is tool-execution overhead, not pipeline accounting, and is parsed into neither population.
+ - All-zero assistant SDK usage is ambiguous without wire-presence evidence and is recorded as missing, not a zero-token H1 observation. An observer can append `mainUsageEvidence(message, observed)` after checking actual wire usage presence; the sidecar hashes the unchanged canonical message, and conflicting evidence fails closed to missing. This optional witness is not inferred from SDK zeros.
+-- `tokensFromWireUsage` omits fields absent from its input object. Canonical assistant messages, however, carry SDK-normalised usage with zero placeholders; per-field absence cannot be recovered from those values alone. The all-zero guard is message-level only. Before recording H1 (the uncached-main-input saving endpoint), the observer must supply actual wire-presence evidence and qualify partial-field missingness on the selected main host/provider. The current library does not emit that evidence for real sessions. Explicit wire-observed zeros remain values, not missing charges.
++- `tokensFromWireUsage` omits fields absent from its input object. Canonical assistant messages, however, carry SDK-normalised usage with zero placeholders; per-field absence cannot be recovered from those values alone. The all-zero guard is message-level only. `wireMainUsageEvidence()` subscribes a collector to `before_provider_request`, `provider_stream_event` and `message_end`, returning unsubscribers. Its version-2 records correlate exact response IDs to unchanged canonical message hashes; warm or failed streams without a finalised message remain uncorrelated. Each usage object replaces the previous cumulative snapshot, including fields that become absent. Unknown cache subsets never establish `inputUncached`; explicit zeros count only for fields present on the wire. Reported token totals remain separate from component arithmetic. A single no-claim record leaves the previous parser path; a no-claim record mixed with an asserting record for the same message deliberately fails closed. Scripted real-session tests establish hook delivery and serialised-message hash agreement on the development peer and owned host. Before H1 recording, qualify subscription-provider partial-field shapes and actual live hook/hash matching on the selected main host. No live subscription recording is established by those fixtures.
+ - `effectivePayloadPatch` is recorded as the effect of `onPayload({})`; a future patch that inspects the real provider payload skeleton would record differently from what it sends.
+ - Statistics: duplicate or non-integer population entries are rejected; seeds must be integers in the 32-bit unsigned range so the echoed seed is the seed used. Queries with partial repeats contribute complete-case pairs while also being listed in `missingQueries`. `primaryAvailable(estimate, population, metric)` gates the prespecified primary claim for the metric analysed: an incomplete population (any missing cell, any expected query absent from the pairs, any partial-repeat query) blocks both metrics, while nonpositive query means (`undefinedRatioQueries`) block only the `log-ratio` primary, so a complete population with a zero query mean keeps its primary difference interval with zero-valued pairs retained. `bootstrapPairedQueries` applies the same metric-aware guard with its own metric and returns null bounds when the guard fails unless the caller passes `diagnostic: true` to label a complete-case interval; without a `population` the interval is always complete-case use.
+ - `appendRunObservation` appends one canonical JSON line per observation and never rewrites prior lines; a `runId` already present in the file is rejected, `failed`/`aborted` records require `error` text, and `rerunOf` requires `rerunReason`. The frozen type keeps `toolCatalogueSha256`/`promptSha256` as required strings, so a `not-started` run still names them; if that proves too strict the change belongs to a specification revision.
+ 
++## H1 Recording Gate
++
++The [C16 contract](../../docs/plans/codemode/CONTRACT.md#c16-usage-semantics) requires:
++
++> Unknown cache subsets cannot establish uncached input.
++
++The selected subscription main's Codex response shape is not live-qualified. Positive fixtures supply an explicit cache-write field; they do not prove that the selected provider emits it. If the live wire omits that field, `inputUncached` remains unknown and H1 is not measurable under the current interpretation. Qualify the actual shape before designing or authorising H1. Treating a provider-documented unsupported cache-write category as known zero requires a recorded owner decision or frozen-contract revision, not an implicit helper default.
++
++The SDK and version-1 fallback paths remain readable for compatibility. They are not qualified H1 observations: the recording or analysis lane must require an asserting version-2 witness, exact message-hash matching and known `inputUncached` for every main assistant message. Missing or fallback-only observations block the primary endpoint rather than supplying zero or an SDK-derived substitute. That H1-specific gate is not implemented by the general parser and remains a prerequisite to any approved study.
++
+ ## Checks
+ 
+ ```bash
+diff --git a/scripts/benchmarks/main-usage-evidence.ts b/scripts/benchmarks/main-usage-evidence.ts
+new file mode 100644
+index 0000000..304b2e1
+--- /dev/null
++++ b/scripts/benchmarks/main-usage-evidence.ts
+@@ -0,0 +1,753 @@
++// SPDX-License-Identifier: Apache-2.0
++// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
++
++// Benchmark-only main-usage wire-presence observer and evidence emitter (T31).
++//
++// The canonical assistant message carries SDK-normalised usage whose required
++// fields are zero placeholders: pi-ai's openai-completions `parseChunkUsage`
++// maps an absent `prompt_tokens` to 0 and derives `input` with
++// `Math.max(0, prompt - cacheRead - cacheWrite)`, and its responses-family
++// `finalizeResponse` does the same with `|| 0` fallbacks (Observed in the
++// installed Pi 1.3.0 host's bundled pi-ai 1.3.0
++// dist/api/openai-completions.js and dist/api/openai-responses-shared.js;
++// byte-identical in this worktree's dev pi-ai 1.1.0). Per-field wire absence
++// therefore cannot be recovered from a finalised message. This module is the
++// missing emitter side: it subscribes to the supported host events, records
++// the RAW wire usage field presence of the main agent loop's provider
++// streams, correlates each observation to the finalised assistant message,
++// and emits schemaVersion 2 evidence records for `parseUsageEvents`.
++//
++// Supported host events (Observed in the installed Pi 1.3.0
++// dist/core/extensions/types.d.ts and dist/core/sdk.js):
++//
++// - `provider_stream_event` `{ data, provider, api, model }`: fired by
++//   `handleProviderStreamEvent` for every parsed provider stream event before
++//   Pi normalises it. The session wires this handler into the agent loop's
++//   own stream options (`createLoopConfig` in pi-agent-core dist/agent.js
++//   passes `onProviderStreamEvent` into every `streamAssistantResponse`
++//   call), so the event fires for main agent-loop requests and for cache-warm
++//   requests (dist/core/cache-warmer.js spreads the captured
++//   `run.options`, which include the handler, into its own `streamSimple`
++//   call). It does NOT fire for extension model calls (the intelli pipeline
++//   supplies its own callbacks to `ctx.modelRegistry.streamSimple()` and
++//   ModelRuntime.prepareRequest injects no session handler), nor for
++//   compaction or summary calls, which stream outside the agent loop.
++// - `before_provider_request` `{ payload }`: fired once per logical provider
++//   request (pi-ai calls `options.onPayload` once, before its retry wrapper).
++//   Its return value replaces the payload, so a read-only observer MUST
++//   return nothing. This collector's handler returns `undefined` and never
++//   mutates the payload; it records only a window count.
++// - `message_end` `{ message }`: the finalised canonical message. Assistant
++//   messages carry `responseId`, which pi-ai sets from the wire:
++//   openai-completions `output.responseId ||= chunk.id` (first chunk id) and
++//   responses-family `response.created`/`finalizeResponse`
++//   `output.responseId = response.id`. The response id is therefore an exact
++//   correlation key between a wire stream and its finalised message.
++//
++// Correlation policy (fail closed):
++//
++// - A wire usage observation is keyed by the response id carried on the wire.
++//   At assistant `message_end`, the observation with the message's
++//   `responseId` is consumed. Cache-warm calls, failed attempts and any other
++//   stream whose id never finalises stays UNCORRELATED: it is never folded
++//   into a message and is reported in `uncorrelatedResponseIds`.
++// - Usage chunks without any response id attach to the last id seen for the
++//   same provider/model and mark the record `ambiguous`; ambiguous records
++//   make no usage-presence claim (`usageObserved: null`).
++// - A response id consumed by two distinct canonical messages marks both
++//   records `ambiguous` and emits a conflict record for the earlier message,
++//   so the parser fails closed on both.
++// - Record content is a whitelist projection: numeric usage fields, response
++//   ids, api/provider/model names and counts. Message content, provider
++//   headers and credentials never enter records (the stream event carries
++//   parsed chunks only, and the request observer ignores the payload body).
++
++import { asJson, canonicalJson, sha256Canonical } from "./canonical.js";
++import type { Json } from "./contracts.js";
++import type { TokenObservation } from "./contracts.js";
++
++/** Evidence record type shared with `usage-parser.ts` v1 sidecars. */
++export const MAIN_USAGE_EVIDENCE_TYPE = "intelli_benchmark_main_usage";
++/** Internal schema version of the richer field-presence record. */
++export const MAIN_USAGE_EVIDENCE_V2_SCHEMA_VERSION = 2;
++
++/** Cap on retained uncorrelated response ids per record; counts stay exact. */
++const DEFAULT_MAX_UNCORRELATED_IDS = 32;
++
++/** Maximum accepted length for a wire response id string in records. */
++const MAX_RESPONSE_ID_LENGTH = 256;
++
++/**
++ * Raw wire usage field presence. `null` means the field was absent from the
++ * wire usage object; an explicit wire zero is a reported value and stays `0`.
++ */
++export interface WireUsageFields {
++  /** Completions `prompt_tokens` / responses `input_tokens` (cache-inclusive total). */
++  readonly inputTokens: number | null;
++  /** Completions `prompt_tokens_details.cached_tokens` (or fallback spellings) / responses `input_tokens_details.cached_tokens`. */
++  readonly cachedTokens: number | null;
++  /** Completions `prompt_tokens_details.cache_write_tokens` / responses `input_tokens_details.cache_write_tokens`. */
++  readonly cacheWriteTokens: number | null;
++  /** Completions `completion_tokens` / responses `output_tokens`. */
++  readonly outputTokens: number | null;
++  /** Completions `completion_tokens_details.reasoning_tokens` / responses `output_tokens_details.reasoning_tokens`. */
++  readonly reasoningTokens: number | null;
++  /** Provider-reported `total_tokens`, retained independently of component arithmetic on either family. */
++  readonly totalTokens: number | null;
++}
++
++/** Where the usage object was found on the wire. */
++export type WireUsageSource = "chunk-usage" | "choice-usage" | "response-usage";
++
++/** How the record's wire observation was matched to the message. */
++export type MainUsageCorrelation = "response-id" | "none";
++
++/**
++ * schemaVersion 2 main-usage evidence record. `usageObserved` is tri-state:
++ * `true` (wire usage object observed for the correlated response id, fields
++ * valid), `false` (correlated response id completed with no usage-bearing
++ * wire object) or `null` (correlation failed or ambiguous: no claim).
++ */
++export interface MainUsageEvidenceV2Record {
++  readonly type: typeof MAIN_USAGE_EVIDENCE_TYPE;
++  readonly schemaVersion: typeof MAIN_USAGE_EVIDENCE_V2_SCHEMA_VERSION;
++  /** Canonical sha256 of the unchanged finalised assistant message. */
++  readonly messageSha256: string;
++  /** Correlation key actually used; null when the message carries no responseId. */
++  readonly responseId: string | null;
++  readonly correlation: MainUsageCorrelation;
++  readonly usageObserved: boolean | null;
++  /** Api of the wire observation; the empty string when no observation exists. */
++  readonly api: string;
++  readonly usageSource: WireUsageSource | null;
++  readonly fields: WireUsageFields | null;
++  /** Provider-reported total cost on the wire usage object, when numeric. */
++  readonly wireCostTotal: number | null;
++  /** True when the observation's attachment was uncertain; makes no claim. */
++  readonly ambiguous: boolean;
++  readonly uncorrelatedResponseIds: readonly string[];
++  readonly uncorrelatedCount: number;
++  /** `before_provider_request` windows observed before this record was emitted. */
++  readonly requestWindows: number;
++}
++
++/** Api families whose wire usage spellings this module extracts. */
++const COMPLETIONS_APIS = new Set(["openai-completions"]);
++const RESPONSES_APIS = new Set([
++  "openai-responses",
++  "azure-openai-responses",
++  "openai-codex-responses",
++]);
++
++function isJsonObject(value: unknown): value is Record<string, unknown> {
++  return typeof value === "object" && value !== null && !Array.isArray(value);
++}
++
++/** Finite non-negative number check for token counts (negative wire values are noise). */
++function tokenCount(value: unknown): number | null {
++  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
++}
++
++function finiteNumber(value: unknown): number | null {
++  return typeof value === "number" && Number.isFinite(value) ? value : null;
++}
++
++/** Response id safe for records: nonempty bounded string. */
++function safeResponseId(value: unknown): string | null {
++  return typeof value === "string" && value !== "" && value.length <= MAX_RESPONSE_ID_LENGTH
++    ? value
++    : null;
++}
++
++const EMPTY_FIELDS: WireUsageFields = {
++  inputTokens: null,
++  cachedTokens: null,
++  cacheWriteTokens: null,
++  outputTokens: null,
++  reasoningTokens: null,
++  totalTokens: null,
++};
++
++interface WireObservation {
++  readonly api: string;
++  readonly provider: string;
++  readonly model: string;
++  fields: WireUsageFields;
++  usageSource: WireUsageSource | null;
++  wireCostTotal: number | null;
++  attachedWithoutId: boolean;
++  usageBearing: boolean;
++  consumedBy: string | null; // canonical message hash
++}
++
++export interface MainUsageEvidenceDiagnostics {
++  /** Total `before_provider_request` windows observed (read-only handler). */
++  readonly requestWindows: number;
++  /** `provider_stream_event` events received. */
++  readonly streamEvents: number;
++  /** Stream events whose api has no field spelling support (counted only). */
++  readonly unsupportedApiEvents: number;
++  /** Usage-bearing wire objects seen. */
++  readonly usageBearingObservations: number;
++  /** Wire response ids with usage that never correlated to a message. */
++  readonly uncorrelatedResponseIds: readonly string[];
++  /** Assistant message_end events correlated, by kind. */
++  readonly correlated: number;
++  readonly unmatched: number;
++  readonly ambiguous: number;
++}
++
++export interface MainUsageEvidenceCollectorOptions {
++  /** Cap for `uncorrelatedResponseIds` per record (default 32). */
++  readonly maxUncorrelatedIds?: number;
++}
++
++/** Structural host event shapes (host-neutral; no Pi imports). */
++export interface BeforeProviderRequestLike {
++  readonly type: "before_provider_request";
++  readonly payload: unknown;
++}
++export interface ProviderStreamEventLike {
++  readonly type: "provider_stream_event";
++  readonly provider: string;
++  readonly api: string;
++  readonly model: string;
++  readonly data: unknown;
++}
++export interface MessageEndLike {
++  readonly type: "message_end";
++  readonly message: unknown;
++}
++
++export interface MainUsageEvidenceCollector {
++  /** Read-only request observer: returns nothing, mutates nothing. */
++  onBeforeProviderRequest(event: BeforeProviderRequestLike): undefined;
++  onProviderStreamEvent(event: ProviderStreamEventLike): void;
++  onMessageEnd(event: MessageEndLike): void;
++  /** Emitted evidence records in emission order (v2 only). */
++  readonly records: readonly MainUsageEvidenceV2Record[];
++  /** Run-wide diagnostics; call after the run settles for final uncorrelated ids. */
++  readonly diagnostics: MainUsageEvidenceDiagnostics;
++}
++
++interface CompletionsUsageProjection {
++  readonly fields: WireUsageFields;
++  readonly costTotal: number | null;
++}
++
++/**
++ * Projects an openai-completions wire usage object onto canonical field
++ * presence. Mirrors the spelling precedence Observed in pi-ai
++ * `parseChunkUsage`: cached tokens read `prompt_tokens_details.cached_tokens`
++ * then `prompt_cache_hit_tokens` then `cached_tokens` (null-skipping `??`
++ * chain, so an explicit 0 spelling wins over a later spelling). pi-ai reads
++ * `cache_write_tokens` and the responses-family spellings with `|| 0`; this
++ * projection records presence for any finite non-negative number including 0
++ * (honest divergence: a wire 0 stays a present value instead of collapsing
++ * to the SDK zero placeholder).
++ */
++function projectCompletionsUsage(usage: Record<string, unknown>): CompletionsUsageProjection {
++  const details = isJsonObject(usage["prompt_tokens_details"]) ? usage["prompt_tokens_details"] : {};
++  const completionDetails = isJsonObject(usage["completion_tokens_details"])
++    ? usage["completion_tokens_details"]
++    : {};
++  const cachedCandidates = [details["cached_tokens"], usage["prompt_cache_hit_tokens"], usage["cached_tokens"]];
++  const cachedTokens = cachedCandidates.find((value) => tokenCount(value) !== null) ?? null;
++  const cachedValue = cachedTokens === null ? null : tokenCount(cachedTokens);
++  const rawCost = usage["cost"];
++  const costTotal = finiteNumber(rawCost) ?? (isJsonObject(rawCost) ? finiteNumber(rawCost["total"]) : null);
++  return {
++    fields: {
++      inputTokens: tokenCount(usage["prompt_tokens"]),
++      cachedTokens: cachedValue,
++      cacheWriteTokens: tokenCount(details["cache_write_tokens"]),
++      outputTokens: tokenCount(usage["completion_tokens"]),
++      reasoningTokens: tokenCount(completionDetails["reasoning_tokens"]),
++      totalTokens: tokenCount(usage["total_tokens"]),
++    },
++    costTotal,
++  };
++}
++
++/** Projects a responses-family wire `response.usage` object (Observed in pi-ai `finalizeResponse`). */
++function projectResponsesUsage(usage: Record<string, unknown>): CompletionsUsageProjection {
++  const inputDetails = isJsonObject(usage["input_tokens_details"]) ? usage["input_tokens_details"] : {};
++  const outputDetails = isJsonObject(usage["output_tokens_details"]) ? usage["output_tokens_details"] : {};
++  const rawCost = usage["cost"];
++  const costTotal = finiteNumber(rawCost) ?? (isJsonObject(rawCost) ? finiteNumber(rawCost["total"]) : null);
++  return {
++    fields: {
++      inputTokens: tokenCount(usage["input_tokens"]),
++      cachedTokens: tokenCount(inputDetails["cached_tokens"]),
++      cacheWriteTokens: tokenCount(inputDetails["cache_write_tokens"]),
++      outputTokens: tokenCount(usage["output_tokens"]),
++      reasoningTokens: tokenCount(outputDetails["reasoning_tokens"]),
++      totalTokens: tokenCount(usage["total_tokens"]),
++    },
++    costTotal,
++  };
++}
++
++function hasAnyField(fields: WireUsageFields): boolean {
++  return (
++    fields.inputTokens !== null ||
++    fields.cachedTokens !== null ||
++    fields.cacheWriteTokens !== null ||
++    fields.outputTokens !== null ||
++    fields.reasoningTokens !== null ||
++    fields.totalTokens !== null
++  );
++}
++
++/**
++ * Creates the collector. Wire observations are keyed by response id; ids are
++ * unique per provider response (each HTTP/WebSocket attempt opens a new one),
++ * so cache-warm calls and failed attempts can never collide with a finalised
++ * message's id. Handlers are synchronous and never throw on malformed data:
++ * malformed events degrade the observation, never the host run.
++ */
++export function createMainUsageEvidenceCollector(
++  options: MainUsageEvidenceCollectorOptions = {},
++): MainUsageEvidenceCollector {
++  const maxUncorrelated = options.maxUncorrelatedIds ?? DEFAULT_MAX_UNCORRELATED_IDS;
++  const wire = new Map<string, WireObservation>();
++  const lastIdByStream = new Map<string, string>(); // `${provider}/${model}` -> last seen response id
++  const emitted: MainUsageEvidenceV2Record[] = [];
++  const seenMessageHashes = new Set<string>();
++  let requestWindows = 0;
++  let streamEvents = 0;
++  let unsupportedApiEvents = 0;
++  let usageBearingObservations = 0;
++  let correlated = 0;
++  let unmatched = 0;
++  let ambiguousMessages = 0;
++
++  const uncorrelatedIds = (): { ids: readonly string[]; count: number } => {
++    const all: string[] = [];
++    for (const [id, observation] of wire) {
++      if (observation.usageBearing && observation.consumedBy === null) all.push(id);
++    }
++    return { ids: all.slice(0, maxUncorrelated), count: all.length };
++  };
++
++  const baseRecord = (
++    messageSha256: string,
++    responseId: string | null,
++    requestWindowCount: number,
++  ): Omit<
++    MainUsageEvidenceV2Record,
++    "correlation" | "usageObserved" | "api" | "usageSource" | "fields" | "wireCostTotal" | "ambiguous"
++  > => {
++    const uncorrelated = uncorrelatedIds();
++    return {
++      type: MAIN_USAGE_EVIDENCE_TYPE,
++      schemaVersion: MAIN_USAGE_EVIDENCE_V2_SCHEMA_VERSION,
++      messageSha256,
++      responseId,
++      uncorrelatedResponseIds: uncorrelated.ids,
++      uncorrelatedCount: uncorrelated.count,
++      requestWindows: requestWindowCount,
++    };
++  };
++
++  const collector: MainUsageEvidenceCollector = {
++    onBeforeProviderRequest(_event: BeforeProviderRequestLike): undefined {
++      requestWindows += 1;
++      return undefined; // read-only: never a payload replacement
++    },
++
++    onProviderStreamEvent(event: ProviderStreamEventLike): void {
++      streamEvents += 1;
++      const api = typeof event.api === "string" ? event.api : "";
++      if (!COMPLETIONS_APIS.has(api) && !RESPONSES_APIS.has(api)) {
++        unsupportedApiEvents += 1;
++        return;
++      }
++      const data = isJsonObject(event.data) ? (event.data as Record<string, unknown>) : null;
++      if (data === null) return;
++      const streamKey = `${event.provider}/${event.model}`;
++
++      if (COMPLETIONS_APIS.has(api)) {
++        // ChatCompletionChunk: every chunk of one completion shares the id;
++        // usage sits on `chunk.usage` with a `choices[0].usage` fallback some
++        // providers use (Observed in pi-ai openai-completions.js).
++        const chunkId = safeResponseId(data["id"]);
++        let usageSource: WireUsageSource | null = null;
++        let projection: CompletionsUsageProjection | null = null;
++        const chunkUsage = isJsonObject(data["usage"]) ? data["usage"] : null;
++        const choices = Array.isArray(data["choices"]) ? data["choices"] : [];
++        const firstChoice = isJsonObject(choices[0]) ? choices[0] : null;
++        const choiceUsage =
++          chunkUsage === null && firstChoice !== null && isJsonObject(firstChoice["usage"])
++            ? firstChoice["usage"]
++            : null;
++        if (chunkUsage !== null) {
++          usageSource = "chunk-usage";
++          projection = projectCompletionsUsage(chunkUsage);
++        } else if (choiceUsage !== null) {
++          usageSource = "choice-usage";
++          projection = projectCompletionsUsage(choiceUsage);
++        }
++        applyObservation(streamKey, api, event, chunkId, usageSource, projection);
++        return;
++      }
++
++      // Responses family: `response.created` opens the response id;
++      // terminal events carry `response.usage` (Observed in pi-ai
++      // openai-responses-shared.js processResponsesStream and
++      // openai-codex-responses.js mapCodexEvents).
++      const eventType = typeof data["type"] === "string" ? data["type"] : "";
++      const response = isJsonObject(data["response"]) ? data["response"] : null;
++      if (eventType === "response.created") {
++        applyObservation(streamKey, api, event, safeResponseId(response?.["id"]), null, null);
++        return;
++      }
++      if (eventType === "response.completed" || eventType === "response.failed" || eventType === "response.incomplete") {
++        const responseUsage = response !== null && isJsonObject(response["usage"]) ? response["usage"] : null;
++        applyObservation(
++          streamKey,
++          api,
++          event,
++          safeResponseId(response?.["id"]),
++          responseUsage !== null ? "response-usage" : null,
++          responseUsage !== null ? projectResponsesUsage(responseUsage) : null,
++        );
++        return;
++      }
++      // Non-terminal responses events (deltas, items) carry no usage and no id claim.
++    },
++
++    onMessageEnd(event: MessageEndLike): void {
++      const message = isJsonObject(event.message) ? (event.message as Record<string, unknown>) : null;
++      if (message === null || message["role"] !== "assistant") return;
++      let canonical: string;
++      let hash: string;
++      try {
++        canonical = canonicalJson(message);
++        hash = sha256Canonical(asJson(message));
++      } catch {
++        return; // non-JSON message content cannot be keyed honestly
++      }
++      if (seenMessageHashes.has(canonical)) return; // exact duplicate finalisation
++      seenMessageHashes.add(canonical);
++      const responseId = safeResponseId(message["responseId"]);
++      const observation = responseId !== null ? wire.get(responseId) : undefined;
++      if (responseId === null || observation === undefined) {
++        unmatched += 1;
++        emitted.push({
++          ...baseRecord(hash, responseId, requestWindows),
++          correlation: "none",
++          usageObserved: null,
++          api: "",
++          usageSource: null,
++          fields: null,
++          wireCostTotal: null,
++          ambiguous: false,
++        });
++        return;
++      }
++      if (observation.consumedBy !== null && observation.consumedBy !== hash) {
++        // The same wire response id finalised two distinct messages: the
++        // usage cannot be attributed to either. Emit an ambiguous conflict
++        // record for the earlier message too, so folding fails closed on both.
++        ambiguousMessages += 1;
++        emitted.push({
++          ...baseRecord(observation.consumedBy, responseId, requestWindows),
++          correlation: "response-id",
++          usageObserved: null,
++          api: observation.api,
++          usageSource: null,
++          fields: null,
++          wireCostTotal: null,
++          ambiguous: true,
++        });
++        emitted.push({
++          ...baseRecord(hash, responseId, requestWindows),
++          correlation: "response-id",
++          usageObserved: null,
++          api: observation.api,
++          usageSource: null,
++          fields: null,
++          wireCostTotal: null,
++          ambiguous: true,
++        });
++        return;
++      }
++      // Consume BEFORE snapshotting uncorrelated ids, so the observation this
++      // record claims is not listed as uncorrelated in its own record.
++      observation.consumedBy = hash;
++      correlated += 1;
++      const ambiguous = observation.attachedWithoutId;
++      if (ambiguous) ambiguousMessages += 1;
++      emitted.push({
++        ...baseRecord(hash, responseId, requestWindows),
++        correlation: "response-id",
++        usageObserved: ambiguous ? null : observation.usageBearing,
++        api: observation.api,
++        usageSource: ambiguous ? null : observation.usageSource,
++        fields: ambiguous || !observation.usageBearing ? null : observation.fields,
++        wireCostTotal: ambiguous ? null : observation.wireCostTotal,
++        ambiguous,
++      });
++    },
++
++    get records(): readonly MainUsageEvidenceV2Record[] {
++      // Snapshot: callers cannot mutate emission history retroactively.
++      return [...emitted];
++    },
++
++    get diagnostics(): MainUsageEvidenceDiagnostics {
++      return {
++        requestWindows,
++        streamEvents,
++        unsupportedApiEvents,
++        usageBearingObservations,
++        uncorrelatedResponseIds: uncorrelatedIds().ids,
++        correlated,
++        unmatched,
++        ambiguous: ambiguousMessages,
++      };
++    },
++  };
++
++  function applyObservation(
++    streamKey: string,
++    api: string,
++    event: ProviderStreamEventLike,
++    chunkId: string | null,
++    usageSource: WireUsageSource | null,
++    projection: CompletionsUsageProjection | null,
++  ): void {
++    let id = chunkId;
++    let attachedWithoutId = false;
++    if (id === null && usageSource !== null) {
++      // Usage-bearing chunk without its own id: attach to the last id seen
++      // for the same provider/model stream and mark the attachment ambiguous.
++      id = lastIdByStream.get(streamKey) ?? null;
++      attachedWithoutId = true;
++    }
++    if (id === null) {
++      if (usageSource !== null) usageBearingObservations += 1; // counted, never claimed
++      return; // nothing keyable: no observation, no claim
++    }
++    if (chunkId !== null) lastIdByStream.set(streamKey, chunkId);
++    const existing = wire.get(id);
++    if (existing === undefined) {
++      const fields = projection === null ? EMPTY_FIELDS : projection.fields;
++      const usageBearing = projection !== null && hasAnyField(projection.fields);
++      if (usageBearing) usageBearingObservations += 1;
++      wire.set(id, {
++        api,
++        provider: event.provider,
++        model: event.model,
++        fields,
++        usageSource: usageBearing ? usageSource : null,
++        wireCostTotal: projection === null ? null : projection.costTotal,
++        attachedWithoutId,
++        usageBearing,
++        consumedBy: null,
++      });
++      return;
++    }
++    if (projection !== null) {
++      // Each usage object is the latest cumulative snapshot, as in the SDK's
++      // whole-object overwrite. Fields absent from it must become unknown;
++      // retaining earlier fields would silently mix two different snapshots.
++      if (!existing.usageBearing && hasAnyField(projection.fields)) usageBearingObservations += 1;
++      existing.fields = projection.fields;
++      existing.usageBearing = hasAnyField(projection.fields);
++      existing.usageSource = existing.usageBearing ? usageSource : null;
++      existing.wireCostTotal = projection.costTotal;
++    }
++    existing.attachedWithoutId = existing.attachedWithoutId || attachedWithoutId;
++  }
++
++  return collector;
++}
++
++/**
++ * Convenience wiring for a benchmark harness: subscribes the collector to the
++ * three supported events on an `ExtensionAPI`-like surface and returns the
++ * unsubscribe functions. The before_provider_request handler returns nothing,
++ * so the host keeps the original payload.
++ */
++export function wireMainUsageEvidence(
++  pi: {
++    on(
++      event: "before_provider_request",
++      handler: (event: BeforeProviderRequestLike) => undefined,
++    ): () => void;
++    on(event: "provider_stream_event", handler: (event: ProviderStreamEventLike) => void): () => void;
++    on(event: "message_end", handler: (event: MessageEndLike) => void): () => void;
++  },
++  collector: MainUsageEvidenceCollector,
++): readonly (() => void)[] {
++  return [
++    pi.on("before_provider_request", (event) => collector.onBeforeProviderRequest(event)),
++    pi.on("provider_stream_event", (event) => collector.onProviderStreamEvent(event)),
++    pi.on("message_end", (event) => collector.onMessageEnd(event)),
++  ];
++}
++
++// ---------------------------------------------------------------------------
++// Record reading and canonical mapping, consumed by usage-parser.ts.
++// ---------------------------------------------------------------------------
++
++const WIRE_FIELD_KEYS: readonly (keyof WireUsageFields)[] = [
++  "inputTokens",
++  "cachedTokens",
++  "cacheWriteTokens",
++  "outputTokens",
++  "reasoningTokens",
++  "totalTokens",
++];
++
++function readWireFields(value: unknown): WireUsageFields | null {
++  if (!isJsonObject(value)) return null;
++  const out: Partial<Record<keyof WireUsageFields, number | null>> = {};
++  for (const key of WIRE_FIELD_KEYS) {
++    const raw = value[key];
++    if (raw === null) {
++      out[key] = null;
++      continue;
++    }
++    const count = tokenCount(raw);
++    if (count === null) return null;
++    out[key] = count;
++  }
++  return {
++    inputTokens: out.inputTokens ?? null,
++    cachedTokens: out.cachedTokens ?? null,
++    cacheWriteTokens: out.cacheWriteTokens ?? null,
++    outputTokens: out.outputTokens ?? null,
++    reasoningTokens: out.reasoningTokens ?? null,
++    totalTokens: out.totalTokens ?? null,
++  };
++}
++
++/** Reader bound for uncorrelated id lists: generous, independent of the emitter cap. */
++const MAX_READ_UNCORRELATED_IDS = 4096;
++
++function readStringArray(value: unknown, cap: number): string[] | null {
++  if (!Array.isArray(value) || value.length > cap) return null;
++  const out: string[] = [];
++  for (const item of value) {
++    if (typeof item !== "string" || item.length > MAX_RESPONSE_ID_LENGTH) return null;
++    out.push(item);
++  }
++  return out;
++}
++
++/**
++ * Strictly validates a schemaVersion 2 evidence record from an event stream.
++ * Returns the typed record or null when any required field is malformed;
++ * unknown extra keys are ignored so future additive revisions stay readable.
++ */
++export function readMainUsageEvidenceV2(event: unknown): MainUsageEvidenceV2Record | null {
++  if (!isJsonObject(event)) return null;
++  if (event["type"] !== MAIN_USAGE_EVIDENCE_TYPE) return null;
++  if (event["schemaVersion"] !== MAIN_USAGE_EVIDENCE_V2_SCHEMA_VERSION) return null;
++  const messageSha256 = event["messageSha256"];
++  if (typeof messageSha256 !== "string" || !/^[0-9a-f]{64}$/.test(messageSha256)) return null;
++  const responseId = event["responseId"];
++  const safeId = responseId === null ? null : safeResponseId(responseId);
++  if (responseId !== null && safeId === null) return null;
++  const correlation = event["correlation"];
++  if (correlation !== "response-id" && correlation !== "none") return null;
++  const usageObserved = event["usageObserved"];
++  if (usageObserved !== true && usageObserved !== false && usageObserved !== null) return null;
++  const api = event["api"];
++  if (typeof api !== "string") return null;
++  const usageSource = event["usageSource"];
++  if (
++    usageSource !== null &&
++    usageSource !== "chunk-usage" &&
++    usageSource !== "choice-usage" &&
++    usageSource !== "response-usage"
++  )
++    return null;
++  const wireCostTotal = event["wireCostTotal"];
++  if (wireCostTotal !== null && finiteNumber(wireCostTotal) === null) return null;
++  if (typeof event["ambiguous"] !== "boolean") return null;
++  const uncorrelatedCount = event["uncorrelatedCount"];
++  if (typeof uncorrelatedCount !== "number" || !Number.isInteger(uncorrelatedCount) || uncorrelatedCount < 0)
++    return null;
++  const requestWindows = event["requestWindows"];
++  if (typeof requestWindows !== "number" || !Number.isInteger(requestWindows) || requestWindows < 0)
++    return null;
++  const fields = event["fields"];
++  const parsedFields = fields === null ? null : readWireFields(fields);
++  if (fields !== null && parsedFields === null) return null;
++  const uncorrelatedResponseIds = readStringArray(event["uncorrelatedResponseIds"], MAX_READ_UNCORRELATED_IDS);
++  if (uncorrelatedResponseIds === null) return null;
++  // Claim consistency: an asserted observation must carry supported api,
++  // fields and a source; an unasserted record must carry none of them.
++  if (usageObserved === true) {
++    if (parsedFields === null) return null;
++    if (!COMPLETIONS_APIS.has(api) && !RESPONSES_APIS.has(api)) return null;
++    if (usageSource === null) return null;
++    if (!hasAnyField(parsedFields)) return null;
++  } else if (parsedFields !== null || usageSource !== null) {
++    return null;
++  }
++  if (correlation === "none" && usageObserved !== null) return null;
++  if (correlation === "response-id" && responseId === null) return null;
++  return {
++    type: MAIN_USAGE_EVIDENCE_TYPE,
++    schemaVersion: MAIN_USAGE_EVIDENCE_V2_SCHEMA_VERSION,
++    messageSha256,
++    responseId: safeId,
++    correlation,
++    usageObserved,
++    api,
++    usageSource,
++    fields: parsedFields,
++    wireCostTotal: wireCostTotal === null ? null : finiteNumber(wireCostTotal),
++    ambiguous: event["ambiguous"] === true,
++    uncorrelatedResponseIds,
++    uncorrelatedCount,
++    requestWindows,
++  };
++}
++
++/** Serialises a record to canonical Json for the benchmark event stream. */
++export function mainUsageEvidenceV2Json(record: MainUsageEvidenceV2Record): Json {
++  return asJson({ ...record });
++}
++
++/**
++ * Maps wire field presence to the canonical TokenObservation, mirroring the
++ * host's arithmetic while staying presence-honest:
++ *
++ * - `inputTokens` is cache-inclusive. Uncached input requires both cache
++ *   subsets as well as that total; wire-absent subsets are not zero. This
++ *   deliberately differs from SDK zero-defaulting and preserves C16/T31
++ *   missingness before any H1 measurement.
++ * - Preserve a reported `total_tokens` on either family. Without one the
++ *   total remains unknown, even when component arithmetic is possible: the
++ *   canonical field cannot distinguish a derived value from a reported one.
++ */
++export function tokensFromWireEvidence(record: MainUsageEvidenceV2Record): TokenObservation | null {
++  if (record.usageObserved !== true || record.fields === null) return null;
++  const fields = record.fields;
++  const cacheRead = fields.cachedTokens;
++  const cacheWrite = fields.cacheWriteTokens;
++  const output = fields.outputTokens;
++  const reasoning = fields.reasoningTokens;
++  const observation: TokenObservation = {
++    ...(fields.inputTokens !== null
++      ? {
++          inputTotal: fields.inputTokens,
++          ...(cacheRead !== null && cacheWrite !== null
++            ? { inputUncached: Math.max(0, fields.inputTokens - cacheRead - cacheWrite) }
++            : {}),
++        }
++      : {}),
++    ...(output !== null ? { outputTotal: output } : {}),
++    ...(cacheRead !== null ? { cacheRead } : {}),
++    ...(cacheWrite !== null ? { cacheWrite } : {}),
++    ...(reasoning !== null ? { reasoning } : {}),
++    ...(fields.totalTokens !== null ? { totalTokens: fields.totalTokens } : {}),
++  };
++  return observation;
++}
+diff --git a/scripts/benchmarks/usage-parser.ts b/scripts/benchmarks/usage-parser.ts
+index e4c0e0e..cd89d6a 100644
+--- a/scripts/benchmarks/usage-parser.ts
++++ b/scripts/benchmarks/usage-parser.ts
+@@ -35,6 +35,11 @@
+ // the session-event shapes; only the skipped envelope records differ.
+ 
+ import { asJson, canonicalJson, sha256Canonical } from "./canonical.js";
++import {
++  readMainUsageEvidenceV2,
++  tokensFromWireEvidence,
++  type MainUsageEvidenceV2Record,
++} from "./main-usage-evidence.js";
+ import type { AccountingSummary, Json, ParsedUsage, TokenObservation } from "./contracts.js";
+ 
+ interface AssistantObservation {
+@@ -62,6 +67,41 @@ export function mainUsageEvidence(message: Json, observed: boolean): Json {
+   };
+ }
+ 
++/** Folded schemaVersion 2 evidence for one canonical message hash. */
++interface V2EvidenceFold {
++  readonly status: "agreed" | "conflict";
++  readonly record?: MainUsageEvidenceV2Record;
++}
++
++/**
++ * Two v2 records agree when their usage claims match exactly: the tri-state
++ * `usageObserved`, the asserted api/source/cost and every wire field
++ * position (null vs value). Diagnostic fields (uncorrelated id lists,
++ * request-window counts) may differ without conflict. Disagreement folds to
++ * `conflict`, which the parser treats as unobserved, mirroring the v1 rule
++ * that conflicting evidence cannot turn an unknown observation into a known
++ * zero.
++ */
++function v2RecordsAgree(a: MainUsageEvidenceV2Record, b: MainUsageEvidenceV2Record): boolean {
++  if (a.usageObserved !== b.usageObserved) return false;
++  if (a.usageObserved === null) return true; // both make no claim; mixed null/asserting records conflict above
++  if (a.api !== b.api || a.responseId !== b.responseId || a.correlation !== b.correlation) return false;
++  if (a.ambiguous !== b.ambiguous) return false;
++  if (a.usageSource !== b.usageSource || a.wireCostTotal !== b.wireCostTotal) return false;
++  const fa = a.fields;
++  const fb = b.fields;
++  if ((fa === null) !== (fb === null)) return false;
++  if (fa === null || fb === null) return true;
++  return (
++    fa.inputTokens === fb.inputTokens &&
++    fa.cachedTokens === fb.cachedTokens &&
++    fa.cacheWriteTokens === fb.cacheWriteTokens &&
++    fa.outputTokens === fb.outputTokens &&
++    fa.reasoningTokens === fb.reasoningTokens &&
++    fa.totalTokens === fb.totalTokens
++  );
++}
++
+ function isJsonObject(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+ }
+@@ -354,7 +394,17 @@ export function parseUsageEvents(events: readonly Json[], mode: "json" | "rpc"):
+   const toolById = new Map<string, ToolObservation>();
+   const toolOrder: string[] = [];
+   const mainEvidence = new Map<string, boolean>();
++  const v2Evidence = new Map<string, V2EvidenceFold>();
+   for (const event of events) {
++    const v2 = readMainUsageEvidenceV2(event);
++    if (v2 !== null) {
++      const hash = v2.messageSha256;
++      const existing = v2Evidence.get(hash);
++      if (existing === undefined) v2Evidence.set(hash, { status: "agreed", record: v2 });
++      else if (existing.status === "agreed" && existing.record !== undefined && !v2RecordsAgree(existing.record, v2))
++        v2Evidence.set(hash, { status: "conflict" });
++      continue;
++    }
+     if (
+       !isJsonObject(event) ||
+       event["type"] !== MAIN_USAGE_EVIDENCE_TYPE ||
+@@ -383,17 +433,45 @@ export function parseUsageEvents(events: readonly Json[], mode: "json" | "rpc"):
+       const existing = assistantSeen.get(canonical);
+       if (existing !== undefined) continue; // exact duplicate finalised message
+       const candidate = tokensFromWireUsage(message["usage"]);
+-      const observed = mainEvidence.get(sha256Canonical(asJson(message)));
+-      // SDKs initialise required usage fields to zero when the provider sends
+-      // no usage. Without a correlated wire-presence witness, all-zero SDK
+-      // usage is ambiguous and must not become a zero-token H1 observation.
+-      const usage =
+-        observed === false ||
+-        (observed !== true &&
+-          candidate !== null &&
+-          Object.values(candidate).every((value) => value === 0))
+-          ? null
+-          : candidate;
++      const hash = sha256Canonical(asJson(message));
++      const v1Observed = mainEvidence.get(hash);
++      const v2 = v2Evidence.get(hash);
++      // A schemaVersion 2 witness carries per-field wire presence. When it
++      // asserts an observation (and v1 evidence, if present, does not
++      // contradict it), the canonical tokens come from the wire fields:
++      // wire-explicit zeros are values, wire-absent fields stay unknown. A
++      // v2 record that asserts no usage (`usageObserved: false`), a folded
++      // conflict, or a v1/v2 disagreement fails closed to an unobserved null,
++      // mirroring the v1 conflicting-evidence rule. Only an agreed no-claim
++      // view leaves the v1/SDK path intact; a no-claim record mixed with an
++      // asserting record is a conflict, never a fallback permission.
++      const v2Asserts =
++        v2 !== undefined &&
++        v2.status === "agreed" &&
++        v2.record !== undefined &&
++        !v2.record.ambiguous &&
++        v2.record.usageObserved === true &&
++        v1Observed !== false;
++      const v2Unobserved =
++        v2 !== undefined &&
++        (v2.status === "conflict" || (v2.record !== undefined && v2.record.usageObserved === false));
++      let usage: TokenObservation | null;
++      if (v2Asserts && v2.record !== undefined) {
++        usage = tokensFromWireEvidence(v2.record);
++      } else if (v2Unobserved) {
++        usage = null;
++      } else {
++        // SDKs initialise required usage fields to zero when the provider sends
++        // no usage. Without a correlated wire-presence witness, all-zero SDK
++        // usage is ambiguous and must not become a zero-token H1 observation.
++        usage =
++          v1Observed === false ||
++          (v1Observed !== true &&
++            candidate !== null &&
++            Object.values(candidate).every((value) => value === 0))
++            ? null
++            : candidate;
++      }
+       const observation: AssistantObservation = { id: assistantId(message, usedIds), usage };
+       assistantSeen.set(canonical, observation);
+       assistantMessages.push(observation);
+diff --git a/scripts/qualify-native-floor.mts b/scripts/qualify-native-floor.mts
+new file mode 100644
+index 0000000..9c5bd02
+--- /dev/null
++++ b/scripts/qualify-native-floor.mts
+@@ -0,0 +1,94 @@
++// SPDX-License-Identifier: Apache-2.0
++// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
++
++// Credential-free native floor qualification.
++//
++//   node --import tsx scripts/qualify-native-floor.mts install
++//   node --import tsx scripts/qualify-native-floor.mts run
++//
++// `install` places the exact manifest floor host (the single `>=X.Y.Z` of the
++// `Pi` peers) in .tmp/m4-floor/host/<version>/ with a private HOME, TMPDIR and
++// npm cache below the repository, verifies the installed versions and writes
++// provenance.json beside it. It downloads registry packages only; install
++// scripts are not run. `run` executes test/native-floor-qualification.test.ts
++// against that install with private HOME/agent/TMPDIR and every API key
++// variable removed; a missing floor install fails rather than skips. Neither command makes an inference or page request.
++
++import { spawnSync } from "node:child_process";
++import { mkdir, readFile, writeFile } from "node:fs/promises";
++import { join } from "node:path";
++import { fileURLToPath } from "node:url";
++import { REPO_ROOT } from "../test/helpers/native-replay.js";
++import { floorInstallDir, manifestFloor } from "../test/helpers/native-floor-qualification.js";
++
++const scratch = join(REPO_ROOT, ".tmp/m4-floor");
++const privateDirs = { HOME: join(scratch, "home"), TMPDIR: join(scratch, "tmp"), npm_config_cache: join(scratch, "npm-cache") };
++
++export function privateFloorEnv(
++  extra: Record<string, string> = {},
++  source: NodeJS.ProcessEnv = process.env,
++): NodeJS.ProcessEnv {
++  const allowed = ["PATH", "LANG", "LC_ALL", "TERM", "TZ", "SYSTEMROOT", "NATIVE_FLOOR_HOST", "NATIVE_FLOOR_KEEP"];
++  const inherited = Object.fromEntries(allowed.flatMap(key => source[key] === undefined ? [] : [[key, source[key]]]));
++  return { ...inherited, ...privateDirs, PI_OFFLINE: "1", PI_SKIP_VERSION_CHECK: "1", PI_TELEMETRY: "0", ...extra };
++}
++
++const readVersion = async (root: string) =>
++  (JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { version: string }).version;
++
++async function install(): Promise<void> {
++  const version = await manifestFloor();
++  const dir = floorInstallDir(version);
++  for (const path of [dir, ...Object.values(privateDirs)]) await mkdir(path, { recursive: true });
++  await writeFile(join(dir, "package.json"), `${JSON.stringify({ private: true }, null, 2)}\n`);
++  const result = spawnSync(
++    "npm",
++    ["install", "--no-audit", "--no-fund", "--ignore-scripts", `@earendil-works/pi-coding-agent@${version}`],
++    { cwd: dir, env: privateFloorEnv(), stdio: "inherit" },
++  );
++  if (result.status !== 0) throw new Error(`npm install exited ${String(result.status)}`);
++  const host = join(dir, "node_modules/@earendil-works/pi-coding-agent");
++  const nested = join(host, "node_modules/@earendil-works");
++  const versions: Record<string, string> = { "pi-coding-agent": await readVersion(host) };
++  for (const name of ["pi-ai", "pi-agent-core", "pi-tui"]) versions[name] = await readVersion(join(nested, name));
++  for (const [name, actual] of Object.entries(versions))
++    if (actual !== version) throw new Error(`${name} installed ${actual}, manifest floor is ${version}`);
++  const lock = JSON.parse(await readFile(join(dir, "package-lock.json"), "utf8")) as {
++    packages: Record<string, { version?: string; integrity?: string; resolved?: string }>;
++  };
++  const integrity = Object.fromEntries(
++    Object.entries(lock.packages)
++      .filter(([path]) => /@earendil-works\/[^/]+$/.test(path))
++      // The floor's shrinkwrap pins nested `Pi` packages by URL without an
++      // integrity hash; record that absence rather than inventing one.
++      .map(([path, entry]) => [path, { version: entry.version, integrity: entry.integrity ?? null, resolved: entry.resolved }]),
++  );
++  await writeFile(
++    join(dir, "provenance.json"),
++    `${JSON.stringify({ manifestFloor: version, versions, integrity, node: process.version, installedAt: new Date().toISOString(), installScripts: "not run" }, null, 2)}\n`,
++  );
++  console.log(`Floor Pi ${version} installed at ${host}`);
++}
++
++function run(): void {
++  const result = spawnSync(
++    process.execPath,
++    ["--import", "tsx", "--test", "test/native-floor-qualification.test.ts"],
++    {
++      cwd: REPO_ROOT,
++      env: privateFloorEnv({ PI_CODING_AGENT_DIR: join(scratch, "agent"), NATIVE_FLOOR_REQUIRED: "1" }),
++      stdio: "inherit",
++    },
++  );
++  process.exitCode = result.status ?? 1;
++}
++
++if (process.argv[1] === fileURLToPath(import.meta.url)) {
++  const command = process.argv[2];
++  if (command === "install") await install();
++  else if (command === "run") run();
++  else {
++    console.error("usage: qualify-native-floor.mts install|run");
++    process.exitCode = 2;
++  }
++}
+diff --git a/scripts/verify-mcp-install.mjs b/scripts/verify-mcp-install.mjs
+index f53cadd..184e5ae 100644
+--- a/scripts/verify-mcp-install.mjs
++++ b/scripts/verify-mcp-install.mjs
+@@ -159,6 +159,29 @@ try {
+   assert.equal(result.stderr, "", "installed runtime emitted unexpected diagnostics");
+   const evidence = JSON.parse(result.stdout);
+   assert.equal(evidence.outcome, "completed");
++  await copyFile(
++    join(root, "test/probes/mcp-provider-security.mjs"),
++    join(dir, "provider-security-probe.mjs"),
++  );
++  const providerSecurity = await run(
++    process.execPath,
++    ["provider-security-probe.mjs"],
++    dir,
++    isolated,
++  );
++  assert.equal(providerSecurity.stderr, "", "installed provider transport polluted stderr");
++  assert.equal(
++    providerSecurity.stdout,
++    "mcp-provider-security-complete\n",
++    "installed default transport must complete every security assertion",
++  );
++  evidence.providerSecurity = "default-transport-healthy-encoding-abort";
++  const providerDependency = JSON.parse((await run(process.execPath, [
++    "--input-type=module", "-e",
++    `import { createRequire } from 'node:module'; const require = createRequire(${JSON.stringify(join(pkg, "package.json"))}); const manifest = require('undici/package.json'); console.log(JSON.stringify({ version: manifest.version, engines: manifest.engines }));`,
++  ], dir, isolated)).stdout);
++  assert.equal(providerDependency.version, manifest.dependencies.undici);
++  evidence.providerDependency = providerDependency;
+   await copyFile(
+     join(root, "test/probes/page-transport-install.mjs"),
+     join(dir, "page-transport-probe.mjs"),
+diff --git a/test/benchmark-main-usage-evidence.test.ts b/test/benchmark-main-usage-evidence.test.ts
+new file mode 100644
+index 0000000..06e656a
+--- /dev/null
++++ b/test/benchmark-main-usage-evidence.test.ts
+@@ -0,0 +1,830 @@
++// SPDX-License-Identifier: Apache-2.0
++// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
++import assert from "node:assert/strict";
++import { dirname, join } from "node:path";
++import { fileURLToPath, pathToFileURL } from "node:url";
++import { describe, it } from "node:test";
++import { asJson, canonicalJson } from "../scripts/benchmarks/canonical.js";
++import {
++  createMainUsageEvidenceCollector,
++  mainUsageEvidenceV2Json,
++  readMainUsageEvidenceV2,
++  tokensFromWireEvidence,
++  wireMainUsageEvidence,
++  type MainUsageEvidenceV2Record,
++  type ProviderStreamEventLike,
++} from "../scripts/benchmarks/main-usage-evidence.js";
++import { mainUsageEvidence, parseUsageEvents } from "../scripts/benchmarks/usage-parser.js";
++import type { Json } from "../scripts/benchmarks/contracts.js";
++
++// Wire fixtures model the actual installed SDK shapes, Observed in the
++// bundled pi-ai (byte-identical between the installed Pi 1.3.0 host's pi-ai
++// 1.3.0 and this worktree's dev pi-ai 1.1.0) on 2026-10-26:
++//
++// - openai-completions: every parsed ChatCompletionChunk reaches the
++//   `provider_stream_event` handler (`for await (const chunk of openaiStream)
++//   { await options?.onProviderStreamEvent?.(chunk, model); ... }`); the
++//   message `responseId` is the first chunk id (`output.responseId ||=
++//   chunk.id`); usage sits on `chunk.usage` (null on non-final chunks) with a
++//   `choices[0].usage` fallback, and later usage chunks overwrite earlier
++//   ones. Source: dist/api/openai-completions.js.
++// - responses family (openai-responses, azure-openai-responses,
++//   openai-codex-responses): every raw event reaches the handler
++//   (`processResponsesStream`: `await options?.onProviderStreamEvent?.(event,
++//   model)`; the codex api replays its mapped events through the same hook in
++//   `mapCodexEvents`); `response.created` sets the message responseId and
++//   terminal `response.completed`/`failed`/`incomplete` events carry
++//   `response.usage`. Source: dist/api/openai-responses-shared.js,
++//   dist/api/openai-codex-responses.js.
++//
++// These are structural SDK-shape fixtures, not live captures: live SSE
++// ordering, codex WebSocket delivery and cache-warm interleaving on a real
++// host remain unqualified until the granted targeted lane runs.
++
++const PROVIDER = "openrouter";
++const COMPLETIONS_API = "openai-completions";
++
++const streamEvent = (data: unknown, api = COMPLETIONS_API, model = "main-m"): ProviderStreamEventLike =>
++  ({ type: "provider_stream_event", provider: PROVIDER, api, model, data }) as ProviderStreamEventLike;
++
++/** OpenAI Completions chunk, non-final (usage null, carries a delta). */
++function deltaChunk(id: string, text = "x"): Json {
++  return asJson({ id, object: "chat.completion.chunk", choices: [{ index: 0, delta: { content: text }, finish_reason: null }], usage: null });
++}
++
++/** OpenAI Completions final chunk with the standard usage object. */
++function usageChunk(id: string, usage: Record<string, unknown>): Json {
++  return asJson({ id, object: "chat.completion.chunk", choices: [], usage });
++}
++
++const messageEnd = (message: unknown): { type: "message_end"; message: unknown } => ({
++  type: "message_end",
++  message,
++});
++
++function assistantMessage(responseId: string | undefined, usage: unknown): Record<string, unknown> {
++  return {
++    role: "assistant",
++    content: [{ type: "text", text: "answer" }],
++    api: COMPLETIONS_API,
++    provider: PROVIDER,
++    model: "main-m",
++    ...(responseId !== undefined ? { responseId } : {}),
++    timestamp: 1,
++    usage,
++    stopReason: "stop",
++  };
++}
++
++/** Full SDK-normalised usage (pi-ai zero placeholders for absent wire fields). */
++const sdkUsage = (input: number, output: number, cacheRead = 0, cacheWrite = 0): Json =>
++  asJson({ input, output, cacheRead, cacheWrite, totalTokens: input + output + cacheRead + cacheWrite });
++
++describe("collector correlation through host-shaped events", () => {
++  it("records per-field wire presence for a correlated completions message", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onBeforeProviderRequest({ type: "before_provider_request", payload: { model: "main-m", messages: [] } });
++    collector.onProviderStreamEvent(streamEvent(deltaChunk("resp_1")));
++    collector.onProviderStreamEvent(
++      streamEvent(
++        usageChunk("resp_1", {
++          prompt_tokens: 1200,
++          prompt_tokens_details: { cached_tokens: 800, cache_write_tokens: 100 },
++          completion_tokens: 90,
++          completion_tokens_details: { reasoning_tokens: 20 },
++          total_tokens: 1290,
++          cost: 0.05,
++        }),
++      ),
++    );
++    const message = assistantMessage("resp_1", sdkUsage(300, 90, 800, 100));
++    collector.onMessageEnd(messageEnd(message));
++    const records = collector.records;
++    assert.equal(records.length, 1);
++    const record = records[0]!;
++    assert.equal(record.correlation, "response-id");
++    assert.equal(record.responseId, "resp_1");
++    assert.equal(record.usageObserved, true);
++    assert.equal(record.usageSource, "chunk-usage");
++    assert.equal(record.ambiguous, false);
++    assert.equal(record.wireCostTotal, 0.05);
++    assert.equal(record.requestWindows, 1);
++    assert.deepEqual(record.fields, {
++      inputTokens: 1200,
++      cachedTokens: 800,
++      cacheWriteTokens: 100,
++      outputTokens: 90,
++      reasoningTokens: 20,
++      totalTokens: 1290,
++    });
++    assert.equal(record.messageSha256.length, 64);
++    // Parser: wire fields replace the SDK candidate, explicit wire values kept.
++    const parsed = parseUsageEvents(
++      [asJson(messageEnd(message)), mainUsageEvidenceV2Json(record)],
++      "json",
++    );
++    assert.deepEqual(parsed.assistantMessages[0]!.usage, {
++      inputTotal: 1200,
++      inputUncached: 300, // max(0, 1200 - 800 - 100), pi-ai arithmetic
++      outputTotal: 90,
++      cacheRead: 800,
++      cacheWrite: 100,
++      reasoning: 20,
++      totalTokens: 1290, // completions total is derived and matches the wire here
++    });
++    assert.deepEqual(parsed.missing, []);
++  });
++
++  it("keeps an all-zero wire usage as values, not an ambiguous SDK placeholder", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(streamEvent(usageChunk("resp_0", { prompt_tokens: 0, completion_tokens: 0 })));
++    const message = assistantMessage("resp_0", sdkUsage(0, 0));
++    collector.onMessageEnd(messageEnd(message));
++    const record = collector.records[0]!;
++    assert.equal(record.usageObserved, true);
++    assert.deepEqual(record.fields, {
++      inputTokens: 0,
++      cachedTokens: null,
++      cacheWriteTokens: null,
++      outputTokens: 0,
++      reasoningTokens: null,
++      totalTokens: null,
++    });
++    const parsed = parseUsageEvents([asJson(messageEnd(message)), mainUsageEvidenceV2Json(record)], "json");
++    // Explicit wire zeros survive; absent cache subsets stay absent (unknown).
++    assert.deepEqual(parsed.assistantMessages[0]!.usage, {
++      inputTotal: 0,
++      outputTotal: 0,
++    });
++    assert.deepEqual(parsed.missing, []);
++  });
++
++  it("preserves partial wire fields: absent prompt keeps uncached input unknown", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(streamEvent(usageChunk("resp_p", { completion_tokens: 40 })));
++    collector.onMessageEnd(messageEnd(assistantMessage("resp_p", sdkUsage(0, 40))));
++    const record = collector.records[0]!;
++    const parsed = parseUsageEvents([asJson(messageEnd(assistantMessage("resp_p", sdkUsage(0, 40)))), mainUsageEvidenceV2Json(record)], "json");
++    const usage = parsed.assistantMessages[0]!.usage!;
++    assert.equal("inputUncached" in usage, false);
++    assert.equal("inputTotal" in usage, false);
++    assert.equal(usage.outputTotal, 40);
++    assert.equal("totalTokens" in usage, false); // a known output subtotal is not a complete token total
++  });
++
++  it("never derives uncached input from absent cache subsets on either API family", () => {
++    for (const api of ["openai-completions", "openai-codex-responses"]) {
++      for (const [cachedTokens, cacheWriteTokens] of [[null, null], [0, null], [null, 0], [0, 0]] as const) {
++        const record = v2Record("a".repeat(64), "partial-cache", true, api,
++          api === "openai-completions" ? "chunk-usage" : "response-usage",
++          { inputTokens: 100, cachedTokens, cacheWriteTokens, outputTokens: 5, reasoningTokens: null, totalTokens: 105 });
++        const usage = tokensFromWireEvidence(record)!;
++        assert.equal(usage.inputTotal, 100);
++        assert.equal(usage.totalTokens, 105);
++        assert.equal(Object.hasOwn(usage, "inputUncached"), cachedTokens !== null && cacheWriteTokens !== null);
++        if (cachedTokens !== null && cacheWriteTokens !== null) assert.equal(usage.inputUncached, 100);
++      }
++    }
++  });
++
++  it("does not label component arithmetic as a provider-reported total", () => {
++    const record = v2Record("a".repeat(64), "no-total", true, "openai-completions", "chunk-usage",
++      { inputTokens: 100, cachedTokens: 0, cacheWriteTokens: 0, outputTokens: 5, reasoningTokens: null, totalTokens: null });
++    assert.deepEqual(tokensFromWireEvidence(record), { inputTotal: 100, inputUncached: 100, outputTotal: 5, cacheRead: 0, cacheWrite: 0 });
++  });
++
++  it("latest cumulative usage removes earlier fields that become absent", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(streamEvent(usageChunk("latest", {
++      prompt_tokens: 100, completion_tokens: 5,
++      prompt_tokens_details: { cached_tokens: 20, cache_write_tokens: 0 }, cost: 0.1,
++    })));
++    collector.onProviderStreamEvent(streamEvent(usageChunk("latest", { completion_tokens: 7 })));
++    collector.onMessageEnd(messageEnd(assistantMessage("latest", sdkUsage(0, 7))));
++    const record = collector.records[0]!;
++    assert.equal(record.fields!.inputTokens, null);
++    assert.equal(record.fields!.cachedTokens, null);
++    assert.equal(record.wireCostTotal, null);
++    assert.deepEqual(tokensFromWireEvidence(record), { outputTotal: 7 });
++  });
++
++  it("reports a correlated response id that completed without any usage object", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(streamEvent(deltaChunk("resp_none")));
++    const message = assistantMessage("resp_none", sdkUsage(0, 0));
++    collector.onMessageEnd(messageEnd(message));
++    const record = collector.records[0]!;
++    assert.equal(record.correlation, "response-id");
++    assert.equal(record.usageObserved, false);
++    assert.equal(record.fields, null);
++    const parsed = parseUsageEvents([asJson(messageEnd(message)), mainUsageEvidenceV2Json(record)], "json");
++    assert.equal(parsed.assistantMessages[0]!.usage, null);
++    assert.deepEqual(parsed.missing, ["resp_none"]);
++  });
++
++  it("makes no claim when the message carries no responseId or the wire id was never seen", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onMessageEnd(messageEnd(assistantMessage(undefined, sdkUsage(5, 5))));
++    collector.onMessageEnd(messageEnd(assistantMessage("never_seen", sdkUsage(0, 0))));
++    const records = collector.records;
++    assert.equal(records.length, 2);
++    for (const record of records) {
++      assert.equal(record.correlation, "none");
++      assert.equal(record.usageObserved, null);
++      assert.equal(record.fields, null);
++    }
++    // Parser: no v2 claim leaves the v1/SDK path intact (all-zero stays missing).
++    const noId = assistantMessage(undefined, sdkUsage(5, 5));
++    const zero = assistantMessage("never_seen", sdkUsage(0, 0));
++    const parsed = parseUsageEvents(
++      [asJson(messageEnd(noId)), asJson(messageEnd(zero)), ...records.map(mainUsageEvidenceV2Json)],
++      "json",
++    );
++    assert.equal(parsed.assistantMessages[0]!.usage!.inputUncached, 5); // non-zero SDK values kept
++    assert.equal(parsed.assistantMessages[1]!.usage, null); // all-zero SDK without a witness
++  });
++
++  it("isolates cache-warm and failed-attempt streams from main usage", () => {
++    const collector = createMainUsageEvidenceCollector();
++    // Warm call: request window and a usage-bearing stream that never finalises a message.
++    collector.onBeforeProviderRequest({ type: "before_provider_request", payload: { model: "main-m", max_tokens: 1 } });
++    collector.onProviderStreamEvent(streamEvent(usageChunk("warm_1", { prompt_tokens: 1100, completion_tokens: 1 })));
++    // Main turn: a failed attempt (usage delivered, stream then errored) and the successful retry.
++    collector.onBeforeProviderRequest({ type: "before_provider_request", payload: { model: "main-m" } });
++    collector.onProviderStreamEvent(streamEvent(usageChunk("resp_err", { prompt_tokens: 900, completion_tokens: 2 })));
++    collector.onProviderStreamEvent(streamEvent(deltaChunk("resp_ok")));
++    collector.onProviderStreamEvent(streamEvent(usageChunk("resp_ok", { prompt_tokens: 950, completion_tokens: 30 })));
++    const message = assistantMessage("resp_ok", sdkUsage(950, 30));
++    collector.onMessageEnd(messageEnd(message));
++    const record = collector.records[0]!;
++    assert.equal(record.responseId, "resp_ok");
++    assert.deepEqual(record.uncorrelatedResponseIds, ["warm_1", "resp_err"]);
++    assert.equal(record.uncorrelatedCount, 2);
++    // Main usage comes only from the correlated response id.
++    const parsed = parseUsageEvents([asJson(messageEnd(message)), mainUsageEvidenceV2Json(record)], "json");
++    assert.equal(parsed.assistantMessages[0]!.usage!.inputTotal, 950);
++    assert.equal(parsed.assistantMessages[0]!.usage!.outputTotal, 30);
++    assert.deepEqual(collector.diagnostics.uncorrelatedResponseIds, ["warm_1", "resp_err"]);
++  });
++
++  it("marks id-less usage chunks ambiguous instead of guessing their response", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(streamEvent(deltaChunk("resp_a")));
++    collector.onProviderStreamEvent(streamEvent(usageChunk("", { prompt_tokens: 100, completion_tokens: 5 }))); // no id
++    const message = assistantMessage("resp_a", sdkUsage(0, 0));
++    collector.onMessageEnd(messageEnd(message));
++    const record = collector.records[0]!;
++    assert.equal(record.correlation, "response-id");
++    assert.equal(record.ambiguous, true);
++    assert.equal(record.usageObserved, null); // no claim
++    assert.equal(record.fields, null);
++    // Parser: an ambiguous record leaves the SDK path (all-zero stays missing).
++    const parsed = parseUsageEvents([asJson(messageEnd(message)), mainUsageEvidenceV2Json(record)], "json");
++    assert.equal(parsed.assistantMessages[0]!.usage, null);
++  });
++
++  it("fails closed on both messages when one response id finalises two distinct messages", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(streamEvent(usageChunk("shared", { prompt_tokens: 100, completion_tokens: 5 })));
++    const first = assistantMessage("shared", sdkUsage(100, 5));
++    (first.content as Array<Record<string, unknown>>)[0]!.text = "first";
++    collector.onMessageEnd(messageEnd(first));
++    const second = assistantMessage("shared", sdkUsage(0, 0));
++    (second.content as Array<Record<string, unknown>>)[0]!.text = "second";
++    second.timestamp = 2;
++    collector.onMessageEnd(messageEnd(second));
++    const records = collector.records;
++    assert.equal(records.length, 3); // first claim, conflict marker for first, ambiguous second
++    const parsed = parseUsageEvents(
++      [asJson(messageEnd(first)), asJson(messageEnd(second)), ...records.map(mainUsageEvidenceV2Json)],
++      "json",
++    );
++    // The first message's claiming record and conflict marker disagree: fold -> conflict -> null.
++    assert.equal(parsed.assistantMessages[0]!.usage, null);
++    // The second message gets an ambiguous no-claim record: SDK path, all-zero -> missing.
++    assert.equal(parsed.assistantMessages[1]!.usage, null);
++  });
++
++  it("ignores exact duplicate finalisations of the same message", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(streamEvent(usageChunk("resp_d", { prompt_tokens: 10, completion_tokens: 1 })));
++    const message = assistantMessage("resp_d", sdkUsage(10, 1));
++    collector.onMessageEnd(messageEnd(message));
++    collector.onMessageEnd(messageEnd(message));
++    assert.equal(collector.records.length, 1);
++  });
++
++  it("extracts the Moonshot-style choice-usage fallback", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(
++      streamEvent(
++        asJson({ id: "resp_m", object: "chat.completion.chunk", choices: [{ index: 0, delta: {}, finish_reason: "stop", usage: { prompt_tokens: 50, completion_tokens: 5 } }], usage: null }),
++      ),
++    );
++    collector.onMessageEnd(messageEnd(assistantMessage("resp_m", sdkUsage(50, 5))));
++    const record = collector.records[0]!;
++    assert.equal(record.usageSource, "choice-usage");
++    assert.equal(record.fields!.inputTokens, 50);
++    assert.equal(record.fields!.outputTokens, 5);
++  });
++
++  it("follows the cached-token spelling precedence observed in pi-ai", () => {
++    const collector = createMainUsageEvidenceCollector();
++    // details.cached_tokens wins even when prompt_cache_hit_tokens is also present.
++    collector.onProviderStreamEvent(
++      streamEvent(usageChunk("resp_c", { prompt_tokens: 200, prompt_tokens_details: { cached_tokens: 40 }, prompt_cache_hit_tokens: 60, completion_tokens: 5 })),
++    );
++    collector.onMessageEnd(messageEnd(assistantMessage("resp_c", sdkUsage(160, 5, 40))));
++    const record = collector.records[0]!;
++    assert.equal(record.fields!.cachedTokens, 40);
++    // Without the details spelling, prompt_cache_hit_tokens is read; then cached_tokens.
++    const collector2 = createMainUsageEvidenceCollector();
++    collector2.onProviderStreamEvent(streamEvent(usageChunk("resp_c2", { prompt_tokens: 200, prompt_cache_hit_tokens: 70, cached_tokens: 90, completion_tokens: 5 })));
++    collector2.onMessageEnd(messageEnd(assistantMessage("resp_c2", sdkUsage(130, 5, 70))));
++    assert.equal(collector2.records[0]!.fields!.cachedTokens, 70);
++    const collector3 = createMainUsageEvidenceCollector();
++    collector3.onProviderStreamEvent(streamEvent(usageChunk("resp_c3", { prompt_tokens: 200, cached_tokens: 90, completion_tokens: 5 })));
++    collector3.onMessageEnd(messageEnd(assistantMessage("resp_c3", sdkUsage(110, 5, 90))));
++    assert.equal(collector3.records[0]!.fields!.cachedTokens, 90);
++  });
++
++  it("keeps later usage chunks overwriting earlier ones, mirroring pi-ai", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(streamEvent(usageChunk("resp_w", { prompt_tokens: 100, completion_tokens: 5 })));
++    collector.onProviderStreamEvent(streamEvent(usageChunk("resp_w", { prompt_tokens: 150, completion_tokens: 6 })));
++    collector.onMessageEnd(messageEnd(assistantMessage("resp_w", sdkUsage(150, 6))));
++    const fields = collector.records[0]!.fields!;
++    assert.equal(fields.inputTokens, 150);
++    assert.equal(fields.outputTokens, 6);
++  });
++});
++
++describe("responses-family wire shapes", () => {
++  const responsesEvent = (data: unknown): ProviderStreamEventLike =>
++    streamEvent(data, "openai-codex-responses");
++
++  it("correlates response.created id with response.completed usage", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(responsesEvent(asJson({ type: "response.created", response: { id: "resp_9" } })));
++    collector.onProviderStreamEvent(responsesEvent(asJson({ type: "response.output_text.delta", delta: "hi" })));
++    collector.onProviderStreamEvent(
++      responsesEvent(
++        asJson({
++          type: "response.completed",
++          response: {
++            id: "resp_9",
++            usage: {
++              input_tokens: 500,
++              input_tokens_details: { cached_tokens: 200, cache_write_tokens: 50 },
++              output_tokens: 40,
++              output_tokens_details: { reasoning_tokens: 5 },
++              total_tokens: 790,
++            },
++          },
++        }),
++      ),
++    );
++    const message = assistantMessage("resp_9", sdkUsage(250, 40, 200, 50));
++    (message as Record<string, unknown>).api = "openai-codex-responses";
++    collector.onMessageEnd(messageEnd(message));
++    const record = collector.records[0]!;
++    assert.equal(record.usageSource, "response-usage");
++    assert.deepEqual(record.fields, {
++      inputTokens: 500,
++      cachedTokens: 200,
++      cacheWriteTokens: 50,
++      outputTokens: 40,
++      reasoningTokens: 5,
++      totalTokens: 790,
++    });
++    const parsed = parseUsageEvents([asJson(messageEnd(message)), mainUsageEvidenceV2Json(record)], "json");
++    assert.deepEqual(parsed.assistantMessages[0]!.usage, {
++      inputTotal: 500,
++      inputUncached: 250, // max(0, 500 - 200 - 50)
++      outputTotal: 40,
++      cacheRead: 200,
++      cacheWrite: 50,
++      reasoning: 5,
++      totalTokens: 790, // responses family keeps the wire total
++    });
++  });
++
++  it("keeps usage observed on a response.failed terminal event", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(responsesEvent(asJson({ type: "response.created", response: { id: "resp_f" } })));
++    collector.onProviderStreamEvent(
++      responsesEvent(asJson({ type: "response.failed", response: { id: "resp_f", usage: { input_tokens: 20, output_tokens: 3 } } })),
++    );
++    const failed = assistantMessage("resp_f", sdkUsage(0, 0));
++    failed.stopReason = "error";
++    failed.errorMessage = "boom";
++    collector.onMessageEnd(messageEnd(failed));
++    const record = collector.records[0]!;
++    assert.equal(record.usageObserved, true);
++    const parsed = parseUsageEvents([asJson(messageEnd(failed)), mainUsageEvidenceV2Json(record)], "json");
++    // The failed message keeps its honestly observed wire usage instead of the SDK zeros.
++    assert.equal(parsed.assistantMessages[0]!.usage!.inputTotal, 20);
++    assert.equal(parsed.assistantMessages[0]!.usage!.outputTotal, 3);
++    assert.deepEqual(parsed.missing, []);
++  });
++
++  it("counts unsupported apis without making any field claim", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(streamEvent(asJson({ type: "message_start", message: { id: "msg_1", usage: { input_tokens: 9 } } }), "anthropic-messages"));
++    collector.onProviderStreamEvent(streamEvent(asJson({ type: "message_delta", usage: { output_tokens: 4 } }), "anthropic-messages"));
++    const message = assistantMessage("msg_1", sdkUsage(0, 0));
++    collector.onMessageEnd(messageEnd(message));
++    const record = collector.records[0]!;
++    assert.equal(record.correlation, "none");
++    assert.equal(record.usageObserved, null);
++    assert.equal(collector.diagnostics.unsupportedApiEvents, 2);
++    const parsed = parseUsageEvents([asJson(messageEnd(message)), mainUsageEvidenceV2Json(record)], "json");
++    assert.equal(parsed.assistantMessages[0]!.usage, null); // SDK zeros stay ambiguous
++  });
++});
++
++describe("read-only request observer and record safety", () => {
++  it("never returns a payload replacement and never mutates the payload", () => {
++    const collector = createMainUsageEvidenceCollector();
++    const payload = { model: "main-m", messages: [{ role: "user", content: "secret-free" }], Authorization: "Bearer should-not-be-recorded" };
++    const before = canonicalJson(payload);
++    const result = collector.onBeforeProviderRequest({ type: "before_provider_request", payload });
++    assert.equal(result, undefined);
++    assert.equal(canonicalJson(payload), before);
++  });
++
++  it("keeps provider headers, credentials and message content out of records", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onBeforeProviderRequest({ type: "before_provider_request", payload: { model: "m", Authorization: "Bearer sk-secret", api_key: "sk-2" } });
++    collector.onProviderStreamEvent(streamEvent(deltaChunk("resp_s", "user content must not leak")));
++    collector.onProviderStreamEvent(streamEvent(usageChunk("resp_s", { prompt_tokens: 1, completion_tokens: 1 })));
++    const message = assistantMessage("resp_s", sdkUsage(1, 1));
++    collector.onMessageEnd(messageEnd(message));
++    const serialised = collector.records.map((record) => canonicalJson(record)).join("\n");
++    assert.ok(!serialised.includes("sk-secret"), "credentials must not appear in records");
++    assert.ok(!serialised.includes("sk-2"), "api keys must not appear in records");
++    assert.ok(!serialised.includes("user content must not leak"), "message content must not appear in records");
++    assert.ok(!serialised.includes("Authorization"), "header names must not appear in records");
++    // Whitelist projection: every record key is a declared evidence key.
++    const allowed = new Set([
++      "type", "schemaVersion", "messageSha256", "responseId", "correlation", "usageObserved",
++      "api", "usageSource", "fields", "wireCostTotal", "ambiguous", "uncorrelatedResponseIds",
++      "uncorrelatedCount", "requestWindows",
++    ]);
++    for (const record of collector.records) {
++      for (const key of Object.keys(record)) assert.ok(allowed.has(key), `unexpected record key ${key}`);
++    }
++  });
++
++  it("wires through an ExtensionAPI-like surface and unsubscribes cleanly", () => {
++    const collector = createMainUsageEvidenceCollector();
++    const registered: string[] = [];
++    const pi = {
++      on(event: string, _handler: (event: never) => unknown): () => void {
++        registered.push(event);
++        return () => undefined;
++      },
++    };
++    const unsubscribers = wireMainUsageEvidence(pi as never, collector);
++    assert.equal(unsubscribers.length, 3);
++    assert.deepEqual(registered.sort(), ["before_provider_request", "message_end", "provider_stream_event"]);
++  });
++});
++
++describe("v2 record validation and mapping", () => {
++  it("round-trips emitted records through readMainUsageEvidenceV2", () => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(streamEvent(usageChunk("resp_r", { prompt_tokens: 7, completion_tokens: 2 })));
++    collector.onMessageEnd(messageEnd(assistantMessage("resp_r", sdkUsage(7, 2))));
++    for (const record of collector.records) {
++      const json = mainUsageEvidenceV2Json(record);
++      const read = readMainUsageEvidenceV2(json);
++      assert.notEqual(read, null);
++      assert.deepEqual(read, record);
++    }
++  });
++
++  it("rejects malformed v2 records so the parser falls back to the SDK path", () => {
++    const message = assistantMessage("resp_x", sdkUsage(3, 3));
++    const good = createMainUsageEvidenceCollector();
++    good.onProviderStreamEvent(streamEvent(usageChunk("resp_x", { prompt_tokens: 3, completion_tokens: 3 })));
++    good.onMessageEnd(messageEnd(message));
++    const recordJson = mainUsageEvidenceV2Json(good.records[0]!) as Record<string, unknown>;
++    const bad: Json[] = [
++      asJson({ ...recordJson, messageSha256: "not-a-hash" }),
++      asJson({ ...recordJson, usageObserved: "yes" }),
++      asJson({ ...recordJson, fields: { inputTokens: -5 }, usageSource: null }),
++      asJson({ ...recordJson, usageObserved: true, fields: null }),
++      asJson({ ...recordJson, correlation: "none", usageObserved: true }),
++      asJson({ ...recordJson, uncorrelatedCount: -1 }),
++      asJson({ type: "intelli_benchmark_main_usage", schemaVersion: 3, messageSha256: "0".repeat(64), responseId: null, correlation: "none", usageObserved: null, api: "", usageSource: null, fields: null, wireCostTotal: null, ambiguous: false, uncorrelatedResponseIds: [], uncorrelatedCount: 0, requestWindows: 0 }),
++    ];
++    for (const candidate of bad) assert.equal(readMainUsageEvidenceV2(candidate), null, canonicalJson(candidate));
++    // The parser ignores malformed v2 noise; the non-zero SDK candidate stands.
++    const parsed = parseUsageEvents([asJson(messageEnd(message)), ...bad], "json");
++    assert.equal(parsed.assistantMessages[0]!.usage!.inputUncached, 3);
++  });
++
++  it("preserves a reported total on both API families rather than replacing it with a component sum", () => {
++    const completions = readMainUsageEvidenceV2(
++      mainUsageEvidenceV2Json({
++        ...v2Record("a".repeat(64), "resp_1", true, "openai-completions", "chunk-usage", {
++          inputTokens: 1000, cachedTokens: 600, cacheWriteTokens: 100, outputTokens: 50, reasoningTokens: null, totalTokens: 9999,
++        }),
++        wireCostTotal: 0.01, ambiguous: false, uncorrelatedResponseIds: [], uncorrelatedCount: 0, requestWindows: 1, correlation: "response-id",
++      }),
++    )!;
++    const completionsTokens = tokensFromWireEvidence(completions)!;
++    assert.equal(completionsTokens.totalTokens, 9999); // reported total is kept separately from component arithmetic
++    const responses = readMainUsageEvidenceV2(
++      mainUsageEvidenceV2Json({
++        ...v2Record("b".repeat(64), "resp_2", true, "openai-responses", "response-usage", {
++          inputTokens: 1000, cachedTokens: 600, cacheWriteTokens: 100, outputTokens: 50, reasoningTokens: null, totalTokens: 1750,
++        }),
++        wireCostTotal: null, ambiguous: false, uncorrelatedResponseIds: [], uncorrelatedCount: 0, requestWindows: 1, correlation: "response-id",
++      }),
++    )!;
++    assert.equal(tokensFromWireEvidence(responses)!.totalTokens, 1750); // wire total preserved
++  });
++});
++
++/** Minimal valid v2 record builder for parser-level tests. */
++function v2Record(
++  messageSha256: string,
++  responseId: string | null,
++  usageObserved: boolean | null,
++  api: string,
++  usageSource: MainUsageEvidenceV2Record["usageSource"],
++  fields: MainUsageEvidenceV2Record["fields"],
++): MainUsageEvidenceV2Record {
++  return {
++    type: "intelli_benchmark_main_usage",
++    schemaVersion: 2,
++    messageSha256,
++    responseId,
++    correlation: responseId === null ? "none" : "response-id",
++    usageObserved,
++    api,
++    usageSource,
++    fields,
++    wireCostTotal: null,
++    ambiguous: false,
++    uncorrelatedResponseIds: [],
++    uncorrelatedCount: 0,
++    requestWindows: 1,
++  };
++}
++
++describe("parser v1/v2 coexistence", () => {
++  const message = assistantMessage("resp_v", sdkUsage(0, 0));
++  const messageEndJson = asJson(messageEnd(message));
++  const collectorFor = (): MainUsageEvidenceV2Record => {
++    const collector = createMainUsageEvidenceCollector();
++    collector.onProviderStreamEvent(streamEvent(usageChunk("resp_v", { prompt_tokens: 0, completion_tokens: 0 })));
++    collector.onMessageEnd(messageEnd(message));
++    return collector.records[0]!;
++  };
++
++  it("keeps existing v1 sidecars readable and unchanged in behaviour", () => {
++    // v1 alone: observed true keeps the SDK zeros as values.
++    const v1 = parseUsageEvents([messageEndJson, mainUsageEvidence(asJson(message), true)], "json");
++    assert.equal(v1.assistantMessages[0]!.usage!.inputUncached, 0);
++    // v1 false forces null.
++    const v1False = parseUsageEvents([messageEndJson, mainUsageEvidence(asJson(message), false)], "json");
++    assert.equal(v1False.assistantMessages[0]!.usage, null);
++  });
++
++  it("prefers wire fields when v1 agrees, and fails closed when versions disagree", () => {
++    const v2 = collectorFor();
++    const both = parseUsageEvents([messageEndJson, mainUsageEvidence(asJson(message), true), mainUsageEvidenceV2Json(v2)], "json");
++    assert.deepEqual(both.assistantMessages[0]!.usage, { inputTotal: 0, outputTotal: 0 });
++    const v1FalseV2True = parseUsageEvents([messageEndJson, mainUsageEvidence(asJson(message), false), mainUsageEvidenceV2Json(v2)], "json");
++    assert.equal(v1FalseV2True.assistantMessages[0]!.usage, null); // v1 false wins fail-closed
++    const v1TrueV2False = parseUsageEvents(
++      [
++        messageEndJson,
++        mainUsageEvidence(asJson(message), true),
++        mainUsageEvidenceV2Json({ ...v2, usageObserved: false, fields: null, usageSource: null }),
++      ],
++      "json",
++    );
++    assert.equal(v1TrueV2False.assistantMessages[0]!.usage, null); // contradiction fails closed
++  });
++
++  it("folds conflicting v2 records for one message to unobserved", () => {
++    const v2 = collectorFor();
++    const conflicting = parseUsageEvents(
++      [messageEndJson, mainUsageEvidenceV2Json(v2), mainUsageEvidenceV2Json({ ...v2, wireCostTotal: 0.5 })],
++      "json",
++    );
++    assert.equal(conflicting.assistantMessages[0]!.usage, null);
++    assert.deepEqual(conflicting.missing, ["resp_v"]);
++    // Diagnostic-only differences do not conflict: same claim, different window counts.
++    const diagnosticOnly = parseUsageEvents(
++      [messageEndJson, mainUsageEvidenceV2Json(v2), mainUsageEvidenceV2Json({ ...v2, requestWindows: 9, uncorrelatedCount: 4 })],
++      "json",
++    );
++    assert.equal(Object.hasOwn(diagnosticOnly.assistantMessages[0]!.usage!, "inputUncached"), false);
++  });
++
++  it("asserting records from different API or response identities cannot agree merely because token fields match", () => {
++    const v2 = collectorFor();
++    for (const changed of [{ ...v2, api: "openai-responses" }, { ...v2, responseId: "foreign-response" }]) {
++      for (const records of [[v2, changed], [changed, v2]]) {
++        const parsed = parseUsageEvents([messageEndJson, ...records.map(mainUsageEvidenceV2Json)], "json");
++        assert.equal(parsed.assistantMessages[0]!.usage, null);
++      }
++    }
++  });
++
++  it("a no-claim record mixed with an asserting record deliberately invalidates that message", () => {
++    const v2 = collectorFor();
++    const noClaim = { ...v2, usageObserved: null, fields: null, usageSource: null } as const;
++    for (const records of [[v2, noClaim], [noClaim, v2]]) {
++      const parsed = parseUsageEvents([messageEndJson, ...records.map(mainUsageEvidenceV2Json)], "json");
++      assert.equal(parsed.assistantMessages[0]!.usage, null);
++      assert.deepEqual(parsed.missing, ["resp_v"]);
++    }
++  });
++
++  it("ignores evidence keyed to a different message", () => {
++    const v2 = collectorFor();
++    const other = asJson({ role: "assistant", content: [], provider: "p", model: "m", responseId: "other", timestamp: 9, usage: sdkUsage(2, 2) });
++    const parsed = parseUsageEvents([asJson(messageEnd(other)), mainUsageEvidenceV2Json(v2)], "json");
++    assert.equal(parsed.assistantMessages[0]!.usage!.inputUncached, 2);
++  });
++});
++
++// ---------------------------------------------------------------------------
++// Actual SDK wiring: the installed pi-ai transport drives the collector.
++//
++// These tests do not hand-build the chunk objects fed to the collector. They
++// drive the actual installed `pi-ai/dist/api/openai-completions.js`
++// `streamSimple` (real request serialisation, real SSE parsing, real
++// `parseChunkUsage` normalisation, real `responseId` capture) with an
++// injected in-process `fetch` that answers from a scripted SSE body. No
++// globalThis.fetch call, socket or DNS is made: the fetch function is never
++// connected (the same credential-free pattern as the accepted
++// test/helpers/native-replay.ts main fixture). The host root defaults to the
++// worktree's dev peer and follows NATIVE_REPLAY_PI_HOST for an installed
++// host, matching the native-replay host-selection convention. The worktree
++// dev pi-ai 1.1.0 and the installed Pi 1.3.0 host's pi-ai 1.3.0 were
++// byte-diffed on 2026-10-26: parseChunkUsage, the chunk wiring and
++// responses-family finalizeResponse are identical, so the default peer
++// exercises the same normalisation the installed host runs.
++// ---------------------------------------------------------------------------
++
++const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
++const SDK_HOST_ROOT = process.env.NATIVE_REPLAY_PI_HOST || join(REPO_ROOT, "node_modules/@earendil-works/pi-coding-agent");
++
++interface SdkStreamLike extends AsyncIterable<unknown> {
++  result(): Promise<Record<string, unknown>>;
++}
++
++/** Minimal OpenAI SSE body: a delta chunk, a usage chunk and [DONE]. */
++function sseBody(chunks: Record<string, unknown>[]): string {
++  return [...chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`), "data: [DONE]\n\n"].join("");
++}
++
++async function driveCompletionsSdk(
++  sse: string,
++): Promise<{ captured: unknown[]; message: Record<string, unknown>; fetchCalls: number }> {
++  const completions = (await import(
++    pathToFileURL(join(dirname(SDK_HOST_ROOT), "pi-ai/dist/api/openai-completions.js")).href
++  )) as {
++    streamSimple: (
++      model: unknown,
++      context: unknown,
++      options: Record<string, unknown>,
++    ) => SdkStreamLike;
++  };
++  const captured: unknown[] = [];
++  let fetchCalls = 0;
++  const inProcessFetch = (async () => {
++    fetchCalls += 1;
++    return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
++  }) as typeof fetch;
++  const model = {
++    provider: "fixture-inproc",
++    id: "main",
++    api: "openai-completions",
++    baseUrl: "http://main.fixture.invalid/v1",
++    // `input` modalities are required: transformMessages' downgradeUnsupportedImages
++    // reads model.input.includes("image") before any request is built.
++    input: ["text", "image"],
++    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
++    contextWindow: 0,
++    maxTokens: 4096,
++  };
++  const stream = completions.streamSimple(model, { messages: [{ role: "user", content: "hello" }] }, {
++    apiKey: "fixture-key",
++    fetch: inProcessFetch,
++    maxRetries: 0,
++    onProviderStreamEvent: (data: unknown) => {
++      captured.push(data);
++    },
++  });
++  for await (const event of stream) void event; // drain the real event stream
++  const message = await stream.result();
++  return { captured, message, fetchCalls };
++}
++
++describe("actual SDK wiring through the installed pi-ai transport (credential-free)", () => {
++  it("harvests real parsed chunks and correlates by the real responseId", async () => {
++    const wireUsage = {
++      prompt_tokens: 1200,
++      prompt_tokens_details: { cached_tokens: 800, cache_write_tokens: 100 },
++      completion_tokens: 90,
++      completion_tokens_details: { reasoning_tokens: 20 },
++      total_tokens: 1290,
++    };
++    const sse = sseBody([
++      { id: "resp_sdk_1", object: "chat.completion.chunk", created: 1, model: "main", choices: [{ index: 0, delta: { role: "assistant", content: "hi" }, finish_reason: null }], usage: null },
++      { id: "resp_sdk_1", object: "chat.completion.chunk", created: 1, model: "main", choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: wireUsage },
++    ]);
++    const { captured, message, fetchCalls } = await driveCompletionsSdk(sse);
++    assert.equal(fetchCalls, 1); // the injected transport answered; no retry
++    assert.ok(captured.length >= 2, "the real stream delivered at least the delta and usage chunks");
++    // The real SDK normalisation under test: responseId from the first chunk,
++    // uncached input from the pi-ai arithmetic, wire cost computed by calculateCost.
++    assert.equal(message["responseId"], "resp_sdk_1");
++    const sdkUsage = message["usage"] as Record<string, number>;
++    assert.equal(sdkUsage.input, 300); // 1200 - 800 - 100
++    assert.equal(sdkUsage.cacheRead, 800);
++    assert.equal(sdkUsage.output, 90);
++    assert.equal(sdkUsage.reasoning, 20);
++    // The captured chunks are the objects the host would hand the session
++    // provider_stream_event handler: feed them to the collector unchanged.
++    const collector = createMainUsageEvidenceCollector();
++    for (const data of captured) {
++      collector.onProviderStreamEvent({
++        type: "provider_stream_event",
++        provider: "fixture-inproc",
++        api: "openai-completions",
++        model: "main",
++        data,
++      });
++    }
++    collector.onMessageEnd({ type: "message_end", message });
++    const record = collector.records[0]!;
++    assert.equal(record.correlation, "response-id");
++    assert.equal(record.responseId, message["responseId"]);
++    assert.equal(record.usageObserved, true);
++    assert.equal(record.usageSource, "chunk-usage");
++    assert.equal(record.fields!.inputTokens, 1200);
++    assert.equal(record.fields!.cachedTokens, 800);
++    assert.equal(record.fields!.cacheWriteTokens, 100);
++    assert.equal(record.fields!.outputTokens, 90);
++    assert.equal(record.fields!.reasoningTokens, 20);
++    // End to end through the parser with the real SDK message and record.
++    const parsed = parseUsageEvents(
++      [asJson({ type: "message_end", message }), mainUsageEvidenceV2Json(record)],
++      "json",
++    );
++    assert.deepEqual(parsed.assistantMessages[0]!.usage, {
++      inputTotal: 1200,
++      inputUncached: 300,
++      outputTotal: 90,
++      cacheRead: 800,
++      cacheWrite: 100,
++      reasoning: 20,
++      totalTokens: 1290,
++    });
++    assert.deepEqual(parsed.missing, []);
++  });
++
++  it("proves the T31 disambiguation on the real SDK: wire-absent usage is not a zero-token observation", async () => {
++    // The scripted provider completes the turn with NO usage object on the
++    // wire. The real SDK still finalises the message with zero-placeholder
++    // usage; the correlated v2 record must mark the usage unobserved so the
++    // parser records missing instead of a zero-token main observation.
++    const sse = sseBody([
++      { id: "resp_sdk_2", object: "chat.completion.chunk", created: 1, model: "main", choices: [{ index: 0, delta: { role: "assistant", content: "done" }, finish_reason: null }], usage: null },
++      { id: "resp_sdk_2", object: "chat.completion.chunk", created: 1, model: "main", choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: null },
++    ]);
++    const { captured, message } = await driveCompletionsSdk(sse);
++    assert.equal(message["responseId"], "resp_sdk_2");
++    const sdkUsage = message["usage"] as Record<string, number>;
++    assert.equal(sdkUsage.input, 0); // placeholder: the SDK initialised zeros
++    assert.equal(sdkUsage.output, 0);
++    const collector = createMainUsageEvidenceCollector();
++    for (const data of captured) {
++      collector.onProviderStreamEvent({
++        type: "provider_stream_event",
++        provider: "fixture-inproc",
++        api: "openai-completions",
++        model: "main",
++        data,
++      });
++    }
++    collector.onMessageEnd({ type: "message_end", message });
++    const record = collector.records[0]!;
++    assert.equal(record.usageObserved, false); // correlated id, no usage object on the wire
++    const parsed = parseUsageEvents(
++      [asJson({ type: "message_end", message }), mainUsageEvidenceV2Json(record)],
++      "json",
++    );
++    assert.equal(parsed.assistantMessages[0]!.usage, null);
++    assert.deepEqual(parsed.missing, ["resp_sdk_2"]);
++  });
++});
+diff --git a/test/benchmark-main-usage-session.test.ts b/test/benchmark-main-usage-session.test.ts
+new file mode 100644
+index 0000000..659a8eb
+--- /dev/null
++++ b/test/benchmark-main-usage-session.test.ts
+@@ -0,0 +1,157 @@
++// SPDX-License-Identifier: Apache-2.0
++// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
++import assert from "node:assert/strict";
++import { mkdir, rm, writeFile } from "node:fs/promises";
++import { join } from "node:path";
++import { after, it } from "node:test";
++import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
++import {
++  isolateProcess,
++  installNetworkGuard,
++  selectHost,
++  importHost,
++  createMainFixture,
++  openSession,
++  writeEvidence,
++  type WireUsage,
++} from "./helpers/native-replay.js";
++import { asJson, sha256Canonical } from "../scripts/benchmarks/canonical.js";
++import { parseUsageEvents } from "../scripts/benchmarks/usage-parser.js";
++import {
++  createMainUsageEvidenceCollector,
++  wireMainUsageEvidence,
++  mainUsageEvidenceV2Json,
++} from "../scripts/benchmarks/main-usage-evidence.js";
++
++const record = (value: unknown): value is Record<string, unknown> =>
++  value !== null && typeof value === "object" && !Array.isArray(value);
++const isolation = await isolateProcess("main-usage-session");
++const guard = installNetworkGuard();
++const selected = await selectHost();
++const host = await importHost(selected);
++const workspace = join(isolation.root, "workspace");
++await mkdir(workspace);
++await writeFile(join(isolation.agentDir, "auth.json"), "{}");
++await writeFile(join(isolation.agentDir, "models.json"), "{}");
++after(async () => {
++  guard.restore();
++  if (!process.env.NATIVE_MAIN_USAGE_KEEP)
++    await rm(isolation.root, { recursive: true, force: true });
++});
++
++it("actual session hooks hash-match serialised canonical messages and retain field missingness (T31)", async () => {
++  const cases: Array<{
++    name: string;
++    usage?: Record<string, unknown>;
++    uncached: number | undefined;
++  }> = [
++    {
++      name: "complete",
++      usage: {
++        prompt_tokens: 1000,
++        completion_tokens: 10,
++        total_tokens: 1010,
++        prompt_tokens_details: { cached_tokens: 200, cache_write_tokens: 0 },
++      },
++      uncached: 800,
++    },
++    {
++      name: "unknown-cache-write",
++      usage: {
++        prompt_tokens: 1000,
++        completion_tokens: 10,
++        total_tokens: 1010,
++        prompt_tokens_details: { cached_tokens: 200 },
++      },
++      uncached: undefined,
++    },
++    { name: "output-only", usage: { completion_tokens: 10 }, uncached: undefined },
++    { name: "no-wire-usage", uncached: undefined },
++    {
++      name: "explicit-zero",
++      usage: {
++        prompt_tokens: 0,
++        completion_tokens: 0,
++        total_tokens: 0,
++        prompt_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
++      },
++      uncached: 0,
++    },
++  ];
++  const evidence = [];
++  for (const scenario of cases) {
++    const main = await createMainFixture(selected.root);
++    const collector = createMainUsageEvidenceCollector();
++    let unsubscriptions: readonly (() => void)[] = [];
++    const observer = (pi: ExtensionAPI) => {
++      unsubscriptions = wireMainUsageEvidence(pi, collector);
++    };
++    const handle = await openSession({
++      host,
++      workspace,
++      agentDir: isolation.agentDir,
++      main,
++      nativeFactory: null,
++      codemode: "off",
++      tools: [],
++      extraFactories: [observer as never],
++    });
++    try {
++      main.setScript([
++        {
++          text: "Scripted qualification answer.",
++          ...(scenario.usage ? { usage: scenario.usage as unknown as WireUsage } : {}),
++        },
++      ]);
++      guard.setPhase(scenario.name, []);
++      await handle.session.prompt("Synthetic usage qualification only.");
++      const messages = handle.events.flatMap((event) =>
++        record(event) &&
++        event.type === "message_end" &&
++        record(event.message) &&
++        event.message.role === "assistant"
++          ? [event]
++          : [],
++      );
++      assert.equal(messages.length, 1);
++      const message = (messages[0] as { message: unknown }).message;
++      assert.equal(collector.records.length, 1);
++      assert.equal(
++        collector.diagnostics.correlated,
++        1,
++        "A non-zero real-session hash match is mandatory",
++      );
++      assert.equal(collector.records[0]!.messageSha256, sha256Canonical(asJson(message)));
++      const serialised = JSON.parse(
++        JSON.stringify([...handle.events, ...collector.records.map(mainUsageEvidenceV2Json)]),
++      );
++      const parsed = parseUsageEvents(serialised, "json");
++      assert.equal(parsed.assistantMessages.length, 1);
++      assert.equal(parsed.assistantMessages[0]!.usage?.inputUncached, scenario.uncached);
++      if (!scenario.usage) {
++        assert.equal(collector.records[0]!.usageObserved, false);
++        assert.equal(parsed.assistantMessages[0]!.usage, null);
++      } else {
++        assert.equal(collector.records[0]!.usageObserved, true);
++        if (scenario.name === "output-only") {
++          assert.deepEqual(parsed.assistantMessages[0]!.usage, { outputTotal: 10 });
++        }
++      }
++      assert.equal(main.fetchCalls(), 1);
++      assert.equal(main.unguardedStreams(), 0);
++      assert.deepEqual(guard.violations(), []);
++      evidence.push({
++        scenario: scenario.name,
++        host: selected,
++        records: collector.records,
++        diagnostics: collector.diagnostics,
++        parsed,
++      });
++    } finally {
++      for (const unsubscribe of unsubscriptions) unsubscribe();
++      handle.dispose();
++      guard.setPhase("setup", []);
++    }
++  }
++  await writeEvidence(isolation.root, "main-usage-session", evidence);
++});
+diff --git a/test/dependency-security.test.ts b/test/dependency-security.test.ts
+index 713f195..53ec27f 100644
+--- a/test/dependency-security.test.ts
++++ b/test/dependency-security.test.ts
+@@ -3,6 +3,7 @@
+ import assert from "node:assert/strict";
+ import { it } from "node:test";
+ import { createRequire } from "node:module";
++import { spawnSync } from "node:child_process";
+ import { readFileSync } from "node:fs";
+ import { dirname, join } from "node:path";
+ 
+@@ -19,3 +20,78 @@ it("the MathML runtime uses the patched external parser, not an embedded older c
+   const { MathMLToLaTeX } = defuddleRequire("mathml-to-latex");
+   assert.match(MathMLToLaTeX.convert("<math><mfrac><mi>x</mi><mn>2</mn></mfrac></math>"), /\\frac\{x\}\{2\}/);
+ });
++
++it("the development host resolves patched Undici with bounded parser and fetch rejection", () => {
++  const hostRequire = createRequire(import.meta.resolve("@earendil-works/pi-coding-agent"));
++  const undiciEntry = hostRequire.resolve("undici");
++  // A separate process makes an unhandled response-stream error a test failure.
++  // Inputs are deliberately small; this does not run a memory-exhaustion attack.
++  const result = spawnSync(process.execPath, ["--input-type=commonjs", "-e", `
++    const assert = require('node:assert/strict');
++    const { createHash } = require('node:crypto');
++    const { createServer } = require('node:http');
++    const { finished } = require('node:stream/promises');
++    const { createRequire } = require('node:module');
++    const req = createRequire(${JSON.stringify(undiciEntry)});
++    const { fetch, Agent } = req('./index.js');
++    const { EventSourceStream } = req('./lib/web/eventsource/eventsource-stream.js');
++    (async () => {
++      for (const chunks of [
++        [Buffer.from('data:\\n'.repeat(1025))],
++        Array.from({ length: 1025 }, () => Buffer.from('x')),
++        [Buffer.from('id: ' + 'x'.repeat(4097) + '\\n')],
++      ]) {
++        const parser = new EventSourceStream({ maxEventSize: 4096 });
++        const settled = assert.rejects(finished(parser), /maximum.*size|size.*exceeded/i);
++        for (const chunk of chunks) parser.write(chunk);
++        parser.end();
++        await settled;
++      }
++      const digest = createHash('sha256').update('trusted').digest('base64');
++      for (const algorithm of ['sha256', 'SHA256', 'Sha256']) {
++        assert.equal(await (await fetch('data:,trusted', { integrity: algorithm + '-' + digest })).text(), 'trusted');
++        await assert.rejects(fetch('data:,changed', { integrity: algorithm + '-' + digest }), /fetch failed/);
++      }
++      const server = createServer((_request, response) => {
++        response.writeHead(200, { 'Content-Encoding': 'gzip, gzip, gzip, gzip, gzip, gzip', 'Content-Length': '100' });
++        const socket = response.socket;
++        response.flushHeaders();
++        setTimeout(() => socket.destroy(), 50);
++      });
++      const agent = new Agent();
++      await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
++      try {
++        await assert.rejects(fetch('http://127.0.0.1:' + server.address().port, { dispatcher: agent }), /fetch failed/);
++        // Keep the process alive until the server-close trigger has fired.
++        await new Promise(resolve => setTimeout(resolve, 100));
++      } finally {
++        await agent.close();
++        server.closeAllConnections();
++        await new Promise(resolve => server.close(resolve));
++      }
++      process.stdout.write('undici-security-complete\\n');
++    })().catch(error => { console.error(error); process.exitCode = 1; });
++  `], { encoding: "utf8", timeout: 20_000 });
++  assert.equal(result.error, undefined);
++  assert.equal(result.signal, null);
++  assert.equal(result.status, 0, result.stderr);
++  assert.equal(result.stdout, "undici-security-complete\n", "Every security assertion must finish");
++});
++
++it("the MCP runtime's Zod rejects oversized constrained collections before parsing elements", () => {
++  const serverRequire = createRequire(import.meta.resolve("@modelcontextprotocol/server"));
++  const { z } = serverRequire("zod") as typeof import("zod");
++  let visits = 0;
++  const element = z.unknown().superRefine(() => { visits++; });
++  for (const [schema, input] of [
++    [z.array(element).max(2), Array(8).fill(null)],
++    [z.set(element).max(2), new Set([1, 2, 3, 4])],
++    [z.map(element, element).max(2), new Map([[1, 1], [2, 2], [3, 3]])],
++  ] as const) {
++    const result = schema.safeParse(input);
++    assert.equal(result.success, false);
++    if (!result.success) assert.equal(result.error.issues[0].code, "too_big");
++  }
++  assert.equal(visits, 0);
++  assert.equal(z.array(z.number()).max(2).safeParse([1, 2]).success, true);
++});
+diff --git a/test/helpers/native-floor-qualification.ts b/test/helpers/native-floor-qualification.ts
+new file mode 100644
+index 0000000..d91706a
+--- /dev/null
++++ b/test/helpers/native-floor-qualification.ts
+@@ -0,0 +1,345 @@
++// SPDX-License-Identifier: Apache-2.0
++// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
++
++// M4 native floor qualification helpers.
++//
++// The floor is the exact `Pi` version named by the package manifest's peer
++// range, installed by scripts/qualify-native-floor.mts into an owned
++// directory below the repository's encrypted .tmp/. It is never upgraded and
++// never silently replaced: a missing or different installation fails, and a
++// deliberately different host must be named through NATIVE_FLOOR_HOST, which
++// labels every record as an explicit control rather than floor evidence.
++//
++// The floor's npm-shrinkwrap.json nests pi-ai and pi-agent-core below the
++// coding-agent package, so this module resolves them from the selected host
++// instead of assuming the sibling layout of a hoisted installation.
++
++import { readFile, access } from "node:fs/promises";
++import { join } from "node:path";
++import { pathToFileURL } from "node:url";
++import type { Api, Model, SimpleStreamOptions } from "@earendil-works/pi-ai";
++import { FIXTURE_API_KEY, MAIN_API, MAIN_BASE_URL, MAIN_PROVIDER, REPO_ROOT } from "./native-replay.js";
++import type { MainFixture, MainTurn } from "./native-replay.js";
++
++export const FLOOR_INSTALL_PARENT = join(REPO_ROOT, ".tmp/m4-floor/host");
++const PEERS = ["@earendil-works/pi-ai", "@earendil-works/pi-coding-agent", "@earendil-works/pi-tui"];
++
++/** The single `>=X.Y.Z` floor shared by every `Pi` peer in the manifest. */
++export async function manifestFloor(): Promise<string> {
++  const manifest = JSON.parse(await readFile(join(REPO_ROOT, "package.json"), "utf8")) as {
++    peerDependencies?: Record<string, string>;
++  };
++  const floors = PEERS.map((name) => {
++    const range = manifest.peerDependencies?.[name];
++    const match = range ? /^>=(\d+\.\d+\.\d+)$/.exec(range) : null;
++    if (!match) throw new Error(`peer ${name} has no exact >=X.Y.Z floor: ${String(range)}`);
++    return match[1]!;
++  });
++  if (new Set(floors).size !== 1) throw new Error(`peer floors disagree: ${floors.join(", ")}`);
++  return floors[0]!;
++}
++
++export const floorInstallDir = (version: string) => join(FLOOR_INSTALL_PARENT, version);
++
++export interface FloorHost {
++  readonly root: string;
++  readonly version: string;
++  readonly manifestFloor: string;
++  /** Owned exact floor install, or a host the operator named explicitly as a control. */
++  readonly kind: "owned-floor" | "explicit-control";
++  readonly piAiRoot: string;
++  readonly piAiVersion: string;
++  readonly agentCoreRoot: string;
++  readonly agentCoreVersion: string;
++}
++
++async function packageAt(root: string): Promise<{ name: string; version: string }> {
++  return JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
++    name: string;
++    version: string;
++  };
++}
++
++/** A dependency of the host package: nested (shrinkwrap layout) first, then sibling. */
++async function hostDependency(hostRoot: string, name: string): Promise<string> {
++  for (const candidate of [
++    join(hostRoot, "node_modules/@earendil-works", name),
++    join(hostRoot, "..", name),
++  ]) {
++    try {
++      await access(join(candidate, "package.json"));
++      return candidate;
++    } catch {
++      /* Try the next layout. */
++    }
++  }
++  throw new Error(`${hostRoot} has no resolvable @earendil-works/${name}`);
++}
++
++export async function selectFloorHost(): Promise<FloorHost> {
++  const floor = await manifestFloor();
++  const explicit = process.env.NATIVE_FLOOR_HOST;
++  const root =
++    explicit || join(floorInstallDir(floor), "node_modules/@earendil-works/pi-coding-agent");
++  let manifest: { name: string; version: string };
++  try {
++    manifest = await packageAt(root);
++  } catch (error) {
++    throw new Error(
++      explicit
++        ? `NATIVE_FLOOR_HOST ${root} is not a readable package root: ${String(error)}`
++        : `Owned floor Pi ${floor} is not installed at ${root}. ` +
++            `Run: node --import tsx scripts/qualify-native-floor.mts install`,
++    );
++  }
++  if (manifest.name !== "@earendil-works/pi-coding-agent")
++    throw new Error(`${root} is not @earendil-works/pi-coding-agent`);
++  if (!explicit && manifest.version !== floor)
++    throw new Error(`owned floor install reports ${manifest.version}, manifest floor is ${floor}`);
++  const piAiRoot = await hostDependency(root, "pi-ai");
++  const agentCoreRoot = await hostDependency(root, "pi-agent-core");
++  return {
++    root,
++    version: manifest.version,
++    manifestFloor: floor,
++    kind: explicit ? "explicit-control" : "owned-floor",
++    piAiRoot,
++    piAiVersion: (await packageAt(piAiRoot)).version,
++    agentCoreRoot,
++    agentCoreVersion: (await packageAt(agentCoreRoot)).version,
++  };
++}
++
++type HostModule = typeof import("@earendil-works/pi-coding-agent");
++
++export async function importFloorHost(host: FloorHost): Promise<HostModule> {
++  return (await import(pathToFileURL(join(host.root, "dist/index.js")).href)) as HostModule;
++}
++
++// ── Static capability surface ───────────────────────────────────────────────
++
++export interface StaticCapabilities {
++  readonly hostExports: readonly string[];
++  /** Later Codemode/MCP/tool-search factories; absent at the floor. */
++  readonly laterFactories: Readonly<Record<string, boolean>>;
++  /** The host's OpenAI-completions adapter source names the pre-normalisation stream hook. */
++  readonly completionsStreamHook: boolean;
++  /** The same adapter forwards options.fetch to its client (the fetch-tee channel). */
++  readonly completionsFetchOption: boolean;
++  /** pi-agent-core honours a returned `isError` (later hosts) rather than only thrown errors. */
++  readonly loopHonoursReturnedIsError: boolean;
++}
++
++export async function staticCapabilities(
++  host: FloorHost,
++  module: HostModule,
++): Promise<StaticCapabilities> {
++  const hostExports = Object.keys(module).sort();
++  const completions = await readFile(join(host.piAiRoot, "dist/api/openai-completions.js"), "utf8");
++  const loop = await readFile(join(host.agentCoreRoot, "dist/agent-loop.js"), "utf8");
++  return {
++    hostExports,
++    laterFactories: Object.fromEntries(
++      ["createCodemodeExtension", "createMcpExtension", "createToolSearchExtension"].map((name) => [
++        name,
++        hostExports.includes(name),
++      ]),
++    ),
++    completionsStreamHook: completions.includes("onProviderStreamEvent"),
++    completionsFetchOption: /options\?\.fetch/.test(completions),
++    loopHonoursReturnedIsError: /result\.isError === true/.test(loop),
++  };
++}
++
++// ── Registry facade observer ────────────────────────────────────────────────
++
++export interface FacadeCall {
++  readonly provider: string;
++  readonly model: string;
++  readonly systemPrompt: boolean;
++  readonly fetchOption: boolean;
++  readonly streamHookOption: boolean;
++  fetchInvocations: number;
++  streamHookInvocations: number;
++}
++
++export interface FacadeObserver {
++  readonly calls: FacadeCall[];
++  reset(): void;
++  restore(): void;
++}
++
++/**
++ * Observation-only wrapper on the host's ModelRegistry.prototype.streamSimple
++ * (the facade the native client must use). It records each call and counts
++ * invocations of the caller's own `fetch` and `onProviderStreamEvent`
++ * options, then delegates to the original method with the same behaviour.
++ * It never answers, alters or replaces a request.
++ */
++export function observeRegistryFacade(module: HostModule): FacadeObserver {
++  const proto = (module.ModelRegistry as unknown as { prototype: Record<string, unknown> })
++    .prototype;
++  const original = proto.streamSimple as (
++    this: unknown,
++    model: Model<Api>,
++    context: { systemPrompt?: unknown },
++    options?: SimpleStreamOptions,
++  ) => unknown;
++  if (typeof original !== "function") throw new Error("host ModelRegistry has no streamSimple facade");
++  const calls: FacadeCall[] = [];
++  proto.streamSimple = function (
++    this: unknown,
++    model: Model<Api>,
++    context: { systemPrompt?: unknown },
++    options?: SimpleStreamOptions,
++  ) {
++    const call: FacadeCall = {
++      provider: model.provider,
++      model: model.id,
++      systemPrompt: typeof context?.systemPrompt === "string" && context.systemPrompt.length > 0,
++      fetchOption: typeof options?.fetch === "function",
++      streamHookOption: typeof options?.onProviderStreamEvent === "function",
++      fetchInvocations: 0,
++      streamHookInvocations: 0,
++    };
++    calls.push(call);
++    const observed: SimpleStreamOptions | undefined = options && {
++      ...options,
++      ...(options.fetch
++        ? {
++            fetch: ((...args: Parameters<typeof fetch>) => {
++              call.fetchInvocations++;
++              return (options.fetch as typeof fetch)(...args);
++            }) as typeof fetch,
++          }
++        : {}),
++      ...(options.onProviderStreamEvent
++        ? {
++            onProviderStreamEvent: (event: unknown, eventModel: Model<Api>) => {
++              call.streamHookInvocations++;
++              return options.onProviderStreamEvent!(event, eventModel);
++            },
++          }
++        : {}),
++    };
++    return original.call(this, model, context, observed);
++  };
++  return {
++    calls,
++    reset: () => void (calls.length = 0),
++    restore: () => {
++      proto.streamSimple = original;
++    },
++  };
++}
++
++// ── In-process main fixture for any host layout ─────────────────────────────
++
++const sse = (value: unknown) => `data: ${JSON.stringify(value)}\n\n`;
++const chunk = (id: string, delta: unknown, finish: string | null = null, usage?: unknown) => ({
++  id,
++  object: "chat.completion.chunk",
++  created: 0,
++  model: "fixture",
++  choices: [{ index: 0, delta, finish_reason: finish }],
++  ...(usage ? { usage } : {}),
++});
++
++function mainSse(turn: MainTurn | undefined, id: string, callPrefix: string): string {
++  const parts: string[] = [];
++  if (!turn) parts.push(sse(chunk(id, { role: "assistant", content: "script exhausted" })), sse(chunk(id, {}, "stop")));
++  else if (turn.toolCalls?.length) {
++    turn.toolCalls.forEach((call, index) =>
++      parts.push(
++        sse(
++          chunk(id, {
++            role: "assistant",
++            tool_calls: [
++              {
++                index,
++                id: `${callPrefix}_${index}`,
++                type: "function",
++                function: { name: call.name, arguments: JSON.stringify(call.args) },
++              },
++            ],
++          }),
++        ),
++      ),
++    );
++    parts.push(sse(chunk(id, {}, "tool_calls", turn.usage)));
++  } else
++    parts.push(
++      sse(chunk(id, { role: "assistant", content: turn.text ?? "" })),
++      sse(chunk(id, {}, "stop", turn.usage)),
++    );
++  parts.push("data: [DONE]\n\n");
++  return parts.join("");
++}
++
++/**
++ * The same credential-free scripted main as native-replay's createMainFixture,
++ * resolving the selected host's own `pi-ai` adapter from its actual layout.
++ * The main never opens a socket: an injected in-process fetch answers it.
++ */
++export async function createFloorMainFixture(host: FloorHost): Promise<MainFixture> {
++  const completions = (await import(
++    pathToFileURL(join(host.piAiRoot, "dist/api/openai-completions.js")).href
++  )) as {
++    streamSimple: (model: Model<Api>, context: unknown, options?: SimpleStreamOptions) => unknown;
++  };
++  let turns: readonly MainTurn[] = [];
++  let next = 0;
++  let fetchCalls = 0;
++  let unguarded = 0;
++  const rawBodies: string[] = [];
++  const inProcessFetch = (async (input: unknown, init?: { body?: unknown }) => {
++    fetchCalls++;
++    const url =
++      typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
++    if (!url.startsWith(MAIN_BASE_URL)) throw new Error(`main fixture received foreign URL ${url}`);
++    const body =
++      typeof init?.body === "string" ? init.body : await new Response(init?.body as BodyInit).text();
++    rawBodies.push(body);
++    return new Response(mainSse(turns[next++], `main-${rawBodies.length}`, `call_${rawBodies.length}`), {
++      status: 200,
++      headers: { "content-type": "text/event-stream" },
++    });
++  }) as typeof fetch;
++  const factory = (pi: { registerProvider: (name: string, config: unknown) => void }) => {
++    pi.registerProvider(MAIN_PROVIDER, {
++      baseUrl: MAIN_BASE_URL,
++      apiKey: FIXTURE_API_KEY,
++      api: MAIN_API,
++      models: [
++        {
++          id: "main",
++          name: "main",
++          api: MAIN_API,
++          reasoning: false,
++          input: ["text"],
++          contextWindow: 200_000,
++          maxTokens: 8_000,
++          cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 0 },
++        },
++      ],
++      streamSimple: (model: Model<Api>, context: unknown, options?: SimpleStreamOptions) => {
++        if (options?.fetch) unguarded++;
++        return completions.streamSimple({ ...model, api: "openai-completions" } as Model<Api>, context, {
++          ...options,
++          fetch: inProcessFetch,
++        });
++      },
++    });
++  };
++  return {
++    factory: factory as never,
++    rawBodies,
++    fetchCalls: () => fetchCalls,
++    unguardedStreams: () => unguarded,
++    setScript(script) {
++      turns = script;
++      next = 0;
++      rawBodies.length = 0;
++    },
++  };
++}
+diff --git a/test/native-floor-qualification.test.ts b/test/native-floor-qualification.test.ts
+new file mode 100644
+index 0000000..e55b023
+--- /dev/null
++++ b/test/native-floor-qualification.test.ts
+@@ -0,0 +1,872 @@
++// SPDX-License-Identifier: Apache-2.0
++// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
++
++// M4 native floor qualification on the exact manifest floor host.
++//
++// A real AgentSession of the owned floor installation (see
++// scripts/qualify-native-floor.mts) runs the native extension from the
++// immutable createNativeExtension() factory with Codemode off. Stage calls
++// are NOT injected: the native client dispatches through the floor's own
++// ModelRegistry.streamSimple() facade to the private loopback stage fixture,
++// with an observation-only wrapper counting calls and the caller's own
++// citation channels. Pages are synthetic in-process bytes through the real
++// FetchClient. The main model is the in-process scripted fixture.
++//
++// It qualifies what the floor supports, directly: actual host batch
++// scheduling, thrown floor error delivery, the required registry facade,
++// pre-stream-hook (fetch-tee) citation recovery and the usage the floor lets
++// the extension observe. Later Codemode/MCP factories are absent at the
++// floor; those cases are reported as unsupported, never substituted.
++//
++// Evidence class: loopback record phase, not zero-network replay. No
++// credential, live provider, page or catalogue request is made; the network
++// and auth tripwires stay installed. NATIVE_FLOOR_HOST names an explicit
++// control host instead; capability-dependent expectations then follow the
++// static capability probe, and records say "explicit-control".
++
++import assert from "node:assert/strict";
++import { after, before, describe, it } from "node:test";
++import { mkdir, readFile, readdir, rm } from "node:fs/promises";
++import { join } from "node:path";
++import type { IndexCandidate, PageTransport } from "../src/core/contracts.js";
++import type { NativeSuggestionReadView } from "../src/native-injection.js";
++import {
++  REPO_ROOT,
++  RAW_SENTINEL,
++  countAuthResolution,
++  createRecording,
++  installNetworkGuard,
++  isolateProcess,
++  loadSourceNative,
++  openSession,
++  startStageFixture,
++  syntheticPage,
++  writeAgentConfig,
++  writeEvidence,
++  type MainFixture,
++  type MainTurn,
++  type NetworkGuard,
++  type SessionHandle,
++  type StageFixture,
++  type StageReply,
++  type StageRole,
++} from "./helpers/native-replay.js";
++import {
++  createFloorMainFixture,
++  importFloorHost,
++  observeRegistryFacade,
++  selectFloorHost,
++  staticCapabilities,
++  type FacadeObserver,
++} from "./helpers/native-floor-qualification.js";
++
++// Default unit discovery always skips this owned-host population. The named
++// gate sets NATIVE_FLOOR_REQUIRED=1; explicit requests fail if the host is
++// missing, and the default test count never depends on a retained install.
++const requested = process.env.NATIVE_FLOOR_REQUIRED === "1" || process.env.NATIVE_FLOOR_HOST;
++const selection = requested
++  ? { host: await selectFloorHost() }
++  : { skip: "Run npm run qualify:native-floor for the required owned-host population" };
++
++if ("skip" in selection) {
++  describe("native floor qualification", () => {
++    it("runs only against the owned floor install or an explicit control host", { skip: selection.skip }, () => {});
++  });
++} else {
++  const isolation = await isolateProcess("floor", join(REPO_ROOT, ".tmp/m4-floor"));
++  const guard: NetworkGuard = installNetworkGuard();
++  const floor = selection.host;
++  const host = await importFloorHost(floor);
++  const capabilities = await staticCapabilities(floor, host);
++  const source = await loadSourceNative();
++  const auth = countAuthResolution(host as unknown as Record<string, unknown>, () => guard.phase());
++  const facade: FacadeObserver = observeRegistryFacade(host);
++  const codemodeAvailable = capabilities.laterFactories.createCodemodeExtension === true;
++  let main: MainFixture;
++  let stage: StageFixture;
++
++  const QA = "floor batch alpha research";
++  const QB = "floor batch bravo research";
++  /** Its search is permanently rejected (HTTP 400) after actual dispatch. */
++  const QF = "floor batch failing research";
++  const QC = "floor batch standalone collate";
++  /** Its search answer carries no prose links: sources arrive only as url_citation annotations. */
++  const QN = "floor citation-only research";
++  const page = (id: string) => `https://docs.example.test/${id.toLowerCase()}`;
++  const PAGES: Record<string, readonly string[]> = {
++    [QA]: ["A1", "A2"],
++    [QB]: ["B1", "B2"],
++    [QN]: ["N1", "N2"],
++  };
++  const pages = new Map(
++    Object.values(PAGES)
++      .flat()
++      .map((id) => [page(id), syntheticPage(id, `${id} fact: the ${id} limit is ${id.length}.`)]),
++  );
++
++  const usage = (prompt: number, completion: number) => ({
++    prompt_tokens: prompt,
++    completion_tokens: completion,
++    total_tokens: prompt + completion,
++  });
++  const ROLE_USAGE: Record<StageRole, { prompt: number; completion: number }> = {
++    search: { prompt: 50, completion: 10 },
++    extract: { prompt: 300, completion: 20 },
++    collate: { prompt: 120, completion: 15 },
++    suggest: { prompt: 70, completion: 8 },
++  };
++
++  // ── Stage attribution and in-flight accounting ─────────────────────────────
++
++  function ownerOf(role: StageRole, user: string): string {
++    if (role === "search") return [QA, QB, QF, QN].find((q) => user.startsWith(q)) ?? "unknown";
++    if (role === "extract") {
++      const marker = /PAGE-MARKER:([A-Za-z0-9]+)/.exec(user)?.[1];
++      return Object.entries(PAGES).find(([, ids]) => marker && ids.includes(marker))?.[0] ?? "unknown";
++    }
++    if (role === "suggest") return /^Current query: "([^"]+)"/.exec(user)?.[1] ?? "unknown";
++    return (JSON.parse(user) as { query?: string }).query ?? "unknown";
++  }
++
++  interface StageRow {
++    readonly role: StageRole;
++    readonly owner: string;
++  }
++
++  interface Meter {
++    readonly rows: StageRow[];
++    peakByRole: Record<StageRole, number>;
++    rendezvous: "pending" | "met" | "timeout" | "unused";
++  }
++
++  interface ScriptOptions {
++    readonly searchRendezvousMs?: number;
++    readonly rejectSearch?: readonly string[];
++  }
++
++  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
++
++  function scriptStage(options: ScriptOptions = {}): Meter {
++    const meter: Meter = {
++      rows: [],
++      peakByRole: { search: 0, extract: 0, collate: 0, suggest: 0 },
++      rendezvous: options.searchRendezvousMs === undefined ? "unused" : "pending",
++    };
++    const inFlight = { search: 0, extract: 0, collate: 0, suggest: 0 };
++    let meet: () => void = () => {};
++    const met = new Promise<void>((resolve) => {
++      meet = resolve;
++    });
++    const searchOwners = new Set<string>();
++    stage.setScript(({ role, user }) => {
++      const owner = ownerOf(role, user);
++      meter.rows.push({ role, owner });
++      inFlight[role]++;
++      meter.peakByRole[role] = Math.max(meter.peakByRole[role], inFlight[role]);
++      let hold: Promise<unknown> = Promise.resolve();
++      if (role === "search" && options.searchRendezvousMs !== undefined) {
++        searchOwners.add(owner);
++        if (searchOwners.size >= 2 && meter.rendezvous === "pending") {
++          meter.rendezvous = "met";
++          meet();
++        }
++        hold = Promise.race([
++          met,
++          sleep(options.searchRendezvousMs).then(() => {
++            if (meter.rendezvous === "pending") meter.rendezvous = "timeout";
++          }),
++        ]);
++      }
++      const settle = hold.then(() => {
++        inFlight[role]--;
++      });
++      const { prompt, completion } = ROLE_USAGE[role];
++      const reply = (text: string, extra: Partial<StageReply> = {}): StageReply => ({
++        text,
++        usage: usage(prompt, completion),
++        after: settle,
++        ...extra,
++      });
++      switch (role) {
++        case "search": {
++          if (options.rejectSearch?.includes(owner))
++            return {
++              status: 400,
++              errorBody: JSON.stringify({ error: { message: "fixture permanent bad request" } }),
++              after: settle,
++            };
++          const ids = PAGES[owner] ?? [];
++          if (owner === QN)
++            return reply(`Answer for ${owner} without prose links.`, { annotations: ids.map(page) });
++          return reply(`Answer for ${owner}: ${ids.map((id) => `[${id}](${page(id)})`).join(" and ")}.`);
++        }
++        case "extract":
++          return reply(`Official docs, current.\nExtracted facts for ${owner}.`);
++        case "collate":
++          return reply(`Synthesis for ${owner} [S1].`);
++        case "suggest":
++          return reply("[]");
++      }
++    });
++    return meter;
++  }
++
++  // ── Actual admission and publication probe ──────────────────────────────────
++
++  type AdmissionEvent =
++    | { readonly kind: "allocated"; readonly operationId: string; readonly query: string; readonly runId: string }
++    | { readonly kind: "indexed"; readonly operationId: string; readonly runId: string }
++    | { readonly kind: "unavailable"; readonly operationId: string; readonly phase: string };
++
++  function admissionProbe(): { controller: NativeSuggestionReadView; log: AdmissionEvent[] } {
++    const log: AdmissionEvent[] = [];
++    return {
++      log,
++      controller: {
++        allocated: (input) =>
++          void log.push({
++            kind: "allocated",
++            operationId: input.operationId,
++            query: input.query,
++            runId: input.reservation.runId,
++          }),
++        indexed: (input) =>
++          void log.push({ kind: "indexed", operationId: input.operationId, runId: input.run.reservation.runId }),
++        unavailable: (input) =>
++          void log.push({ kind: "unavailable", operationId: input.operationId, phase: input.phase }),
++        candidates: async (input): Promise<readonly IndexCandidate[]> => input.readVerified(),
++      },
++    };
++  }
++
++  function countedPages(inner: PageTransport) {
++    const urls: string[] = [];
++    const transport: PageTransport = async (url, request) => {
++      urls.push(url);
++      return inner(url, request);
++    };
++    return { transport, urls };
++  }
++
++  // ── Thrown-error witness ────────────────────────────────────────────────────
++
++  interface ThrownRecord {
++    readonly tool: string;
++    readonly name: string;
++    readonly message: string;
++    readonly execution?: unknown;
++    readonly usage?: unknown;
++    readonly data?: unknown;
++  }
++
++  /**
++   * Observation-only witness at the native registration boundary: the native
++   * factory receives a proxy of the host ExtensionAPI whose registerTool wraps
++   * each intelli tool's execute. The wrapper calls the original and records a
++   * thrown error's own fields before rethrowing it unchanged, so the floor loop
++   * sees exactly the original throw. Everything else is the host's own API.
++   */
++  function witnessThrows(
++    factory: (pi: never) => void,
++    /** Discriminating control only: falsely advertise the later error-result capability. */
++    advertiseErrorResults = false,
++  ): {
++    factory: (pi: never) => void;
++    thrown: ThrownRecord[];
++    invocations: () => number;
++  } {
++    const thrown: ThrownRecord[] = [];
++    let invocations = 0;
++    const wrap = (tool: { name: string; execute: (...args: unknown[]) => Promise<unknown> }) => ({
++      ...tool,
++      execute: async (...args: unknown[]) => {
++        invocations++;
++        try {
++          return await tool.execute(...args);
++        } catch (error) {
++          const fields = error as { name?: unknown; message?: unknown; execution?: unknown; usage?: unknown; data?: unknown };
++          thrown.push({
++            tool: tool.name,
++            name: String(fields.name),
++            message: String(fields.message),
++            execution: fields.execution,
++            usage: fields.usage,
++            data: fields.data,
++          });
++          throw error;
++        }
++      },
++    });
++    const proxied = (pi: Record<string, unknown>) =>
++      factory(
++        new Proxy(pi, {
++          get(target, key, receiver) {
++            if (advertiseErrorResults && key === "registerMcpServer")
++              return () => {
++                throw new Error("control: advertised only");
++              };
++            const value = Reflect.get(target, key, receiver);
++            if (key !== "registerTool" || typeof value !== "function") return value;
++            return (tool: { name: string; execute: (...args: unknown[]) => Promise<unknown> }) =>
++              value.call(target, tool.name.startsWith("intelli_") ? wrap(tool) : tool);
++          },
++        }) as never,
++      );
++    return { factory: proxied as never, thrown, invocations: () => invocations };
++  }
++
++  // ── Session driver ──────────────────────────────────────────────────────────
++
++  const researchCall = (query: string) => ({
++    name: "intelli_research",
++    args: { query, maxUrls: 2, focusPrompt: `facts for ${query}` },
++  });
++  const collateCall = {
++    name: "intelli_collate",
++    args: {
++      query: QC,
++      extractions: [
++        { url: page("A1"), title: "A1", extraction: "A1 limit is 2.", sourceType: "official-docs", status: "success" },
++      ],
++    },
++  };
++
++  interface BatchRun {
++    readonly handle: SessionHandle;
++    readonly meter: Meter;
++    readonly admissions: AdmissionEvent[];
++    readonly pageUrls: string[];
++    readonly facadeCalls: ReturnType<typeof facadeSnapshot>;
++    readonly thrown: ThrownRecord[];
++    readonly witnessInvocations: number;
++    readonly promptError: string | null;
++    readonly mainBodies: string[];
++    readonly toolExecutionBefore: unknown;
++    readonly toolExecutionDuring: unknown;
++    readonly workspace: string;
++  }
++
++  const facadeSnapshot = () => facade.calls.map((call) => ({ ...call }));
++
++  async function runBatch(input: {
++    readonly phase: string;
++    readonly calls: MainTurn["toolCalls"];
++    readonly script?: ScriptOptions;
++    readonly hostSequential?: boolean;
++    readonly advertiseErrorResults?: boolean;
++  }): Promise<BatchRun> {
++    const workspace = join(isolation.root, `workspace-${input.phase}`);
++    await mkdir(workspace, { recursive: true });
++    await writeAgentConfig(isolation.agentDir, stage.baseUrl, { defaultUrls: 2, maxUrls: 2 });
++    const meter = scriptStage(input.script);
++    const probe = admissionProbe();
++    const counted = countedPages(createRecording(input.phase, pages).pageTransport);
++    main.setScript([
++      { toolCalls: input.calls, usage: usage(900, 40) },
++      { text: "Done.", usage: usage(1200, 6) },
++    ]);
++    guard.setPhase(input.phase, [stage.port]);
++    // No registryStreamSimple injection: the native client uses the floor facade.
++    const witness = witnessThrows(
++      source.module.createNativeExtension({
++        mode: "unit",
++        pageTransport: counted.transport,
++        suggestionReadView: probe.controller,
++      }) as never,
++      input.advertiseErrorResults,
++    );
++    const handle = await openSession({
++      host,
++      agentDir: isolation.agentDir,
++      workspace,
++      main,
++      nativeFactory: witness.factory,
++      codemode: "off",
++    });
++    const agent = (handle.session as unknown as { agent: { toolExecution: unknown } }).agent;
++    const toolExecutionBefore = agent.toolExecution;
++    if (input.hostSequential) agent.toolExecution = "sequential";
++    const toolExecutionDuring = agent.toolExecution;
++    facade.reset();
++    let promptError: string | null = null;
++    try {
++      await handle.session.prompt("Run the floor batch.");
++    } catch (error) {
++      promptError = String(error);
++    } finally {
++      guard.setPhase("idle", [stage.port]);
++    }
++    const mainBodies = [...main.rawBodies];
++    handle.dispose();
++    return {
++      handle,
++      meter,
++      admissions: probe.log,
++      pageUrls: counted.urls,
++      facadeCalls: facadeSnapshot(),
++      thrown: witness.thrown,
++      witnessInvocations: witness.invocations(),
++      promptError,
++      mainBodies,
++      toolExecutionBefore,
++      toolExecutionDuring,
++      workspace,
++    };
++  }
++
++  // ── Interpretation ──────────────────────────────────────────────────────────
++
++  type ToolEnd = {
++    toolName: string;
++    toolCallId: string;
++    isError: boolean;
++    result: {
++      content?: Array<{ text?: string }>;
++      details?: { intelli?: Record<string, unknown> } & Record<string, unknown>;
++      usage?: unknown;
++    };
++  };
++
++  const ends = (handle: SessionHandle) =>
++    handle.events.filter(
++      (event) =>
++        (event as { type?: string }).type === "tool_execution_end" &&
++        String((event as { toolName?: string }).toolName).startsWith("intelli_"),
++    ) as unknown as ToolEnd[];
++
++  /** Final toolResult messages, as the session persists them. */
++  const toolResultMessages = (handle: SessionHandle) =>
++    handle.events
++      .filter(
++        (event) =>
++          (event as { type?: string }).type === "message_end" &&
++          (event as { message?: { role?: string } }).message?.role === "toolResult",
++      )
++      .map((event) => (event as { message: Record<string, unknown> }).message);
++
++  const hostOrder = (handle: SessionHandle) =>
++    handle.toolEvents
++      .filter((event) => String(event.toolName).startsWith("intelli_") && event.type !== "tool_execution_update")
++      .map((event) => `${String(event.toolName)}:${String(event.type).replace("tool_execution_", "")}`);
++
++  const queryOf = (handle: SessionHandle, end: { toolCallId: unknown }) =>
++    String(
++      (
++        handle.toolEvents.find(
++          (event) => event.type === "tool_execution_start" && event.toolCallId === end.toolCallId,
++        )?.args as { query?: unknown } | undefined
++      )?.query ?? "",
++    );
++
++  function allocatedBeforeFirstPublication(log: readonly AdmissionEvent[]): string[] {
++    const first = log.findIndex((event) => event.kind === "indexed");
++    return log
++      .slice(0, first === -1 ? log.length : first)
++      .filter((event): event is Extract<AdmissionEvent, { kind: "allocated" }> => event.kind === "allocated")
++      .map((event) => event.query);
++  }
++
++  function lifecycles(log: readonly AdmissionEvent[]) {
++    return log
++      .filter((event): event is Extract<AdmissionEvent, { kind: "allocated" }> => event.kind === "allocated")
++      .map((allocation) => ({
++        query: allocation.query,
++        allocated: log.indexOf(allocation),
++        indexed: log.findIndex((event) => event.kind === "indexed" && event.runId === allocation.runId),
++      }));
++  }
++
++  const accountingOf = (end: ToolEnd) =>
++    ((end.result.details?.intelli ?? {}) as { accounting?: Record<string, unknown> }).accounting ?? {};
++
++  function stageTotals(rows: readonly StageRow[], owner: string) {
++    const own = rows.filter((row) => row.owner === owner);
++    return {
++      attempts: own.length,
++      input: own.reduce((sum, row) => sum + ROLE_USAGE[row.role].prompt, 0),
++      output: own.reduce((sum, row) => sum + ROLE_USAGE[row.role].completion, 0),
++    };
++  }
++
++  function evidenceOf(run: BatchRun) {
++    return {
++      host: floor,
++      capabilities: { ...capabilities, hostExports: undefined },
++      evidenceClass: "loopback-record (not zero-network replay); stage dispatch through the actual host facade",
++      toolExecution: { before: run.toolExecutionBefore, during: run.toolExecutionDuring },
++      promptError: run.promptError,
++      hostOrder: hostOrder(run.handle),
++      admissions: run.admissions,
++      stage: { rendezvous: run.meter.rendezvous, peakByRole: run.meter.peakByRole, rows: run.meter.rows },
++      pageUrls: run.pageUrls,
++      facadeCalls: run.facadeCalls,
++      witnessInvocations: run.witnessInvocations,
++      thrown: run.thrown,
++      results: ends(run.handle).map((end) => ({
++        tool: end.toolName,
++        query: queryOf(run.handle, end),
++        isError: end.isError,
++        content: end.result.content,
++        detailKeys: Object.keys(end.result.details ?? {}),
++        outcome: end.result.details?.intelli?.outcome,
++        accounting: accountingOf(end),
++        usage: end.result.usage ?? null,
++      })),
++      toolResultMessages: toolResultMessages(run.handle).map((message) => ({
++        toolName: message.toolName,
++        isError: message.isError,
++        usage: message.usage ?? null,
++        detailKeys: Object.keys((message.details as object | undefined) ?? {}),
++      })),
++    };
++  }
++
++  /** Tripwires and facade use common to every floor batch. */
++  function assertTripwires(run: BatchRun, phase: string) {
++    assert.equal(run.promptError, null);
++    assert.deepEqual(guard.violations(phase), [], JSON.stringify(guard.violations(phase)));
++    assert(!run.meter.rows.some((row) => row.owner === "unknown"), "every stage request attributed");
++    for (const body of run.mainBodies) assert(!body.includes(RAW_SENTINEL), "no raw page bytes reach main");
++    // Every stage request was dispatched by the host facade, with its system prompt.
++    const stageCalls = run.facadeCalls.filter((call) => call.provider === "fixture-stage");
++    assert.equal(stageCalls.length, run.meter.rows.length, "one facade call per stage request");
++    assert(stageCalls.every((call) => call.systemPrompt), "facade received every stage system prompt");
++    assert.equal(
++      run.facadeCalls.filter((call) => call.provider !== "fixture-stage").length,
++      0,
++      "the main is not dispatched through the extension facade path",
++    );
++    assert(run.witnessInvocations > 0, "the executable-tool witness was on the actual loop path");
++  }
++
++  /** Strict serial order: each producer allocates only after the previous one published. */
++  function assertSerial(run: BatchRun, expected: readonly string[]) {
++    const cycles = lifecycles(run.admissions);
++    assert.deepEqual(cycles.map((cycle) => cycle.query), [...expected], "actual admission follows batch order");
++    for (let index = 1; index < cycles.length; index++)
++      assert(
++        cycles[index]!.allocated > cycles[index - 1]!.indexed,
++        `${cycles[index]!.query} allocated only after ${cycles[index - 1]!.query} published`,
++      );
++    const order = hostOrder(run.handle);
++    for (let index = 0; index < order.length; index += 2)
++      assert.equal(
++        order[index]!.replace(/:start$/, ""),
++        order[index + 1]!.replace(/:end$/, ""),
++        `host runs each call to its end before the next start: ${order.join(", ")}`,
++      );
++    assert.equal(run.meter.peakByRole.search, 1, "no two searches were ever in flight");
++  }
++
++  // ── Lifecycle ───────────────────────────────────────────────────────────────
++
++  before(async () => {
++    main = await createFloorMainFixture(floor);
++    stage = await startStageFixture();
++  });
++
++  after(async () => {
++    facade.restore();
++    guard.restore();
++    auth.restore();
++    await stage?.close();
++    if (!process.env.NATIVE_FLOOR_KEEP) await rm(isolation.root, { recursive: true, force: true });
++  });
++
++  // ── Suite ───────────────────────────────────────────────────────────────────
++
++  describe(`native floor qualification on ${floor.kind} Pi ${floor.version} (manifest floor ${floor.manifestFloor}, Codemode off)`, () => {
++    it("pins the floor identity, capability surface and registered execution modes", async () => {
++      const workspace = join(isolation.root, "workspace-pins");
++      await mkdir(workspace, { recursive: true });
++      await writeAgentConfig(isolation.agentDir, stage.baseUrl);
++      main.setScript([]);
++      guard.setPhase("pins", []);
++      let registerMcpServer: string | undefined;
++      const handle = await openSession({
++        host,
++        agentDir: isolation.agentDir,
++        workspace,
++        main,
++        nativeFactory: source.module.createNativeExtension({ mode: "unit" }) as never,
++        codemode: "off",
++        extraFactories: [
++          ((pi: Record<string, unknown>) => {
++            registerMcpServer = typeof pi.registerMcpServer;
++          }) as never,
++        ],
++      });
++      try {
++        const agent = (handle.session as unknown as {
++          agent: { toolExecution: unknown; state: { tools: Array<{ name: string; executionMode?: unknown }> } };
++        }).agent;
++        const modes = Object.fromEntries(
++          agent.state.tools
++            .filter((tool) => tool.name.startsWith("intelli_"))
++            .map((tool) => [tool.name, tool.executionMode ?? null]),
++        );
++        const peer = JSON.parse(
++          await readFile(join(REPO_ROOT, "node_modules/@earendil-works/pi-coding-agent/package.json"), "utf8"),
++        ) as { version: string };
++        await writeEvidence(isolation.root, "pins", {
++          host: floor,
++          capabilities,
++          registerMcpServer,
++          toolExecution: agent.toolExecution,
++          modes,
++          // The native source's runtime peer imports (CONFIG_DIR_NAME, pi-tui Text)
++          // resolve from the repository tree, as in test/e2e/15_pi_floor.sh.
++          nativePeerImportsResolveFrom: { root: "repository node_modules", piCodingAgent: peer.version },
++        });
++        assert.equal(agent.toolExecution, "parallel", "host default batch strategy");
++        assert.deepEqual(modes, {
++          intelli_search: null,
++          intelli_extract: null,
++          intelli_collate: "sequential",
++          intelli_research: "parallel",
++        });
++        assert.equal(typeof (host.ModelRegistry as unknown as { prototype: { streamSimple?: unknown } }).prototype.streamSimple, "function");
++        assert(capabilities.completionsFetchOption, "the host adapter forwards options.fetch (tee channel)");
++        if (floor.kind === "owned-floor") {
++          assert.equal(floor.version, floor.manifestFloor);
++          assert.deepEqual(capabilities.laterFactories, {
++            createCodemodeExtension: false,
++            createMcpExtension: false,
++            createToolSearchExtension: false,
++          });
++          assert.equal(registerMcpServer, "undefined", "floor extension API has no registerMcpServer");
++          assert.equal(capabilities.completionsStreamHook, false, "floor pi-ai predates onProviderStreamEvent");
++          assert.equal(capabilities.loopHonoursReturnedIsError, false, "floor loop recognises only thrown errors");
++        }
++      } finally {
++        guard.setPhase("idle", [stage.port]);
++        handle.dispose();
++      }
++    });
++
++    it("dispatches a research through the floor facade and recovers citation-only sources through the matching channel", async () => {
++      const phase = "record-citations";
++      const run = await runBatch({ phase, calls: [researchCall(QN)] });
++      const [end] = ends(run.handle);
++      await writeEvidence(isolation.root, "citations", evidenceOf(run));
++      assertTripwires(run, phase);
++      assert(end, "one host end");
++      assert.equal(end.isError, false);
++      assert.equal(end.result.details?.intelli?.outcome, "completed");
++      // Sources existed only as annotations, so fetching them proves recovery.
++      for (const id of PAGES[QN]!) assert(run.pageUrls.includes(page(id)), `${id} fetched from a citation`);
++      assert.equal(run.meter.rows.filter((row) => row.role === "extract").length, 2, "both cited pages extracted");
++      const searches = run.facadeCalls.filter((call) => call.model === "search");
++      assert.equal(searches.length, 1);
++      const search = searches[0]!;
++      assert(search.fetchOption && search.fetchInvocations > 0, "the fetch-tee channel carried the search request");
++      assert(search.streamHookOption, "the extension also offers the stream hook");
++      if (capabilities.completionsStreamHook)
++        assert(search.streamHookInvocations > 0, "a host with the stream hook delivers chunks through it");
++      else assert.equal(search.streamHookInvocations, 0, "the floor never invokes the stream hook: recovery is the tee");
++      // The run's own telemetry sidecar records the harvest, as 15_pi_floor.sh requires live.
++      const runs = join(run.workspace, ".search/.intelli-v1/runs");
++      const [runDir, ...others] = await readdir(runs);
++      assert(runDir && !others.length, "one run directory");
++      const meta = JSON.parse(await readFile(join(runs, runDir, "meta.json"), "utf8")) as {
++        outcome?: string;
++        stages?: { search?: { annotationsHarvested?: number; linksReturned?: number } };
++      };
++      assert.equal(meta.outcome, "completed");
++      assert.equal(meta.stages?.search?.annotationsHarvested, PAGES[QN]!.length);
++      assert.equal(meta.stages?.search?.linksReturned, PAGES[QN]!.length);
++    });
++
++    it("two direct researches in one assistant batch genuinely overlap on the floor loop", async () => {
++      const phase = "record-direct-overlap";
++      const run = await runBatch({
++        phase,
++        calls: [researchCall(QA), researchCall(QB)],
++        script: { searchRendezvousMs: 10_000 },
++      });
++      await writeEvidence(isolation.root, "direct-overlap", evidenceOf(run));
++      assertTripwires(run, phase);
++      assert.equal(run.toolExecutionDuring, "parallel");
++      assert.equal(run.meter.rendezvous, "met", "both searches were in flight together");
++      assert.equal(run.meter.peakByRole.search, 2);
++      assert.deepEqual(new Set(allocatedBeforeFirstPublication(run.admissions)), new Set([QA, QB]));
++      assert.deepEqual(hostOrder(run.handle).slice(0, 2), ["intelli_research:start", "intelli_research:start"]);
++      for (const end of ends(run.handle)) {
++        assert.equal(end.isError, false);
++        assert.equal(end.result.details?.intelli?.outcome, "completed");
++      }
++    });
++
++    it("a floor batch containing sequential collate serialises as a whole", async () => {
++      const expected = [QA, QC, QB];
++      const phase = "record-mixed-collate";
++      const run = await runBatch({
++        phase,
++        calls: [researchCall(QA), collateCall, researchCall(QB)],
++        script: { searchRendezvousMs: 400 },
++      });
++      await writeEvidence(isolation.root, "mixed-collate", evidenceOf(run));
++      assertTripwires(run, phase);
++      assert.equal(run.toolExecutionDuring, "parallel", "serialisation comes from the batch, not host-wide mode");
++      assert.equal(run.meter.rendezvous, "timeout");
++      assertSerial(run, expected);
++    });
++
++    it("floor host-wide sequential toolExecution serialises two direct researches", async () => {
++      const expected = [QA, QB];
++      const phase = "record-host-sequential";
++      const run = await runBatch({
++        phase,
++        calls: [researchCall(QA), researchCall(QB)],
++        script: { searchRendezvousMs: 400 },
++        hostSequential: true,
++      });
++      await writeEvidence(isolation.root, "host-sequential", evidenceOf(run));
++      assertTripwires(run, phase);
++      assert.equal(run.toolExecutionBefore, "parallel");
++      assert.equal(run.toolExecutionDuring, "sequential");
++      assert.equal(run.meter.rendezvous, "timeout");
++      assertSerial(run, expected);
++    });
++
++    it("delivers a dispatched research failure in a parallel floor batch through the floor's error channel", async () => {
++      const phase = "record-direct-failure";
++      const run = await runBatch({
++        phase,
++        calls: [researchCall(QF), researchCall(QA)],
++        script: { searchRendezvousMs: 10_000, rejectSearch: [QF] },
++      });
++      const results = ends(run.handle);
++      const failed = results.find((end) => queryOf(run.handle, end) === QF);
++      const sibling = results.find((end) => queryOf(run.handle, end) === QA);
++      await writeEvidence(isolation.root, "direct-failure", { ...evidenceOf(run), failedEnd: failed ?? null });
++      assertTripwires(run, phase);
++      assert.equal(run.meter.rendezvous, "met");
++      assert.deepEqual(
++        run.meter.rows.filter((row) => row.owner === QF).map((row) => row.role),
++        ["search"],
++        "a permanent 400 is one dispatched attempt",
++      );
++      assert.deepEqual(new Set(allocatedBeforeFirstPublication(run.admissions)), new Set([QF, QA]));
++      assert(failed && sibling, "one end per member");
++      assert.equal(run.mainBodies.length, 2, "the batch settled and the loop continued");
++      assert(run.mainBodies[1]!.includes("fixture permanent bad request"), "main sees the failure");
++      assert.equal(sibling.isError, false);
++      assert.equal(sibling.result.details?.intelli?.outcome, "completed");
++      assert.equal(failed.isError, true, "the host marks the failure");
++      assert.match(String(failed.result.content?.[0]?.text), /fixture permanent bad request/);
++      const failedOperation = run.admissions.find((event) => event.kind === "allocated" && event.query === QF)!.operationId;
++      assert.deepEqual(
++        run.admissions.filter((event) => event.kind !== "allocated").map((event) => `${event.kind}:${event.operationId === failedOperation ? "F" : "A"}`),
++        ["unavailable:F", "indexed:A"],
++      );
++      if (!capabilities.loopHonoursReturnedIsError) {
++        // Floor: the runtime throws NativeExecutionError; the loop builds its own
++        // error result, so no canonical field or host usage is delivered.
++        assert.equal(run.thrown.length, 1, "exactly one thrown failure");
++        const thrown = run.thrown[0]!;
++        assert.equal(thrown.name, "NativeExecutionError");
++        assert.match(thrown.message, /fixture permanent bad request/);
++        assert.deepEqual(failed.result.details, {}, "no canonical data reaches the host");
++        assert.equal(failed.result.usage, undefined, "no host usage is delivered");
++        const persisted = toolResultMessages(run.handle).find((message) => message.toolCallId === failed.toolCallId);
++        assert.equal(persisted?.isError, true);
++        assert.equal(persisted?.usage, undefined, "the session persists no usage for the failed call");
++        // The thrown receipt keeps missingness locally and marks delivery unknown.
++        const execution = thrown.execution as { accounting?: Record<string, unknown> };
++        assert.equal(execution.accounting?.parentDelivery, "unknown");
++        assert.equal(execution.accounting?.missingAttempts, 1);
++        assert.deepEqual(execution.accounting?.tokens, {});
++        assert.equal(execution.accounting?.costComplete, false);
++      } else {
++        assert.equal(run.thrown.length, 0, "a capable host receives a returned error result");
++        assert.equal(failed.result.details?.intelli?.outcome, "error");
++      }
++    });
++
++    it(
++      "control: a falsely advertised error-result capability would report the failure as success on the floor loop",
++      { skip: capabilities.loopHonoursReturnedIsError ? "this host honours returned isError" : false },
++      async () => {
++        const phase = "record-false-capability-control";
++        const run = await runBatch({
++          phase,
++          calls: [researchCall(QF)],
++          script: { rejectSearch: [QF] },
++          advertiseErrorResults: true,
++        });
++        const [end] = ends(run.handle);
++        await writeEvidence(isolation.root, "false-capability-control", evidenceOf(run));
++        assertTripwires(run, phase);
++        assert.equal(run.thrown.length, 0, "the runtime returned instead of throwing");
++        assert(end, "one host end");
++        // The floor loop ignores the returned isError: detection is load-bearing.
++        assert.equal(end.isError, false, "floor marks the returned failure as success");
++        assert.equal(end.result.details?.intelli?.outcome, "error");
++      },
++    );
++
++    it("records the usage the floor lets a successful research observe", async () => {
++      const phase = "record-usage";
++      const run = await runBatch({ phase, calls: [researchCall(QA)] });
++      const [end] = ends(run.handle);
++      const evidence = evidenceOf(run);
++      await writeEvidence(isolation.root, "usage", evidence);
++      assertTripwires(run, phase);
++      assert(end && !end.isError);
++      const accounting = accountingOf(end) as {
++        attempts?: number;
++        observedAttempts?: number;
++        missingAttempts?: number;
++        tokens?: Record<string, number>;
++        missingTokenFields?: string[];
++        costComplete?: boolean;
++      };
++      const own = stageTotals(run.meter.rows, QA);
++      const estimated = (accounting as { estimatedCost?: Record<string, number> }).estimatedCost ?? {};
++      const hostUsage = end.result.usage as { input?: number; output?: number; totalTokens?: number; cost?: Record<string, number> };
++      assert.equal(accounting.attempts, own.attempts);
++      assert.equal(accounting.observedAttempts, own.attempts);
++      assert.equal(accounting.missingAttempts, 0);
++      assert.equal(accounting.costComplete, false);
++      assert(Math.abs((estimated.output ?? NaN) - own.output * 2e-6) < 1e-12);
++      if (capabilities.completionsStreamHook) {
++        // Raw wire usage is visible: exact tokens, as on current hosts.
++        assert.equal(accounting.tokens?.inputTotal, own.input);
++        assert.equal(accounting.tokens?.outputTotal, own.output);
++        return;
++      }
++      // Floor: no raw stream events. The SDK's zero-initialised usage cannot
++      // prove a reported input, so only positive output is kept as observed and
++      // every other token field stays missing rather than zero.
++      assert.deepEqual(accounting.tokens, { outputTotal: own.output });
++      assert.deepEqual(
++        [...(accounting.missingTokenFields ?? [])].sort(),
++        ["cacheRead", "cacheWrite", "cacheWrite1h", "inputTotal", "inputUncached", "reasoning", "totalTokens"],
++      );
++      // Observed inconsistency, pinned so a change is deliberate: the catalogue
++      // estimate still carries the SDK's input cost for those missing tokens,
++      // and host usage pairs a zero input placeholder with that input cost.
++      assert(Math.abs((estimated.input ?? NaN) - own.input * 1e-6) < 1e-12);
++      assert.equal(hostUsage.input, 0);
++      assert.equal(hostUsage.output, own.output);
++      assert.equal(hostUsage.totalTokens, own.output);
++      assert(Math.abs((hostUsage.cost?.input ?? NaN) - own.input * 1e-6) < 1e-12);
++    });
++
++    it("reports later Codemode replay as unsupported at the floor rather than substituting a host", { skip: codemodeAvailable ? "Codemode exists on this control host; covered by native-replay-f7" : false }, async () => {
++      assert.equal(codemodeAvailable, false);
++      assert.equal(typeof (host as unknown as Record<string, unknown>).createCodemodeExtension, "undefined");
++    });
++
++    it("records auth resolution without credentials", async () => {
++      const events = auth.events();
++      await writeEvidence(isolation.root, "auth", { events });
++      for (const event of events) {
++        assert(!/login|enqueueCredentialOperation/.test(event.method), `no credential operation: ${event.method}`);
++        if (event.method.endsWith(".refresh")) assert.notEqual(event.provider, "allowNetwork=true");
++        else assert(["fixture-inproc", "fixture-stage"].includes(event.provider), event.provider);
++      }
++    });
++  });
++}
+diff --git a/test/native-floor-runner.test.ts b/test/native-floor-runner.test.ts
+new file mode 100644
+index 0000000..4f83afc
+--- /dev/null
++++ b/test/native-floor-runner.test.ts
+@@ -0,0 +1,43 @@
++// SPDX-License-Identifier: Apache-2.0
++// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
++import assert from "node:assert/strict";
++import { it } from "node:test";
++import { privateFloorEnv } from "../scripts/qualify-native-floor.mjs";
++
++it("the floor runner allows only explicit environment names, never ambient credentials or loaders", () => {
++  const env = privateFloorEnv(
++    { NATIVE_FLOOR_REQUIRED: "1" },
++    {
++      PATH: "/synthetic/bin",
++      LANG: "C.UTF-8",
++      NATIVE_FLOOR_HOST: "/synthetic/floor",
++      NATIVE_FLOOR_KEEP: "1",
++      GH_TOKEN: "synthetic",
++      GITHUB_TOKEN: "synthetic",
++      AWS_SECRET_ACCESS_KEY: "synthetic",
++      OPENROUTER_API_KEY: "synthetic",
++      NODE_OPTIONS: "--require synthetic",
++      HOME: "/operator",
++      TMPDIR: "/unencrypted",
++      PI_CODING_AGENT_DIR: "/operator/agent",
++      UNRELATED_UNKNOWN_VALUE: "synthetic",
++    },
++  );
++  assert.equal(env.PATH, "/synthetic/bin");
++  assert.equal(env.NATIVE_FLOOR_HOST, "/synthetic/floor");
++  assert.equal(env.NATIVE_FLOOR_KEEP, "1");
++  assert.equal(env.NATIVE_FLOOR_REQUIRED, "1");
++  for (const key of [
++    "GH_TOKEN",
++    "GITHUB_TOKEN",
++    "AWS_SECRET_ACCESS_KEY",
++    "OPENROUTER_API_KEY",
++    "NODE_OPTIONS",
++    "PI_CODING_AGENT_DIR",
++    "UNRELATED_UNKNOWN_VALUE",
++  ])
++    assert.equal(Object.hasOwn(env, key), false, key);
++  assert(env.HOME?.includes("/.tmp/m4-floor/home"));
++  assert(env.TMPDIR?.includes("/.tmp/m4-floor/tmp"));
++  assert.equal(env.PI_OFFLINE, "1");
++});
+diff --git a/test/native-usage.test.ts b/test/native-usage.test.ts
+index 0e4ec78..2ce4a57 100644
+--- a/test/native-usage.test.ts
++++ b/test/native-usage.test.ts
+@@ -46,6 +46,18 @@ for (const alias of ["prompt_cache_hit_tokens", "cached_tokens"]) {
+   });
+ }
+ 
++it("T16 unsupported response usage keeps input missing even when its catalogue estimate is nonzero", () => {
++  for (const event of [undefined, { type: "response.completed", response: { usage: { input_tokens: 7, output_tokens: 3 } } }]) {
++    const capture = createNativeUsageCapture();
++    if (event) capture.chunk(event);
++    const observation = capture.observation({ input: 7, output: 3, cacheRead: 0, cacheWrite: 0,
++      cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 } });
++    assert.deepEqual(observation?.tokens, { outputTotal: 3 });
++    assert.equal(observation?.costBasis, "catalogue");
++    assert.equal(observation?.cost?.input, 0.01);
++  }
++});
++
+ it("T16 provider usage snapshots remain cumulative replacements, not sums or field merges", () => {
+   const capture = createNativeUsageCapture();
+   capture.chunk({
+diff --git a/test/probes/mcp-provider-security.mjs b/test/probes/mcp-provider-security.mjs
+new file mode 100644
+index 0000000..73eb16d
+--- /dev/null
++++ b/test/probes/mcp-provider-security.mjs
+@@ -0,0 +1,157 @@
++// SPDX-License-Identifier: Apache-2.0
++// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
++// Runs against source or an independent production installation. No fetch
++// injection is passed to the runtime: the actual default provider HTTP runs.
++import assert from "node:assert/strict";
++import { createRequire } from "node:module";
++import { createServer } from "node:http";
++import { connect } from "node:net";
++import { mkdtemp } from "node:fs/promises";
++import { join } from "node:path";
++
++const target = process.argv[2] ?? "@curio-data/mcp-intelli-search/runtime";
++const modes = process.argv[3] ? [process.argv[3]] : ["healthy", "encoding", "abort"];
++assert(modes.every((mode) => ["healthy", "encoding", "abort"].includes(mode)));
++const { createRuntime, parseConfig } = await import(target);
++const require = createRequire(import.meta.resolve(target));
++const { Agent, getGlobalDispatcher, setGlobalDispatcher } = require("undici");
++const savedDispatcher = getGlobalDispatcher();
++const originalFetch = globalThis.fetch;
++globalThis.fetch = () => {
++  throw new Error("Node-bundled fetch must not serve MCP provider requests");
++};
++const model = "perplexity/sonar";
++const secret = "synthetic-provider-security-key";
++let mode = "healthy";
++let catalogueCalls = 0;
++let completionCalls = 0;
++let active = 0;
++let stalled;
++let stalledStarted;
++const server = createServer((request, response) => {
++  assert.equal(request.headers.authorization, `Bearer ${secret}`);
++  active++;
++  response.once("close", () => {
++    active--;
++  });
++  if (request.url === "/api/v1/models") {
++    catalogueCalls++;
++    response.setHeader("content-type", "application/json");
++    response.end(
++      JSON.stringify({
++        data: [
++          { id: model, architecture: { input_modalities: ["text"], output_modalities: ["text"] } },
++        ],
++      }),
++    );
++    return;
++  }
++  assert.equal(request.url, "/api/v1/chat/completions");
++  completionCalls++;
++  if (mode === "encoding") {
++    response.writeHead(200, {
++      "Content-Encoding": "gzip, gzip, gzip, gzip, gzip, gzip",
++      "Content-Length": "100",
++    });
++    const socket = response.socket;
++    response.flushHeaders();
++    setTimeout(() => socket.destroy(), 50);
++  } else if (mode === "abort") {
++    stalled = response;
++    response.writeHead(200, { "Content-Type": "application/json" });
++    response.flushHeaders();
++    stalledStarted();
++  } else {
++    response.setHeader("content-type", "application/json");
++    response.end(
++      JSON.stringify({
++        choices: [
++          { message: { content: "Default provider transport succeeded." }, finish_reason: "stop" },
++        ],
++        usage: { prompt_tokens: 12, completion_tokens: 4, total_tokens: 16, cost: 0.001 },
++      }),
++    );
++  }
++});
++await new Promise((resolve, reject) => {
++  server.once("error", reject);
++  server.listen(0, "127.0.0.1", resolve);
++});
++const agent = new Agent({
++  // Test-only connector: keep the production HTTPS URL/headers/path intact,
++  // but supply a local HTTP socket. No DNS or external connection is made.
++  connect(options, callback) {
++    assert.equal(options.hostname, "openrouter.ai");
++    assert.equal(options.protocol, "https:");
++    assert(["", "443"].includes(String(options.port)));
++    const socket = connect({ host: "127.0.0.1", port: server.address().port });
++    socket.once("connect", () => callback(null, socket));
++    socket.once("error", callback);
++    return socket;
++  },
++});
++setGlobalDispatcher(agent);
++try {
++  for (const testMode of modes) {
++    mode = testMode;
++    const workspace = await mkdtemp(join(process.cwd(), `provider-security-${mode}-`));
++    const config = await parseConfig(
++      {
++        providers: { openrouter: { apiKeyEnv: "SECURITY_FIXTURE_KEY" } },
++        models: Object.fromEntries(
++          ["search", "extract", "collate"].map((role) => [role, { provider: "openrouter", model }]),
++        ),
++        tuning: { llmRetryAttempts: 1, llmTimeoutMs: 5000, disableLlmsFullDiscovery: true },
++      },
++      workspace,
++    );
++    const runtime = await createRuntime(config, {
++      env: { SECURITY_FIXTURE_KEY: secret },
++      logger: { warn() {}, error() {} },
++    });
++    try {
++      const controller = new AbortController();
++      const started = new Promise((resolve) => {
++        stalledStarted = resolve;
++      });
++      const result = runtime.execute(
++        "intelli_search",
++        { query: "Synthetic transport security fixture" },
++        { signal: controller.signal },
++      );
++      if (mode === "healthy") {
++        assert.equal((await result).outcome, "completed");
++      } else {
++        // Attach rejection handling immediately; cancellation waits for the
++        // server's explicit body-start witness instead of a timing guess.
++        const rejected = assert.rejects(result, (error) => {
++          assert(!error.message.includes(secret));
++          return /OpenRouter|abort/i.test(error.message);
++        });
++        if (mode === "abort") {
++          await started;
++          controller.abort();
++        }
++        await rejected;
++      }
++    } finally {
++      await runtime.close();
++      stalled?.destroy();
++      stalled = undefined;
++    }
++    // Observe all server-side close callbacks before the next case. This is
++    // not a claim that a remote-close callback is client settlement evidence.
++    for (let i = 0; active > 0 && i < 100; i++)
++      await new Promise((resolve) => setTimeout(resolve, 10));
++    assert.equal(active, 0);
++  }
++  assert.equal(catalogueCalls, modes.length);
++  assert.equal(completionCalls, modes.length);
++} finally {
++  setGlobalDispatcher(savedDispatcher);
++  globalThis.fetch = originalFetch;
++  await agent.close();
++  server.closeAllConnections();
++  await new Promise((resolve) => server.close(resolve));
++}
++process.stdout.write("mcp-provider-security-complete\n");
+diff --git a/test/tsconfig.native-contract.json b/test/tsconfig.native-contract.json
+index 204f117..9fe1a35 100644
+--- a/test/tsconfig.native-contract.json
++++ b/test/tsconfig.native-contract.json
+@@ -9,6 +9,7 @@
+   "include": [
+     "native-contract.test.ts",
+     "core-boundary.test.ts",
++    "dependency-security.test.ts",
+     "core-operations.test.ts",
+     "core-llm.test.ts",
+     "core-scoped-policy.test.ts",
+@@ -39,6 +40,11 @@
+     "native-model-client.test.ts",
+     "native-factory.test.ts",
+     "native-direct-batch.test.ts",
++    "native-floor-qualification.test.ts",
++    "native-floor-runner.test.ts",
++    "helpers/native-floor-qualification.ts",
++    "../scripts/qualify-native-floor.mts",
++    "benchmark-main-usage-session.test.ts",
+     "cache-growth-qualification.test.ts",
+     "../scripts/qualify-cache-growth.mts",
+     "native-suggestion-view.test.ts",

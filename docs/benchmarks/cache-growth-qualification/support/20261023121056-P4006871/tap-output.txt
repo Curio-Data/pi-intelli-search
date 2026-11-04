@@ -1,0 +1,40 @@
+▶ M4 cache growth and recovery qualification (profile: default)
+  ✔ q1: committed run-store growth records allocation, index and candidate-read costs (184.854023ms)
+  ﹣ q2a: exact structural-limit query bytes at the allocation and marker boundaries (0.30331ms) # full profile only: commits a real query at the 16 MiB STRUCTURAL_MAX_BYTES ceiling
+  ﹣ q2b: a real committed population reaches the secondary-index budget; writer and reader refuse beyond (0.262042ms) # full profile only: grows a real population against the 128 MiB INDEX_MAX_BYTES budget
+  ✔ q3: repeated corrupt-index reads rebuild in memory; a writer repairs only secondary metadata (62.046431ms)
+  ✔ q4shape: whole-parent scan accepts a legacy, staging, committed and uncommitted cache shape (7.729818ms)
+  ﹣ q4: physical whole-parent scan at the unchanged 100000-entry cap boundary (0.230321ms) # full profile only: physically creates a 100000-entry workspace population
+  ✔ q5: pinned pi-v0.19.0 and current writer processes share one parent without metadata interference (653.750848ms)
+  ✖ q6: non-destructive recovery drill refuses damaged history and archives explicitly (3201.75959ms)
+evidence summary: /srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/.tmp/m4-growth/qualification/20261023121056-P4006871/summary.json
+✖ M4 cache growth and recovery qualification (profile: default) (4112.905412ms)
+ℹ tests 8
+ℹ suites 1
+ℹ pass 4
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 3
+ℹ todo 0
+ℹ duration_ms 4668.660884
+
+✖ failing tests:
+
+test at test/cache-growth-qualification.test.ts:3:29944
+✖ q6: non-destructive recovery drill refuses damaged history and archives explicitly (3201.75959ms)
+  AssertionError [ERR_ASSERTION]: {"status":"unavailable","diagnostic":{"code":"JOURNAL_DAMAGED","message":"Allocation journal /srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/.tmp/m4-growth/q6-recovery-5OdBv3/.intelli-v1/allocations.ndjson is damaged (unterminated partial tail; it is never truncated automatically). Publication is unavailable; stop all writers, preserve the namespace and validate the journal before any repair."}}
+  + actual - expected
+  
+  + 'unavailable'
+  - 'rebuilt'
+  
+      at TestContext.<anonymous> (/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/test/cache-growth-qualification.test.ts:1267:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'unavailable',
+    expected: 'rebuilt',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

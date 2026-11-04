@@ -1,5 +1,7 @@
 # Codemode Study v1
 
+Study closed on 4 November 2026. Read the [final measured report](REPORT.md), [measured-v3 bundle](measured-v3/) and [closure record](../../plans/codemode/CLOSURE.md). The completed study is inconclusive and supports no Codemode benefit or main-package integration. Numerical analysis reproduces from the public bundle; original ignored raw evidence was disposed under the owner's retirement approval and cannot be independently re-audited. The remainder of this page preserves the study's original setup and baseline.
+
 Versioned protocol, corpus, calibration packet, costed schedule and spend baseline for the research-first Codemode `off`/`on` comparison. Authority: [Owner Decisions](../../plans/codemode/OWNER-REFOCUS.md), [Research Plan](../../plans/codemode/RESEARCH-PLAN.md), [Resume](../../plans/codemode/RESUME.md). Status: pilot scored; owner-approved measured-series-2 frozen and awaiting execution. Current execution outcomes are recorded in [Status](../../plans/codemode/STATUS.md); no measured-series benefit is claimed.
 
 ## Files

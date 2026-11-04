@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "kind": "append-only-calibration-rebinding",
+  "recordedUtc": "2026-11-03T11:55:00Z",
+  "ownerDecision": "Yes: the owner's four verdicts on unchanged calibration.json carry over to corpus-v2-r4-owner-expanded.",
+  "decisionsSha256": "87f09da1cfe349ac3cc2aed779d707819d03721f6fb2d272b521e6a13a2cefcc",
+  "calibrationJsonSha256": "c0abba11206d841d692a09c69f2d59b75bca85d1934948f50db702f301fb0a11",
+  "rubricSha256": "b8d7a5932b2cdb7171b43771feafc2faa98536d09596a2216d6e7e4ac05b954d",
+  "rebindings": [
+    {
+      "fromCorpusRevision": "corpus-v1-r3",
+      "fromCorpusSha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed",
+      "toCorpusRevision": "corpus-v2-r4-owner-expanded",
+      "toCorpusSha256": "695ba07dc665dcf81168117f84497e5e2fd9362bc02a5fa7270bad4d59ec89cb",
+      "reason": "The owner expanded the measured population and revised corpus metadata without changing calibration.json or STANDARD-RUBRIC."
+    }
+  ],
+  "preservation": "Append-only. Original decisions.json and all input files remain unchanged. This record does not assert judge reliability."
+}

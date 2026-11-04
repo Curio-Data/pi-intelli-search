@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="440" viewBox="0 0 760 440" role="img" aria-label="live: measured-series paired query means">
+<rect width="760" height="440" fill="#ffffff"/>
+<text x="24.0" y="34.0" font-size="15" text-anchor="start" fill="#111827" font-weight="600">live: measured-series paired query means</text>
+<text x="24.0" y="52.0" font-size="12" text-anchor="start" fill="#6b7280">uncached input tokens, off vs on; Diagnostic Only; Not Claim Evidence</text>
+<line x1="70" y1="350.0" x2="736" y2="350.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="62.0" y="354.0" font-size="11" text-anchor="end" fill="#6b7280">0</text>
+<line x1="70" y1="280.0" x2="736" y2="280.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="62.0" y="284.0" font-size="11" text-anchor="end" fill="#6b7280">6868</text>
+<line x1="70" y1="210.0" x2="736" y2="210.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="62.0" y="214.0" font-size="11" text-anchor="end" fill="#6b7280">13736</text>
+<line x1="70" y1="140.0" x2="736" y2="140.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="62.0" y="144.0" font-size="11" text-anchor="end" fill="#6b7280">20604</text>
+<line x1="70" y1="70.0" x2="736" y2="70.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="62.0" y="74.0" font-size="11" text-anchor="end" fill="#6b7280">27472</text>
+<line x1="70.0" y1="111.0" x2="70.0" y2="90.7" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="70.0" cy="111.0" r="4" fill="#4b5563"/>
+<circle cx="70.0" cy="90.7" r="4" fill="#2563eb"/>
+<text x="70.0" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 70.0 384)">CS-RES-01</text>
+<line x1="105.1" y1="232.9" x2="105.1" y2="254.9" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="105.1" cy="232.9" r="4" fill="#4b5563"/>
+<circle cx="105.1" cy="254.9" r="4" fill="#2563eb"/>
+<text x="105.1" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 105.1 384)">CS-RES-02</text>
+<line x1="140.1" y1="246.4" x2="140.1" y2="197.5" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="140.1" cy="246.4" r="4" fill="#4b5563"/>
+<circle cx="140.1" cy="197.5" r="4" fill="#2563eb"/>
+<text x="140.1" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 140.1 384)">CS-RES-03</text>
+<line x1="175.2" y1="227.4" x2="175.2" y2="254.6" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="175.2" cy="227.4" r="4" fill="#4b5563"/>
+<circle cx="175.2" cy="254.6" r="4" fill="#2563eb"/>
+<text x="175.2" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 175.2 384)">CS-RES-04</text>
+<line x1="210.2" y1="191.6" x2="210.2" y2="216.2" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="210.2" cy="191.6" r="4" fill="#4b5563"/>
+<circle cx="210.2" cy="216.2" r="4" fill="#2563eb"/>
+<text x="210.2" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 210.2 384)">CS-RES-05</text>
+<line x1="245.3" y1="246.5" x2="245.3" y2="319.3" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="245.3" cy="246.5" r="4" fill="#4b5563"/>
+<circle cx="245.3" cy="319.3" r="4" fill="#2563eb"/>
+<text x="245.3" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 245.3 384)">CS-RES-06</text>
+<line x1="280.3" y1="232.4" x2="280.3" y2="146.2" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="280.3" cy="232.4" r="4" fill="#4b5563"/>
+<circle cx="280.3" cy="146.2" r="4" fill="#2563eb"/>
+<text x="280.3" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 280.3 384)">CS-RES-07</text>
+<line x1="315.4" y1="287.7" x2="315.4" y2="180.9" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="315.4" cy="287.7" r="4" fill="#4b5563"/>
+<circle cx="315.4" cy="180.9" r="4" fill="#2563eb"/>
+<text x="315.4" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 315.4 384)">CS-RES-08</text>
+<line x1="350.4" y1="184.4" x2="350.4" y2="211.6" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="350.4" cy="184.4" r="4" fill="#4b5563"/>
+<circle cx="350.4" cy="211.6" r="4" fill="#2563eb"/>
+<text x="350.4" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 350.4 384)">CS-SER-01</text>
+<line x1="385.5" y1="230.8" x2="385.5" y2="236.7" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="385.5" cy="230.8" r="4" fill="#4b5563"/>
+<circle cx="385.5" cy="236.7" r="4" fill="#2563eb"/>
+<text x="385.5" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 385.5 384)">CS-SER-02</text>
+<line x1="420.5" y1="234.5" x2="420.5" y2="192.9" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="420.5" cy="234.5" r="4" fill="#4b5563"/>
+<circle cx="420.5" cy="192.9" r="4" fill="#2563eb"/>
+<text x="420.5" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 420.5 384)">CS-SER-03</text>
+<line x1="455.6" y1="195.0" x2="455.6" y2="167.2" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="455.6" cy="195.0" r="4" fill="#4b5563"/>
+<circle cx="455.6" cy="167.2" r="4" fill="#2563eb"/>
+<text x="455.6" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 455.6 384)">CS-SER-04</text>
+<line x1="490.6" y1="212.3" x2="490.6" y2="204.9" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="490.6" cy="212.3" r="4" fill="#4b5563"/>
+<circle cx="490.6" cy="204.9" r="4" fill="#2563eb"/>
+<text x="490.6" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 490.6 384)">CS-SER-05</text>
+<line x1="525.7" y1="154.4" x2="525.7" y2="139.5" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="525.7" cy="154.4" r="4" fill="#4b5563"/>
+<circle cx="525.7" cy="139.5" r="4" fill="#2563eb"/>
+<text x="525.7" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 525.7 384)">CS-SER-06</text>
+<line x1="560.7" y1="151.6" x2="560.7" y2="211.1" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="560.7" cy="151.6" r="4" fill="#4b5563"/>
+<circle cx="560.7" cy="211.1" r="4" fill="#2563eb"/>
+<text x="560.7" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 560.7 384)">CS-SER-07</text>
+<line x1="595.8" y1="243.2" x2="595.8" y2="235.9" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="595.8" cy="243.2" r="4" fill="#4b5563"/>
+<circle cx="595.8" cy="235.9" r="4" fill="#2563eb"/>
+<text x="595.8" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 595.8 384)">CS-SER-08</text>
+<line x1="630.8" y1="222.2" x2="630.8" y2="231.1" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="630.8" cy="222.2" r="4" fill="#4b5563"/>
+<circle cx="630.8" cy="231.1" r="4" fill="#2563eb"/>
+<text x="630.8" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 630.8 384)">CS-SER-09</text>
+<line x1="665.9" y1="215.9" x2="665.9" y2="164.3" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="665.9" cy="215.9" r="4" fill="#4b5563"/>
+<circle cx="665.9" cy="164.3" r="4" fill="#2563eb"/>
+<text x="665.9" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 665.9 384)">CS-SER-10</text>
+<line x1="700.9" y1="244.8" x2="700.9" y2="218.3" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="700.9" cy="244.8" r="4" fill="#4b5563"/>
+<circle cx="700.9" cy="218.3" r="4" fill="#2563eb"/>
+<text x="700.9" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 700.9 384)">CS-SER-11</text>
+<line x1="736.0" y1="269.0" x2="736.0" y2="238.6" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="736.0" cy="269.0" r="4" fill="#4b5563"/>
+<circle cx="736.0" cy="238.6" r="4" fill="#2563eb"/>
+<text x="736.0" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 736.0 384)">CS-SER-12</text>
+<text x="16.0" y="422.0" font-size="11" text-anchor="start" fill="#6b7280">query clusters: 20; missing queries: 1; undefined ratio queries: 0</text>
+<text x="526.0" y="40.0" font-size="11" text-anchor="start" fill="#4b5563">● off (control)</text>
+<text x="636.0" y="40.0" font-size="11" text-anchor="start" fill="#2563eb">● on (treatment)</text>
+</svg>

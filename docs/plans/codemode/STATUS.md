@@ -1,8 +1,12 @@
 # Codemode Research Status
 
-Current direction: research first, under the [2 November 2026 Owner Decisions](OWNER-REFOCUS.md). Start with [Resume](RESUME.md) and follow the [Research Plan](RESEARCH-PLAN.md). No Codemode benefit has been measured. The branch is not complete until the code, measured data, reproducible analysis and publication-ready report exist.
+Current direction: closed and archived on 4 November 2026. Start with [Study Closure](CLOSURE.md) and the [final measured report](../../benchmarks/codemode-study-v1/REPORT.md). The completed study is inconclusive: it demonstrates no Codemode benefit and establishes no preserved answer quality. Main-package integration is not recommended on this evidence.
 
-## Current Implementation Checkpoint
+The measured series executed 160 comparative runs plus 20 fixture captures. Both primary token analyses and both primary quality analyses are unavailable under the frozen missing-data rules. Complete-case diagnostics do not show a token saving. The final report, sanitised dataset, analysis source, quality records and fresh-environment reproduction record are committed under `docs/benchmarks/codemode-study-v1/`.
+
+The owner approved disposal of the original ignored results during worktree retirement. Numerical analysis remains reproducible from the committed bundle; independent verification against original raw sessions, pages, packets and ledger rows is no longer possible. The sections below are historical checkpoints, including earlier statements that measured capture had not started. They do not describe remaining work or authorise new execution.
+
+## Historical Implementation Checkpoint
 
 The accepted foundations remain in this branch. They are not experimental results:
 
@@ -65,6 +69,12 @@ Independent reviews found and prompted corrections to packet content, order bala
 The egress-monitor investigation is stopped by owner direction. R16 remains historically blocked; it is neither integrated nor reclassified as passing. There is no pending threat-model question to answer before research development. Old-host, broad platform, package-release and separate deadline/query-expansion studies are deferred. Main-package incorporation and an impact statement for older hosts follow only if the research supports that decision.
 
 A previously observed dependency-audit finding remains disclosed in the preserved records. No dependency repair or new security exploration is commissioned. Report an encountered security question to the owner in plain terms. This is not a claim that known findings were fixed or that credential care is unnecessary.
+
+## Approved Storage Cleanup
+
+The [4 November 2026 cleanup record](CLEANUP-20261104.md) documents removal of the three approved generated-fixture roots and 7,130 historical monitor traces. Growth-qualification summaries, observations, environment records, test output and embedded source snapshots were promoted before deletion. Raw benchmarks, publication outputs, other monitor files, existing edits and all worktrees were preserved. Historical manifests remain unchanged but now list removed traces; full local trace re-analysis is no longer possible. The repeated allocated-footprint audit fell from 63.78 GiB to 36.68 GiB, not an equivalent physical-space recovery claim.
+
+The subsequent [M4 and cache cleanup](CLEANUP-M4-20261104.md) removed the approved M4 scratch tree and exact cache-only list within this worktree. A complete embedded dirty Git snapshot and a verified non-cache archive preserve source and historical records. The main checkout and other worktrees were not cleanup targets. Raw benchmarks remain deferred pending the owner's separate suitability review, not permanently exempt from approved disposal. The later record carries the current footprint and relocation map.
 
 ## Branch Cleanup
 

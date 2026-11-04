@@ -1,0 +1,19 @@
+▶ M4 cache growth and recovery qualification (profile: default)
+  ✔ q1: committed run-store growth records allocation, index and candidate-read costs (204.172179ms)
+  ﹣ q2a: exact structural-limit query bytes at the allocation and marker boundaries (0.322669ms) # full profile only: commits a real query at the 16 MiB STRUCTURAL_MAX_BYTES ceiling
+  ﹣ q2b: a real committed population reaches the secondary-index budget; writer and reader refuse beyond (0.276773ms) # full profile only: grows a real population against the 128 MiB INDEX_MAX_BYTES budget
+  ✔ q3: repeated corrupt-index reads rebuild in memory; a writer repairs only secondary metadata (64.331118ms)
+  ✔ q4shape: whole-parent scan accepts a legacy, staging, committed and uncommitted cache shape (9.23539ms)
+  ﹣ q4: physical whole-parent scan at the unchanged 100000-entry cap boundary (0.299118ms) # full profile only: physically creates a 100000-entry workspace population
+  ✔ q5: pinned pi-v0.19.0 and current writer processes share one parent without metadata interference (556.549564ms)
+  ✔ q6: non-destructive recovery drill refuses damaged history and archives explicitly (3284.437253ms)
+evidence summary: /srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/.tmp/m4-growth/qualification/20261023121130-P4010118/summary.json
+✔ M4 cache growth and recovery qualification (profile: default) (4120.909894ms)
+ℹ tests 8
+ℹ suites 1
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 3
+ℹ todo 0
+ℹ duration_ms 4495.632486

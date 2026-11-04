@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "codemode-spend-reconciliation",
+  "createdUtc": "2026-11-04",
+  "source": {
+    "pathAtStudyCompletion": "evidence/benchmarks/programme-spend/spend-ledger.jsonl",
+    "sha256": "72bf6b92f906fc28c2e7f711a4fb6256926fa0f1ad7530ae6991a81ed3984725",
+    "rows": 279,
+    "reservations": 139,
+    "settlements": 139,
+    "sequenceContinuous": true,
+    "reservationAndSettlementRunIdsMatch": true,
+    "firstUtc": "2026-11-02T18:51:37.631Z",
+    "lastUtc": "2026-11-03T17:27:59.023Z"
+  },
+  "ceilingNanoUsd": 30000000000,
+  "baseline": {
+    "revision": "spend-baseline-3",
+    "sha256": "b3dffbba4cd500a19247be505f619545d71675948c52191070b4f4afd58deea3",
+    "knownNanoUsd": 545984786,
+    "unknownHoldNanoUsd": 1500000000
+  },
+  "settledStudy": {
+    "reportedNanoUsd": 1535065760,
+    "unknownNanoUsd": 0,
+    "byPhase": {
+      "development": {
+        "settledRuns": 7,
+        "reportedNanoUsd": 172275910,
+        "unknownNanoUsd": 0
+      },
+      "pilot": {
+        "settledRuns": 32,
+        "reportedNanoUsd": 172989140,
+        "unknownNanoUsd": 0
+      },
+      "measured": {
+        "settledRuns": 100,
+        "reportedNanoUsd": 1189800710,
+        "unknownNanoUsd": 0
+      }
+    }
+  },
+  "reconciliation": {
+    "knownProgrammeChargesNanoUsd": 2081050546,
+    "accountingExposureIncludingBaselineHoldsNanoUsd": 3581050546,
+    "remainingAgainstCeilingNanoUsd": 26418949454
+  },
+  "limits": [
+    "Arithmetic over the identified original ledger, not an account-debit audit.",
+    "Unknown-charge holds are admission assumptions, not audited charges or proven upper bounds.",
+    "Subscription and notional list-price usage are excluded from OpenRouter programme cash charges.",
+    "The original ledger is not retained in the archived reproduction bundle; this summary does not permit independent row-level or chain verification."
+  ]
+}

@@ -1,0 +1,3 @@
+population,analysis_class,primary_available,total_primary_available,token_claim,fifty_percent_hypothesis,quality_claim,overall_saving_claim,quality_loss_margin,uncached_ratio,uncached_lower,uncached_upper,total_ratio,total_lower,total_upper
+replay,measured-series,false,false,unavailable,not-established,insufficient-precision,not-established,0.5,1.4021317146186183,,,1.7338533090864585,,
+live,measured-series,false,false,unavailable,not-established,insufficient-precision,not-established,0.5,1.053874469565309,,,1.213532995580084,,

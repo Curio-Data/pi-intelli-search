@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="440" viewBox="0 0 760 440" role="img" aria-label="replay: measured-series paired query means">
+<rect width="760" height="440" fill="#ffffff"/>
+<text x="24.0" y="34.0" font-size="15" text-anchor="start" fill="#111827" font-weight="600">replay: measured-series paired query means</text>
+<text x="24.0" y="52.0" font-size="12" text-anchor="start" fill="#6b7280">uncached input tokens, off vs on; Diagnostic Only; Not Claim Evidence</text>
+<line x1="70" y1="350.0" x2="736" y2="350.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="62.0" y="354.0" font-size="11" text-anchor="end" fill="#6b7280">0</text>
+<line x1="70" y1="280.0" x2="736" y2="280.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="62.0" y="284.0" font-size="11" text-anchor="end" fill="#6b7280">3847</text>
+<line x1="70" y1="210.0" x2="736" y2="210.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="62.0" y="214.0" font-size="11" text-anchor="end" fill="#6b7280">7695</text>
+<line x1="70" y1="140.0" x2="736" y2="140.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="62.0" y="144.0" font-size="11" text-anchor="end" fill="#6b7280">11542</text>
+<line x1="70" y1="70.0" x2="736" y2="70.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="62.0" y="74.0" font-size="11" text-anchor="end" fill="#6b7280">15389</text>
+<line x1="70.0" y1="263.0" x2="70.0" y2="260.2" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="70.0" cy="263.0" r="4" fill="#4b5563"/>
+<circle cx="70.0" cy="260.2" r="4" fill="#2563eb"/>
+<text x="70.0" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 70.0 384)">CS-RES-01</text>
+<line x1="121.2" y1="275.6" x2="121.2" y2="218.5" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="121.2" cy="275.6" r="4" fill="#4b5563"/>
+<circle cx="121.2" cy="218.5" r="4" fill="#2563eb"/>
+<text x="121.2" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 121.2 384)">CS-RES-02</text>
+<line x1="172.5" y1="206.9" x2="172.5" y2="191.1" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="172.5" cy="206.9" r="4" fill="#4b5563"/>
+<circle cx="172.5" cy="191.1" r="4" fill="#2563eb"/>
+<text x="172.5" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 172.5 384)">CS-RES-03</text>
+<line x1="223.7" y1="211.9" x2="223.7" y2="170.5" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="223.7" cy="211.9" r="4" fill="#4b5563"/>
+<circle cx="223.7" cy="170.5" r="4" fill="#2563eb"/>
+<text x="223.7" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 223.7 384)">CS-RES-04</text>
+<line x1="274.9" y1="141.2" x2="274.9" y2="90.7" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="274.9" cy="141.2" r="4" fill="#4b5563"/>
+<circle cx="274.9" cy="90.7" r="4" fill="#2563eb"/>
+<text x="274.9" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 274.9 384)">CS-RES-08</text>
+<line x1="326.2" y1="272.6" x2="326.2" y2="236.5" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="326.2" cy="272.6" r="4" fill="#4b5563"/>
+<circle cx="326.2" cy="236.5" r="4" fill="#2563eb"/>
+<text x="326.2" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 326.2 384)">CS-SER-01</text>
+<line x1="377.4" y1="276.3" x2="377.4" y2="247.5" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="377.4" cy="276.3" r="4" fill="#4b5563"/>
+<circle cx="377.4" cy="247.5" r="4" fill="#2563eb"/>
+<text x="377.4" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 377.4 384)">CS-SER-02</text>
+<line x1="428.6" y1="280.0" x2="428.6" y2="215.3" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="428.6" cy="280.0" r="4" fill="#4b5563"/>
+<circle cx="428.6" cy="215.3" r="4" fill="#2563eb"/>
+<text x="428.6" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 428.6 384)">CS-SER-03</text>
+<line x1="479.8" y1="192.2" x2="479.8" y2="129.8" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="479.8" cy="192.2" r="4" fill="#4b5563"/>
+<circle cx="479.8" cy="129.8" r="4" fill="#2563eb"/>
+<text x="479.8" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 479.8 384)">CS-SER-04</text>
+<line x1="531.1" y1="203.4" x2="531.1" y2="175.1" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="531.1" cy="203.4" r="4" fill="#4b5563"/>
+<circle cx="531.1" cy="175.1" r="4" fill="#2563eb"/>
+<text x="531.1" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 531.1 384)">CS-SER-05</text>
+<line x1="582.3" y1="187.1" x2="582.3" y2="163.9" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="582.3" cy="187.1" r="4" fill="#4b5563"/>
+<circle cx="582.3" cy="163.9" r="4" fill="#2563eb"/>
+<text x="582.3" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 582.3 384)">CS-SER-06</text>
+<line x1="633.5" y1="259.7" x2="633.5" y2="169.8" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="633.5" cy="259.7" r="4" fill="#4b5563"/>
+<circle cx="633.5" cy="169.8" r="4" fill="#2563eb"/>
+<text x="633.5" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 633.5 384)">CS-SER-10</text>
+<line x1="684.8" y1="219.7" x2="684.8" y2="170.7" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="684.8" cy="219.7" r="4" fill="#4b5563"/>
+<circle cx="684.8" cy="170.7" r="4" fill="#2563eb"/>
+<text x="684.8" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 684.8 384)">CS-SER-11</text>
+<line x1="736.0" y1="235.0" x2="736.0" y2="155.3" stroke="#9ca3af" stroke-width="1.5"/>
+<circle cx="736.0" cy="235.0" r="4" fill="#4b5563"/>
+<circle cx="736.0" cy="155.3" r="4" fill="#2563eb"/>
+<text x="736.0" y="384.0" font-size="10" text-anchor="end" fill="#374151" transform="rotate(-35 736.0 384)">CS-SER-12</text>
+<text x="16.0" y="422.0" font-size="11" text-anchor="start" fill="#6b7280">query clusters: 14; missing queries: 1; undefined ratio queries: 0</text>
+<text x="526.0" y="40.0" font-size="11" text-anchor="start" fill="#4b5563">● off (control)</text>
+<text x="636.0" y="40.0" font-size="11" text-anchor="start" fill="#2563eb">● on (treatment)</text>
+</svg>

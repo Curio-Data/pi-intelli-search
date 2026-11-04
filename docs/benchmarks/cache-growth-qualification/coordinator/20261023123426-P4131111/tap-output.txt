@@ -1,0 +1,20 @@
+▶ M4 cache growth and recovery qualification (profile: full)
+  ✔ q0: driver refuses reused evidence and unknown profiles without starting populations (453.262901ms)
+  ✔ q1: committed run-store growth records allocation, index and candidate-read costs (121807.413737ms)
+  ✔ q2a: exact structural-limit query bytes at the allocation and marker boundaries (801.00607ms)
+  ✔ q2b: a real committed population reaches the secondary-index budget; writer and reader refuse beyond (12782.348074ms)
+  ✔ q3: repeated corrupt-index reads rebuild in memory; a writer repairs only secondary metadata (43.587474ms)
+  ✔ q4shape: whole-parent scan accepts a legacy, staging, committed and uncommitted cache shape (6.328227ms)
+  ✔ q4: physical whole-parent scan at the unchanged 100000-entry cap boundary (9060.002183ms)
+  ✔ q5: pinned pi-v0.19.0 and current writer processes share one parent without metadata interference (928.368866ms)
+  ✔ q6: non-destructive recovery drill refuses damaged history and archives explicitly (3386.705843ms)
+evidence summary: /srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-research/.tmp/m4-growth/qualification/20261023123426-P4131111/summary.json
+✔ M4 cache growth and recovery qualification (profile: full) (149272.154698ms)
+ℹ tests 9
+ℹ suites 1
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 149852.789835

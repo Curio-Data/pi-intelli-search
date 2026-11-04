@@ -1,0 +1,54 @@
+{
+  "csv": "context-exposure.csv",
+  "datasetSha256": "1c5d1ce1193bca80f27625d80defa02b8ace79e02890e64cf3127266c39f1901",
+  "unit": "UTF-16 code units of original page text; interpretation.units names the diagnostics in other units",
+  "columns": {
+    "population": "replay or live",
+    "workflow": "workflow, or all",
+    "arm": "off or on",
+    "runs": "compared runs",
+    "complete_runs": "runs in the means and medians",
+    "incomplete_runs": "excluded, not zero",
+    "unavailable_runs": "excluded, not zero",
+    "raw_page_characters": "page characters summed over all requests in a run",
+    "whole_page_or_long_run_characters": "the JSON field wholePageCharacters",
+    "short_run_characters": "the JSON field quotationCharacters: short exact page-text runs",
+    "peak_request_characters": "largest single request in a run",
+    "mean_request_characters": "run total divided by its requests",
+    "requests": "requests per run",
+    "short_run_below_64_characters": "the part of short_run_characters in runs below 64 characters, where coincidence is plausible",
+    "skipped_before_delivery_characters": "page characters in items placed before their page was delivered; not counted in any other column"
+  },
+  "medianColumns": "Each measure has a _mean and a _median column over complete runs; the two diagnostic measures also have a _total over the same runs",
+  "methods": [
+    {
+      "version": "raw-page-characters-v2",
+      "minimumSpanCharacters": 32,
+      "quotationCeilingCharacters": 1024,
+      "quotationPageShare": 0.25,
+      "classificationProvenance": "post-hoc-descriptive"
+    }
+  ],
+  "definitions": {
+    "rawPageCharacters": "Retrieved page characters in actual main-model requests, counted per request.",
+    "wholePageCharacters": "Whole-page or long run: any other exact run at or above the minimum. It may be a partial page, and retrieved pages can themselves be capped by the tool.",
+    "quotationCharacters": "Short exact page-text run: shorter than the ceiling and below the page share. A size class only; no justification is judged and no quotation claim is made."
+  },
+  "labels": {
+    "wholePageCharacters": "whole-page or long-run exposure",
+    "quotationCharacters": "short-run exposure (short exact page-text runs)"
+  },
+  "interpretation": {
+    "scope": "Descriptive only. Not an endpoint and no input to any claim assessment. No quotation claim is authorised; final owner review of publication wording is pending.",
+    "cumulativeRequests": "rawPageCharacters is a sum over requests, and each request re-sends earlier history, so it grows with the number of requests as well as with page volume. Arms can differ in request count. Read it beside peakRequestCharacters and meanRequestCharacters.",
+    "replaySignal": "Replay exposure is largely set by the fixture: where the same recorded result reaches both arms, the figure can match by construction. Replay figures carry limited arm signal and are not comparable with live figures.",
+    "classes": "wholePageCharacters and quotationCharacters are compatibility field names for two size classes that sum to the total. Their definitions and limits are in definitions and methods. The limits were chosen post hoc, after retained data was inspected.",
+    "missingData": "Incomplete and unavailable runs are excluded from means and medians, never counted as zero.",
+    "deliveryGate": "An item counts against a page only when a call naming that page's URL has its output at or before the item in the same request. The gate holds per URL, not per retrieval: once one such call has delivered, all captured text for that URL can match. Page text placed earlier, such as a search answer sharing wording with a page fetched later, is not counted. skippedBeforeDeliveryCharacters and the skipped_before_delivery_characters columns report it, and it is in no total.",
+    "shortRunFloor": "Runs just above the 32-character minimum can be coincidental shared wording. shortRunsBelow64Characters and the short_run_below_64_characters columns show the part of the short-run class below 64 characters. Inspect those spans before treating short runs as deliberate quotations; no coincidence correction is applied.",
+    "comparedRuns": "The runs table lists every run in the dataset. Only rows with compared true enter the means, medians, totals and CSV: other partitions, fixture captures, synthetic driver runs, reruns and single-arm runs are false, so summing the table gives a different population. diagnosticTotals also includes incomplete and unavailable compared records, while the skipped and below-64 figures use complete records only.",
+    "units": "Totals, spans, gateSkipped and unscannedRole are original page characters. excluded.urlOnly and excluded.promptEcho are positions in the canonicalised request item, so they must not be added to page characters. urlSubstitutedSources and the nonNfc diagnostics are counts of entries, not characters.",
+    "limits": "Exact runs below 32 characters are not counted, so paraphrase and shorter fragments are invisible. The frozen study settings cap fetched and extracted page text at 16,000 characters, so a whole-page run may be a partial page. Encrypted reasoning items are not inspectable. A tool outside the measured catalogue makes a run incomplete. Text in a different Unicode form from its page is partly undercounted.",
+    "magnitudes": "replay: over 76 compared complete runs, 94213 of 293863 short-run characters sit in runs below 64 characters, and 9939 page characters sit in items placed before delivery and are not counted. live: over 79 compared complete runs, 10161 of 36671 short-run characters sit in runs below 64 characters, and 13791 page characters sit in items placed before delivery and are not counted."
+  }
+}

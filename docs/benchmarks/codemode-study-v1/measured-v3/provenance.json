@@ -1,0 +1,1178 @@
+{
+  "schemaVersion": 2,
+  "edition": "publication-v1",
+  "inputDataset": {
+    "sha256": "668409e6b2730247de7103456472996605b3e9bc3ceeaaf73d15bd85a201e498",
+    "note": "The input filename is withheld; the digest identifies the input"
+  },
+  "sanitisedDatasetSha256": "1c5d1ce1193bca80f27625d80defa02b8ace79e02890e64cf3127266c39f1901",
+  "buildRuntime": {
+    "node": "v24.19.0",
+    "platform": "linux",
+    "loader": "tsx@4.23.15",
+    "note": "Recorded at build time. Compare the runtime used for independent reproduction against these values."
+  },
+  "exporter": {
+    "commit": "3546343265110d21610f0656bc202720ed9e97c3",
+    "dirty": false,
+    "comparedWithRecordedExperimentalCommit": "differs (exporter 3546343265110d21610f0656bc202720ed9e97c3, recorded experimental b330750d2b771007372c59ce2a220c17c1da16e9)",
+    "sourceSha256": {
+      "canonical.ts": "f93734cb93c7aace2cbd067957f48e0537366200466c7656d1d11857a3595e56",
+      "run-observation.ts": "817715242b16267b8aef22294839a6f8bb4d86b205d09b474851f7cbaf6cfad6",
+      "statistics.ts": "e96644cdaa2040b1458d81c7314d702900c6bf1e8f5586fb353c8fa8ab17cd2d",
+      "study-analysis.ts": "54428e388b06a342ca67319fb493390f231d71ad696407fd4624d5dec85e56e3",
+      "study-context-exposure.ts": "5e3130f0e29b6e47901792fdfa96843110fb71a48431b91b1e4758c91944d4ed",
+      "study-publication.ts": "9da4cdf0840b37d9ef26437339fae546620480a16a36f28867968ad931c64de5"
+    }
+  },
+  "redactions": {
+    "localPathsRedacted": 14,
+    "sessionIdsRedacted": 0,
+    "credentialsRedacted": 0,
+    "jsonPointers": [
+      "/quality/records/47/score/rationale"
+    ],
+    "droppedKeys": {
+      "session": 656,
+      "executable": 328,
+      "args": 328
+    },
+    "removedArtefactPaths": 360,
+    "extraDenyListEntries": 2
+  },
+  "degenerateWorkspaceDigests": 68,
+  "privateArtifacts": [
+    {
+      "runId": "CS-SER-01-capture-on-r1-20261103T111743019Z-6ead6c",
+      "privateManifestSha256": "7b6add8ec3481d1645806d33f683dc17a877bffb4fd71359505c7d4647962cbf",
+      "privateWorkspaceSha256": "043c01ea3835989138c28e99f782a735a235b341766eb2feb162aa85939478e8",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-02-capture-on-r1-20261103T111853836Z-2eb253",
+      "privateManifestSha256": "ae87eb3f0f5b49bd734dc7d06a96e9d12e671515d2713128175625e1e96d6ec1",
+      "privateWorkspaceSha256": "7678abc3c6adf477b38387d49cffaebf9b663ff8e826d4e7b41d28b6643229e0",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-03-capture-on-r1-20261103T111957204Z-ec7549",
+      "privateManifestSha256": "90850028ce5f5bb736eb5a5b8cc3623230ba1238baed863efb7ac2109c593275",
+      "privateWorkspaceSha256": "a9ec15a06e4cc0ddef716e784e4baaf978593badfc57e85d66a6e0e9e7946009",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-04-capture-on-r1-20261103T112104158Z-e3b7e6",
+      "privateManifestSha256": "6fd46ef378a9b3bb70325e87663b206609a0f277f522d4213fde85255c140161",
+      "privateWorkspaceSha256": "b798a73d23147cc0a423e15a01998a6d33f7b2f088f05e3d7ae17b95a3265d2f",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-05-capture-on-r1-20261103T112238208Z-36ef18",
+      "privateManifestSha256": "d32b087e80a0f36ba2220044fff5102ad33e29b83c1cd92b05068bf5cb4688ec",
+      "privateWorkspaceSha256": "5fd10f58c485243812a34e60b54e90274ca5267e57f4c9bd26d95f09def07fea",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-06-capture-on-r1-20261103T112405070Z-01cbe0",
+      "privateManifestSha256": "3c16622680c1ae6b50cb7f188a3540e5bddea9dfc86d9d87e0c3fce99cd4281f",
+      "privateWorkspaceSha256": "1e495719014516949f2363b3241fb39059e38b735d48bbecf133da6ceca697ba",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-07-capture-on-r1-20261103T112552043Z-d45e06",
+      "privateManifestSha256": "5587f9f59262e17ec157904041a27230d5c32df6ff905e8504009363689730a1",
+      "privateWorkspaceSha256": "413d4cbebe89c863a25ecced0f7679f35a604d57a184ac0e3865ee0a696b92da",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-08-capture-on-r1-20261103T112752974Z-2f4bca",
+      "privateManifestSha256": "b3ee070f883bf5a95b0efe924799dc586e8a662fc69d22e503010daa4001839f",
+      "privateWorkspaceSha256": "90eafffba1d29ee86fa077ff6ec2fc5151b684e46683342bed7bf8ec503961e5",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-09-capture-on-r1-20261103T112945805Z-b4487f",
+      "privateManifestSha256": "ef8834ae7ba519c39a1dfa436402d2c195feb5662e5b5627bd4af3e5c9ce3843",
+      "privateWorkspaceSha256": "77eada0c6f8ee578e502dc8bc9ac08f8cda1179ee8dbbb0b3151f0be1a96905f",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-10-capture-on-r1-20261103T113147628Z-c558ca",
+      "privateManifestSha256": "a3c5a7b3f45f78438781c4cc0183e524b798bc9a3ffef33eaef70f83e7ac448b",
+      "privateWorkspaceSha256": "8d7dc14733b1be07c0f7bc450284d32b49f271000cdd5c5ef0f75b26caf15504",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-11-capture-on-r1-20261103T113319925Z-2ef924",
+      "privateManifestSha256": "df4a476849d2d361384bfd429cfe0f664a0b4f33d9690f476def667f898f3da6",
+      "privateWorkspaceSha256": "2a1b1388fb35aeecdfbd94e139806bc6d190d2f213fd7d3b1ef19c50e55a1f26",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-12-capture-on-r1-20261103T113439560Z-0aa69a",
+      "privateManifestSha256": "dc3b6edb50cd0fcdff502cc9b9b68605c22b88e0b5ac5e4aba013918b87f7e84",
+      "privateWorkspaceSha256": "751e8fef075623b887ee50180be975fb55fc7bdc1cbcd19e02ff61ed5127093a",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-01-capture-on-r1-20261103T113539778Z-00cff9",
+      "privateManifestSha256": "d4054ac5c1447a693cfafc6b741a8620495f8e3a944cc90c85b910a87f8a328e",
+      "privateWorkspaceSha256": "8c2e9ca1344bce1b9ea03c2c1b9aab85513dde27d46e30de584fcc2f66ef1daa",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-02-capture-on-r1-20261103T113655985Z-6d9176",
+      "privateManifestSha256": "3c052a790a2f37f46d1703e2fa1a66ecd6f8151dbcbbe5ffc8580bba75dc18ec",
+      "privateWorkspaceSha256": "ccd5a677e026844a186d6a08f584f608f0278ff157480a10b94a442677d2d8c2",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-03-capture-on-r1-20261103T113801419Z-49d0d1",
+      "privateManifestSha256": "b84930ec911e7440d2172f406cc85c44239ace75215dfdc9d243392617706992",
+      "privateWorkspaceSha256": "56c2511b145c852ecbe5c910c91daaa3b4e1dfecdd61fd14d8daa61783f81c86",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-04-capture-on-r1-20261103T113909746Z-6750e8",
+      "privateManifestSha256": "e6e26aac3a8170526172e9df967993eff21dd25463809188e331a494bdbbb06b",
+      "privateWorkspaceSha256": "a99351bbbbe69262c66b03488406107d1c305bf68c36a2378b79a23e0c99a8f2",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-05-capture-on-r1-20261103T114040441Z-6a8158",
+      "privateManifestSha256": "3a9ac059fbb8ba49187d8ea7b5d4ae410957ae328c9f41a526865b7835eec451",
+      "privateWorkspaceSha256": "93ad91b6bb91c8412c2ba11a614e2e81df4a26881e0491c5e3e4197f2a5578f7",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-06-capture-on-r1-20261103T114145113Z-3c0ad3",
+      "privateManifestSha256": "19bf98151bd54af236ad0c0f342f7f8c9b79bc112dbf81c25f0c26a9bb5e6480",
+      "privateWorkspaceSha256": "08fa5a22e1e669d0c1f1acf415b2729d06d8a16d9b49e50831821fd61ceb5b69",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-07-capture-on-r1-20261103T114317944Z-bb0b53",
+      "privateManifestSha256": "a16b3e495186e2bea45f128709942037b3c3a286df27b863b9fc3d1fccfa3f72",
+      "privateWorkspaceSha256": "7e58555b8e61775a9b616de47d021952067f3a34ef58f76c91a0f468b2b8ad6a",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-08-capture-on-r1-20261103T114444328Z-73f3ff",
+      "privateManifestSha256": "4400a3b35ed0f5c817e9e3e54b5bbbd31d0bd421d639239b0fb710201340c5f7",
+      "privateWorkspaceSha256": "01836090e84df477c474419c2555d1234c80efa53ced2c89587b05fe0a9e1920",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-01-replay-off-r1-20261103T143417073Z-534e3e",
+      "privateManifestSha256": "ca6c590cf2183bb80f73f02ce8b6cb5f796106ba8ab6dec1fe98b11f90f54839",
+      "privateWorkspaceSha256": "2213cac4598442998cc15a34ccaa456653dd07bf277945a5d26aa599cb584a9c",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-01-replay-on-r1-20261103T143529308Z-6d96ad",
+      "privateManifestSha256": "670d8b1f262c31d261e0cccd137d1e0eb1ddcea7b995e770fc4fd18b090a6d7e",
+      "privateWorkspaceSha256": "aec67aa5567ee80909b239040df401dbc6d1fc0825898c785bac9a87e123a79f",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-01-replay-on-r2-20261103T143642296Z-60f445",
+      "privateManifestSha256": "a446f5c3242c5d47e22706a2cdca2ecaa628db50342178390d67b2753dd1f629",
+      "privateWorkspaceSha256": "bbc792f6cbfa0e8d51a0513efa69be0e1adb3b773ef28ed5df42f04ce2c568f3",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-01-replay-off-r2-20261103T143754467Z-749632",
+      "privateManifestSha256": "359ab8ea47c1eec18d44416ed6442492b839fcf21591ae05d3421ac9f4d7f0a8",
+      "privateWorkspaceSha256": "868f31b05159ea3d20aa48723d85c72a4ac1a593d512b74aff44433e2633573a",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-02-replay-on-r1-20261103T143906315Z-04abf7",
+      "privateManifestSha256": "bb5d116df8af6a544fd08e02252dd0c4d6985c1ae7dd726d140f09494b4b5f0c",
+      "privateWorkspaceSha256": "2c1c809f7e0e056828e1641ec0625af1b1fda3fe88c7b11833b37bf781f01374",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-02-replay-off-r1-20261103T144011994Z-01a281",
+      "privateManifestSha256": "a9cfddac6752f73d6add29d06c9cc0b81a2867b6f597d109e18e1f5ece7f222e",
+      "privateWorkspaceSha256": "1c9e6216b6935f85d175eeac9c2f36b8c8531f30c0b62dccdf672c1d5b85eb1d",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-02-replay-on-r2-20261103T144123267Z-daf3aa",
+      "privateManifestSha256": "ba8563569b7308fc01584c7f0f5f7159b0d30ec15f1e9f94e26a3de99e8e61df",
+      "privateWorkspaceSha256": "31d178b6507811acb87decde50b1dc63b4debb0e41bbe69d1bfa1046d6fc94b0",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-02-replay-off-r2-20261103T144232291Z-5b37cc",
+      "privateManifestSha256": "4ada65f1e608f29c593682f0babd925c96a1dbc998822fc06df0e1d787131cf7",
+      "privateWorkspaceSha256": "3e8254c069797c24dff703a8be0f068277ffc75e7030f0f5e0b187f5635d8c3b",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-03-replay-on-r1-20261103T144340437Z-04b5fd",
+      "privateManifestSha256": "1ab94d3e5fd15fb0c41da8de5dae5fe4cd255759c8f382e2bc567ff82c6b379e",
+      "privateWorkspaceSha256": "49b0f5ff5830f4ec6651483c4e658b3f59f9023354cd8804bdc577d32cc0e786",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-03-replay-off-r1-20261103T144448511Z-cdcc48",
+      "privateManifestSha256": "bf53c08430576a41849ab09fd8488ec0900f6d7ec17293132a7bdf95b41ba12a",
+      "privateWorkspaceSha256": "b93a4c78ddc68da356e660cf56ef50beff3a37f16c69fd141bdea03137dd2620",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-03-replay-on-r2-20261103T144550880Z-c740f8",
+      "privateManifestSha256": "6efcd9f68a338eaf2cb1564ce228f5ba85af3a610631ab03f30d25a92ddbdc43",
+      "privateWorkspaceSha256": "1dff2e301db740ce7b7c98d255ef4e294ecb829f9261a48bfd7a2dd80b06dbb7",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-03-replay-off-r2-20261103T144659953Z-f299f1",
+      "privateManifestSha256": "e6ef4861d6facbb34009dd7ab0131edc13e4542e9d3390e1fb992478e94a8f3c",
+      "privateWorkspaceSha256": "f4c0bdd27c0bbc70a5c2dc5e155ef9ac6fba938c35148f443cbbd0696ffbb4b9",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-04-replay-off-r1-20261103T144812494Z-737a9f",
+      "privateManifestSha256": "e074910fccc01508af8284669d31fc1321ec444deca93af21463ece209041856",
+      "privateWorkspaceSha256": "c2b9c8959af0aa6c37f3ab1d56ea3c75267a24f957eb23298a500028f868b5f7",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-04-replay-on-r1-20261103T144948964Z-80232e",
+      "privateManifestSha256": "ba1ed7b555c0627a54f58a04a4727b12b72270d4877d6fdc1912ce0cdeed2b37",
+      "privateWorkspaceSha256": "e6760e492d309465c08bcc1905e68b6c7e7ad4b0702ad0532fdabd7abe7b45c6",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-04-replay-on-r2-20261103T145128157Z-96ae5a",
+      "privateManifestSha256": "1effe0a816fd0ffc9ed43d6ead9222e3b8a717890d3c6d88464ceee110ce76b6",
+      "privateWorkspaceSha256": "cf94d10297850951859e2aaf9a9f6a7d6aeb1aa97d0339bf40fc4db40945772a",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-04-replay-off-r2-20261103T145302715Z-206ead",
+      "privateManifestSha256": "1f718206ba8ca31355fa85d4fddc7cfa6b143fecef514bc3eff874888379575c",
+      "privateWorkspaceSha256": "7e89a158bbab548877c581c7502b9dcd32f11ac4b3ff9de27f404eb26d9347ac",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-05-replay-on-r1-20261103T145444346Z-94d465",
+      "privateManifestSha256": "ea3043e19406eff5c624d167781f333ac1e1be9f8f0a751d9e8c92953a29bf29",
+      "privateWorkspaceSha256": "e465c9d7a21e1791a5d6eafd59a90bf5a44428cf5f574ebdf3f8f72d61953088",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-05-replay-off-r1-20261103T145615632Z-30884b",
+      "privateManifestSha256": "f5359f88d8f8793b4aedd980f6e4730cd23043683530e0d84ef71c868c4fe387",
+      "privateWorkspaceSha256": "9e45212fbe538bf4ed26ed5d2aae53c6cdc2967c574d735a0e9d3ada909ce16e",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-05-replay-off-r2-20261103T145749350Z-7de486",
+      "privateManifestSha256": "6ac0e4d5e28cfa17316488fe46e49eee267391eb1b25b3698596b7a45ca8a56c",
+      "privateWorkspaceSha256": "7921af8afd1e768a0750ad228ccb75d542cd34ff2cbebeb4c049b9ba648340a3",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-05-replay-on-r2-20261103T145914044Z-2d540f",
+      "privateManifestSha256": "fcf04743980ea25cdd6a223811cc23f45cd4d38a96b8c20b1ce65bcfc943f91e",
+      "privateWorkspaceSha256": "eb88a3bce5c6f4da9a35a848ca868def6f47d88666da7fe470ff44630741de2b",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-06-replay-on-r1-20261103T150038799Z-ed449f",
+      "privateManifestSha256": "67ec7d35ca153f9efb745b735d73e4ba5e5a14302d958a0381dcccc8da1917e5",
+      "privateWorkspaceSha256": "64227f63a5d414e6b1c676fa7dce4afeee90e6a61bc393e7f0fcee5bca45852f",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-06-replay-off-r1-20261103T150225530Z-12c622",
+      "privateManifestSha256": "f254053cf5c2b44613672fd387d7d1088019608c9bb4464516c42dd6cd3750c7",
+      "privateWorkspaceSha256": "dbf92047d314ee7e3876baf0dca87919053a031ba2e5c23b405e212abb251dd4",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-06-replay-on-r2-20261103T150419017Z-aa2958",
+      "privateManifestSha256": "6d6b3e831e2299886848b1d064aeb4defe0cacb1a7ecefbd64082097e4b29acf",
+      "privateWorkspaceSha256": "78d8a9e754e3f0adb1bac0169f9bd29dc040ee708e90ed56f71eb5a8fdc73d5b",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-06-replay-off-r2-20261103T150606410Z-adb768",
+      "privateManifestSha256": "773d3d2d3f126ef7f1b35fa3f99cce3243af70b2b9bfdf3229ae6baed714f2e2",
+      "privateWorkspaceSha256": "38fb7c5a392108508a90be202b46e00305d3decabff716f84a75e5091ccab4b1",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-07-replay-off-r1-20261103T150754856Z-62ad25",
+      "privateManifestSha256": "10d495e7e50e033e585970d12511ac6ca9fcf64074a3bbaece31c3207cf682db",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-07-replay-on-r1-20261103T150914892Z-84dc87",
+      "privateManifestSha256": "d18ffeaecceb71d752a202ffaa20bab1d728bc47aa7bd5956dc33e8f91b19393",
+      "privateWorkspaceSha256": "be7eab317a14f6c97cc116c33d0c2533292396d01f92b8031d490c4371d88749",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-07-replay-off-r2-20261103T151108464Z-1668e5",
+      "privateManifestSha256": "0c65782f876de7b2e51e750dc1e9b1caa76b44c8828cc05d9a0f12cd0b6ab31a",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-07-replay-on-r2-20261103T151135694Z-29a62f",
+      "privateManifestSha256": "b02c8b63c367844b8f3e3a57dae0de189ec9b8568f96f5f693915a8fd927b10b",
+      "privateWorkspaceSha256": "fcf5ea7760bf3707bfead55fadcb1b38acd9f5164c2af17fb3140acf492a945d",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-08-replay-on-r1-20261103T151328785Z-8f122c",
+      "privateManifestSha256": "834352908c1512b601654b725b4adbb1b968f18af05e1c50df99f3436ea83390",
+      "privateWorkspaceSha256": "7261617b2ebb4cdf93dbeefc23ecaafd64a0c845751593af6aeec672dc3980ae",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-08-replay-off-r1-20261103T151522603Z-0390af",
+      "privateManifestSha256": "c8f57158630acbda3c9ccb7b0690d06c4fd18b12d4a17aff2bfdf52c7b2452d2",
+      "privateWorkspaceSha256": "860021d40f613411ed7052864947e781edcc8a571cbca4c3fc11632ea7045ad2",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-08-replay-off-r2-20261103T151925438Z-4850f3",
+      "privateManifestSha256": "dc8f94455b4268c9f209976301e6dd82c344285e7ad83cb0dbc021c2d219bd5a",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-08-replay-on-r2-20261103T152038661Z-bf99e6",
+      "privateManifestSha256": "f60feefc9f9eb62ab18a99cd933c7a07e7ee5496124766364cc1462962fa34c0",
+      "privateWorkspaceSha256": "a7653c164e71930a838d6414040d349d51601440164cf273bbde12e89f9d90c5",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-09-replay-off-r1-20261103T152230875Z-bb568b",
+      "privateManifestSha256": "f4238a40962ef521200b83a311db7f3182d8795058fd127e0bf6c3017f97160c",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-09-replay-on-r1-20261103T152405697Z-924587",
+      "privateManifestSha256": "76afd2a7d29312a075436062dfde874ee2da4a693e822e310854d13bc94758e5",
+      "privateWorkspaceSha256": "8020e6dcd69d331119b42088342b523b48570ac4352e2876a356ad6be81da142",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-09-replay-off-r2-20261103T152602036Z-7e8650",
+      "privateManifestSha256": "b7f23bd2d84feebf3da545f496f25f388d0503d8d935d5bd8e774ebfb193403d",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-09-replay-on-r2-20261103T152737894Z-c161cd",
+      "privateManifestSha256": "b638e8322f50296d510725bf02d1b5bd3ab37f9a35562666e7a7ee91bfab5dfe",
+      "privateWorkspaceSha256": "60f99bc83de3c759d4e42e9c00a0bedd69a8b9d47481c3e645693ee916507049",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-10-replay-on-r1-20261103T152938409Z-2ab2bf",
+      "privateManifestSha256": "58089be3918efed8be38f773de8899081d1dbbbc8d00f8bfe79632db6fbcac17",
+      "privateWorkspaceSha256": "ca2b787ad7e97037f2c314dd4275cb2b453a92ae2b9f4a12f70387f67eb6a580",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-10-replay-off-r1-20261103T153111627Z-15c69b",
+      "privateManifestSha256": "90de2b9bee41a539945878faea8796087a2df3b619c85fe689ce18a56a662ea1",
+      "privateWorkspaceSha256": "13ba77167aa191633dda0857ceb1b2efa1ef95d77ef984c7600f0fd1013604a5",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-10-replay-on-r2-20261103T153244797Z-a483ca",
+      "privateManifestSha256": "05f0ed48533ea7c5671a7a185332d1157da9502a06e39db30d23ffb20860e327",
+      "privateWorkspaceSha256": "3ce6da4911c9c89731ec4e7b8694518553a498472d50c028c4eedf1e77a0bffd",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-10-replay-off-r2-20261103T153409298Z-b0ecb4",
+      "privateManifestSha256": "65fee4badac63a1061be85b7d5c3476f67ac224904bbc065184a903012c7141a",
+      "privateWorkspaceSha256": "60283bd090acf075a7e1743a47265ac2a849267eaf38746428a6dc5aa4a59a35",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-11-replay-on-r1-20261103T153544499Z-765eef",
+      "privateManifestSha256": "58eb531f1e051905b10e7b8bac818b923c15d0319e5bcc4c52fed0efb234c396",
+      "privateWorkspaceSha256": "1beae2fdfe391447243d754881e4f498822638dc2ffda473f317981dab9ddf09",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-11-replay-off-r1-20261103T153658296Z-00de58",
+      "privateManifestSha256": "d43e1b9d642acc209a0cfae1d3feb5c9026232d3312a6812fc2595c2500c2373",
+      "privateWorkspaceSha256": "5d8b3f5f25e525c3ea5d3bee84e3fb0aafcd13db982493dc424cd8b4625230e7",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-11-replay-off-r2-20261103T153823630Z-291e08",
+      "privateManifestSha256": "626d8123bff5de55d316ce51ffb7c5bd8ece549c53b6dc9e187e8e1ad3b41f9e",
+      "privateWorkspaceSha256": "527d16debb6fe16b86e286921882e822f2fe63decefaf46853e203326135c3ad",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-11-replay-on-r2-20261103T154020774Z-41510e",
+      "privateManifestSha256": "1b61412707714558fc30ef3409e4e5f9a2f5146896ac0d18cc1e074a74357ddc",
+      "privateWorkspaceSha256": "5500375628a2c5c665720859d8b69092e44644d37fa50c1ed321411c276d506c",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-12-replay-on-r1-20261103T154142567Z-80cb0c",
+      "privateManifestSha256": "4cdb2796ba6dff4dbe706f40b86f9f135705433b2fdc98853246d0fe692441fb",
+      "privateWorkspaceSha256": "b67c580742ed17a1022edacbfc00ffecde6e6733f367223761b6629dc196f3be",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-12-replay-off-r1-20261103T154242400Z-c283c6",
+      "privateManifestSha256": "a4b80359c87ecadf45e6a8a8d55e516f15c450da6bc40a57400d5c09476e2162",
+      "privateWorkspaceSha256": "901943ab957eef7a33e4b48082d485463af970e2535a9f420950c51770a8e720",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-12-replay-off-r2-20261103T154340920Z-a72dfe",
+      "privateManifestSha256": "c97d35f4994221998ae23d729862b1c14b70a6f0a405b0d6f19cf6fd94a655d9",
+      "privateWorkspaceSha256": "7885372d4a649359776a0aa134978ef024e85da946fabf706568d5049773b345",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-12-replay-on-r2-20261103T154435816Z-9d3691",
+      "privateManifestSha256": "c450418747017b4bb45ce7b3a232c258f38c6c25616ca20b2188150675ec1e04",
+      "privateWorkspaceSha256": "f1fe47f775d3c233356569cc068b5c58086dd9e84eef08e0aa2281d048fc5252",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-01-replay-on-r1-20261103T154531452Z-f666c3",
+      "privateManifestSha256": "3b5c2e4c310e9e2d79adb0bfd283c13eb1a116ac7db065931e2830badc36cee3",
+      "privateWorkspaceSha256": "c66df5134494493278dd8cdd1443c91fc49d09e543797f96b1bad5fa04017531",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-01-replay-off-r1-20261103T154648985Z-0d359a",
+      "privateManifestSha256": "fc43c23cfd610aa3d5510e1a3d71fa80bd96df42343bf05e57384eddfad6b6fb",
+      "privateWorkspaceSha256": "bd786987e1a806d4dfc38488062b6edef8c1fbc1615450f8d411d7f4ab8c4b86",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-01-replay-on-r2-20261103T154809185Z-5d1ad8",
+      "privateManifestSha256": "ad214c99f8c07c83055b21cd61c83ac4290318092e605367f543d0067f0a7d64",
+      "privateWorkspaceSha256": "377f17926f012522a354dd4ac715503096ae326656a481cabd48999d888c4f31",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-01-replay-off-r2-20261103T154928623Z-a605cc",
+      "privateManifestSha256": "f03dea9f2dafefea1420b315de47b0f7d57a2b477cbe0bdbda6fd0f4117d2497",
+      "privateWorkspaceSha256": "fc00c0d3c35baec676251833dea469e9e204a7649b5c801c6bc9b9d5f88c278d",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-02-replay-off-r1-20261103T155049716Z-dd0d70",
+      "privateManifestSha256": "57928caa664887c7183dba24c8cf8d88c0a914ce899bdff5a7a46e2c0b00c846",
+      "privateWorkspaceSha256": "aceaef89e04ca79076f78f1dc6e2cbe2f4f04d3d0a6d3be50e3a476a1509ccd3",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-02-replay-on-r1-20261103T155151885Z-1a3298",
+      "privateManifestSha256": "261e2fcbdf13d4a20cd059993713727ae6a2d393ba996207fed84f0fd71433fe",
+      "privateWorkspaceSha256": "79c0c3ce1088a1a26849644716e0f5d109f469bbfdf9ea481c14c545ba548e33",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-02-replay-off-r2-20261103T155257921Z-f5c135",
+      "privateManifestSha256": "4751131c9c1cc44deab23c88d401398c2cf609caaa101f1c0bf8f5707ce44a0e",
+      "privateWorkspaceSha256": "46ed3bf1372ab5889a8128f7710ecd940903651e55ee80fefbfeb3c3f7cc3ad0",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-02-replay-on-r2-20261103T155403059Z-a039d9",
+      "privateManifestSha256": "605ab040fdc2b75e6d99eee927acb8e6a9eb089ee09893760892981b5789dfa7",
+      "privateWorkspaceSha256": "62ee4f97d07f89dfe8d06fded1707b9b2a1952717bb91351838653ffaca03fcd",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-03-replay-on-r1-20261103T155508964Z-20f1f6",
+      "privateManifestSha256": "a298b97951e239b6e201827287120307c138e95c4bc49a00a09920bdd324dd46",
+      "privateWorkspaceSha256": "2ae1a5fbb4f8b731c0e9431350a5581b0d7326dbb58938d8154ab785d7de24b8",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-03-replay-off-r1-20261103T155617370Z-a5aac6",
+      "privateManifestSha256": "5b7d238858de77470a80fb71fe78e52bc2f54444514c8a5a567055d399ccad76",
+      "privateWorkspaceSha256": "f2269d68e7696f3d4d125c8472515f815fafbcd6746867b21150644adde9be02",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-03-replay-off-r2-20261103T155726454Z-509020",
+      "privateManifestSha256": "7b3542f56cc6b56db01fd58918c455bd2c65c77625af5bf75353e316b786c2c7",
+      "privateWorkspaceSha256": "478a1d34a36d7a1b6a8541d341d5f72ae24bf9e52db6b640eeb49dbb8d322567",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-03-replay-on-r2-20261103T155835621Z-876479",
+      "privateManifestSha256": "8c9c8c7dca50dec0459c573a8042f781a320d3f5addd83a7eac780fd297ab12b",
+      "privateWorkspaceSha256": "7fcb62f9c728ebbb8e79a31cee820c20e38a802dd0981bf98279a25fc513bd11",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-04-replay-on-r1-20261103T155947722Z-ed4dcf",
+      "privateManifestSha256": "a06b9b9b9f1a42354cc6c550e5e3e420e8077ea2fde78eea2760513e7372bfbd",
+      "privateWorkspaceSha256": "6515291040dfdf36fc5fcd4a1c404b8f05ec70305f1a5afafc8438684f6c9877",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-04-replay-off-r1-20261103T160125964Z-62e117",
+      "privateManifestSha256": "98f61a520c65271b4bc3a5f28bd6d42aa6fc9ac37969819d77124f35493a132f",
+      "privateWorkspaceSha256": "31cacdda1b47e0d427310617c295c274b8aeee97cea1f3dd5a75c46ec22b24ae",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-04-replay-off-r2-20261103T160301509Z-862806",
+      "privateManifestSha256": "01ba4646f28f414a4ad913b648f06b46fcdad06bce34c94a3dd5094028861dc2",
+      "privateWorkspaceSha256": "b4b11bbf8020a101cbe186e3effabf7226f94746bf896d0b24f7913a67a9d994",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-04-replay-on-r2-20261103T160428982Z-a01f55",
+      "privateManifestSha256": "64f88f489f3c597ea2a7c400a0907f1b1944092dbbd0994849148762daea8744",
+      "privateWorkspaceSha256": "1b966f6a893c9c53aa562de7a16bcb4cdd80ca8709e91da76d52570096466666",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-05-replay-on-r1-20261103T160610975Z-bf50b0",
+      "privateManifestSha256": "6ea7fcf1c032cc013d078a40f63a9f55ec6a325446afb6ed10bdd973e08ef39e",
+      "privateWorkspaceSha256": "03353b4946ecae98c6142fa232d4b2f29273cdad375268bf6f1b45f7933257f5",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-05-replay-off-r1-20261103T160717427Z-d0bd33",
+      "privateManifestSha256": "a73ded4a879071024828e915b74fccb75836f5969958467f31aed8712e18be6d",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-05-replay-on-r2-20261103T160858653Z-a50a3d",
+      "privateManifestSha256": "6e06cc4bd982a0d43c666311e663311a3cfcc4de05e272cf2c3ff7c974db22c9",
+      "privateWorkspaceSha256": "bfb190e0b4c9d882f3f4ed1c42450863f8ae721b8c4f2ddce58b8ea1effc1877",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-05-replay-off-r2-20261103T161002307Z-8f74c5",
+      "privateManifestSha256": "cc4a9839f1f60f5fd40344c1f5fa258b48b25961cdf95407f1edaaff839c8cec",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-06-replay-off-r1-20261103T161203574Z-e38fb8",
+      "privateManifestSha256": "8dd4084095bcb928915175a70de71dea1e64cb838e93de45a73f822f72fc1fcd",
+      "privateWorkspaceSha256": "43475b19a89aeae8491325c1ea4bfeaf387acd5459f42011fd03acf174ccf67e",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-06-replay-on-r1-20261103T161506341Z-5e42a7",
+      "privateManifestSha256": "948d4bc9ba166d4062f412503eeecba78a5bb953de0de853b44417f7256d776a",
+      "privateWorkspaceSha256": "9f8718317801c4523d560d36bf062bc62c0d7f6dcbb6e6c58974cbaceecf724e",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-06-replay-off-r2-20261103T161634601Z-336ca3",
+      "privateManifestSha256": "cd87827476b5ceb6b0374e90a4e8449ebf1881f83fe20380f13f678839c61153",
+      "privateWorkspaceSha256": "8e29ab425c6029e24f21b7cbf5c06f644f2c9267fa71a2eacd0258af29a007bf",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-06-replay-on-r2-20261103T161937458Z-e76f4a",
+      "privateManifestSha256": "c3aa00a1a1c387a05e67b5de95cad7d82db73e535dfe453b67542221fa5a01e8",
+      "privateWorkspaceSha256": "cf360adf1326d0b91adf6eb94aa92e919c95cf71f1ade4a079bd5e98e94979f6",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-07-replay-off-r1-20261103T162104249Z-e3fe97",
+      "privateManifestSha256": "fe37f36b7ac55bbcdf494f4248d39c81f659a0a8ad53de35578de493e8367ae7",
+      "privateWorkspaceSha256": "f24d37fbfb6a4a7689285e3805cae16eac060b32f4f860febaa66ee3ee09616c",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-07-replay-on-r1-20261103T162149948Z-6785c2",
+      "privateManifestSha256": "51d74670cbd7f8657b921d915eedb860e99c5c14ef5527b730d0c0ee7966f402",
+      "privateWorkspaceSha256": "dbbeb8f43cbb1ca1cf008796e9339538cd498b54ddae81b28eebe5b8d14cd486",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-07-replay-on-r2-20261103T162237051Z-7036e4",
+      "privateManifestSha256": "01f16c0220061e4881d97535b00f2a9602bf4739379d12ed23356515c48be57c",
+      "privateWorkspaceSha256": "5da69153c6e04f8a410cfe58498df1d0388285ccbaac13244bbee59f4d9efaab",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-07-replay-off-r2-20261103T162322130Z-d41b8c",
+      "privateManifestSha256": "8929e93ef716710bfa3419d57a09158af7c282f2b23e65daf18322f8084b34b2",
+      "privateWorkspaceSha256": "b4a5a99ed41f18f04b6773314f158371c9acdcbb68d7d7c753af5e662f7c866e",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-08-replay-off-r1-20261103T162408015Z-b44df9",
+      "privateManifestSha256": "24a05c604f72f617b63ae356fa9f28c4f6228556e898254496565e6dbda168f7",
+      "privateWorkspaceSha256": "b5fc2c24747485bbf48e2340700f9b242782fdbe43fc8231fc7fe4060995506e",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-08-replay-on-r1-20261103T162513610Z-60b5a0",
+      "privateManifestSha256": "4fabb765c26dffc9752b637727413c023c2095da700a898e574eb092c5103ab6",
+      "privateWorkspaceSha256": "60837d62a5ad561092bf60b0f6af0efc4e2c77215ed601949a016d8a03399f9f",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-08-replay-off-r2-20261103T162621845Z-a87f18",
+      "privateManifestSha256": "8e1e0f9ed06b2701f02bf8b9941de528f93aab2b01fd3044c44c02de722075e7",
+      "privateWorkspaceSha256": "e96cd5673726bcd718e89780801aabb1519db10748d5784bacb8163dce470b35",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-08-replay-on-r2-20261103T162724757Z-f5b10c",
+      "privateManifestSha256": "64fbf60138f22fcce656723640976c8fdbc0666f6ff1b24ec37c0b8c24be606f",
+      "privateWorkspaceSha256": "049f7512dd26f9ce1337bddda16b8c812f4099f78e4db7be52b3c2c5ffa0c3f3",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-01-live-off-r1-20261103T162830887Z-d5803b",
+      "privateManifestSha256": "6e8ada10586170f118b19ba9bfc887c4cb574da6f373f42628ac8af4aff03840",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-01-live-on-r1-20261103T162903613Z-27ee8e",
+      "privateManifestSha256": "d102efd1eaeb27a2d0a59555d69dbe5e0d767bbe47f176c57b88c63370fc3b84",
+      "privateWorkspaceSha256": "4fc157014bc8cc1629016f3955d8d1e71033ae2599f7b26d1823dff51cf36f27",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-01-live-on-r2-20261103T162931654Z-e5968b",
+      "privateManifestSha256": "39a4deaf79a51759a3b89b59a169e18e1050ecf752cf06f91b9a095d18d73e4f",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-01-live-off-r2-20261103T162959438Z-518be4",
+      "privateManifestSha256": "5947de36d6adf499f789b9e7740c0c57702eb4befcad7fe0567a3bd83e1fa4a1",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-02-live-on-r1-20261103T163031043Z-cb4348",
+      "privateManifestSha256": "1945d01aea08dee96ae0d171c0facd6e195960009dd85577f66f10bc438a8e60",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-02-live-off-r1-20261103T163055549Z-a60c48",
+      "privateManifestSha256": "ce3f2aae865f69344d10c1a1e2b5e9794f99b7bf2500e383a5092cfe14033e28",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-02-live-on-r2-20261103T163128802Z-d591f5",
+      "privateManifestSha256": "c4d07ff1cd7bcd50338836b8d240dbbba4c0bafa40a7836939f244001ffa8e6f",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-02-live-off-r2-20261103T163150901Z-fb4145",
+      "privateManifestSha256": "ec542f675cf289e50b9af89c2e3819135d591e32e92d50ba8e5f8f65a6ad97c4",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-03-live-on-r1-20261103T163221320Z-9f2558",
+      "privateManifestSha256": "937792641c8e10e07d13bd09630b32a4f935eaf5c96d57f5659f25d4d1b54ab0",
+      "privateWorkspaceSha256": "d24c63f00ba02632d9d353d9352dceb1465735be841445f51dfee018d3b8e69f",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-03-live-off-r1-20261103T163353274Z-db29f4",
+      "privateManifestSha256": "53452b134672a43a37e215a2911c3d024f762089510027fd7a3f781975b0aa65",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-03-live-on-r2-20261103T163423641Z-81d639",
+      "privateManifestSha256": "91d1580a1ec6c07967434710c20972ac9afa6372653835eb97e079668dd312fb",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-03-live-off-r2-20261103T163446960Z-cdee1c",
+      "privateManifestSha256": "072d4031743dc96591e90ab9d948863d124eec6dfbbafc6fb90ac93406e75039",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-04-live-off-r1-20261103T163521007Z-948ba9",
+      "privateManifestSha256": "6a01f603c453f76a195faba69c9fc95781150437b0f1da393475ae653ba6fe19",
+      "privateWorkspaceSha256": "5d9048c9f3e0d7c9ed7c4af1caa5336632cacf5771e0bbb86c18d3df63ef8f86",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-04-live-on-r1-20261103T163707133Z-0c127c",
+      "privateManifestSha256": "385e6f13c02859474b6fb406a26a31e0a6d8eabdb6ef675942c5289147b9e647",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-04-live-on-r2-20261103T163733402Z-4c9f56",
+      "privateManifestSha256": "12097d5ee1146888a7ddd89e5bec7266afa06436d8cb540fdf7043f64392e4cb",
+      "privateWorkspaceSha256": "2210a4438a44c692049a81d3b003e492b61dfb56c4f68dc3ff342644a8fbd506",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-04-live-off-r2-20261103T163909346Z-70df35",
+      "privateManifestSha256": "d0c49e69b8e4d98dcd389289054eee7df52a6ba50c99b4bd0738693112551d90",
+      "privateWorkspaceSha256": "4ae18cdc598f52ea83cf758658a47cab1c313458421e5000c95dd4aa76dd00f8",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-05-live-on-r1-20261103T164029413Z-a17b17",
+      "privateManifestSha256": "5ccf8489b0feeb9ed394a6d34e338ecd97b6d685609efcc8527c916eeaa05664",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-05-live-off-r1-20261103T164046475Z-190d64",
+      "privateManifestSha256": "fa65b36e75b8957a5a717f38d87db496075dd1dc49b2784144140ac3e6bc7d68",
+      "privateWorkspaceSha256": "4b1249a6d42b08c641ae67ba1b21c557353f4c957ba7bb4318d0d928dfd32a6d",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-05-live-off-r2-20261103T164218645Z-593fdd",
+      "privateManifestSha256": "d63c597735f9d2d40775eb7af543837cbabe5adf38a6ef5b783e97346a3dd2ab",
+      "privateWorkspaceSha256": "1b55578a91eb279f8188a657a29c6df881ca70ca44829469260a948d080807a9",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-05-live-on-r2-20261103T164327661Z-0c1f34",
+      "privateManifestSha256": "d947fd94705d215e96f21d12f471ee427cd7ead6f7e5c7a6e13768d7c77e580d",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-06-live-on-r1-20261103T164355462Z-971952",
+      "privateManifestSha256": "00ea6539e148fcbef5c74545fa026a9734f4ef551cef47a709ca0138cdff86de",
+      "privateWorkspaceSha256": "07bccd66be26309a1c4fc34e4cce38ed45a4d2d769bcbf7cb8b19bdb94e22531",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-06-live-off-r1-20261103T164449164Z-577c19",
+      "privateManifestSha256": "85d572c2975836ba3ad1bfa2413ea912d37362b81656ce8990716bf94b46777a",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-06-live-on-r2-20261103T164527314Z-e2800b",
+      "privateManifestSha256": "9ba011e6b35f6aa867c2a484d90b09afa29581004a92e95c2731ecad92547e8d",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-06-live-off-r2-20261103T164555407Z-075317",
+      "privateManifestSha256": "38f7d042c0c3a8c9ba73ba251c2ff810dbb29a46fda08dc5d6e3560c637f4d91",
+      "privateWorkspaceSha256": "0ecd8f7453597d5812cca0ebe771d160872301034582514e1f33ba3d7a896d80",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-07-live-off-r1-20261103T164721632Z-8ce022",
+      "privateManifestSha256": "5069c706f7dd90b335c18dfd4ff0da871053e057d90dbd19406527e8363b69e6",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-07-live-on-r1-20261103T164811906Z-63eb21",
+      "privateManifestSha256": "2bbe406942755bdfdc3b06e5a35a00dc29fcc2ee0d175cc00f9826d065dea4ad",
+      "privateWorkspaceSha256": "272417bbae9b5bd9ec919e7407f8df672dbfff994678199176b33c36ee9e4a45",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-07-live-off-r2-20261103T165022267Z-079916",
+      "privateManifestSha256": "88a1fcb523697f46c3681d21e07184b9257ad1425be8f8db0f0a0089c6fbfa70",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-07-live-on-r2-20261103T165054653Z-960b7c",
+      "privateManifestSha256": "5489ae93fee706dcd05398b599ab39cb40870b02f9a75b3aca5ed2e1686eb7ee",
+      "privateWorkspaceSha256": "bb0614b0b4e819d85f80d2f0a38a5acf05892cf9792a192b59933fe7982aa33b",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-08-live-on-r1-20261103T165123463Z-2169bb",
+      "privateManifestSha256": "a0b4f92962ec771d05135a4fb7f630755df7da649d4b7db233daaffd258830e9",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-08-live-off-r1-20261103T165151980Z-9c0264",
+      "privateManifestSha256": "1a982c53f3211a6705cfde7acaab12853f747be908c33efebd41b644993ab6df",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-08-live-off-r2-20261103T165218374Z-cfbb44",
+      "privateManifestSha256": "767b7dd65d3499a6a223640ad32994282f1fd3a8afc4c6cf4608de99b281e639",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-08-live-on-r2-20261103T165247202Z-40fcdf",
+      "privateManifestSha256": "13ee26949761a28e78a38dd619f65b457a62b2866f58f9617b301d5425777516",
+      "privateWorkspaceSha256": "6a868561d5f56ec11ed438e50f46513d837c726b437a58669722c7610d793084",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-09-live-off-r1-20261103T165354335Z-5c0f0b",
+      "privateManifestSha256": "48e291ec79d35397df7500b43d30541d47fc53b05cf7c6bf9161a6b019866641",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-09-live-on-r1-20261103T165427544Z-a27db6",
+      "privateManifestSha256": "0282f852655fc6bd1ad34da3eee3ad84778fe893abc4c9c6c73c89ce6decfed6",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-09-live-off-r2-20261103T165455617Z-27df71",
+      "privateManifestSha256": "6f0b43dab8d5c7d67c7e24b93c997d33487ac3a2161bba3ae8d437c3eba15afc",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-09-live-on-r2-20261103T165529568Z-def583",
+      "privateManifestSha256": "9bc6a2da9dacb252b88234b9447c787bca8152d75bbe38de4276517161a667d9",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-10-live-on-r1-20261103T165557130Z-72b85e",
+      "privateManifestSha256": "2b3d2ca490f988e408642ca82b760278716d93c6eb65d0c31942c86c16fbd6d3",
+      "privateWorkspaceSha256": "25f51be63d191ce3a3ccf500ebda1b3e92d3c842d48e3a1b808bd7b58d06efda",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-10-live-off-r1-20261103T165644880Z-7e0ae9",
+      "privateManifestSha256": "95f7f427c778af48f8e730c8b1b8e52e5727aad2f6962c3c08d0faab26d94e45",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-10-live-on-r2-20261103T165720832Z-316e50",
+      "privateManifestSha256": "d2b8475520f2f7ed476fcb7271fbcf1051be95d671386159b1807c752ebaecac",
+      "privateWorkspaceSha256": "3b0dd8de5e4bc68ee13aaf398e3d57f380507aed3735bc8586551538519be551",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-10-live-off-r2-20261103T165807270Z-07e766",
+      "privateManifestSha256": "aa15665f763e0ab17f8fa048b717ae1b77dcfa529254a2dcc201d99f974fc450",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-11-live-on-r1-20261103T165833749Z-400728",
+      "privateManifestSha256": "e8a086916da455b71ab858786a0c4ac8b77c1ddb2b7d9c9b04e5510eed99d3e9",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-11-live-off-r1-20261103T165903958Z-e0fbff",
+      "privateManifestSha256": "349a0bf29a0c8ee7c0c28d1a51ff652dcfccb8fd33d2938f0acaa85d305ff223",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-11-live-off-r2-20261103T165929087Z-f5ee02",
+      "privateManifestSha256": "36e504e055c9b585a813ccf30d314b8daeac6c13f217637e741faf5b940484b0",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-11-live-on-r2-20261103T170002245Z-758d1d",
+      "privateManifestSha256": "97da5e4221518bb067a810a5830f89cc269a4c908427039521b3fd80cd773fb1",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-12-live-on-r1-20261103T170034630Z-5a7236",
+      "privateManifestSha256": "d6168acebbd9fda0f8cd8dfa7cbc5bccbef3fb95e3e4d4410d4339ffb8e658ea",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-12-live-off-r1-20261103T170113778Z-124d99",
+      "privateManifestSha256": "87b1a242a9748000aa04147d898c0be992fc7bb942c29f474d5c93a8a3056803",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-SER-12-live-off-r2-20261103T170158470Z-7da93f",
+      "privateManifestSha256": "079f9f1ed8e0f6ef40262b87dace12643e88df3c5d4a25382654283505c4cb76",
+      "privateWorkspaceSha256": "ec28f4d97ba5cec1ad31000bd7b41809e1fc43cc0d059083629ad65f37fc475d",
+      "other": []
+    },
+    {
+      "runId": "CS-SER-12-live-on-r2-20261103T170323948Z-2bd456",
+      "privateManifestSha256": "a55fed4936e7a4e1839dc9beb1b1c7ef5e1c5ff8bef239e8a4da7d197c9739b3",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-01-live-on-r1-20261103T170403228Z-fcb5a7",
+      "privateManifestSha256": "9e1a6ec1911f368738d364a7ba69c8116e22c6bd30403fde8d0903bfbeda47f0",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-01-live-off-r1-20261103T170435626Z-70cdba",
+      "privateManifestSha256": "c36da5fb1b02c9a93e3ae32f1c759ae1d8f7eeef1e7b07f251be3e916f5c60af",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-01-live-on-r2-20261103T170539530Z-84b469",
+      "privateManifestSha256": "fc0a2164ee563f409a15bd8771338a0a6518fbf4fac736452a81522e4a90d059",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-01-live-off-r2-20261103T170616740Z-98968f",
+      "privateManifestSha256": "cf73f0161fb66ff38ae4977d92be123d493c5f8fd25da1ccd55871ad2f64b969",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-02-live-off-r1-20261103T170644854Z-fcb970",
+      "privateManifestSha256": "cf410c463b4073b7ad26d8dbac08aef6a281d00c4671ae19dd631d1042cc9bc6",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-02-live-on-r1-20261103T170724738Z-24332b",
+      "privateManifestSha256": "716fdf14fdb873787b0adc64820efd437dc3dcfbc0b069e19101aa074ae6d4da",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-02-live-off-r2-20261103T170747676Z-b07b0f",
+      "privateManifestSha256": "b5ef9c9087bfc1fe978546fac23cf33cc5910228d450a7268b0f4d5df42e84cc",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-02-live-on-r2-20261103T170813062Z-fd23d5",
+      "privateManifestSha256": "caf56719b6379c35755baa7bd56e07f189ba06350b8e382cbe88d1df79bf0bdd",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-03-live-on-r1-20261103T170835005Z-91e1ad",
+      "privateManifestSha256": "6aa37a46e1224afeebb4c50f6bdc485430709457e0be8ee5a4ccc2678e9cb4ab",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-03-live-off-r1-20261103T170904572Z-472462",
+      "privateManifestSha256": "7520cba285178302598a02057737086f470890ccc7d04566af8de0b2e2e9e06e",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-03-live-off-r2-20261103T170948025Z-51ff0b",
+      "privateManifestSha256": "8a109d685831b9761bd84b92597a6591ae83b3c772be6928f9435926d8552a93",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-03-live-on-r2-20261103T171044742Z-cfd0b4",
+      "privateManifestSha256": "5785085998599e0471f3c20c180d82df588eef489631073aca8753cf277cecad",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-04-live-on-r1-20261103T171115994Z-5e1c8a",
+      "privateManifestSha256": "650e01fc5a9a2b65037f2fdbd1b2ea5975898acb238533a9b6639808d0e2ef64",
+      "privateWorkspaceSha256": "7a5e483d446d889d98b5a36b25a2dfaacc4e7c347d33f1c47d5382d06c9d234d",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-04-live-off-r1-20261103T171342984Z-b17695",
+      "privateManifestSha256": "17a220a9f3d2859d62d6870a6105892301ad1ffe8b15d3fe422f931213f56461",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-04-live-off-r2-20261103T171418108Z-82571b",
+      "privateManifestSha256": "c32949d79b60f0526617210255df8065237ceb0f65646a3b442c175716e490cf",
+      "privateWorkspaceSha256": "2a6e894d6ef506f286bcc0d29eed2d4af1a02e683246fc4bbaaaa3288ba57be2",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-04-live-on-r2-20261103T171604698Z-7d489e",
+      "privateManifestSha256": "02762e9057fcabb2bde875c9d1da45a2ed36f2709c6bdc2f70440ae9ef6a828d",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-05-live-on-r1-20261103T171629486Z-afd9aa",
+      "privateManifestSha256": "c8b8d4ec69fd37502302a5f38a979ea6566157250fb4c29d770f8e73302f4564",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-05-live-off-r1-20261103T171700877Z-386bb4",
+      "privateManifestSha256": "57bb1dbec002d971b355e7d97638e9ec6787e4c35e87279b8bc9eb928c2c8c3f",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-05-live-on-r2-20261103T171726100Z-de5e4c",
+      "privateManifestSha256": "466b96b25d88cc39086a71d7d3d0fd3a137c4ea9237151c48755bce3903ae7b6",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-05-live-off-r2-20261103T171745579Z-4567e0",
+      "privateManifestSha256": "c7b5437867c5606c5046d2b284e63c6986d7220aeeff5dd5b737a537bb604a4b",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-06-live-off-r1-20261103T171817710Z-13fbc9",
+      "privateManifestSha256": "bf5ea8a7605b690ae420e5c3e45eee36c08ffd07c91452e70d0e7a71bddf1c4a",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-06-live-on-r1-20261103T171934487Z-db9503",
+      "privateManifestSha256": "a43148568098a1a5ef4e37b2f551d40d3f07a386f7c7030c5f7d7a099970dbbd",
+      "privateWorkspaceSha256": "fb94ee61678653bc26bae0e29b2695ae2bf491c6c1668d818ba141b11efa8309",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-06-live-off-r2-20261103T172104839Z-2d1ba3",
+      "privateManifestSha256": "cc9211e4b02045c7556a570287b91c36b89027f95e5956b52599d9aa84fd5775",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-06-live-on-r2-20261103T172238304Z-41d8d6",
+      "privateManifestSha256": "a6dab48c0639681481c47a66fd229b40fc92518fdc4d0b860dabcf059261bfc2",
+      "privateWorkspaceSha256": "71261d5ed582371a51c856b126635e3ba5d05057a6997301ef81416cc276c6cd",
+      "other": []
+    },
+    {
+      "runId": "CS-RES-07-live-off-r1-20261103T172326679Z-e242ae",
+      "privateManifestSha256": "a8033f2c00537ea45bc8b0d363aaa978f18530c7f08b02605fa810825c387be1",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-07-live-on-r1-20261103T172405915Z-9440b1",
+      "privateManifestSha256": "00476d2851331bf1a70e450fd674f63a2c4c835055995c6c8793966be7132573",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-07-live-on-r2-20261103T172444858Z-651f21",
+      "privateManifestSha256": "c9b64f963170be4ce277f4dda0bc14a2afa7acf777207156025a60d3b44b1cdf",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-07-live-off-r2-20261103T172536690Z-f515ac",
+      "privateManifestSha256": "8bb7eb40f9f42eb3d1ad9bea7971afcd526016254f1a8880bf8ceceadb67b999",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-08-live-off-r1-20261103T172639211Z-68491c",
+      "privateManifestSha256": "792c98bb799e28e06f50e698d8ede877b2483c4af1c8f7abb08842fa5bffd778",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-08-live-on-r1-20261103T172705691Z-be7e68",
+      "privateManifestSha256": "dc633e8a460f9920059be3e2abf5134bfc9fbdc15773032dbd74d13d05c07a21",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-08-live-off-r2-20261103T172732086Z-c826db",
+      "privateManifestSha256": "e14b4ccd447a1fbe1eefc710ece01dbf2366f7a83d0a54743ab6edbfdcbdace4",
+      "privateWorkspaceSha256": null,
+      "other": []
+    },
+    {
+      "runId": "CS-RES-08-live-on-r2-20261103T172756614Z-b39af8",
+      "privateManifestSha256": "91b38d1a54b961ca2ec540d00849797aa88230aa8f3d05c8224b69d67d2e4b15",
+      "privateWorkspaceSha256": null,
+      "other": []
+    }
+  ],
+  "inputs": {
+    "schemaVersion": 1,
+    "metadata": {
+      "mainModel": {
+        "provider": "openai-codex",
+        "id": "gpt-6.1-sol",
+        "billing": "subscription"
+      }
+    },
+    "files": [
+      {
+        "name": "JUDGING.md",
+        "role": "other",
+        "sha256": "98d4740b5d70946290311113402cce6c302f4230148b596e3b71ee001cdb1141"
+      },
+      {
+        "name": "MEASURED-SERIES.json",
+        "role": "design-manifest",
+        "sha256": "3b77616a62133cc95c01008494b73e5a5acf468d465e094615dab34f2117a151"
+      },
+      {
+        "name": "PROTOCOL.md",
+        "role": "protocol",
+        "sha256": "b11529093290094792fa4079cfe7009d3189ebdf9585f2c113cb4ce29b1c25d3"
+      },
+      {
+        "name": "corpus-revision-binding.json",
+        "role": "other",
+        "sha256": "cbb917ecda8a7c6f2e0578341e4b9c1592e90536b9d9ad8b569cd2eb3e1b19ca"
+      },
+      {
+        "name": "corpus.json",
+        "role": "corpus",
+        "sha256": "695ba07dc665dcf81168117f84497e5e2fd9362bc02a5fa7270bad4d59ec89cb"
+      },
+      {
+        "name": "decisions.json",
+        "role": "other",
+        "sha256": "87f09da1cfe349ac3cc2aed779d707819d03721f6fb2d272b521e6a13a2cefcc"
+      },
+      {
+        "name": "measured-answers.json",
+        "role": "answers",
+        "sha256": "a7631de1d7af1e8ce81f399eccca1e85e307aa8eba55ad0451a58406c271a8da"
+      },
+      {
+        "name": "rebindings.json",
+        "role": "other",
+        "sha256": "4b8ce15c75ebe6fccf2514e52f1bbcd207a2741a67ecf999f7a20c1eeed9c328"
+      }
+    ]
+  }
+}

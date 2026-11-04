@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 2,
+  "edition": "publication-v1",
+  "generator": "scripts/benchmarks/study-publication.ts",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "a1701b2e76ae417a7182e978c3d584547ea834c0cb04b21a367e9c4e844634a9",
+      "bytes": 6076
+    },
+    {
+      "path": "REPORT.md",
+      "sha256": "c10dac9361eb29a8b97cd591cc4adf0a6d912488bb4c0fa06fee86988866a261",
+      "bytes": 10125
+    },
+    {
+      "path": "dataset.json",
+      "sha256": "1c5d1ce1193bca80f27625d80defa02b8ace79e02890e64cf3127266c39f1901",
+      "bytes": 4824863
+    },
+    {
+      "path": "derived/analysis.json",
+      "sha256": "94bde591cbe400a1300a2bad5a307b629f9d0d4fb893860be699bedf83eb6705",
+      "bytes": 391974
+    },
+    {
+      "path": "derived/context-exposure-method.json",
+      "sha256": "dfcfd37259ad6df18dbc78b9f755dbb3625b54def578d18aafe33196eb58a9d7",
+      "bytes": 5788
+    },
+    {
+      "path": "derived/context-exposure.csv",
+      "sha256": "defa60a0565eb4ee6a69ccb451893363ee4b3319ce21dbdb866001ae57685950",
+      "bytes": 3443
+    },
+    {
+      "path": "derived/effects.csv",
+      "sha256": "7d269b771f1fee4eaabd5dd9313f7036293ef517cd39266ce6fb3285d381c199",
+      "bytes": 1701
+    },
+    {
+      "path": "environment.json",
+      "sha256": "eb98bf688c39287e4df3a9ac73784a6c6d3c639db00c973785dd38a4979b68cb",
+      "bytes": 1067
+    },
+    {
+      "path": "figures/live-token-ratios.svg",
+      "sha256": "5f5af169e9996b4b6a155b5b9889e950a7ddcf9b5818b6e81d6e970d76d767d1",
+      "bytes": 2693
+    },
+    {
+      "path": "figures/live-total-input-pairs.svg",
+      "sha256": "0cb6f4a38128faa826f532dea8021c1f9442d688ce3131df07609be030a46d0a",
+      "bytes": 8046
+    },
+    {
+      "path": "figures/live-uncached-input-pairs.svg",
+      "sha256": "d21fd761b023667f22ad708dfd6a4e55dc56f37f3706df001489a5684b5b2f0a",
+      "bytes": 8048
+    },
+    {
+      "path": "figures/quality-scores.svg",
+      "sha256": "031f2a0cedd1d7e82ecbf955bc1abfc2311a9438b9bb89e904fa0f64490fcfa0",
+      "bytes": 11188
+    },
+    {
+      "path": "figures/replay-token-ratios.svg",
+      "sha256": "324d4193aa8bc5e37bb78caa11d8592276b05a62bb52e12a42eb151adaba0cf5",
+      "bytes": 2697
+    },
+    {
+      "path": "figures/replay-total-input-pairs.svg",
+      "sha256": "3800bc73cdb2c5b4e0631e98d844eab4f311a2eef355dffc1a8e17ae65da5b2d",
+      "bytes": 6135
+    },
+    {
+      "path": "figures/replay-uncached-input-pairs.svg",
+      "sha256": "e9a68eb7735c74cd7ef12010c8c1ae95d6b5f0e876fbf664debb44d389a8b240",
+      "bytes": 6137
+    },
+    {
+      "path": "inputs/JUDGING.md",
+      "sha256": "98d4740b5d70946290311113402cce6c302f4230148b596e3b71ee001cdb1141",
+      "bytes": 9842
+    },
+    {
+      "path": "inputs/MEASURED-SERIES.json",
+      "sha256": "3b77616a62133cc95c01008494b73e5a5acf468d465e094615dab34f2117a151",
+      "bytes": 9009
+    },
+    {
+      "path": "inputs/PROTOCOL.md",
+      "sha256": "b11529093290094792fa4079cfe7009d3189ebdf9585f2c113cb4ce29b1c25d3",
+      "bytes": 20856
+    },
+    {
+      "path": "inputs/corpus-revision-binding.json",
+      "sha256": "cbb917ecda8a7c6f2e0578341e4b9c1592e90536b9d9ad8b569cd2eb3e1b19ca",
+      "bytes": 3666
+    },
+    {
+      "path": "inputs/corpus.json",
+      "sha256": "695ba07dc665dcf81168117f84497e5e2fd9362bc02a5fa7270bad4d59ec89cb",
+      "bytes": 36371
+    },
+    {
+      "path": "inputs/decisions.json",
+      "sha256": "87f09da1cfe349ac3cc2aed779d707819d03721f6fb2d272b521e6a13a2cefcc",
+      "bytes": 1646
+    },
+    {
+      "path": "inputs/manifest.json",
+      "sha256": "b8eb7c4768a44808f0575a01098828f61faf9d321373b4b1318962743ff005c6",
+      "bytes": 1423
+    },
+    {
+      "path": "inputs/measured-answers.json",
+      "sha256": "a7631de1d7af1e8ce81f399eccca1e85e307aa8eba55ad0451a58406c271a8da",
+      "bytes": 573529
+    },
+    {
+      "path": "inputs/rebindings.json",
+      "sha256": "4b8ce15c75ebe6fccf2514e52f1bbcd207a2741a67ecf999f7a20c1eeed9c328",
+      "bytes": 1117
+    },
+    {
+      "path": "omissions.json",
+      "sha256": "0c76d3f6d006ddfc47f17f072a9ef3626abbebe84c672290d0f5f98face84b62",
+      "bytes": 4133
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "f8d8409b85904fb437f51459cd1d7fdc19b4a1fb56fc41a0bb5c01f46e5af588",
+      "bytes": 13359
+    },
+    {
+      "path": "package.json",
+      "sha256": "0e6291356f12232fb02a8ca94986f5135051fe19eda1507219aac8a043546a93",
+      "bytes": 160
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "e2e6bd19642c8057517160f2e6903a05eb8e0da3001bf2e74ac64dc858b81448",
+      "bytes": 52733
+    },
+    {
+      "path": "source/canonical.ts",
+      "sha256": "f93734cb93c7aace2cbd067957f48e0537366200466c7656d1d11857a3595e56",
+      "bytes": 6516
+    },
+    {
+      "path": "source/package.json",
+      "sha256": "f69ed17eea98f49ee075f676bae79df9cb779e54d5887b94d94313d34511170c",
+      "bytes": 42
+    },
+    {
+      "path": "source/run-observation.ts",
+      "sha256": "817715242b16267b8aef22294839a6f8bb4d86b205d09b474851f7cbaf6cfad6",
+      "bytes": 6900
+    },
+    {
+      "path": "source/statistics.ts",
+      "sha256": "e96644cdaa2040b1458d81c7314d702900c6bf1e8f5586fb353c8fa8ab17cd2d",
+      "bytes": 12879
+    },
+    {
+      "path": "source/study-analysis.ts",
+      "sha256": "54428e388b06a342ca67319fb493390f231d71ad696407fd4624d5dec85e56e3",
+      "bytes": 36857
+    },
+    {
+      "path": "source/study-context-exposure.ts",
+      "sha256": "5e3130f0e29b6e47901792fdfa96843110fb71a48431b91b1e4758c91944d4ed",
+      "bytes": 53201
+    },
+    {
+      "path": "source/study-publication.ts",
+      "sha256": "9da4cdf0840b37d9ef26437339fae546620480a16a36f28867968ad931c64de5",
+      "bytes": 145192
+    },
+    {
+      "path": "tables/claims.csv",
+      "sha256": "11dc32f8874dc18e783f6f01ee6578fe92128ead92a337320a62d68eb3ed100d",
+      "bytes": 533
+    },
+    {
+      "path": "tables/judges.csv",
+      "sha256": "6f8cc0820f08ced52499fc88c195553bdce674a380ed48982f1f499dbafe29f0",
+      "bytes": 45727
+    },
+    {
+      "path": "tables/outcomes.csv",
+      "sha256": "e1a213e321987dc9b15253d39018b4bfdc4fca1159898f67ee94e9dc4b907a38",
+      "bytes": 137
+    },
+    {
+      "path": "tables/runs.csv",
+      "sha256": "0e1266dccae86f3850976f2f77b00a2020caf371a031b95be8eda462424198e1",
+      "bytes": 45191
+    }
+  ]
+}

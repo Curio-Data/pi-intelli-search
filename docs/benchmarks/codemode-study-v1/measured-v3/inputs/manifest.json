@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "metadata": {
+    "mainModel": {
+      "provider": "openai-codex",
+      "id": "gpt-6.1-sol",
+      "billing": "subscription"
+    }
+  },
+  "files": [
+    {
+      "name": "JUDGING.md",
+      "role": "other",
+      "sha256": "98d4740b5d70946290311113402cce6c302f4230148b596e3b71ee001cdb1141"
+    },
+    {
+      "name": "MEASURED-SERIES.json",
+      "role": "design-manifest",
+      "sha256": "3b77616a62133cc95c01008494b73e5a5acf468d465e094615dab34f2117a151"
+    },
+    {
+      "name": "PROTOCOL.md",
+      "role": "protocol",
+      "sha256": "b11529093290094792fa4079cfe7009d3189ebdf9585f2c113cb4ce29b1c25d3"
+    },
+    {
+      "name": "corpus-revision-binding.json",
+      "role": "other",
+      "sha256": "cbb917ecda8a7c6f2e0578341e4b9c1592e90536b9d9ad8b569cd2eb3e1b19ca"
+    },
+    {
+      "name": "corpus.json",
+      "role": "corpus",
+      "sha256": "695ba07dc665dcf81168117f84497e5e2fd9362bc02a5fa7270bad4d59ec89cb"
+    },
+    {
+      "name": "decisions.json",
+      "role": "other",
+      "sha256": "87f09da1cfe349ac3cc2aed779d707819d03721f6fb2d272b521e6a13a2cefcc"
+    },
+    {
+      "name": "measured-answers.json",
+      "role": "answers",
+      "sha256": "a7631de1d7af1e8ce81f399eccca1e85e307aa8eba55ad0451a58406c271a8da"
+    },
+    {
+      "name": "rebindings.json",
+      "role": "other",
+      "sha256": "4b8ce15c75ebe6fccf2514e52f1bbcd207a2741a67ecf999f7a20c1eeed9c328"
+    }
+  ]
+}

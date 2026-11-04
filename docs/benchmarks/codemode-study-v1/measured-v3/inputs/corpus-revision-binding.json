@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "kind": "calibration-corpus-revision-binding",
+  "decisions": {
+    "path": "evidence/benchmarks/codemode-study-v1/calibration/decisions.json",
+    "sha256": "87f09da1cfe349ac3cc2aed779d707819d03721f6fb2d272b521e6a13a2cefcc"
+  },
+  "calibrationJsonSha256": "c0abba11206d841d692a09c69f2d59b75bca85d1934948f50db702f301fb0a11",
+  "reviewedCorpus": {
+    "commit": "a29e0a4985f4b04981b1e0c5686e87e3a60b81da",
+    "path": "docs/benchmarks/codemode-study-v1/corpus.json",
+    "jsonSha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed",
+    "revision": "corpus-v1-r3"
+  },
+  "measuredCorpus": {
+    "commit": "b330750d2b771007372c59ce2a220c17c1da16e9",
+    "path": "docs/benchmarks/codemode-study-v1/corpus.json",
+    "jsonSha256": "695ba07dc665dcf81168117f84497e5e2fd9362bc02a5fa7270bad4d59ec89cb",
+    "revision": "corpus-v2-r4-owner-expanded"
+  },
+  "unchangedScope": {
+    "definition": {
+      "excludedTopLevelKeys": [
+        "confirmation",
+        "purpose",
+        "revision"
+      ],
+      "excludedQueryKeys": [
+        "partition"
+      ]
+    },
+    "sha256": "fc3f43a7c24981b4229f5ccc9a97587ae696e9a0ffee589ddee573172d3c4a93",
+    "standardRubricSha256": "b8d7a5932b2cdb7171b43771feafc2faa98536d09596a2216d6e7e4ac05b954d"
+  },
+  "differences": {
+    "topLevelKeys": [
+      "confirmation",
+      "purpose",
+      "revision"
+    ],
+    "queryPartitions": [
+      {
+        "id": "CS-RES-01",
+        "from": "reserve",
+        "to": "measured-series"
+      },
+      {
+        "id": "CS-RES-02",
+        "from": "reserve",
+        "to": "measured-series"
+      },
+      {
+        "id": "CS-RES-03",
+        "from": "reserve",
+        "to": "measured-series"
+      },
+      {
+        "id": "CS-RES-04",
+        "from": "reserve",
+        "to": "measured-series"
+      },
+      {
+        "id": "CS-RES-05",
+        "from": "reserve",
+        "to": "measured-series"
+      },
+      {
+        "id": "CS-RES-06",
+        "from": "reserve",
+        "to": "measured-series"
+      },
+      {
+        "id": "CS-RES-07",
+        "from": "reserve",
+        "to": "measured-series"
+      },
+      {
+        "id": "CS-RES-08",
+        "from": "reserve",
+        "to": "measured-series"
+      }
+    ]
+  },
+  "witnesses": [
+    {
+      "path": "evidence/benchmarks/codemode-measured-20261103-r1/quality-v1/manifest.json",
+      "sha256": "fb6b9ec8c4f9ffab01cad92d9142b608f6ac671be99120e319e641da273c842c",
+      "rubricSha256": "b8d7a5932b2cdb7171b43771feafc2faa98536d09596a2216d6e7e4ac05b954d",
+      "corpusSha256": "695ba07dc665dcf81168117f84497e5e2fd9362bc02a5fa7270bad4d59ec89cb",
+      "partition": "measured-series",
+      "preparerCommit": "b330750d2b771007372c59ce2a220c17c1da16e9"
+    },
+    {
+      "path": "evidence/benchmarks/codemode-pilot-20261103-r1/quality-v1/manifest.json",
+      "sha256": "9dce8cf0a8150333494ec8438c804ed5b86d14da4aabc355cb3100fbee3fd58e",
+      "rubricSha256": "b8d7a5932b2cdb7171b43771feafc2faa98536d09596a2216d6e7e4ac05b954d",
+      "corpusSha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed",
+      "partition": "pilot",
+      "preparerCommit": "e0ea32741308c9e8f6bd354d5e3b55957a204803"
+    }
+  ],
+  "ownerRecord": {
+    "path": "evidence/benchmarks/codemode-study-v1/calibration/rebindings.json",
+    "sha256": "4b8ce15c75ebe6fccf2514e52f1bbcd207a2741a67ecf999f7a20c1eeed9c328"
+  },
+  "basis": "Derived by comparing the two named git blobs. No repeat owner review was requested or performed.",
+  "effect": "Visibility of already-retained judge scores only. No score, packet, label, endpoint or raw observation changes. The labels do not validate the judges."
+}

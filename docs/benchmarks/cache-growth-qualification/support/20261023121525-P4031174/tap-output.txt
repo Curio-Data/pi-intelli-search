@@ -1,0 +1,38 @@
+▶ M4 cache growth and recovery qualification (profile: full)
+  ✔ q1: committed run-store growth records allocation, index and candidate-read costs (122613.30563ms)
+  ✔ q2a: exact structural-limit query bytes at the allocation and marker boundaries (792.979916ms)
+  ✖ q2b: a real committed population reaches the secondary-index budget; writer and reader refuse beyond (8895.150779ms)
+  ✔ q3: repeated corrupt-index reads rebuild in memory; a writer repairs only secondary metadata (54.71247ms)
+  ✔ q4shape: whole-parent scan accepts a legacy, staging, committed and uncommitted cache shape (9.035842ms)
+  ✔ q4: physical whole-parent scan at the unchanged 100000-entry cap boundary (9699.029632ms)
+  ✔ q5: pinned pi-v0.19.0 and current writer processes share one parent without metadata interference (740.828461ms)
+  ✔ q6: non-destructive recovery drill refuses damaged history and archives explicitly (3327.844182ms)
+evidence summary: /srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/.tmp/m4-growth/qualification/20261023121525-P4031174/summary.json
+✖ M4 cache growth and recovery qualification (profile: full) (146135.069971ms)
+ℹ tests 8
+ℹ suites 1
+ℹ pass 7
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 146532.566586
+
+✖ failing tests:
+
+test at test/cache-growth-qualification.test.ts:3:7888
+✖ q2b: a real committed population reaches the secondary-index budget; writer and reader refuse beyond (8895.150779ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  11 !== 10
+  
+      at TestContext.<anonymous> (/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/test/cache-growth-qualification.test.ts:619:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 11,
+    expected: 10,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

@@ -1,0 +1,17 @@
+population,endpoint,interval_metric,paired_tasks,missing_tasks,ratio,difference,lower,upper,diagnostic_lower,diagnostic_upper,primary_available
+replay,mainInputUncached,ratio,14,1,1.4021317146186183,2472.3214285714284,,,1.2689293813831681,1.5620344191649052,false
+replay,mainInputTotal,ratio,14,1,1.7338533090864585,6330.607142857143,,,1.6167719830676197,1.868583521533688,false
+replay,qualityJudge1,difference,14,1,1.0207612979718659,0.07142857142857142,,,-0.07142857142857142,0.25,false
+replay,qualityJudge2,difference,14,1,0.9890496337303718,-0.03571428571428571,,,-0.21428571428571427,0.10714285714285714,false
+replay,returnedMs,difference,0,15,,,,,,,false
+replay,reportedPipelineUsd,difference,0,15,,,,,,,false
+replay,qualityJudge1IncludingFailed,difference,15,0,,0.06666666666666667,,,-0.06666666666666667,0.23333333333333334,false
+replay,qualityJudge2IncludingFailed,difference,15,0,,-0.03333333333333333,,,-0.2,0.1,false
+live,mainInputUncached,ratio,20,1,1.053874469565309,1087.15,,,0.8681060215633489,1.2607857704913727,false
+live,mainInputTotal,ratio,20,1,1.213532995580084,5371.95,,,0.9629488240065689,1.4725849373093567,false
+live,qualityJudge1,difference,20,1,0.9517515063442307,-0.125,,,-0.525,0.3,false
+live,qualityJudge2,difference,20,1,0.9886640179085613,0,,,-0.325,0.3,false
+live,returnedMs,difference,20,1,0.8862716381755938,-5180.167708775002,,,-14533.297770563131,4129.011538954995,false
+live,reportedPipelineUsd,difference,20,1,,-0.0045644665,,,-0.0079851938125,-0.0011233923500000012,false
+live,qualityJudge1IncludingFailed,difference,20,0,0.919331356086838,-0.2,,,-0.625,0.225,false
+live,qualityJudge2IncludingFailed,difference,20,0,0.9549864919986835,-0.1,,,-0.475,0.25,false

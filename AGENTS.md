@@ -4,18 +4,31 @@ This is a **`Pi` extension** that adds intelligent web research tools to the `Pi
 
 The strict configuration and experimental runtime entrypoint are documented in [the package guide](packages/mcp/README.md).
 
-## Research-First Branch Instructions
+## Archived Codemode Research Branch
 
-On `feat/codemode-research` and its research worktrees, start with [Codemode Resume](docs/plans/codemode/RESUME.md). The [2 November 2026 Owner Decisions](docs/plans/codemode/OWNER-REFOCUS.md) and [Research Plan](docs/plans/codemode/RESEARCH-PLAN.md) supersede conflicting older delivery, security, compatibility and live-gate instructions below and in historical plan/evidence files.
+On `feat/codemode-research`, start with [Study Closure](docs/plans/codemode/CLOSURE.md) and the [archive guide](docs/plans/codemode/RESUME.md). The owner closed the investigation on 4 November 2026. The [final report](docs/benchmarks/codemode-study-v1/REPORT.md) records a completed but inconclusive study with no demonstrated benefit and no recommendation for main-package integration.
 
-- Completion requires experimental code, a fair same-build Codemode-off/on measured dataset, correct metadata, reproducible analysis and a publication-ready report. Synthetic tests or a pilot alone do not complete this branch. Main-package integration is considered only after a worthwhile measured benefit.
-- Use the pinned current host and prescribed models in Owner Decisions. Do not change package support floors or revive old-host qualification during the study. Security investigation and monitor development are stopped; report an encountered concern plainly for the owner's version/risk decision rather than starting another workstream.
-- Preserve ordinary credential care, finite calls, cancellation, truthful accounting and the existing USD 30 ceiling. Reconcile prior attributable spend and unknown exposure; a new session does not reset the budget. Study readiness follows the new protocol, not an expired legacy preparer or a per-call approval loop.
-- Build, deterministic tests, types, applicable generator checks and historical `check:codemode-plan` integrity checks remain required. Do not automatically run the old paid E2E suite, floor installers, halted helpers or security probes. The old audit/floor release blockers are disclosed history, not reasons to resume security exploration or prerequisites for the experiment. This is not a declaration that those checks passed.
-- The pending legacy-harness overlay is parked under ignored evidence, outside its active working paths, as recorded in Status. Restored old E2E scripts are not the study driver; do not run them against the new cache as a shortcut. No historical live window repeats to repair its outcome.
-- Retain raw study data under `evidence/benchmarks/<series-id>/`, never solely under `.tmp/`. Produce a versioned shareable dataset and commands that regenerate the report's figures without model calls. Evidence is never deleted. No package staging, publication or main merge is authorised.
+- Preserve the experimental source, frozen methodology, compact results and publication bundle. Regenerate numerical analysis through the bundle, without model calls.
+- Do not resume paid capture, judging, monitor development, historical scenarios or old-host qualification. Do not stage, publish or merge Codemode on this evidence.
+- The original ignored results were disposed under explicit owner approval when the worktree was retired. Raw sessions and original evidence are not available for independent re-audit; do not imply that they remain locally available.
+- Historical plans, helper instructions and source patches are archival records, not execution authority. Preserve their outcome and missingness semantics.
 
-The existing `evidence/` directory also holds the timestamped pre-refocus snapshots and parked harness patch. These are durable local records, not new scratch folders. Frozen old contract/method files remain intact for accepted-code integrity; current scope and sequencing come from the owner decisions above.
+Frozen old contract, method and corpus files remain historical inputs. Current disposition and reproduction limits come from [Study Closure](docs/plans/codemode/CLOSURE.md).
+
+---
+
+## Repository Folders
+
+This repository uses VFM. The global scratch, citation and informed-consent rules apply; the evidence conventions below are local to this project. This retention policy governs cleanup: older blanket no-deletion statements in planning material describe the default, not a prohibition on explicitly authorised consolidation.
+
+| Folder | Holds | Default Retention |
+|---|---|---|
+| `evidence/` | Durable proof, timestamped and gitignored | Preserve historical records; do not overwrite them during ordinary development |
+| `evidence/agents/<run>/` | Agent briefs and reports, written here directly | Preserve; only disposable work and logs belong in scratch |
+| `.plan/` | Plan board and ledger | Preserve |
+
+- **Evidence Consolidation and Cleanup.** At the user's explicit request, evidence may be consolidated, archived or deleted. Before proceeding, identify the affected material, what will remain, and the consequences for citations, manifests, reproducibility and recovery. Explain any reliance on backups and obtain approval for the defined scope. Perform only that cleanup and record the outcome in retained project documentation. Consolidation must not misrepresent historical results or imply that removed evidence remains available locally; identify affected references and inventories without silently rewriting historical hashes or verdicts.
+- **Research Records.** Keep raw study data in `evidence/benchmarks/<series-id>/`, not solely in scratch. Preserve failed and incomplete observations alongside successful ones during ordinary research. Any proposed disposal must disclose its effect on auditing the reported results; cleanup is not permission to select only favourable observations or change historical outcomes.
 
 ---
 

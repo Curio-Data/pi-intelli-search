@@ -86,7 +86,7 @@ Steps 1 and 2 may share a bounded implementation cycle. Use parallel agents only
 
 ## Evidence and Reproduction
 
-Write durable raw study data directly under `evidence/benchmarks/<series-id>/`. This location is ignored by Git and does not travel in a clone. Disposable scratch alone may use `.tmp/`; promote anything needed for a result before citing it. Never delete historical evidence.
+Write durable raw study data directly under `evidence/benchmarks/<series-id>/`. This location is ignored by Git and does not travel in a clone. Disposable scratch alone may use `.tmp/`; promote anything needed for a result before citing it. Preserve historical evidence by default. User-requested consolidation, archival or deletion follows [Repository Folders](../../../AGENTS.md#repository-folders), with the scope, retained material and consequences for citations, manifests, reproducibility and recovery explained before approval. Record any approved disposal without changing historical outcomes or implying that removed evidence remains available locally.
 
 The publication deliverable needs a versioned shareable bundle in addition to private raw files. Include task inputs/rubrics, prompts/scripts/settings, per-run metrics and completeness, final answers and judge outputs where shareable, provenance manifests, analysis source, environment pins, and exact commands to regenerate tables and figures. Retain full private source snapshots for audit; share fetched material only where redistribution is appropriate. Document every omission/redaction and its effect on reproducibility. No credentials or private session data belong in the public bundle.
 

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "reviewedUtc": "2026-11-02T16:40:25Z",
+  "reviewTimeBasis": "Time the owner's explicit chat verdicts were recorded; the exact time spent reading the packet was not supplied.",
+  "reviewer": "Owner, through the current conversation",
+  "reviewedInputs": {
+    "calibrationJsonSha256": "c0abba11206d841d692a09c69f2d59b75bca85d1934948f50db702f301fb0a11",
+    "corpusJsonSha256": "8054af08ebadf256983427d356dd26d6e5980e3ff0d2954187492933ffd884ed",
+    "scope": "The owner supplied verdicts for the calibration cases. The corpus hash identifies their referenced rubric; no separate review of the full corpus is claimed."
+  },
+  "decisions": [
+    { "id": "CAL-01", "verdict": "A", "matchesProposal": true, "note": null },
+    { "id": "CAL-02", "verdict": "A", "matchesProposal": true, "note": null },
+    { "id": "CAL-03", "verdict": "A", "matchesProposal": true, "note": null },
+    { "id": "CAL-04", "verdict": "A", "matchesProposal": true, "note": null }
+  ],
+  "rubricWordingIssues": [],
+  "ownerFeedbackVerbatim": "That was poor, all the answers you could have judgeds",
+  "assessmentLimitations": [
+    "The owner criticised the packet as trivial work the assistant could have judged.",
+    "Every proposed and human-selected winner is A. The packet provides no balanced answer-position check.",
+    "These verdicts establish human labels for four obvious synthetic sanity checks only. They do not establish judge reliability, meaningful calibration or preservation of answer quality in the study.",
+    "No approval of the overall study design, scoring system or paid readiness is inferred from these verdicts."
+  ]
+}

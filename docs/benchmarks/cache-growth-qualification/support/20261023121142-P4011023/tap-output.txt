@@ -1,0 +1,50 @@
+▶ M4 cache growth and recovery qualification (profile: full)
+  ✔ q1: committed run-store growth records allocation, index and candidate-read costs (122069.771415ms)
+  ✔ q2a: exact structural-limit query bytes at the allocation and marker boundaries (808.897631ms)
+  ✖ q2b: a real committed population reaches the secondary-index budget; writer and reader refuse beyond (8917.684752ms)
+  ✔ q3: repeated corrupt-index reads rebuild in memory; a writer repairs only secondary metadata (71.392417ms)
+  ✔ q4shape: whole-parent scan accepts a legacy, staging, committed and uncommitted cache shape (8.438669ms)
+  ✖ q4: physical whole-parent scan at the unchanged 100000-entry cap boundary (7598.063936ms)
+  ✔ q5: pinned pi-v0.19.0 and current writer processes share one parent without metadata interference (597.333122ms)
+  ✔ q6: non-destructive recovery drill refuses damaged history and archives explicitly (3296.253127ms)
+evidence summary: /srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/.tmp/m4-growth/qualification/20261023121142-P4011023/summary.json
+✖ M4 cache growth and recovery qualification (profile: full) (143370.131252ms)
+ℹ tests 8
+ℹ suites 1
+ℹ pass 6
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 143704.951984
+
+✖ failing tests:
+
+test at test/cache-growth-qualification.test.ts:3:7888
+✖ q2b: a real committed population reaches the secondary-index budget; writer and reader refuse beyond (8917.684752ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  11 !== 20
+  
+      at TestContext.<anonymous> (/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/test/cache-growth-qualification.test.ts:617:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 11,
+    expected: 20,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/cache-growth-qualification.test.ts:3:22008
+✖ q4: physical whole-parent scan at the unchanged 100000-entry cap boundary (7598.063936ms)
+  Error: Cache safety scan exceeds 100000 entries; use a smaller cache directory
+      at inspect (/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/packages/mcp/src/workspace.ts:30:13)
+      at inspect (/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/packages/mcp/src/workspace.ts:58:39)
+      at async assertWorkspaceSafe (/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/packages/mcp/src/workspace.ts:82:5)
+      at async workspacePaths (/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/packages/mcp/src/workspace.ts:107:3)
+      at async createRuntime (/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/packages/mcp/src/runtime.ts:150:17)
+      at async TestContext.<anonymous> (/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/codemode-m4-growth/test/cache-growth-qualification.test.ts:955:21)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)

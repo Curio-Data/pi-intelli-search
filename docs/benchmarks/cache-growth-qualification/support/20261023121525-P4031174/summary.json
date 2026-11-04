@@ -1,0 +1,98 @@
+{
+  "profile": "full",
+  "startedAt": "2026-10-23T12:15:25.658Z",
+  "note": "Raw one-host observations. Byte counts are filesystem sizes, entry counts are directory or record counts, and elapsed values are wall-clock milliseconds. No whole-process heap cap, latency promise or unsupported-platform claim is implied.",
+  "q1": [
+    {
+      "population": 4,
+      "elapsedMs": 50.9,
+      "journalBytes": 2064,
+      "indexBytes": 1557,
+      "runDirs": 4,
+      "candidateMs": 6.9,
+      "allocateMsMedian": 3.3,
+      "commitMsMedian": 3.4,
+      "indexMsMedian": 1.8
+    },
+    {
+      "population": 64,
+      "elapsedMs": 852.1,
+      "journalBytes": 33261,
+      "indexBytes": 23514,
+      "runDirs": 64,
+      "candidateMs": 11.2,
+      "allocateMsMedian": 9.6,
+      "commitMsMedian": 2.4,
+      "indexMsMedian": 1.5
+    },
+    {
+      "population": 256,
+      "elapsedMs": 7787.2,
+      "journalBytes": 133926,
+      "indexBytes": 94611,
+      "runDirs": 256,
+      "candidateMs": 19.8,
+      "allocateMsMedian": 25.5,
+      "commitMsMedian": 2.1,
+      "indexMsMedian": 2.5
+    },
+    {
+      "population": 1024,
+      "elapsedMs": 113792.5,
+      "journalBytes": 538455,
+      "indexBytes": 380868,
+      "runDirs": 1024,
+      "candidateMs": 35.9,
+      "allocateMsMedian": 96.7,
+      "commitMsMedian": 2.5,
+      "indexMsMedian": 7.8
+    }
+  ],
+  "q2a": {
+    "structuralMaxBytes": 16777216,
+    "markerBodyEnvelopeBytes": 1201,
+    "exactCapQueryBytes": 16776007,
+    "exactCapMarkerBytes": 16777216,
+    "journalBytes": 3265
+  },
+  "q3": {
+    "repeatedReads": 3,
+    "corruptBytesPreserved": true,
+    "preservedCopy": "index.corrupt-20261023T121738002Z-3cc4b13c37f35d28.json",
+    "repairedEntries": 4,
+    "validButIncompleteDistinct": true,
+    "rebuildCompletes": 5
+  },
+  "q4shape": {
+    "accepted": true
+  },
+  "q4": {
+    "capEntries": 100000,
+    "physicalDescendantsAtPass": 99999,
+    "creationMs": 1838.9,
+    "scanPassMs": 1108.2,
+    "overByOneRejected": true,
+    "runtimeWorkspaceRejectionBeforeInference": true
+  },
+  "q5": {
+    "oldTag": "pi-v0.19.0",
+    "oldCommit": "17fccb388d2016fe46aab91521711197522e502a",
+    "cacheModuleSha256": "23ef4e1fae526e2f0aef19bbf4313f3cb6eb7f79df0d7a2134ee71cb9817a034",
+    "newRuns": 4,
+    "legacyRuns": 5,
+    "isolationWitnessEqual": true,
+    "lockInodeStable": true
+  },
+  "q6": {
+    "damagedTailRefused": "JOURNAL_DAMAGED",
+    "missingJournalRefused": "JOURNAL_MISSING",
+    "chainCorruptionRefused": "JOURNAL_DAMAGED",
+    "rebuildUnderLockOnly": "LOCK_BUSY while held",
+    "orphanReportedNotDeleted": true,
+    "choiceNewCacheDirSequence": 1,
+    "choiceRenamedAsideLockInodeStable": true,
+    "choiceInPlaceFreshNamespaceSequence": 1,
+    "oldNamespacePreserved": true
+  },
+  "finishedAt": "2026-10-23T12:17:51.796Z"
+}

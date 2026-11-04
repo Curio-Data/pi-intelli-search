@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 2,
+  "edition": "publication-v1",
+  "analysisClass": "measured-series",
+  "recordedExperimentalCommit": "b330750d2b771007372c59ce2a220c17c1da16e9",
+  "lockfileSha256": [
+    "e6963d2ef6fdd17dcdc59eb2377e580fa3106612cb441b592e370449d2b39ffb"
+  ],
+  "hosts": [
+    {
+      "version": "1.4.0",
+      "source": "explicit-root"
+    }
+  ],
+  "pipelineModels": [
+    {
+      "role": "search",
+      "provider": "openrouter",
+      "model": "perplexity/sonar"
+    },
+    {
+      "role": "extract",
+      "provider": "openrouter",
+      "model": "minimax/minimax-m3"
+    },
+    {
+      "role": "collate",
+      "provider": "openrouter",
+      "model": "minimax/minimax-m3"
+    }
+  ],
+  "judges": [
+    "claude-opus-5-5[1m]",
+    "openai-codex/gpt-6.1-sol"
+  ],
+  "mainModel": {
+    "provider": "openai-codex",
+    "id": "gpt-6.1-sol",
+    "billing": "subscription"
+  },
+  "mainModelNote": "Declared in the inputs manifest; not verified against run data.",
+  "analysisCommand": "node --import tsx source/study-analysis.ts dataset.json ../analysis-check"
+}
