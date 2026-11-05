@@ -1,10 +1,12 @@
 # Fresh-Agent Resume Checkpoint
 
-Status: the `rh-v4` experiment completed on 5 November 2026. The full-population Codemode mean was 1,920.5 main tokens lower, but two route-nonconforming baseline runs account for the entire reduction. As a descriptive sensitivity reading, the Codemode mean across the other eight pairs was 330.1 tokens higher. Only pair 2 had both runs conforming and adequate, and Codemode used 1,090 more main tokens in that pair. Only 8 of 20 runs met the completion, conformance and adequacy conditions that the frozen gate requires of every run, so it rejects an overall savings-with-preserved-usefulness claim. This result concerns one question, one corpus, `Pi` 1.5.0 and `openai-codex/gpt-6.1-sol`.
+Current assignment: a fresh agent should start with [Pilot Resume](RESUME.md). The owner approved the 16,000-token extraction/collation caps, 300-second attempt timeout and a USD 10 total ceiling for bounded preparation and up to two end-to-end pilots. The [owner decision](../../../evidence/agents/20261105T173919Z-handoff-resume/owner-decision.json) supersedes the pending USD 4.82 proposal without expanding the operation counts. The offline corrections are validated and reviewed; the separate pilot protocol and live path still need implementation and acceptance. No new live operation has started. No measured sprint is authorised.
+
+Historical `rh-v4` status: completed on 5 November 2026. The full-population Codemode mean was 1,920.5 main tokens lower, but two route-nonconforming baseline runs account for the entire reduction. As a descriptive sensitivity reading, the Codemode mean across the other eight pairs was 330.1 tokens higher. Only pair 2 had both runs conforming and adequate, and Codemode used 1,090 more main tokens in that pair. Only 8 of 20 runs met the completion, conformance and adequacy conditions that the frozen gate requires of every run, so it rejects an overall savings-with-preserved-usefulness claim. This result concerns one question, one corpus, `Pi` 1.5.0 and `openai-codex/gpt-6.1-sol`.
 
 ## Resume Here
 
-Continue in the existing checkout only to inspect, preserve or reproduce the completed work:
+Start with [Pilot Resume](RESUME.md) for the current authority, sole reading order, entry checks and remaining pilot work. Continue in the existing checkout and preserve the completed `rh-v4` evidence:
 
 ```text
 /srv/secure/repos/CURIO/.worktrees/pi-intelli-search/research-handoff-runner
@@ -13,13 +15,7 @@ branch: study/research-handoff-runner
 
 Do not recreate, reset or retire this worktree. Preserve its ignored evidence. The evidence directories survive here, not in a clean clone or a new worktree. Do not clean them or substitute older scientific material when something is absent.
 
-Read in this order:
-
-1. [Findings](FINDINGS.md), the current result and sensitivity record.
-2. [Reproduction](REPRODUCTION.md), the implemented offline analysis and operational rules.
-3. [Protocol](PROTOCOL.md) and [Execution Plan](EXECUTION-PLAN.md), the frozen comparison and acceptance rules. Their status text predates collection; Findings holds current status.
-4. The accepted candidate, observer, measured, assessment and settlement artefacts named below.
-5. [Brief](BRIEF.md), [Feasibility](FEASIBILITY.md) and [Handover](HANDOVER.md) for the original scope. They are commissioning records, not a fresh instruction to create another branch or run another experiment.
+The sections below retain the completed `rh-v4` record. They are historical context, not an alternative launch procedure.
 
 ## Comparison and Claim Gate
 
@@ -83,7 +79,9 @@ The [topic-validation disclosure](../../../evidence/benchmarks/research-handoff/
 
 Both rejected PostgreSQL preparations remain under [`20261104T203243Z-rh-v3-measured/`](../../../evidence/benchmarks/research-handoff/20261104T203243Z-rh-v3-measured/) and [`20261104T204211Z-rh-v3-measured-r2/`](../../../evidence/benchmarks/research-handoff/20261104T204211Z-rh-v3-measured-r2/). Their implementation and observer passes apply only to `rh-v3`; they establish no comparison and were not reused.
 
-## Next Assignment
+## Historical Repeat Boundary
+
+The following boundary belongs to the completed `rh-v4` series. The approved pilot is governed by [Pilot Resume](RESUME.md) and [Refresh and Pilot Plan](REFRESH-PLAN.md), not by reusing the historical allowance.
 
 Inspect or reproduce the completed analysis only. Do not resume collection, rerun a diagnostic, select a replacement source or infer an overall Codemode benefit from the full-population mean. Preserve all evidence under its existing identity. Any new question, recapture, package integration, publication, version bump, main merge or additional measured run requires a separate owner decision.
 

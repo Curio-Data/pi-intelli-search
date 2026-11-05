@@ -19,6 +19,7 @@ import { DurableJournal, createRunDirectory, digestObject, digestText, digestFil
 import type { Arm, Phase, RunManifest, RunRecord } from "./contracts.js";
 import { applyAssessmentBundle } from "./assessment-bundle.js";
 import { checkReturnContract } from "./return-contract.js";
+import { observedPipelineOutcome } from "./outcome.js";
 
 export const REPO_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 const PROTOCOL_PATH = join(REPO_ROOT, "docs/experiments/research-handoff/PROTOCOL.md");
@@ -183,7 +184,7 @@ export async function runWorker(cfg: WorkerConfig): Promise<RunRecord> {
   const record: RunRecord = { manifest: { ...manifest, endedAt: new Date().toISOString(), status: failure ? "failed" : recorder.outcome() },
     ...observation, ...(failure ? { error: failure } : {}) };
   record.inputIntegrity = settleInputIntegrity({ frozen, events: record.adapterEvents });
-  record.pipelineOutcome = String([...record.adapterEvents].reverse().find(event => event.kind === "research-result")?.data.outcome ?? (record.error ? "error" : "not-started"));
+  record.pipelineOutcome = observedPipelineOutcome(record);
   record.financialControl = {
     budgetLimited: record.adapterEvents.some(event => event.kind === "budget-rejected"),
     overrun: record.adapterEvents.some(event => event.kind === "budget-overrun"),

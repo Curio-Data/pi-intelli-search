@@ -18,6 +18,8 @@ import type {
 import { assessAdequacy, type AdequacyResult } from "./adequacy.js";
 import { checkReturnContract } from "./return-contract.js";
 import { PRIMARY_METRIC } from "./config.js";
+import { providerInputAttribution, type ProviderInputAttribution } from "./provider-attribution.js";
+import { observedPipelineOutcome } from "./outcome.js";
 
 export const TOKENIZER_ID = "js-tiktoken@1.0.21/o200k_base" as const;
 export const ATTRIBUTION_SERIALISATION = "Logical contexts are first projected to model-visible messages and declarations, excluding SDK usage, timestamps, details and nestedCalls. Responses reasoning ciphertext is excluded and reported as UTF-8 bytes. Complete projected values and non-string fragments then use recursively key-sorted JSON; recorded strings are encoded verbatim; array order is preserved; object properties whose value is undefined are omitted and undefined array entries become null. Each component fragment is encoded independently." as const;
@@ -67,6 +69,9 @@ export interface RequestAttribution extends AttributionEstimate {
   requestId: string;
   attemptId?: string;
   attemptStatus?: MainAttempt["status"];
+  /** Whole proxy estimate minus independently tokenised component sum. */
+  componentResidual: number;
+  providerAttribution?: ProviderInputAttribution;
 }
 
 export interface HandoffCounts {
@@ -110,6 +115,9 @@ export interface DownstreamStageAnalysis {
   truncatedCompletions: number;
   usage: UsageAnalysis;
   usageSource: "provider-attempts" | "logical-completions" | "none";
+  /** Serving routes of final logical completions, not all retry attempts. */
+  completionRoutes: Record<string, number>;
+  unreportedCompletionRoutes: number;
   outputTextBytes?: number;
   outputTextTokens?: number;
   outputSizeComplete: boolean;
@@ -144,6 +152,11 @@ export interface RunAnalysis {
   inputMatched: boolean;
   inputComplete: boolean;
   pipelineOutcome?: string;
+  /** Event-derived diagnostic; the recorded label and frozen eligibility remain intact. */
+  observedPipelineOutcome: string;
+  initialInvocationConforms: boolean;
+  assignedTopologyConforms: boolean;
+  recoveryCalls: number;
   financialControl?: { budgetLimited: boolean; overrun: boolean; activeReservations: boolean };
   observerVerified: boolean;
   /** False for an unfinished run or unverified observer coverage, even when partial records contain zeros. */
@@ -471,7 +484,7 @@ class RequestAttributor {
 
     for (const [key, entry] of Object.entries(value)) {
       if ((key === "tools" || key === "toolCatalogue" || key === "catalogue") && category === "unallocated") {
-        this.visit(entry, "arm-declarations-guidance");
+        this.visitDeclarations(entry);
       } else if ((key === "system" || key === "systemPrompt" || key === "instructions") && category === "unallocated") {
         this.visit(entry, "unallocated");
       } else if (toolCallKeys.has(key)) {
@@ -482,9 +495,18 @@ class RequestAttributor {
     }
   }
 
+  private visitDeclarations(value: unknown): void {
+    // Schemas and identifiers are model-visible too. Do not interpret their
+    // role/type/name keys as transcript metadata or tool calls.
+    this.componentTokens["arm-declarations-guidance"] += estimateTokens(fragmentText(value));
+  }
+
   private visitMessage(message: Record<string, unknown>, category: AttributionCategory): void {
-    for (const key of ["content", "text", "sections", "toolsAdded", "toolsRemoved"]) {
+    for (const key of ["content", "text", "sections"]) {
       if (key in message) this.visitContent(message[key], category);
+    }
+    for (const key of ["tools", "toolsAdded", "toolsRemoved"]) {
+      if (key in message) this.visitDeclarations(message[key]);
     }
   }
 
@@ -550,13 +572,16 @@ function estimateRequest(
   attributor.visit(projected);
   const wholeRequestTokens = estimateTokens(serialiseAttribution(projected));
   const providerInputTokens = validNonnegative(attempt?.usage?.input) ? attempt?.usage?.input : undefined;
+  const componentTokenSum = Object.values(attributor.componentTokens).reduce((sum, count) => sum + count, 0);
   return {
     requestId,
     attemptId: attempt?.id,
     attemptStatus: attempt?.status,
     tokenizer: TOKENIZER_ID,
     componentTokens: attributor.componentTokens,
-    componentTokenSum: Object.values(attributor.componentTokens).reduce((sum, count) => sum + count, 0),
+    componentTokenSum,
+    componentResidual: wholeRequestTokens - componentTokenSum,
+    ...(attempt ? { providerAttribution: providerInputAttribution(attempt) } : {}),
     opaqueReasoningBytes: projector.opaqueReasoningBytes,
     wholeRequestTokens,
     providerInputTokens,
@@ -715,6 +740,8 @@ interface DownstreamAccumulator {
   activeReservations: Map<string, number>;
   sdkEstimatedCostUsd: number;
   logicalSdkEstimatedCostUsd: number;
+  completionRoutes: Map<string, number>;
+  unreportedCompletionRoutes: number;
 }
 
 function downstreamAccumulator(): DownstreamAccumulator {
@@ -732,6 +759,8 @@ function downstreamAccumulator(): DownstreamAccumulator {
     activeReservations: new Map(),
     sdkEstimatedCostUsd: 0,
     logicalSdkEstimatedCostUsd: 0,
+    completionRoutes: new Map(),
+    unreportedCompletionRoutes: 0,
   };
 }
 
@@ -750,7 +779,8 @@ function downstreamUsage(raw: unknown): ReportedUsage | undefined {
     output: nonnegativeField(raw.output) ?? nonnegativeField(raw.completion_tokens) ?? nonnegativeField(raw.output_tokens),
     cacheRead: nonnegativeField(raw.cacheRead) ?? nonnegativeField(raw.cached_tokens)
       ?? nonnegativeField(inputDetails.cached_tokens),
-    cacheWrite: nonnegativeField(raw.cacheWrite),
+    cacheWrite: nonnegativeField(raw.cacheWrite) ?? nonnegativeField(raw.cache_write_tokens)
+      ?? nonnegativeField(inputDetails.cache_write_tokens),
     reasoning: nonnegativeField(raw.reasoning) ?? nonnegativeField(raw.reasoning_tokens)
       ?? nonnegativeField(outputDetails.reasoning_tokens),
     reportedCostUsd: nonnegativeField(raw.cost),
@@ -812,6 +842,8 @@ function finishDownstreamStage(accumulator: DownstreamAccumulator): DownstreamSt
     truncatedCompletions: accumulator.truncated.size,
     usage,
     usageSource: useLogical ? "logical-completions" : attempts.length > 0 ? "provider-attempts" : "none",
+    completionRoutes: Object.fromEntries([...accumulator.completionRoutes].sort(([a], [b]) => a.localeCompare(b))),
+    unreportedCompletionRoutes: accumulator.unreportedCompletionRoutes,
     outputTextBytes: outputSizeComplete ? Buffer.byteLength(outputText, "utf8") : undefined,
     outputTextTokens: outputSizeComplete ? estimateTokens(outputText) : undefined,
     outputSizeComplete,
@@ -852,6 +884,9 @@ function analyseDownstream(record: RunRecord): DownstreamAnalysis {
     if (event.kind === "model-request") accumulator.logicalRequests += 1;
     if (event.kind === "model-completion") {
       accumulator.logicalCompletions += 1;
+      if (typeof data.routeProvider === "string" && data.routeProvider.trim()) {
+        accumulator.completionRoutes.set(data.routeProvider, (accumulator.completionRoutes.get(data.routeProvider) ?? 0) + 1);
+      } else accumulator.unreportedCompletionRoutes += 1;
       accumulator.logicalUsages.push(downstreamUsage(data.usageEstimate));
       accumulator.logicalOutputs.push(typeof data.text === "string" ? data.text : undefined);
       accumulator.logicalSdkEstimatedCostUsd += sdkEstimate(data.usageEstimate);
@@ -1033,8 +1068,15 @@ export function analyseRun(record: RunRecord): RunAnalysis {
     && topLevelCalls[0]?.name === "codemode" && nestedCalls.length === 1
     && nestedCalls[0]?.name === "intelli_research"
     && nestedCalls[0]?.parentToolCallId === topLevelCalls[0]?.id;
-  const observedRouteConforms = (baselineRoute || candidateRoute) && noToolErrors
+  const researchCalls = record.toolCalls.filter(call => call.name === "intelli_research");
+  const first = topLevelCalls[0];
+  const initialInvocationConforms = researchCalls.length === 1 && (record.manifest.arm === "baseline"
+    ? first?.name === "intelli_research" && !researchCalls[0].parentToolCallId
+    : first?.name === "codemode" && researchCalls[0].parentToolCallId === first.id);
+  const recoveryCalls = record.toolCalls.filter(call => call.name === "read").length;
+  const assignedTopologyConforms = (baselineRoute || candidateRoute)
     && postToolResumptions === 1 && finalAnswerResumptions === 1 && additionalResumptions === 0;
+  const observedRouteConforms = assignedTopologyConforms && noToolErrors;
   const returnContract = checkReturnContract(record);
   const conforms = record.conformance.conforms && observedRouteConforms && returnContract.preserved;
   const evidenceReadable = record.evidenceAccess.readable
@@ -1057,6 +1099,8 @@ export function analyseRun(record: RunRecord): RunAnalysis {
     ...adequacy.problems,
     ...downstream.problems,
     ...returnContract.problems,
+    ...record.adapterEvents.filter(event => event.kind === "research-error")
+      .map(event => typeof event.data.message === "string" ? `Research failure: ${event.data.message}` : "Research failed without a recorded message."),
   ];
   if (!record.inputIntegrity.matched) problems.push("Recorded input integrity did not match.");
   if (record.inputIntegrity.complete !== true) problems.push("Input execution-completeness proof is missing or incomplete.");
@@ -1082,6 +1126,10 @@ export function analyseRun(record: RunRecord): RunAnalysis {
     inputMatched: record.inputIntegrity.matched,
     inputComplete: record.inputIntegrity.complete === true,
     pipelineOutcome: record.pipelineOutcome,
+    observedPipelineOutcome: observedPipelineOutcome(record),
+    initialInvocationConforms,
+    assignedTopologyConforms,
+    recoveryCalls,
     financialControl,
     observerVerified: record.observerCoverage.verified,
     observationComplete: record.observerCoverage.verified
@@ -1510,6 +1558,8 @@ const markdownMetrics: PairMetric[] = [
   "peakLogicalRequestTokens",
   "finalRetainedContextTokens",
   "downstreamTotalTokens",
+  "downstreamOutputTokens",
+  "generatedRawScriptTokens",
   "downstreamReportedCostUsd",
   "extractionOutputTextBytes",
   "collationOutputTextBytes",
@@ -1547,6 +1597,29 @@ export function renderAnalysisMarkdown(result: PairAnalysisResult): string {
       : !run.adequacy.independentReview || !run.adequacy.disagreementsResolved ? "Review Incomplete"
       : run.adequacy.adequate ? "Pass" : "Fail";
     lines.push(`| ${markdownCell(run.runId)} | ${markdownCell(run.pair)} | ${run.arm} | ${run.status} | ${run.analysisError ? markdownCell(run.analysisError) : "None"} | ${markdownNumber(observed ? run.cumulativeInputTokens : undefined)} | ${markdownNumber(observed ? run.usage.uncachedInput.value : undefined)} | ${markdownNumber(observed ? run.cumulativeOutputTokens : undefined)} | ${markdownNumber(observed ? run.cumulativeTotalTokens : undefined)} | ${markdownNumber(resumptions)} | ${markdownCell(run.pipelineOutcome)} | ${adequacy} |`);
+  }
+  lines.push("", "## Execution Diagnostics", "",
+    "Initial invocation checks the first call and unique research invocation independently of later recovery and pipeline success. Assigned topology checks the full one-handoff boundary. Recorded conformance and the historical claim gate are unchanged. Serving routes describe final logical collation completions, not every retry attempt.", "",
+    "| Run | Initial Invocation | Recovery Reads | Assigned Topology | Recorded Pipeline | Event-Derived Pipeline | Collation Truncations | Collation Text Bytes | Collation Routes |",
+    "|---|---|---:|---|---|---|---:|---:|---|");
+  for (const run of result.runs) {
+    const collate = run.downstream.byStage.collate;
+    const routes = Object.entries(collate.completionRoutes).map(([name, count]) => `${name}: ${count}`);
+    if (collate.unreportedCompletionRoutes) routes.push(`unknown: ${collate.unreportedCompletionRoutes}`);
+    lines.push(`| ${markdownCell(run.runId)} | ${run.analysisError ? "unknown" : run.initialInvocationConforms ? "Matched" : "Not Matched"} | ${run.analysisError ? "unknown" : run.recoveryCalls} | ${run.analysisError ? "unknown" : run.assignedTopologyConforms ? "Matched" : "Not Matched"} | ${markdownCell(run.pipelineOutcome)} | ${run.analysisError ? "unknown" : run.observedPipelineOutcome} | ${run.analysisError ? "unknown" : collate.truncatedCompletions} | ${markdownNumber(collate.outputTextBytes)} | ${markdownCell(routes.join("; "))} |`);
+  }
+  lines.push("", "## Provider Input Attribution", "",
+    "These are cumulative provider-reported input components, not proxy estimates. Values require complete observed requests and reconciled parent-item counts in every attempt. Unknown attribution never becomes zero. Full proxy components and their signed whole-request gaps remain in analysis.json.", "",
+    "| Run | Input Tokens | Declaration Input | Instruction Input |",
+    "|---|---:|---:|---:|");
+  for (const run of result.runs) {
+    const attempts = run.attribution.attempts;
+    const component = (field: "declarationInputTokens" | "instructionInputTokens"): number | undefined => {
+      if (run.analysisError || !run.observationComplete || run.usage.logicalRequestsWithoutAttempts > 0 || !attempts.length
+        || attempts.some(attempt => !attempt.providerAttribution?.reconciled || attempt.providerAttribution[field] === undefined)) return undefined;
+      return attempts.reduce((sum, attempt) => sum + attempt.providerAttribution![field]!, 0);
+    };
+    lines.push(`| ${markdownCell(run.runId)} | ${markdownNumber(run.observationComplete ? run.cumulativeInputTokens : undefined)} | ${markdownNumber(component("declarationInputTokens"))} | ${markdownNumber(component("instructionInputTokens"))} |`);
   }
   const affected = result.runs.filter(run => run.analysisError || run.problems.length > 0);
   if (affected.length > 0) {

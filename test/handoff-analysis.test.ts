@@ -1150,6 +1150,123 @@ describe("human analysis summary", () => {
   });
 });
 
+describe("post-rh-v4 observation corrections", () => {
+  it("attributes complete declarations in both additional_tools and toolsAdded shapes", () => {
+    for (const arm of ["baseline", "candidate"] as const) {
+      const record = makeRecord({ arm });
+      const declarations = [{ type: "function", name: "example", description: "A declared tool", parameters: {
+        type: "object", properties: { role: { type: "string" }, tools: { type: "array", items: { type: "string" } } },
+      } }];
+      const payload = { instructions: SYSTEM, input: [
+        { role: "developer", type: "additional_tools", tools: declarations },
+        { role: "user", content: record.prompt },
+      ] };
+      record.requests[0].attempts[0].payload = payload;
+      const context = record.requests[0].context as { messages: Array<Record<string, unknown>> };
+      context.messages[0].toolsAdded = declarations;
+      const full = analyseRun(record);
+      const expected = tokens(serialiseAttribution(declarations));
+      delete (payload.input[0] as Record<string, unknown>).tools;
+      delete context.messages[0].toolsAdded;
+      const removed = analyseRun(record);
+      for (const view of ["attempts", "logicalRequests"] as const) {
+        assert.equal(full.attribution[view][0].componentTokens["arm-declarations-guidance"]
+          - removed.attribution[view][0].componentTokens["arm-declarations-guidance"], expected);
+        assert.equal(full.attribution[view][0].componentTokens.unallocated, removed.attribution[view][0].componentTokens.unallocated);
+        const row = full.attribution[view][0];
+        assert.equal(row.componentResidual, row.wholeRequestTokens - row.componentTokenSum!);
+      }
+      assert.equal(full.cumulativeTotalTokens, removed.cumulativeTotalTokens);
+    }
+  });
+
+  it("recovers known cache writes from raw completions without inventing missing zeros", () => {
+    for (const [raw, expected] of [
+      [{ prompt_tokens_details: { cache_write_tokens: 0 } }, 0],
+      [{ prompt_tokens_details: { cache_write_tokens: 37 } }, 37],
+      [{ input_tokens_details: { cache_write_tokens: 41 } }, 41],
+      [{ cache_write_tokens: 13 }, 13],
+      [{ cacheWrite: 0, prompt_tokens_details: { cache_write_tokens: 37 } }, 0],
+      [{}, undefined],
+    ] as const) {
+      const record = makeRecord();
+      record.adapterEvents.push(
+        { kind: "pipeline-attempt", stage: "extract", data: { id: "p1" } },
+        { kind: "pipeline-completion", stage: "extract", data: { id: "p1", rawUsage: {
+          prompt_tokens: 50, completion_tokens: 10, ...raw,
+        }, stopReason: "stop", content: [{ type: "text", text: "Evidence" }] } },
+      );
+      const write = analyseRun(record).downstream.byStage.extract.usage.cacheWrite;
+      assert.equal(write.value, expected);
+      assert.equal(write.complete, expected !== undefined);
+    }
+  });
+
+  it("reports completion routes and unknown routing separately", () => {
+    const record = makeRecord();
+    record.adapterEvents.push(
+      { kind: "model-completion", stage: "collate", data: { routeProvider: "Route B", text: "B" } },
+      { kind: "model-completion", stage: "collate", data: { routeProvider: "Route A", text: "A" } },
+      { kind: "model-completion", stage: "collate", data: { routeProvider: "Route B", text: "B2" } },
+    );
+    const stage = analyseRun(record).downstream.byStage.collate;
+    assert.deepEqual(stage.completionRoutes, { "Route A": 1, "Route B": 2 });
+    assert.equal(stage.unreportedCompletionRoutes, 1);
+  });
+
+  it("keeps a correct initial invocation separate from recovery and the frozen topology", () => {
+    const record = makeRecord();
+    record.toolCalls.push({ id: "recovery", name: "read", input: { path: ".search/run/report.md" }, isError: false });
+    const row = analyseRun(record);
+    assert.equal(row.initialInvocationConforms, true);
+    assert.equal(row.assignedTopologyConforms, false);
+    assert.equal(row.recoveryCalls, 1);
+    assert.equal(row.conforms, false);
+    record.toolCalls.unshift({ id: "premature-read", name: "read", input: { path: "wrong" } });
+    assert.equal(analyseRun(record).initialInvocationConforms, false);
+  });
+
+  it("sums provider components only when every observed attempt supplies them", () => {
+    const record = makeRecord();
+    for (const request of record.requests) {
+      const attempt = request.attempts[0];
+      const payload = attempt.payload as Record<string, unknown>;
+      delete payload.tools;
+      payload.instructions = SYSTEM;
+      (payload.input as unknown[]).unshift({ role: "developer", type: "additional_tools", tools: [{ name: "example" }] });
+      attempt.rawUsage = { input_tokens: 100, attribution: {
+        items: { at_test: { input_tokens: 10 }, msg_test: { input_tokens: 85 } },
+        request_fields: { instructions: { input_tokens: 5 } },
+      } };
+    }
+    assert.ok(renderAnalysisMarkdown(analysePairs([record])).includes("| baseline-1 | 200 | 20 | 10 |"));
+    delete record.requests[1].attempts[0].rawUsage;
+    assert.ok(renderAnalysisMarkdown(analysePairs([record])).includes("| baseline-1 | 200 | unknown | unknown |"));
+    record.requests[1].attempts = [];
+    assert.ok(renderAnalysisMarkdown(analysePairs([record])).includes("| baseline-1 | unknown | unknown | unknown |"));
+  });
+
+  it("separates correct invocation from failed research without relaxing the frozen gate", () => {
+    const record = makeRecord({ arm: "candidate", status: "failed" });
+    record.pipelineOutcome = "not-started";
+    record.toolCalls.forEach(call => { call.isError = true; });
+    record.adapterEvents = [{ kind: "research-error", data: { message: "Collation returned no visible text" } }];
+    const row = analyseRun(record);
+    assert.equal(row.initialInvocationConforms, true);
+    assert.equal(row.assignedTopologyConforms, true);
+    assert.equal(row.observedRouteConforms, false);
+    assert.equal(row.conforms, false);
+    assert.equal(row.pipelineOutcome, "not-started", "historical label is retained");
+    assert.equal(row.observedPipelineOutcome, "error");
+    const result = analysePairs([record]);
+    assert.equal(result.positiveClaim.allowed, false);
+    const markdown = renderAnalysisMarkdown(result);
+    assert.match(markdown, /## Execution Diagnostics/);
+    assert.match(markdown, /Collation returned no visible text/);
+    assert.match(markdown, /## Provider Input Attribution/);
+  });
+});
+
 describe("deterministic attribution serialisation", () => {
   it("sorts object keys, preserves arrays and verifies local tokenizer round trips", () => {
     assert.equal(serialiseAttribution({ z: 1, a: { d: 4, b: 2 }, skip: undefined }), '{"a":{"b":2,"d":4},"z":1}');
