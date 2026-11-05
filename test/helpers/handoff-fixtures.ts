@@ -35,13 +35,19 @@ export const SYNTHETIC_CAPTURE_META = {
   protocolRef: PROTOCOL_REVISION,
 } as const;
 
-/** Three synthetic postgresql.org pages matching the study's three-source cap. */
-export function syntheticPages(count = 3, opts: { duplicateContent?: boolean } = {}): FetchedPage[] {
+/**
+ * Six synthetic pages matching the study's six-source cap, alternating between
+ * the two approved study domains. The bodies are deliberately placeholder
+ * text: they contain no real setup instructions and no answer hints, so a
+ * synthetic replay can never be mistaken for study evidence.
+ */
+export function syntheticPages(count = 6, opts: { duplicateContent?: boolean } = {}): FetchedPage[] {
   return Array.from({ length: count }, (_, i) => {
-    const url = `https://www.postgresql.org/docs/17/synthetic-page-${i + 1}.html`;
+    const host = i % 2 === 0 ? "developers.cloudflare.com" : "pi.dev";
+    const url = `https://${host}/synthetic-page-${i + 1}`;
     const content = opts.duplicateContent
-      ? "PG17_SYNTH_IDENTICAL: shared body used to exercise the repeated-identical-message multiset rule."
-      : `PG17_SYNTH_${i + 1}: transaction boundaries, advisory locks, SKIP LOCKED and LISTEN/NOTIFY notes for page ${i + 1}.`.repeat(
+      ? "SYNTHETIC_IDENTICAL_BODY: shared placeholder body used to exercise the repeated-identical-message multiset rule; no real setup instructions."
+      : `SYNTHETIC_PAGE_${i + 1}: placeholder body for pipeline coverage only; it contains no real configuration, credentials or setup instructions.`.repeat(
             3,
           );
     return {
@@ -126,7 +132,7 @@ export function syntheticCallLlmDelegate(args: {
     args.calls?.push({ systemPrompt, userMessage });
     if (systemPrompt === SEARCH_SYSTEM_PROMPT) return args.frozen.capture.completion.text;
     if (systemPrompt === EXTRACTION_SYSTEM_PROMPT) {
-      return "official docs, current\nSynthetic extraction of the supplied page: locks and notifications covered.";
+      return "official docs, current\nSynthetic extraction of the supplied placeholder page: no real setup instructions.";
     }
     if (systemPrompt === COLLATION_SYSTEM_PROMPT) {
       // Cite only an evidence URL: the baseline's provenance validation

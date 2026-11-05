@@ -68,7 +68,7 @@ test("assembleFrozenInputs recomputes the baseline selection semantics", async (
     citations: [
       { url: pages[0].url, title: "Alpha citation" },
       { url: pages[1].url, title: "Beta duplicate" },
-      { url: "https://www.postgresql.org/docs/17/citation-only.html", title: "Citation only" },
+      { url: "https://pi.dev/synthetic-citation-only", title: "Citation only" },
     ],
   };
   const frozen = await assembleFrozenInputs({
@@ -87,7 +87,10 @@ test("assembleFrozenInputs recomputes the baseline selection semantics", async (
     [pages[1].url, pages[0].url],
   );
   assert.equal(frozen.capture.effectiveMaxUrls, 2);
-  assert.equal(frozen.capture.userMessage, `${studyParams().query} site:postgresql.org`);
+  assert.equal(
+    frozen.capture.userMessage,
+    `${studyParams().query} site:developers.cloudflare.com OR site:pi.dev`,
+  );
 });
 
 test("assembleFrozenInputs rejects a zero-link capture and misaligned pages", async () => {
@@ -435,7 +438,7 @@ test("frozen fetch serves ordered clones and rejects order, options and abort de
   const opts = fetchOpts(settings);
 
   const served = await fetchPages(pages.map((p) => p.url), undefined, opts);
-  assert.equal(served.length, 3);
+  assert.equal(served.length, pages.length);
   assert.deepEqual(
     served.map((p) => p.url),
     pages.map((p) => p.url),
@@ -493,9 +496,9 @@ test("settleInputIntegrity verifies exact multiset consumption and deviation eve
   const client = createFrozenModelClient({ delegate, frozen, journal, latch: createInputControlLatch() });
   const fetch = createFrozenFetchPages({ frozen, journal, latch: createInputControlLatch() });
 
-  // Complete the expected exchange for two of the three pages, then settle:
-  // one extraction remains unconsumed. That is an execution gap, NOT an
-  // input mismatch (F4): matched stays true, complete is false.
+  // Complete the expected exchange for all but one page, then settle: one
+  // extraction remains unconsumed. That is an execution gap, NOT an input
+  // mismatch (F4): matched stays true, complete is false.
   await client.complete(
     baseRequest({
       model: studySettings().searchModel,
@@ -505,7 +508,7 @@ test("settleInputIntegrity verifies exact multiset consumption and deviation eve
     }),
   );
   await fetch(pages.map((p) => p.url), undefined, fetchOpts(frozen.settings as ReturnType<typeof studySettings>));
-  for (const page of pages.slice(0, 2)) {
+  for (const page of pages.slice(0, -1)) {
     const message = buildExtractionMessage(page.content, studyParams().query, studyParams().focusPrompt, (frozen.settings as ReturnType<typeof studySettings>).extractMaxChars);
     await client.complete(
       baseRequest({ model: studySettings().extractModel, systemPrompt: EXTRACTION_SYSTEM_PROMPT, userMessage: message }),
@@ -517,9 +520,9 @@ test("settleInputIntegrity verifies exact multiset consumption and deviation eve
   assert.equal(settled.complete, false);
   assert.ok(settled.completenessProblems.some((p) => p.includes("expected 1")));
 
-  // Completing the third extraction and the result event closes the loop.
-  const third = pages[2];
-  const message = buildExtractionMessage(third.content, studyParams().query, studyParams().focusPrompt, (frozen.settings as ReturnType<typeof studySettings>).extractMaxChars);
+  // Completing the final extraction and the result event closes the loop.
+  const finalPage = pages[pages.length - 1];
+  const message = buildExtractionMessage(finalPage.content, studyParams().query, studyParams().focusPrompt, (frozen.settings as ReturnType<typeof studySettings>).extractMaxChars);
   await client.complete(
     baseRequest({ model: studySettings().extractModel, systemPrompt: EXTRACTION_SYSTEM_PROMPT, userMessage: message }),
   );

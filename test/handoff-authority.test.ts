@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { verifyPreparationAuthority, admitAcceptedPreparation, prepareCapture, qualifyDownstreamCost, settleAcceptedSeries, assertFixedEnvelopeApproval } from "../scripts/research-handoff/collection.js";
 import { assertLiveEvidenceRoot, assertFixedAdmissionIdentity, validateLiveAcceptance, REPO_ROOT, type WorkerConfig } from "../scripts/research-handoff/runner.js";
 import { unavailableRecord, writeNewJson, digestFile, sourceIdentity } from "../scripts/research-handoff/storage.js";
-import { BUDGET, pairedSchedule } from "../scripts/research-handoff/config.js";
+import { BUDGET, FINANCIAL_APPROVAL_SCOPE, pairedSchedule } from "../scripts/research-handoff/config.js";
 
 test("handoff unresolved financial authority blocks every metered entry before network or credentials", async () => {
   const root = await mkdtemp(join(tmpdir(), "handoff-authority-"));
@@ -29,10 +29,12 @@ test("handoff unresolved financial authority blocks every metered entry before n
 });
 
 test("fixed-envelope approval and admission remain bounded to the exact experiment identities", () => {
-  const owner = { schemaVersion: 1, approvedAt: "2026-11-04T00:00:00Z", approvedBy: "owner", approved: true, scope: "continue-without-programme-ledger", maximumExperimentEnvelopeNanoUsd: 25_810_000_000 };
+  assert.equal(FINANCIAL_APPROVAL_SCOPE, "continue-without-programme-ledger-rh-v4");
+  const owner = { schemaVersion: 1, approvedAt: "2026-11-04T00:00:00Z", approvedBy: "owner", approved: true, scope: FINANCIAL_APPROVAL_SCOPE, maximumExperimentEnvelopeNanoUsd: 25_810_000_000 };
   assert.doesNotThrow(() => assertFixedEnvelopeApproval(owner));
   assert.throws(() => assertFixedEnvelopeApproval({ ...owner, maximumExperimentEnvelopeNanoUsd: 30_000_000_000 }), /bounded no-ledger/);
   assert.throws(() => assertFixedEnvelopeApproval({ ...owner, scope: "unlimited" }), /bounded no-ledger/);
+  assert.throws(() => assertFixedEnvelopeApproval({ ...owner, scope: "continue-without-programme-ledger" }), /bounded no-ledger/);
   const admission = { accepted: true, mode: "fixed-envelope", codeSha256: "code", protocolSha256: "protocol", envelopeNanoUsd: 25_810_000_000 };
   assert.doesNotThrow(() => assertFixedAdmissionIdentity(admission, "code", "protocol"));
   assert.throws(() => assertFixedAdmissionIdentity({ ...admission, codeSha256: "other" }, "code", "protocol"), /missing or changed/);
@@ -49,7 +51,7 @@ test("fixed-envelope admission, measured acceptance and local close-out integrat
     const protocolSha256 = await digestFile(join(REPO_ROOT, "docs/experiments/research-handoff/PROTOCOL.md"));
     const ownerPath = join(root, "owner.json"), technicalPath = join(root, "technical.md"), diagnosticPath = join(root, "diagnostic.json");
     writeNewJson(ownerPath, { schemaVersion: 1, approvedAt: "2026-11-04T00:00:00Z", approvedBy: "owner", approved: true,
-      scope: "continue-without-programme-ledger", maximumExperimentEnvelopeNanoUsd: BUDGET.batchNanoUsd });
+      scope: FINANCIAL_APPROVAL_SCOPE, maximumExperimentEnvelopeNanoUsd: BUDGET.batchNanoUsd });
     writeNewJson(technicalPath, "# Accepted technical review\n");
     writeNewJson(diagnosticPath, { accepted: true, codeSha256, protocolSha256 });
     const acceptancePath = join(root, "preparation.json");

@@ -24,7 +24,7 @@ npm run check:readmes
 npm run check:changelog
 ```
 
-The existing native and standalone tests remain in `test:all`. The explicit `test:handoff` lane runs the experiment's tests, including installed-host checks, with isolated home, agent and temporary directories. No live end-to-end package suite, publication check or security audit is part of this experiment's validation authority.
+The existing native and standalone tests remain in `test:all`. The explicit `test:handoff` lane runs the experiment's tests, including installed-host checks, with isolated home, agent and temporary directories. Record `sourceIdentity(process.cwd()).digest` before and after the complete lane and require the same value, so the log binds every check to one implementation identity. No live end-to-end package suite, publication check or security audit is part of this experiment's validation authority.
 
 ## Host Identity and Synthetic Proof
 
@@ -73,7 +73,7 @@ npm run study:handoff -- analyse \
   evidence/benchmarks/research-handoff/unique-measured/assessments.json
 ```
 
-The join happens in memory. It never rewrites raw records. A missing or changed review artefact, a duplicate grade or a record-hash mismatch rejects the assessment bundle. Without accepted assessments, the numeric table remains available but the positive-claim gate cannot pass.
+Both the grader and the checking reviewer must satisfy the isolation rule in [Protocol](PROTOCOL.md#task). The join happens in memory. It never rewrites raw records. A missing or changed review artefact, a duplicate grade or a record-hash mismatch rejects the assessment bundle. Without accepted assessments, the numeric table remains available but the positive-claim gate cannot pass.
 
 ## Live Gates
 
@@ -83,19 +83,19 @@ Follow the gates in this order. Each entry requires the evidence in its own row,
 
 | Stage | Entry or Decision | Prerequisites | Output |
 |---|---|---|---|
-| Implementation | Independent technical acceptance | Frozen candidate, deterministic checks and actual-host synthetic proof | Accepted candidate and measurement boundary |
+| Implementation | Independent technical and prose acceptance | Frozen candidate, deterministic checks and actual-host synthetic proof | Accepted candidate and measurement boundary |
 | Main Diagnostics | `collect`, diagnostic acceptance | Accepted candidate and a separately accepted two-conversation diagnostic schedule using synthetic downstream inputs | Real main-provider observer evidence; no programme reservation required for this subscription-only step |
-| Financial Admission | `admit` | Accepted diagnostic evidence, owner approval for the fixed-envelope amendment and current public rates | One bounded local admission; no replacement programme ledger |
+| Financial Admission | `admit` | Accepted diagnostic evidence, the new narrow owner financial receipt with scope `continue-without-programme-ledger-rh-v4`, and current public rates | One bounded local admission; no replacement programme ledger |
 | Common Capture | `capture` | Accepted preparation and fixed-envelope admission | Fresh search/pages and Sonar's numeric-charge check |
-| Corpus Review | Coordinator decision | Retained common capture | Accepted topic coverage and source-version applicability |
-| Downstream Qualification | `qualify-cost` | Accepted corpus and Sonar reporting, within the bounded qualification allowance | M3 reported-charge evidence |
+| Corpus Review | Fresh reviewer who has not read the topic-validation answer, the coordinator's answer-shaped discussion or the disclosure's query field | Retained common capture | Accepted topic coverage and source applicability, including any documented limitation or absence; silence alone fails |
+| Downstream Qualification | `qualify-cost` | Accepted corpus and Sonar reporting, within the bounded qualification allowance | MiniMax M3 reported-charge evidence |
 | Measured Acceptance | Coordinator decision | Accepted diagnostics, corpus, charge reporting and financial admission | Frozen measured schedule and all input/runtime identities |
 | Measured Conversations | `collect`, measured acceptance | That exact measured acceptance | Full retained inventory, including failures or not-run rows |
 | Financial Close-Out | `settle` | Terminal collection or preparation-failure evidence and reviewed receipts | Local settlement receipt with unknown charges still held |
 
-The owner's `rh-v3` amendment removes the unavailable programme-ledger prerequisite and fixes the maximum experiment envelope at USD 25.81. It does not make a synthetic test or subscription-only observer diagnostic a paid research observation. No replacement ledger or fresh USD 30 allowance is created.
+The owner's `rh-v3` amendment removed the unavailable programme-ledger prerequisite and fixed the maximum experiment envelope at USD 25.81. The `rh-v4` question amendment replaces the study stimulus but grants no financial authority: a new narrow owner receipt with scope `continue-without-programme-ledger-rh-v4`, `schemaVersion: 1`, `approvedBy: "owner"`, `approved: true`, a non-empty `approvedAt`, and `maximumExperimentEnvelopeNanoUsd` equal to the implemented bound is required before `admit`. The runner rejects the historical `rh-v3` receipt scope. Every acceptance recorded against the `rh-v3` identity, including the synthetic proof, observer diagnostic and financial admission, requires renewal against the revised code and protocol identity before any live entry is used. Neither amendment makes a synthetic test or subscription-only observer diagnostic a paid research observation, and the question amendment authorises no fresh capture or measured conversation by itself. No replacement ledger or fresh USD 30 allowance is created.
 
-For the main diagnostics, create a fresh credential-free synthetic series under the accepted code and pass its `frozen-inputs.json` to `collect`. The diagnostic acceptance review must verify both assigned routes, complete observer coverage, fixed-input equality and unchanged-return preservation. Compare the candidate's recorded return with its transmitted `function_call_output`, accounting for the pinned host's newline envelope. A nonconforming or unreviewed diagnostic is not accepted merely because `collect` reports that collection finished. These conversations establish observation and return behaviour, not factual answer adequacy.
+For the main diagnostics, create a fresh credential-free synthetic series under the accepted code and pass its `frozen-inputs.json` to `collect`. The driver supplies two synthetic pages because these conversations qualify main-model observation and return behaviour; the deterministic pinned-host tests cover six-page downstream fan-out separately. The diagnostic acceptance review must verify both assigned routes, complete observer coverage, fixed-input equality and unchanged-return preservation. Compare the candidate's recorded return with its transmitted `function_call_output`, accounting for the pinned host's newline envelope. A nonconforming or unreviewed diagnostic is not accepted merely because `collect` reports that collection finished. These conversations establish observation and return behaviour, not factual answer adequacy.
 
 The authority structures are defined by `PreparationAcceptance` in [`collection.ts`](../../../scripts/research-handoff/collection.ts) and `LiveAcceptance` in [`runner.ts`](../../../scripts/research-handoff/runner.ts). Credential arguments are explicit file references, never token values. Credentials are read through a non-refreshing store. OAuth access must have at least 35 minutes remaining, covering the 30-minute worker ceiling and the host's refresh window; expiry requires the operator's own login workflow. No credential is written into a run profile.
 
@@ -103,7 +103,7 @@ The authority structures are defined by `PreparationAcceptance` in [`collection.
 |---|---|
 | `admit <preparation-acceptance.json>` | Refresh public rates and record the accepted fixed-envelope admission |
 | `capture <preparation-acceptance.json> <auth-file>` | Run fresh common search and page acquisition behind the financial guard |
-| `qualify-cost <preparation-acceptance.json> <auth-file> <corpus-acceptance.json>` | Qualify M3's reported-charge channel on one frozen source |
+| `qualify-cost <preparation-acceptance.json> <auth-file> <corpus-acceptance.json>` | Qualify MiniMax M3's reported-charge channel on one frozen source |
 | `collect <conversation-acceptance.json> <auth-file> <frozen-inputs.json>` | Execute the exact diagnostic or measured schedule sequentially |
 | `settle <preparation-acceptance.json>` | Reconcile retained stage receipts and write local settlement, keeping unknown holds |
 

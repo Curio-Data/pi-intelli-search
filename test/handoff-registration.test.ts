@@ -214,8 +214,8 @@ test("native parity: identical inputs produce identical text, details, progress 
 
     // Model roles that crossed the live delegate. Arm A crosses all four
     // stages; arm B's search is REPLAYED by the frozen adapter (never
-    // delegated), so the delegate sees: one search (arm A), three extractions
-    // per arm, one collation per arm.
+    // delegated), so the delegate sees: one search (arm A), one extraction per
+    // frozen page per arm, one collation per arm.
     const roles = delegateCalls
       .map((call) => call.systemPrompt)
       .map((prompt) => {
@@ -224,7 +224,7 @@ test("native parity: identical inputs produce identical text, details, progress 
         return "search";
       });
     assert.equal(roles.filter((r) => r === "search").length, 1); // arm A only; arm B replayed
-    assert.equal(roles.filter((r) => r === "extract").length, 6); // three per arm
+    assert.equal(roles.filter((r) => r === "extract").length, frozen.extractionInputs.length * 2);
     assert.equal(roles.filter((r) => r === "collate").length, 2); // once per arm
   } finally {
     agent.restore();
@@ -379,14 +379,14 @@ test("partial failures: a frozen failed page stays visible in both arms", async 
   try {
     const pages = [
       {
-        url: "https://www.postgresql.org/docs/17/synthetic-page-1.html",
+        url: "https://developers.cloudflare.com/synthetic-page-1",
         title: "Synthetic Page 1",
-        content: "PG17_SYNTH_1 readable content.",
+        content: "SYNTHETIC_PAGE_1 readable placeholder content; no real setup instructions.",
         status: "success" as const,
         source: "markdown",
       },
       {
-        url: "https://www.postgresql.org/docs/17/synthetic-page-2.html",
+        url: "https://pi.dev/synthetic-page-2",
         title: "Synthetic Page 2",
         content: "",
         status: "error" as const,
@@ -428,7 +428,7 @@ test("partial failures: a frozen failed page stays visible in both arms", async 
     const textB = runB.result.content[0].type === "text" ? runB.result.content[0].text : "";
     assert.equal(textB, textA);
     // The failed page and its frozen reason remain visible in the result.
-    assert.ok(textB.includes("synthetic-page-2.html"));
+    assert.ok(textB.includes("synthetic-page-2"));
     assert.ok(textB.includes("synthetic fetch failure"));
     // Both runs completed with one blocked source.
     assert.equal((runB.result.details as Record<string, unknown>).pagesFailed, 1);
@@ -647,8 +647,8 @@ test("F2: a fully mismatched extraction multiset stops all live delegation; the 
 test("F2: a partial mismatch refuses the later collation before delegation", async () => {
   const { frozen } = await buildSyntheticCorpus();
   const tampered = structuredClone(frozen);
-  // Page 0 consumes and delegates; page 1 mismatches; page 2 and collation
-  // are refused by the latch BEFORE any live delegation.
+  // Page 0 consumes and delegates; page 1 mismatches; the remaining pages and
+  // collation are refused by the latch BEFORE any live delegation.
   tampered.extractionInputs[1].userMessageSha256 = "1".repeat(64);
   await assert.rejects(
     runCoreWithFrozen({ frozen: tampered, delegate: syntheticCallLlmDelegate({ frozen }) }),
@@ -718,7 +718,7 @@ test("F4: an all-extraction provider failure is not an input mismatch", async ()
     // The degraded result is RETURNED, not thrown: a provider failure is not
     // an input deviation. nativeResult keeps the details record; the outcome
     // travels in the journal's research-result event.
-    assert.equal((run.result.details as Record<string, unknown>).extractionFailed, 3);
+    assert.equal((run.result.details as Record<string, unknown>).extractionFailed, frozen.extractionInputs.length);
     const result = events.find((e) => e.kind === "research-result");
     assert.equal(result?.data.outcome, "extraction-failed");
     assert.equal(events.some((e) => e.kind === "input-control-failed"), false);

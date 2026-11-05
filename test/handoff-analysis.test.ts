@@ -1154,7 +1154,7 @@ describe("deterministic attribution serialisation", () => {
   it("sorts object keys, preserves arrays and verifies local tokenizer round trips", () => {
     assert.equal(serialiseAttribution({ z: 1, a: { d: 4, b: 2 }, skip: undefined }), '{"a":{"b":2,"d":4},"z":1}');
     assert.equal(serialiseAttribution([3, undefined, 1]), '[3,null,1]');
-    for (const sample of ["hello world", SCRIPT, "PostgreSQL ✅"]) {
+    for (const sample of ["hello world", SCRIPT, "Synthetic ✅"]) {
       assert.equal(encoding.decode(encoding.encode(sample, "all", [])), sample);
       assert.equal(estimateTokens(sample), tokens(sample));
     }

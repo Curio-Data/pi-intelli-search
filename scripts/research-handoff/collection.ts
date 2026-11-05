@@ -10,7 +10,7 @@ import { createNativeOperationContext } from "../../src/native-operation-context
 import { fetchPages } from "../../src/core/fetch.js";
 import { buildExtractionMessage } from "../../src/core/messages.js";
 import { EXTRACTION_SYSTEM_PROMPT } from "../../src/core/prompts.js";
-import { studySettings, studyParams, taskPrompt, pairedSchedule, MAIN_MODEL, BUDGET, BASELINE_COMMIT } from "./config.js";
+import { studySettings, studyParams, taskPrompt, pairedSchedule, MAIN_MODEL, BUDGET, BASELINE_COMMIT, FINANCIAL_APPROVAL_SCOPE } from "./config.js";
 import { createGuardedCallLlm, providerReportedCost } from "./pipeline-client.js";
 import { assertStoredCredentialReady } from "./credentials.js";
 import { AttemptBudget } from "./budget.js";
@@ -41,7 +41,7 @@ const protocolFile = join(REPO_ROOT, "docs/experiments/research-handoff/PROTOCOL
 export function assertFixedEnvelopeApproval(owner: unknown): void {
   const approval = owner as { schemaVersion?: unknown; approvedAt?: unknown; approvedBy?: unknown; approved?: unknown; scope?: unknown; maximumExperimentEnvelopeNanoUsd?: unknown };
   if (approval.schemaVersion !== 1 || typeof approval.approvedAt !== "string" || !approval.approvedAt
-    || approval.approvedBy !== "owner" || approval.approved !== true || approval.scope !== "continue-without-programme-ledger"
+    || approval.approvedBy !== "owner" || approval.approved !== true || approval.scope !== FINANCIAL_APPROVAL_SCOPE
     || approval.maximumExperimentEnvelopeNanoUsd !== BUDGET.batchNanoUsd) {
     throw new Error("Owner approval does not cover the bounded no-ledger experiment");
   }

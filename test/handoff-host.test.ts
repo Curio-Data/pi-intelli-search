@@ -135,7 +135,7 @@ test("baseline nominal route: direct research call through the actual pinned hos
   const corpus = await buildSyntheticCorpus();
   const { harness, session } = await setup("baseline", [
     researchCallTurn(corpus.params),
-    messageTurn("SKIP LOCKED selects free rows; advisory locks outlive transactions; LISTEN/NOTIFY only wakes workers. Report saved."),
+    messageTurn("Synthetic outbound email setup completed. Report saved."),
   ]);
   try {
     assert.deepEqual([...session.activeTools()].sort(), ["intelli_research", "read"]);
@@ -152,7 +152,7 @@ test("baseline nominal route: direct research call through the actual pinned hos
     assert.equal(observation.requests[0].afterToolCall, false);
     assert.equal(observation.requests[1].afterToolCall, true);
     assert.equal(observation.requests[1].finalAnswerProducing, true);
-    assert.ok(observation.finalAnswer.includes("SKIP LOCKED"));
+    assert.ok(observation.finalAnswer.includes("Synthetic outbound email"));
     // Exact fetch-level observation on both logical requests.
     for (const request of observation.requests) {
       assert.equal(request.attempts.length, 1);
@@ -184,7 +184,7 @@ test("baseline nominal route: direct research call through the actual pinned hos
     // Search is replayed by the frozen client; only extraction and collation delegate.
     const extractions = harness.delegateCalls.filter((call) => call.systemPrompt === EXTRACTION_SYSTEM_PROMPT).length;
     const collations = harness.delegateCalls.filter((call) => call.systemPrompt === COLLATION_SYSTEM_PROMPT).length;
-    assert.equal(extractions, 3, "three frozen pages extracted live");
+    assert.equal(extractions, 6, "all six frozen pages extracted live");
     assert.equal(collations, 1, "one collation");
     assert.equal(observation.observerCoverage.verified, true, JSON.stringify(observation.observerCoverage.problems));
     assert.equal(observation.conformance.conforms, true, JSON.stringify(observation.conformance.problems));
