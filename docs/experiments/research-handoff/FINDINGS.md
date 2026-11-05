@@ -1,57 +1,119 @@
 # Research Handoff Findings
 
-Status: no measured conversations have run, so this experiment establishes no token-saving, resumption, answer-quality or Codemode-benefit claim. On 5 November 2026 the owner approved the `rh-v4` question amendment, replacing the PostgreSQL stimulus with a neutral [_Cloudflare_](https://www.cloudflare.com) research task. The `rh-v4-r3` candidate passed deterministic and synthetic checks, and its technical reviewer accepted observer renewal, but its prose reviewer required one documentation-only correction round; `rh-v4-r4` carries those corrections. No Cloudflare experiment capture or measured conversation exists.
+Status: the `rh-v4` experiment completed on 5 November 2026. The full-population Codemode mean was 1,920.5 main tokens lower, but two route-nonconforming baseline runs account for the entire reduction. As a descriptive sensitivity reading, the Codemode mean across the other eight pairs was 330.1 tokens higher. Only one pair had both runs conforming and adequate, and Codemode used 1,090 more main tokens in that pair. Only 8 of 20 runs met the completion, conformance and adequacy conditions that the frozen gate requires of every run, so it rejects an overall savings-with-preserved-usefulness claim. This result concerns one question, one corpus, `Pi` 1.5.0 and `openai-codex/gpt-6.1-sol`.
 
-## Accepted RH-V3 Implementation and Observer Evidence
+## Comparison and Question
 
-The accepted `rh-v3` implementation was commit `3e43070183b6c63623f02fd782b633cd0c552f2c`, with code identity `1c420c9027dac6b10b0294db1407cc8fff09eb562a922f312f9d4b39ef804e73` and protocol identity `0f252090b0c2910f33212af62f5b734716d670c6e73bde4b651be1e2bb94f530` (`rh-v3`).
+The baseline made one native `intelli_research` call. The candidate made one Codemode call whose script awaited the same operation and returned its complete text once. Both routes used the same frozen corpus, settings and downstream research engine. The query was:
 
-The deterministic lane passed 663 native tests, 62 standalone tests, and 133 study tests, plus build, both relevant type projects, and all applicable generator checks. Fresh actual-host synthetic runs completed both routes, and offline `analysis.json` reproduction was byte-identical. Independent technical and prose reviews accepted the candidate.
+> When running Pi Durable on Cloudflare, how do I enable outbound email with Cloudflare native services?
 
-Two subscription-main observer conversations completed under `openai-codex/gpt-6.1-sol`. Each arm used two logical requests and two observed server-sent-event (SSE) attempts, one assigned handoff, and one answer-producing resumption. Fixed inputs, usage coverage, route conformance, report readability, and unchanged native returns passed. The acceptance receipt is `20261104T203108Z-rh-v3-observer-diagnostic/diagnostic-result.json`; its sibling `diagnostic-acceptance.json` is the schedule authority, not the result receipt. These are observer facts, not measured savings or answer-adequacy evidence. Single-conversation usage totals are not reproduced here and do not support comparison.
+Ten sequential pairs alternated order, with at least 30 seconds between conversations. **Main tokens** are provider-reported input and output from the main agent. **Downstream tokens** are usage from the research pipeline's extraction and collation work; search was captured once and replayed. A **post-tool resumption** is another logical main-model request after a tool result. A **conforming run** used its assigned route with one handoff and no extra evidence calls.
 
-## Corpus Outcomes
+## Claim Gate and Outcomes
 
-Two fresh common captures ran under the accepted source-selection path for [_PostgreSQL_](https://www.postgresql.org/docs/17/). Both were readable and [_Perplexity Sonar_](https://docs.perplexity.ai) reported numeric charges. Neither corpus satisfied the frozen topic and version requirements.
+The [protocol's positive-claim rule](PROTOCOL.md#schedule-and-analysis) requires all twenty runs to complete, conform, pass independent adequacy review and retain readable evidence, with the primary metric known in every pair. Eight runs met both the conformance and adequacy conditions: two baseline and six candidate. Only pair 2 had both arms eligible. The other twelve runs failed at least one required completion, input, pipeline, observer, usage, financial, conformance, adequacy or evidence condition. **The gate rejects the claim.**
 
-| Capture | Selected Sources | Preparation Decision |
-|---|---|---|
-| `20261104T203243Z-rh-v3-measured` | PostgreSQL 17 `NOTIFY`, `LISTEN`, and explicit locking | Rejected: no selected source defines `FOR UPDATE SKIP LOCKED`; external-side-effect coverage was also insufficient |
-| `20261104T204211Z-rh-v3-measured-r2` | PostgreSQL 17 `LISTEN`; `current` `NOTIFY` and explicit locking | Rejected: `SKIP LOCKED` remained absent, and two sources were not pinned to PostgreSQL 17 |
+All twenty scheduled conversations produced retained records. The collector did not stop early, and no replacements occurred. The [run inventory](../../../evidence/benchmarks/research-handoff/20261105T105332Z-rh-v4-measured/inventory.json) retains every outcome.
 
-The second capture was the only owner-approved recapture. The coordinator did not hand-select replacements, replay an inadequate corpus, or run further captures. Because corpus acceptance precedes every arm result, the ten measured pairs and the separate MiniMax M3 charge-reporting qualification did not run. Milestone M3 acceptance was complete for the `rh-v3` identity and requires renewal under `rh-v4`; the model-specific charge gate remains unrun.
+| Outcome | Baseline | Candidate | Total |
+|---|---:|---:|---:|
+| Completed Status | 4 | 7 | 11 |
+| Failed Status | 4 | 3 | 7 |
+| Nonconforming Status | 2 | 0 | 2 |
+| Conforming Route | 4 | 7 | 11 |
+| Not Conforming Route | 6 | 3 | 9 |
+| Adequate Answer | 3 | 6 | 9 |
+| Inadequate Answer | 7 | 4 | 11 |
+| Both Conforming and Adequate | 2 | 6 | 8 |
 
-The selection mechanism used unallowlisted Sonar discovery over `postgresql.org` with `maxUrls: 3`. In both captures it chose `explicit-locking.html` but not the PostgreSQL 17 `SELECT` reference page that defines `SKIP LOCKED`. The PostgreSQL query already named that construct, so another blind rewording or capture was not a reliable correction. External-side-effect evidence was also insufficient in both corpora. The preparation amendment needed to address source coverage and version pinning, not merely request another capture. Each `corpus-acceptance.json` is the scientific rejection decision; `capture/outcome.json` records only successful machine capture and Sonar charge reporting.
+The nine route-nonconforming runs comprise seven failed runs and two further runs that finished the pipeline but broke the one-handoff route. Adequacy is graded separately from conformance: baseline pair 6 was adequate despite its route-nonconforming status and truncated synthesis. Only baseline pairs 2 and 10 were both conforming and adequate; candidate pairs 1, 2, 3, 5, 7 and 9 met both conditions.
 
-The `rh-v4` question amendment replaces the stimulus, its domains and its source cap rather than requesting another PostgreSQL capture. It does not establish adequate source coverage for the new task: fresh corpus acceptance decides that. Both rejected series remain retained history under their own identities and are not reused or regraded.
+## Collation and Answer Adequacy
+
+Eleven runs recorded a truncated downstream completion: six baseline and five candidate. Seven produced zero collation output bytes: four baseline and three candidate. These failures arose in a downstream stage shared by both arms. In the failed records, `pipelineOutcome: not-started` means that no `research-result` event was recorded, although downstream attempts and usage were retained.
+
+Among the nine runs with no truncated completion, two of four baseline answers and five of five candidate answers were adequate. This is an observed association, not evidence that either route caused better answers. Adequate answers demonstrated honest scope-keeping against a corpus with documented gaps; the grade does not certify a complete deployment recipe.
+
+The eleven inadequate answers comprised the seven empty-collation failures and four others: unsupported prerequisite claims in baseline pairs 1 and 3, an unsupported absence claim in baseline pair 9, and insufficient content after a truncated synthesis in candidate pair 10. Three answers carried material unsupported claims. Baseline pair 9 omitted a send invocation present in the corpus.
+
+Recovery behaviour differed. Six baseline runs used evidence reads: each of its four failed runs read once, and route-nonconforming pairs 6 and 9 each read four times. No candidate run used an evidence read. Candidate pair 10 disclosed the truncation and declined to answer without reading the saved evidence. Baseline pair 6 recovered enough evidence for an adequate answer but broke the one-handoff route.
+
+The [independent adequacy review](../../../evidence/agents/20261105T080302Z-research-handoff-cloudflare/reports/adequacy-review.md) agreed with all twenty grades. The grader and checking reviewer were isolated from the earlier topic-validation answer, the coordinator's answer-shaped discussion and the disclosure's query field. The [assessment bundle](../../../evidence/benchmarks/research-handoff/20261105T105332Z-rh-v4-measured/assessments.json) binds each grade to its raw record and the durable review.
+
+## Token and Resumption Differences
+
+The [assessed analysis](../../../evidence/benchmarks/research-handoff/20261105T105332Z-rh-v4-analysis-assessed-r2/analysis.json) includes all ten pairs for each metric below. Failed runs remain in these means. Their main-token values are low because the research call returned no useful text and the final answers were short, not because the conversations made fewer requests. On average, their downstream usage and cost are above the completed-run mean: extraction ran as normal, and each collation reached 4,000 output tokens before returning no visible text. Differences are candidate minus baseline. Negative values mean lower candidate values, not an automatic benefit.
+
+| Metric | Baseline Mean | Candidate Mean | Mean Difference | Median Difference | Difference Range |
+|---|---:|---:|---:|---:|---:|
+| Cumulative Input Tokens | 6,858.8 | 5,025.7 | -1,833.1 | 39 | -11,563 to 1,104 |
+| Cumulative Output Tokens | 710.0 | 622.6 | -87.4 | -92 | -895 to 530 |
+| Cumulative Total Tokens | 7,568.8 | 5,648.3 | -1,920.5 | -205 | -12,458 to 1,634 |
+| Post-Tool Resumptions | 1.8 | 1.0 | -0.8 | -1 | -2 to 0 |
+| Generated Script Tokens | 0 | 111.0 | 111.0 | 111 | 106 to 116 |
+| Downstream Output Tokens | 20,771.6 | 21,342.1 | 570.5 | 1,586 | -7,200 to 9,285 |
+| Downstream Total Tokens | 52,464.9 | 52,594.9 | 130.0 | 455.5 | -8,451 to 9,433 |
+| Downstream Reported Cost, USD | 0.03105911 | 0.032239592 | 0.001180482 | 0.00198027 | -0.007298008 to 0.010846152 |
+| Collation Output Text Bytes | 2,941.7 | 3,084.0 | 142.3 | -112 | -4,317 to 6,713 |
+
+Baseline pairs 6 and 9 contributed -21,846 to the -19,205 total difference. The other eight pairs summed to +2,641, or +330.1 per pair. Six pairs were lower for the candidate and four were higher. The median difference of -205 against the mean of -1,920.5 shows the skew. The same two pairs also reverse the direction for cumulative input, uncached input, cumulative output, the proxy estimates for peak logical request, final retained context, useful tool return and final answer, and collation output bytes when they are removed as a descriptive sensitivity reading. The eight-pair reading establishes no direction. Pairs 6 and 9 remain in every frozen full-population metric, as the protocol requires.
+
+Only pair 2 had both runs conforming and adequate. Codemode used 1,090 more main tokens, 4,806 fewer downstream tokens and USD 0.00479936 less downstream reported cost in that pair. One pair supports no conclusion and does not establish an overall direction.
+
+Every completed, conforming run used exactly one post-tool resumption and one top-level handoff in both arms. The resumption difference arose only in failed and route-nonconforming baseline runs. Six baseline runs used recovery reads and no candidate runs did, accounting for the entire -0.8 difference. This does not establish that either route is more efficient.
+
+Candidate means were higher for generated script tokens, downstream output tokens, downstream total tokens, downstream reported cost and collation output bytes. These are the analysis gate's named regressions; collation output bytes nevertheless had a negative median difference. No significance test or confidence interval is reported for this single-query study.
+
+## Corpus Limits
+
+The single authorised capture used normal [_Perplexity Sonar_](https://docs.perplexity.ai) discovery without pre-declared documents. It selected six readable pages representing five distinct texts. The [fresh corpus review](../../../evidence/benchmarks/research-handoff/20261105T105332Z-rh-v4-measured/corpus-acceptance.json) accepted sufficient evidence for all six assessment topics, including documented limitations and absences.
+
+The reviewer recorded limits for grading: one duplicate document, two sources outside the requested domains, no direct documentation joining _Pi Durable_ to the email mechanism, missing setup and send-failure details, and a misleading citation title for a third-party repository whose claims had to remain repo-scoped. The separate [_MiniMax M3_](https://minimax.io) [qualification](../../../evidence/benchmarks/research-handoff/20261105T105332Z-rh-v4-measured/cost-qualification/outcome.json) confirmed a numeric provider-reported charge before measured collection.
 
 ## Financial Close-Out
 
-Fixed-envelope close-out produced local receipts without creating a replacement ledger.
+The continuation envelope was USD 25.81. The [settlement receipt](../../../evidence/benchmarks/research-handoff/20261105T105332Z-rh-v4-measured/settlement-receipt.json) and [settlement review](../../../evidence/benchmarks/research-handoff/20261105T105332Z-rh-v4-measured/settlement-review.json) record:
 
-| Series | Reported Charges | Unknown Holds | Active Reservations |
-|---|---:|---:|---:|
-| First capture | USD 0.00553 | USD 0 | USD 0 |
-| Approved recapture | USD 0.00570 | USD 0 | USD 0 |
-| Total | USD 0.01123 | USD 0 | USD 0 |
+| Financial Item | Result |
+|---|---:|
+| Reported Charges | USD 0.643910399 |
+| Released Envelope | USD 25.166089601 |
+| Unknown-Charge Holds | USD 0 |
+| Active Reservations | USD 0 |
+| Overrun | USD 0 |
+| Replacement Programme Ledger | No |
 
-These are provider-reported charges from retained stage receipts, not predicted spend or a programme-wide financial reconciliation. Receipt fields are nano-USD. Each series released the unused part of its own accepted envelope, so the documents do not establish a remaining lifetime allowance or residual capture authority. The `rh-v4` question amendment grants no financial authority; a new narrow owner receipt with scope `continue-without-programme-ledger-rh-v4` is required before `admit`. The separate topic-validation call was outside the experiment envelope, and its provider charge is not established by its retained `meta.json`.
+The study used the fixed continuation envelope because the earlier programme ledger is unavailable; it did not create a replacement. Reported charges comprise the single capture, the MiniMax M3 qualification and MiniMax M3 extraction and collation in the twenty runs. Main-model usage was subscription-billed and has no reported charge here; it is not included in the total. Zero unknown holds therefore does not mean that all consumption was priced.
 
-## Evidence Map
+The earlier rejected [_PostgreSQL_](https://www.postgresql.org) captures reported USD 0.01123 separately. The topic-validation call was outside the experiment envelope, and its provider charge is not established by its retained `meta.json`; neither figure is included in this settlement.
 
-All raw evidence is retained in this worktree under `evidence/benchmarks/research-handoff/`:
+## Implementation and Observer Evidence
 
-- `20261104T201721Z-rh-v3-synthetic-r4/` and its `-offline/` sibling: accepted synthetic implementation proof and reproduction.
-- `20261104T203108Z-rh-v3-observer-diagnostic/` and its `-offline/` sibling: accepted `rh-v3` main-provider observer evidence.
-- `20261104T203243Z-rh-v3-measured/`: first capture, corpus rejection, and local close-out.
-- `20261104T204211Z-rh-v3-measured-r2/`: approved recapture, corpus rejection, and local close-out.
+The measured batch ran from `f5bfc20` plus the receipted `rh-v4-r4` patch, later committed unchanged as `f26a329`. The [candidate receipt](../../../evidence/agents/20261105T080302Z-research-handoff-cloudflare/candidate-rh-v4-r4.json) predates acceptance and records code identity `6c039cf8bee58c6835a81c9a0dee994c335706494badb27e2788123b0829f54f` and protocol identity `42c0de0798bebd12cc6def14fbc071d2f46909f1be6301b69d03816b9f237992`.
 
-Validation, technical reviews, prose reviews, and owner decisions are under `evidence/agents/20261104T192721Z-research-handoff-m4/`. Earlier M3 implementation and observer evidence remains under `evidence/agents/20261104T164114Z-research-handoff-m3/` and the corresponding benchmark directories. The `meta.coreCommit` value `d2ec506…` in frozen captures is the unchanged production-core baseline constant, not the accepted `rh-v3` implementation commit.
+The [deterministic lane](../../../evidence/agents/20261105T080302Z-research-handoff-cloudflare/reports/rh-v4-validation-r4.log) passed 663 native tests, 62 standalone tests and 138 study tests, plus build, both relevant type projects and all applicable generator checks. Fresh actual-host synthetic runs exercised both routes with equal inputs and unchanged native returns. Independent technical and prose reviewers accepted the candidate.
 
-A new owner decision belongs in a narrow `owner-*.json` receipt under `evidence/agents/20261104T192721Z-research-handoff-m4/`, following the existing records' `schemaVersion`, `approvedAt`, `approvedBy`, narrow `scope`, verbatim owner exchange, and explicit limits. The `rh-v4` decision followed that convention in `owner-cloudflare-question-amendment.json`. `candidate-rh-v3-r4.json` supplies identities and pointers for the accepted `rh-v3` implementation; acceptance is bound by the technical/prose reviews, diagnostic result, and preparation receipts, all of which require renewal under `rh-v4`.
+The [observer result](../../../evidence/benchmarks/research-handoff/20261105T101248Z-rh-v4-observer-diagnostic/diagnostic-result.json) records two completed subscription-main conversations under `openai-codex/gpt-6.1-sol`. Each arm used two logical requests and two observed server-sent-event attempts, one assigned handoff and one answer-producing resumption. The [independent diagnostic review](../../../evidence/agents/20261105T080302Z-research-handoff-cloudflare/reports/diagnostic-review.md) verified equal frozen inputs, complete usage, route conformance, readable reports and unchanged native return bytes under the pinned host's output wrapper. These are observer facts, not measured savings.
 
-## Decision on Further Measurement
+## Reproduction
 
-The owner has decided how further measurement proceeds: the [`rh-v4` question amendment](../../../evidence/agents/20261104T192721Z-research-handoff-m4/owner-cloudflare-question-amendment.json) takes the revised source/question route with a neutral Cloudflare task, two study domains and a source cap of six. The `rh-v4` receipt approves the question and preparation amendment only. Corrected candidate review and symmetric observer diagnostics come next. A new owner financial receipt and current-rate admission precede capture; fresh corpus acceptance and MiniMax M3 charge qualification follow capture and precede any measured conversation. No remaining allowance is inferred from the released envelopes.
+The final analysis was reproduced offline into `20261105T105332Z-rh-v4-analysis-assessed-reproduction/`. Its `analysis.json`, `inputs.json` and `summary.md` are byte-identical to those in `20261105T105332Z-rh-v4-analysis-assessed-r2/`. The [human-readable summary](../../../evidence/benchmarks/research-handoff/20261105T105332Z-rh-v4-analysis-assessed-r2/summary.md) lists every run and its limitations.
 
-The [topic-validation disclosure](../../../evidence/benchmarks/research-handoff/20261105T075350Z-topic-validation/planning-disclosure.json) preserves the answer-shaped planning call that preceded this decision and prohibits its reuse. Fresh corpus acceptance and answer grading require reviewers who have not read that answer, the coordinator's answer-shaped discussion or the disclosure's query field. The call was outside the experiment envelope. Its provider charge is not established by its retained `meta.json` and is not included in the settlement figures.
+Choose a fresh output directory under `.tmp/` and run:
+
+```bash
+npm run study:handoff -- analyse \
+  evidence/benchmarks/research-handoff/20261105T105332Z-rh-v4-measured/inventory.json \
+  .tmp/analysis-rh-v4-new \
+  measured \
+  evidence/benchmarks/research-handoff/20261105T105332Z-rh-v4-measured/assessments.json
+```
+
+The output directory must not already exist. Raw records remain immutable, and assessments join in memory. Evidence links in this document resolve only in this retained worktree because `evidence/` is gitignored.
+
+## Historical Preparation
+
+The accepted `rh-v3` implementation passed its deterministic, synthetic and observer gates, but both permitted PostgreSQL corpora were rejected before any arm result. Their source identities and rejection receipts remain under [`20261104T203243Z-rh-v3-measured/`](../../../evidence/benchmarks/research-handoff/20261104T203243Z-rh-v3-measured/) and [`20261104T204211Z-rh-v3-measured-r2/`](../../../evidence/benchmarks/research-handoff/20261104T204211Z-rh-v3-measured-r2/). No measured PostgreSQL conversation ran, and those captures were not reused.
+
+Before the owner approved the [_Cloudflare_](https://www.cloudflare.com) question, the coordinator ran an answer-shaped topic-validation call. Its [planning disclosure](../../../evidence/benchmarks/research-handoff/20261105T075350Z-topic-validation/planning-disclosure.json) preserves and digest-binds that material while prohibiting its use as experimental input. The corpus and adequacy reviewers remained isolated from it.
