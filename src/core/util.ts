@@ -600,9 +600,9 @@ export function extractSourceUrls(text: string): SourceUrl[] {
     // label, as in bücher.de), or followed by a port, query or fragment, is
     // only part of a reference: skip it rather than fetch a different host or
     // drop the rest. Punctuation and spaces of any script are boundaries.
-    const before = text.slice(Math.max(0, m.index - 1), m.index);
+    const before = text.slice(Math.max(0, m.index - 2), m.index);
     const after = text.slice(m.index + m[0].length, m.index + m[0].length + 2);
-    if (/[\p{L}\p{N}]/u.test(before) || /^[\p{L}\p{N}-]|^:\d|^[?#]\S/u.test(after)) continue;
+    if (/[\p{L}\p{N}\p{M}]$/u.test(before) || /^[\p{L}\p{N}\p{M}-]|^:\d|^[?#]\S/u.test(after)) continue;
     const domainReference = m[1].replace(/[.,;:!]+$/, "");
     if (!plausibleDomainReference(domainReference)) continue;
     const slash = domainReference.indexOf("/");

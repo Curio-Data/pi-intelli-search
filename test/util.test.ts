@@ -237,7 +237,8 @@ Also bare reference https://kit.svelte.dev.
   it("skips partial hosts and normalises host case in protocol-less references", () => {
     const urls = extractSourceUrls(
       "See bücher.de, example.xn--p1ai, example.com:8080/path, example.net?q=1, main.js.map, " +
-        "config.h.in, manage.py, vue.js.org, “notion.so” — publico.pt/2026/story and EXAMPLE.ORG/Docs.",
+        "config.h.in, manage.py, vue.js.org, “notion.so” — publico.pt/2026/story, \u{10400}example.com, " +
+        "e\u0301xample.com and EXAMPLE.ORG/Docs.",
     ).map((u) => u.url);
     assert.deepStrictEqual(urls, [
       "https://vue.js.org",

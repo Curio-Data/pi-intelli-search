@@ -13,7 +13,7 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-793%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-794%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -427,7 +427,7 @@ A completed research result can contain failed or incomplete sources. `details.p
 
 Nonempty output that stops at its output cap, shown by finish reason `length` or by a reported token count that reaches the cap, is kept with a truncation warning. `intelli_extract` returns `details.truncated`; research and manual collation mark affected sources in the Source Assessment inventory. A synthesis warning applies to the summary itself. Without either signal, the absence of a warning does not establish completeness, and `outcome: "completed"` does not guarantee complete source coverage.
 
-Research retries two cases once with double the cap: an extraction that stops at its cap without visible text, and a synthesis that stops at its cap with or without text. If the larger retry fails, a truncated synthesis from the first attempt is kept with its warning. The retry can add up to twice the original cap in billed output per affected call, and a diagnostic or warning from the retried call reports the doubled cap. For a budget-exhaustion diagnostic that survives the retry, review `extractionMaxTokens` for page extraction or `collationMaxTokens` for synthesis. On reasoning models, the budget includes reasoning as well as visible text. Increase the relevant cap within the model's output and context limits, or select a model with a smaller reasoning requirement. Lowering reasoning effort did not prevent exhaustion on the serving route identified in the investigation; it is not a guaranteed remedy. Read an available saved page before repeating paid research. Raising `llmTimeoutMs` addresses timer expiry, not an exhausted token budget or a host deadline.
+Research retries two cases once with double the cap: an extraction that stops at its cap without visible text, and a synthesis that stops at its cap with or without text. If the larger retry fails, returns no text or returns shorter truncated text, the first truncated synthesis is kept with its warning. The retry can add up to twice the original cap in billed output per affected call, and a diagnostic or warning from the retried call reports the doubled cap. For a budget-exhaustion diagnostic that survives the retry, review `extractionMaxTokens` for page extraction or `collationMaxTokens` for synthesis. On reasoning models, the budget includes reasoning as well as visible text. Increase the relevant cap within the model's output and context limits, or select a model with a smaller reasoning requirement. Lowering reasoning effort did not prevent exhaustion on the serving route identified in the investigation; it is not a guaranteed remedy. Read an available saved page before repeating paid research. Raising `llmTimeoutMs` addresses timer expiry, not an exhausted token budget or a host deadline.
 
 A higher completion cap can permit more billable output and increase OpenRouter's in-flight credit reservation. The [Cost](#cost) estimate is a planning figure, not a spending limit; raising a cap does not mean every call consumes it.
 

@@ -275,7 +275,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
     });
     failureMessage =
       `Collation failed: ${asSentence(reason)} ${succeededExtractions.length} page(s) were extracted, but ` +
-      `the successful report already saved for this query at ${p.cachePath} was preserved, ` +
+      `the report already saved for this query at ${p.cachePath} was preserved, ` +
       `so this run's extractions were not saved.\n\nSearch summary:\n${search.searchResult}`;
     outcome = "collate-failed";
     collation = collationFailureReport(
@@ -679,7 +679,7 @@ async function runCollateStage(
   throwIfAborted(p.signal);
   // A truncated synthesis is retried too: one collation call is cheap next to
   // the extractions it would otherwise summarise incompletely.
-  const { completion, maxTokens } = await completeWithBudgetRetry(
+  const chosen = await completeWithBudgetRetry(
     p,
     "collate",
     {
@@ -694,9 +694,18 @@ async function runCollateStage(
     },
     true,
   );
+  // When two truncated candidates exist, the preferred one may fail
+  // provenance validation (a cut-off citation); the other is then tried.
+  let { completion, maxTokens } = chosen;
+  let collation: string;
+  try {
+    collation = finalizeCollation(completion.text, p.cachePath, succeededExtractions, identity, "fetched");
+  } catch (error) {
+    if (!chosen.alternate) throw error;
+    ({ completion, maxTokens } = chosen.alternate);
+    collation = finalizeCollation(completion.text, p.cachePath, succeededExtractions, identity, "fetched");
+  }
   const { text, routeProvider } = completion;
-
-  let collation = finalizeCollation(text, p.cachePath, succeededExtractions, identity, "fetched");
 
   // A synthesis cut off by the output cap still commits, but the reader must
   // know it is incomplete rather than assume a clean ending.
@@ -706,8 +715,11 @@ async function runCollateStage(
       maxTokens > p.settings.collationMaxTokens
         ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens, after one retry at a larger cap); ` +
           `the synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
-        : `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens); ` +
-          `the synthesis may be cut off mid-sentence. Raise collationMaxTokens or re-run if completeness matters.`;
+        : p.budgetRetries.collate
+          ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens), and a retry at a larger cap did not complete; ` +
+            `the synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
+          : `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens); ` +
+            `the synthesis may be cut off mid-sentence. Raise collationMaxTokens or re-run if completeness matters.`;
   }
 
   p.tel?.recordCollate({
@@ -1206,7 +1218,7 @@ async function completeWithBudgetRetry(
   stage: "extract" | "collate",
   request: ModelRequest & { maxTokens: number },
   retryTruncated: boolean,
-): Promise<{ completion: ModelCompletion; maxTokens: number }> {
+): Promise<BudgetedCompletion & { alternate?: BudgetedCompletion }> {
   const cap = request.maxTokens;
   let first: ModelCompletion | undefined;
   try {
@@ -1239,19 +1251,23 @@ async function completeWithBudgetRetry(
     const completion = await p.models.complete({ ...request, maxTokens });
     // A usable truncated first answer is never replaced by an empty retry, or
     // by a retry that is also truncated and shorter.
-    if (
-      first &&
-      (!completion.text.trim() ||
-        (completionTruncated(completion, maxTokens) &&
-          completion.text.trim().length < first.text.trim().length))
-    )
-      return { completion: first, maxTokens: cap };
+    if (first && !completion.text.trim()) return { completion: first, maxTokens: cap };
+    if (first && completionTruncated(completion, maxTokens)) {
+      // Both truncated: prefer the longer text, keeping the other in reserve.
+      const longerFirst = completion.text.trim().length < first.text.trim().length;
+      const retried = { completion, maxTokens };
+      const kept = { completion: first, maxTokens: cap };
+      return longerFirst ? { ...kept, alternate: retried } : { ...retried, alternate: kept };
+    }
     if (!first && !completion.text.trim() && completionTruncated(completion, maxTokens))
       throw bothBudgetsSpent(cap, maxTokens);
     return { completion, maxTokens };
   } catch (error) {
     throwIfAborted(p.signal);
-    if (!first && isOutputBudgetExhausted(error)) throw bothBudgetsSpent(cap, maxTokens);
+    if (error instanceof OutputBudgetExhaustedError && error.message.startsWith(BOTH_SPENT))
+      throw error;
+    if (!first && isOutputBudgetExhausted(error))
+      throw bothBudgetsSpent(cap, maxTokens, failureDetail(errMsg(error)));
     // Keep paid, usable output when the larger retry fails (for example a
     // model whose output limit is below the doubled cap).
     if (first) {
@@ -1262,10 +1278,18 @@ async function completeWithBudgetRetry(
   }
 }
 
-function bothBudgetsSpent(cap: number, maxTokens: number): OutputBudgetExhaustedError {
+interface BudgetedCompletion {
+  completion: ModelCompletion;
+  maxTokens: number;
+}
+
+const BOTH_SPENT = "Output cap reached without visible text at ";
+
+function bothBudgetsSpent(cap: number, maxTokens: number, detail?: string): OutputBudgetExhaustedError {
   return new OutputBudgetExhaustedError(
-    `Output cap reached without visible text at ${cap} tokens and again after one retry ` +
-      `at ${maxTokens} tokens; the model's hidden reasoning consumed both budgets. ` +
-      "Choose a model that reasons less for this stage, or re-run.",
+    `${BOTH_SPENT}${cap} tokens and again after one retry at ${maxTokens} tokens; ` +
+      "the model's hidden reasoning consumed both budgets. Raise the stage's output cap, " +
+      "choose a model that reasons less for this stage, or re-run." +
+      (detail ? ` Last response: ${detail}` : ""),
   );
 }

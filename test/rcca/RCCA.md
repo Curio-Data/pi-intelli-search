@@ -72,7 +72,7 @@ The pipeline then mishandles the outcome:
 | F2 | A synthesis failure returns `collate-failed` and saves the extractions, pages, a failure report and `meta.json`. A same-day successful report for the query, including one a concurrent run commits, is preserved instead (decided under the cache lock) |
 | F4 | Truncation also uses the provider finish reason, so it is flagged when usage is missing |
 | F5 | The all-fetch-failed result lists failed URLs and reasons; the mixed headline names both counts |
-| F6 | Protocol-less references must end in a delegated top-level domain (TLD); a bare reference under a TLD mostly seen as a file extension needs a path, `www.` or a third label, so `bun.sh` and `notion.so` stay candidates while `install.sh` is still fetched. Citations rank ahead of these guesses. `scripts/generate-tlds.mjs` refreshes the TLD set |
+| F6 | Protocol-less references must end in a delegated top-level domain (TLD); a bare reference under a TLD mostly seen as a file extension needs a path, `www.` or a third label. TLDs popular for sites, such as `.sh` and `.so`, are exempt, so `bun.sh` and `notion.so` stay candidates and `install.sh` is still fetched. Citations rank ahead of these guesses. `scripts/generate-tlds.mjs` refreshes the TLD set |
 
 Not changed: `isError` stays `false` for degraded results, which carry their
 `outcome`; PDF rejection remains by design; F7 needs no change.

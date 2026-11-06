@@ -185,7 +185,8 @@ const COLLATION_FAILED_MARKER = "<!-- intelli-search:collate-failed -->";
 
 /** True for a saved report written by collationFailureReport(). */
 export function isCollationFailureReport(report: string): boolean {
-  return report.includes(COLLATION_FAILED_MARKER);
+  // A whole line only: the query title is written unstripped into the report.
+  return report.split("\n").some((line) => line.trim() === COLLATION_FAILED_MARKER);
 }
 
 /**

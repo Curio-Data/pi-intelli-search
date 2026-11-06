@@ -434,6 +434,24 @@ it("preserves a successful synthesis that itself mentions a collation failure", 
   assert.equal(await readFile(join(path, "report.md"), "utf8"), report);
 });
 
+it("falls back to the other truncated synthesis when the preferred one fails validation", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const complete = context.models.complete;
+  let collateCalls = 0;
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    collateCalls += 1;
+    return collateCalls === 1
+      ? { text: "A much longer but invalid truncated synthesis [S99].", citations: [], finishReason: "length" }
+      : { text: "Valid [S1].", citations: [], finishReason: "length" };
+  };
+  const result = await research({ query: "invalid longer first" }, context, dependencies);
+  assert.equal(result.outcome, "completed");
+  assert.match(result.text, /Valid \[S1\]/);
+  assert.match(result.text, /after one retry at a larger cap/);
+});
+
 it("keeps a longer truncated first synthesis over a shorter truncated retry", async (t) => {
   const root = await workspace(t);
   const { context, dependencies } = coreContext(root);
@@ -980,7 +998,7 @@ for (const operation of ["research", "collate"] as const) {
     if (operation === "research") {
       const failed = await run();
       assert.equal(failed.outcome, "collate-failed");
-      assert.match(failed.text, /provenance validation failed.*successful report already saved .* was preserved/s);
+      assert.match(failed.text, /provenance validation failed.*report already saved .* was preserved/s);
       assert.equal(failed.details.cachePath, "");
       assert.equal(failed.details.preservedCachePath, successful.details.cachePath);
     } else {
