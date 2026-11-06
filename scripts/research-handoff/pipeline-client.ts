@@ -30,12 +30,29 @@ function identifyStage(prompt: string, config: ModelConfig): Exclude<Stage, "cac
 /** Preserve the released callLlm policy, observe/reserve each facade attempt below it.
  * No global hook mutation. Raw provider cost is distinct from SDK catalogue estimates.
  */
-export function createGuardedCallLlm(options: { runId: string; budget: AttemptBudget; journal: Journal }): typeof callLlm {
+/** Per-stage caps and reservations. The default is the historical rh-v4 guard, unchanged. */
+export interface DownstreamLimits {
+  maxTokens: Record<Exclude<Stage, "cache">, number>;
+  boundsNanoUsd: Record<Exclude<Stage, "cache">, number>;
+  maxAttempts: number;
+  /** Pilot only: the dispatched payload must carry exactly the intended cap, not merely at most it. */
+  exactWireLimit?: boolean;
+  /** Pilot only: the per-attempt application timeout must equal this value. */
+  timeoutMs?: number;
+}
+export const HISTORICAL_DOWNSTREAM_LIMITS: DownstreamLimits = {
+  maxTokens: { search: 2000, fetch: 0, extract: 8000, collate: 4000 },
+  boundsNanoUsd: { search: BUDGET.sonarAttemptNanoUsd, fetch: 0, extract: BUDGET.extractAttemptNanoUsd, collate: BUDGET.collateAttemptNanoUsd },
+  maxAttempts: 3,
+};
+export function createGuardedCallLlm(options: { runId: string; budget: AttemptBudget; journal: Journal; limits?: DownstreamLimits }): typeof callLlm {
   let sequence = 0;
+  const limits = options.limits ?? HISTORICAL_DOWNSTREAM_LIMITS;
   return async (ctx, model, systemPrompt, userMessage, policy) => {
     const stage = identifyStage(systemPrompt, model);
-    const maxTokens = stage === "search" ? 2000 : stage === "extract" ? 8000 : 4000;
-    if (policy?.maxTokens !== maxTokens || (policy.retry?.attempts ?? 1) > 3) {
+    const maxTokens = limits.maxTokens[stage];
+    if (policy?.maxTokens !== maxTokens || (policy.retry?.attempts ?? 1) > limits.maxAttempts
+      || (limits.timeoutMs !== undefined && policy.timeoutMs !== limits.timeoutMs)) {
       throw new Error("Downstream policy differs from the accepted cost bound");
     }
     const registry = ctx.modelRegistry as unknown as ModelRegistryFacade;
@@ -47,8 +64,7 @@ export function createGuardedCallLlm(options: { runId: string; budget: AttemptBu
         }
         return ((resolvedModel, context, streamOptions) => {
           const id = `${options.runId}:pipeline:${++sequence}`;
-          const bound = stage === "search" ? BUDGET.sonarAttemptNanoUsd
-            : stage === "extract" ? BUDGET.extractAttemptNanoUsd : BUDGET.collateAttemptNanoUsd;
+          const bound = limits.boundsNanoUsd[stage];
           options.budget.reserve(id, bound);
           let reportedCost: number | undefined;
           let rawUsage: unknown;
@@ -65,7 +81,8 @@ export function createGuardedCallLlm(options: { runId: string; budget: AttemptBu
                 const actual = patched === undefined ? payload : patched;
                 const body = recordObject(actual);
                 const outputLimit = body?.max_tokens ?? body?.max_completion_tokens;
-                if (body?.model !== model.model || typeof outputLimit !== "number" || outputLimit > maxTokens || outputLimit <= 0) {
+                if (body?.model !== model.model || typeof outputLimit !== "number" || outputLimit > maxTokens || outputLimit <= 0
+                  || (limits.exactWireLimit && outputLimit !== maxTokens)) {
                   throw new Error("Downstream wire payload exceeds the accepted model/output bound");
                 }
                 options.journal.record({ kind: "pipeline-payload", stage, data: { id, payload: actual } });

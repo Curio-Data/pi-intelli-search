@@ -16,10 +16,11 @@ import { createGuardedCallLlm } from "./pipeline-client.js";
 import { assertStoredCredentialReady } from "./credentials.js";
 import { analyseRun, analysePairs, renderAnalysisMarkdown } from "./analyse.js";
 import { DurableJournal, createRunDirectory, digestObject, digestText, digestFile, sourceIdentity, writeNewJson, loadInventory, unavailableRecord } from "./storage.js";
-import type { Arm, Phase, RunManifest, RunRecord } from "./contracts.js";
+import { isPilotPhase, type PilotWorkerOptions, type Arm, type Phase, type RunManifest, type RunRecord } from "./contracts.js";
 import { applyAssessmentBundle } from "./assessment-bundle.js";
 import { checkReturnContract } from "./return-contract.js";
 import { observedPipelineOutcome } from "./outcome.js";
+import { PILOT_SERIES_ROOT } from "./pilot-config.js";
 
 export const REPO_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 const PROTOCOL_PATH = join(REPO_ROOT, "docs/experiments/research-handoff/PROTOCOL.md");
@@ -33,6 +34,8 @@ export interface WorkerConfig {
   acceptancePath?: string;
   /** A path reference only; never credential material. */
   authPath?: string;
+  /** rh-v5 pilot workers only. */
+  pilot?: PilotWorkerOptions;
 }
 export interface LiveAcceptance {
   schemaVersion: 1;
@@ -53,6 +56,8 @@ export interface LiveAcceptance {
 }
 
 export async function assertLiveEvidenceRoot(path: string): Promise<void> {
+  // rh-v4 authority never reaches the rh-v5 pilot root, whatever its receipts claim.
+  if (resolve(path) === resolve(PILOT_SERIES_ROOT)) throw new Error("The rh-v5 pilot root accepts only pilot authority; historical rh-v4 operations are refused");
   const base = await realpath(join(REPO_ROOT, "evidence/benchmarks/research-handoff"));
   const actual = await realpath(resolve(path));
   const rel = relative(base, actual);
@@ -108,7 +113,7 @@ function syntheticScript(arm: Arm, params: unknown): SyntheticScript {
       usage: { input_tokens: 220, output_tokens: 35, cached_tokens: 40, reasoning_tokens: 5 } } }],
   ];
 }
-async function evidenceAccess(record: RunRecord, workspace: string): Promise<RunRecord["evidenceAccess"]> {
+export async function evidenceAccess(record: RunRecord, workspace: string): Promise<RunRecord["evidenceAccess"]> {
   const results = record.adapterEvents.filter(event => event.kind === "research-result");
   const reports: string[] = [], problems: string[] = [];
   for (const result of results) {
@@ -133,6 +138,9 @@ async function evidenceAccess(record: RunRecord, workspace: string): Promise<Run
 
 export async function runWorker(cfg: WorkerConfig): Promise<RunRecord> {
   if (cfg.schemaVersion !== 1 || cfg.manifest.status !== "scheduled") throw new Error("Invalid scheduled worker configuration");
+  const phase = cfg.manifest.phase;
+  // The historical rh-v4 worker never executes a pilot mode; the CLI routes those to the pilot worker.
+  if (isPilotPhase(phase)) throw new Error("Pilot phases are executed only by the separate pilot worker");
   const identity = await sourceIdentity(REPO_ROOT);
   if (identity.digest !== cfg.manifest.codeSha256 || await digestFile(PROTOCOL_PATH) !== cfg.manifest.protocolSha256) throw new Error("Code/protocol identity changed before worker dispatch");
   if (cfg.manifest.phase !== "synthetic") await validateLiveAcceptance(cfg);
@@ -159,14 +167,14 @@ export async function runWorker(cfg: WorkerConfig): Promise<RunRecord> {
   } };
   const recorder = createRecorder(cfg.manifest.runId, cfg.manifest.arm, allowedToolsForArm(cfg.manifest.arm), synthetic ? SYNTHETIC_MODEL_ID : MAIN_MODEL.model, sink);
   const budget = new AttemptBudget(syntheticResearch ? 0 : BUDGET.runNanoUsd, recorder);
-  const prompt = taskPrompt(cfg.manifest.arm, frozen.capture.params, cfg.manifest.phase);
+  const prompt = taskPrompt(cfg.manifest.arm, frozen.capture.params, phase);
   if (digestText(prompt) !== cfg.manifest.promptSha256) throw new Error("Rendered prompt changed");
   const manifest: RunManifest = { ...cfg.manifest, status: "started", startedAt: new Date().toISOString(), host: host.identity };
   writeNewJson(join(cfg.directory, "started.json"), manifest);
   let failure: string | undefined;
   try {
     session = await createStudySession(host, {
-      runId: manifest.runId, arm: manifest.arm, phase: manifest.phase,
+      runId: manifest.runId, arm: manifest.arm, phase,
       workspaceDir: cfg.workspace, agentDir: cfg.agentDir,
       credentials: synthetic ? { kind: "inmemory", credentials: {} } : { kind: "readonly-file", authPath: cfg.authPath! },
       research: { extension: createBenchmarkResearchExtension as Parameters<typeof createStudySession>[1]["research"]["extension"],
@@ -252,17 +260,25 @@ export async function runSyntheticSeries(output: string): Promise<void> {
 }
 
 export async function executeWorker(cfg: WorkerConfig): Promise<RunRecord> {
+  // Synthetic modes are credential-free and short; every other mode keeps the independent 30-minute ceiling.
+  const workerTimeoutMs = cfg.manifest.phase === "pilot-synthetic" && cfg.pilot?.workerCeilingMs !== undefined
+    ? Math.min(cfg.pilot.workerCeilingMs, 120_000)
+    : cfg.manifest.phase === "synthetic" || cfg.manifest.phase === "pilot-synthetic" ? 120_000 : 1_800_000;
   const configPath = join(cfg.directory, "worker.json");
   writeNewJson(configPath, cfg);
   const log = createWriteStream(join(cfg.directory, "process.log"), { flags: "wx", mode: 0o600 });
   const env: NodeJS.ProcessEnv = { ...process.env, PI_CODING_AGENT_DIR: cfg.agentDir, HOME: cfg.agentDir, TMPDIR: cfg.agentDir };
   for (const key of Object.keys(env)) if (/(?:API_KEY|AUTH_TOKEN|OAUTH_TOKEN)$/.test(key)) delete env[key];
   const child = spawn(process.execPath, ["--import", "tsx", join(REPO_ROOT, "scripts/research-handoff/cli.ts"), "worker", configPath],
-    { cwd: REPO_ROOT, env, stdio: ["ignore", "pipe", "pipe"], timeout: cfg.manifest.phase === "synthetic" ? 120_000 : 1_800_000 });
+    { cwd: REPO_ROOT, env, stdio: ["ignore", "pipe", "pipe"], timeout: workerTimeoutMs });
   child.stdout.pipe(log, { end: false }); child.stderr.pipe(log, { end: false });
-  const exit = await new Promise<number | null>((resolveExit, reject) => { child.once("error", reject); child.once("close", resolveExit); });
+  let signal: NodeJS.Signals | null = null;
+  const exit = await new Promise<number | null>((resolveExit, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, closeSignal) => { signal = closeSignal; resolveExit(code); });
+  });
   await new Promise<void>(resolveLog => log.end(resolveLog));
-  writeNewJson(join(cfg.directory, "process-exit.json"), { exit });
+  writeNewJson(join(cfg.directory, "process-exit.json"), { exit, signal, workerTimeoutMs });
   const path = join(cfg.directory, "record.json");
   try { await stat(path); }
   catch {

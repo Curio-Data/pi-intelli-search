@@ -66,6 +66,11 @@ export interface RecorderOptions {
   allowedTopLevelTools: readonly string[];
   /** Optional durable sink; every event is written synchronously, before any throw. */
   durable?: Journal;
+  /**
+   * Historical rh-v4 default "forbidden": any read is nonconformance. The rh-v5 pilot
+   * permits evidence recovery; the pilot return check classifies it by call position.
+   */
+  recoveryPolicy?: "forbidden" | "evidence-permitted";
 }
 
 /** Thrown by the dispatch gates BEFORE any transmission. */
@@ -524,7 +529,7 @@ export class RunRecorder implements AdapterJournal {
       }
     }
     for (const call of this.tools) {
-      if (call.name === "read") {
+      if (call.name === "read" && this.opts.recoveryPolicy !== "evidence-permitted") {
         this.nonconformanceProblems.push(`evidence read deviates from one-handoff route: ${call.id}`);
       }
       if (!call.parentToolCallId && !this.opts.allowedTopLevelTools.includes(call.name)) {

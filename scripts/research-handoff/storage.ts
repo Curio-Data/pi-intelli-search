@@ -8,7 +8,7 @@ import { canonicalJson } from "./common-inputs.js";
 export { canonicalJson } from "./common-inputs.js";
 import { readFile, readdir } from "node:fs/promises";
 import { join, resolve, relative, isAbsolute } from "node:path";
-import type { Journal, JournalEvent, RunRecord, Phase, RunManifest } from "./contracts.js";
+import type { Journal, JournalEvent, RunRecord, AnyPhase, Phase, RunManifest } from "./contracts.js";
 
 export const digestText = (text: string) => createHash("sha256").update(text).digest("hex");
 export const digestObject = (object: unknown) => digestText(canonicalJson(object));
@@ -79,6 +79,10 @@ export async function sourceIdentity(root: string): Promise<{ digest: string; fi
   ]) {
     files[path] = await digestFile(join(root, path));
   }
+  // The rh-v5 pilot contract joins the identity once it exists; historical trees without it are unaffected.
+  const pilotProtocol = "docs/experiments/research-handoff/PILOT-PROTOCOL.md";
+  try { files[pilotProtocol] = await digestFile(join(root, pilotProtocol)); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   for (const name of ["@earendil-works/pi-coding-agent", "@earendil-works/pi-tui"]) {
     const path = join("node_modules", name, "package.json");
     const manifest = JSON.parse(await readFile(join(root, path), "utf8")) as { version: string };
@@ -114,7 +118,7 @@ export async function loadInventory(path: string, phase: Phase = "measured"): Pr
 }
 
 /** An unreadable record is not an observation of zero requests or zero spending. */
-export function unavailableRecord(id: string, phase: Phase, error: string, manifest?: RunManifest): RunRecord {
+export function unavailableRecord(id: string, phase: AnyPhase, error: string, manifest?: RunManifest): RunRecord {
   return {
     manifest: manifest ? { ...manifest, status: "failed" } : {
       schemaVersion: 1, runId: id, phase, arm: "baseline", status: "failed",

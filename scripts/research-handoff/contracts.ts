@@ -10,6 +10,14 @@ import type { FetchedPage, ModelConfig, ResearchSettings } from "../../src/core/
 export const SCHEMA_VERSION = 1 as const;
 export type Arm = "baseline" | "candidate";
 export type Phase = "synthetic" | "diagnostic" | "measured";
+/** rh-v5 pilot modes. Deliberately disjoint from the historical rh-v4 phases:
+ * historical analysis rejects them and the pilot path rejects historical phases. */
+export type PilotPhase = "pilot-synthetic" | "pilot-diagnostic" | "pilot";
+export type AnyPhase = Phase | PilotPhase;
+export const PILOT_PHASES: readonly PilotPhase[] = ["pilot-synthetic", "pilot-diagnostic", "pilot"];
+export function isPilotPhase(phase: unknown): phase is PilotPhase {
+  return typeof phase === "string" && (PILOT_PHASES as readonly string[]).includes(phase);
+}
 export type RunStatus = "scheduled" | "started" | "completed" | "failed" | "nonconforming" | "not-run";
 export type Stage = "search" | "fetch" | "extract" | "collate" | "cache";
 
@@ -98,7 +106,7 @@ export interface RunManifest {
   schemaVersion: 1;
   runId: string;
   arm: Arm;
-  phase: Phase;
+  phase: AnyPhase;
   pair?: number;
   status: RunStatus;
   startedAt?: string;
@@ -161,4 +169,19 @@ export interface AttributionEstimate {
   opaqueReasoningBytes?: number;
   providerInputTokens?: number;
   residual?: number;
+}
+
+/** Credential-free actual-host pilot cases (PILOT-PROTOCOL.md, Gate Sequence step 1). */
+export type PilotSyntheticScenario = "complete" | "recovery" | "truncated" | "failed"
+  | "recovery-limit" | "budget-refused" | "unknown-charge" | "worker-ceiling"
+  | "long-complete" | "default-limit-truncated" | "observer-complete";
+/** Pilot-only worker options. Never present on historical rh-v4 worker configurations. */
+export interface PilotWorkerOptions {
+  revision: "rh-v5-pilot-1";
+  /** Per-conversation allowance; zero for observer diagnostics. */
+  budgetNanoUsd: number;
+  financialMode: "known-charges" | "no-charges";
+  scenario?: PilotSyntheticScenario;
+  /** Honoured only in pilot-synthetic mode, to exercise the worker ceiling without waiting 30 minutes. */
+  workerCeilingMs?: number;
 }

@@ -31,7 +31,7 @@ import type {
 import { canonicalJson, sha256Hex, computeFrozenDigest } from "./common-inputs.js";
 import type { BenchmarkRegistrationOptions } from "./registration.js";
 import { HOST_PATH, HOST_VERSION, MAIN_MODEL, MAIN_LIMITS } from "./config.js";
-import type { Arm, Journal, MainAttempt } from "./contracts.js";
+import type { AnyPhase, Arm, Journal, MainAttempt } from "./contracts.js";
 import {
   RunRecorder,
   recorderExtensionFactory,
@@ -267,7 +267,7 @@ export const SYNTHETIC_MODEL_ID = "main-sim";
 export interface SyntheticTurn {
   items: Array<
     | { type: "message"; text: string }
-    | { type: "function_call"; name: string; args: unknown }
+    | { type: "function_call"; name: string; args: unknown; /** Defaults to call_<index>; set for later turns so ids stay unique. */ callId?: string }
   >;
   usage?: {
     input_tokens: number;
@@ -281,7 +281,9 @@ export interface SyntheticTurn {
 /** One physical fetch outcome: a scripted SSE response or a thrown fetch. */
 export type SyntheticFetchOutcome =
   | { kind: "response"; status: number; turn: SyntheticTurn }
-  | { kind: "throw"; message: string };
+  | { kind: "throw"; message: string }
+  /** Synthetic only: the turn is built from the decoded request about to be sent (for example to cite a saved report path). */
+  | { kind: "dynamic"; build(payload: unknown): SyntheticTurn };
 
 /** script[logicalIndex - 1][attemptIndex - 1] selects the physical outcome. */
 export type SyntheticScript = SyntheticFetchOutcome[][];
@@ -295,7 +297,7 @@ function sseBody(turn: SyntheticTurn, responseId: string): string {
       frames.push(`{"type":"response.output_item.done","output_index":${index},"item":${JSON.stringify(wire)}}`);
     } else {
       const argumentsJson = JSON.stringify(item.args);
-      const wire = { type: "function_call", call_id: `call_${index}`, id: `fc_${index}`, name: item.name, arguments: argumentsJson };
+      const wire = { type: "function_call", call_id: item.callId ?? `call_${index}`, id: item.callId ? `fc_${item.callId}` : `fc_${index}`, name: item.name, arguments: argumentsJson };
       frames.push(`{"type":"response.output_item.added","output_index":${index},"item":${JSON.stringify(wire)}}`);
       // `response.function_call_arguments.done` carries the complete argument
       // text at the TOP LEVEL (the pinned parser reads event.arguments).
@@ -345,7 +347,7 @@ export function syntheticMainProviderConfig() {
 export interface StudySessionConfig {
   runId: string;
   arm: Arm;
-  phase: "synthetic" | "diagnostic" | "measured";
+  phase: AnyPhase;
   /** Fresh, empty, per-run workspace (own .search output). */
   workspaceDir: string;
   /** Isolated agent dir; the runner points PI_CODING_AGENT_DIR here and writes settings.json. */
@@ -607,7 +609,9 @@ export async function createStudySession(
       }
       if (script) {
         const outcomes = script[handle.index - 1] ?? [];
-        const outcome = outcomes[recorder.attemptCount(handle.index) - 1] ?? { kind: "throw" as const, message: "synthetic script exhausted" };
+        const scripted = outcomes[recorder.attemptCount(handle.index) - 1] ?? { kind: "throw" as const, message: "synthetic script exhausted" };
+        const outcome: Exclude<SyntheticFetchOutcome, { kind: "dynamic" }> = scripted.kind === "dynamic"
+          ? { kind: "response", status: 200, turn: scripted.build(wire.payload) } : scripted;
         if (outcome.kind === "throw") {
           recorder.failAttempt(attemptId, "error", outcome.message);
           throw new Error(outcome.message);
@@ -735,8 +739,10 @@ export function createRecorder(
   allowedTopLevelTools: readonly string[],
   mainModelId: string,
   durable?: Journal,
+  recoveryPolicy?: "forbidden" | "evidence-permitted",
 ): RunRecorder {
   return new RunRecorder({
+    ...(recoveryPolicy ? { recoveryPolicy } : {}),
     runId,
     arm,
     mainModelId,

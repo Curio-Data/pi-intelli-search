@@ -639,7 +639,7 @@ function attemptUncachedInput(attempt: MainAttempt): number | undefined {
     ? attempt.usage.input - attempt.usage.cacheRead : undefined;
 }
 
-function analyseUsage(requests: MainRequest[]): UsageAnalysis {
+export function analyseUsage(requests: MainRequest[]): UsageAnalysis {
   const attempts = requests.flatMap(request => request.attempts);
   const missingLogicalIds = requests.filter(request => request.attempts.length === 0).map(request => `logical:${request.id}`);
   const input = sumField(attempts, usage => usage.input);
@@ -676,7 +676,7 @@ function analyseUsage(requests: MainRequest[]): UsageAnalysis {
   return usage;
 }
 
-function validateSequence(requests: MainRequest[]): void {
+export function validateSequence(requests: MainRequest[]): void {
   const requestIds = new Set<string>();
   const attemptIds = new Set<string>();
   let finalAnswerRequests = 0;
@@ -706,7 +706,7 @@ function validateSequence(requests: MainRequest[]): void {
   }
 }
 
-function validateToolCalls(toolCalls: ToolCallRecord[]): void {
+export function validateToolCalls(toolCalls: ToolCallRecord[]): void {
   const ids = new Set<string>();
   for (const call of toolCalls) {
     if (!call.id || ids.has(call.id)) throw new AnalysisInputError(`Duplicate or empty tool-call identity ${call.id || "(empty)"}.`);
@@ -855,7 +855,7 @@ function finishDownstreamStage(accumulator: DownstreamAccumulator): DownstreamSt
   };
 }
 
-function analyseDownstream(record: RunRecord): DownstreamAnalysis {
+export function analyseDownstream(record: RunRecord): DownstreamAnalysis {
   const byStage: Record<DownstreamStage, DownstreamAccumulator> = {
     search: downstreamAccumulator(), extract: downstreamAccumulator(),
     collate: downstreamAccumulator(), cache: downstreamAccumulator(),
@@ -977,7 +977,7 @@ function analyseDownstream(record: RunRecord): DownstreamAnalysis {
   };
 }
 
-function analyseAttribution(record: RunRecord): AttributionAnalysis {
+export function analyseAttribution(record: RunRecord): AttributionAnalysis {
   const logicalRequests = record.requests.map(request => estimateRequest(request.context, record, request.id));
   const attempts = record.requests.flatMap(request =>
     request.attempts.map(attempt => estimateRequest(attempt.payload, record, request.id, attempt)));
@@ -1120,7 +1120,8 @@ export function analyseRun(record: RunRecord): RunAnalysis {
   return {
     runId: record.manifest.runId,
     arm: record.manifest.arm,
-    phase: record.manifest.phase,
+    // Narrowed by the phase guard above; pilot phases never reach this row.
+    phase: record.manifest.phase as Phase,
     pair: record.manifest.pair,
     status: record.manifest.status,
     inputMatched: record.inputIntegrity.matched,

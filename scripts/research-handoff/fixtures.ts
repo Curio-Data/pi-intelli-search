@@ -4,14 +4,15 @@
 import type { callLlm } from "../../src/llm.js";
 import { EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT } from "../../src/core/prompts.js";
 import type { FrozenInputs } from "./contracts.js";
+import type { ResearchSettings } from "../../src/core/types.js";
 import { assembleFrozenInputs } from "./common-inputs.js";
 import { studyParams, studySettings, BASELINE_COMMIT } from "./config.js";
 
 /** Newly authored synthetic proof material. Never a measured source capture. */
-export async function syntheticInputs(protocolRef: string): Promise<FrozenInputs> {
+export async function syntheticInputs(protocolRef: string, settings: ResearchSettings = studySettings()): Promise<FrozenInputs> {
   const urls = ["https://handoff.invalid/alpha", "https://handoff.invalid/beta"];
   return assembleFrozenInputs({
-    params: studyParams(), settings: studySettings(),
+    params: studyParams(), settings,
     searchCompletion: { text: `Synthetic discovery: [Alpha](${urls[0]}) and [Beta](${urls[1]}).`, citations: [] },
     searchAttempts: 1,
     pages: urls.map((url, index) => ({ url, title: index ? "Beta" : "Alpha", status: "success" as const,
