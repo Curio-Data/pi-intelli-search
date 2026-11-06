@@ -31,6 +31,7 @@ import {
 } from "../../src/core/prompts.js";
 import { tuningDefaults } from "../../src/core/defaults.js";
 import { SCHEMA_VERSION, type FrozenInputs, type Journal, type JournalEvent } from "./contracts.js";
+import { verifySourceDerivation, type SourceDerivation } from "./source-selection.js";
 
 /** Search-stage request constant from the baseline core (research.ts). */
 const SEARCH_MAX_TOKENS = 2000;
@@ -157,6 +158,8 @@ export interface AssembleFrozenInputsArgs {
   /** Result of the ONE live fetchPages call for the selected URLs, in order. */
   pages: FetchedPage[];
   meta: FrozenInputs["meta"];
+  /** rh-v6 only: pages are the derivation's selected pages, not the discovery list. */
+  sourceDerivation?: SourceDerivation;
 }
 
 function effectiveMaxUrls(params: ResearchParams, settings: DeepReadonly<ResearchSettings>): number {
@@ -164,7 +167,7 @@ function effectiveMaxUrls(params: ResearchParams, settings: DeepReadonly<Researc
 }
 
 export async function assembleFrozenInputs(args: AssembleFrozenInputsArgs): Promise<FrozenInputs> {
-  const { params, settings, searchCompletion, searchAttempts, pages, meta } = args;
+  const { params, settings, searchCompletion, searchAttempts, pages, meta, sourceDerivation } = args;
   const cap = effectiveMaxUrls(params, settings);
   const selectedSources = mergeCitations(extractSourceUrls(searchCompletion.text), {
     citations: searchCompletion.citations,
@@ -174,13 +177,17 @@ export async function assembleFrozenInputs(args: AssembleFrozenInputsArgs): Prom
       "capture produced zero selected sources; it cannot serve a fixed-source replay",
     ]);
   }
+  // Historical captures align pages with the discovery list; an rh-v6 capture
+  // aligns them with its separately recorded derived inventory.
+  const aligned = sourceDerivation ? sourceDerivation.selected : selectedSources;
+  const alignedName = sourceDerivation ? "sourceDerivation.selected" : "selectedSources";
   const urlProblems = pages
     .map((page, i) => ({ page, i }))
-    .filter(({ page, i }) => selectedSources[i] === undefined || page.url !== selectedSources[i].url)
-    .map(({ page, i }) => `pages[${i}] url ${JSON.stringify(page.url)} does not align with selectedSources[${i}]`);
-  if (pages.length !== selectedSources.length || urlProblems.length > 0) {
+    .filter(({ page, i }) => aligned[i] === undefined || page.url !== aligned[i].url)
+    .map(({ page, i }) => `pages[${i}] url ${JSON.stringify(page.url)} does not align with ${alignedName}[${i}]`);
+  if (pages.length !== aligned.length || urlProblems.length > 0 || (sourceDerivation && pages.length === 0)) {
     throw new FrozenIntegrityError("structure", [
-      `pages length ${pages.length} vs selectedSources length ${selectedSources.length}`,
+      `pages length ${pages.length} vs ${alignedName} length ${aligned.length}`,
       ...urlProblems,
     ]);
   }
@@ -214,6 +221,7 @@ export async function assembleFrozenInputs(args: AssembleFrozenInputsArgs): Prom
     extractionInputs,
     settings: settings as DeepReadonly<ResearchSettings>,
     meta,
+    ...(sourceDerivation ? { sourceDerivation } : {}),
   };
   return { ...core, digest: computeFrozenDigest(core) };
 }
@@ -316,11 +324,18 @@ export function verifyFrozenInputs(frozen: FrozenInputs): void {
     }
   }
 
-  // Page alignment with the selected sources.
-  const sources = capture.selectedSources ?? [];
+  // Page alignment with the selected sources. An rh-v6 corpus aligns its pages
+  // with the derived inventory instead; the raw discovery list keeps its
+  // historical recomputation check below either way.
+  const derivation = frozen.sourceDerivation;
+  if (derivation !== undefined && (typeof derivation !== "object" || derivation === null || !Array.isArray(derivation.selected))) {
+    throw new FrozenIntegrityError("structure", ["sourceDerivation must be an object with a selected array"]);
+  }
+  const sources = derivation ? derivation.selected : capture.selectedSources ?? [];
+  const sourcesName = derivation ? "sourceDerivation.selected" : "selectedSources";
   if (Array.isArray(frozen.pages)) {
     if (frozen.pages.length !== sources.length) {
-      fail(`pages length ${frozen.pages.length} !== selectedSources length ${sources.length}`);
+      fail(`pages length ${frozen.pages.length} !== ${sourcesName} length ${sources.length}`);
     }
     for (const [i, entry] of frozen.pages.entries()) {
       const page = entry?.page;
@@ -329,8 +344,9 @@ export function verifyFrozenInputs(frozen: FrozenInputs): void {
         continue;
       }
       if (sources[i] && page.url !== sources[i].url) {
-        fail(`pages[${i}].page.url ${JSON.stringify(page.url)} does not align with selectedSources[${i}]`);
+        fail(`pages[${i}].page.url ${JSON.stringify(page.url)} does not align with ${sourcesName}[${i}]`);
       }
+      if (derivation && page.status !== "success") fail(`pages[${i}] is a derived selected page without a successful capture`);
       if (page.status !== "success" && page.status !== "error") fail(`pages[${i}].page.status must be success|error`);
       if (!isPlainString(page.content)) fail(`pages[${i}].page.content must be a string`);
       if (isPlainString(page.content) && entry.contentSha256 !== sha256Hex(page.content)) {
@@ -390,6 +406,12 @@ export function verifyFrozenInputs(frozen: FrozenInputs): void {
     if (JSON.stringify(recomputed) !== JSON.stringify(capture.selectedSources)) {
       fail("capture.selectedSources does not equal the recomputed baseline citation merge and cap");
     }
+  }
+
+  // Derived inventory: re-derive it from the raw discovery list and the
+  // recorded fetch log under the registered frozen policy.
+  if (derivation && Array.isArray(frozen.pages) && Array.isArray(capture.selectedSources)) {
+    for (const problem of verifySourceDerivation(frozen)) fail(problem);
   }
 
   // Meta identity.
@@ -687,7 +709,12 @@ export function createFrozenFetchPages(args: CreateFrozenFetchPagesArgs): typeof
     journal.record({
       kind: "fetch-served",
       stage: "fetch",
-      data: { urls: expectedUrls, statuses: pages.map((page) => page.status) },
+      data: {
+        urls: expectedUrls,
+        statuses: pages.map((page) => page.status),
+        // rh-v6: the core requested the raw discovery list; the frozen derived inventory is served.
+        ...(frozen.sourceDerivation ? { derivedInventory: true, servedUrls: pages.map((page) => page.url) } : {}),
+      },
     });
     return pages;
   };

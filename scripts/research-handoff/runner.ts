@@ -21,6 +21,7 @@ import { applyAssessmentBundle } from "./assessment-bundle.js";
 import { checkReturnContract } from "./return-contract.js";
 import { observedPipelineOutcome } from "./outcome.js";
 import { PILOT_SERIES_ROOT } from "./pilot-config.js";
+import { RH6_SERIES_ROOT } from "./pilot-continuation.js";
 
 export const REPO_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 const PROTOCOL_PATH = join(REPO_ROOT, "docs/experiments/research-handoff/PROTOCOL.md");
@@ -58,6 +59,7 @@ export interface LiveAcceptance {
 export async function assertLiveEvidenceRoot(path: string): Promise<void> {
   // rh-v4 authority never reaches the rh-v5 pilot root, whatever its receipts claim.
   if (resolve(path) === resolve(PILOT_SERIES_ROOT)) throw new Error("The rh-v5 pilot root accepts only pilot authority; historical rh-v4 operations are refused");
+  if (resolve(path) === resolve(RH6_SERIES_ROOT)) throw new Error("The rh-v6 pilot root accepts only rh-v6 pilot authority; historical rh-v4 operations are refused");
   const base = await realpath(join(REPO_ROOT, "evidence/benchmarks/research-handoff"));
   const actual = await realpath(resolve(path));
   const rel = relative(base, actual);

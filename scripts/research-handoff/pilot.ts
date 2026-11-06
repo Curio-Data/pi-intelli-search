@@ -18,7 +18,7 @@ import { EXTRACTION_SYSTEM_PROMPT, COLLATION_SYSTEM_PROMPT, SEARCH_SYSTEM_PROMPT
 import { loadPinnedHost, createStudySession, createRecorder, allowedToolsForArm, writeIsolatedModelsOverlay, readOnlyFileCredentialStore,
   SYNTHETIC_MODEL_ID, SYNTHETIC_PROVIDER_ID, type SyntheticScript, type SyntheticTurn } from "./host.js";
 import { createBenchmarkResearchExtension } from "./registration.js";
-import { loadFrozenInputs, settleInputIntegrity, assertCorpusAcceptable } from "./common-inputs.js";
+import { loadFrozenInputs, settleInputIntegrity, assertCorpusAcceptable, verifyFrozenInputs } from "./common-inputs.js";
 import { BASELINE_COMMIT, MAIN_MODEL } from "./config.js";
 import { syntheticInputs, syntheticDownstream } from "./fixtures.js";
 import { AttemptBudget } from "./budget.js";
@@ -36,21 +36,30 @@ import {
 } from "./pilot-authority.js";
 import {
   PILOT_BUDGET, PILOT_CODEMODE_MAX_OUTPUT_TOKENS, PILOT_RUBRICS, PILOT_TOPICS, PILOT_MIN_GAP_MS, PILOT_PROFILE, PILOT_PROTOCOL_PATH, PILOT_PROTOCOL_REVISION, PILOT_SCOPE,
-  pilotAllocationFor, pilotParams, pilotRunId, pilotSettings, pilotTaskPrompt, type PilotSlot,
+  pilotAllocationFor, pilotParams, pilotRunId, pilotSettings, pilotTaskPrompt, pilotAllocation, RH5_PILOT, type PilotDefinition, type PilotSlot,
 } from "./pilot-config.js";
+import { pilotDefinitionFor, syntheticContinuationInputs } from "./pilot-continuation.js";
 import { isPilotPhase, type Arm, type FrozenInputs, type JournalEvent, type PilotSyntheticScenario, type PilotWorkerOptions, type RunManifest, type RunRecord } from "./contracts.js";
 
-/** On-wire and reservation guards for every pilot downstream attempt. */
-export const PILOT_DOWNSTREAM_LIMITS: DownstreamLimits = {
-  maxTokens: { search: 2000, fetch: 0, extract: PILOT_PROFILE.extractionMaxTokens, collate: PILOT_PROFILE.collationMaxTokens },
-  boundsNanoUsd: { search: PILOT_BUDGET.sonarAttemptNanoUsd, fetch: 0, extract: PILOT_BUDGET.m3AttemptNanoUsd, collate: PILOT_BUDGET.m3AttemptNanoUsd },
-  maxAttempts: PILOT_PROFILE.downstreamAttemptsPerCall,
-  exactWireLimit: true,
-  timeoutMs: PILOT_PROFILE.llmTimeoutMs,
-};
-export async function pilotProtocolSha256(): Promise<string> {
-  try { return await digestFile(PILOT_PROTOCOL_PATH); }
-  catch { throw new Error(`Pilot protocol ${PILOT_PROTOCOL_PATH} is missing; pilot modes cannot run without the frozen contract`); }
+/** On-wire and reservation guards for every downstream attempt of a pilot definition. */
+export function pilotDownstreamLimits(definition: PilotDefinition): DownstreamLimits {
+  const { profile, budget } = definition;
+  return {
+    maxTokens: { search: 2000, fetch: 0, extract: profile.extractionMaxTokens, collate: profile.collationMaxTokens },
+    boundsNanoUsd: { search: budget.sonarAttemptNanoUsd, fetch: 0, extract: budget.m3AttemptNanoUsd, collate: budget.m3AttemptNanoUsd },
+    maxAttempts: profile.downstreamAttemptsPerCall,
+    exactWireLimit: true,
+    timeoutMs: profile.llmTimeoutMs,
+  };
+}
+export const PILOT_DOWNSTREAM_LIMITS: DownstreamLimits = pilotDownstreamLimits(RH5_PILOT);
+export async function pilotProtocolSha256(definition: PilotDefinition = RH5_PILOT): Promise<string> {
+  try { return await digestFile(definition.protocolPath); }
+  catch { throw new Error(`Pilot protocol ${definition.protocolPath} is missing; pilot modes cannot run without the frozen contract`); }
+}
+/** Observer and synthetic corpora: rh-v6 builds its invented corpus through the real source derivation. */
+async function pilotSyntheticCorpus(definition: PilotDefinition, protocolSha256: string): Promise<FrozenInputs> {
+  return definition.sourcePolicy ? syntheticContinuationInputs(protocolSha256, definition) : syntheticInputs(protocolSha256, definition.settings());
 }
 const sleep = (milliseconds: number) => new Promise<void>(resolveSleep => setTimeout(resolveSleep, milliseconds));
 const readJson = async (path: string) => JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
@@ -110,7 +119,7 @@ export function pilotSyntheticScript(arm: Arm, scenario: PilotSyntheticScenario,
 }
 
 /** A synthetic model registry below the REAL pilot guard: payload caps, reservations and settlement all execute. */
-export function syntheticRegistry(scenario: PilotSyntheticScenario) {
+export function syntheticRegistry(scenario: PilotSyntheticScenario, searchText = "Synthetic discovery: [Alpha](https://handoff.invalid/alpha) and [Beta](https://handoff.invalid/beta).") {
   return {
     find: (provider: string, id: string) => ({ provider, id, api: "openai-completions", name: id }),
     getApiKeyAndHeaders: async () => ({ ok: true, apiKey: "synthetic-no-network", headers: {} }),
@@ -137,7 +146,7 @@ export function syntheticRegistry(scenario: PilotSyntheticScenario) {
         const summary = "## Synthetic Summary\n\nThe supplied pages yielded synthetic evidence for the pilot return check.";
         const text = stage === "collate"
           ? (long ? `${summary}\n\n${"Synthetic long collation line for the display-budget check.\n".repeat(Math.ceil(SYNTHETIC_LONG_COLLATION_CHARS / 59))}` : summary)
-          : stage === "search" ? "Synthetic discovery: [Alpha](https://handoff.invalid/alpha) and [Beta](https://handoff.invalid/beta)."
+          : stage === "search" ? searchText
           : "Synthetic extracted evidence for the pilot check; not a factual result.";
         return {
           role: "assistant", api: "openai-completions", provider: model.provider, model: model.id, timestamp: Date.now(),
@@ -195,7 +204,8 @@ export async function verifyPaidPrerequisites(authority: VerifiedPilotAuthority,
 /** Live worker admission. The worker calls it without seams; tests pass isolated fixture authority only. */
 export async function validatePilotWorker(cfg: WorkerConfig, options: PilotAuthorityOptions & { now?: () => number } = {}): Promise<void> {
   if (!cfg.acceptancePath || !cfg.authPath) throw new Error("Live pilot inference requires an implementation acceptance and an explicit credential reference");
-  const authority = await verifyPilotImplementation(cfg.acceptancePath, options);
+  const definition = pilotDefinitionFor(cfg.pilot?.revision);
+  const authority = await verifyPilotImplementation(cfg.acceptancePath, { ...options, definition });
   const expected = join(authority.root, "runs", cfg.manifest.runId);
   if (resolve(cfg.directory) !== expected || resolve(cfg.workspace) !== join(expected, "workspace") || resolve(cfg.agentDir) !== join(expected, "agent")) {
     throw new Error("Pilot worker paths differ from the designated series");
@@ -208,7 +218,7 @@ export async function validatePilotWorker(cfg: WorkerConfig, options: PilotAutho
   if (!claim || claim.runId !== cfg.manifest.runId || claim.corpusSha256 !== cfg.manifest.corpusSha256
     || claim.implementationAcceptanceSha256 !== authority.acceptanceSha256) throw new Error(`No matching ${slot} claim`);
   if (cfg.manifest.phase === "pilot") {
-    if (cfg.pilot?.budgetNanoUsd !== pilotAllocationFor(cfg.manifest.arm) || cfg.pilot.financialMode !== "known-charges") throw new Error("Paid pilot allowance differs from the allocation");
+    if (cfg.pilot?.budgetNanoUsd !== pilotAllocation(definition, cfg.manifest.arm) || cfg.pilot.financialMode !== "known-charges") throw new Error("Paid pilot allowance differs from the allocation");
     const { corpusSha256 } = await verifyPaidPrerequisites(authority, cfg.manifest.arm, String(claim.corpusAcceptancePath), options.now?.());
     if (corpusSha256 !== cfg.manifest.corpusSha256) throw new Error("Paid pilot corpus differs from the accepted capture");
   } else if (cfg.pilot?.budgetNanoUsd !== 0 || cfg.pilot.financialMode !== "no-charges") {
@@ -219,23 +229,29 @@ export async function validatePilotWorker(cfg: WorkerConfig, options: PilotAutho
 
 export async function runPilotWorker(cfg: WorkerConfig): Promise<RunRecord> {
   const phase = cfg.manifest.phase;
-  if (cfg.schemaVersion !== 1 || cfg.manifest.status !== "scheduled" || !isPilotPhase(phase) || cfg.pilot?.revision !== PILOT_PROTOCOL_REVISION) {
+  if (cfg.schemaVersion !== 1 || cfg.manifest.status !== "scheduled" || !isPilotPhase(phase) || !cfg.pilot) {
     throw new Error("Invalid scheduled pilot worker configuration");
   }
+  let definition: PilotDefinition;
+  try { definition = pilotDefinitionFor(cfg.pilot.revision); } catch { throw new Error("Invalid scheduled pilot worker configuration"); }
   const options: PilotWorkerOptions = cfg.pilot;
   const synthetic = phase === "pilot-synthetic";
   if (synthetic && !options.scenario) throw new Error("Synthetic pilot workers require a scenario");
   if (!synthetic && options.scenario) throw new Error("Live pilot workers never run synthetic scenarios");
   const identity = await sourceIdentity(REPO_ROOT);
-  if (identity.digest !== cfg.manifest.codeSha256 || await pilotProtocolSha256() !== cfg.manifest.protocolSha256) throw new Error("Code/pilot protocol identity changed before worker dispatch");
+  if (identity.digest !== cfg.manifest.codeSha256 || await pilotProtocolSha256(definition) !== cfg.manifest.protocolSha256) throw new Error("Code/pilot protocol identity changed before worker dispatch");
   if (!synthetic) await validatePilotWorker(cfg);
   const frozen = await loadFrozenInputs({ path: cfg.frozenPath });
   assertCorpusAcceptable({ frozen });
-  if (frozen.digest !== cfg.manifest.corpusSha256 || digestObject(pilotSettings()) !== cfg.manifest.settingsSha256
+  if (frozen.digest !== cfg.manifest.corpusSha256 || digestObject(definition.settings()) !== cfg.manifest.settingsSha256
     || digestObject(frozen.settings) !== cfg.manifest.settingsSha256) throw new Error("Input/settings identity changed before worker dispatch");
+  // A derived-source series replays only derived corpora, and an earlier series never replays one.
+  if (!!definition.sourcePolicy !== !!frozen.sourceDerivation || (frozen.sourceDerivation && frozen.sourceDerivation.policy.id !== definition.sourcePolicy?.id)) {
+    throw new Error("Frozen corpus source derivation differs from the pilot definition");
+  }
   if ((await readdir(cfg.workspace)).length) throw new Error("Worker workspace is not empty");
   process.env.PI_CODING_AGENT_DIR = cfg.agentDir;
-  await writeFile(join(cfg.agentDir, "settings.json"), JSON.stringify({ "pi-intelli-search": pilotSettings() }) + "\n", { flag: "wx" });
+  await writeFile(join(cfg.agentDir, "settings.json"), JSON.stringify({ "pi-intelli-search": definition.settings() }) + "\n", { flag: "wx" });
   const durable = new DurableJournal(cfg.directory, cfg.manifest.runId);
   const host = await loadPinnedHost();
   if (digestObject(host.identity) !== digestObject(cfg.manifest.host)) throw new Error("Loaded host differs from accepted identity");
@@ -250,7 +266,7 @@ export async function runPilotWorker(cfg: WorkerConfig): Promise<RunRecord> {
   const recorder = createRecorder(cfg.manifest.runId, cfg.manifest.arm, allowedToolsForArm(cfg.manifest.arm),
     synthetic ? SYNTHETIC_MODEL_ID : MAIN_MODEL.model, sink, "evidence-permitted");
   const budget = new AttemptBudget(options.budgetNanoUsd, recorder);
-  const guarded = createGuardedCallLlm({ runId: cfg.manifest.runId, budget, journal: recorder, limits: PILOT_DOWNSTREAM_LIMITS });
+  const guarded = createGuardedCallLlm({ runId: cfg.manifest.runId, budget, journal: recorder, limits: pilotDownstreamLimits(definition) });
   // Explicit per-mode downstream: only the paid pilot reaches real extraction/collation.
   const downstream: typeof callLlm = phase === "pilot" ? guarded
     : phase === "pilot-diagnostic" || options.scenario === "observer-complete" ? syntheticDownstream : pilotSyntheticDownstream(options.scenario!, guarded);
@@ -324,11 +340,11 @@ export async function pilotChecksFor(directory: string, frozen: Pick<FrozenInput
 }
 
 function pilotManifest(input: { runId: string; arm: Arm; phase: RunManifest["phase"]; host: RunManifest["host"]; codeSha256: string;
-  protocolSha256: string; frozen: FrozenInputs; synthetic: boolean; scenario?: PilotSyntheticScenario }): RunManifest {
+  protocolSha256: string; frozen: FrozenInputs; synthetic: boolean; scenario?: PilotSyntheticScenario; definition: PilotDefinition }): RunManifest {
   return { schemaVersion: 1, runId: input.runId, arm: input.arm, phase: input.phase, pair: 1, status: "scheduled", host: input.host,
     mainModel: input.synthetic ? { provider: SYNTHETIC_PROVIDER_ID, model: SYNTHETIC_MODEL_ID } : MAIN_MODEL,
     protocolSha256: input.protocolSha256, codeSha256: input.codeSha256, corpusSha256: input.frozen.digest,
-    settingsSha256: digestObject(pilotSettings()),
+    settingsSha256: digestObject(input.definition.settings()),
     promptSha256: digestText(pilotTaskPrompt(input.arm, input.frozen.capture.params, pilotOpening(input.phase, input.scenario))) };
 }
 /** Observer diagnostics and their synthetic rehearsal use the observer opening; every other pilot mode uses the paid opening. */
@@ -341,23 +357,23 @@ export function pilotOpening(phase: RunManifest["phase"], scenario?: PilotSynthe
 // ---------------------------------------------------------------------------
 
 export async function runPilotSyntheticSeries(output: string, scenarios: readonly PilotSyntheticScenario[] = PILOT_SYNTHETIC_SCENARIOS,
-  execute: typeof executeWorker = executeWorker): Promise<{ passed: boolean; outcomes: unknown[] }> {
+  execute: typeof executeWorker = executeWorker, definition: PilotDefinition = RH5_PILOT): Promise<{ passed: boolean; outcomes: unknown[] }> {
   const directory = resolve(output);
   await mkdir(directory);
-  const host = await loadPinnedHost(), code = await sourceIdentity(REPO_ROOT), protocolSha256 = await pilotProtocolSha256();
-  const frozen = await syntheticInputs(protocolSha256, pilotSettings());
+  const host = await loadPinnedHost(), code = await sourceIdentity(REPO_ROOT), protocolSha256 = await pilotProtocolSha256(definition);
+  const frozen = await pilotSyntheticCorpus(definition, protocolSha256);
   const frozenPath = join(directory, "frozen-inputs.json");
   writeNewJson(frozenPath, frozen);
-  writeNewJson(join(directory, "identity.json"), { host: host.identity, code, protocolSha256, protocolRevision: PILOT_PROTOCOL_REVISION, credentialUse: false });
+  writeNewJson(join(directory, "identity.json"), { host: host.identity, code, protocolSha256, protocolRevision: definition.revision, credentialUse: false });
   const outcomes: Array<Record<string, unknown>> = [];
   for (const scenario of scenarios) {
     for (const arm of PILOT_SYNTHETIC_ARMS[scenario] ?? (["baseline", "candidate"] as const)) {
       const runId = `${basename(directory)}-${scenario}-${arm}`;
       const paths = createRunDirectory(join(directory, "runs"), runId);
-      const manifest = pilotManifest({ runId, arm, phase: "pilot-synthetic", host: host.identity, codeSha256: code.digest, protocolSha256, frozen, synthetic: true, scenario });
+      const manifest = pilotManifest({ runId, arm, phase: "pilot-synthetic", host: host.identity, codeSha256: code.digest, protocolSha256, frozen, synthetic: true, scenario, definition });
       const financialMode = PILOT_SYNTHETIC_FINANCIAL[scenario] ?? "known-charges";
-      const budgetNanoUsd = scenario === "budget-refused" ? PILOT_BUDGET.m3AttemptNanoUsd + 1 : financialMode === "no-charges" ? 0 : pilotAllocationFor(arm);
-      const pilot: PilotWorkerOptions = { revision: PILOT_PROTOCOL_REVISION, budgetNanoUsd, financialMode, scenario,
+      const budgetNanoUsd = scenario === "budget-refused" ? definition.budget.m3AttemptNanoUsd + 1 : financialMode === "no-charges" ? 0 : pilotAllocation(definition, arm);
+      const pilot: PilotWorkerOptions = { revision: definition.revision, budgetNanoUsd, financialMode, scenario,
         ...(scenario === "worker-ceiling" ? { workerCeilingMs: SYNTHETIC_WORKER_CEILING_MS } : {}) };
       await execute({ schemaVersion: 1, manifest, ...paths, frozenPath, pilot });
       const checks = await pilotChecksFor(paths.directory, frozen, financialMode);
@@ -384,7 +400,8 @@ export async function runPilotSyntheticSeries(output: string, scenarios: readonl
     }
   }
   const passed = outcomes.every(outcome => outcome.matched === true);
-  writeNewJson(join(directory, "series-outcome.json"), { revision: PILOT_PROTOCOL_REVISION, passed, outcomes });
+  writeNewJson(join(directory, "series-outcome.json"), { revision: definition.revision, passed, outcomes,
+    ...(frozen.sourceDerivation ? { corpusSha256: frozen.digest, derivedSources: frozen.sourceDerivation.selected.map(item => item.url) } : {}) });
   return { passed, outcomes };
 }
 
@@ -393,7 +410,7 @@ export async function runPilotSyntheticSeries(output: string, scenarios: readonl
 // ---------------------------------------------------------------------------
 
 function binding(authority: VerifiedPilotAuthority) {
-  return { scope: PILOT_SCOPE, protocolRevision: PILOT_PROTOCOL_REVISION, seriesRoot: authority.root,
+  return { scope: authority.definition.scope, protocolRevision: authority.definition.revision, seriesRoot: authority.root,
     implementationAcceptanceSha256: authority.acceptanceSha256, ownerDecisionSha256: authority.acceptance.ownerDecisionSha256,
     codeSha256: authority.acceptance.codeSha256, protocolSha256: authority.acceptance.protocolSha256 };
 }
@@ -422,7 +439,8 @@ export async function pilotObserve(acceptancePath: string, authPath: string, opt
   assertPilotSchedule(runIds, [pilotRunId(root, "observer", "baseline"), pilotRunId(root, "observer", "candidate")]);
   await mkdir(join(root, "observer"));
   const host = await loadPinnedHost();
-  const frozen = await syntheticInputs(authority.acceptance.protocolSha256, pilotSettings());
+  const definition = authority.definition;
+  const frozen = await pilotSyntheticCorpus(definition, authority.acceptance.protocolSha256);
   const frozenPath = join(root, "observer", "frozen-inputs.json");
   writeNewJson(frozenPath, frozen);
   for (const [index, arm] of (["baseline", "candidate"] as const).entries()) {
@@ -433,7 +451,7 @@ export async function pilotObserve(acceptancePath: string, authPath: string, opt
   for (const [index, arm] of (["baseline", "candidate"] as const).entries()) {
     const paths = createRunDirectory(join(root, "runs"), runIds[index]);
     const manifest = pilotManifest({ runId: runIds[index], arm, phase: "pilot-diagnostic", host: host.identity,
-      codeSha256: authority.acceptance.codeSha256, protocolSha256: authority.acceptance.protocolSha256, frozen, synthetic: false });
+      codeSha256: authority.acceptance.codeSha256, protocolSha256: authority.acceptance.protocolSha256, frozen, synthetic: false, definition });
     if (stop) {
       const record = unavailableRecord(manifest.runId, manifest.phase, `Not run: ${stop}`, manifest);
       record.manifest.status = "not-run";
@@ -444,7 +462,7 @@ export async function pilotObserve(acceptancePath: string, authPath: string, opt
     try {
       await credentialCheck(authPath, MAIN_MODEL.provider);
       await execute({ schemaVersion: 1, manifest, ...paths, frozenPath, acceptancePath, authPath,
-        pilot: { revision: PILOT_PROTOCOL_REVISION, budgetNanoUsd: 0, financialMode: "no-charges" } });
+        pilot: { revision: definition.revision, budgetNanoUsd: 0, financialMode: "no-charges" } });
       const checks = await pilotChecksFor(paths.directory, frozen, "no-charges");
       outcomes.push({ runId: manifest.runId, passed: checks.passed, failing: checks.checks.filter(check => !check.pass).map(check => check.id) });
       if (!checks.passed) stop = `Observer ${arm} failed machine checks`;
@@ -463,7 +481,8 @@ export async function pilotObserve(acceptancePath: string, authPath: string, opt
 
 export interface CatalogueModel { id: string; context_length: number; pricing: Record<string, string> }
 /** Step 4 bounds (PILOT-PROTOCOL.md, Financial Controls). */
-export function assertPilotRates(data: { data: CatalogueModel[] }): { sonar: CatalogueModel; m3: CatalogueModel } {
+export function assertPilotRates(data: { data: CatalogueModel[] }, definition: PilotDefinition = RH5_PILOT): { sonar: CatalogueModel; m3: CatalogueModel } {
+  const budget = definition.budget;
   const sonar = data.data.find(model => model.id === "perplexity/sonar"), m3 = data.data.find(model => model.id === "minimax/minimax-m3");
   const numeric = (value: unknown) => typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0;
   if (!sonar || !m3 || ![sonar.pricing.prompt, sonar.pricing.completion, sonar.pricing.web_search, m3.pricing.prompt, m3.pricing.completion].every(numeric)
@@ -473,8 +492,10 @@ export function assertPilotRates(data: { data: CatalogueModel[] }): { sonar: Cat
     || Number(m3.pricing.prompt) > 0.0000003 || Number(m3.pricing.completion) > 0.0000012) {
     throw new Error("Current catalogue exceeds or does not establish the pilot cost bounds");
   }
-  if (6 * PILOT_BUDGET.sonarAttemptNanoUsd > PILOT_BUDGET.captureNanoUsd || 3 * PILOT_BUDGET.m3AttemptNanoUsd > PILOT_BUDGET.qualificationNanoUsd
-    || PILOT_BUDGET.captureNanoUsd + PILOT_BUDGET.qualificationNanoUsd + PILOT_BUDGET.baselinePilotNanoUsd + PILOT_BUDGET.candidatePilotNanoUsd !== PILOT_BUDGET.totalNanoUsd) {
+  // Each pilot envelope must hold twelve full M3 reservations at once (both protocols, Financial Controls).
+  if (6 * budget.sonarAttemptNanoUsd > budget.captureNanoUsd || 3 * budget.m3AttemptNanoUsd > budget.qualificationNanoUsd
+    || 12 * budget.m3AttemptNanoUsd > Math.min(budget.baselinePilotNanoUsd, budget.candidatePilotNanoUsd)
+    || budget.captureNanoUsd + budget.qualificationNanoUsd + budget.baselinePilotNanoUsd + budget.candidatePilotNanoUsd !== budget.totalNanoUsd) {
     throw new Error("Pilot allocation arithmetic does not fit the stage reservations");
   }
   return { sonar, m3 };
@@ -492,23 +513,24 @@ export async function pilotAdmit(acceptancePath: string, diagnosticAcceptancePat
       if (!response.ok) throw new Error(`Rate catalogue unavailable (${response.status})`);
       return response.json();
     })();
-    rates = assertPilotRates(raw as { data: CatalogueModel[] });
+    rates = assertPilotRates(raw as { data: CatalogueModel[] }, authority.definition);
   } catch (error) {
     writeNewJson(join(authority.root, "financial-admission-receipt.json"), { ...binding(authority), kind: "pilot-financial-admission", accepted: false, error: String(error) });
     throw error;
   }
   writeNewJson(join(authority.root, "rates-at-admission.json"), { observedAt: new Date().toISOString(), ...rates });
   const path = join(authority.root, "financial-admission-receipt.json");
-  writeNewJson(path, { ...binding(authority), kind: "pilot-financial-admission", accepted: true, envelopeNanoUsd: PILOT_BUDGET.totalNanoUsd,
-    allocationNanoUsd: { capture: PILOT_BUDGET.captureNanoUsd, chargeQualification: PILOT_BUDGET.qualificationNanoUsd,
-      baselinePilot: PILOT_BUDGET.baselinePilotNanoUsd, candidatePilot: PILOT_BUDGET.candidatePilotNanoUsd },
-    reservationsNanoUsd: { sonarAttempt: PILOT_BUDGET.sonarAttemptNanoUsd, m3Attempt: PILOT_BUDGET.m3AttemptNanoUsd } });
+  const budget = authority.definition.budget;
+  writeNewJson(path, { ...binding(authority), kind: "pilot-financial-admission", accepted: true, envelopeNanoUsd: budget.totalNanoUsd,
+    allocationNanoUsd: { capture: budget.captureNanoUsd, chargeQualification: budget.qualificationNanoUsd,
+      baselinePilot: budget.baselinePilotNanoUsd, candidatePilot: budget.candidatePilotNanoUsd },
+    reservationsNanoUsd: { sonarAttempt: budget.sonarAttemptNanoUsd, m3Attempt: budget.m3AttemptNanoUsd } });
   return path;
 }
 
-async function pilotNativeContext(agentDir: string, workspace: string, authPath: string, budget: AttemptBudget, journal: DurableJournal, runId: string, registry?: unknown) {
+async function pilotNativeContext(definition: PilotDefinition, agentDir: string, workspace: string, authPath: string, budget: AttemptBudget, journal: DurableJournal, runId: string, registry?: unknown) {
   process.env.PI_CODING_AGENT_DIR = agentDir;
-  await writeFile(join(agentDir, "settings.json"), JSON.stringify({ "pi-intelli-search": pilotSettings() }) + "\n", { flag: "wx" });
+  await writeFile(join(agentDir, "settings.json"), JSON.stringify({ "pi-intelli-search": definition.settings() }) + "\n", { flag: "wx" });
   let modelRegistry = registry;
   if (!modelRegistry) {
     const host = await loadPinnedHost();
@@ -518,7 +540,7 @@ async function pilotNativeContext(agentDir: string, workspace: string, authPath:
     modelRegistry = new host.sdk.ModelRegistry(runtime);
   }
   const ctx = { cwd: workspace, isProjectTrusted: () => false, modelRegistry, ui: {} } as unknown as ExtensionContext;
-  return createNativeOperationContext(ctx, undefined, createGuardedCallLlm({ runId, budget, journal, limits: PILOT_DOWNSTREAM_LIMITS }));
+  return createNativeOperationContext(ctx, undefined, createGuardedCallLlm({ runId, budget, journal, limits: pilotDownstreamLimits(definition) }));
 }
 function reportedCharge(events: JournalEvent[], stage: string): boolean {
   const last = [...events].reverse().find(event => event.kind === "pipeline-completion" && event.stage === stage && (event.data.stopReason === "stop" || event.data.stopReason === "length"));
@@ -532,18 +554,21 @@ export async function pilotCapture(acceptancePath: string, authPath: string, opt
   await claimPilotSlot(authority.root, "capture", binding(authority));
   const paths = createRunDirectory(authority.root, "capture");
   const journal = new DurableJournal(paths.directory, `${basename(authority.root)}-capture`);
-  const budget = new AttemptBudget(PILOT_BUDGET.captureNanoUsd, journal);
+  const definition = authority.definition;
+  const budget = new AttemptBudget(definition.budget.captureNanoUsd, journal);
   const previous = process.env.PI_CODING_AGENT_DIR;
   let frozen: FrozenInputs | undefined, failure: string | undefined;
   try {
     await (options.credentialCheck ?? defaultCredentialCheck)(authPath, "openrouter");
-    const context = await pilotNativeContext(paths.agentDir, paths.workspace, authPath, budget, journal, "capture", options.modelRegistry);
-    frozen = await captureCommonInputs({ params: pilotParams(), context, fetchPages: options.fetchPages ?? fetchPages, journal,
+    const context = await pilotNativeContext(definition, paths.agentDir, paths.workspace, authPath, budget, journal, "capture", options.modelRegistry);
+    frozen = await captureCommonInputs({ params: definition.params(), context, fetchPages: options.fetchPages ?? fetchPages, journal,
+      ...(definition.sourcePolicy ? { sourcePolicy: definition.sourcePolicy } : {}),
       meta: { capturedAt: new Date().toISOString(), coreCommit: BASELINE_COMMIT, protocolRef: authority.acceptance.protocolSha256 } });
     writeNewJson(join(paths.directory, "frozen-inputs.json"), frozen);
+    if (definition.sourcePolicy) verifyFrozenInputs(frozen);
     assertCorpusAcceptable({ frozen });
     assertAllSelectedPagesCaptured(frozen);
-    if (digestObject(frozen.settings) !== digestObject(pilotSettings())) throw new Error("Captured settings differ from the frozen pilot profile");
+    if (digestObject(frozen.settings) !== digestObject(definition.settings())) throw new Error("Captured settings differ from the frozen pilot profile");
     if (!reportedCharge(journal.events, "search")) throw new Error("Sonar did not report a numeric charge");
     if (budget.snapshot().stopped || budget.snapshot().activeNanoUsd || budget.snapshot().unknownNanoUsd) throw new Error("Capture financial state is not settled with known charges");
   } catch (error) { failure = String(error); }
@@ -571,12 +596,12 @@ export async function pilotQualify(acceptancePath: string, authPath: string, cor
   await claimPilotSlot(authority.root, "charge-qualification", { ...binding(authority), corpusSha256: frozen.digest });
   const paths = createRunDirectory(authority.root, "charge-qualification");
   const journal = new DurableJournal(paths.directory, `${basename(authority.root)}-charge-qualification`);
-  const budget = new AttemptBudget(PILOT_BUDGET.qualificationNanoUsd, journal);
+  const budget = new AttemptBudget(authority.definition.budget.qualificationNanoUsd, journal);
   const previous = process.env.PI_CODING_AGENT_DIR;
   let failure: string | undefined;
   try {
     await (options.credentialCheck ?? defaultCredentialCheck)(authPath, "openrouter");
-    const context = await pilotNativeContext(paths.agentDir, paths.workspace, authPath, budget, journal, "charge-qualification", options.modelRegistry);
+    const context = await pilotNativeContext(authority.definition, paths.agentDir, paths.workspace, authPath, budget, journal, "charge-qualification", options.modelRegistry);
     const page = frozen.pages.find(item => item.page.status === "success")!.page;
     const s = context.settings;
     const completion = await context.models.complete({ model: s.extractModel, systemPrompt: EXTRACTION_SYSTEM_PROMPT,
@@ -615,9 +640,9 @@ export async function pilotRun(acceptancePath: string, authPath: string, arm: Ar
   const host = await loadPinnedHost();
   const paths = createRunDirectory(join(root, "runs"), runId);
   const manifest = pilotManifest({ runId, arm, phase: "pilot", host: host.identity, codeSha256: authority.acceptance.codeSha256,
-    protocolSha256: authority.acceptance.protocolSha256, frozen, synthetic: false });
+    protocolSha256: authority.acceptance.protocolSha256, frozen, synthetic: false, definition: authority.definition });
   await (options.execute ?? executeWorker)({ schemaVersion: 1, manifest, ...paths, frozenPath, acceptancePath, authPath,
-    pilot: { revision: PILOT_PROTOCOL_REVISION, budgetNanoUsd: pilotAllocationFor(arm), financialMode: "known-charges" } });
+    pilot: { revision: authority.definition.revision, budgetNanoUsd: pilotAllocation(authority.definition, arm), financialMode: "known-charges" } });
   const checks = await pilotChecksFor(paths.directory, frozen, "known-charges");
   return { runId, passed: checks.passed };
 }
@@ -649,14 +674,17 @@ export async function pilotGate(acceptancePath: string, arm: Arm, lockPath: stri
   return { passed, path };
 }
 
-const SETTLEMENT_STAGES: Array<{ slot: PilotSlot; cap: number; directory: (root: string) => string }> = [
-  { slot: "observer-baseline", cap: 0, directory: root => join(root, "runs", pilotRunId(root, "observer", "baseline")) },
-  { slot: "observer-candidate", cap: 0, directory: root => join(root, "runs", pilotRunId(root, "observer", "candidate")) },
-  { slot: "capture", cap: PILOT_BUDGET.captureNanoUsd, directory: root => join(root, "capture") },
-  { slot: "charge-qualification", cap: PILOT_BUDGET.qualificationNanoUsd, directory: root => join(root, "charge-qualification") },
-  { slot: "pilot-baseline", cap: PILOT_BUDGET.baselinePilotNanoUsd, directory: root => join(root, "runs", pilotRunId(root, "pilot", "baseline")) },
-  { slot: "pilot-candidate", cap: PILOT_BUDGET.candidatePilotNanoUsd, directory: root => join(root, "runs", pilotRunId(root, "pilot", "candidate")) },
-];
+function settlementStages(definition: PilotDefinition): Array<{ slot: PilotSlot; cap: number; directory: (root: string) => string }> {
+  const budget = definition.budget;
+  return [
+    { slot: "observer-baseline", cap: 0, directory: root => join(root, "runs", pilotRunId(root, "observer", "baseline")) },
+    { slot: "observer-candidate", cap: 0, directory: root => join(root, "runs", pilotRunId(root, "observer", "candidate")) },
+    { slot: "capture", cap: budget.captureNanoUsd, directory: root => join(root, "capture") },
+    { slot: "charge-qualification", cap: budget.qualificationNanoUsd, directory: root => join(root, "charge-qualification") },
+    { slot: "pilot-baseline", cap: budget.baselinePilotNanoUsd, directory: root => join(root, "runs", pilotRunId(root, "pilot", "baseline")) },
+    { slot: "pilot-candidate", cap: budget.candidatePilotNanoUsd, directory: root => join(root, "runs", pilotRunId(root, "pilot", "candidate")) },
+  ];
+}
 /** Walks only the claimed identities of this decision. A claimed stage without a valid final receipt is held at its full ceiling. */
 export async function pilotSettle(acceptancePath: string, options: PilotOperationOptions = {}, interruptionReceiptPaths: readonly string[] = []): Promise<string> {
   const authority = await verifyPilotImplementation(acceptancePath, options);
@@ -674,7 +702,7 @@ export async function pilotSettle(acceptancePath: string, options: PilotOperatio
     }
     interruptions.set(receipt.slot, { ...receipt, receiptSha256: await digestFile(path) });
   }
-  for (const stage of SETTLEMENT_STAGES) {
+  for (const stage of settlementStages(authority.definition)) {
     const claim = await readPilotClaim(root, stage.slot);
     if (!claim) { receipts.push({ slot: stage.slot, claimed: false, notStarted: true }); continue; }
     const dir = stage.directory(root);
@@ -707,13 +735,14 @@ export async function pilotSettle(acceptancePath: string, options: PilotOperatio
   writeNewJson(join(root, "settlement-review.json"), { ...binding(authority), reportedNanoUsd: reported, unknownNanoUsd: unknown, activeNanoUsd: active, receipts });
   const liability = reported + unknown + active, path = join(root, "settlement-receipt.json");
   writeNewJson(path, { ...binding(authority), kind: "pilot-settlement", closed: true, reportedNanoUsd: reported, unknownNanoUsd: unknown, activeNanoUsd: active,
-    releasedNanoUsd: Math.max(0, PILOT_BUDGET.totalNanoUsd - liability), overrunNanoUsd: Math.max(0, liability - PILOT_BUDGET.totalNanoUsd),
+    releasedNanoUsd: Math.max(0, authority.definition.budget.totalNanoUsd - liability), overrunNanoUsd: Math.max(0, liability - authority.definition.budget.totalNanoUsd),
     note: "Subscription-main usage is reported separately and is not part of this monetary settlement." });
   return path;
 }
 
 /** Offline re-analysis of retained pilot records; never applies the historical savings gate. */
-export async function analysePilotInventory(inventoryPath: string, frozenPath: string, output: string, financialMode: PilotWorkerOptions["financialMode"]): Promise<void> {
+export async function analysePilotInventory(inventoryPath: string, frozenPath: string, output: string, financialMode: PilotWorkerOptions["financialMode"],
+  definition: PilotDefinition = RH5_PILOT): Promise<void> {
   const root = resolve(inventoryPath, "..");
   const rows = JSON.parse(await readFile(inventoryPath, "utf8")) as unknown;
   if (!Array.isArray(rows) || !rows.every(row => typeof row === "string")) throw new Error("Expected a record-path inventory");
@@ -741,10 +770,10 @@ export async function analysePilotInventory(inventoryPath: string, frozenPath: s
   }
   if (phases.size > 1) throw new Error(`Inventory mixes phases: ${[...phases].join(", ")}; use separate observer and paid inventories`);
   await mkdir(resolve(output));
-  writeNewJson(join(resolve(output), "pilot-analysis.json"), { revision: PILOT_PROTOCOL_REVISION, financialMode,
+  writeNewJson(join(resolve(output), "pilot-analysis.json"), { revision: definition.revision, financialMode,
     claim: "Machine checks per observation only; no failure rate, equivalence or savings is inferred.", runs,
     inputs: { inventorySha256: await digestFile(inventoryPath), frozenSha256: frozen.digest, analyserCode: (await sourceIdentity(REPO_ROOT)).digest,
-      protocolSha256: await pilotProtocolSha256() } });
+      protocolSha256: await pilotProtocolSha256(definition) } });
 }
 
 /**
@@ -752,7 +781,7 @@ export async function analysePilotInventory(inventoryPath: string, frozenPath: s
  * its evidence-access record, opaque bindings and an ungraded skeleton; never the run name, raw record or traces.
  * The coordinator-only mapping retains the actual run identity for assembling the lock after both grades exist.
  */
-export async function pilotReviewInputs(recordPath: string, frozenPath: string, output: string, answerLabel: string): Promise<string> {
+export async function pilotReviewInputs(recordPath: string, frozenPath: string, output: string, answerLabel: string, definition: PilotDefinition = RH5_PILOT): Promise<string> {
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/.test(answerLabel) || /baseline|candidate|codemode|direct/i.test(answerLabel)) {
     throw new Error("Answer label must be neutral and must not name a route");
   }
@@ -760,7 +789,7 @@ export async function pilotReviewInputs(recordPath: string, frozenPath: string, 
   const frozen = await loadFrozenInputs({ path: frozenPath });
   if (record.manifest?.corpusSha256 !== frozen.digest) throw new Error("Record and frozen corpus differ");
   const bindings = { answerLabel, runIdSha256: digestText(record.manifest.runId), recordSha256: digestObject(record),
-    answerSha256: digestText(record.finalAnswer ?? ""), corpusSha256: frozen.digest, rubricSha256: await pilotProtocolSha256() };
+    answerSha256: digestText(record.finalAnswer ?? ""), corpusSha256: frozen.digest, rubricSha256: await pilotProtocolSha256(definition) };
   const directory = resolve(output);
   await mkdir(directory);
   const graders = join(directory, "graders");
@@ -778,4 +807,32 @@ export async function pilotReviewInputs(recordPath: string, frozenPath: string, 
   writeNewJson(join(directory, "coordinator-mapping.json"), { ...bindings, runId: record.manifest.runId, recordPath: resolve(recordPath),
     note: "Coordinator only. Do not give this file or the run name to graders. Assemble the lock (with the actual runId) only after both grades are written." });
   return directory;
+}
+
+/**
+ * Credential-free bounded corpus-review bundle: the frozen task, the protocol digest, every selected page's
+ * bytes and, for a derived corpus, the derivation without page bodies so a reviewer can check how each page
+ * was reached. Never includes the raw search text, any answer, grade or conversation history.
+ */
+export async function pilotCorpusReviewInputs(frozenPath: string, output: string, definition: PilotDefinition = RH5_PILOT): Promise<string> {
+  const frozen = await loadFrozenInputs({ path: frozenPath });
+  if (!!definition.sourcePolicy !== !!frozen.sourceDerivation) throw new Error("Frozen corpus source derivation differs from the pilot definition");
+  const directory = resolve(output);
+  await mkdir(directory);
+  const derivation = frozen.sourceDerivation;
+  const path = join(directory, "inputs.json");
+  writeNewJson(path, {
+    kind: "pilot-corpus-review-inputs", revision: definition.revision, protocolSha256: await pilotProtocolSha256(definition),
+    corpusSha256: frozen.digest, frozenFileSha256: await digestFile(frozenPath), task: frozen.capture.params,
+    pages: frozen.pages.map((entry, position) => ({ position, url: entry.page.url, title: entry.page.title, status: entry.page.status,
+      variant: entry.page.source ?? null, characters: entry.page.content.length, contentSha256: entry.contentSha256, content: entry.page.content,
+      ...(derivation ? { depth: derivation.selected[position]?.depth, parentKey: derivation.selected[position]?.parentKey } : {}) })),
+    ...(derivation ? { derivation: { policyId: derivation.policy.id, policySha256: derivation.policySha256, taskTerms: derivation.taskTerms,
+      discovery: derivation.discovery, stopReason: derivation.stopReason, ignoredLinks: derivation.ignoredLinks,
+      fetches: derivation.fetches.map(({ page: _page, ...rest }) => rest),
+      candidates: derivation.candidates.map(({ order, url, depth, parentKey, anchor, termScore, matchedTerms, sameSection, status }) =>
+        ({ order, url, depth, parentKey, anchor, termScore, matchedTerms, sameSection, status })) } } : {}),
+    note: "Bounded corpus-review input. The raw search text, answers, grades and conversation history are deliberately absent.",
+  });
+  return path;
 }

@@ -10,11 +10,12 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ResearchParams } from "../../src/core/contracts.js";
 import type { ResearchSettings } from "../../src/core/types.js";
-import type { Arm } from "./contracts.js";
+import type { Arm, PilotRevision } from "./contracts.js";
+import type { SourcePolicy } from "./source-selection.js";
 import { studySettings, studyParams } from "./config.js";
 
 const REPO = resolve(fileURLToPath(new URL("../../", import.meta.url)));
-export const PILOT_PROTOCOL_REVISION = "rh-v5-pilot-1";
+export const PILOT_PROTOCOL_REVISION = "rh-v5-pilot-1" as const;
 export const PILOT_PROTOCOL_PATH = join(REPO, "docs/experiments/research-handoff/PILOT-PROTOCOL.md");
 export const PILOT_SCOPE = "research-handoff-pilot-rh-v5" as const;
 export const OWNER_DECISION_PATH = join(REPO, "evidence/agents/20261105T173919Z-handoff-resume/owner-decision.json");
@@ -110,4 +111,41 @@ export function pilotRunId(root: string, kind: "observer" | "pilot", arm: Arm): 
 }
 export function pilotAllocationFor(arm: Arm): number {
   return arm === "baseline" ? PILOT_BUDGET.baselinePilotNanoUsd : PILOT_BUDGET.candidatePilotNanoUsd;
+}
+
+// ---------------------------------------------------------------------------
+// Pilot definitions: one shared mechanism, one frozen definition per series
+// ---------------------------------------------------------------------------
+
+export type PilotProfile = { readonly [K in keyof typeof PILOT_PROFILE]: number };
+export type PilotOperationLimits = { readonly [K in keyof typeof PILOT_OPERATION_LIMITS]: number };
+export type PilotBudget = { readonly [K in keyof typeof PILOT_BUDGET]: number };
+/**
+ * Everything that distinguishes one bounded pilot series from another. The
+ * shared runner, authority, settlement and analysis read only these fields,
+ * so rh-v5 keeps its exact historical values and rh-v6 declares its own.
+ */
+export interface PilotDefinition {
+  revision: PilotRevision;
+  scope: string;
+  protocolPath: string;
+  ownerDecisionPath: string;
+  ownerDecisionSha256: string;
+  seriesRoot: string;
+  profile: PilotProfile;
+  operationLimits: PilotOperationLimits;
+  budget: PilotBudget;
+  /** Present only for a series whose capture derives its sources (rh-v6). */
+  sourcePolicy?: SourcePolicy;
+  settings(): ResearchSettings;
+  params(): ResearchParams;
+}
+export const RH5_PILOT: PilotDefinition = Object.freeze({
+  revision: PILOT_PROTOCOL_REVISION, scope: PILOT_SCOPE, protocolPath: PILOT_PROTOCOL_PATH,
+  ownerDecisionPath: OWNER_DECISION_PATH, ownerDecisionSha256: OWNER_DECISION_SHA256, seriesRoot: PILOT_SERIES_ROOT,
+  profile: PILOT_PROFILE, operationLimits: PILOT_OPERATION_LIMITS, budget: PILOT_BUDGET,
+  settings: pilotSettings, params: pilotParams,
+});
+export function pilotAllocation(definition: PilotDefinition, arm: Arm): number {
+  return arm === "baseline" ? definition.budget.baselinePilotNanoUsd : definition.budget.candidatePilotNanoUsd;
 }

@@ -7,6 +7,7 @@ import { research, type ResearchDependencies } from "../../src/core/operations/r
 import { SEARCH_SYSTEM_PROMPT } from "../../src/core/prompts.js";
 import type { FrozenInputs, Journal } from "./contracts.js";
 import { assembleFrozenInputs } from "./common-inputs.js";
+import { SourceSelection, type SourceDerivation, type SourcePolicy } from "./source-selection.js";
 
 class CaptureFinished extends Error {}
 /** Executes the released search/selection code, then ends at the one fetch boundary.
@@ -19,11 +20,14 @@ export async function captureCommonInputs(options: {
   fetchPages: ResearchDependencies["fetchPages"];
   journal: Journal;
   meta: FrozenInputs["meta"];
+  /** rh-v6 only: replaces the single fetch of the discovery list with the frozen bounded selection. */
+  sourcePolicy?: SourcePolicy;
 }): Promise<FrozenInputs> {
   let searchCalls = 0;
   let lastCompletion: ModelCompletion | undefined;
   let pages: FetchedPage[] | undefined;
   let fetchCalls = 0;
+  let sourceDerivation: SourceDerivation | undefined;
   const models = {
     preflight: options.context.models.preflight.bind(options.context.models),
     complete: async (request: Parameters<OperationContext["models"]["complete"]>[0]) => {
@@ -45,8 +49,22 @@ export async function captureCommonInputs(options: {
     const result = await research(options.params, { ...options.context, models }, {
       fetchPages: async (urls, signal, settings) => {
         if (++fetchCalls !== 1) throw new Error("Capture attempted a second page acquisition");
-        pages = await options.fetchPages(urls, signal, settings);
-        options.journal.record({ kind: "capture-pages", data: { urls, pages } });
+        if (!options.sourcePolicy) {
+          pages = await options.fetchPages(urls, signal, settings);
+          options.journal.record({ kind: "capture-pages", data: { urls, pages } });
+          throw finished;
+        }
+        // The core's request is the unchanged discovery list. Each policy step is one
+        // single-URL acquisition through the same package fetch path and options.
+        const selection = new SourceSelection(options.sourcePolicy, options.params, urls);
+        for (let step = selection.next(); step; step = selection.next()) {
+          const [page] = await options.fetchPages([step.url], signal, settings);
+          options.journal.record({ kind: "capture-selection-fetch", data: { ...step, page: page ?? null } });
+          selection.accept(page);
+        }
+        sourceDerivation = selection.result();
+        pages = selection.selectedPages();
+        options.journal.record({ kind: "capture-pages", data: { urls, derivedInventory: true, pages, stopReason: sourceDerivation.stopReason } });
         throw finished;
       },
       downloadLlmsFullToCache: async () => { throw new Error("Capture attempted documentation discovery"); },
@@ -59,5 +77,6 @@ export async function captureCommonInputs(options: {
   return assembleFrozenInputs({
     params: options.params, settings: options.context.settings as ResearchSettings,
     searchCompletion: lastCompletion, searchAttempts: searchCalls, pages, meta: options.meta,
+    ...(sourceDerivation ? { sourceDerivation } : {}),
   });
 }

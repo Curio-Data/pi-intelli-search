@@ -5,6 +5,7 @@ import type {
   DeepReadonly, ModelCompletion, ResearchParams,
 } from "../../src/core/contracts.js";
 import type { FetchedPage, ModelConfig, ResearchSettings } from "../../src/core/types.js";
+import type { SourceDerivation } from "./source-selection.js";
 
 /** Coordinator-owned schema. No implementation imports another track's test helpers. */
 export const SCHEMA_VERSION = 1 as const;
@@ -42,6 +43,9 @@ export interface FrozenInputs {
   }>;
   settings: DeepReadonly<ResearchSettings>;
   meta: { capturedAt: string; coreCommit: string; protocolRef: string };
+  /** rh-v6 only: the deterministic derived source inventory. When present, `pages` align with
+   * `sourceDerivation.selected`, while `capture.selectedSources` stays the raw discovery list. */
+  sourceDerivation?: SourceDerivation;
   digest: string;
 }
 
@@ -176,8 +180,9 @@ export type PilotSyntheticScenario = "complete" | "recovery" | "truncated" | "fa
   | "recovery-limit" | "budget-refused" | "unknown-charge" | "worker-ceiling"
   | "long-complete" | "default-limit-truncated" | "observer-complete";
 /** Pilot-only worker options. Never present on historical rh-v4 worker configurations. */
+export type PilotRevision = "rh-v5-pilot-1" | "rh-v6-pilot-1";
 export interface PilotWorkerOptions {
-  revision: "rh-v5-pilot-1";
+  revision: PilotRevision;
   /** Per-conversation allowance; zero for observer diagnostics. */
   budgetNanoUsd: number;
   financialMode: "known-charges" | "no-charges";

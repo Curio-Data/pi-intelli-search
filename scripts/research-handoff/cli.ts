@@ -8,7 +8,9 @@ import { runWorker, runSyntheticSeries, reproduce, REPO_ROOT, type WorkerConfig 
 import { sourceIdentity, writeNewJson } from "./storage.js";
 import type { Phase } from "./contracts.js";
 import { isPilotPhase, type PilotSyntheticScenario } from "./contracts.js";
-import { runPilotWorker, runPilotSyntheticSeries, analysePilotInventory, pilotObserve, pilotAdmit, pilotCapture, pilotQualify, pilotRun, pilotGate, pilotSettle, pilotReviewInputs, PILOT_SYNTHETIC_SCENARIOS } from "./pilot.js";
+import { runPilotWorker, runPilotSyntheticSeries, analysePilotInventory, pilotObserve, pilotAdmit, pilotCapture, pilotQualify, pilotRun, pilotGate, pilotSettle, pilotReviewInputs, pilotCorpusReviewInputs, PILOT_SYNTHETIC_SCENARIOS } from "./pilot.js";
+import { RH5_PILOT, type PilotDefinition } from "./pilot-config.js";
+import { RH6_PILOT } from "./pilot-continuation.js";
 import { admitAcceptedPreparation, prepareCapture, qualifyDownstreamCost, collectAcceptedSeries, settleAcceptedSeries } from "./collection.js";
 
 const USAGE = [
@@ -38,6 +40,11 @@ const USAGE = [
   "            pilot-gate <implementation-acceptance.json> baseline <assessment-lock.json>",
   "    step 8: pilot-run ... candidate ...   (only after a passed baseline gate), then pilot-gate ... candidate ...",
   "    close:  pilot-settle <implementation-acceptance.json> [interruption-receipt.json ...]   (closes the series)",
+  "rh-v6 continuation (PILOT-CONTINUATION.md): the same commands and arguments with the rh6- prefix in place of pilot-,",
+  "  bound only to the rh-v6 owner direction, root, profile, envelope and slots; pilot- commands never reach it.",
+  "  Credential-free: rh6-synthetic, rh6-analyse, rh6-review-inputs, and",
+  "    rh6-corpus-review-inputs <frozen-inputs.json> <new-dir>   (bounded corpus-review bundle, after step 5)",
+  "  Acceptance required, in gate order: rh6-observe, rh6-admit, rh6-capture, rh6-qualify, rh6-run/rh6-gate (baseline, then candidate), rh6-settle",
   "Internal driver entry (live modes remain gated):",
   "  worker <worker.json>",
   "rh-v4: see docs/experiments/research-handoff/REPRODUCTION.md. rh-v5 pilot: see docs/experiments/research-handoff/PILOT-PROTOCOL.md, Gate Sequence and Schedule.",
@@ -51,38 +58,44 @@ async function main() {
     return value;
   };
   if (command === "--help" || command === "help") { console.log(USAGE); return; }
-  if (command?.startsWith("pilot-")) {
-    if (command === "pilot-synthetic" && args.length >= 1 && args.length <= 2) {
+  if (command?.startsWith("pilot-") || command?.startsWith("rh6-")) {
+    // Each command family is bound to exactly one frozen definition; nothing infers it from a receipt.
+    const definition: PilotDefinition = command.startsWith("rh6-") ? RH6_PILOT : RH5_PILOT;
+    const name = `pilot-${command.slice(command.indexOf("-") + 1)}`;
+    const options = { definition };
+    if (name === "pilot-synthetic" && args.length >= 1 && args.length <= 2) {
       const scenarios = args[1] ? args[1].split(",") : [...PILOT_SYNTHETIC_SCENARIOS];
       if (!scenarios.every(item => (PILOT_SYNTHETIC_SCENARIOS as readonly string[]).includes(item))) throw new Error(USAGE);
-      const result = await runPilotSyntheticSeries(args[0], scenarios as PilotSyntheticScenario[]);
+      const result = await runPilotSyntheticSeries(args[0], scenarios as PilotSyntheticScenario[], undefined, definition);
       console.log(`Pilot synthetic series ${result.passed ? "matched every expected verdict" : "MISMATCHED an expected verdict"}: ${resolve(args[0])}/series-outcome.json`);
       if (!result.passed) process.exitCode = 1;
-    } else if (command === "pilot-analyse" && args.length >= 3 && args.length <= 4 && (!args[3] || ["known-charges", "no-charges"].includes(args[3]))) {
-      await analysePilotInventory(args[0], args[1], args[2], (args[3] ?? "known-charges") as "known-charges" | "no-charges");
+    } else if (name === "pilot-analyse" && args.length >= 3 && args.length <= 4 && (!args[3] || ["known-charges", "no-charges"].includes(args[3]))) {
+      await analysePilotInventory(args[0], args[1], args[2], (args[3] ?? "known-charges") as "known-charges" | "no-charges", definition);
       console.log(`Pilot offline analysis: ${resolve(args[2])}`);
-    } else if (command === "pilot-observe" && args.length === 2) {
-      const result = await pilotObserve(args[0], args[1]);
+    } else if (name === "pilot-observe" && args.length === 2) {
+      const result = await pilotObserve(args[0], args[1], options);
       console.log(`Observer diagnostics ${result.stopped ? "stopped" : "finished"}: ${result.outcomePath}`);
       if (result.stopped) process.exitCode = 1;
-    } else if (command === "pilot-admit" && args.length === 2) {
-      console.log(`Pilot financial admission: ${await pilotAdmit(args[0], args[1])}`);
-    } else if (command === "pilot-capture" && args.length === 2) {
-      console.log(`Pilot capture: ${await pilotCapture(args[0], args[1])}`);
-    } else if (command === "pilot-qualify" && args.length === 3) {
-      console.log(`Pilot charge qualification: ${await pilotQualify(args[0], args[1], args[2])}`);
-    } else if (command === "pilot-run" && args.length === 4) {
-      const result = await pilotRun(args[0], args[1], arm(args[2]), args[3]);
+    } else if (name === "pilot-admit" && args.length === 2) {
+      console.log(`Pilot financial admission: ${await pilotAdmit(args[0], args[1], options)}`);
+    } else if (name === "pilot-capture" && args.length === 2) {
+      console.log(`Pilot capture: ${await pilotCapture(args[0], args[1], options)}`);
+    } else if (name === "pilot-qualify" && args.length === 3) {
+      console.log(`Pilot charge qualification: ${await pilotQualify(args[0], args[1], args[2], options)}`);
+    } else if (name === "pilot-run" && args.length === 4) {
+      const result = await pilotRun(args[0], args[1], arm(args[2]), args[3], options);
       console.log(`${result.runId}: machine checks ${result.passed ? "passed" : "failed"}; assessments and the gate remain separate.`);
       if (!result.passed) process.exitCode = 1;
-    } else if (command === "pilot-gate" && args.length === 3) {
-      const result = await pilotGate(args[0], arm(args[1]), args[2]);
+    } else if (name === "pilot-gate" && args.length === 3) {
+      const result = await pilotGate(args[0], arm(args[1]), args[2], options);
       console.log(`Pilot ${args[1]} gate ${result.passed ? "passed" : "failed"}: ${result.path}`);
       if (!result.passed) process.exitCode = 1;
-    } else if (command === "pilot-settle" && args.length >= 1) {
-      console.log(`Pilot settlement: ${await pilotSettle(args[0], {}, args.slice(1))}`);
-    } else if (command === "pilot-review-inputs" && args.length === 4) {
-      console.log(`Pilot review inputs: ${await pilotReviewInputs(args[0], args[1], args[2], args[3])}`);
+    } else if (name === "pilot-settle" && args.length >= 1) {
+      console.log(`Pilot settlement: ${await pilotSettle(args[0], options, args.slice(1))}`);
+    } else if (name === "pilot-review-inputs" && args.length === 4) {
+      console.log(`Pilot review inputs: ${await pilotReviewInputs(args[0], args[1], args[2], args[3], definition)}`);
+    } else if (command === "rh6-corpus-review-inputs" && args.length === 2) {
+      console.log(`Pilot corpus-review inputs: ${await pilotCorpusReviewInputs(args[0], args[1], definition)}`);
     } else {
       throw new Error(USAGE);
     }

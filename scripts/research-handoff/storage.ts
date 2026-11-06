@@ -79,10 +79,12 @@ export async function sourceIdentity(root: string): Promise<{ digest: string; fi
   ]) {
     files[path] = await digestFile(join(root, path));
   }
-  // The rh-v5 pilot contract joins the identity once it exists; historical trees without it are unaffected.
-  const pilotProtocol = "docs/experiments/research-handoff/PILOT-PROTOCOL.md";
-  try { files[pilotProtocol] = await digestFile(join(root, pilotProtocol)); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  // Each pilot contract joins the identity once it exists; historical trees without it are unaffected.
+  for (const name of ["PILOT-PROTOCOL.md", "PILOT-CONTINUATION.md"]) {
+    const pilotProtocol = `docs/experiments/research-handoff/${name}`;
+    try { files[pilotProtocol] = await digestFile(join(root, pilotProtocol)); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  }
   for (const name of ["@earendil-works/pi-coding-agent", "@earendil-works/pi-tui"]) {
     const path = join("node_modules", name, "package.json");
     const manifest = JSON.parse(await readFile(join(root, path), "utf8")) as { version: string };

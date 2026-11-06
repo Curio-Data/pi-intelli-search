@@ -12,8 +12,9 @@ import { FINANCIAL_APPROVAL_SCOPE } from "./config.js";
 import {
   OWNER_DECISION_SHA256, PILOT_BUDGET, PILOT_OPERATION_LIMITS, PILOT_PROFILE, PILOT_PROTOCOL_PATH,
   PILOT_PROTOCOL_REVISION, PILOT_RUBRICS, PILOT_SCOPE, PILOT_SERIES_ROOT, PILOT_SLOTS, PILOT_TOPICS,
-  pilotSettings, type PilotSlot,
+  pilotSettings, RH5_PILOT, type PilotDefinition, type PilotSlot,
 } from "./pilot-config.js";
+import { RH6_PROTOCOL_REVISION, verifyContinuationDirection } from "./pilot-continuation.js";
 import type { RunRecord } from "./contracts.js";
 
 const REPO = resolve(PILOT_PROTOCOL_PATH, "../../../..");
@@ -26,8 +27,12 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
 }
 const same = (a: unknown, b: unknown) => digestObject(a) === digestObject(b);
 
-/** Test seams only. The CLI never supplies them, so production binds the designated real root. */
+/**
+ * `definition` selects the series (default rh-v5); the CLI passes it explicitly per command family.
+ * The remaining fields are test seams only. The CLI never supplies them, so production binds the designated real root.
+ */
 export interface PilotAuthorityOptions {
+  definition?: PilotDefinition;
   designatedRoot?: string;
   ownerDecisionSha256?: string;
   rootCheck?: (path: string) => Promise<void>;
@@ -42,9 +47,12 @@ export async function assertPilotEvidenceRoot(path: string): Promise<void> {
 }
 
 export async function verifyOwnerDecision(path: string, options: PilotAuthorityOptions = {}): Promise<Record<string, unknown>> {
-  if (await digestFile(path) !== (options.ownerDecisionSha256 ?? OWNER_DECISION_SHA256)) throw new Error("Owner decision bytes differ from the recorded digest");
+  const definition = options.definition ?? RH5_PILOT;
+  if (await digestFile(path) !== (options.ownerDecisionSha256 ?? definition.ownerDecisionSha256)) throw new Error("Owner decision bytes differ from the recorded digest");
   const d = await readJson(path);
-  const designated = options.designatedRoot ?? PILOT_SERIES_ROOT;
+  const designated = options.designatedRoot ?? definition.seriesRoot;
+  if (definition.revision === RH6_PROTOCOL_REVISION) { await verifyContinuationDirection(d, designated); return d; }
+  if (definition !== RH5_PILOT) throw new Error(`No owner-record verifier for ${definition.revision}`);
   const allocation = object(d.coordinatorAllocationNanoUsd);
   const total = ["commonCapture", "chargeQualification", "baselinePilot", "candidatePilot"].reduce((sum, key) => sum + Number(allocation[key]), 0);
   if (d.schemaVersion !== 1 || d.approved !== true || d.approvedBy !== "owner" || d.scope !== PILOT_SCOPE
@@ -70,8 +78,8 @@ export interface PilotImplementationAcceptance {
   kind: "pilot-implementation-acceptance";
   acceptedBy: "coordinator";
   accepted: true;
-  scope: typeof PILOT_SCOPE;
-  protocolRevision: typeof PILOT_PROTOCOL_REVISION;
+  scope: string;
+  protocolRevision: string;
   seriesRoot: string;
   ownerDecisionPath: string;
   ownerDecisionSha256: string;
@@ -87,41 +95,45 @@ export interface VerifiedPilotAuthority {
   acceptancePath: string;
   acceptanceSha256: string;
   root: string;
+  definition: PilotDefinition;
 }
 /** Verifies the implementation acceptance against the live tree; never accepts an rh-v4 receipt. */
 export async function verifyPilotImplementation(path: string, options: PilotAuthorityOptions = {}): Promise<VerifiedPilotAuthority> {
+  const definition = options.definition ?? RH5_PILOT;
   const a = await readJson(path) as unknown as PilotImplementationAcceptance;
-  const designated = resolve(options.designatedRoot ?? PILOT_SERIES_ROOT);
+  const designated = resolve(options.designatedRoot ?? definition.seriesRoot);
   if (a.schemaVersion !== 1 || a.kind !== "pilot-implementation-acceptance" || a.acceptedBy !== "coordinator" || a.accepted !== true
-    || a.scope !== PILOT_SCOPE || a.protocolRevision !== PILOT_PROTOCOL_REVISION || "financialMode" in a || "phase" in a) {
-    throw new Error("Not an accepted rh-v5 pilot implementation; historical rh-v4 receipts are not reusable");
+    || a.scope !== definition.scope || a.protocolRevision !== definition.revision || "financialMode" in a || "phase" in a) {
+    throw new Error(`Not an accepted ${definition.revision} pilot implementation; historical rh-v4 receipts and other pilot revisions are not reusable`);
   }
   if (resolve(a.seriesRoot) !== designated) throw new Error("Pilot authority names a root other than the designated series root");
+  // A later series never reopens a closed earlier root, whatever its receipts claim.
+  if (definition !== RH5_PILOT && resolve(a.seriesRoot) === resolve(PILOT_SERIES_ROOT)) throw new Error("The closed rh-v5 root cannot be reopened by a later pilot");
   await (options.rootCheck ?? assertPilotEvidenceRoot)(a.seriesRoot);
   // Settlement closes the series: no later live command (including another settlement) may continue from it.
   if (await fileExists(join(designated, "settlement-receipt.json"))) throw new Error("The pilot series is settled and closed to further live work");
   await verifyOwnerDecision(a.ownerDecisionPath, options);
-  if (a.ownerDecisionSha256 !== (options.ownerDecisionSha256 ?? OWNER_DECISION_SHA256)) throw new Error("Acceptance cites another owner decision");
+  if (a.ownerDecisionSha256 !== (options.ownerDecisionSha256 ?? definition.ownerDecisionSha256)) throw new Error("Acceptance cites another owner decision");
   if ((await sourceIdentity(REPO)).digest !== a.codeSha256) throw new Error("Pilot code identity changed since acceptance");
-  if (await digestFile(PILOT_PROTOCOL_PATH) !== a.protocolSha256) throw new Error("Pilot protocol identity changed since acceptance");
+  if (await digestFile(definition.protocolPath) !== a.protocolSha256) throw new Error("Pilot protocol identity changed since acceptance");
   for (const [p, h] of [[a.technicalReviewPath, a.technicalReviewSha256], [a.proseReviewPath, a.proseReviewSha256]]) {
     if (!p || await digestFile(p) !== h) throw new Error("Independent technical or prose review is missing or changed");
   }
   const acceptanceSha256 = await digestFile(path);
-  await bindRoot(designated, { ownerDecisionSha256: a.ownerDecisionSha256, implementationAcceptanceSha256: acceptanceSha256,
+  await bindRoot(designated, definition, { ownerDecisionSha256: a.ownerDecisionSha256, implementationAcceptanceSha256: acceptanceSha256,
     codeSha256: a.codeSha256, protocolSha256: a.protocolSha256 });
-  return { acceptance: a, acceptancePath: path, acceptanceSha256, root: designated };
+  return { acceptance: a, acceptancePath: path, acceptanceSha256, root: designated, definition };
 }
 
 /** One generation per root: the first verified use binds it, later uses must match exactly. */
-async function bindRoot(root: string, binding: Record<string, string>): Promise<void> {
+async function bindRoot(root: string, definition: PilotDefinition, binding: Record<string, string>): Promise<void> {
   const path = join(root, "pilot-root-binding.json");
   try {
     const existing = await readJson(path);
     if (!same(existing.binding, binding)) throw new Error("Designated root is already bound to another pilot generation or implementation");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    writeNewJson(path, { schemaVersion: 1, scope: PILOT_SCOPE, protocolRevision: PILOT_PROTOCOL_REVISION, boundAt: new Date().toISOString(), binding });
+    writeNewJson(path, { schemaVersion: 1, scope: definition.scope, protocolRevision: definition.revision, boundAt: new Date().toISOString(), binding });
   }
 }
 
