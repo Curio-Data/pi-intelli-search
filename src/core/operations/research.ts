@@ -1260,14 +1260,14 @@ async function completeWithBudgetRetry(
       return longerFirst ? { ...kept, alternate: retried } : { ...retried, alternate: kept };
     }
     if (!first && !completion.text.trim() && completionTruncated(completion, maxTokens))
-      throw bothBudgetsSpent(cap, maxTokens);
+      throw bothBudgetsSpent(stage, cap, maxTokens);
     return { completion, maxTokens };
   } catch (error) {
     throwIfAborted(p.signal);
     if (error instanceof OutputBudgetExhaustedError && error.message.startsWith(BOTH_SPENT))
       throw error;
     if (!first && isOutputBudgetExhausted(error))
-      throw bothBudgetsSpent(cap, maxTokens, failureDetail(errMsg(error)));
+      throw bothBudgetsSpent(stage, cap, maxTokens);
     // Keep paid, usable output when the larger retry fails (for example a
     // model whose output limit is below the doubled cap).
     if (first) {
@@ -1285,11 +1285,15 @@ interface BudgetedCompletion {
 
 const BOTH_SPENT = "Output cap reached without visible text at ";
 
-function bothBudgetsSpent(cap: number, maxTokens: number, detail?: string): OutputBudgetExhaustedError {
+function bothBudgetsSpent(
+  stage: "extract" | "collate",
+  cap: number,
+  maxTokens: number,
+): OutputBudgetExhaustedError {
+  const setting = stage === "extract" ? "extractionMaxTokens" : "collationMaxTokens";
   return new OutputBudgetExhaustedError(
     `${BOTH_SPENT}${cap} tokens and again after one retry at ${maxTokens} tokens; ` +
-      "the model's hidden reasoning consumed both budgets. Raise the stage's output cap, " +
-      "choose a model that reasons less for this stage, or re-run." +
-      (detail ? ` Last response: ${detail}` : ""),
+      `the model's hidden reasoning consumed both budgets. Raise ${setting}, ` +
+      "choose a model that reasons less for this stage, or re-run.",
   );
 }
