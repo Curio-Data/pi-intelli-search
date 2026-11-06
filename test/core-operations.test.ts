@@ -130,13 +130,25 @@ it("surfaces per-page failure reasons, saved sources and telemetry classificatio
   // The extract fan-out is concurrent, so key the fixture on the number of
   // extract-model calls seen: the first page exhausts the budget with zero
   // visible text, the second extracts cleanly but its text is cut off at
-  // the cap (both at usage.output === extractionMaxTokens = 100).
+  // the cap (both at usage.output === extractionMaxTokens = 100). The empty
+  // page is retried once at a doubled cap (200), which also comes back empty.
   let extractCalls = 0;
-  const complete = async (request: { model: { model: string }; userMessage: string }) => {
+  const complete = async (request: {
+    model: { model: string };
+    userMessage: string;
+    maxTokens?: number;
+  }) => {
     if (request.model.model === "search")
       return { text: "Answer. [One](https://one.example/page) [Two](https://two.example/page)", citations: [] };
     if (request.model.model === "collate") return { text: "Summary.", citations: [] };
     if (request.userMessage.startsWith("Current query:")) return { text: "[]", citations: [] };
+    if (request.maxTokens === 200)
+      return {
+        text: "",
+        citations: [],
+        usage: { output: 200, reasoning: 200 },
+        routeProvider: "FixtureRoute",
+      };
     extractCalls += 1;
     if (extractCalls === 1)
       return { text: "", citations: [], usage: exhaustedUsage, routeProvider: "FixtureRoute" };
@@ -161,6 +173,7 @@ it("surfaces per-page failure reasons, saved sources and telemetry classificatio
   assert.equal(meta.stages.extract.failureReasons.budgetExhausted, 1);
   assert.equal(meta.stages.extract.failureReasons.other, 0);
   assert.equal(meta.stages.extract.truncated, 1);
+  assert.equal(meta.stages.extract.budgetRetries, 1);
   assert.equal(meta.stages.extract.provider, "FixtureRoute");
   const report = await readFile(join(root, result.details.cachePath as string, "report.md"), "utf8");
   assert.match(report, /⚠ truncated/);
@@ -312,17 +325,60 @@ it("carries caller truncation flags into collate and warns on its own truncated 
   assert.match(report, /⚠ truncated/, "inventory flags the supplied extraction");
 });
 
-it("rejects empty collation instead of reporting a completed cache", async (t) => {
+it("rejects empty manual collation without creating artefacts", async (t) => {
   const root = await workspace(t);
-  const { context, dependencies } = coreContext(root);
+  const { context } = coreContext(root);
   const complete = context.models.complete;
   context.models.complete = async (request) => request.model.model === "collate"
     ? { text: " \n", citations: [] } : complete(request);
-  await assert.rejects(research({ query: "empty synthesis" }, context, dependencies), /no visible text.*collationMaxTokens/);
   await assert.rejects(collate({ query: "empty manual", extractions: [{
     url: "https://one.example", title: "One", extraction: "body", sourceType: "docs", status: "success",
   }] }, context), /no visible text.*collationMaxTokens/);
   assert.deepEqual(await readdir(root), [], "empty synthesis must not create success artefacts");
+});
+
+it("retries an empty capped collation once with a doubled budget", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { disableTelemetry: false });
+  const complete = context.models.complete;
+  const caps: Array<number | undefined> = [];
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    caps.push(request.maxTokens);
+    return caps.length === 1
+      ? { text: "", citations: [], finishReason: "length" }
+      : complete(request);
+  };
+  const result = await research({ query: "budget retry" }, context, dependencies);
+  assert.equal(result.outcome, "completed");
+  assert.deepEqual(caps, [context.settings.collationMaxTokens, context.settings.collationMaxTokens * 2]);
+  const meta = JSON.parse(
+    await readFile(join(root, result.details.cachePath as string, "meta.json"), "utf8"),
+  );
+  assert.equal(meta.stages.collate.budgetRetried, true);
+});
+
+it("commits research extractions with a failure report when collation fails", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { disableTelemetry: false });
+  const complete = context.models.complete;
+  context.models.complete = async (request) => request.model.model === "collate"
+    ? { text: " \n", citations: [] } : complete(request);
+  const result = await research({ query: "empty synthesis" }, context, dependencies);
+  assert.equal(result.outcome, "collate-failed");
+  assert.match(result.text, /## Collation Failed/);
+  assert.match(result.text, /no visible text.*collationMaxTokens/);
+  const path = join(root, result.details.cachePath as string);
+  const report = await readFile(join(path, "report.md"), "utf8");
+  assert.match(report, /## Collation Failed/);
+  assert.equal(report.match(/\| S\d+ \|/g)?.length, 2, "both saved extractions are listed");
+  assert.equal((await readdir(join(path, "extractions"))).length, 2);
+  const meta = JSON.parse(await readFile(join(path, "meta.json"), "utf8"));
+  assert.equal(meta.outcome, "collate-failed");
+  assert.equal(meta.stages.collate.summaryChars, 0);
+  assert.match(meta.stages.collate.error, /no visible text/);
+  const index = await readFile(join(context.paths.cacheRoot, ".index.json"), "utf8").catch(() => "[]");
+  assert.doesNotMatch(index, /empty synthesis/, "a run without synthesis is not indexed");
 });
 
 for (const outcome of ["no-links", "fetch-failed", "extraction-failed"] as const) {
@@ -802,7 +858,13 @@ for (const operation of ["research", "collate"] as const) {
     }
     context.models.complete = async (request) => request.model.model === "collate"
       ? { text: "Read `sources/17-fiction.md`. [S17]", citations: [] } : complete(request);
-    await assert.rejects(run(), /provenance validation failed/);
+    if (operation === "research") {
+      const failed = await run();
+      assert.equal(failed.outcome, "collate-failed");
+      assert.match(failed.text, /provenance validation failed.*previous report .* was preserved/s);
+    } else {
+      await assert.rejects(run(), /provenance validation failed/);
+    }
     assert.equal(await readFile(join(path, "report.md"), "utf8"), report);
     assert.equal(await readFile(join(context.paths.cacheRoot, ".index.json"), "utf8"), index);
     await assert.rejects(stat(`${path}.1`), /ENOENT/);

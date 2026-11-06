@@ -161,6 +161,20 @@ describe("wrapFetchForAnnotations", () => {
 });
 
 describe("mergeCitations", () => {
+  it("ranks harvested citations ahead of protocol-less guesses", () => {
+    const merged = mergeCitations(
+      [
+        { url: "https://explicit.example/a", title: "A" },
+        { url: "https://guess.example", title: "guess.example", inferred: true },
+      ],
+      { citations: [{ url: "https://cited.example/b", title: "B" }] } as never,
+    );
+    assert.deepStrictEqual(
+      merged.map((m) => m.url),
+      ["https://explicit.example/a", "https://cited.example/b", "https://guess.example"],
+    );
+  });
+
   it("keeps text links first, appends annotation-only urls, dedupes by exact url", () => {
     const sink = createAnnotationSink();
     sink.citations.push(

@@ -6,13 +6,15 @@ The agent briefs, reports, the input report and the raw live-call log are retain
 locally under `evidence/agents/2026-11-06-rcca-mcp-research/` (gitignored, with a
 `live-raw/SHA256SUMS` manifest).
 
-## Probes
+## Regression Tests
 
 The files below drive the real MCP runtime, OpenRouter adapter, retry policy,
 research pipeline, cache, telemetry and MCP result mapping with a scripted HTTP
-transport. They make no network calls. Each assertion holds on both 0.19.0 and
-0.21.0; version differences are printed as `OBS {json}` lines and appended to the
-file named by `RCCA_OBS` when it is set.
+transport. They make no network calls. They began as probes whose assertions held
+on both 0.19.0 and 0.21.0; with the corrective actions they assert the corrected
+behaviour, failing 25 of 54 on the 0.21.0 source and passing on 0.22.0.
+Observations are printed as `OBS {json}` lines and appended to the file named by
+`RCCA_OBS` when it is set.
 
 | File | Findings |
 |---|---|
@@ -22,8 +24,9 @@ file named by `RCCA_OBS` when it is set.
 | `rcca-fetch/gate.probe.test.ts` | F6: content-type gate (PDF rejection by design) |
 | `rcca-fetch/falsepos.probe.test.ts` | F6: false-positive host shapes |
 
-`npm test` does not collect them (`scripts/run-tests.mjs` reads only top-level
-`test/`). Run them directly:
+The standalone suite collects them through
+`packages/mcp/test/rcca-regressions.test.ts`, so `npm run test:all` runs them.
+Run them alone with:
 
 ```bash
 node --import tsx --test test/rcca/*/*.test.ts
@@ -59,6 +62,19 @@ The pipeline then mishandles the outcome:
 | F5 reporting gaps | `extractionFailed` added; soft failures keep `isError: false`; no per-URL fetch reasons |
 | F6 bogus hosts | Present: the prose domain pass linkifies any dotted token, ahead of real citations |
 | F7 serial calls | Consistent with the host's read-only rule; research is correctly not read-only |
+
+## Corrective Actions (0.22.0)
+
+| Finding | Action |
+|---|---|
+| F1, F3 | An extraction that stops at its cap without text, and a synthesis that stops at its cap, is retried once with double the cap. The shared policy no longer repeats an exhausted budget at the same cap. The default `collationMaxTokens` rises from 4000 to 8000 |
+| F2 | A synthesis failure returns `collate-failed` and saves the extractions, pages, a failure report and `meta.json`; an earlier report for the query is preserved instead |
+| F4 | Truncation also uses the provider finish reason, so it is flagged without usage |
+| F5 | The all-fetch-failed result lists failed URLs and reasons; the mixed headline names both counts |
+| F6 | Protocol-less references must end in a delegated TLD; file-extension TLDs need a path or `www.`. Citations rank ahead of these guesses |
+
+Not changed: `isError` stays `false` for degraded results, which carry their
+`outcome`; PDF rejection remains by design; F7 needs no change.
 
 ## Retained Scratch
 

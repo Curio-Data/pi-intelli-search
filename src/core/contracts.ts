@@ -72,7 +72,13 @@ export interface OperationInputs {
   intelli_research: ResearchParams;
 }
 
-export type OperationOutcome = "completed" | "no-links" | "fetch-failed" | "extraction-failed";
+/** "collate-failed" commits the extractions and a report without a synthesis. */
+export type OperationOutcome =
+  | "completed"
+  | "no-links"
+  | "fetch-failed"
+  | "extraction-failed"
+  | "collate-failed";
 
 /** Execution failures throw; degraded research remains a usable result. */
 export interface OperationResult<Details = Record<string, unknown>> {
@@ -143,6 +149,10 @@ export interface ModelCompletion {
    *  `provider` stream-event or response field). Optional: adapters
    *  without route visibility omit it. */
   routeProvider?: string;
+  /** Why generation stopped, normalised: "length" means the output cap was
+   *  reached, so nonempty text is truncated. Optional: adapters without the
+   *  signal omit it and callers fall back to reported usage. */
+  finishReason?: "stop" | "length" | "other";
 }
 
 export interface ModelClient {

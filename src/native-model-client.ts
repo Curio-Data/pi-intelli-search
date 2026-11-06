@@ -3,7 +3,12 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createAnnotationSink } from "./annotations.js";
-import type { ModelBinding, ModelClient, ModelUsage } from "./core/contracts.js";
+import type {
+  ModelBinding,
+  ModelClient,
+  ModelCompletion,
+  ModelUsage,
+} from "./core/contracts.js";
 import { callLlm } from "./llm.js";
 
 /** Existing native preflight semantics: model existence, not credential discovery. */
@@ -105,6 +110,7 @@ export function createNativeModelClient(
       const annotations = request.collectCitations ? createAnnotationSink() : undefined;
       let usage: ModelUsage | undefined;
       let routeProvider: string | undefined;
+      let finishReason: ModelCompletion["finishReason"];
       const text = await delegate(ctx, request.model, request.systemPrompt, request.userMessage, {
         maxTokens: request.maxTokens,
         signal: request.signal,
@@ -123,12 +129,16 @@ export function createNativeModelClient(
         onRouteProvider: (provider) => {
           routeProvider = provider;
         },
+        onStopReason: (reason) => {
+          finishReason = reason === "length" || reason === "stop" ? reason : "other";
+        },
       });
       return {
         text,
         citations: annotations?.citations ?? [],
         ...(usage ? { usage } : {}),
         ...(routeProvider ? { routeProvider } : {}),
+        ...(finishReason ? { finishReason } : {}),
       };
     },
   };

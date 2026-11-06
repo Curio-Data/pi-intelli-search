@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// RCCA probe (rcca-extract): F3/F5. Drives the real MCP runtime + core research pipeline with a
+// RCCA regression (rcca-extract): F3/F5. Drives the real MCP runtime + core research pipeline with a
 // scripted OpenRouter transport (no network) and observes per-page status, recorded reasons,
 // MCP tool result mapping (successResult), report.md and meta.json. Observations are printed as
 // "OBS {json}" and appended to $RCCA_OBS so both trees can be compared.
@@ -106,6 +106,10 @@ const allFail = (r: Reply) => ({ pages: [A, B], extract: () => r });
 test("X1 extract: content null + length (reasoning exhausted cap) on every page", async () => {
   const o = await scenario("x1", allFail({ message: { content: null, reasoning: "thinking" }, finish: "length", usage: cap }));
   assert.equal(o.outcome, "extraction-failed");
+  // Corrected: each page is retried once at a doubled cap before it fails.
+  assert.equal(o.extractCalls, 4);
+  assert.equal(o.meta?.extract.budgetRetries, 2);
+  assert.equal(o.meta?.extract.failureReasons.budgetExhausted, 2);
 });
 test("X2 extract: content '' + length", async () => {
   const o = await scenario("x2", allFail(ok("", "length", cap)));
@@ -129,7 +133,10 @@ test("X7 extract: model call hangs (llmTimeoutMs elapses)", async () => {
   await scenario("x7", { pages: [A, B], extract: () => ({ hang: true }), tuning: { llmTimeoutMs: 150, llmRetryAttempts: 1 } });
 });
 test("X8 extract: nonempty cut at cap (length + usage at cap)", async () => {
-  await scenario("x8", allFail(ok("Official documentation, current.\nFacts cut mid-sen", "length", { prompt_tokens: 900, completion_tokens: 3000, total_tokens: 3900 })));
+  const o = await scenario("x8", allFail(ok("Official documentation, current.\nFacts cut mid-sen", "length", { prompt_tokens: 900, completion_tokens: 3000, total_tokens: 3900 })));
+  // F4 corrected: finish_reason "length" flags truncation below the configured cap.
+  assert.equal(o.meta?.extract.truncated, 2);
+  assert.equal(o.extractCalls, 2, "nonempty extraction text is not retried");
 });
 
 // ---- F5: mixed outcomes and result fields ---------------------------------------------------
@@ -144,6 +151,8 @@ test("M3 call-9 shape: 3 pages, 1 fetch error, 2 fetched but both extractions fa
   const C = mk("c", "", "error", "HTTP 404");
   const o = await scenario("m3", { pages: [A, B, C], extract: () => ok("", "stop") });
   assert.equal(o.outcome, "extraction-failed");
+  // F5 corrected: the headline names both failure kinds.
+  assert.match(o.text ?? "", /^1 page\(s\) failed to fetch and 2 extraction\(s\) failed/);
 });
 test("M4 all fetched, all extractions fail (5 pages) -> details", async () => {
   const pages = ["a", "b", "c", "d", "e"].map((n) => mk(n, `## ${n}\nfacts`));
@@ -153,6 +162,9 @@ test("M5 all fetch fail -> fetch-failed; meta has URLs?", async () => {
   const pages = [mk("a", "", "error", "HTTP 403"), mk("b", "", "error", "Not HTML: application/pdf")];
   const o = await scenario("m5", { pages, extract: () => ok(EXTRACT) });
   assert.equal(o.outcome, "fetch-failed");
+  // F5 corrected: each failed URL is listed with its reason.
+  assert.match(o.text ?? "", /docs\.example\/a: HTTP 403/);
+  assert.match(o.text ?? "", /docs\.example\/b: Not HTML: application\/pdf/);
 });
 
 // ---- input size under shipped defaults ------------------------------------------------------

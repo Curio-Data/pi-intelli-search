@@ -155,7 +155,7 @@ A completed result can still have missing evidence. Check the failed-source list
 
 A truncation warning means reported output reached the configured stage cap; it does not prove exactly where text stopped. The absence of a warning does not establish completeness when usage is unavailable. Do not present a warned-about extraction or synthesis as complete evidence.
 
-For a budget-exhaustion diagnostic, review the matching extraction or collation token cap with the maintainer rather than retrying unchanged. The cap can include reasoning tokens, and lowering reasoning effort is not a guaranteed remedy. Standalone extraction returns `details.truncated`; carry it into manual collation. An `extraction-failed` result contains the search summary and up to ten known failure reasons, not a new cached report or saved pages. An all-fetch-failed result returns the search summary without individual reasons. A failed cache judge does not invalidate completed research, and no related-search suggestions do not establish that no relevant cache exists.
+For a budget-exhaustion diagnostic, review the matching extraction or collation token cap with the maintainer rather than retrying unchanged. The cap can include reasoning tokens, and lowering reasoning effort is not a guaranteed remedy. Standalone extraction returns `details.truncated`; carry it into manual collation. An `extraction-failed` result contains the search summary and up to ten known failure reasons, not a new cached report or saved pages. An all-fetch-failed result returns the search summary and up to ten failed URLs with their reasons. A `collate-failed` result either names a cached report that lists the saved extractions, which can be read instead of repeating the research, or states that an earlier report for the query was preserved. A failed cache judge does not invalidate completed research, and no related-search suggestions do not establish that no relevant cache exists.
 
 ## Follow Up from Cache
 
@@ -206,5 +206,5 @@ This is also why `focusPrompt` matters. It tells the extraction model what to ke
 - **Invalid Arguments** (`INVALID_ARGUMENTS`): the call parameters failed validation. Correct the arguments; do not retry unchanged.
 - **Operation Failures** (`OPERATION`): a stage failed after validation. Read the diagnostic before repeating paid work. For an exhausted output budget or a provenance failure, correct the cause rather than retrying unchanged. Report persistent failures with the stage and bounded diagnostic, without credentials.
 - **Cancelled** (`CANCELLED`): the client cancelled the call. Do not retry automatically.
-- **Degraded Research** (`no-links`, `fetch-failed`, `extraction-failed`): the result is still returned with what succeeded. Check the summary and decide whether a narrower query or a retry is warranted.
+- **Degraded Research** (`no-links`, `fetch-failed`, `extraction-failed`, `collate-failed`): the result is still returned with what succeeded. Check the summary and decide whether a narrower query or a retry is warranted.
 - **Busy:** the eight-request queue is already full. Wait for an earlier call to finish before submitting another.

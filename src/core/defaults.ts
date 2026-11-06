@@ -25,7 +25,7 @@ export function tuningDefaults(): Omit<
     // and page-dependent, so telemetry records residual exhaustion
     // (evidence/2026-11-02-extract-failure-agentskills-io).
     extractionMaxTokens: 8000,
-    collationMaxTokens: 4000,
+    collationMaxTokens: 8000,
     browserFingerprint: "chrome_145",
     disableLlmsFullDiscovery: false,
     disableTelemetry: false,

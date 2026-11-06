@@ -161,7 +161,12 @@ describe("native model client", () => {
         return response();
       }),
     );
-    assert.deepEqual(await client.complete(request), { text: "answer", citations: [], usage });
+    assert.deepEqual(await client.complete(request), {
+      text: "answer",
+      citations: [],
+      usage,
+      finishReason: "stop",
+    });
     assert.equal(calls, 1);
   });
 

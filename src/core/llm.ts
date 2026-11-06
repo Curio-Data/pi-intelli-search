@@ -6,6 +6,7 @@ import {
   AttemptTimeoutError,
   callWithAbortTimeout,
   errMsg,
+  isOutputBudgetExhausted,
   isRetryableMessage,
   parseRetryAfterMs,
   throwIfAborted,
@@ -60,6 +61,10 @@ export async function runModelWithPolicy<T>(
       (result, error) => {
         if (signal?.aborted) return { retry: false };
         if (timedOut) return { retry: true };
+        // A spent output budget recurs at the same cap; the operation decides
+        // whether to retry with a larger one. Its message carries token
+        // counts that the status classifier could otherwise misread.
+        if (isOutputBudgetExhausted(error)) return { retry: false };
         const message = error ? errMsg(error) : result?.error;
         return isRetryableMessage(message)
           ? { retry: true, retryAfterMs: parseRetryAfterMs(message) ?? hints.retryAfterMs }

@@ -3,7 +3,7 @@
     "content": [
       {
         "type": "text",
-        "text": "All 3 pages failed to fetch.\n\nSearch summary:\nFixture answer.\n"
+        "text": "All 3 pages failed to fetch.\n\nFailed Sources (up to 10):\n- https://example.com/a: fixture blocked\n- https://example.org/b: fixture blocked\n- https://example.net/c: fixture blocked\n\nSearch summary:\nFixture answer.\n"
       }
     ],
     "details": {

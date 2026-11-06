@@ -18,7 +18,7 @@ import {
 import { buildCollationMessage, formatCacheAppendix } from "../messages.js";
 import { evidenceExtractions, finalizeCollation } from "../provenance.js";
 import type { ExtractResult } from "../types.js";
-import { errMsg, throwIfAborted, budgetExhausted } from "../util.js";
+import { errMsg, throwIfAborted, completionTruncated } from "../util.js";
 import type { OperationContext, OperationResult } from "../contracts.js";
 
 export async function collate(
@@ -74,7 +74,7 @@ export async function collate(
   );
 
   // Call LLM for collation (no lock — never hold locks across LLM calls)
-  const { text, usage } = await models.complete({
+  const completion = await models.complete({
     model: collateConfig,
     systemPrompt: COLLATION_SYSTEM_PROMPT,
     userMessage,
@@ -82,11 +82,11 @@ export async function collate(
     signal,
   });
 
-  let collation = finalizeCollation(text, cachePath, succeeded, identity, "supplied");
+  let collation = finalizeCollation(completion.text, cachePath, succeeded, identity, "supplied");
 
   // Mirrors the research path: a synthesis cut off by the output cap still
   // commits, but the reader must know it may end mid-sentence.
-  if (budgetExhausted(usage, settings.collationMaxTokens)) {
+  if (completionTruncated(completion, settings.collationMaxTokens)) {
     collation +=
       `\n\n> ⚠ Collation output reached collationMaxTokens (${settings.collationMaxTokens}); ` +
       `the synthesis may be cut off mid-sentence. Raise collationMaxTokens or re-run if completeness matters.`;

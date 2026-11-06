@@ -208,6 +208,14 @@ const DEFAULT_HISTORY: Record<
     collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   },
+  "0.22.0": {
+    // Research-failure corrective actions (minor bump of both packages under
+    // the two-package scheme); model defaults unchanged. collationMaxTokens
+    // rises 4,000 -> 8,000; tuning keys are not part of match-based migration.
+    extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+    collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
+    searchModel: { provider: "openrouter", model: "perplexity/sonar" },
+  },
 };
 
 /** In-memory settings cache, isolated by the configuration source context. */

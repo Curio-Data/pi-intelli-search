@@ -26,7 +26,12 @@ export const SCHEMA_VERSION = 1 as const;
 /** Run outcome. Degraded runs also write a sidecar (v0.11.0+) so the analysis
  * script can measure how often the pipeline degraded, not just how often it
  * succeeded. */
-export type TelemetryOutcome = "completed" | "no-links" | "fetch-failed" | "extraction-failed";
+export type TelemetryOutcome =
+  | "completed"
+  | "no-links"
+  | "fetch-failed"
+  | "extraction-failed"
+  | "collate-failed";
 
 /**
  * Canonical telemetry payload. Additive-only evolution: new fields optional.
@@ -78,8 +83,12 @@ export interface TelemetryMeta {
       totalInputCharsApprox: number;
       totalOutputChars: number;
       // Successful extractions whose visible text was cut off by the output
-      // cap (usage.output >= extractionMaxTokens). Present only when nonzero.
+      // cap (finish reason "length", or usage.output >= the cap). Present
+      // only when nonzero.
       truncated?: number;
+      // Pages retried once with a doubled output budget after hidden
+      // reasoning spent the first one. Present only when nonzero.
+      budgetRetries?: number;
       // Failure classification aggregated after the extract worker pool
       // settles. Present only when at least one extraction failed.
       failureReasons?: { budgetExhausted: number; other: number };
@@ -91,8 +100,13 @@ export interface TelemetryMeta {
     collate: {
       model: string;
       summaryChars: number;
-      // True when the synthesis itself was cut off by collationMaxTokens.
+      // True when the synthesis itself was cut off by its output cap.
       truncated?: boolean;
+      // True when collation was retried once with a doubled output budget.
+      budgetRetried?: boolean;
+      // Bounded reason when collation failed and the run committed the
+      // extractions without a synthesis (outcome "collate-failed").
+      error?: string;
       // Serving route when the adapter observed one.
       provider?: string;
     };
@@ -185,6 +199,7 @@ export class TelemetryBuilder {
     totalInputCharsApprox: number;
     totalOutputChars: number;
     truncated?: number;
+    budgetRetries?: number;
     failureReasons?: { budgetExhausted: number; other: number };
     provider?: string;
   }): void {
@@ -195,6 +210,8 @@ export class TelemetryBuilder {
     model: string;
     summaryChars: number;
     truncated?: boolean;
+    budgetRetried?: boolean;
+    error?: string;
     provider?: string;
   }): void {
     this.meta.stages.collate = { ...input };

@@ -212,11 +212,25 @@ Also bare reference https://kit.svelte.dev.
       {
         url: "https://github.com/microsoft/TypeScript/releases",
         title: "releases",
+        inferred: true,
       },
       {
         url: "https://devblogs.microsoft.com/typescript",
         title: "typescript",
+        inferred: true,
       },
+    ]);
+  });
+
+  it("rejects filenames and identifiers as protocol-less domains", () => {
+    const urls = extractSourceUrls(
+      "Edit app.ini and robots.txt, run manage.py, read README.md, set user.name and " +
+        "service.DISABLE, use Node.js. Docs: www.example.md, docs.example.md/guide, example.io.",
+    ).map((u) => u.url);
+    assert.deepStrictEqual(urls, [
+      "https://www.example.md",
+      "https://docs.example.md/guide",
+      "https://example.io",
     ]);
   });
 

@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { runModelWithPolicy } from "../src/core/llm.js";
-import { sleep } from "../src/core/util.js";
+import { OutputBudgetExhaustedError, sleep } from "../src/core/util.js";
 
 const request = {
   model: { provider: "fixture", model: "selected" },
@@ -179,6 +179,23 @@ it("cancels retry delay without another request", async () => {
       },
     ),
     { name: "AbortError" },
+  );
+  assert.equal(attempts, 1);
+});
+
+it("leaves output-budget exhaustion to the operation instead of retrying the same cap", async () => {
+  let attempts = 0;
+  await assert.rejects(
+    runModelWithPolicy(
+      async () => {
+        attempts++;
+        throw new OutputBudgetExhaustedError("exhausted the output budget (500 output tokens)");
+      },
+      request,
+      logger,
+      { sleep: async () => {} },
+    ),
+    OutputBudgetExhaustedError,
   );
   assert.equal(attempts, 1);
 });

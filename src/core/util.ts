@@ -3,7 +3,8 @@
 
 // Shared utilities
 
-import type { ModelUsage } from "./contracts.js";
+import type { ModelCompletion, ModelUsage } from "./contracts.js";
+import { FILE_EXTENSION_TLDS, TOP_LEVEL_DOMAINS } from "./tlds.js";
 
 /** True when reported completion tokens reached the requested cap, meaning
  *  the model's output (visible text plus any hidden reasoning) was cut off.
@@ -17,6 +18,16 @@ export function budgetExhausted(
   return usage.output >= maxTokens;
 }
 
+/** True when generation stopped at the output cap: the adapter reported finish
+ *  reason "length", or reported usage reached the cap. Nonempty text is then
+ *  truncated. */
+export function completionTruncated(
+  completion: Pick<ModelCompletion, "usage" | "finishReason">,
+  maxTokens: number | undefined,
+): boolean {
+  return completion.finishReason === "length" || budgetExhausted(completion.usage, maxTokens);
+}
+
 /** True when the completion budget was exhausted with (almost) the whole cap
  *  spent on hidden reasoning, i.e. a reasoning-only response with no visible
  *  text. Used to classify a failed call as budget exhaustion rather than
@@ -27,6 +38,37 @@ export function reasoningOnlyCompletion(
 ): boolean {
   if (usage?.output == null || usage.reasoning == null || maxTokens == null) return false;
   return usage.output >= maxTokens && usage.reasoning >= usage.output - 1;
+}
+
+/**
+ * Thrown by a model adapter when a completion stopped at the output cap
+ * without visible text (hidden reasoning consumed the budget). The marker
+ * property survives adapter error wrapping (copy it with
+ * markOutputBudgetExhausted), so operations can retry with a larger budget
+ * without parsing message text, and the shared policy does not retry it at
+ * the same cap.
+ */
+export class OutputBudgetExhaustedError extends Error {
+  readonly outputBudgetExhausted = true;
+  constructor(message: string) {
+    super(message);
+    this.name = "OutputBudgetExhaustedError";
+  }
+}
+
+export function isOutputBudgetExhausted(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { outputBudgetExhausted?: unknown }).outputBudgetExhausted === true
+  );
+}
+
+/** Carry the budget-exhaustion marker from `from` onto a wrapping error. */
+export function markOutputBudgetExhausted<E extends Error>(error: E, from: unknown): E {
+  if (isOutputBudgetExhausted(from))
+    Object.defineProperty(error, "outputBudgetExhausted", { value: true, enumerable: false });
+  return error;
 }
 
 export function throwIfAborted(signal?: AbortSignal): void {
@@ -484,8 +526,16 @@ export function createRateLimiter(minIntervalMs: number): (signal?: AbortSignal)
  *
  * In all passes, URLs never contain whitespace, so a space ends the match.
  */
-export function extractSourceUrls(text: string): Array<{ url: string; title: string }> {
-  const urls: Array<{ url: string; title: string }> = [];
+export interface SourceUrl {
+  url: string;
+  title: string;
+  /** Set on protocol-less domain references (pass 3): a guess from prose,
+   *  ranked after explicit links and harvested citations by mergeCitations(). */
+  inferred?: true;
+}
+
+export function extractSourceUrls(text: string): SourceUrl[] {
+  const urls: SourceUrl[] = [];
   const seen = new Set<string>();
 
   // Pass 1: markdown links [title](url)
@@ -547,6 +597,7 @@ export function extractSourceUrls(text: string): Array<{ url: string; title: str
   for (const m of text.matchAll(domainPattern)) {
     if (absoluteSpans.some(({ start, end }) => m.index >= start && m.index < end)) continue;
     const domainReference = m[1].replace(/[.,;:!]+$/, "");
+    if (!plausibleDomainReference(domainReference)) continue;
     const url = `https://${domainReference}`;
     if (seen.has(url)) continue;
     try {
@@ -554,13 +605,29 @@ export function extractSourceUrls(text: string): Array<{ url: string; title: str
       seen.add(url);
       const parts = u.pathname.split("/").filter(Boolean);
       const title = parts.length > 0 ? parts[parts.length - 1].replace(/\.[^.]+$/, "") : u.hostname;
-      urls.push({ url, title });
+      urls.push({ url, title, inferred: true });
     } catch {
       // Defensive: the domain-shaped match should form a valid URL.
     }
   }
 
   return urls;
+}
+
+/**
+ * Filter for protocol-less references found in prose. The final label must be
+ * a delegated top-level domain, which rejects filenames and identifiers such as
+ * `app.ini`, `robots.txt`, `Node.js` and `service.DISABLE`. A TLD that is also a
+ * common file extension (`manage.py`, `README.md`, `user.name`) is accepted
+ * only with a path or a `www.` prefix.
+ */
+function plausibleDomainReference(reference: string): boolean {
+  const slash = reference.indexOf("/");
+  const host = slash === -1 ? reference : reference.slice(0, slash);
+  const tld = host.slice(host.lastIndexOf(".") + 1).toLowerCase();
+  if (!TOP_LEVEL_DOMAINS.has(tld)) return false;
+  const hasPath = slash !== -1 && slash < reference.length - 1;
+  return hasPath || /^www\./i.test(host) || !FILE_EXTENSION_TLDS.has(tld);
 }
 
 /**

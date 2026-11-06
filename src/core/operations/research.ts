@@ -10,6 +10,8 @@ import {
 import { mergeCitations } from "../annotations.js";
 import type {
   ModelClient,
+  ModelCompletion,
+  ModelRequest,
   OperationContext,
   OperationResult,
   ResearchParams,
@@ -46,7 +48,8 @@ import {
   createRateLimiter,
   errMsg,
   throwIfAborted,
-  budgetExhausted,
+  completionTruncated,
+  isOutputBudgetExhausted,
   reasoningOnlyCompletion,
 } from "../util.js";
 import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "../telemetry.js";
@@ -61,7 +64,7 @@ import {
   formatCacheAppendix,
 } from "../messages.js";
 import { progress } from "../progress.js";
-import { finalizeCollation } from "../provenance.js";
+import { collationFailureReport, finalizeCollation } from "../provenance.js";
 
 /** Per-run I/O injection; no mutable global engine harness. */
 export interface ResearchDependencies {
@@ -118,6 +121,7 @@ export async function research(
     searchConfig: settings.searchModel,
     extractConfig: settings.extractModel,
     collateConfig: settings.collateModel,
+    budgetRetries: { extract: 0, collate: false },
   });
 }
 
@@ -139,6 +143,8 @@ interface PipelineCtx extends OperationContext {
   collateConfig: ModelConfig;
   signal: AbortSignal | undefined;
   cachePath: string;
+  /** Doubled-budget retries issued: extraction pages, and collation. */
+  budgetRetries: { extract: number; collate: boolean };
 }
 
 /**
@@ -168,10 +174,16 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   const fetched = await runFetchStage(p, search.urls);
   throwIfAborted(p.signal);
   if (fetched.successPages.length === 0) {
+    const fetchLines = fetched.pages
+      .map((pg) => `- ${pg.url}: ${failureDetail(pg.error ?? "no reason recorded")}`)
+      .slice(0, 10)
+      .join("\n");
     return degradedReturn(
       p,
       "fetch-failed",
-      `All ${search.urls.length} pages failed to fetch.\n\nSearch summary:\n${search.searchResult}`,
+      `All ${search.urls.length} pages failed to fetch.` +
+        (fetchLines ? `\n\nFailed Sources (up to 10):\n${fetchLines}` : "") +
+        `\n\nSearch summary:\n${search.searchResult}`,
       {
         cachePath: "",
         urlsSearched: search.urls.length,
@@ -207,10 +219,10 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   if (succeededExtractions.length === 0) {
     const fetchFailed = extracted.blockedExtractions.length;
     const extractFailed = extracted.extractions.filter((e) => e.status === "failed").length;
-    const reason =
-      fetchFailed > 0
-        ? `${fetchFailed} page(s) failed to fetch`
-        : `${extractFailed} extraction(s) failed`;
+    const reason = [
+      ...(fetchFailed > 0 ? [`${fetchFailed} page(s) failed to fetch`] : []),
+      ...(extractFailed > 0 || fetchFailed === 0 ? [`${extractFailed} extraction(s) failed`] : []),
+    ].join(" and ");
     // Per-page reasons: the worst outcome must still explain itself. No cache
     // is written on this path, so there is no saved source to point at.
     const failureLines = allExtractions
@@ -236,14 +248,68 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
     );
   }
 
-  const collation = await runCollateStage(p, search.searchResult, succeededExtractions, identity);
+  // A collation failure after paid extraction commits the extractions with a
+  // report that states the failure, instead of discarding the run. A previous
+  // successful report for the same query is preserved like any degraded
+  // refresh: only the failed attempt's sidecar is recorded.
+  let collation: string;
+  let outcome: "completed" | "collate-failed" = "completed";
+  try {
+    collation = await runCollateStage(p, search.searchResult, succeededExtractions, identity);
+  } catch (error) {
+    throwIfAborted(p.signal);
+    const reason = failureDetail(errMsg(error)) || "collation failed";
+    p.logger.error(`Collation failed: ${reason}`);
+    p.tel?.recordCollate({
+      model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
+      summaryChars: 0,
+      ...(p.budgetRetries.collate ? { budgetRetried: true } : {}),
+      error: reason,
+    });
+    const details = {
+      cachePath: "",
+      urlsSearched: search.urls.length,
+      pagesFetched: fetched.successPages.length,
+      pagesFailed: fetched.pages.length - fetched.successPages.length,
+      extractionFailed: allExtractions.filter((e) => e.status === "failed").length,
+    };
+    const priorReport = await stat(join(p.physicalCachePath, "report.md"))
+      .then(() => true)
+      .catch(() => false);
+    if (priorReport) {
+      return degradedReturn(
+        p,
+        "collate-failed",
+        `Collation failed: ${reason}. ${succeededExtractions.length} page(s) were extracted, but ` +
+          `the previous report for this query at ${p.cachePath} was preserved, so this ` +
+          `run's extractions were not saved.\n\nSearch summary:\n${search.searchResult}`,
+        details,
+      );
+    }
+    outcome = "collate-failed";
+    collation = collationFailureReport(
+      `Collation failed: ${reason}`,
+      p.cachePath,
+      succeededExtractions,
+      identity,
+    );
+  }
 
   // Start llms-full downloads BEFORE acquiring any lock, then write cache
   // artefacts under the per-cache-path lock (only local file I/O there).
   throwIfAborted(p.signal);
   const llms = await startLlmsFullDownloads(p, fetched.successPages);
   try {
-    await writeCacheArtifacts(p, allExtractions, fetched, search.searchResult, collation, llms, identity);
+    await writeCacheArtifacts(
+      p,
+      allExtractions,
+      fetched,
+      search.searchResult,
+      collation,
+      llms,
+      identity,
+      outcome,
+    );
   } finally {
     // Settle writers before removing their directory, even on cache failure or cancellation.
     llms.abort.abort();
@@ -269,7 +335,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   // so the final sidecar is complete. Atomic via temp-file + rename; a
   // failure is caught and logged, never surfaced to the pipeline.
   throwIfAborted(p.signal);
-  await writeLockedTelemetry(p, "completed");
+  await writeLockedTelemetry(p, outcome);
 
   // ═══════════════════════════════════════════
   // Return concise injection
@@ -309,7 +375,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
 
   return {
     text: result,
-    outcome: "completed",
+    outcome,
     details: {
       cachePath: p.cachePath,
       urlsSearched: search.urls.length,
@@ -561,6 +627,7 @@ async function runExtractStage(
     totalInputCharsApprox: totalIn,
     totalOutputChars: totalOut,
     ...(truncatedCount > 0 ? { truncated: truncatedCount } : {}),
+    ...(p.budgetRetries.extract > 0 ? { budgetRetries: p.budgetRetries.extract } : {}),
     ...(failedExtr > 0
       ? {
           failureReasons: {
@@ -595,25 +662,33 @@ async function runCollateStage(
   );
 
   throwIfAborted(p.signal);
-  const { text, usage, routeProvider } = await p.models.complete({
-    model: p.collateConfig,
-    systemPrompt: COLLATION_SYSTEM_PROMPT,
-    userMessage: collationUserMsg,
-    maxTokens: p.settings.collationMaxTokens,
-    signal: p.signal,
-    retry: p.retry,
-    timeoutMs: p.settings.llmTimeoutMs,
-    onRetryNotice: (msg) => p.onProgress?.(progress("collate", msg)),
-  });
+  // A truncated synthesis is retried too: one collation call is cheap next to
+  // the extractions it would otherwise summarise incompletely.
+  const { completion, maxTokens } = await completeWithBudgetRetry(
+    p,
+    "collate",
+    {
+      model: p.collateConfig,
+      systemPrompt: COLLATION_SYSTEM_PROMPT,
+      userMessage: collationUserMsg,
+      maxTokens: p.settings.collationMaxTokens,
+      signal: p.signal,
+      retry: p.retry,
+      timeoutMs: p.settings.llmTimeoutMs,
+      onRetryNotice: (msg) => p.onProgress?.(progress("collate", msg)),
+    },
+    true,
+  );
+  const { text, routeProvider } = completion;
 
   let collation = finalizeCollation(text, p.cachePath, succeededExtractions, identity, "fetched");
 
   // A synthesis cut off by the output cap still commits, but the reader must
   // know it is incomplete rather than assume a clean ending.
-  const collateTruncated = budgetExhausted(usage, p.settings.collationMaxTokens);
+  const collateTruncated = completionTruncated(completion, maxTokens);
   if (collateTruncated) {
     collation +=
-      `\n\n> ⚠ Collation output reached collationMaxTokens (${p.settings.collationMaxTokens}); ` +
+      `\n\n> ⚠ Collation output reached its output cap (${maxTokens} tokens); ` +
       `the synthesis may be cut off mid-sentence. Raise collationMaxTokens or re-run if completeness matters.`;
   }
 
@@ -621,6 +696,7 @@ async function runCollateStage(
     model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
     summaryChars: text.trim().length,
     ...(collateTruncated ? { truncated: true } : {}),
+    ...(p.budgetRetries.collate ? { budgetRetried: true } : {}),
     ...(routeProvider ? { provider: routeProvider } : {}),
   });
 
@@ -699,6 +775,7 @@ async function writeCacheArtifacts(
   collation: string,
   llms: LlmsDownloads,
   identity: SourceIdentity,
+  outcome: TelemetryOutcome,
 ): Promise<void> {
   await withLock(
     cacheLockDir(p.physicalCachePath),
@@ -737,11 +814,13 @@ async function writeCacheArtifacts(
       );
 
       // Write telemetry sidecar (atomic via temp-file + rename)
-      await writeTelemetrySidecar(p.logger, p.tel, p.physicalCachePath, "completed");
+      await writeTelemetrySidecar(p.logger, p.tel, p.physicalCachePath, outcome);
 
       // Atomic index update under a separate lock scoped to the cache
       // directory. Different cache paths contend only on this short
-      // index update, not on the per-cache-path bulk writes.
+      // index update, not on the per-cache-path bulk writes. A run without
+      // a synthesis is not offered to later cache suggestions.
+      if (outcome !== "completed") return;
       await withLock(
         indexLockDir(p.paths.cacheRoot),
         async () => {
@@ -989,22 +1068,27 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       p.settings.extractMaxChars,
     );
 
-    const completion = await p.models.complete({
-      model: p.extractConfig,
-      systemPrompt: EXTRACTION_SYSTEM_PROMPT,
-      userMessage,
-      maxTokens: p.settings.extractionMaxTokens,
-      signal: p.signal,
-      retry: p.retry,
-      timeoutMs: p.settings.llmTimeoutMs,
-      onRetryNotice: (msg) => p.onProgress?.(progress("extract", msg)),
-    });
+    const { completion, maxTokens } = await completeWithBudgetRetry(
+      p,
+      "extract",
+      {
+        model: p.extractConfig,
+        systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+        userMessage,
+        maxTokens: p.settings.extractionMaxTokens,
+        signal: p.signal,
+        retry: p.retry,
+        timeoutMs: p.settings.llmTimeoutMs,
+        onRetryNotice: (msg) => p.onProgress?.(progress("extract", msg)),
+      },
+      false,
+    );
     const { text: extraction, usage } = completion;
     routeProvider = completion.routeProvider;
 
     // Classification signal, computed while usage is in scope so the catch
     // below can label the failure without re-parsing error text.
-    exhausted = budgetExhausted(usage, p.settings.extractionMaxTokens);
+    exhausted = completionTruncated(completion, maxTokens);
     if (!extraction.trim()) {
       // A 200 response can still carry zero visible text: on reasoning models
       // the completion cap covers hidden reasoning tokens, and an exhausted
@@ -1012,7 +1096,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       // conditional on the reported budget so a healthy budget is not told to
       // raise its cap.
       const usageNote = usage?.output != null
-        ? ` (${usage.output}/${p.settings.extractionMaxTokens} output tokens` +
+        ? ` (${usage.output}/${maxTokens} output tokens` +
           (usage.reasoning ? `, ${usage.reasoning} hidden reasoning` : "") + ")"
         : "";
       throw new Error(
@@ -1052,11 +1136,48 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       error: message + (errMsg(err).length > 300 ? "…" : ""),
       // Structured classification: usage-based when the call completed, else
       // a match against our own adapter messages (never free provider text).
-      failureKind:
-        exhausted === true || /exhausted the output budget/.test(message)
-          ? "budget"
-          : "other",
+      failureKind: exhausted === true || isOutputBudgetExhausted(err) ? "budget" : "other",
       ...(routeProvider ? { routeProvider } : {}),
     };
   }
+}
+
+/** Bounded single-line failure reason for results, reports and telemetry. */
+function failureDetail(message: string): string {
+  return message.replace(/\s+/g, " ").trim().slice(0, 300);
+}
+
+/**
+ * One model call, retried once with a doubled output budget when hidden
+ * reasoning spent the cap before any visible text (or, when
+ * `retryTruncated` is set, before the text finished). Reasoning models on
+ * some serving routes ignore the requested effort, and the route is chosen
+ * per call, so the same cap is not retried: the shared policy leaves this
+ * outcome to the operation.
+ */
+async function completeWithBudgetRetry(
+  p: PipelineCtx,
+  stage: "extract" | "collate",
+  request: ModelRequest & { maxTokens: number },
+  retryTruncated: boolean,
+): Promise<{ completion: ModelCompletion; maxTokens: number }> {
+  const cap = request.maxTokens;
+  try {
+    const completion = await p.models.complete(request);
+    const spent = completionTruncated(completion, cap);
+    if (!spent || (completion.text.trim() && !retryTruncated))
+      return { completion, maxTokens: cap };
+  } catch (error) {
+    throwIfAborted(p.signal);
+    if (!isOutputBudgetExhausted(error)) throw error;
+  }
+  throwIfAborted(p.signal);
+  const maxTokens = cap * 2;
+  if (stage === "extract") p.budgetRetries.extract += 1;
+  else p.budgetRetries.collate = true;
+  p.onProgress?.(
+    progress(stage, `Output cap of ${cap} tokens reached; retrying once with ${maxTokens}`),
+  );
+  const completion = await p.models.complete({ ...request, maxTokens });
+  return { completion, maxTokens };
 }

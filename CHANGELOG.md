@@ -6,6 +6,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [pi-0.22.0] - 2026-11-06
+
+Research-failure corrective actions. A root cause and corrective action analysis of intermittent research failures found that the default reasoning model, on some [_OpenRouter_](https://openrouter.ai) serving routes, spends the whole output cap on hidden reasoning and returns no text or cut-off text. Per-call routing made the failures intermittent. A failed synthesis then discarded the whole run.
+
+### Changed
+
+- Research retries an extraction that stops at its output cap without visible text, and a synthesis that stops at its cap with or without text, once with double the cap. The shared retry policy no longer repeats an exhausted budget at the same cap, so a token count in the diagnostic can no longer be read as an HTTP status. Standalone extraction and manual collation still make one attempt.
+- The default `collationMaxTokens` rises from 4,000 to 8,000. Explicit tuning values are preserved; model defaults and the minimum supported `Pi` version are unchanged. A larger output cap can increase OpenRouter's in-flight credit reservation on low-balance accounts.
+- Truncation warnings also use the provider's finish reason, so text cut off at the cap is flagged when usage is missing or below the configured cap. Telemetry records `stages.extract.budgetRetries` and `stages.collate.budgetRetried`.
+- Protocol-less domain references found in search prose must end in a delegated top-level domain, and those that end in a common file extension such as `.py` or `.md` need a path or a `www.` prefix. Filenames and identifiers such as `app.ini`, `robots.txt` and `Node.js` are no longer fetched as sites. Harvested citations now rank ahead of these guesses, so a guess cannot displace a real citation from the `maxUrls` selection.
+
+### Added
+
+- A synthesis failure after successful extraction returns the new `collate-failed` outcome instead of an execution error. With no earlier report for the query, research saves the extractions, fetched pages, a report that states the reason and lists the saved extractions, and the telemetry sidecar with `stages.collate.error`. The run is not added to the cache index. An earlier successful report for the same query is preserved, and only the failed attempt's sidecar is recorded.
+- The all-fetch-failed result lists up to ten failed URLs with their fetch errors.
+
+### Fixed
+
+- When some pages failed to fetch and every fetched page failed extraction, the degraded result's first line named only the fetch failures. It now states both counts.
+
+## [mcp-0.22.0] - 2026-11-06
+
+Core behaviour is shared with [pi-0.22.0] and recorded there.
+
+### Changed
+
+- The [_OpenRouter_](https://openrouter.ai) adapter reports each completion's finish reason to the core, and marks budget exhaustion with a structured signal that survives its error wrapping, so the core retry does not depend on diagnostic text.
+
 ## [pi-0.21.0] - 2026-11-03
 
 Published on `npm`; [isolated registry installation](docs/COMPATIBILITY.md#published-0210-native-package-verification-2026-11-03) passes. The tarball checksum matches registry metadata, the packaged README matches the native release tag, and the tarball ships `PI_CHANGELOG.md` with the manifest's `changelogPath` intact.
@@ -586,6 +614,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[mcp-0.22.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.22.0
+[pi-0.22.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.22.0
 [mcp-0.21.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.21.0
 [pi-0.21.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.21.0
 [mcp-0.20.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.20.0

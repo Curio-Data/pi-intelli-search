@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-// RCCA probe (rcca-collate): drives the real MCP runtime + core research pipeline with a
+// RCCA regression (rcca-collate): drives the real MCP runtime + core research pipeline with a
 // scripted OpenRouter transport. No network. Observations are printed as "OBS {json}" lines
-// and also appended to $RCCA_OBS (a scratch file) so both trees can be compared.
+// and also appended to $RCCA_OBS when set. Assertions pin the corrected behaviour: they fail
+// on mcp-0.21.0 and earlier, where these shapes discarded the run (F1, F2, F4).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -142,39 +143,56 @@ async function scenario(name: string, script: Script, opts: { prior?: boolean } 
 }
 
 const cap = { prompt_tokens: 900, completion_tokens: 4000, total_tokens: 4900, completion_tokens_details: { reasoning_tokens: 4000 } };
-const hard = (o: Awaited<ReturnType<typeof scenario>>) => {
+type Obs = Awaited<ReturnType<typeof scenario>>;
+const hard = (o: Obs) => {
   assert.ok(o.error, "expected a thrown error");
   assert.equal(o.outcome, undefined);
   assert.deepEqual(o.files, [], "nothing written to the cache on a hard failure");
 };
+// F2 corrected: a failed collation keeps the paid extractions, a report and the sidecar.
+const saved = (o: Obs, collateCalls: number) => {
+  assert.equal(o.error, undefined, "collation failure no longer fails the run");
+  assert.equal(o.outcome, "collate-failed");
+  assert.ok(o.files.some((x) => x.endsWith("/report.md")), "failure report written");
+  assert.equal(o.files.filter((x) => x.includes("/extractions/")).length, 2, "extractions kept");
+  assert.equal(o.meta?.outcome, "collate-failed", "meta.json written");
+  assert.ok(o.meta?.stages.collate.error, "sidecar records the reason");
+  assert.equal(o.calls.collate, collateCalls);
+};
 
 // ---- Collate-stage response shapes -------------------------------------------------------
 test("C1 collate: content null + finish_reason length (reasoning exhausted the cap)", async () => {
-  hard(await scenario("c1", { collate: { message: { content: null, reasoning: "thinking..." }, finish: "length", usage: cap } }));
+  saved(await scenario("c1", { collate: { message: { content: null, reasoning: "thinking..." }, finish: "length", usage: cap } }), 2);
 });
 test("C2 collate: content null + finish_reason stop", async () => {
-  hard(await scenario("c2", { collate: { message: { content: null }, finish: "stop" } }));
+  saved(await scenario("c2", { collate: { message: { content: null }, finish: "stop" } }), 1);
 });
 test("C3 collate: content empty string + finish_reason stop", async () => {
-  hard(await scenario("c3", { collate: ok("", "stop") }));
+  saved(await scenario("c3", { collate: ok("", "stop") }), 1);
 });
 test("C4 collate: content empty string + finish_reason length", async () => {
-  hard(await scenario("c4", { collate: ok("", "length", cap) }));
+  saved(await scenario("c4", { collate: ok("", "length", cap) }), 2);
 });
 test("C5 collate: reasoning present, content null, stop", async () => {
-  hard(await scenario("c5", { collate: { message: { content: null, reasoning: "long chain of thought", reasoning_details: [{ type: "reasoning.text", text: "x" }] }, finish: "stop", usage: cap } }));
+  saved(await scenario("c5", { collate: { message: { content: null, reasoning: "long chain of thought", reasoning_details: [{ type: "reasoning.text", text: "x" }] }, finish: "stop", usage: cap } }), 1);
 });
 test("C6 collate: reasoning present, content empty string, stop", async () => {
-  hard(await scenario("c6", { collate: { message: { content: "", reasoning: "chain of thought" }, finish: "stop", usage: cap } }));
+  saved(await scenario("c6", { collate: { message: { content: "", reasoning: "chain of thought" }, finish: "stop", usage: cap } }), 1);
 });
 test("C9 collate: content key absent", async () => {
-  hard(await scenario("c9", { collate: { message: { role: "assistant" }, finish: "stop" } }));
+  saved(await scenario("c9", { collate: { message: { role: "assistant" }, finish: "stop" } }), 1);
 });
 test("C10 collate: content is an array of parts", async () => {
-  hard(await scenario("c10", { collate: { message: { content: [{ type: "text", text: "Synth" }] }, finish: "stop" } }));
+  saved(await scenario("c10", { collate: { message: { content: [{ type: "text", text: "Synth" }] }, finish: "stop" } }), 1);
 });
 test("C11 collate: whitespace-only content + stop", async () => {
-  hard(await scenario("c11", { collate: ok("  \n ", "stop") }));
+  saved(await scenario("c11", { collate: ok("  \n ", "stop") }), 1);
+});
+test("C1r collate: budget exhausted once, then healthy at the doubled cap", async () => {
+  const o = await scenario("c1r", { collate: (n) => (n === 1 ? { message: { content: null }, finish: "length", usage: cap } : ok(SYNTH)) });
+  assert.equal(o.outcome, "completed");
+  assert.equal(o.calls.collate, 2);
+  assert.equal(o.meta?.stages.collate.budgetRetried, true);
 });
 test("C12 collate: transient first call (null content) then healthy: is it retried?", async () => {
   const o = await scenario("c12", { collate: (n) => (n === 1 ? { message: { content: null }, finish: "stop" } : ok(SYNTH)) });
@@ -186,14 +204,22 @@ const cut = "## Best match\n\nThe only implementation is community-maintained [S
 test("C7 collate: nonempty summary cut at cap, finish_reason length, usage at cap", async () => {
   const o = await scenario("c7", { collate: ok(cut, "length", { prompt_tokens: 900, completion_tokens: 4000, total_tokens: 4900 }) });
   assert.equal(o.outcome, "completed");
+  // F4 corrected: retried once at a doubled cap, then committed with a warning.
+  assert.equal(o.calls.collate, 2);
+  assert.equal(o.meta?.stages.collate.truncated, true);
+  assert.equal(o.textHasWarning, true);
 });
 test("C8 collate: nonempty summary cut, finish_reason stop, no usage block", async () => {
   const o = await scenario("c8", { collate: ok(cut, "stop") });
   assert.equal(o.outcome, "completed");
+  // Known limit: with finish_reason stop and no usage, truncation is undetectable.
+  assert.equal(o.calls.collate, 1);
 });
 test("C8b collate: nonempty cut, finish_reason length, usage absent", async () => {
   const o = await scenario("c8b", { collate: ok(cut, "length") });
   assert.equal(o.outcome, "completed");
+  // F4 corrected: finish_reason alone flags truncation when usage is absent.
+  assert.equal(o.meta?.stages.collate.truncated, true);
 });
 test("C8c collate: nonempty cut, finish_reason stop, usage at cap", async () => {
   await scenario("c8c", { collate: ok(cut, "stop", { prompt_tokens: 900, completion_tokens: 4000, total_tokens: 4900 }) });

@@ -3,7 +3,7 @@
 
 import { EXTRACTION_SYSTEM_PROMPT } from "../prompts.js";
 import type { ExtractParams } from "../contracts.js";
-import { inferSourceType, inferCurrentness, throwIfAborted, budgetExhausted } from "../util.js";
+import { inferSourceType, inferCurrentness, throwIfAborted, completionTruncated } from "../util.js";
 import { buildExtractionMessage } from "../messages.js";
 import type { OperationContext, OperationResult } from "../contracts.js";
 
@@ -22,13 +22,14 @@ export async function extract(
     settings.extractMaxChars,
   );
 
-  const { text: extraction, usage } = await models.complete({
+  const completion = await models.complete({
     model: extractConfig,
     systemPrompt: EXTRACTION_SYSTEM_PROMPT,
     userMessage,
     maxTokens: settings.extractionMaxTokens,
     signal,
   });
+  const { text: extraction, usage } = completion;
 
   throwIfAborted(signal);
   // A 200 response can still carry zero visible text: on reasoning models
@@ -37,7 +38,7 @@ export async function extract(
   // actionable message instead of returning an empty extraction as if it
   // were a result.
   if (!extraction.trim()) {
-    const exhausted = budgetExhausted(usage, settings.extractionMaxTokens);
+    const exhausted = completionTruncated(completion, settings.extractionMaxTokens);
     const usageNote = usage?.output != null
       ? ` (${usage.output}/${settings.extractionMaxTokens} output tokens` +
         (usage.reasoning ? `, ${usage.reasoning} hidden reasoning` : "") + ")"
@@ -53,8 +54,8 @@ export async function extract(
   const currentness = inferCurrentness(firstLine);
 
   // Nonempty output cut off by the cap: kept, but flagged so the caller knows
-  // the extraction may end mid-sentence. Missing usage never flags.
-  const truncated = budgetExhausted(usage, settings.extractionMaxTokens);
+  // the extraction may end mid-sentence. Missing usage and finish reason never flag.
+  const truncated = completionTruncated(completion, settings.extractionMaxTokens);
   const truncationNote = truncated
     ? `\n\n> ⚠ Extraction output reached extractionMaxTokens (${settings.extractionMaxTokens}); the text may be cut off mid-sentence.`
     : "";

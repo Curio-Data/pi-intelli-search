@@ -4,6 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createOpenRouterClient } from "../src/providers/openrouter.js";
+import { isOutputBudgetExhausted } from "../../../src/core/util.js";
 import { buildSearchPayloadPatch } from "../../../src/core/messages.js";
 import { parseConfig } from "../src/config.js";
 import {
@@ -407,6 +408,45 @@ test("budget-exhausted length responses fail with an actionable message regardle
       );
       assert.equal(calls, 1);
     }
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("budget exhaustion carries a structured marker, is not retried at the same cap, and finish reasons are reported", async () => {
+  const f = await fixture();
+  try {
+    let calls = 0;
+    let reply: Record<string, unknown> = {};
+    const client = createOpenRouterClient(f.config, {
+      env: { FIXTURE_KEY: "fixture-secret" },
+      logger,
+      fetch: fakeTransport(() => {
+        calls++;
+        return json(reply);
+      }),
+    });
+    await client.preflight([{ role: "search", config: f.config.settings.searchModel }]);
+    // "500 output tokens" would read as HTTP 500 to the status classifier.
+    reply = {
+      choices: [{ finish_reason: "length", message: { content: null } }],
+      usage: { prompt_tokens: 10, completion_tokens: 500 },
+    };
+    await assert.rejects(
+      client.complete({ ...request(f.config), retry: { attempts: 3, baseDelayMs: 1, maxDelayMs: 1 } }),
+      (error: Error & { code?: string }) =>
+        error.code === "PROVIDER" && isOutputBudgetExhausted(error),
+    );
+    assert.equal(calls, 1);
+    reply = {
+      choices: [{ finish_reason: "length", message: { content: "Cut off mid" } }],
+      usage: { prompt_tokens: 10, completion_tokens: 20 },
+    };
+    assert.equal((await client.complete(request(f.config))).finishReason, "length");
+    reply = { choices: [{ finish_reason: "stop", message: { content: "Done." } }] };
+    assert.equal((await client.complete(request(f.config))).finishReason, "stop");
+    reply = { choices: [{ message: { content: "Done." } }] };
+    assert.equal((await client.complete(request(f.config))).finishReason, undefined);
   } finally {
     await f.cleanup();
   }

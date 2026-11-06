@@ -150,16 +150,49 @@ export function finalizeCollation(
     invalid("the model generated a cache-file reference");
   }
 
-  let result = `## Summary\n\n${summary}\n\n## Source assessment\n\n`;
-  result +=
-    "Source inventory is generated from this run's successful, non-empty extractions, not from search citations. Cross-links in synthesis are not additional fetched sources. Types are extraction metadata, not independent quality ratings.\n\n";
-  result += "| ID | Source | Type | Evidence | Extraction | Full page |\n";
+  for (const source of sources) {
+    if (!identity.extractionFileFor(source.url)) invalid("an evidence source has no extraction file");
+  }
+  return (
+    `## Summary\n\n${summary}\n\n## Source assessment\n\n` +
+    "Source inventory is generated from this run's successful, non-empty extractions, not from search citations. Cross-links in synthesis are not additional fetched sources. Types are extraction metadata, not independent quality ratings.\n\n" +
+    sourceTable(sources, cachePath, identity, evidence)
+  );
+}
+
+function sourceTable(
+  sources: readonly ExtractResult[],
+  cachePath: string,
+  identity: SourceIdentity,
+  evidence: "fetched" | "supplied",
+): string {
+  let result = "| ID | Source | Type | Evidence | Extraction | Full page |\n";
   result += "|---|---|---|---|---|---|\n";
   for (const [index, source] of sources.entries()) {
     const extractionFile = identity.extractionFileFor(source.url);
-    if (!extractionFile) invalid("an evidence source has no extraction file");
     const fullPage = identity.sourceFileFor(source.url);
-    result += `| S${index + 1} | ${cell(source.url)} | ${cell(source.sourceType)}${source.truncated ? " ⚠ truncated" : ""} | ${evidence === "fetched" ? "Fetched and extracted" : "Caller-supplied extraction"} | ${cell(`${cachePath}/extractions/${extractionFile}`)} | ${fullPage ? cell(`${cachePath}/sources/${fullPage}`) : "Not cached"} |\n`;
+    result += `| S${index + 1} | ${cell(source.url)} | ${cell(source.sourceType)}${source.truncated ? " ⚠ truncated" : ""} | ${evidence === "fetched" ? "Fetched and extracted" : "Caller-supplied extraction"} | ${extractionFile ? cell(`${cachePath}/extractions/${extractionFile}`) : "Not cached"} | ${fullPage ? cell(`${cachePath}/sources/${fullPage}`) : "Not cached"} |\n`;
   }
   return result.trimEnd();
+}
+
+/**
+ * Report body for a research run whose collation failed after extraction
+ * succeeded. No synthesis exists, so the body states the failure and lists the
+ * saved extractions; their files carry the paid-for content.
+ */
+export function collationFailureReport(
+  reason: string,
+  cachePath: string,
+  extractions: readonly ExtractResult[],
+  identity: SourceIdentity,
+): string {
+  const sources = evidenceExtractions(extractions);
+  return (
+    `## Collation Failed\n\n> ⚠ ${reason}\n\n` +
+    `No synthesis was produced. The ${sources.length} extraction(s) below were saved; read the ` +
+    "extraction files directly, or re-run the research.\n\n" +
+    "## Source assessment\n\n" +
+    sourceTable(sources, cachePath, identity, "fetched")
+  );
 }

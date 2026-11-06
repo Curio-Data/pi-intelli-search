@@ -80,7 +80,7 @@ describe("loadSettings defaults", () => {
     assert.strictEqual(settings.fetchConcurrency, 4);
     assert.strictEqual(settings.extractionConcurrency, 4);
     assert.strictEqual(settings.extractionMaxTokens, 8000);
-    assert.strictEqual(settings.collationMaxTokens, 4000);
+    assert.strictEqual(settings.collationMaxTokens, 8000);
     assert.strictEqual(settings.browserFingerprint, "chrome_145");
     assert.strictEqual(settings.disableLlmsFullDiscovery, false);
     assert.strictEqual(settings.disableTelemetry, false);
