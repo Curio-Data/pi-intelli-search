@@ -1,6 +1,6 @@
 # Research Handoff Refresh and Pilot Plan
 
-Status: the owner approved the pilot profile and a USD 10 total spending ceiling on 5 November 2026, recorded in the [owner decision](../../../evidence/agents/20261105T173919Z-handoff-resume/owner-decision.json). Offline corrections are validated and reviewed. A fresh agent must implement and qualify the separate pilot path before using that approval. No pilot has started and no measured sprint is authorised. Start a new session with [Pilot Resume](RESUME.md).
+Status: historical commissioning plan. The owner approved this profile and ceiling on 5 November 2026 in the [owner decision](../../../evidence/agents/20261105T173919Z-handoff-resume/owner-decision.json). The implementation and observer gates subsequently passed, but the single fresh corpus was rejected and the series closed before qualification or paid pilots. [Pilot Findings](PILOT-FINDINGS.md) records the result. Forward-looking text below preserves the original plan; it authorises no continuation. Start a new session with the current [Pilot Resume](RESUME.md).
 
 ## Baseline
 
@@ -98,8 +98,6 @@ The MiniMax M3 reservation at a 16,000-token output cap is USD 0.3337728 per att
 
 These are exposure limits, not expected charges or a guarantee that every retry path fits. Reserve before dispatch, settle reported charges, retain unknown holds, and stop on insufficient allowance or overrun. Refresh rates again at admission and reject a rate or catalogue change that exceeds the bound. Main-model consumption is subscription-billed and remains separately reported. No extra capture, pilot replacement or automatic sprint is included.
 
-## Next Action
+## Current Continuation Boundary
 
-The budget and profile decision is settled. Do not ask for the same approval again. Continue with the bounded implementation and gate sequence in [Pilot Resume](RESUME.md). The larger allowance adds no capture, replacement, extra comparison or measured sprint. Baseline remains first; its failure stops before the candidate. A failed source capture can stop preparation before either pilot.
-
-Freeze and independently review the new protocol, costed schedule and implementation, then obtain coordinator acceptance of their exact identities before any live gate. Approval of the objective and budget does not waive those checks. If the accepted scope cannot be completed within the stated limits, retain the failure and return the specific issue to the owner.
+The approved sequence has stopped and settled. Retain the rejected corpus and unused slots; do not repeat the implementation or launch instructions above against the closed root. [Pilot Resume](RESUME.md) identifies permitted offline work. A new source-policy pilot requires its own costed schedule and owner decision.

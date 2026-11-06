@@ -1,12 +1,12 @@
 # Fresh-Agent Resume Checkpoint
 
-Current assignment: a fresh agent should start with [Pilot Resume](RESUME.md). The owner approved the 16,000-token extraction/collation caps, 300-second attempt timeout and a USD 10 total ceiling for bounded preparation and up to two end-to-end pilots. The [owner decision](../../../evidence/agents/20261105T173919Z-handoff-resume/owner-decision.json) supersedes the pending USD 4.82 proposal without expanding the operation counts. The offline corrections are validated and reviewed; the separate pilot protocol and live path still need implementation and acceptance. No new live operation has started. No measured sprint is authorised.
+Current state: the `rh-v5` pilot is closed at the corpus-review gate. Its implementation is validated and independently accepted, both subscription-main observers passed, and the single fresh capture completed. The fresh corpus reviewer rejected required setup, configuration and failure-evidence coverage, so charge qualification and both paid pilots remained unused. [Pilot Findings](PILOT-FINDINGS.md) records the outcome and settlement. Start with [Pilot Resume](RESUME.md) for the closed-series boundary; no further live work or measured sprint is authorised.
 
 Historical `rh-v4` status: completed on 5 November 2026. The full-population Codemode mean was 1,920.5 main tokens lower, but two route-nonconforming baseline runs account for the entire reduction. As a descriptive sensitivity reading, the Codemode mean across the other eight pairs was 330.1 tokens higher. Only pair 2 had both runs conforming and adequate, and Codemode used 1,090 more main tokens in that pair. Only 8 of 20 runs met the completion, conformance and adequacy conditions that the frozen gate requires of every run, so it rejects an overall savings-with-preserved-usefulness claim. This result concerns one question, one corpus, `Pi` 1.5.0 and `openai-codex/gpt-6.1-sol`.
 
 ## Resume Here
 
-Start with [Pilot Resume](RESUME.md) for the current authority, sole reading order, entry checks and remaining pilot work. Continue in the existing checkout and preserve the completed `rh-v4` evidence:
+Start with [Pilot Resume](RESUME.md) for the current reading order, accepted identity and permitted offline continuation. Continue in the existing checkout and preserve the completed `rh-v4` evidence:
 
 ```text
 /srv/secure/repos/CURIO/.worktrees/pi-intelli-search/research-handoff-runner
@@ -81,7 +81,7 @@ Both rejected PostgreSQL preparations remain under [`20261104T203243Z-rh-v3-meas
 
 ## Historical Repeat Boundary
 
-The following boundary belongs to the completed `rh-v4` series. The approved pilot is governed by [Pilot Resume](RESUME.md) and [Refresh and Pilot Plan](REFRESH-PLAN.md), not by reusing the historical allowance.
+The following boundary belongs to the completed `rh-v4` series. The later `rh-v5` pilot is also closed; its result and unused-slot boundary are governed by [Pilot Resume](RESUME.md), not by reusing either series' allowance.
 
 Inspect or reproduce the completed analysis only. Do not resume collection, rerun a diagnostic, select a replacement source or infer an overall Codemode benefit from the full-population mean. Preserve all evidence under its existing identity. Any new question, recapture, package integration, publication, version bump, main merge or additional measured run requires a separate owner decision.
 
