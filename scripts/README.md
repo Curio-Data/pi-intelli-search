@@ -99,7 +99,7 @@ The tested full installation flow is [`test/e2e/12_plugin_bundles.sh`](../test/e
 
 ## `generate-tlds.mjs`
 
-Refreshes the delegated top-level domain set in `src/core/tlds.ts`, which the research search stage uses to reject filenames and identifiers that look like protocol-less domains. The script reads a downloaded copy of the [_IANA_](https://www.iana.org/domains/root) root zone list and makes no network request:
+Refreshes the ASCII delegated top-level domain set in `src/core/tlds.ts`, which the research search stage uses to reject filenames and identifiers that look like protocol-less domains. The script reads a downloaded copy of the [_Internet Assigned Numbers Authority_ (IANA)](https://www.iana.org/domains/root) root zone list and makes no network request:
 
 ```bash
 curl -sS -o .tmp/tlds.txt https://data.iana.org/TLD/tlds-alpha-by-domain.txt

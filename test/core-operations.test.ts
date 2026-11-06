@@ -4,10 +4,10 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { search, extract, collate, research, MissingModelsError } from "../src/core/index.js";
 import type { ResearchDependencies } from "../src/core/operations/research.js";
-import { cacheLockDir, makeCachePath, readIndex } from "../src/core/cache.js";
+import { cacheLockDir, makeCachePath, readIndex, withLock } from "../src/core/cache.js";
 import { coreContext } from "./helpers/core-context.js";
 import type { OperationProgress } from "../src/core/contracts.js";
 
@@ -165,7 +165,7 @@ it("surfaces per-page failure reasons, saved sources and telemetry classificatio
   assert.equal(result.details.extractionFailed, 1);
   assert.match(result.text, /1 truncated at the output cap\), 1 failed/);
   assert.match(result.text, /\*\*Failed Sources\*\*:/);
-  assert.match(result.text, /https:\/\/(one|two)\.example\/page: Extraction returned no visible text/);
+  assert.match(result.text, /https:\/\/(one|two)\.example\/page: Output cap reached without visible text at 100 tokens and again after one retry at 200 tokens/);
   assert.match(result.text, /full page saved: `[^`]+\/sources\/\d+-/);
   const meta = JSON.parse(
     await readFile(join(root, result.details.cachePath as string, "meta.json"), "utf8"),
@@ -383,14 +383,25 @@ it("never replaces a successful report committed while collation was failing", a
   const query = "concurrent collate failure";
   const path = makeCachePath(query, root, context.paths.cacheRoot);
   const complete = context.models.complete;
+  let collated!: () => void;
+  const collateDone = new Promise<void>((resolve) => (collated = resolve));
   context.models.complete = async (request) => {
     if (request.model.model !== "collate") return complete(request);
-    // A concurrent same-query run commits its report before this one writes.
-    await mkdir(path, { recursive: true });
-    await writeFile(join(path, "report.md"), "# Report\n\n## Summary\n\nConcurrent success.\n");
+    collated();
     return { text: " ", citations: [] };
   };
-  const result = await research({ query }, context, dependencies);
+  // Hold the cache lock so the failing run decides only after a concurrent
+  // run's successful report lands, as when that run commits first.
+  let run!: ReturnType<typeof research>;
+  await mkdir(dirname(path), { recursive: true });
+  await withLock(cacheLockDir(path), async () => {
+    run = research({ query }, context, dependencies);
+    await collateDone;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await mkdir(path, { recursive: true });
+    await writeFile(join(path, "report.md"), "# Report\n\n## Summary\n\nConcurrent success.\n");
+  });
+  const result = await run;
   assert.equal(result.outcome, "collate-failed");
   assert.equal(result.details.cachePath, "");
   assert.ok(result.details.preservedCachePath);
@@ -400,12 +411,56 @@ it("never replaces a successful report committed while collation was failing", a
   assert.equal(meta.outcome, "collate-failed");
 });
 
+it("preserves a successful synthesis that itself mentions a collation failure", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const complete = context.models.complete;
+  let fail = false;
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    if (fail) return { text: " ", citations: [] };
+    return { text: "Facts [S1].\n\n## Collation Failed\n\n<!-- intelli-search:collate-failed -->\nDiscussed [S1].", citations: [] };
+  };
+  const query = "synthesis about collation failures";
+  const first = await research({ query }, context, dependencies);
+  assert.equal(first.outcome, "completed");
+  const path = join(root, first.details.cachePath as string);
+  const report = await readFile(join(path, "report.md"), "utf8");
+  assert.doesNotMatch(report, /intelli-search:collate-failed/, "model text cannot carry the marker");
+  fail = true;
+  const second = await research({ query }, context, dependencies);
+  assert.equal(second.outcome, "collate-failed");
+  assert.ok(second.details.preservedCachePath);
+  assert.equal(await readFile(join(path, "report.md"), "utf8"), report);
+});
+
+it("keeps a longer truncated first synthesis over a shorter truncated retry", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const complete = context.models.complete;
+  let collateCalls = 0;
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    collateCalls += 1;
+    return collateCalls === 1
+      ? { text: "A longer truncated synthesis with more detail [S1].", citations: [], finishReason: "length" }
+      : { text: "Shorter [S1].", citations: [], finishReason: "length" };
+  };
+  const result = await research({ query: "shorter retry" }, context, dependencies);
+  assert.equal(result.outcome, "completed");
+  assert.match(result.text, /A longer truncated synthesis/);
+  assert.doesNotMatch(result.text, /Shorter \[S1\]/);
+});
+
 it("replaces an earlier failure report on a second failed collation and skips the judge", async (t) => {
   const root = await workspace(t);
   const { context, dependencies, requests } = coreContext(root);
   const complete = context.models.complete;
   context.models.complete = async (request) => request.model.model === "collate"
     ? { text: " ", citations: [] } : complete(request);
+  // A prior completed run puts an entry in the index, so the judge would run.
+  const healthy = await research({ query: "unrelated healthy topic" }, coreContext(root).context, dependencies);
+  assert.equal(healthy.outcome, "completed");
   const query = "repeated collate failure";
   const first = await research({ query }, context, dependencies);
   const second = await research({ query }, context, dependencies);

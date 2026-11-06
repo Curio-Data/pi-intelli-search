@@ -704,7 +704,7 @@ async function runCollateStage(
   if (collateTruncated) {
     collation +=
       maxTokens > p.settings.collationMaxTokens
-        ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens, after one retry at double collationMaxTokens); ` +
+        ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens, after one retry at a larger cap); ` +
           `the synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
         : `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens); ` +
           `the synthesis may be cut off mid-sentence. Raise collationMaxTokens or re-run if completeness matters.`;
@@ -802,8 +802,10 @@ async function writeCacheArtifacts(
       // may have been committed by a concurrent run since collation began.
       // An earlier failure report is replaced (and archived) as usual.
       if (outcome !== "completed") {
+        // Fail closed: only a confirmed absence lets this run commit; an
+        // unreadable report is preserved as if it were successful.
         const prior = await readFile(join(p.physicalCachePath, "report.md"), "utf8").catch(
-          () => undefined,
+          (error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? undefined : ""),
         );
         if (prior !== undefined && !isCollationFailureReport(prior)) {
           await writeTelemetrySidecar(p.logger, p.tel, p.physicalCachePath, outcome);
@@ -1235,11 +1237,21 @@ async function completeWithBudgetRetry(
   if (stage === "extract") await p.gate(p.signal);
   try {
     const completion = await p.models.complete({ ...request, maxTokens });
-    // A usable truncated first answer is never replaced by an emptier retry.
-    if (first && !completion.text.trim()) return { completion: first, maxTokens: cap };
+    // A usable truncated first answer is never replaced by an empty retry, or
+    // by a retry that is also truncated and shorter.
+    if (
+      first &&
+      (!completion.text.trim() ||
+        (completionTruncated(completion, maxTokens) &&
+          completion.text.trim().length < first.text.trim().length))
+    )
+      return { completion: first, maxTokens: cap };
+    if (!first && !completion.text.trim() && completionTruncated(completion, maxTokens))
+      throw bothBudgetsSpent(cap, maxTokens);
     return { completion, maxTokens };
   } catch (error) {
     throwIfAborted(p.signal);
+    if (!first && isOutputBudgetExhausted(error)) throw bothBudgetsSpent(cap, maxTokens);
     // Keep paid, usable output when the larger retry fails (for example a
     // model whose output limit is below the doubled cap).
     if (first) {
@@ -1248,4 +1260,12 @@ async function completeWithBudgetRetry(
     }
     throw error;
   }
+}
+
+function bothBudgetsSpent(cap: number, maxTokens: number): OutputBudgetExhaustedError {
+  return new OutputBudgetExhaustedError(
+    `Output cap reached without visible text at ${cap} tokens and again after one retry ` +
+      `at ${maxTokens} tokens; the model's hidden reasoning consumed both budgets. ` +
+      "Choose a model that reasons less for this stage, or re-run.",
+  );
 }

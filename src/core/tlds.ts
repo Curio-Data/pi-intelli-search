@@ -97,13 +97,13 @@ const IANA_TLDS =
 export const TOP_LEVEL_DOMAINS: ReadonlySet<string> = new Set(IANA_TLDS.split(" "));
 
 /**
- * Delegated TLDs that are also common file extensions or property names
- * (`manage.py`, `README.md`, `install.sh`, `model.pt`, `user.name`,
- * `user.id`). A protocol-less reference ending in one of these is accepted
- * only with at least three labels, such as `docs.example.md`.
+ * Delegated TLDs that are also common file extensions (`manage.py`,
+ * `README.md`, `install.sh`, `main.js.map`, `nginx.pid`, `user.name`). A bare
+ * protocol-less reference ending in one of these needs a path, a `www.`
+ * prefix or a third label. TLDs popular for real sites, such as `.so`, `.pt`
+ * and `.id`, are deliberately absent so `notion.so` stays a candidate.
  */
 export const FILE_EXTENSION_TLDS: ReadonlySet<string> = new Set([
-  "am", "cab", "cc", "cr", "id", "java", "map", "md", "mk", "ml", "mov",
-  "name", "pid", "pm", "pro", "ps", "pt", "py", "rs", "run", "sc", "sh",
-  "so", "ss", "st", "sv", "td", "tf", "zip",
+  "cab", "java", "map", "md", "mk", "ml", "mov", "name", "pid", "pm",
+  "ps", "py", "rs", "run", "sv", "tf", "zip",
 ]);

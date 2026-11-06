@@ -593,13 +593,16 @@ export function extractSourceUrls(text: string): SourceUrl[] {
     absoluteSpans.push({ start: m.index, end: m.index + m[0].length });
   }
   const domainPattern =
-    /(?<!:\/\/)(?<![A-Za-z0-9@._\-\u0080-￿])((?:www\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?:\/[^\s<>"{}*()|\\`\[\]]*)?)/g;
+    /(?<!:\/\/)(?<![A-Za-z0-9@._-])((?:www\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?:\/[^\s<>"{}*()|\\`\[\]]*)?)/g;
   for (const m of text.matchAll(domainPattern)) {
     if (absoluteSpans.some(({ start, end }) => m.index >= start && m.index < end)) continue;
-    // A host that continues into a non-ASCII or punycode label, or a port,
-    // was matched only in part: skip it rather than fetch a different host.
-    const next = text.slice(m.index + m[0].length, m.index + m[0].length + 2);
-    if (/^[A-Za-z0-9\-\u0080-\uffff]|^:\d/.test(next)) continue;
+    // A match bordered by a letter, digit or hyphen (an IDN or punycode
+    // label, as in bücher.de), or followed by a port, query or fragment, is
+    // only part of a reference: skip it rather than fetch a different host or
+    // drop the rest. Punctuation and spaces of any script are boundaries.
+    const before = text.slice(Math.max(0, m.index - 1), m.index);
+    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 2);
+    if (/[\p{L}\p{N}]/u.test(before) || /^[\p{L}\p{N}-]|^:\d|^[?#]\S/u.test(after)) continue;
     const domainReference = m[1].replace(/[.,;:!]+$/, "");
     if (!plausibleDomainReference(domainReference)) continue;
     const slash = domainReference.indexOf("/");
@@ -629,12 +632,13 @@ const SOURCE_EXTENSION_LABELS = new Set(["c", "cpp", "css", "h", "hpp", "js", "m
 /**
  * Filter for protocol-less references found in prose. The final label must be
  * a delegated top-level domain, which rejects filenames and identifiers such as
- * `app.ini`, `robots.txt`, `Node.js` and `service.DISABLE`. A TLD that is also a
- * common file extension or property name (`manage.py`, `README.md`, `user.id`)
- * needs at least three labels, such as `docs.example.md` or `www.example.md`,
- * so `manage.py/runserver` is rejected too. Before such a TLD, or `.in`, a
- * source-file extension label marks a filename (`main.js.map`, `config.h.in`);
- * `vue.js.org` is unaffected.
+ * `app.ini`, `robots.txt`, `Node.js` and `service.DISABLE`. A bare reference
+ * ending in a TLD that is mostly seen as a file extension (`manage.py`,
+ * `README.md`, `main.js.map`) needs a path, a `www.` prefix or a third label,
+ * such as `docs.example.md`. Before such a TLD, or `.in`, a source-file
+ * extension label marks a filename even with a path (`main.js.map`,
+ * `config.h.in`); `vue.js.org` is unaffected. Guesses rank after real
+ * citations, so the filter errs towards keeping real hosts.
  */
 function plausibleDomainReference(reference: string): boolean {
   const slash = reference.indexOf("/");
@@ -643,7 +647,8 @@ function plausibleDomainReference(reference: string): boolean {
   if (!TOP_LEVEL_DOMAINS.has(tld)) return false;
   const fileLike = FILE_EXTENSION_TLDS.has(tld) || tld === "in";
   if (fileLike && SOURCE_EXTENSION_LABELS.has(labels[labels.length - 2] ?? "")) return false;
-  return labels.length >= 3 || !FILE_EXTENSION_TLDS.has(tld);
+  const hasPath = slash !== -1;
+  return hasPath || labels.length >= 3 || !FILE_EXTENSION_TLDS.has(tld);
 }
 
 /**

@@ -12,8 +12,8 @@ The files below drive the real MCP runtime, OpenRouter adapter, retry policy,
 research pipeline, cache, telemetry and MCP result mapping with a scripted HTTP
 transport. They make no network calls. They began as probes whose assertions held
 on both 0.19.0 and 0.21.0; with the corrective actions they assert the corrected
-behaviour. At the first 0.22.0 commit they failed 25 of 54 on the 0.21.0 source and passed on
-0.22.0.
+behaviour. At commit `4eadcc3` they failed 25 of 54 against the 0.21.0 source and all
+passed against 0.22.0.
 Observations are printed as `OBS {json}` lines and appended to the file named by
 `RCCA_OBS` when it is set.
 
@@ -72,7 +72,7 @@ The pipeline then mishandles the outcome:
 | F2 | A synthesis failure returns `collate-failed` and saves the extractions, pages, a failure report and `meta.json`. A same-day successful report for the query, including one a concurrent run commits, is preserved instead (decided under the cache lock) |
 | F4 | Truncation also uses the provider finish reason, so it is flagged when usage is missing |
 | F5 | The all-fetch-failed result lists failed URLs and reasons; the mixed headline names both counts |
-| F6 | Protocol-less references must end in a delegated top-level domain (TLD); TLDs that double as file extensions or property names need three labels. Citations rank ahead of these guesses. `scripts/generate-tlds.mjs` refreshes the TLD set |
+| F6 | Protocol-less references must end in a delegated top-level domain (TLD); a bare reference under a TLD mostly seen as a file extension needs a path, `www.` or a third label, so `bun.sh` and `notion.so` stay candidates while `install.sh` is still fetched. Citations rank ahead of these guesses. `scripts/generate-tlds.mjs` refreshes the TLD set |
 
 Not changed: `isError` stays `false` for degraded results, which carry their
 `outcome`; PDF rejection remains by design; F7 needs no change.

@@ -99,6 +99,8 @@ export function finalizeCollation(
   }
   const sources = evidenceExtractions(extractions);
   const summary = text
+    // Model text can never carry the generated failure-report marker.
+    .replaceAll(COLLATION_FAILED_MARKER, "")
     .replace(/^(?:[ \t]*\r?\n)+/, "")
     .replace(/^#{1,6}[ \t]+Summary(?:[ \t]*\r?\n|$)/i, "")
     .replace(/^(?:[ \t]*\r?\n)+/, "")
@@ -176,11 +178,14 @@ function sourceTable(
   return result.trimEnd();
 }
 
-const COLLATION_FAILED_HEADING = "## Collation Failed";
+/** Generated marker identifying a failure report. finalizeCollation() strips
+ *  it from model text, so a synthesis that merely mentions a collation
+ *  failure is never mistaken for one. */
+const COLLATION_FAILED_MARKER = "<!-- intelli-search:collate-failed -->";
 
 /** True for a saved report written by collationFailureReport(). */
 export function isCollationFailureReport(report: string): boolean {
-  return report.split("\n").includes(COLLATION_FAILED_HEADING);
+  return report.includes(COLLATION_FAILED_MARKER);
 }
 
 /**
@@ -196,7 +201,7 @@ export function collationFailureReport(
 ): string {
   const sources = evidenceExtractions(extractions);
   return (
-    `${COLLATION_FAILED_HEADING}\n\n> ⚠ ${reason}\n\n` +
+    `## Collation Failed\n\n${COLLATION_FAILED_MARKER}\n\n> ⚠ ${reason}\n\n` +
     `No synthesis was produced. The ${sources.length} extraction(s) below were saved; read the ` +
     "extraction files directly, or re-run the research.\n\n" +
     "## Source assessment\n\n" +
