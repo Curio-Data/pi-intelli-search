@@ -593,12 +593,20 @@ export function extractSourceUrls(text: string): SourceUrl[] {
     absoluteSpans.push({ start: m.index, end: m.index + m[0].length });
   }
   const domainPattern =
-    /(?<!:\/\/)(?<![A-Za-z0-9@._-])((?:www\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?:\/[^\s<>"{}*()|\\`\[\]]*)?)/g;
+    /(?<!:\/\/)(?<![A-Za-z0-9@._\-\u0080-￿])((?:www\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?:\/[^\s<>"{}*()|\\`\[\]]*)?)/g;
   for (const m of text.matchAll(domainPattern)) {
     if (absoluteSpans.some(({ start, end }) => m.index >= start && m.index < end)) continue;
+    // A host that continues into a non-ASCII or punycode label, or a port,
+    // was matched only in part: skip it rather than fetch a different host.
+    const next = text.slice(m.index + m[0].length, m.index + m[0].length + 2);
+    if (/^[A-Za-z0-9\-\u0080-\uffff]|^:\d/.test(next)) continue;
     const domainReference = m[1].replace(/[.,;:!]+$/, "");
     if (!plausibleDomainReference(domainReference)) continue;
-    const url = `https://${domainReference}`;
+    const slash = domainReference.indexOf("/");
+    const url =
+      slash === -1
+        ? `https://${domainReference.toLowerCase()}`
+        : `https://${domainReference.slice(0, slash).toLowerCase()}${domainReference.slice(slash)}`;
     if (seen.has(url)) continue;
     try {
       const u = new URL(url);
@@ -614,20 +622,28 @@ export function extractSourceUrls(text: string): SourceUrl[] {
   return urls;
 }
 
+/** Source-file extensions that, as the label before the TLD, mark a filename
+ *  such as `main.js.map` or `config.h.in` rather than a host. */
+const SOURCE_EXTENSION_LABELS = new Set(["c", "cpp", "css", "h", "hpp", "js", "min", "ts"]);
+
 /**
  * Filter for protocol-less references found in prose. The final label must be
  * a delegated top-level domain, which rejects filenames and identifiers such as
  * `app.ini`, `robots.txt`, `Node.js` and `service.DISABLE`. A TLD that is also a
- * common file extension (`manage.py`, `README.md`, `user.name`) is accepted
- * only with a path or a `www.` prefix.
+ * common file extension or property name (`manage.py`, `README.md`, `user.id`)
+ * needs at least three labels, such as `docs.example.md` or `www.example.md`,
+ * so `manage.py/runserver` is rejected too. Before such a TLD, or `.in`, a
+ * source-file extension label marks a filename (`main.js.map`, `config.h.in`);
+ * `vue.js.org` is unaffected.
  */
 function plausibleDomainReference(reference: string): boolean {
   const slash = reference.indexOf("/");
-  const host = slash === -1 ? reference : reference.slice(0, slash);
-  const tld = host.slice(host.lastIndexOf(".") + 1).toLowerCase();
+  const labels = (slash === -1 ? reference : reference.slice(0, slash)).toLowerCase().split(".");
+  const tld = labels[labels.length - 1];
   if (!TOP_LEVEL_DOMAINS.has(tld)) return false;
-  const hasPath = slash !== -1 && slash < reference.length - 1;
-  return hasPath || /^www\./i.test(host) || !FILE_EXTENSION_TLDS.has(tld);
+  const fileLike = FILE_EXTENSION_TLDS.has(tld) || tld === "in";
+  if (fileLike && SOURCE_EXTENSION_LABELS.has(labels[labels.length - 2] ?? "")) return false;
+  return labels.length >= 3 || !FILE_EXTENSION_TLDS.has(tld);
 }
 
 /**

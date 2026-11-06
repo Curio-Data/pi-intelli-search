@@ -358,6 +358,70 @@ it("retries an empty capped collation once with a doubled budget", async (t) => 
   assert.equal(meta.stages.collate.budgetRetried, true);
 });
 
+it("keeps a usable truncated synthesis when the doubled-budget retry fails", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const complete = context.models.complete;
+  let collateCalls = 0;
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    collateCalls += 1;
+    if (collateCalls === 1)
+      return { text: "Usable but truncated synthesis [S1].", citations: [], finishReason: "length" };
+    throw new Error("provider rejected max_completion_tokens");
+  };
+  const result = await research({ query: "retry fallback" }, context, dependencies);
+  assert.equal(result.outcome, "completed");
+  assert.equal(collateCalls, 2);
+  assert.match(result.text, /Usable but truncated synthesis/);
+  assert.match(result.text, /Collation output reached its cap/);
+});
+
+it("never replaces a successful report committed while collation was failing", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { disableTelemetry: false });
+  const query = "concurrent collate failure";
+  const path = makeCachePath(query, root, context.paths.cacheRoot);
+  const complete = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    // A concurrent same-query run commits its report before this one writes.
+    await mkdir(path, { recursive: true });
+    await writeFile(join(path, "report.md"), "# Report\n\n## Summary\n\nConcurrent success.\n");
+    return { text: " ", citations: [] };
+  };
+  const result = await research({ query }, context, dependencies);
+  assert.equal(result.outcome, "collate-failed");
+  assert.equal(result.details.cachePath, "");
+  assert.ok(result.details.preservedCachePath);
+  assert.match(await readFile(join(path, "report.md"), "utf8"), /Concurrent success/);
+  await assert.rejects(stat(`${path}.1`), /ENOENT/);
+  const meta = JSON.parse(await readFile(join(path, "meta.json"), "utf8"));
+  assert.equal(meta.outcome, "collate-failed");
+});
+
+it("replaces an earlier failure report on a second failed collation and skips the judge", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies, requests } = coreContext(root);
+  const complete = context.models.complete;
+  context.models.complete = async (request) => request.model.model === "collate"
+    ? { text: " ", citations: [] } : complete(request);
+  const query = "repeated collate failure";
+  const first = await research({ query }, context, dependencies);
+  const second = await research({ query }, context, dependencies);
+  assert.equal(first.outcome, "collate-failed");
+  assert.equal(second.outcome, "collate-failed");
+  assert.ok(second.details.cachePath, "the second run commits its own extractions");
+  const path = join(root, second.details.cachePath as string);
+  assert.match(await readFile(join(path, "report.md"), "utf8"), /## Collation Failed/);
+  assert.match(await readFile(join(`${path}.1`, "report.md"), "utf8"), /## Collation Failed/);
+  assert.equal(
+    requests.filter((request) => request.userMessage.startsWith("Current query:")).length,
+    0,
+    "no cache-suggest judge call after a failed collation",
+  );
+});
+
 it("commits research extractions with a failure report when collation fails", async (t) => {
   const root = await workspace(t);
   const { context, dependencies } = coreContext(root, { disableTelemetry: false });
@@ -861,7 +925,9 @@ for (const operation of ["research", "collate"] as const) {
     if (operation === "research") {
       const failed = await run();
       assert.equal(failed.outcome, "collate-failed");
-      assert.match(failed.text, /provenance validation failed.*previous report .* was preserved/s);
+      assert.match(failed.text, /provenance validation failed.*successful report already saved .* was preserved/s);
+      assert.equal(failed.details.cachePath, "");
+      assert.equal(failed.details.preservedCachePath, successful.details.cachePath);
     } else {
       await assert.rejects(run(), /provenance validation failed/);
     }

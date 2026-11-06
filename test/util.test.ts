@@ -234,6 +234,20 @@ Also bare reference https://kit.svelte.dev.
     ]);
   });
 
+  it("skips partial hosts and normalises host case in protocol-less references", () => {
+    const urls = extractSourceUrls(
+      "See bücher.de, example.xn--p1ai, example.com:8080/path, main.js.map, config.h.in, " +
+        "manage.py/runserver, model.pt, user.id, vue.js.org and EXAMPLE.ORG/Docs.",
+    ).map((u) => u.url);
+    assert.deepStrictEqual(urls, ["https://vue.js.org", "https://example.org/Docs"]);
+  });
+
+  it("keeps file-extension TLDs inside the delegated set", async () => {
+    const { TOP_LEVEL_DOMAINS, FILE_EXTENSION_TLDS } = await import("../src/core/tlds.js");
+    assert.ok(TOP_LEVEL_DOMAINS.size > 1000);
+    for (const tld of FILE_EXTENSION_TLDS) assert.ok(TOP_LEVEL_DOMAINS.has(tld), tld);
+  });
+
   it("does not treat email addresses or absolute URLs as extra domain references", () => {
     const urls = extractSourceUrls(
       "Contact releases@example.com or read https://github.com/microsoft/TypeScript/releases.",

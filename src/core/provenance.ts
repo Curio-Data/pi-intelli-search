@@ -176,6 +176,13 @@ function sourceTable(
   return result.trimEnd();
 }
 
+const COLLATION_FAILED_HEADING = "## Collation Failed";
+
+/** True for a saved report written by collationFailureReport(). */
+export function isCollationFailureReport(report: string): boolean {
+  return report.split("\n").includes(COLLATION_FAILED_HEADING);
+}
+
 /**
  * Report body for a research run whose collation failed after extraction
  * succeeded. No synthesis exists, so the body states the failure and lists the
@@ -189,7 +196,7 @@ export function collationFailureReport(
 ): string {
   const sources = evidenceExtractions(extractions);
   return (
-    `## Collation Failed\n\n> ⚠ ${reason}\n\n` +
+    `${COLLATION_FAILED_HEADING}\n\n> ⚠ ${reason}\n\n` +
     `No synthesis was produced. The ${sources.length} extraction(s) below were saved; read the ` +
     "extraction files directly, or re-run the research.\n\n" +
     "## Source assessment\n\n" +

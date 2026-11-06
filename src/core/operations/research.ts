@@ -50,6 +50,7 @@ import {
   throwIfAborted,
   completionTruncated,
   isOutputBudgetExhausted,
+  OutputBudgetExhaustedError,
   reasoningOnlyCompletion,
 } from "../util.js";
 import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "../telemetry.js";
@@ -64,7 +65,11 @@ import {
   formatCacheAppendix,
 } from "../messages.js";
 import { progress } from "../progress.js";
-import { collationFailureReport, finalizeCollation } from "../provenance.js";
+import {
+  collationFailureReport,
+  finalizeCollation,
+  isCollationFailureReport,
+} from "../provenance.js";
 
 /** Per-run I/O injection; no mutable global engine harness. */
 export interface ResearchDependencies {
@@ -249,11 +254,13 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   }
 
   // A collation failure after paid extraction commits the extractions with a
-  // report that states the failure, instead of discarding the run. A previous
-  // successful report for the same query is preserved like any degraded
-  // refresh: only the failed attempt's sidecar is recorded.
+  // report that states the failure, instead of discarding the run. A
+  // successful report already in place for the same query (decided under the
+  // cache lock) is preserved like any degraded refresh: only the failed
+  // attempt's sidecar is recorded.
   let collation: string;
   let outcome: "completed" | "collate-failed" = "completed";
+  let failureMessage = "";
   try {
     collation = await runCollateStage(p, search.searchResult, succeededExtractions, identity);
   } catch (error) {
@@ -266,29 +273,13 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
       ...(p.budgetRetries.collate ? { budgetRetried: true } : {}),
       error: reason,
     });
-    const details = {
-      cachePath: "",
-      urlsSearched: search.urls.length,
-      pagesFetched: fetched.successPages.length,
-      pagesFailed: fetched.pages.length - fetched.successPages.length,
-      extractionFailed: allExtractions.filter((e) => e.status === "failed").length,
-    };
-    const priorReport = await stat(join(p.physicalCachePath, "report.md"))
-      .then(() => true)
-      .catch(() => false);
-    if (priorReport) {
-      return degradedReturn(
-        p,
-        "collate-failed",
-        `Collation failed: ${reason}. ${succeededExtractions.length} page(s) were extracted, but ` +
-          `the previous report for this query at ${p.cachePath} was preserved, so this ` +
-          `run's extractions were not saved.\n\nSearch summary:\n${search.searchResult}`,
-        details,
-      );
-    }
+    failureMessage =
+      `Collation failed: ${asSentence(reason)} ${succeededExtractions.length} page(s) were extracted, but ` +
+      `the successful report already saved for this query at ${p.cachePath} was preserved, ` +
+      `so this run's extractions were not saved.\n\nSearch summary:\n${search.searchResult}`;
     outcome = "collate-failed";
     collation = collationFailureReport(
-      `Collation failed: ${reason}`,
+      reason,
       p.cachePath,
       succeededExtractions,
       identity,
@@ -297,10 +288,15 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
 
   // Start llms-full downloads BEFORE acquiring any lock, then write cache
   // artefacts under the per-cache-path lock (only local file I/O there).
+  // A run without a synthesis skips supplementary documentation downloads.
   throwIfAborted(p.signal);
-  const llms = await startLlmsFullDownloads(p, fetched.successPages);
+  const llms: LlmsDownloads =
+    outcome === "completed"
+      ? await startLlmsFullDownloads(p, fetched.successPages)
+      : { abort: new AbortController(), futures: [] };
+  let committed: boolean;
   try {
-    await writeCacheArtifacts(
+    committed = await writeCacheArtifacts(
       p,
       allExtractions,
       fetched,
@@ -324,10 +320,29 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
     }
   }
 
+  if (!committed) {
+    return {
+      text: failureMessage,
+      outcome,
+      details: {
+        cachePath: "",
+        // The preserved report is not this run's output, so it is reported
+        // separately rather than as cachePath.
+        preservedCachePath: p.cachePath,
+        urlsSearched: search.urls.length,
+        pagesFetched: fetched.successPages.length,
+        pagesFailed: fetched.pages.length - fetched.successPages.length,
+        extractionFailed: allExtractions.filter((e) => e.status === "failed").length,
+      },
+    };
+  }
+
   // ═══════════════════════════════════════════
   // Stage 5: Cache suggest — find related previous searches
   // ═══════════════════════════════════════════
-  const suggestionsAppendix = await runCacheSuggestStage(p);
+  // Skipped without a synthesis: the run is not indexed, and the judge would
+  // spend another model call on a run that already failed.
+  const suggestionsAppendix = outcome === "completed" ? await runCacheSuggestStage(p) : "";
 
   // ── Telemetry sidecar refresh ──
   // The sidecar was already written under the cache lock with all core
@@ -688,8 +703,11 @@ async function runCollateStage(
   const collateTruncated = completionTruncated(completion, maxTokens);
   if (collateTruncated) {
     collation +=
-      `\n\n> ⚠ Collation output reached its output cap (${maxTokens} tokens); ` +
-      `the synthesis may be cut off mid-sentence. Raise collationMaxTokens or re-run if completeness matters.`;
+      maxTokens > p.settings.collationMaxTokens
+        ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens, after one retry at double collationMaxTokens); ` +
+          `the synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
+        : `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens); ` +
+          `the synthesis may be cut off mid-sentence. Raise collationMaxTokens or re-run if completeness matters.`;
   }
 
   p.tel?.recordCollate({
@@ -776,10 +794,23 @@ async function writeCacheArtifacts(
   llms: LlmsDownloads,
   identity: SourceIdentity,
   outcome: TelemetryOutcome,
-): Promise<void> {
-  await withLock(
+): Promise<boolean> {
+  const committed = await withLock(
     cacheLockDir(p.physicalCachePath),
     async () => {
+      // A run without a synthesis never displaces a successful report, which
+      // may have been committed by a concurrent run since collation began.
+      // An earlier failure report is replaced (and archived) as usual.
+      if (outcome !== "completed") {
+        const prior = await readFile(join(p.physicalCachePath, "report.md"), "utf8").catch(
+          () => undefined,
+        );
+        if (prior !== undefined && !isCollationFailureReport(prior)) {
+          await writeTelemetrySidecar(p.logger, p.tel, p.physicalCachePath, outcome);
+          return false;
+        }
+      }
+
       // Archive a previous run's artefact set to a numbered sibling folder
       // (<cachePath>.1, .2, ...) before this run commits. Rotation happens
       // only here, on the success path with the new results already in
@@ -820,7 +851,7 @@ async function writeCacheArtifacts(
       // directory. Different cache paths contend only on this short
       // index update, not on the per-cache-path bulk writes. A run without
       // a synthesis is not offered to later cache suggestions.
-      if (outcome !== "completed") return;
+      if (outcome !== "completed") return true;
       await withLock(
         indexLockDir(p.paths.cacheRoot),
         async () => {
@@ -829,9 +860,11 @@ async function writeCacheArtifacts(
         },
         p.signal,
       );
+      return true;
     },
     p.signal,
   );
+  if (!committed) return false;
 
   // Await remaining llms-full downloads outside the lock. Commit their
   // staged files under the cache lock so concurrent same-query runs cannot
@@ -846,6 +879,7 @@ async function writeCacheArtifacts(
       p.signal,
     );
   }
+  return true;
 }
 
 // ── Stage 5: Cache suggest ──
@@ -1124,7 +1158,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
     // single-line reason is retained on the result so the report and tool
     // result can explain the failure instead of a bare "Extraction failed";
     // provider bodies often carry newlines and markup that would break both.
-    const message = errMsg(err).replace(/\s+/g, " ").trim().slice(0, 300) || "extraction failed";
+    const message = failureDetail(errMsg(err)) || "extraction failed";
     p.logger.error(`Extraction failed for ${page.url}: ${message}`);
     return {
       url: page.url,
@@ -1133,7 +1167,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       sourceType: "unknown",
       currentness: "unknown",
       status: "failed",
-      error: message + (errMsg(err).length > 300 ? "…" : ""),
+      error: message,
       // Structured classification: usage-based when the call completed, else
       // a match against our own adapter messages (never free provider text).
       failureKind: exhausted === true || isOutputBudgetExhausted(err) ? "budget" : "other",
@@ -1142,9 +1176,19 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
   }
 }
 
-/** Bounded single-line failure reason for results, reports and telemetry. */
+/** Largest output cap the settings accept; the budget retry never exceeds it. */
+const MAX_OUTPUT_TOKENS = 128_000;
+
+/** Bounded single-line failure reason for results, reports and telemetry,
+ *  marked with an ellipsis when cut. */
 function failureDetail(message: string): string {
-  return message.replace(/\s+/g, " ").trim().slice(0, 300);
+  const line = message.replace(/\s+/g, " ").trim();
+  return line.length > 300 ? `${line.slice(0, 299).trimEnd()}…` : line;
+}
+
+/** A failure reason closed as a sentence, so further text can follow it. */
+function asSentence(reason: string): string {
+  return /[.!?…]$/.test(reason) ? reason : `${reason}.`;
 }
 
 /**
@@ -1162,22 +1206,46 @@ async function completeWithBudgetRetry(
   retryTruncated: boolean,
 ): Promise<{ completion: ModelCompletion; maxTokens: number }> {
   const cap = request.maxTokens;
+  let first: ModelCompletion | undefined;
   try {
     const completion = await p.models.complete(request);
     const spent = completionTruncated(completion, cap);
     if (!spent || (completion.text.trim() && !retryTruncated))
       return { completion, maxTokens: cap };
+    if (completion.text.trim()) first = completion;
   } catch (error) {
     throwIfAborted(p.signal);
     if (!isOutputBudgetExhausted(error)) throw error;
   }
   throwIfAborted(p.signal);
-  const maxTokens = cap * 2;
+  // Bounded by the largest cap the settings accept.
+  const maxTokens = Math.min(cap * 2, MAX_OUTPUT_TOKENS);
+  if (maxTokens <= cap) {
+    if (first) return { completion: first, maxTokens: cap };
+    throw new OutputBudgetExhaustedError(
+      `Output cap of ${cap} tokens reached without visible text; no larger retry is possible.`,
+    );
+  }
   if (stage === "extract") p.budgetRetries.extract += 1;
   else p.budgetRetries.collate = true;
   p.onProgress?.(
-    progress(stage, `Output cap of ${cap} tokens reached; retrying once with ${maxTokens}`),
+    progress(stage, `Output cap of ${cap} tokens reached; retrying once with ${maxTokens} tokens`),
   );
-  const completion = await p.models.complete({ ...request, maxTokens });
-  return { completion, maxTokens };
+  // The retry is a further extract call, so it observes the configured throttle.
+  if (stage === "extract") await p.gate(p.signal);
+  try {
+    const completion = await p.models.complete({ ...request, maxTokens });
+    // A usable truncated first answer is never replaced by an emptier retry.
+    if (first && !completion.text.trim()) return { completion: first, maxTokens: cap };
+    return { completion, maxTokens };
+  } catch (error) {
+    throwIfAborted(p.signal);
+    // Keep paid, usable output when the larger retry fails (for example a
+    // model whose output limit is below the doubled cap).
+    if (first) {
+      p.logger.error(`Retry with ${maxTokens} output tokens failed: ${failureDetail(errMsg(error))}`);
+      return { completion: first, maxTokens: cap };
+    }
+    throw error;
+  }
 }

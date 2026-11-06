@@ -12,7 +12,8 @@ The files below drive the real MCP runtime, OpenRouter adapter, retry policy,
 research pipeline, cache, telemetry and MCP result mapping with a scripted HTTP
 transport. They make no network calls. They began as probes whose assertions held
 on both 0.19.0 and 0.21.0; with the corrective actions they assert the corrected
-behaviour, failing 25 of 54 on the 0.21.0 source and passing on 0.22.0.
+behaviour. At the first 0.22.0 commit they failed 25 of 54 on the 0.21.0 source and passed on
+0.22.0.
 Observations are printed as `OBS {json}` lines and appended to the file named by
 `RCCA_OBS` when it is set.
 
@@ -67,11 +68,11 @@ The pipeline then mishandles the outcome:
 
 | Finding | Action |
 |---|---|
-| F1, F3 | An extraction that stops at its cap without text, and a synthesis that stops at its cap, is retried once with double the cap. The shared policy no longer repeats an exhausted budget at the same cap. The default `collationMaxTokens` rises from 4000 to 8000 |
-| F2 | A synthesis failure returns `collate-failed` and saves the extractions, pages, a failure report and `meta.json`; an earlier report for the query is preserved instead |
-| F4 | Truncation also uses the provider finish reason, so it is flagged without usage |
+| F1, F3 | Research retries once with double the cap an extraction that stops at its cap without text and a synthesis that stops at its cap; a failed retry keeps a truncated first synthesis. The shared policy no longer repeats an exhausted budget at the same cap. The default `collationMaxTokens` rises from 4,000 to 8,000 |
+| F2 | A synthesis failure returns `collate-failed` and saves the extractions, pages, a failure report and `meta.json`. A same-day successful report for the query, including one a concurrent run commits, is preserved instead (decided under the cache lock) |
+| F4 | Truncation also uses the provider finish reason, so it is flagged when usage is missing |
 | F5 | The all-fetch-failed result lists failed URLs and reasons; the mixed headline names both counts |
-| F6 | Protocol-less references must end in a delegated TLD; file-extension TLDs need a path or `www.`. Citations rank ahead of these guesses |
+| F6 | Protocol-less references must end in a delegated top-level domain (TLD); TLDs that double as file extensions or property names need three labels. Citations rank ahead of these guesses. `scripts/generate-tlds.mjs` refreshes the TLD set |
 
 Not changed: `isError` stays `false` for degraded results, which carry their
 `outcome`; PDF rejection remains by design; F7 needs no change.
@@ -80,5 +81,6 @@ Not changed: `isError` stays `false` for degraded results, which carry their
 
 The reference worktree `ref-mcp-v0.19.0` (detached at `mcp-v0.19.0`, with its own
 `node_modules` and untracked 0.19.0 probe copies) is kept until the corrective
-actions are merged. Remove it then with `git worktree remove` from the main checkout,
-together with `.tmp/agents/2026-11-06-rcca-mcp-research/`.
+actions are merged. Its removal, and disposal of the run's scratch, needs the
+owner's approval at that point; everything retained is under
+`evidence/agents/2026-11-06-rcca-mcp-research/`.

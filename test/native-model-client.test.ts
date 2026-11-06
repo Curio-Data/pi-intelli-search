@@ -170,6 +170,13 @@ describe("native model client", () => {
     assert.equal(calls, 1);
   });
 
+  it("reports a length stop from the facade as finish reason length", async () => {
+    const client = createNativeModelClient(
+      context(true, async () => ({ ...response("cut off"), stopReason: "length" })),
+    );
+    assert.equal((await client.complete(request)).finishReason, "length");
+  });
+
   it("leaves retry ownership and provider-error classification in callLlm", async () => {
     let calls = 0;
     const client = createNativeModelClient(

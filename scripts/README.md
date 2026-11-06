@@ -97,6 +97,18 @@ This command generates bundles only; it does not build, pack, vendor-install or 
 
 The tested full installation flow is [`test/e2e/12_plugin_bundles.sh`](../test/e2e/12_plugin_bundles.sh): build and pack the MCP workspace, generate local bundles, install the tarball into both vendor directories, then install the marketplaces into isolated host profiles and check connection and skill discovery. It uses dummy credentials, not a copied operator credential store. Set `TMPDIR` beneath the repository's gitignored `.tmp/` on encrypted hosts before running it. Credentialed research is a separate check in scenarios 13 and 14; see [Compatibility](../docs/COMPATIBILITY.md#host-plugins) for evidence classes and limits.
 
+## `generate-tlds.mjs`
+
+Refreshes the delegated top-level domain set in `src/core/tlds.ts`, which the research search stage uses to reject filenames and identifiers that look like protocol-less domains. The script reads a downloaded copy of the [_IANA_](https://www.iana.org/domains/root) root zone list and makes no network request:
+
+```bash
+curl -sS -o .tmp/tlds.txt https://data.iana.org/TLD/tlds-alpha-by-domain.txt
+node scripts/generate-tlds.mjs .tmp/tlds.txt          # rewrite the set
+node scripts/generate-tlds.mjs --check .tmp/tlds.txt  # exit 1 on drift
+```
+
+It rewrites only the version line and the delegated-TLD literal. The `FILE_EXTENSION_TLDS` policy in the same file is maintained by hand and must stay a subset of the delegated set, which `test/util.test.ts` checks. Run the check before a release.
+
 ## Claude Tool Routing
 
 [`test/e2e/13_claude_code_plugin.sh`](../test/e2e/13_claude_code_plugin.sh) evaluates tool selection in four fresh Claude Code sessions against the generated local-tarball plugin. It distinguishes installation and skill discovery from successful skill invocation before an operation. Both search and research remain available. Prompts refer to the installed web research plugin without naming either operation; only the explicit-loading case names the skill.
