@@ -211,6 +211,58 @@ test("MCP research keeps the valid third candidate after two longer provenance f
   }
 });
 
+for (const scenario of ["complete", "truncated-errors", "mixed-errors"] as const) {
+  test(`MCP candidate precedence and first-ranked error: ${scenario}`, async () => {
+    const f = await fixture();
+    try {
+      const caps: unknown[] = [];
+      const unknown = "Bad [S99].";
+      const absentUrl = "The longest invalid synthesis. ".repeat(5) + "https://absent.example/page";
+      const cacheReference = "An invalid cache reference: `extractions/01-invented.md`.";
+      const texts = scenario === "complete"
+        ? ["A much longer but truncated synthesis with useful evidence [S1].", "Complete [S1]."]
+        : scenario === "mixed-errors" ? [cacheReference, absentUrl, unknown] : [unknown, absentUrl, cacheReference];
+      const runtime = await createRuntime(
+        { ...f.config, settings: { ...f.config.settings, collationMaxTokens: 100, outputBudgetRetries: 2 } },
+        {
+          env: { FIXTURE_KEY: "fixture-secret" },
+          logger,
+          fetch: fakeTransport((body) => {
+            if (body.model === "perplexity/sonar") return json(completion(`[Docs](${page.url})`));
+            if (body.model === "fixture/extract") return json(completion("Official docs, current.\nFacts"));
+            caps.push(body.max_completion_tokens);
+            const text = texts[caps.length - 1];
+            const finish = caps.length === texts.length && scenario !== "truncated-errors" ? "stop" : "length";
+            return json(completion(text, { choices: [{ message: { content: text }, finish_reason: finish }] }));
+          }),
+          researchDependencies: {
+            fetchPages: async () => [{ ...page, status: "success", source: "markdown" }],
+            downloadLlmsFullToCache: async () => null,
+          },
+        },
+      );
+      const result = await runtime.execute("intelli_research", { query: scenario, maxUrls: 1 });
+      assert.deepEqual(caps, scenario === "complete" ? [100, 200] : [100, 200, 400]);
+      assert.equal(result.outcome, scenario === "complete" ? "completed" : "collate-failed");
+      const report = await readFile(join(result.details.cachePath as string, "report.md"), "utf8");
+      for (const output of [result.text, report]) {
+        if (scenario === "complete") {
+          assert.match(output, /Complete \[S1\]\./);
+          assert.doesNotMatch(output, /A much longer but truncated synthesis|Collation output reached its cap/);
+        } else {
+          const firstReason = scenario === "mixed-errors" ? "unknown source ID" : "a prose URL is absent from the supplied evidence";
+          assert.ok(output.includes(`Collation provenance validation failed: ${firstReason}.`));
+          assert.doesNotMatch(output, scenario === "mixed-errors"
+            ? /a prose URL is absent|generated a cache-file reference/
+            : /unknown source ID|generated a cache-file reference/);
+        }
+      }
+    } finally {
+      await f.cleanup();
+    }
+  });
+}
+
 test("MCP dual-bound collation names both limits and preserves full extractions", async () => {
   const f = await fixture();
   try {

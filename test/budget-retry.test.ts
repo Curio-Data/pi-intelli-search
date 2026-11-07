@@ -221,7 +221,7 @@ it("retains truncated candidates when a completed retry fails provenance", async
   assert.match(result.text, /cap \(100 tokens/);
 });
 
-it("validates every usable candidate longest first even when a shorter retry completes", async (t) => {
+it("prefers the shorter completed synthesis over a longer truncated synthesis", async (t) => {
   const root = await workspace(t);
   const { context, dependencies } = coreContext(root);
   const complete = context.models.complete;
@@ -230,17 +230,21 @@ it("validates every usable candidate longest first even when a shorter retry com
     if (request.model.model !== "collate") return complete(request);
     caps.push(request.maxTokens);
     return request.maxTokens === 100
-      ? { text: "The longer valid synthesis with useful evidence [S1].", citations: [], finishReason: "length" as const }
-      : { text: "Short complete [S1].", citations: [], finishReason: "stop" as const };
+      ? { text: "A much longer but truncated synthesis with useful evidence [S1].", citations: [], finishReason: "length" as const }
+      : { text: "Complete [S1].", citations: [], finishReason: "stop" as const };
   };
-  const result = await research({ query: "rank every usable candidate" }, context, dependencies);
+  const result = await research({ query: "prefer complete synthesis" }, context, dependencies);
   assert.deepEqual(caps, [100, 200], "a completed response still stops further model calls");
   assert.equal(result.outcome, "completed");
-  assert.match(result.text, /The longer valid synthesis/);
-  assert.doesNotMatch(result.text, /Short complete/);
-  assert.match(result.text, /cap \(100 tokens/);
-  assert.match(result.text, /a retry at a larger cap was considered/);
-  assert.doesNotMatch(result.text, /retry at a larger cap did not complete/);
+  const cachePath = join(root, result.details.cachePath as string);
+  const report = await readFile(join(cachePath, "report.md"), "utf8");
+  for (const output of [result.text, report]) {
+    assert.match(output, /Complete \[S1\]\./);
+    assert.doesNotMatch(output, /A much longer but truncated synthesis|Collation output reached its cap/);
+  }
+  const meta = JSON.parse(await readFile(join(cachePath, "meta.json"), "utf8"));
+  assert.equal(meta.stages.collate.truncated, undefined);
+  assert.equal(meta.stages.collate.summaryChars, "Complete [S1].".length);
 });
 
 it("reports a provenance failure when every candidate is invalid", async (t) => {
@@ -260,6 +264,38 @@ it("reports a provenance failure when every candidate is invalid", async (t) => 
   assert.equal(result.outcome, "collate-failed");
   assert.match(result.text, /provenance validation failed/);
 });
+
+for (const hasCompleted of [false, true]) {
+  it(`preserves the first-ranked provenance error when all ${hasCompleted ? "mixed" : "truncated"} candidates fail`, async (t) => {
+    const root = await workspace(t);
+    const { context, dependencies } = coreContext(root);
+    const complete = context.models.complete;
+    const caps: Array<number | undefined> = [];
+    const unknown = "Bad [S99].";
+    const absentUrl = "The longest invalid synthesis. ".repeat(5) + "https://absent.example/page";
+    const cacheReference = "An invalid cache reference: `extractions/01-invented.md`.";
+    const texts = hasCompleted ? [cacheReference, absentUrl, unknown] : [unknown, absentUrl, cacheReference];
+    context.models.complete = async (request) => {
+      if (request.model.model !== "collate") return complete(request);
+      caps.push(request.maxTokens);
+      return {
+        text: texts[caps.length - 1],
+        citations: [],
+        finishReason: hasCompleted && caps.length === 3 ? "stop" as const : "length" as const,
+      };
+    };
+    const result = await research({ query: "first-ranked failure" }, context, dependencies);
+    assert.deepEqual(caps, [100, 200, 400]);
+    assert.equal(result.outcome, "collate-failed");
+    const report = await readFile(join(root, result.details.cachePath as string, "report.md"), "utf8");
+    const firstReason = hasCompleted ? "unknown source ID" : "a prose URL is absent from the supplied evidence";
+    const otherReason = hasCompleted ? /a prose URL is absent|generated a cache-file reference/ : /unknown source ID|generated a cache-file reference/;
+    for (const output of [result.text, report]) {
+      assert.ok(output.includes(`Collation provenance validation failed: ${firstReason}.`));
+      assert.doesNotMatch(output, otherReason);
+    }
+  });
+}
 
 it("reports the effective cap when a configured cap exceeds the ceiling", async (t) => {
   const root = await workspace(t);

@@ -1,10 +1,38 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
-// Output-budget retry arithmetic: which caps the attempts use, and how long
-// each attempt may take. Pure functions, so the schedule is testable without
-// a model call.
+// Output-budget retries: attempt caps, timeouts and candidate preference.
+// Pure functions, testable without a model call.
 
+import type { ModelCompletion } from "./contracts.js";
 import { MAX_OUTPUT_TOKENS } from "./defaults.js";
+import { completionTruncated } from "./util.js";
+
+export interface BudgetedCompletion {
+  completion: ModelCompletion;
+  maxTokens: number;
+}
+
+/**
+ * Input is in attempt order. Prefer completed candidates, latest first,
+ * then truncated candidates, longest first. Retain every candidate so the
+ * caller can validate provenance and fall back without losing paid output.
+ */
+export function rankBudgetedCompletions(
+  candidates: readonly BudgetedCompletion[],
+): BudgetedCompletion[] {
+  return candidates
+    .map((candidate, index) => ({
+      candidate,
+      index,
+      truncated: completionTruncated(candidate.completion, candidate.maxTokens),
+    }))
+    .sort((a, b) => Number(a.truncated) - Number(b.truncated) || (
+      a.truncated
+        ? b.candidate.completion.text.trim().length - a.candidate.completion.text.trim().length
+        : b.index - a.index
+    ))
+    .map(({ candidate }) => candidate);
+}
 
 /**
  * How many times a single attempt's timeout may grow over `llmTimeoutMs`.

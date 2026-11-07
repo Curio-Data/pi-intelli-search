@@ -10,7 +10,6 @@ import {
 import { mergeCitations } from "../annotations.js";
 import type {
   ModelClient,
-  ModelCompletion,
   ModelRequest,
   OperationContext,
   OperationResult,
@@ -66,7 +65,7 @@ import {
   formatCollationTrimNotice,
 } from "../messages.js";
 import { MAX_OUTPUT_TOKENS } from "../defaults.js";
-import { attemptTimeoutMs, budgetCaps } from "../output-budget.js";
+import { attemptTimeoutMs, budgetCaps, rankBudgetedCompletions, type BudgetedCompletion } from "../output-budget.js";
 import { planCollationBudget, inferredSource } from "../collation-budget.js";
 import { progress } from "../progress.js";
 import {
@@ -720,18 +719,21 @@ async function runCollateStage(
     },
     true,
   );
-  // A longer candidate can contain an invalid or cut-off citation. Keep
-  // trying ranked alternatives until one validates or every candidate fails.
+  // Any candidate can contain an invalid or cut-off citation. Keep trying
+  // ranked alternatives, but preserve the preferred candidate's diagnostic
+  // if none validates.
   let { completion, maxTokens } = chosen;
   const alternatives = [...chosen.alternatives];
+  let firstFailure: { error: unknown } | undefined;
   let collation: string;
   while (true) {
     try {
       collation = finalizeCollation(completion.text, p.cachePath, succeededExtractions, identity, "fetched");
       break;
     } catch (error) {
+      firstFailure ??= { error };
       const next = alternatives.shift();
-      if (!next) throw error;
+      if (!next) throw firstFailure.error;
       ({ completion, maxTokens } = next);
     }
   }
@@ -1280,13 +1282,10 @@ async function completeWithBudgetRetry(
   });
   // Keep every usable answer in case a larger attempt is worse. Every
   // configured attempt runs while only truncated text is available; once
-  // calls stop, validation receives all candidates longest first.
+  // calls stop, validation tries completed candidates before truncated ones.
   const candidates: BudgetedCompletion[] = [];
-  const rankedCandidates = (): BudgetedCompletion[] => [...candidates].sort(
-    (a, b) => b.completion.text.trim().length - a.completion.text.trim().length,
-  );
   const best = (): (BudgetedCompletion & { alternatives: BudgetedCompletion[] }) | undefined => {
-    const [preferred, ...alternatives] = rankedCandidates();
+    const [preferred, ...alternatives] = rankBudgetedCompletions(candidates);
     return preferred ? { ...preferred, alternatives } : undefined;
   };
 
@@ -1348,11 +1347,6 @@ async function completeWithBudgetRetry(
     );
   }
   throw bothBudgetsSpent(stage, effectiveCap, caps[caps.length - 1], caps.length - 1);
-}
-
-interface BudgetedCompletion {
-  completion: ModelCompletion;
-  maxTokens: number;
 }
 
 const BOTH_SPENT = "Output cap reached without visible text at ";
