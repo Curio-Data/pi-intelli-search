@@ -38,8 +38,9 @@ applied; they are applied here.
 Each item names its origin in the review reports under
 `/srv/secure/repos/CURIO/pi-intelli-search/evidence/agents/2026-11-06-rcca-mcp-research/reports/`.
 Do item 1 before item 2, so the `collate-failed` fixture freezes the final
-failure-report shape. Every item has open decisions: settle them with the owner
-before coding, and record the answers in this file.
+failure-report shape. The owner's decisions of 2026-11-07 are recorded under each
+item. Where an item still says "orchestrator's choice", decide it yourself, record
+the choice here, and have the reviewers check it.
 
 ### 1. Keep Fetched Pages When Every Extraction Fails
 
@@ -69,13 +70,17 @@ diff. Record the change under `[pi-0.22.0]` with the MCP pointer.
 or pages, and that a repeat preserves an earlier failure report. Rewrite them, run
 `generate:plugins`, `generate:readmes` and `generate:toc`, and get a prose review.
 
-Decisions for the owner:
+**Owner decision (2026-11-07).** Always keep every downloaded page, even when no
+extraction succeeded, and make it visible in the final result: the report lists
+each saved page's path and why its extraction failed, so the calling agent can
+revisit it. The saved pages are also the starting point for a later extraction
+retry, which then needs no refetch. This applies to the native extension and the
+MCP server alike (shared core), in every host exposure mode.
 
-- (a) Does an `extraction-failed` repeat replace an earlier failure report, as
-  `collate-failed` does, or preserve it, as today?
-- (b) Do runs where some pages also failed to fetch save the pages that fetched?
-- (c) Does `details.cachePath` become non-empty for this outcome? MCP passes
-  `details` through verbatim (`packages/mcp/src/server.ts`).
+Orchestrator's choice, with these defaults: a repeat replaces an earlier failure
+report, as `collate-failed` does, but never a same-day successful report; runs where
+some pages failed to fetch save the pages that did; `details.cachePath` names the
+saved folder (MCP passes `details` through verbatim, `packages/mcp/src/server.ts`).
 
 ### 2. Freeze a Native Contract Fixture for `collate-failed`
 
@@ -89,9 +94,9 @@ beside the existing `extraction-failed` branch (the capture script and
 `node_modules/.bin/tsc -p test/tsconfig.native-contract.json`, and check the result,
 cache and telemetry shapes by hand before committing.
 
-Decisions for the owner: which failure shape to freeze (both budgets empty with
-`finish_reason: length`, a provider error, or a provenance rejection), and whether
-to freeze the preserved-report variant too (needs a seeded prior report).
+**Owner decision (2026-11-07):** orchestrator's choice. Freeze the shape seen
+live: every attempt returns empty text with `finish_reason: length`. Freezing the
+preserved-report variant too is optional.
 
 ### 3. Narrow the Domain-Guess Trade-Offs
 
@@ -123,10 +128,17 @@ swung between false negatives and false positives (`notion.so`, `bun.sh`,
 `detik.id` and `vue.js.org` each have a keep row that every change passes, and the cases still accepted
 are listed in `RCCA.md` § Corrective Actions.
 
-Decisions for the owner: which accepted cases to reject now; whether a root
-reference keeps its query or fragment; whether placeholder hosts are rejected
-(without blocking real single-label intranet hosts); whether host:port references
-are kept.
+**Owner decision (2026-11-07): do not filter file-like references out.** They
+will always occur, and sometimes the script or file is the right download: a
+`.py` file may hold the code that answers the question. Build a mechanism that
+handles them as assets instead: keep each guessed reference, label it as inferred
+from text (not a citation), record what fetching it returned (a page, a code or
+text file, nothing), and show that in the result so the calling agent can follow
+it up. This changes the scope above: the work is classifying and handling these
+references, not rejecting more of them. Check the content-type gate in the fetch
+stage (`test/rcca/rcca-fetch/gate.probe.test.ts`) admits plain-text and source
+files. Query-or-fragment, placeholder-host and host:port handling stay the
+orchestrator's choice, under the same test-row rule.
 
 ### 4. Make the Budget Retry Configurable and Single-Source the Token Ceiling
 
@@ -144,11 +156,62 @@ A retry setting, if added, needs `ResearchSettings` (`src/core/types.ts`),
 canonical reference), `guidance/` and `skills/` if agents should know it, and tests
 on both adapters. Zero must disable the retry.
 
-Decisions for the owner: whether to add the setting at all, and its shape (a
-boolean, or a multiplier where 0 disables); whether the native loader should
-validate `extractionMaxTokens` and `collationMaxTokens` against the ceiling (today
-it accepts any value, so a native cap above 128,000 never retries); whether the
-warning at the ceiling should stop advising a higher cap (`rcca-prose-r4.md`).
+**Owner decision (2026-11-07).** Add a setting for the number of budget retries,
+**default 2**, where 0 disables the retry. Each retry doubles the output cap
+(8,000, then 16,000, then 32,000 tokens), up to the ceiling, and only failed calls
+retry. The native loader validates `extractionMaxTokens` and `collationMaxTokens`
+against the same range as MCP, warning on a bad value.
+
+**Timeout gap (found 2026-11-07, must fix).** Every attempt uses the same
+`llmTimeoutMs` (120,000 ms) whatever its cap. At the measured ≈95-104 tokens/s, a
+16,000-token attempt needs ≈160 s, so a retry that needs its full budget times out
+first. Scale each attempt's timeout with its cap, and test it.
+
+Orchestrator's choice: whether the warning at the ceiling stops advising a higher
+cap (`rcca-prose-r4.md`).
+
+### 5. Size the Limits Against the Collation Model's Input Budget
+
+Origin: owner, 2026-11-07. Extraction and collation use separate models, so size
+them separately. The collation model works well up to ≈256,000 input tokens (its
+context window is far larger). Every extraction feeds collation, so the binding
+limit is the collation input: the search summary, the prompts, every extraction,
+and room for the synthesis must fit in that budget. The concern is context
+consumption, not cost. A permitted budget is a ceiling, not a target: most
+extractions use a small part of their cap.
+
+Observed in 76 saved runs (telemetry `meta.json`, 2026-06 to 2026-11, mostly
+`maxUrls` 3 to 10): links returned median 3, max 10; visible extraction text per
+page median ≈4,100 characters (≈1,000 tokens), 90th percentile ≈7,100 (≈1,800),
+largest run mean ≈10,900 (≈2,700); total extraction text per run max ≈55,600
+characters (≈14,000 tokens). Token counts assume ≈4 characters per token.
+
+Working figures (to be confirmed with the owner before coding): 256,000 minus
+≈3,000 for prompts and search summary, minus 32,000 reserved for the synthesis
+(the largest cap after two retries), leaves ≈221,000 tokens for extractions, plus
+≈100 tokens of headers per source. Sources that fit:
+
+| Extraction size per source | Sources that fit |
+|---|---|
+| Typical (≈1,000 tokens) | ≈195 |
+| Heavy, 90th percentile (≈1,800) | ≈118 |
+| Largest seen (≈2,700) | ≈78 |
+| Every extraction fills an 8,000-token cap | ≈27 |
+| Every extraction fills a 32,000-token cap after two retries | ≈6 |
+
+Proposed design: enforce the budget when collation starts, from the extractions'
+actual sizes, rather than sizing `maxUrls` for the worst case. When the total
+exceeds the budget, trim the longest extractions or drop the lowest-ranked sources
+(inferred guesses first), and report what was trimmed. Cap each extraction's
+visible text separately from its output cap, so a retry's larger reasoning
+allowance cannot let one page take the budget. Then raise `extractMaxChars`
+(150,000 characters, ≈37,500 tokens per page today) for long documentation pages;
+the owner suggested 400,000 characters as a starting point. Settings: the budget,
+the per-extraction text cap and the page cut-off, all defaulted.
+
+The search stage is the other limit: no saved run returned more than 10 links.
+More sources need more search breadth (`searchWebSearch.maxResults`, more queries),
+which is a separate question for the owner.
 
 ## Open Review Findings
 
