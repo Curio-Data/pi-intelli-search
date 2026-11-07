@@ -86,8 +86,8 @@ export interface TelemetryMeta {
       // cap (finish reason "length", or usage.output >= the cap). Present
       // only when nonzero.
       truncated?: number;
-      // Pages retried once with a doubled output budget after hidden
-      // reasoning spent the first one. Present only when nonzero.
+      // Extraction budget retries issued after output-cap exhaustion.
+      // Present only when nonzero.
       budgetRetries?: number;
       // Failure classification aggregated after the extract worker pool
       // settles. Present only when at least one extraction failed.
@@ -102,8 +102,19 @@ export interface TelemetryMeta {
       summaryChars: number;
       // True when the synthesis itself was cut off by its output cap.
       truncated?: boolean;
-      // True when collation was retried once with a doubled output budget.
+      // True when any collation budget retry was issued.
       budgetRetried?: boolean;
+      // Number of collation budget retries issued. Present only when nonzero.
+      budgetRetries?: number;
+      // What the collation input budget reduced, when it reduced anything.
+      inputBudget?: {
+        budgetTokens: number;
+        sources: number;
+        trimmed: number;
+        dropped: number;
+        charsBefore: number;
+        charsAfter: number;
+      };
       // Bounded reason when collation failed and the run committed the
       // extractions without a synthesis (outcome "collate-failed").
       error?: string;

@@ -631,7 +631,9 @@ export function extractSourceUrls(text: string): SourceUrl[] {
     const authority = suffixAt === -1 ? domainReference : domainReference.slice(0, suffixAt);
     const suffix = suffixAt === -1 ? "" : domainReference.slice(suffixAt);
     const port = authority.match(/:\d+$/)?.[0] ?? "";
-    const asciiHost = domainToASCII(authority.slice(0, authority.length - port.length)).toLowerCase();
+    const unicodeHost = authority.slice(0, authority.length - port.length);
+    if (hasMixedProseLabels(unicodeHost)) continue;
+    const asciiHost = domainToASCII(unicodeHost).toLowerCase();
     if (!asciiHost || !plausibleDomainReference(`${asciiHost}${suffix}`)) continue;
     const url = `https://${asciiHost}${port}${suffix}`;
     if (seen.has(url)) continue;
@@ -647,6 +649,19 @@ export function extractSourceUrls(text: string): SourceUrl[] {
   }
 
   return urls;
+}
+
+/** Reject a label that mixes Latin with a non-Deseret script. This catches
+ *  prose runs such as Cyrillic or Han text immediately followed by a domain,
+ *  while retaining the explicitly required Deseret-plus-Latin keep row.
+ *  Combining marks and numbers do not trigger the guard. */
+function hasMixedProseLabels(host: string): boolean {
+  return host.split(".").some((label) => {
+    if (!/\p{Script=Latin}/u.test(label)) return false;
+    return (label.match(/\p{L}/gu) ?? []).some(
+      (letter) => !/\p{Script=Latin}/u.test(letter) && !/\p{Script=Deseret}/u.test(letter),
+    );
+  });
 }
 
 /**

@@ -336,6 +336,8 @@ Also bare reference https://kit.svelte.dev.
       expected: "https://xn--caf-dma.fr",
     },
     { reference: "example.comé", decision: "reject" },
+    { reference: "текстexample.com", decision: "reject" },
+    { reference: "文档example.com", decision: "reject" },
     { reference: "pre-example.com", decision: "keep", expected: "https://pre-example.com" },
     { reference: "example.com-suffix", decision: "reject" },
     { reference: "EXAMPLE.ORG/Docs", decision: "keep", expected: "https://example.org/Docs" },

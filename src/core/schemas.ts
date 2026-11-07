@@ -9,9 +9,9 @@ const extractionSchema = Type.Object({
   extraction: Type.String(),
   sourceType: Type.String(),
   status: Type.String(),
-  // Optional diagnostics carried from intelli_extract results: a truncation
-  // flag and the bounded failure reason. Optional so strict argument sampling
-  // that knows only the five core keys keeps working.
+  // Optional provenance and diagnostics carried from extraction results.
+  // Optional so strict argument sampling that knows only the core keys keeps working.
+  inferred: Type.Optional(Type.Boolean()),
   truncated: Type.Optional(Type.Boolean()),
   error: Type.Optional(Type.String()),
 });

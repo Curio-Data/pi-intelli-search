@@ -63,6 +63,7 @@ import {
   buildSearchPayloadPatch,
   buildExtractionMessage,
   buildCollationMessage,
+  COLLATION_NO_EVIDENCE_MESSAGE,
   formatCacheAppendix,
   formatCollationTrimNotice,
 } from "../messages.js";
@@ -72,6 +73,7 @@ import { planCollationBudget, inferredSource } from "../collation-budget.js";
 import { progress } from "../progress.js";
 import {
   collationFailureReport,
+  evidenceExtractions,
   extractionFailureReport,
   finalizeCollation,
   inferredAssetsSection,
@@ -85,6 +87,8 @@ export interface ResearchDependencies {
   downloadLlmsFullToCache: typeof downloadLlmsFullToCache;
   /** Optional per-run filesystem seam for deterministic cleanup-failure tests. */
   removeStaging?: (path: string) => Promise<void>;
+  /** Optional lock-attempt seam for deterministic preservation-race tests. */
+  beforeCacheLock?: (path: string) => Promise<void>;
 }
 
 export class MissingModelsError extends Error {
@@ -788,8 +792,12 @@ async function runCollateStage(
   );
   const evidence = succeededExtractions.map((ext, index) => ({
     ...ext,
+    sourceNumber: index + 1,
     extraction: budget.sources[index]?.text ?? ext.extraction,
   }));
+  if (evidenceExtractions(evidence).length === 0) {
+    throw new Error(COLLATION_NO_EVIDENCE_MESSAGE);
+  }
 
   // Build collation prompt (no files written yet — lock is never held
   // across the LLM call). File references use the shared run identity and
@@ -851,8 +859,8 @@ async function runCollateStage(
         ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens, after a retry at a larger cap); ` +
           `the synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
         : p.budgetRetries.collate > 0
-          ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens), and a retry at a larger cap was considered; ` +
-            `the synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
+          ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens); a retry at a larger cap ran but did not return a better answer. ` +
+            `The synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
           : p.settings.collationMaxTokens >= MAX_OUTPUT_TOKENS
             ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens), which is already the maximum the settings accept; ` +
               `the synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
@@ -962,6 +970,7 @@ async function writeCacheArtifacts(
   identity: SourceIdentity,
   outcome: TelemetryOutcome,
 ): Promise<boolean> {
+  await p.dependencies.beforeCacheLock?.(p.physicalCachePath);
   const committed = await withLock(
     cacheLockDir(p.physicalCachePath),
     async () => {
@@ -1410,6 +1419,7 @@ async function completeWithBudgetRetry(
     return preferred ? { ...preferred, alternatives } : undefined;
   };
 
+  let lastBudgetError: unknown;
   for (const [index, cap] of caps.entries()) {
     throwIfAborted(p.signal);
     if (index > 0) {
@@ -1451,7 +1461,9 @@ async function completeWithBudgetRetry(
         throw error;
       }
       // Budget exhausted with no visible text: the next cap is the only
-      // remaining remedy, so continue.
+      // remaining remedy, so continue. Keep the adapter's diagnostic too:
+      // its output and hidden-reasoning counts explain the exhaustion.
+      lastBudgetError = error;
     }
   }
 
@@ -1462,12 +1474,17 @@ async function completeWithBudgetRetry(
   const effectiveCap = caps[0];
   if (caps.length === 1) {
     throw new OutputBudgetExhaustedError(
-      effectiveCap >= MAX_OUTPUT_TOKENS
+      (effectiveCap >= MAX_OUTPUT_TOKENS
         ? `Output cap of ${effectiveCap} tokens reached without visible text; the cap is already at the ${MAX_OUTPUT_TOKENS}-token maximum, so no larger retry is possible.`
-        : `Output cap of ${effectiveCap} tokens reached without visible text; budget retries are disabled (outputBudgetRetries is 0).`,
+        : `Output cap of ${effectiveCap} tokens reached without visible text; budget retries are disabled (outputBudgetRetries is 0).`) +
+        budgetDiagnostic(lastBudgetError),
     );
   }
-  throw bothBudgetsSpent(stage, effectiveCap, caps[caps.length - 1], caps.length - 1);
+  throw bothBudgetsSpent(stage, effectiveCap, caps[caps.length - 1], caps.length - 1, lastBudgetError);
+}
+
+function budgetDiagnostic(error: unknown): string {
+  return error === undefined ? "" : ` Adapter diagnostic: ${failureDetail(errMsg(error))}`;
 }
 
 const BOTH_SPENT = "Output cap reached without visible text at ";
@@ -1477,12 +1494,14 @@ function bothBudgetsSpent(
   cap: number,
   maxTokens: number,
   retries: number,
+  lastError?: unknown,
 ): OutputBudgetExhaustedError {
   const setting = stage === "extract" ? "extractionMaxTokens" : "collationMaxTokens";
   const attempts = retries === 1 ? "one retry" : `${retries} retries`;
   return new OutputBudgetExhaustedError(
-    `${BOTH_SPENT}${cap} tokens and again after ${attempts} up to ${maxTokens} tokens; ` +
-      `the model's hidden reasoning consumed every budget. Raise ${setting}, ` +
+    `${BOTH_SPENT}${cap} tokens and again after ${attempts} up to ${maxTokens} tokens;` +
+      budgetDiagnostic(lastError) +
+      ` the model's hidden reasoning consumed every budget. Raise ${setting}, ` +
       "choose a model that reasons less for this stage, or re-run.",
   );
 }

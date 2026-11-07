@@ -124,6 +124,9 @@
                 "status": {
                   "type": "string"
                 },
+                "inferred": {
+                  "type": "boolean"
+                },
                 "truncated": {
                   "type": "boolean"
                 },
