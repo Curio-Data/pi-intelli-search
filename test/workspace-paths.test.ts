@@ -48,6 +48,7 @@ describe("explicit workspace paths", () => {
     "no-links",
     "fetch-failed",
     "extraction-failed",
+    "collate-failed",
   ] satisfies Scenario[]) {
     it(`keeps ${scenario} cache, index, telemetry and display under the explicit workspace`, async () => {
       const expected = JSON.parse(await readFile(join(FIXTURES, `${scenario}.json`), "utf8"));

@@ -35,6 +35,7 @@ export const SCENARIOS = [
   "no-links",
   "fetch-failed",
   "extraction-failed",
+  "collate-failed",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 const FIXED_NOW = Date.UTC(2026, 0, 2);
@@ -261,8 +262,16 @@ export async function captureOperation(
           return response(model.id, "", "fixture extraction refused");
         }
         text = EXTRACTION;
-      } else if (prompt === "COLLATION_SYSTEM_PROMPT") text = COLLATION;
-      else text = '[{"index":1,"relevance":"Related fixture"}]';
+      } else if (prompt === "COLLATION_SYSTEM_PROMPT") {
+        if (scenario === "collate-failed") {
+          // Owner decision 2026-11-07: freeze the shape seen live, where every
+          // collation attempt returns empty text with finish_reason "length"
+          // (hidden reasoning exhausts the cap before any visible output), so
+          // the budget retry fires once and then both budgets are spent.
+          return { ...response(model.id, ""), content: [], stopReason: "length" };
+        }
+        text = COLLATION;
+      } else text = '[{"index":1,"relevance":"Related fixture"}]';
       return response(model.id, text);
     };
     const ctx = {

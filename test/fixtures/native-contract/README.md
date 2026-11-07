@@ -20,6 +20,7 @@ The fixture suite runs through `npm test`. The expected files are static JSON, m
 | `no-links.json` | Degraded search text, details, progress and local metadata without a completed report |
 | `fetch-failed.json` | All-fetches-failed result and metadata |
 | `extraction-failed.json` | All-extractions-failed result that saves every fetched page with a failure report naming each saved page and its failure reason |
+| `collate-failed.json` | Collation-failure result (every attempt empty at `finish_reason: length`, budget retry fired) that saves the extractions with a failure report |
 
 Operation fixtures contain the returned result, captured model requests and fetch parameters, progress updates, working-indicator lifecycle, diagnostics and the complete `.search/` file inventory. Cache file values are exact text, including report formatting and serialized metadata. The model request records use the system-prompt export name; `prompts.json` independently freezes its exact text.
 
