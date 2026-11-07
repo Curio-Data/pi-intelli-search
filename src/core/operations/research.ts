@@ -307,7 +307,11 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   }
 
   // Keep inferred provenance and every fetch outcome beside the authoritative
-  // source inventory in both the tool result and report.md.
+  // source inventory in both the tool result and report.md. This point is
+  // shared by completed, collate-failed and extraction-failed reports, so a
+  // committed extraction failure carries the same identity-bearing assets.
+  // The preserved return below renders current outcomes separately without
+  // identity (and with inline bounded reasons) because nothing was saved.
   const inferredAssets = inferredAssetsSection(fetched.pages, p.cachePath, identity);
   if (inferredAssets) collation += `\n\n${inferredAssets}`;
 
