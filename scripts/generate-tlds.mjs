@@ -28,8 +28,8 @@ if (!version) throw new Error("Not an IANA TLD list: missing '# Version' header"
 const labels = lines
   .slice(1)
   .map((line) => line.trim().toLowerCase())
-  .filter((line) => line && !line.startsWith("xn--"));
-if (labels.some((label) => !/^[a-z]{2,63}$/.test(label)))
+  .filter(Boolean);
+if (labels.some((label) => !/^(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})$/.test(label)))
   throw new Error("Unexpected label shape in the IANA list");
 
 const chunks = [];
@@ -52,8 +52,8 @@ if (check) {
     console.error(`src/core/tlds.ts differs from IANA list version ${version}; rerun without --check`);
     process.exit(1);
   }
-  console.log(`src/core/tlds.ts matches IANA list version ${version} (${labels.length} ASCII TLDs)`);
+  console.log(`src/core/tlds.ts matches IANA list version ${version} (${labels.length} TLDs)`);
 } else {
   writeFileSync(target, after);
-  console.log(`Wrote ${labels.length} ASCII TLDs from IANA list version ${version}`);
+  console.log(`Wrote ${labels.length} TLDs from IANA list version ${version}`);
 }

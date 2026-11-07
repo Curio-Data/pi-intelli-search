@@ -220,19 +220,19 @@ export function wrapFetchForAnnotations(
 export function mergeCitations(
   textUrls: Array<{ url: string; title: string; inferred?: true }>,
   sink: AnnotationSink,
-): Array<{ url: string; title: string }> {
-  const merged: Array<{ url: string; title: string }> = [];
+): Array<{ url: string; title: string; inferred?: true }> {
+  const merged: Array<{ url: string; title: string; inferred?: true }> = [];
   const seen = new Set<string>();
-  const add = (url: string, title: string) => {
+  const add = (url: string, title: string, inferred?: true) => {
     if (seen.has(url)) return;
     seen.add(url);
-    merged.push({ url, title });
+    merged.push({ url, title, ...(inferred ? { inferred } : {}) });
   };
   // Explicit links first, then harvested citations, then protocol-less domain
   // guesses from prose, so a guess never displaces a real citation from the
-  // maxUrls slice.
+  // maxUrls slice. The inferred flag survives for fetch and result rendering.
   for (const { url, title, inferred } of textUrls) if (!inferred) add(url, title);
   for (const { url, title } of sink.citations) add(url, title && title.length > 0 ? title : url);
-  for (const { url, title, inferred } of textUrls) if (inferred) add(url, title);
+  for (const { url, title, inferred } of textUrls) if (inferred) add(url, title, inferred);
   return merged;
 }

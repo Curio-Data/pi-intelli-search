@@ -169,10 +169,11 @@ describe("mergeCitations", () => {
       ],
       { citations: [{ url: "https://cited.example/b", title: "B" }] } as never,
     );
-    assert.deepStrictEqual(
-      merged.map((m) => m.url),
-      ["https://explicit.example/a", "https://cited.example/b", "https://guess.example"],
-    );
+    assert.deepStrictEqual(merged, [
+      { url: "https://explicit.example/a", title: "A" },
+      { url: "https://cited.example/b", title: "B" },
+      { url: "https://guess.example", title: "guess.example", inferred: true },
+    ]);
   });
 
   it("keeps text links first, appends annotation-only urls, dedupes by exact url", () => {
@@ -192,6 +193,21 @@ describe("mergeCitations", () => {
       { url: "https://a.example/1", title: "A via text" },
       { url: "https://b.example/2", title: "B" },
       { url: "https://c.example/3", title: "C" },
+    ]);
+  });
+
+  it("does not relabel an explicit or cited duplicate as inferred", () => {
+    const merged = mergeCitations(
+      [
+        { url: "https://same.example", title: "Explicit" },
+        { url: "https://same.example", title: "same.example", inferred: true },
+        { url: "https://cited.example", title: "cited.example", inferred: true },
+      ],
+      { citations: [{ url: "https://cited.example", title: "Cited" }] },
+    );
+    assert.deepStrictEqual(merged, [
+      { url: "https://same.example", title: "Explicit" },
+      { url: "https://cited.example", title: "Cited" },
     ]);
   });
 
