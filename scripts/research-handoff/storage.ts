@@ -80,7 +80,7 @@ export async function sourceIdentity(root: string): Promise<{ digest: string; fi
     files[path] = await digestFile(join(root, path));
   }
   // Each pilot contract joins the identity once it exists; historical trees without it are unaffected.
-  for (const name of ["PILOT-PROTOCOL.md", "PILOT-CONTINUATION.md"]) {
+  for (const name of ["PILOT-PROTOCOL.md", "PILOT-CONTINUATION.md", "REPEAT-PROTOCOL.md"]) {
     const pilotProtocol = `docs/experiments/research-handoff/${name}`;
     try { files[pilotProtocol] = await digestFile(join(root, pilotProtocol)); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }

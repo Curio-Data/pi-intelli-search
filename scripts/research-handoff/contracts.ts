@@ -180,7 +180,7 @@ export type PilotSyntheticScenario = "complete" | "recovery" | "truncated" | "fa
   | "recovery-limit" | "budget-refused" | "unknown-charge" | "worker-ceiling"
   | "long-complete" | "default-limit-truncated" | "observer-complete";
 /** Pilot-only worker options. Never present on historical rh-v4 worker configurations. */
-export type PilotRevision = "rh-v5-pilot-1" | "rh-v6-pilot-1";
+export type PilotRevision = "rh-v5-pilot-1" | "rh-v6-pilot-1" | "rh-v7-once-1";
 export interface PilotWorkerOptions {
   revision: PilotRevision;
   /** Per-conversation allowance; zero for observer diagnostics. */

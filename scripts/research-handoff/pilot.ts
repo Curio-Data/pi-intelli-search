@@ -7,7 +7,8 @@
 // machine checks and settlement walk. Historical modules are imported only
 // for shared mechanics (host, recorder, registration, storage).
 
-import { mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { copyFile, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve, relative } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { callLlm } from "../../src/llm.js";
@@ -38,7 +39,8 @@ import {
   PILOT_BUDGET, PILOT_CODEMODE_MAX_OUTPUT_TOKENS, PILOT_RUBRICS, PILOT_TOPICS, PILOT_MIN_GAP_MS, PILOT_PROFILE, PILOT_PROTOCOL_PATH, PILOT_PROTOCOL_REVISION, PILOT_SCOPE,
   pilotAllocationFor, pilotParams, pilotRunId, pilotSettings, pilotTaskPrompt, pilotAllocation, RH5_PILOT, type PilotDefinition, type PilotSlot,
 } from "./pilot-config.js";
-import { pilotDefinitionFor, syntheticContinuationInputs } from "./pilot-continuation.js";
+import { syntheticContinuationInputs } from "./pilot-continuation.js";
+import { pilotDefinitionFor, verifyReusedCorpus } from "./pilot-repeat.js";
 import { isPilotPhase, type Arm, type FrozenInputs, type JournalEvent, type PilotSyntheticScenario, type PilotWorkerOptions, type RunManifest, type RunRecord } from "./contracts.js";
 
 /** On-wire and reservation guards for every downstream attempt of a pilot definition. */
@@ -181,18 +183,68 @@ export function assertAllSelectedPagesCaptured(frozen: Pick<FrozenInputs, "pages
   if (failed.length) throw new Error(`Capture has ${failed.length} failed selected page(s) (${failed.map(item => `#${item.index + 1} ${item.url}`).join(", ")}); every selected page must be captured`);
 }
 
-/** Gates for a paid pilot conversation: admission, capture, corpus review, qualification; candidate also needs the baseline gate. */
-export async function verifyPaidPrerequisites(authority: VerifiedPilotAuthority, arm: Arm, corpusAcceptancePath: string, now = Date.now()): Promise<{ corpusSha256: string }> {
+/**
+ * The series corpus stage: the capture (rh-v5, rh-v6) or the byte-for-byte import of a
+ * retained corpus (rh-v7). A reuse series never accepts a capture receipt, and the
+ * imported file must still hold the recorded source bytes.
+ */
+export async function verifyCorpusStage(authority: VerifiedPilotAuthority, captureExtra: Record<string, unknown> = {}): Promise<{ corpusSha256: string; frozenPath: string }> {
+  const root = authority.root, reuse = authority.definition.corpusReuse;
+  if (!reuse) {
+    const capture = await verifyStageReceipt(join(root, "capture", "outcome.json"), "pilot-capture-outcome", authority, captureExtra);
+    return { corpusSha256: String(capture.corpusSha256), frozenPath: join(root, "capture", "frozen-inputs.json") };
+  }
+  const frozenPath = join(root, "corpus-import", "frozen-inputs.json");
+  const imported = await verifyStageReceipt(join(root, "corpus-import", "outcome.json"), "pilot-corpus-import-outcome", authority,
+    { corpusSha256: reuse.digest, frozenFileSha256: reuse.sha256, newSearchChargeNanoUsd: 0 });
+  if (await digestFile(frozenPath) !== reuse.sha256) throw new Error("Imported corpus bytes differ from the retained source");
+  return { corpusSha256: String(imported.corpusSha256), frozenPath };
+}
+
+/**
+ * rh-v7 candidate admission: the baseline conversation must be retained with passed machine
+ * checks, a final budget receipt and known charges only. Its answer gate is not consulted;
+ * both answers are graded after the pair. An unreadable, failed or unsafe baseline blocks.
+ */
+export async function verifyBaselineCollected(authority: VerifiedPilotAuthority, frozenPath: string, corpusSha256: string, now = Date.now()) {
+  const root = authority.root, runId = pilotRunId(root, "pilot", "baseline"), directory = join(root, "runs", runId);
+  const claim = await readPilotClaim(root, "pilot-baseline");
+  if (!claim || claim.runId !== runId || claim.corpusSha256 !== corpusSha256 || claim.implementationAcceptanceSha256 !== authority.acceptanceSha256
+    || !await fileExists(join(root, "claims", "pilot-baseline", "dispatched"))) {
+    throw new Error("Candidate requires the claimed baseline conversation of this series with a dispatch witness");
+  }
+  const frozen = await loadFrozenInputs({ path: frozenPath });
+  const checks = await pilotChecksFor(directory, frozen, "known-charges");
+  let record: RunRecord;
+  try { record = JSON.parse(await readFile(join(directory, "record.json"), "utf8")) as RunRecord; }
+  catch (error) { throw new Error(`Candidate requires a readable baseline record: ${String(error)}`); }
+  const failing = checks.checks.filter(check => !check.pass).map(check => check.id);
+  if (!checks.passed || !checks.budgetReceipt || checks.financial.unknownNanoUsd !== 0 || checks.financial.activeNanoUsd !== 0
+    || checks.financial.rejected !== 0 || checks.financial.overruns !== 0 || record.manifest?.runId !== runId || record.manifest.status !== "completed"
+    || record.manifest.corpusSha256 !== corpusSha256 || record.manifest.arm !== "baseline" || record.manifest.phase !== "pilot"
+    || record.manifest.codeSha256 !== authority.acceptance.codeSha256 || record.manifest.protocolSha256 !== authority.acceptance.protocolSha256) {
+    throw new Error(`Candidate requires a baseline with passed machine checks and known charges only; failing: ${failing.join(", ") || "record identity or financial state"}`);
+  }
+  const ended = Date.parse(String(record.manifest.endedAt));
+  if (!Number.isFinite(ended) || now - ended < PILOT_MIN_GAP_MS) throw new Error("Candidate must start at least 30 seconds after the baseline worker ended");
+  return { baselineRunId: runId, baselineRecordSha256: digestObject(record), baselineEndedAt: record.manifest.endedAt, baselineMachineChecksPassed: true,
+    baselineKnownNanoUsd: checks.financial.knownNanoUsd };
+}
+
+/** Gates for a paid pilot conversation: admission, corpus stage, corpus review, qualification; candidate also needs the baseline gate (rh-v7: the collected baseline). */
+export async function verifyPaidPrerequisites(authority: VerifiedPilotAuthority, arm: Arm, corpusAcceptancePath: string, now = Date.now()): Promise<{ corpusSha256: string; baseline?: Record<string, unknown> }> {
   const root = authority.root;
   await verifyStageReceipt(join(root, "financial-admission-receipt.json"), "pilot-financial-admission", authority);
-  const capture = await verifyStageReceipt(join(root, "capture", "outcome.json"), "pilot-capture-outcome", authority, { sonarReportedCharge: true });
-  const corpusSha256 = String(capture.corpusSha256);
+  const { corpusSha256, frozenPath } = await verifyCorpusStage(authority, { sonarReportedCharge: true });
   const corpus = await verifyStageReceipt(corpusAcceptancePath, "pilot-corpus-acceptance", authority, { corpusSha256 });
   if (typeof corpus.reviewer !== "string" || !corpus.reviewPath || await digestFile(String(corpus.reviewPath)) !== corpus.reviewSha256
     || typeof corpus.readableSelectedPages !== "number" || corpus.readableSelectedPages < 2) {
     throw new Error("Corpus acceptance lacks a fresh reviewer, immutable review or at least two readable selected pages");
   }
   await verifyStageReceipt(join(root, "charge-qualification", "outcome.json"), "pilot-charge-qualification-outcome", authority, { corpusSha256, m3ReportedCharge: true });
+  if (arm === "candidate" && authority.definition.gradingAfterPair) {
+    return { corpusSha256, baseline: await verifyBaselineCollected(authority, frozenPath, corpusSha256, now) };
+  }
   if (arm === "candidate") {
     const gate = await verifyStageReceipt(join(root, "pilot-baseline-gate.json"), "pilot-baseline-gate", authority, { passed: true });
     const ended = Date.parse(String(gate.baselineEndedAt));
@@ -493,7 +545,9 @@ export function assertPilotRates(data: { data: CatalogueModel[] }, definition: P
     throw new Error("Current catalogue exceeds or does not establish the pilot cost bounds");
   }
   // Each pilot envelope must hold twelve full M3 reservations at once (both protocols, Financial Controls).
-  if (6 * budget.sonarAttemptNanoUsd > budget.captureNanoUsd || 3 * budget.m3AttemptNanoUsd > budget.qualificationNanoUsd
+  // A reuse series (rh-v7) makes no search: its capture allowance must be exactly zero.
+  const captureFits = definition.corpusReuse ? budget.captureNanoUsd === 0 : 6 * budget.sonarAttemptNanoUsd <= budget.captureNanoUsd;
+  if (!captureFits || 3 * budget.m3AttemptNanoUsd > budget.qualificationNanoUsd
     || 12 * budget.m3AttemptNanoUsd > Math.min(budget.baselinePilotNanoUsd, budget.candidatePilotNanoUsd)
     || budget.captureNanoUsd + budget.qualificationNanoUsd + budget.baselinePilotNanoUsd + budget.candidatePilotNanoUsd !== budget.totalNanoUsd) {
     throw new Error("Pilot allocation arithmetic does not fit the stage reservations");
@@ -550,6 +604,7 @@ function reportedCharge(events: JournalEvent[], stage: string): boolean {
 /** Step 5: the one common capture. No fallback, replacement or recapture. */
 export async function pilotCapture(acceptancePath: string, authPath: string, options: PilotOperationOptions = {}): Promise<string> {
   const authority = await verifyPilotImplementation(acceptancePath, options);
+  if (authority.definition.corpusReuse) throw new Error(`${authority.definition.revision} reuses a retained corpus; capture and recapture are not authorised`);
   await verifyStageReceipt(join(authority.root, "financial-admission-receipt.json"), "pilot-financial-admission", authority);
   await claimPilotSlot(authority.root, "capture", binding(authority));
   const paths = createRunDirectory(authority.root, "capture");
@@ -582,14 +637,50 @@ export async function pilotCapture(acceptancePath: string, authPath: string, opt
   return join(paths.directory, "frozen-inputs.json");
 }
 
+/**
+ * rh-v7 corpus stage: after financial admission, verify the retained corpus and its source
+ * series, claim the single import slot and copy the file byte for byte. Credential-free; no
+ * search, page fetch or model call, and no capture fallback. The zero-limit budget receipt
+ * lets settlement record the stage's zero charge from the ordinary walk.
+ */
+export async function pilotImportCorpus(acceptancePath: string, options: PilotOperationOptions = {}): Promise<string> {
+  const authority = await verifyPilotImplementation(acceptancePath, options);
+  const definition = authority.definition, reuse = definition.corpusReuse;
+  if (!reuse) throw new Error(`${definition.revision} captures its own corpus; corpus import is not authorised`);
+  await verifyStageReceipt(join(authority.root, "financial-admission-receipt.json"), "pilot-financial-admission", authority);
+  const { provenance } = await verifyReusedCorpus(definition);
+  await claimPilotSlot(authority.root, "corpus-import", { ...binding(authority), corpusSha256: reuse.digest, sourceFileSha256: reuse.sha256 });
+  const directory = join(authority.root, "corpus-import");
+  await mkdir(directory);
+  const frozenPath = join(directory, "frozen-inputs.json");
+  const budget = new AttemptBudget(definition.budget.captureNanoUsd, { record: () => {} });
+  let failure: string | undefined, copiedSha256: string | undefined;
+  try {
+    await copyFile(reuse.path, frozenPath, fsConstants.COPYFILE_EXCL);
+    copiedSha256 = await digestFile(frozenPath);
+    if (copiedSha256 !== reuse.sha256) throw new Error("Imported corpus bytes differ from the retained source");
+    const copied = await loadFrozenInputs({ path: frozenPath });
+    if (copied.digest !== reuse.digest) throw new Error("Imported corpus digest differs from the retained source");
+  } catch (error) { failure = String(error); }
+  finally {
+    writeNewJson(join(directory, "budget.json"), budget.snapshot());
+    writeNewJson(join(directory, "outcome.json"), { ...binding(authority), kind: "pilot-corpus-import-outcome", accepted: failure === undefined,
+      error: failure, corpusSha256: reuse.digest, frozenFileSha256: copiedSha256 ?? null, newSearchChargeNanoUsd: 0,
+      network: false, credentialUse: false, provenance,
+      note: "Byte-for-byte reuse of a settled earlier capture. No search, page fetch or model call was made; the source series' search charge is in its own settlement." });
+  }
+  if (failure) throw new Error(failure);
+  return frozenPath;
+}
+
 /** Step 6: one charge-reporting extraction with the complete pilot profile, at most three attempts. */
 export async function pilotQualify(acceptancePath: string, authPath: string, corpusAcceptancePath: string, options: PilotOperationOptions = {}): Promise<string> {
   const authority = await verifyPilotImplementation(acceptancePath, options);
-  const capture = await verifyStageReceipt(join(authority.root, "capture", "outcome.json"), "pilot-capture-outcome", authority, { sonarReportedCharge: true });
-  const frozen = await loadFrozenInputs({ path: join(authority.root, "capture", "frozen-inputs.json") });
+  const stage = await verifyCorpusStage(authority, { sonarReportedCharge: true });
+  const frozen = await loadFrozenInputs({ path: stage.frozenPath });
   assertCorpusAcceptable({ frozen });
   assertAllSelectedPagesCaptured(frozen);
-  if (frozen.digest !== capture.corpusSha256) throw new Error("Capture corpus changed");
+  if (frozen.digest !== stage.corpusSha256) throw new Error("Capture corpus changed");
   const corpus = await verifyStageReceipt(corpusAcceptancePath, "pilot-corpus-acceptance", authority, { corpusSha256: frozen.digest });
   if (typeof corpus.readableSelectedPages !== "number" || corpus.readableSelectedPages < 2 || !corpus.reviewPath
     || await digestFile(String(corpus.reviewPath)) !== corpus.reviewSha256) throw new Error("Corpus acceptance is incomplete");
@@ -627,8 +718,8 @@ export async function pilotQualify(acceptancePath: string, authPath: string, cor
 export async function pilotRun(acceptancePath: string, authPath: string, arm: Arm, corpusAcceptancePath: string, options: PilotOperationOptions = {}): Promise<{ runId: string; passed: boolean }> {
   const authority = await verifyPilotImplementation(acceptancePath, options);
   const root = authority.root;
-  const { corpusSha256 } = await verifyPaidPrerequisites(authority, arm, corpusAcceptancePath, options.now?.());
-  const frozenPath = join(root, "capture", "frozen-inputs.json");
+  const { corpusSha256, baseline } = await verifyPaidPrerequisites(authority, arm, corpusAcceptancePath, options.now?.());
+  const { frozenPath } = await verifyCorpusStage(authority);
   const frozen = await loadFrozenInputs({ path: frozenPath });
   if (frozen.digest !== corpusSha256) throw new Error("Capture corpus changed");
   assertAllSelectedPagesCaptured(frozen);
@@ -636,7 +727,7 @@ export async function pilotRun(acceptancePath: string, authPath: string, arm: Ar
   await (options.credentialCheck ?? defaultCredentialCheck)(authPath, MAIN_MODEL.provider);
   await (options.credentialCheck ?? defaultCredentialCheck)(authPath, "openrouter");
   await claimPilotSlot(root, arm === "baseline" ? "pilot-baseline" : "pilot-candidate", { ...binding(authority), runId, corpusSha256,
-    corpusAcceptancePath, corpusAcceptanceSha256: await digestFile(corpusAcceptancePath) });
+    corpusAcceptancePath, corpusAcceptanceSha256: await digestFile(corpusAcceptancePath), ...(baseline ? { candidateAdmission: baseline } : {}) });
   const host = await loadPinnedHost();
   const paths = createRunDirectory(join(root, "runs"), runId);
   const manifest = pilotManifest({ runId, arm, phase: "pilot", host: host.identity, codeSha256: authority.acceptance.codeSha256,
@@ -652,9 +743,10 @@ export async function pilotGate(acceptancePath: string, arm: Arm, lockPath: stri
   const authority = await verifyPilotImplementation(acceptancePath, options);
   const root = authority.root, runId = pilotRunId(root, "pilot", arm);
   const directory = join(root, "runs", runId);
-  const capture = await verifyStageReceipt(join(root, "capture", "outcome.json"), "pilot-capture-outcome", authority);
-  const frozen = await loadFrozenInputs({ path: join(root, "capture", "frozen-inputs.json") });
-  if (frozen.digest !== capture.corpusSha256) throw new Error("Capture corpus changed");
+  const stage = await verifyCorpusStage(authority);
+  const frozen = await loadFrozenInputs({ path: stage.frozenPath });
+  if (frozen.digest !== stage.corpusSha256) throw new Error("Capture corpus changed");
+  if (authority.definition.gradingAfterPair) await assertPairCollected(authority, frozen);
   const checks = await pilotChecksFor(directory, frozen, "known-charges");
   let record: RunRecord | undefined, assessment: unknown, purpose: { passed: boolean; problems: string[] } = { passed: false, problems: [] };
   let assessed = false;
@@ -674,12 +766,29 @@ export async function pilotGate(acceptancePath: string, arm: Arm, lockPath: stri
   return { passed, path };
 }
 
+/**
+ * rh-v7 grades follow the pair: no answer gate is written until the candidate has a terminal
+ * record, or the baseline's failed machine checks have blocked the candidate.
+ */
+async function assertPairCollected(authority: VerifiedPilotAuthority, frozen: FrozenInputs): Promise<void> {
+  const root = authority.root;
+  if (await readPilotClaim(root, "pilot-candidate")) {
+    if (await fileExists(join(root, "runs", pilotRunId(root, "pilot", "candidate"), "record.json"))) return;
+    throw new Error("Grades follow the pair: the claimed candidate has no terminal record yet");
+  }
+  if (!await readPilotClaim(root, "pilot-baseline")) throw new Error("Grades follow the pair: no baseline conversation has been collected");
+  const baseline = await pilotChecksFor(join(root, "runs", pilotRunId(root, "pilot", "baseline")), frozen, "known-charges");
+  if (baseline.passed) throw new Error("Grades follow the pair: collect the candidate before writing any answer gate");
+}
+
 function settlementStages(definition: PilotDefinition): Array<{ slot: PilotSlot; cap: number; directory: (root: string) => string }> {
   const budget = definition.budget;
   return [
     { slot: "observer-baseline", cap: 0, directory: root => join(root, "runs", pilotRunId(root, "observer", "baseline")) },
     { slot: "observer-candidate", cap: 0, directory: root => join(root, "runs", pilotRunId(root, "observer", "candidate")) },
-    { slot: "capture", cap: budget.captureNanoUsd, directory: root => join(root, "capture") },
+    definition.corpusReuse
+      ? { slot: "corpus-import", cap: budget.captureNanoUsd, directory: root => join(root, "corpus-import") }
+      : { slot: "capture", cap: budget.captureNanoUsd, directory: root => join(root, "capture") },
     { slot: "charge-qualification", cap: budget.qualificationNanoUsd, directory: root => join(root, "charge-qualification") },
     { slot: "pilot-baseline", cap: budget.baselinePilotNanoUsd, directory: root => join(root, "runs", pilotRunId(root, "pilot", "baseline")) },
     { slot: "pilot-candidate", cap: budget.candidatePilotNanoUsd, directory: root => join(root, "runs", pilotRunId(root, "pilot", "candidate")) },
@@ -707,7 +816,7 @@ export async function pilotSettle(acceptancePath: string, options: PilotOperatio
     if (!claim) { receipts.push({ slot: stage.slot, claimed: false, notStarted: true }); continue; }
     const dir = stage.directory(root);
     const terminal = await fileExists(join(dir, "record.json")) || await fileExists(join(dir, "outcome.json"));
-    const dispatched = stage.slot.startsWith("capture") || stage.slot.startsWith("charge") || await fileExists(join(root, "claims", stage.slot, "dispatched"));
+    const dispatched = stage.slot.startsWith("capture") || stage.slot.startsWith("charge") || stage.slot === "corpus-import" || await fileExists(join(root, "claims", stage.slot, "dispatched"));
     if (!terminal && await fileExists(dir) && dispatched) {
       const interruption = interruptions.get(stage.slot);
       if (!interruption) throw new Error(`${stage.slot} has no terminal record; do not settle potentially active work without an interruption receipt`);
@@ -734,8 +843,13 @@ export async function pilotSettle(acceptancePath: string, options: PilotOperatio
   if (unused.length) throw new Error(`Interruption receipt names a slot that is not an interrupted stage: ${unused.join(", ")}`);
   writeNewJson(join(root, "settlement-review.json"), { ...binding(authority), reportedNanoUsd: reported, unknownNanoUsd: unknown, activeNanoUsd: active, receipts });
   const liability = reported + unknown + active, path = join(root, "settlement-receipt.json");
+  const cumulative = authority.definition.cumulative;
   writeNewJson(path, { ...binding(authority), kind: "pilot-settlement", closed: true, reportedNanoUsd: reported, unknownNanoUsd: unknown, activeNanoUsd: active,
     releasedNanoUsd: Math.max(0, authority.definition.budget.totalNanoUsd - liability), overrunNanoUsd: Math.max(0, liability - authority.definition.budget.totalNanoUsd),
+    ...(cumulative ? { cumulative: { priorSettlements: cumulative.priorSettlements, priorReportedNanoUsd: cumulative.priorReportedNanoUsd,
+      seriesLiabilityNanoUsd: liability, cumulativeLiabilityNanoUsd: cumulative.priorReportedNanoUsd + liability,
+      combinedCeilingNanoUsd: cumulative.combinedCeilingNanoUsd,
+      withinCombinedCeiling: cumulative.priorReportedNanoUsd + liability <= cumulative.combinedCeilingNanoUsd } } : {}),
     note: "Subscription-main usage is reported separately and is not part of this monetary settlement." });
   return path;
 }

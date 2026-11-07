@@ -104,6 +104,8 @@ export const PILOT_RUBRICS = ["fidelity", "taskUsefulness"] as const;
 export const PILOT_SLOTS = [
   "observer-baseline", "observer-candidate", "financial-admission",
   "capture", "charge-qualification", "pilot-baseline", "pilot-candidate",
+  /** rh-v7 only: the credential-free import of a retained, settled corpus in place of a capture. */
+  "corpus-import",
 ] as const;
 export type PilotSlot = typeof PILOT_SLOTS[number];
 export function pilotRunId(root: string, kind: "observer" | "pilot", arm: Arm): string {
@@ -135,10 +137,40 @@ export interface PilotDefinition {
   profile: PilotProfile;
   operationLimits: PilotOperationLimits;
   budget: PilotBudget;
-  /** Present only for a series whose capture derives its sources (rh-v6). */
+  /** Present only for a series whose capture derives its sources (rh-v6), or that reuses such a corpus (rh-v7). */
   sourcePolicy?: SourcePolicy;
   settings(): ResearchSettings;
   params(): ResearchParams;
+  /**
+   * rh-v7 only. The series imports this retained corpus byte for byte instead of
+   * capturing one; the capture operation is refused and its allowance is zero.
+   */
+  corpusReuse?: CorpusReuse;
+  /**
+   * rh-v7 only. The candidate needs the baseline's passed machine checks and
+   * known charges, not its answer gate; both answers are graded after the pair.
+   */
+  gradingAfterPair?: true;
+  /** Earlier series roots this definition must never bind, beyond the closed rh-v5 root. */
+  closedRoots?: readonly string[];
+  /** Cumulative accounting carried from settled earlier series (rh-v7). */
+  cumulative?: CumulativeAccounting;
+}
+export interface CorpusReuse {
+  /** Retained frozen-input file of the source series. */
+  path: string;
+  /** SHA-256 of that file's bytes. */
+  sha256: string;
+  /** The corpus `digest` field. */
+  digest: string;
+  sourceSeries: PilotRevision;
+  sourceRoot: string;
+}
+export interface PriorSettlement { path: string; sha256: string; reportedNanoUsd: number }
+export interface CumulativeAccounting {
+  combinedCeilingNanoUsd: number;
+  priorReportedNanoUsd: number;
+  priorSettlements: readonly PriorSettlement[];
 }
 export const RH5_PILOT: PilotDefinition = Object.freeze({
   revision: PILOT_PROTOCOL_REVISION, scope: PILOT_SCOPE, protocolPath: PILOT_PROTOCOL_PATH,

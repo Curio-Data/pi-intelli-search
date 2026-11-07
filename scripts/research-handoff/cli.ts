@@ -8,9 +8,10 @@ import { runWorker, runSyntheticSeries, reproduce, REPO_ROOT, type WorkerConfig 
 import { sourceIdentity, writeNewJson } from "./storage.js";
 import type { Phase } from "./contracts.js";
 import { isPilotPhase, type PilotSyntheticScenario } from "./contracts.js";
-import { runPilotWorker, runPilotSyntheticSeries, analysePilotInventory, pilotObserve, pilotAdmit, pilotCapture, pilotQualify, pilotRun, pilotGate, pilotSettle, pilotReviewInputs, pilotCorpusReviewInputs, PILOT_SYNTHETIC_SCENARIOS } from "./pilot.js";
+import { runPilotWorker, runPilotSyntheticSeries, analysePilotInventory, pilotObserve, pilotAdmit, pilotCapture, pilotImportCorpus, pilotQualify, pilotRun, pilotGate, pilotSettle, pilotReviewInputs, pilotCorpusReviewInputs, PILOT_SYNTHETIC_SCENARIOS } from "./pilot.js";
 import { RH5_PILOT, type PilotDefinition } from "./pilot-config.js";
 import { RH6_PILOT } from "./pilot-continuation.js";
+import { RH7_PILOT } from "./pilot-repeat.js";
 import { admitAcceptedPreparation, prepareCapture, qualifyDownstreamCost, collectAcceptedSeries, settleAcceptedSeries } from "./collection.js";
 
 const USAGE = [
@@ -45,6 +46,10 @@ const USAGE = [
   "  Credential-free: rh6-synthetic, rh6-analyse, rh6-review-inputs, and",
   "    rh6-corpus-review-inputs <frozen-inputs.json> <new-dir>   (bounded corpus-review bundle, after step 5)",
   "  Acceptance required, in gate order: rh6-observe, rh6-admit, rh6-capture, rh6-qualify, rh6-run/rh6-gate (baseline, then candidate), rh6-settle",
+  "rh-v7 single repeat (REPEAT-PROTOCOL.md): the rh6- commands with the rh7- prefix, bound only to the rh-v7 owner direction and root, except:",
+  "  rh7-capture is refused; after rh7-admit run   rh7-import <implementation-acceptance.json>   (credential-free byte-for-byte rh-v6 corpus reuse)",
+  "  rh7-run candidate needs the baseline's passed machine checks and known charges, not its gate; rh7-gate runs for both answers after the pair",
+  "  Credential-free: rh7-synthetic, rh7-analyse, rh7-review-inputs",
   "Internal driver entry (live modes remain gated):",
   "  worker <worker.json>",
   "rh-v4: see docs/experiments/research-handoff/REPRODUCTION.md. rh-v5 pilot: see docs/experiments/research-handoff/PILOT-PROTOCOL.md, Gate Sequence and Schedule.",
@@ -58,9 +63,9 @@ async function main() {
     return value;
   };
   if (command === "--help" || command === "help") { console.log(USAGE); return; }
-  if (command?.startsWith("pilot-") || command?.startsWith("rh6-")) {
+  if (command?.startsWith("pilot-") || command?.startsWith("rh6-") || command?.startsWith("rh7-")) {
     // Each command family is bound to exactly one frozen definition; nothing infers it from a receipt.
-    const definition: PilotDefinition = command.startsWith("rh6-") ? RH6_PILOT : RH5_PILOT;
+    const definition: PilotDefinition = command.startsWith("rh7-") ? RH7_PILOT : command.startsWith("rh6-") ? RH6_PILOT : RH5_PILOT;
     const name = `pilot-${command.slice(command.indexOf("-") + 1)}`;
     const options = { definition };
     if (name === "pilot-synthetic" && args.length >= 1 && args.length <= 2) {
@@ -78,6 +83,8 @@ async function main() {
       if (result.stopped) process.exitCode = 1;
     } else if (name === "pilot-admit" && args.length === 2) {
       console.log(`Pilot financial admission: ${await pilotAdmit(args[0], args[1], options)}`);
+    } else if (command === "rh7-import" && args.length === 1) {
+      console.log(`Corpus import: ${await pilotImportCorpus(args[0], options)}`);
     } else if (name === "pilot-capture" && args.length === 2) {
       console.log(`Pilot capture: ${await pilotCapture(args[0], args[1], options)}`);
     } else if (name === "pilot-qualify" && args.length === 3) {

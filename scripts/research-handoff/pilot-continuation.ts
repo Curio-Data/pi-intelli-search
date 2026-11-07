@@ -11,13 +11,13 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { ResearchParams } from "../../src/core/contracts.js";
 import type { FetchedPage, ResearchSettings } from "../../src/core/types.js";
-import type { FrozenInputs, PilotRevision } from "./contracts.js";
+import type { FrozenInputs } from "./contracts.js";
 import { assembleFrozenInputs } from "./common-inputs.js";
 import { BASELINE_COMMIT } from "./config.js";
 import { RH6_SOURCE_POLICY, deriveSelection } from "./source-selection.js";
 import { digestFile, digestObject } from "./storage.js";
 import {
-  PILOT_PROFILE, PILOT_OPERATION_LIMITS, PILOT_BUDGET, PILOT_SERIES_ROOT, RH5_PILOT, pilotParams, pilotSettings,
+  PILOT_PROFILE, PILOT_OPERATION_LIMITS, PILOT_BUDGET, PILOT_SERIES_ROOT, pilotParams, pilotSettings,
   type PilotDefinition,
 } from "./pilot-config.js";
 
@@ -58,12 +58,7 @@ export const RH6_PILOT: PilotDefinition = Object.freeze({
   profile: RH6_PROFILE, operationLimits: RH6_OPERATION_LIMITS, budget: RH6_BUDGET, sourcePolicy: RH6_SOURCE_POLICY,
   settings: rh6Settings, params: rh6Params,
 });
-export const PILOT_DEFINITIONS: Readonly<Record<PilotRevision, PilotDefinition>> = { "rh-v5-pilot-1": RH5_PILOT, "rh-v6-pilot-1": RH6_PILOT };
-export function pilotDefinitionFor(revision: unknown): PilotDefinition {
-  const definition = typeof revision === "string" ? PILOT_DEFINITIONS[revision as PilotRevision] : undefined;
-  if (!definition) throw new Error(`Unknown pilot revision ${JSON.stringify(revision)}`);
-  return definition;
-}
+// The revision registry (pilotDefinitionFor) lives in pilot-repeat.ts, which also knows rh-v7.
 
 const same = (a: unknown, b: unknown) => digestObject(a) === digestObject(b);
 function object(value: unknown, label: string): Record<string, unknown> {

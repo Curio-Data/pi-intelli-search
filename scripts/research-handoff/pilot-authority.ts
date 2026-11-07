@@ -15,6 +15,7 @@ import {
   pilotSettings, RH5_PILOT, type PilotDefinition, type PilotSlot,
 } from "./pilot-config.js";
 import { RH6_PROTOCOL_REVISION, verifyContinuationDirection } from "./pilot-continuation.js";
+import { RH7_PROTOCOL_REVISION, verifyRepeatDirection } from "./pilot-repeat.js";
 import type { RunRecord } from "./contracts.js";
 
 const REPO = resolve(PILOT_PROTOCOL_PATH, "../../../..");
@@ -52,6 +53,7 @@ export async function verifyOwnerDecision(path: string, options: PilotAuthorityO
   const d = await readJson(path);
   const designated = options.designatedRoot ?? definition.seriesRoot;
   if (definition.revision === RH6_PROTOCOL_REVISION) { await verifyContinuationDirection(d, designated); return d; }
+  if (definition.revision === RH7_PROTOCOL_REVISION) { await verifyRepeatDirection(d, designated, definition); return d; }
   if (definition !== RH5_PILOT) throw new Error(`No owner-record verifier for ${definition.revision}`);
   const allocation = object(d.coordinatorAllocationNanoUsd);
   const total = ["commonCapture", "chargeQualification", "baselinePilot", "candidatePilot"].reduce((sum, key) => sum + Number(allocation[key]), 0);
@@ -109,6 +111,7 @@ export async function verifyPilotImplementation(path: string, options: PilotAuth
   if (resolve(a.seriesRoot) !== designated) throw new Error("Pilot authority names a root other than the designated series root");
   // A later series never reopens a closed earlier root, whatever its receipts claim.
   if (definition !== RH5_PILOT && resolve(a.seriesRoot) === resolve(PILOT_SERIES_ROOT)) throw new Error("The closed rh-v5 root cannot be reopened by a later pilot");
+  if ((definition.closedRoots ?? []).some(closed => resolve(closed) === resolve(a.seriesRoot))) throw new Error("A closed earlier series root cannot be reopened by a later pilot");
   await (options.rootCheck ?? assertPilotEvidenceRoot)(a.seriesRoot);
   // Settlement closes the series: no later live command (including another settlement) may continue from it.
   if (await fileExists(join(designated, "settlement-receipt.json"))) throw new Error("The pilot series is settled and closed to further live work");
