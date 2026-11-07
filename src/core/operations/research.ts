@@ -720,16 +720,20 @@ async function runCollateStage(
     },
     true,
   );
-  // When two truncated candidates exist, the preferred one may fail
-  // provenance validation (a cut-off citation); the other is then tried.
+  // A longer candidate can contain an invalid or cut-off citation. Keep
+  // trying ranked alternatives until one validates or every candidate fails.
   let { completion, maxTokens } = chosen;
+  const alternatives = [...chosen.alternatives];
   let collation: string;
-  try {
-    collation = finalizeCollation(completion.text, p.cachePath, succeededExtractions, identity, "fetched");
-  } catch (error) {
-    if (!chosen.alternate) throw error;
-    ({ completion, maxTokens } = chosen.alternate);
-    collation = finalizeCollation(completion.text, p.cachePath, succeededExtractions, identity, "fetched");
+  while (true) {
+    try {
+      collation = finalizeCollation(completion.text, p.cachePath, succeededExtractions, identity, "fetched");
+      break;
+    } catch (error) {
+      const next = alternatives.shift();
+      if (!next) throw error;
+      ({ completion, maxTokens } = next);
+    }
   }
   const { text, routeProvider } = completion;
 
@@ -1266,7 +1270,7 @@ async function completeWithBudgetRetry(
   stage: "extract" | "collate",
   request: ModelRequest & { maxTokens: number },
   retryTruncated: boolean,
-): Promise<BudgetedCompletion & { alternate?: BudgetedCompletion }> {
+): Promise<BudgetedCompletion & { alternatives: BudgetedCompletion[] }> {
   const configuredCap = request.maxTokens;
   const caps = budgetCaps(configuredCap, p.settings.outputBudgetRetries, MAX_OUTPUT_TOKENS);
   const attempt = (cap: number): ModelRequest & { maxTokens: number } => ({
@@ -1278,13 +1282,12 @@ async function completeWithBudgetRetry(
   // worse. Every configured attempt runs while only truncated text is
   // available; the longest of them is returned if none completes.
   const candidates: BudgetedCompletion[] = [];
-  const best = (): (BudgetedCompletion & { alternate?: BudgetedCompletion }) | undefined => {
-    if (candidates.length === 0) return undefined;
-    const ranked = [...candidates].sort(
-      (a, b) => b.completion.text.trim().length - a.completion.text.trim().length,
-    );
-    const [preferred, second] = ranked;
-    return second ? { ...preferred, alternate: second } : { ...preferred };
+  const rankedCandidates = (): BudgetedCompletion[] => [...candidates].sort(
+    (a, b) => b.completion.text.trim().length - a.completion.text.trim().length,
+  );
+  const best = (): (BudgetedCompletion & { alternatives: BudgetedCompletion[] }) | undefined => {
+    const [preferred, ...alternatives] = rankedCandidates();
+    return preferred ? { ...preferred, alternatives } : undefined;
   };
 
   for (const [index, cap] of caps.entries()) {
@@ -1304,8 +1307,11 @@ async function completeWithBudgetRetry(
     try {
       const completion = await p.models.complete(attempt(cap));
       const spent = completionTruncated(completion, cap);
-      if (!spent || (completion.text.trim() && !retryTruncated))
-        return { completion, maxTokens: cap };
+      if (!spent || (completion.text.trim() && !retryTruncated)) {
+        // Prefer a completed answer, but do not lose earlier paid candidates
+        // if its provenance fails. Extraction ignores these alternatives.
+        return { completion, maxTokens: cap, alternatives: rankedCandidates() };
+      }
       // Usable but cut off: keep it and let the next configured cap try for a
       // complete answer. The longest kept answer wins if none completes.
       if (completion.text.trim()) candidates.push({ completion, maxTokens: cap });

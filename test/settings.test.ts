@@ -880,6 +880,31 @@ describe("tuning validation", () => {
 });
 
 describe("shared tuning ranges drive native validation", () => {
+  it("pins every range value, so a changed bound cannot travel silently", () => {
+    // Deliberately a second copy: this assertion is the value pin. The
+    // parametric test below proves enforcement of whatever the table says;
+    // changing a bound must fail here first.
+    assert.deepStrictEqual(TUNING_RANGES, {
+      defaultUrls: [1, 100],
+      maxUrls: [1, 100],
+      extractMaxChars: [1, 2_000_000],
+      fetchTimeoutMs: [1, 600_000],
+      fetchConcurrency: [1, 32],
+      extractionConcurrency: [1, 32],
+      extractionMaxTokens: [16, 128_000],
+      collationMaxTokens: [16, 128_000],
+      outputBudgetRetries: [0, 5],
+      collationInputBudgetTokens: [10_000, 1_000_000],
+      collationSourceMaxTokens: [256, 128_000],
+      llmTimeoutMs: [1, 600_000],
+      llmRetryAttempts: [1, 10],
+      retryBaseDelayMs: [0, 120_000],
+      retryMaxDelayMs: [0, 120_000],
+      searchRetryAttempts: [1, 10],
+      minRequestIntervalMs: [0, 120_000],
+    });
+  });
+
   async function load(content: Record<string, unknown>): Promise<ResearchSettings> {
     const dir = mkdtempSync(join(tmpdir(), "pi-intelli-range-"));
     const savedDir = process.env.PI_CODING_AGENT_DIR;

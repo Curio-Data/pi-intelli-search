@@ -128,24 +128,22 @@ export function formatCollationTrimNotice(
   plan: CollationBudgetPlan,
   identity: SourceIdentity,
 ): string {
-  const sourceCapLifted = plan.trims.filter((t) => t.cause === "source-cap");
-  const budgetTrimmed = plan.trims.filter((t) => t.cause === "budget" && t.action === "trimmed");
-  const dropped = plan.trims.filter((t) => t.action === "dropped");
+  const sourceCapped = plan.trims.filter((t) => t.sourceCap);
+  const sourceOnly = sourceCapped.filter((t) => !t.budget);
+  const both = sourceCapped.filter((t) => t.budget);
+  const budgetApplied = plan.trims.some((t) => t.budget);
+  const budgetTrimmed = plan.trims.filter((t) => t.budget && !t.sourceCap && t.action === "trimmed");
+  const dropped = plan.trims.filter((t) => !t.sourceCap && t.action === "dropped");
   const chars = (n: number): string => `${n} characters`;
-  const limits = [
-    sourceCapLifted.length > 0
-      ? `the ${plan.sourceMaxTokens}-token per-source limit (collationSourceMaxTokens)`
-      : "",
-    sourceCapLifted.length > 0 && (budgetTrimmed.length > 0 || dropped.length > 0) ? "and" : "",
-    budgetTrimmed.length > 0 || dropped.length > 0
-      ? `the ${plan.budgetTokens}-token input budget (collationInputBudgetTokens)`
-      : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
   let out = `\n\n---\n`;
-  out += `**Collation input trimmed**: ${plan.trims.length} of ${plan.sources.length} extraction(s) exceeded `;
-  out += `${limits}. The model received ${chars(plan.charsAfter)} of ${chars(plan.charsBefore)}. `;
+  out += `**Collation input trimmed**: ${plan.trims.length} of ${plan.sources.length} extraction(s) reduced. `;
+  if (sourceCapped.length > 0) {
+    out += `${sourceCapped.length} exceeded the ${plan.sourceMaxTokens}-token per-source limit (collationSourceMaxTokens). `;
+  }
+  if (budgetApplied) {
+    out += `The run's total exceeded the ${plan.budgetTokens}-token input budget (collationInputBudgetTokens), including source headers. `;
+  }
+  out += `The model received ${chars(plan.charsAfter)} of ${chars(plan.charsBefore)}. `;
   out += `Every extraction is saved in full, and nothing here changes what is on disk.\n`;
   const line = (trim: CollationBudgetTrim): string => {
     const file = identity.extractionFileFor(trim.url);
@@ -154,9 +152,13 @@ export function formatCollationTrimNotice(
       ? `- ${trim.url}: left out entirely${full}\n`
       : `- ${trim.url}: ${chars(trim.keptChars)} of ${chars(trim.originalChars)} sent${full}\n`;
   };
-  if (sourceCapLifted.length > 0) {
-    out += `\nTrimmed to the per-source limit (${sourceCapLifted.length}):\n`;
-    for (const trim of sourceCapLifted) out += line(trim);
+  if (sourceOnly.length > 0) {
+    out += `\nTrimmed to the per-source limit (${sourceOnly.length}):\n`;
+    for (const trim of sourceOnly) out += line(trim);
+  }
+  if (both.length > 0) {
+    out += `\nTrimmed by both limits (${both.length}):\n`;
+    for (const trim of both) out += line(trim);
   }
   if (budgetTrimmed.length > 0) {
     out += `\nTrimmed to a fair share of the input budget (${budgetTrimmed.length}):\n`;
@@ -166,18 +168,20 @@ export function formatCollationTrimNotice(
     out += `\nLeft out to fit the input budget (${dropped.length}):\n`;
     for (const trim of dropped) out += line(trim);
   }
-  out += `\nTrim order: the longest extractions first, inferred references before cited sources, down to a fair share `;
-  out += `of the input budget; whole sources are left out only when a fair share would keep too little to be useful, lowest-ranked first.\n`;
+  if (budgetApplied) {
+    out += `\nTrim order: the longest extractions first, inferred references before cited sources, down to a fair share `;
+    out += `of the input budget; whole sources are left out only when a fair share would keep too little to be useful, lowest-ranked first.\n`;
+  }
   // Only offer a lever that can still move, and only the one that bound.
   const advice: string[] = [];
-  if (sourceCapLifted.length > 0) {
+  if (sourceCapped.length > 0) {
     advice.push(
       plan.sourceMaxTokens >= MAX_OUTPUT_TOKENS
         ? `collationSourceMaxTokens is already at the ${MAX_OUTPUT_TOKENS}-token maximum the settings accept.`
         : `Raise collationSourceMaxTokens to send more of one page.`,
     );
   }
-  if (budgetTrimmed.length > 0 || dropped.length > 0) {
+  if (budgetApplied) {
     advice.push(
       plan.budgetTokens >= TUNING_RANGES.collationInputBudgetTokens[1]
         ? `collationInputBudgetTokens is already at the ${TUNING_RANGES.collationInputBudgetTokens[1]}-token maximum the settings accept, so ask for fewer URLs to send more.`

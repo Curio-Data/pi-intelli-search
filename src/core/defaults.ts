@@ -44,9 +44,6 @@ export const TUNING_RANGES = {
   minRequestIntervalMs: [0, 120_000],
 } as const satisfies Record<string, readonly [number, number]>;
 
-/** A tuning key the adapters range-check. */
-export type TuningKey = keyof typeof TUNING_RANGES;
-
 /** Shared tuning only. Adapters own model selection and credential discovery. */
 export function tuningDefaults(): Omit<
   ResearchSettings,

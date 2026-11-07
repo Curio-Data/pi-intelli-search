@@ -214,7 +214,7 @@ describe("formatCollationTrimNotice", () => {
     [],
   );
 
-  it("writes raw numbers and blames the per-source cap when only it bound", () => {
+  it("writes raw numbers, blames the per-source cap, and omits the trim order it did not run", () => {
     const plan = planCollationBudget(
       [
         { url: "https://a.example/", text: "a".repeat(3_000) },
@@ -229,9 +229,10 @@ describe("formatCollationTrimNotice", () => {
     assert.match(out, /`extractions\/01-a-example\.md`/);
     assert.doesNotMatch(out, /Raise collationInputBudgetTokens/);
     assert.doesNotMatch(out, /\d,\d{3}/, "numbers are written raw, like the rest of the result text");
+    assert.doesNotMatch(out, /Trim order:/, "the fair-share machinery did not run");
   });
 
-  it("blames the input budget, and its ceiling, when the total overflowed", () => {
+  it("says the run's total exceeded the budget and names its lever", () => {
     const plan = planCollationBudget(
       [
         { url: "https://a.example/", text: "a".repeat(3_000) },
@@ -240,10 +241,28 @@ describe("formatCollationTrimNotice", () => {
       { budgetTokens: 1_000, sourceMaxTokens: 32_000 },
     );
     const out = formatCollationTrimNotice(plan, identity);
+    assert.match(out, /run's total exceeded the 1000-token input budget/);
     assert.match(out, /collationInputBudgetTokens/);
     assert.doesNotMatch(out, /collationSourceMaxTokens/);
     assert.match(out, /1600 characters of 3000 characters sent/);
+    assert.match(out, /Trim order:/);
     assert.doesNotMatch(out, /\d,\d{3}/);
+  });
+
+  it("names both limits and both levers for a dual-bound source", () => {
+    const plan = planCollationBudget(
+      Array.from({ length: 40 }, (_, i) => ({
+        url: `https://s${i}.example/`,
+        text: "a".repeat(10_000),
+      })),
+      { budgetTokens: 10_000, sourceMaxTokens: 256 },
+    );
+    const out = formatCollationTrimNotice(plan, identity);
+    assert.match(out, /per-source limit \(collationSourceMaxTokens\)/);
+    assert.match(out, /run's total exceeded the 10000-token input budget \(collationInputBudgetTokens\)/);
+    assert.match(out, /Trimmed by both limits \(40\)/);
+    assert.match(out, /Raise collationSourceMaxTokens/);
+    assert.match(out, /Raise collationInputBudgetTokens/);
   });
 });
 

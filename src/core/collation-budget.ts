@@ -38,14 +38,10 @@ export interface CollationBudgetTrim {
   inferred: boolean;
   /** `trimmed` keeps a prefix; `dropped` sends none of this source. */
   action: "trimmed" | "dropped";
-  /**
-   * Which limit reduced this source. `source-cap` means only the
-   * per-extraction text cap bound and the total budget still had room;
-   * `budget` means the shared input budget did (a fair-share trim or a
-   * drop), whatever the per-source cap also did. The notice names the
-   * matching setting, so the reader is not sent to a lever that cannot help.
-   */
-  cause: "source-cap" | "budget";
+  /** Whether the per-extraction cap reduced this source, before budget trimming. */
+  sourceCap: boolean;
+  /** Whether the shared budget also reduced or dropped this source. */
+  budget: boolean;
   originalChars: number;
   keptChars: number;
 }
@@ -60,7 +56,7 @@ export interface CollationBudgetPlan {
   /** Extraction characters before and after the plan. */
   charsBefore: number;
   charsAfter: number;
-  /** True when the extractions exceeded the budget before any trimming. */
+  /** True when source-capped extractions plus headers still exceeded the budget. */
   overBudget: boolean;
   /** True when the budget was too small even for one source's header. */
   budgetUnusable: boolean;
@@ -134,7 +130,8 @@ export function planCollationBudget(
       url: item.url,
       inferred: item.inferred === true,
       action: keptChars === 0 ? "dropped" : "trimmed",
-      cause: dropped.has(i) || budgetLimited.has(i) ? "budget" : "source-cap",
+      sourceCap: item.text.length > sourceCapChars,
+      budget: dropped.has(i) || budgetLimited.has(i),
       originalChars: item.text.length,
       keptChars,
     });

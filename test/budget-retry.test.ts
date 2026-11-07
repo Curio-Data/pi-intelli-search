@@ -172,6 +172,73 @@ it("keeps the longest usable synthesis when every configured attempt is truncate
   assert.match(result.text, /Collation output reached its cap/);
 });
 
+it("uses a valid shorter synthesis after two longer candidates fail provenance", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const complete = context.models.complete;
+  const caps: Array<number | undefined> = [];
+  // The reviewer's exact scenario: the two longest candidates cite unknown
+  // sources, so only the shortest, valid one can be committed.
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    caps.push(request.maxTokens);
+    const text =
+      request.maxTokens === 100
+        ? "The longest truncated synthesis is invalid and cites unknown [S99]."
+        : request.maxTokens === 200
+          ? "The second longest and also invalid [S98]."
+          : "Valid [S1].";
+    return { text, citations: [], finishReason: "length" as const };
+  };
+  const result = await research({ query: "three candidates" }, context, dependencies);
+  assert.deepEqual(caps, [100, 200, 400]);
+  assert.equal(result.outcome, "completed");
+  assert.match(result.text, /\bValid \[S1\]/);
+  assert.doesNotMatch(result.text, /Collation Failed/);
+  assert.doesNotMatch(result.text, /\[S99\]|\[S98\]/);
+  const report = await readFile(join(root, result.details.cachePath as string, "report.md"), "utf8");
+  assert.match(report, /\bValid \[S1\]/);
+  assert.doesNotMatch(report, /\[S99\]|\[S98\]/);
+  assert.match(result.text, /cap \(400 tokens/);
+});
+
+it("retains truncated candidates when a completed retry fails provenance", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const complete = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    return {
+      text: request.maxTokens === 100 ? "Valid [S1]." : "Longer invalid synthesis [S99].",
+      citations: [],
+      finishReason: request.maxTokens === 400 ? "stop" as const : "length" as const,
+    };
+  };
+  const result = await research({ query: "invalid completed retry" }, context, dependencies);
+  assert.equal(result.outcome, "completed");
+  assert.match(result.text, /Valid \[S1\]/);
+  assert.doesNotMatch(result.text, /\[S99\]/);
+  assert.match(result.text, /cap \(100 tokens/);
+});
+
+it("reports a provenance failure when every candidate is invalid", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const complete = context.models.complete;
+  // No valid candidate exists: fallback must not bypass validation.
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    return {
+      text: `Longer invalid synthesis citing S9${request.maxTokens} [S9${request.maxTokens}].`,
+      citations: [],
+      finishReason: "length" as const,
+    };
+  };
+  const result = await research({ query: "no valid candidate" }, context, dependencies);
+  assert.equal(result.outcome, "collate-failed");
+  assert.match(result.text, /provenance validation failed/);
+});
+
 it("reports the effective cap when a configured cap exceeds the ceiling", async (t) => {
   const root = await workspace(t);
   // Unreachable through either adapter's validation: a defensive case only.

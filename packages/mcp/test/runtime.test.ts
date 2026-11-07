@@ -175,6 +175,84 @@ test("degraded research remains a result and malformed tool arguments never reac
   }
 });
 
+test("MCP research keeps the valid third candidate after two longer provenance failures", async () => {
+  const f = await fixture();
+  try {
+    const caps: unknown[] = [];
+    const runtime = await createRuntime(
+      { ...f.config, settings: { ...f.config.settings, collationMaxTokens: 100, outputBudgetRetries: 2 } },
+      {
+        env: { FIXTURE_KEY: "fixture-secret" },
+        logger,
+        fetch: fakeTransport((body) => {
+          if (body.model === "perplexity/sonar") return json(completion(`[Docs](${page.url})`));
+          if (body.model === "fixture/extract") return json(completion("Official docs, current.\nFacts"));
+          caps.push(body.max_completion_tokens);
+          const text = caps.length === 1
+            ? "The longest truncated synthesis is invalid and cites unknown [S99]."
+            : caps.length === 2 ? "The second longest is invalid [S98]." : "Valid [S1].";
+          return json(completion(text, { choices: [{ message: { content: text }, finish_reason: "length" }] }));
+        }),
+        researchDependencies: {
+          fetchPages: async () => [{ ...page, status: "success", source: "markdown" }],
+          downloadLlmsFullToCache: async () => null,
+        },
+      },
+    );
+    const result = await runtime.execute("intelli_research", { query: "valid third candidate", maxUrls: 1 });
+    assert.deepEqual(caps, [100, 200, 400]);
+    assert.equal(result.outcome, "completed");
+    assert.match(result.text, /Valid \[S1\]/);
+    assert.doesNotMatch(result.text, /\[S99\]|\[S98\]/);
+    const report = await readFile(join(result.details.cachePath as string, "report.md"), "utf8");
+    assert.match(report, /Valid \[S1\]/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("MCP dual-bound collation names both limits and preserves full extractions", async () => {
+  const f = await fixture();
+  try {
+    let sent: Array<{ content: string }> = [];
+    const runtime = await createRuntime(
+      { ...f.config, settings: { ...f.config.settings, collationInputBudgetTokens: 10_000, collationSourceMaxTokens: 256 } },
+      {
+        env: { FIXTURE_KEY: "fixture-secret" },
+        logger,
+        fetch: fakeTransport((body) => {
+          sent = body.messages as Array<{ content: string }>;
+          return json(completion("Summary [S1]."));
+        }),
+      },
+    );
+    const text = "a".repeat(10_000);
+    const result = await runtime.execute("intelli_collate", {
+      query: "dual-bound supplied input",
+      extractions: Array.from({ length: 40 }, (_, i) => ({
+        ...extraction, url: `https://source-${i}.example`, extraction: text,
+      })),
+    });
+    assert.equal(result.outcome, "completed");
+    const payload = JSON.parse(sent[1].content) as { sources: Array<{ extraction: string }> };
+    assert.equal(payload.sources.length, 40);
+    assert.ok(payload.sources.every((s) => s.extraction.length > 0 && s.extraction.length < 1024));
+    const report = await readFile(join(result.details.cachePath as string, "report.md"), "utf8");
+    for (const output of [result.text, report]) {
+      assert.match(output, /Trimmed by both limits \(40\)/);
+      assert.match(output, /per-source limit \(collationSourceMaxTokens\)/);
+      assert.match(output, /run's total exceeded the 10000-token input budget \(collationInputBudgetTokens\)/);
+      assert.match(output, /Raise collationSourceMaxTokens/);
+      assert.match(output, /Raise collationInputBudgetTokens/);
+      assert.match(output, /full extraction: `extractions\/01-source-0-example\.md`/);
+    }
+    const saved = await readFile(join(result.details.cachePath as string, "extractions", "01-source-0-example.md"), "utf8");
+    assert.ok(saved.includes(text));
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("the collation input budget trims the prompt and the MCP result says what was trimmed", async () => {
   const f = await fixture();
   try {
