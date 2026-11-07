@@ -162,7 +162,8 @@ const saved = (o: Obs, collateCalls: number) => {
 
 // ---- Collate-stage response shapes -------------------------------------------------------
 test("C1 collate: content null + finish_reason length (reasoning exhausted the cap)", async () => {
-  saved(await scenario("c1", { collate: { message: { content: null, reasoning: "thinking..." }, finish: "length", usage: cap } }), 2);
+  // Two budget retries by default: 8,000, 16,000 then 32,000 tokens.
+  saved(await scenario("c1", { collate: { message: { content: null, reasoning: "thinking..." }, finish: "length", usage: cap } }), 3);
 });
 test("C2 collate: content null + finish_reason stop", async () => {
   saved(await scenario("c2", { collate: { message: { content: null }, finish: "stop" } }), 1);
@@ -171,7 +172,7 @@ test("C3 collate: content empty string + finish_reason stop", async () => {
   saved(await scenario("c3", { collate: ok("", "stop") }), 1);
 });
 test("C4 collate: content empty string + finish_reason length", async () => {
-  saved(await scenario("c4", { collate: ok("", "length", cap) }), 2);
+  saved(await scenario("c4", { collate: ok("", "length", cap) }), 3);
 });
 test("C5 collate: reasoning present, content null, stop", async () => {
   saved(await scenario("c5", { collate: { message: { content: null, reasoning: "long chain of thought", reasoning_details: [{ type: "reasoning.text", text: "x" }] }, finish: "stop", usage: cap } }), 1);
@@ -204,8 +205,10 @@ const cut = "## Best match\n\nThe only implementation is community-maintained [S
 test("C7 collate: nonempty summary cut at cap, finish_reason length, usage at cap", async () => {
   const o = await scenario("c7", { collate: ok(cut, "length", { prompt_tokens: 900, completion_tokens: 4000, total_tokens: 4900 }) });
   assert.equal(o.outcome, "completed");
-  // F4 corrected: retried once at a doubled cap, then committed with a warning.
-  assert.equal(o.calls.collate, 2);
+  // F4 corrected, and G1/C1 from the round-2 review: every configured retry
+  // runs while only truncated text is available (700 -> 1400 -> 2800 tokens
+  // here), then the longest candidate commits with a warning.
+  assert.equal(o.calls.collate, 3);
   assert.equal(o.meta?.stages.collate.truncated, true);
   assert.equal(o.textHasWarning, true);
 });

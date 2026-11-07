@@ -86,6 +86,19 @@ export interface ResearchSettings {
   extractionConcurrency: number;
   extractionMaxTokens: number;
   collationMaxTokens: number;
+  // ── Output-budget retries ──
+  // Extra attempts after a call spends its output cap before any visible
+  // text. Each retry doubles the cap, never above the shared ceiling
+  // (MAX_OUTPUT_TOKENS); 0 disables the retry. Only a failed call retries.
+  outputBudgetRetries: number;
+  // ── Collation input budget ──
+  // Tokens the collation model may receive for every extraction, its header
+  // and the synthesis. Trimming starts only when the extractions actually
+  // exceed it.
+  collationInputBudgetTokens: number;
+  // Per-extraction ceiling on the text sent to collation, in tokens,
+  // independent of that extraction's output cap.
+  collationSourceMaxTokens: number;
   browserFingerprint: string;
   disableLlmsFullDiscovery: boolean;
   // When false (default), a local-only meta.json telemetry sidecar is written

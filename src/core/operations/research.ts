@@ -10,7 +10,6 @@ import {
 import { mergeCitations } from "../annotations.js";
 import type {
   ModelClient,
-  ModelCompletion,
   ModelRequest,
   OperationContext,
   OperationResult,
@@ -63,7 +62,11 @@ import {
   buildExtractionMessage,
   buildCollationMessage,
   formatCacheAppendix,
+  formatCollationTrimNotice,
 } from "../messages.js";
+import { MAX_OUTPUT_TOKENS } from "../defaults.js";
+import { attemptTimeoutMs, budgetCaps, rankBudgetedCompletions, type BudgetedCompletion } from "../output-budget.js";
+import { planCollationBudget, inferredSource } from "../collation-budget.js";
 import { progress } from "../progress.js";
 import {
   collationFailureReport,
@@ -128,7 +131,7 @@ export async function research(
     searchConfig: settings.searchModel,
     extractConfig: settings.extractModel,
     collateConfig: settings.collateModel,
-    budgetRetries: { extract: 0, collate: false },
+    budgetRetries: { extract: 0, collate: 0 },
   });
 }
 
@@ -151,7 +154,7 @@ interface PipelineCtx extends OperationContext {
   signal: AbortSignal | undefined;
   cachePath: string;
   /** Doubled-budget retries issued: extraction pages, and collation. */
-  budgetRetries: { extract: number; collate: boolean };
+  budgetRetries: { extract: number; collate: number };
 }
 
 /**
@@ -280,7 +283,9 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
       p.tel?.recordCollate({
         model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
         summaryChars: 0,
-        ...(p.budgetRetries.collate ? { budgetRetried: true } : {}),
+        ...(p.budgetRetries.collate > 0
+          ? { budgetRetried: true, budgetRetries: p.budgetRetries.collate }
+          : {}),
         error: reason,
       });
       failureMessage =
@@ -676,6 +681,26 @@ async function runCollateStage(
   succeededExtractions: ExtractResult[],
   identity: SourceIdentity,
 ): Promise<string> {
+  // The collation model's input budget binds, not the extraction output cap:
+  // decide what it receives from the extractions' actual sizes. Trimming
+  // applies only to the text sent to the model; the saved extractions are
+  // written from the untouched results and the notice names each full file.
+  const budget = planCollationBudget(
+    succeededExtractions.map((ext) => ({
+      url: ext.url,
+      text: ext.extraction,
+      ...(inferredSource(ext) ? { inferred: true } : {}),
+    })),
+    {
+      budgetTokens: p.settings.collationInputBudgetTokens,
+      sourceMaxTokens: p.settings.collationSourceMaxTokens,
+    },
+  );
+  const evidence = succeededExtractions.map((ext, index) => ({
+    ...ext,
+    extraction: budget.sources[index]?.text ?? ext.extraction,
+  }));
+
   // Build collation prompt (no files written yet — lock is never held
   // across the LLM call). File references use the shared run identity and
   // are resolved when cache files are written.
@@ -683,7 +708,7 @@ async function runCollateStage(
     p.params.query,
     p.cachePath,
     searchResult,
-    succeededExtractions,
+    evidence,
     identity,
   );
 
@@ -705,16 +730,23 @@ async function runCollateStage(
     },
     true,
   );
-  // When two truncated candidates exist, the preferred one may fail
-  // provenance validation (a cut-off citation); the other is then tried.
+  // Any candidate can contain an invalid or cut-off citation. Keep trying
+  // ranked alternatives, but preserve the preferred candidate's diagnostic
+  // if none validates.
   let { completion, maxTokens } = chosen;
+  const alternatives = [...chosen.alternatives];
+  let firstFailure: { error: unknown } | undefined;
   let collation: string;
-  try {
-    collation = finalizeCollation(completion.text, p.cachePath, succeededExtractions, identity, "fetched");
-  } catch (error) {
-    if (!chosen.alternate) throw error;
-    ({ completion, maxTokens } = chosen.alternate);
-    collation = finalizeCollation(completion.text, p.cachePath, succeededExtractions, identity, "fetched");
+  while (true) {
+    try {
+      collation = finalizeCollation(completion.text, p.cachePath, succeededExtractions, identity, "fetched");
+      break;
+    } catch (error) {
+      firstFailure ??= { error };
+      const next = alternatives.shift();
+      if (!next) throw firstFailure.error;
+      ({ completion, maxTokens } = next);
+    }
   }
   const { text, routeProvider } = completion;
 
@@ -722,22 +754,44 @@ async function runCollateStage(
   // know it is incomplete rather than assume a clean ending.
   const collateTruncated = completionTruncated(completion, maxTokens);
   if (collateTruncated) {
+    // Advice past the ceiling would be impossible to follow: there is no
+    // larger cap to raise.
     collation +=
       maxTokens > p.settings.collationMaxTokens
-        ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens, after one retry at a larger cap); ` +
+        ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens, after a retry at a larger cap); ` +
           `the synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
-        : p.budgetRetries.collate
-          ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens), and a retry at a larger cap did not complete; ` +
+        : p.budgetRetries.collate > 0
+          ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens), and a retry at a larger cap was considered; ` +
             `the synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
-          : `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens); ` +
-            `the synthesis may be cut off mid-sentence. Raise collationMaxTokens or re-run if completeness matters.`;
+          : p.settings.collationMaxTokens >= MAX_OUTPUT_TOKENS
+            ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens), which is already the maximum the settings accept; ` +
+              `the synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
+            : `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens); ` +
+              `the synthesis may be cut off mid-sentence. Raise collationMaxTokens or re-run if completeness matters.`;
   }
+
+  // Say what the collation model did not receive, and where the full text is.
+  if (budget.trims.length > 0) collation += formatCollationTrimNotice(budget, identity);
 
   p.tel?.recordCollate({
     model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
     summaryChars: text.trim().length,
     ...(collateTruncated ? { truncated: true } : {}),
-    ...(p.budgetRetries.collate ? { budgetRetried: true } : {}),
+    ...(p.budgetRetries.collate > 0
+      ? { budgetRetried: true, budgetRetries: p.budgetRetries.collate }
+      : {}),
+    ...(budget.trims.length > 0
+      ? {
+          inputBudget: {
+            budgetTokens: budget.budgetTokens,
+            sources: budget.sources.length,
+            trimmed: budget.trims.filter((trim) => trim.action === "trimmed").length,
+            dropped: budget.trims.filter((trim) => trim.action === "dropped").length,
+            charsBefore: budget.charsBefore,
+            charsAfter: budget.charsAfter,
+          },
+        }
+      : {}),
     ...(routeProvider ? { provider: routeProvider } : {}),
   });
 
@@ -1216,9 +1270,6 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
   }
 }
 
-/** Largest output cap the settings accept; the budget retry never exceeds it. */
-const MAX_OUTPUT_TOKENS = 128_000;
-
 /** Bounded single-line failure reason for results, reports and telemetry,
  *  marked with an ellipsis when cut. */
 function failureDetail(message: string): string {
@@ -1232,81 +1283,96 @@ function asSentence(reason: string): string {
 }
 
 /**
- * One model call, retried once with a doubled output budget when hidden
- * reasoning spent the cap before any visible text (or, when
- * `retryTruncated` is set, before the text finished). Reasoning models on
- * some serving routes ignore the requested effort, and the route is chosen
- * per call, so the same cap is not retried: the shared policy leaves this
- * outcome to the operation.
+ * One model call, retried with a doubled output budget when hidden reasoning
+ * spent the cap before any visible text (or, when `retryTruncated` is set,
+ * before the text finished). The number of retries is the
+ * `outputBudgetRetries` setting (0 disables it), the cap never exceeds the
+ * shared ceiling, and each attempt's timeout scales with the budget it is
+ * given so a retry that needs its allowance is not timed out first. Reasoning
+ * models on some serving routes ignore the requested effort and the route is
+ * chosen per call, so the same cap is never retried: the shared policy leaves
+ * this outcome to the operation.
  */
 async function completeWithBudgetRetry(
   p: PipelineCtx,
   stage: "extract" | "collate",
   request: ModelRequest & { maxTokens: number },
   retryTruncated: boolean,
-): Promise<BudgetedCompletion & { alternate?: BudgetedCompletion }> {
-  const cap = request.maxTokens;
-  let first: ModelCompletion | undefined;
-  try {
-    const completion = await p.models.complete(request);
-    const spent = completionTruncated(completion, cap);
-    if (!spent || (completion.text.trim() && !retryTruncated))
-      return { completion, maxTokens: cap };
-    if (completion.text.trim()) first = completion;
-  } catch (error) {
+): Promise<BudgetedCompletion & { alternatives: BudgetedCompletion[] }> {
+  const configuredCap = request.maxTokens;
+  const caps = budgetCaps(configuredCap, p.settings.outputBudgetRetries, MAX_OUTPUT_TOKENS);
+  const attempt = (cap: number): ModelRequest & { maxTokens: number } => ({
+    ...request,
+    maxTokens: cap,
+    timeoutMs: attemptTimeoutMs(p.settings.llmTimeoutMs, configuredCap, cap),
+  });
+  // Keep every usable answer in case a larger attempt is worse. Every
+  // configured attempt runs while only truncated text is available; once
+  // calls stop, validation tries completed candidates before truncated ones.
+  const candidates: BudgetedCompletion[] = [];
+  const best = (): (BudgetedCompletion & { alternatives: BudgetedCompletion[] }) | undefined => {
+    const [preferred, ...alternatives] = rankBudgetedCompletions(candidates);
+    return preferred ? { ...preferred, alternatives } : undefined;
+  };
+
+  for (const [index, cap] of caps.entries()) {
     throwIfAborted(p.signal);
-    if (!isOutputBudgetExhausted(error)) throw error;
+    if (index > 0) {
+      if (stage === "extract") p.budgetRetries.extract += 1;
+      else p.budgetRetries.collate += 1;
+      p.onProgress?.(
+        progress(
+          stage,
+          `Output cap of ${caps[index - 1]} tokens reached; retrying with ${cap} tokens`,
+        ),
+      );
+      // The retry is a further extract call, so it observes the configured throttle.
+      if (stage === "extract") await p.gate(p.signal);
+    }
+    try {
+      const completion = await p.models.complete(attempt(cap));
+      const spent = completionTruncated(completion, cap);
+      if (!spent || (completion.text.trim() && !retryTruncated)) {
+        // Stop requesting retries, but rank all usable output before
+        // validation, including this completed response.
+        if (completion.text.trim()) candidates.push({ completion, maxTokens: cap });
+        return best() ?? { completion, maxTokens: cap, alternatives: [] };
+      }
+      // Usable but cut off: keep it and let the next configured cap try for a
+      // complete answer. The longest kept answer wins if none completes.
+      if (completion.text.trim()) candidates.push({ completion, maxTokens: cap });
+    } catch (error) {
+      throwIfAborted(p.signal);
+      if (!isOutputBudgetExhausted(error)) {
+        // Keep paid, usable output when a larger attempt fails (for example a
+        // model whose output limit is below the doubled cap).
+        const kept = best();
+        if (kept) {
+          p.logger.error(
+            `Retry with ${cap} output tokens failed: ${failureDetail(errMsg(error))}`,
+          );
+          return kept;
+        }
+        throw error;
+      }
+      // Budget exhausted with no visible text: the next cap is the only
+      // remaining remedy, so continue.
+    }
   }
-  throwIfAborted(p.signal);
-  // Bounded by the largest cap the settings accept.
-  const maxTokens = Math.min(cap * 2, MAX_OUTPUT_TOKENS);
-  if (maxTokens <= cap) {
-    if (first) return { completion: first, maxTokens: cap };
+
+  const kept = best();
+  if (kept) return kept;
+  // Report the cap actually used: a configured cap above the ceiling was
+  // clamped, and naming the unclamped value would contradict the request.
+  const effectiveCap = caps[0];
+  if (caps.length === 1) {
     throw new OutputBudgetExhaustedError(
-      `Output cap of ${cap} tokens reached without visible text; no larger retry is possible.`,
+      effectiveCap >= MAX_OUTPUT_TOKENS
+        ? `Output cap of ${effectiveCap} tokens reached without visible text; the cap is already at the ${MAX_OUTPUT_TOKENS}-token maximum, so no larger retry is possible.`
+        : `Output cap of ${effectiveCap} tokens reached without visible text; budget retries are disabled (outputBudgetRetries is 0).`,
     );
   }
-  if (stage === "extract") p.budgetRetries.extract += 1;
-  else p.budgetRetries.collate = true;
-  p.onProgress?.(
-    progress(stage, `Output cap of ${cap} tokens reached; retrying once with ${maxTokens} tokens`),
-  );
-  // The retry is a further extract call, so it observes the configured throttle.
-  if (stage === "extract") await p.gate(p.signal);
-  try {
-    const completion = await p.models.complete({ ...request, maxTokens });
-    // A usable truncated first answer is never replaced by an empty retry, or
-    // by a retry that is also truncated and shorter.
-    if (first && !completion.text.trim()) return { completion: first, maxTokens: cap };
-    if (first && completionTruncated(completion, maxTokens)) {
-      // Both truncated: prefer the longer text, keeping the other in reserve.
-      const longerFirst = completion.text.trim().length < first.text.trim().length;
-      const retried = { completion, maxTokens };
-      const kept = { completion: first, maxTokens: cap };
-      return longerFirst ? { ...kept, alternate: retried } : { ...retried, alternate: kept };
-    }
-    if (!first && !completion.text.trim() && completionTruncated(completion, maxTokens))
-      throw bothBudgetsSpent(stage, cap, maxTokens);
-    return { completion, maxTokens };
-  } catch (error) {
-    throwIfAborted(p.signal);
-    if (error instanceof OutputBudgetExhaustedError && error.message.startsWith(BOTH_SPENT))
-      throw error;
-    if (!first && isOutputBudgetExhausted(error))
-      throw bothBudgetsSpent(stage, cap, maxTokens);
-    // Keep paid, usable output when the larger retry fails (for example a
-    // model whose output limit is below the doubled cap).
-    if (first) {
-      p.logger.error(`Retry with ${maxTokens} output tokens failed: ${failureDetail(errMsg(error))}`);
-      return { completion: first, maxTokens: cap };
-    }
-    throw error;
-  }
-}
-
-interface BudgetedCompletion {
-  completion: ModelCompletion;
-  maxTokens: number;
+  throw bothBudgetsSpent(stage, effectiveCap, caps[caps.length - 1], caps.length - 1);
 }
 
 const BOTH_SPENT = "Output cap reached without visible text at ";
@@ -1315,11 +1381,13 @@ function bothBudgetsSpent(
   stage: "extract" | "collate",
   cap: number,
   maxTokens: number,
+  retries: number,
 ): OutputBudgetExhaustedError {
   const setting = stage === "extract" ? "extractionMaxTokens" : "collationMaxTokens";
+  const attempts = retries === 1 ? "one retry" : `${retries} retries`;
   return new OutputBudgetExhaustedError(
-    `${BOTH_SPENT}${cap} tokens and again after one retry at ${maxTokens} tokens; ` +
-      `the model's hidden reasoning consumed both budgets. Raise ${setting}, ` +
+    `${BOTH_SPENT}${cap} tokens and again after ${attempts} up to ${maxTokens} tokens; ` +
+      `the model's hidden reasoning consumed every budget. Raise ${setting}, ` +
       "choose a model that reasons less for this stage, or re-run.",
   );
 }

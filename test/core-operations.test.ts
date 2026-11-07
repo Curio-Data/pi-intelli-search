@@ -126,7 +126,9 @@ it("flags truncated standalone extraction instead of reporting it as complete", 
 
 it("surfaces per-page failure reasons, saved sources and telemetry classification", async (t) => {
   const root = await workspace(t);
-  const base = coreContext(root);
+  // One retry at a doubled cap keeps this scenario about per-page reporting;
+  // the retry schedule itself is covered by test/budget-retry.test.ts.
+  const base = coreContext(root, { outputBudgetRetries: 1 });
   const exhaustedUsage = { output: 100, reasoning: 100 };
   // The extract fan-out is concurrent, so key the fixture on the number of
   // extract-model calls seen: the first page exhausts the budget with zero
@@ -166,7 +168,7 @@ it("surfaces per-page failure reasons, saved sources and telemetry classificatio
   assert.equal(result.details.extractionFailed, 1);
   assert.match(result.text, /1 truncated at the output cap\), 1 failed/);
   assert.match(result.text, /\*\*Failed Sources\*\*:/);
-  assert.match(result.text, /https:\/\/(one|two)\.example\/page: Output cap reached without visible text at 100 tokens and again after one retry at 200 tokens/);
+  assert.match(result.text, /https:\/\/(one|two)\.example\/page: Output cap reached without visible text at 100 tokens and again after one retry up to 200 tokens/);
   assert.match(result.text, /full page saved: `[^`]+\/sources\/\d+-/);
   const meta = JSON.parse(
     await readFile(join(root, result.details.cachePath as string, "meta.json"), "utf8"),
@@ -384,11 +386,17 @@ it("never replaces a successful report committed while collation was failing", a
   const query = "concurrent collate failure";
   const path = makeCachePath(query, root, context.paths.cacheRoot);
   const complete = context.models.complete;
-  let collated!: () => void;
-  const collateDone = new Promise<void>((resolve) => (collated = resolve));
+  let collating!: () => void;
+  const collateStarted = new Promise<void>((resolve) => (collating = resolve));
+  // Hold the run inside its collation call, so the concurrent report is
+  // written while the run provably cannot yet be waiting on the cache lock.
+  // Releasing the call there orders the two runs by event, not by a sleep.
+  let releaseCollate!: () => void;
+  const collateGate = new Promise<void>((resolve) => (releaseCollate = resolve));
   context.models.complete = async (request) => {
     if (request.model.model !== "collate") return complete(request);
-    collated();
+    collating();
+    await collateGate;
     return { text: " ", citations: [] };
   };
   // Hold the cache lock so the failing run decides only after a concurrent
@@ -397,10 +405,10 @@ it("never replaces a successful report committed while collation was failing", a
   await mkdir(dirname(path), { recursive: true });
   await withLock(cacheLockDir(path), async () => {
     run = research({ query }, context, dependencies);
-    await collateDone;
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await collateStarted;
     await mkdir(path, { recursive: true });
     await writeFile(join(path, "report.md"), "# Report\n\n## Summary\n\nConcurrent success.\n");
+    releaseCollate();
   });
   const result = await run;
   assert.equal(result.outcome, "collate-failed");
@@ -450,7 +458,7 @@ it("falls back to the other truncated synthesis when the preferred one fails val
   const result = await research({ query: "invalid longer first" }, context, dependencies);
   assert.equal(result.outcome, "completed");
   assert.match(result.text, /Valid \[S1\]/);
-  assert.match(result.text, /after one retry at a larger cap/);
+  assert.match(result.text, /after a retry at a larger cap/);
 });
 
 it("keeps a longer truncated first synthesis over a shorter truncated retry", async (t) => {

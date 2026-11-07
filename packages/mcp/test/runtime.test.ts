@@ -174,3 +174,182 @@ test("degraded research remains a result and malformed tool arguments never reac
     await f.cleanup();
   }
 });
+
+test("MCP research keeps the valid third candidate after two longer provenance failures", async () => {
+  const f = await fixture();
+  try {
+    const caps: unknown[] = [];
+    const runtime = await createRuntime(
+      { ...f.config, settings: { ...f.config.settings, collationMaxTokens: 100, outputBudgetRetries: 2 } },
+      {
+        env: { FIXTURE_KEY: "fixture-secret" },
+        logger,
+        fetch: fakeTransport((body) => {
+          if (body.model === "perplexity/sonar") return json(completion(`[Docs](${page.url})`));
+          if (body.model === "fixture/extract") return json(completion("Official docs, current.\nFacts"));
+          caps.push(body.max_completion_tokens);
+          const text = caps.length === 1
+            ? "The longest truncated synthesis is invalid and cites unknown [S99]."
+            : caps.length === 2 ? "The second longest is invalid [S98]." : "Valid [S1].";
+          return json(completion(text, { choices: [{ message: { content: text }, finish_reason: "length" }] }));
+        }),
+        researchDependencies: {
+          fetchPages: async () => [{ ...page, status: "success", source: "markdown" }],
+          downloadLlmsFullToCache: async () => null,
+        },
+      },
+    );
+    const result = await runtime.execute("intelli_research", { query: "valid third candidate", maxUrls: 1 });
+    assert.deepEqual(caps, [100, 200, 400]);
+    assert.equal(result.outcome, "completed");
+    assert.match(result.text, /Valid \[S1\]/);
+    assert.doesNotMatch(result.text, /\[S99\]|\[S98\]/);
+    const report = await readFile(join(result.details.cachePath as string, "report.md"), "utf8");
+    assert.match(report, /Valid \[S1\]/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+for (const scenario of ["complete", "truncated-errors", "mixed-errors"] as const) {
+  test(`MCP candidate precedence and first-ranked error: ${scenario}`, async () => {
+    const f = await fixture();
+    try {
+      const caps: unknown[] = [];
+      const unknown = "Bad [S99].";
+      const absentUrl = "The longest invalid synthesis. ".repeat(5) + "https://absent.example/page";
+      const cacheReference = "An invalid cache reference: `extractions/01-invented.md`.";
+      const texts = scenario === "complete"
+        ? ["A much longer but truncated synthesis with useful evidence [S1].", "Complete [S1]."]
+        : scenario === "mixed-errors" ? [cacheReference, absentUrl, unknown] : [unknown, absentUrl, cacheReference];
+      const runtime = await createRuntime(
+        { ...f.config, settings: { ...f.config.settings, collationMaxTokens: 100, outputBudgetRetries: 2 } },
+        {
+          env: { FIXTURE_KEY: "fixture-secret" },
+          logger,
+          fetch: fakeTransport((body) => {
+            if (body.model === "perplexity/sonar") return json(completion(`[Docs](${page.url})`));
+            if (body.model === "fixture/extract") return json(completion("Official docs, current.\nFacts"));
+            caps.push(body.max_completion_tokens);
+            const text = texts[caps.length - 1];
+            const finish = caps.length === texts.length && scenario !== "truncated-errors" ? "stop" : "length";
+            return json(completion(text, { choices: [{ message: { content: text }, finish_reason: finish }] }));
+          }),
+          researchDependencies: {
+            fetchPages: async () => [{ ...page, status: "success", source: "markdown" }],
+            downloadLlmsFullToCache: async () => null,
+          },
+        },
+      );
+      const result = await runtime.execute("intelli_research", { query: scenario, maxUrls: 1 });
+      assert.deepEqual(caps, scenario === "complete" ? [100, 200] : [100, 200, 400]);
+      assert.equal(result.outcome, scenario === "complete" ? "completed" : "collate-failed");
+      const report = await readFile(join(result.details.cachePath as string, "report.md"), "utf8");
+      for (const output of [result.text, report]) {
+        if (scenario === "complete") {
+          assert.match(output, /Complete \[S1\]\./);
+          assert.doesNotMatch(output, /A much longer but truncated synthesis|Collation output reached its cap/);
+        } else {
+          const firstReason = scenario === "mixed-errors" ? "unknown source ID" : "a prose URL is absent from the supplied evidence";
+          assert.ok(output.includes(`Collation provenance validation failed: ${firstReason}.`));
+          assert.doesNotMatch(output, scenario === "mixed-errors"
+            ? /a prose URL is absent|generated a cache-file reference/
+            : /unknown source ID|generated a cache-file reference/);
+        }
+      }
+    } finally {
+      await f.cleanup();
+    }
+  });
+}
+
+test("MCP dual-bound collation names both limits and preserves full extractions", async () => {
+  const f = await fixture();
+  try {
+    let sent: Array<{ content: string }> = [];
+    const runtime = await createRuntime(
+      { ...f.config, settings: { ...f.config.settings, collationInputBudgetTokens: 10_000, collationSourceMaxTokens: 256 } },
+      {
+        env: { FIXTURE_KEY: "fixture-secret" },
+        logger,
+        fetch: fakeTransport((body) => {
+          sent = body.messages as Array<{ content: string }>;
+          return json(completion("Summary [S1]."));
+        }),
+      },
+    );
+    const text = "a".repeat(10_000);
+    const result = await runtime.execute("intelli_collate", {
+      query: "dual-bound supplied input",
+      extractions: Array.from({ length: 40 }, (_, i) => ({
+        ...extraction, url: `https://source-${i}.example`, extraction: text,
+      })),
+    });
+    assert.equal(result.outcome, "completed");
+    const payload = JSON.parse(sent[1].content) as { sources: Array<{ extraction: string }> };
+    assert.equal(payload.sources.length, 40);
+    assert.ok(payload.sources.every((s) => s.extraction.length > 0 && s.extraction.length < 1024));
+    const report = await readFile(join(result.details.cachePath as string, "report.md"), "utf8");
+    for (const output of [result.text, report]) {
+      assert.match(output, /Trimmed by both limits \(40\)/);
+      assert.match(output, /per-source limit \(collationSourceMaxTokens\)/);
+      assert.match(output, /run's total exceeded the 10000-token input budget \(collationInputBudgetTokens\)/);
+      assert.match(output, /Raise collationSourceMaxTokens/);
+      assert.match(output, /Raise collationInputBudgetTokens/);
+      assert.match(output, /full extraction: `extractions\/01-source-0-example\.md`/);
+    }
+    const saved = await readFile(join(result.details.cachePath as string, "extractions", "01-source-0-example.md"), "utf8");
+    assert.ok(saved.includes(text));
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("the collation input budget trims the prompt and the MCP result says what was trimmed", async () => {
+  const f = await fixture();
+  try {
+    let sent: Array<{ content: string }> = [];
+    const runtime = await createRuntime(
+      {
+        ...f.config,
+        settings: { ...f.config.settings, collationInputBudgetTokens: 10_000 },
+      } as typeof f.config,
+      {
+        env: { FIXTURE_KEY: "fixture-secret" },
+        logger,
+        fetch: fakeTransport((body) => {
+          sent = body.messages as Array<{ content: string }>;
+          return json(completion("Summary citing the evidence."));
+        }),
+      },
+    );
+    // Two 21,000-character extractions exceed the 40,000-character budget.
+    const line = "Evidence line for the collation input budget.\n";
+    const long = line.repeat(Math.ceil(21_000 / line.length)).slice(0, 21_000);
+    const result = await runtime.execute("intelli_collate", {
+      query: "collation input budget",
+      extractions: [
+        { ...extraction, url: "https://one.example", extraction: long },
+        { ...extraction, url: "https://two.example", extraction: long },
+      ],
+    });
+    assert.equal(result.outcome, "completed");
+    assert.match(result.text, /\*\*Collation input trimmed\*\*: 2 of 2 extraction/);
+    assert.match(result.text, /full extraction: `extractions\/01-/);
+    // The evidence actually sent, read back from the wire payload.
+    const payload = JSON.parse(sent[1].content) as {
+      sources: Array<{ extraction: string }>;
+    };
+    const sentChars = payload.sources.reduce((total, source) => total + source.extraction.length, 0);
+    assert.ok(sentChars <= 39_200, `sent ${sentChars} characters of extraction text`);
+    assert.ok(sentChars > 0);
+    // The standalone adapter reports the physical cache path, not a display path.
+    const saved = await readFile(
+      join(result.details.cachePath as string, "extractions", "01-one-example.md"),
+      "utf8",
+    );
+    assert.ok(saved.length > 21_000, "the saved extraction keeps the whole text");
+  } finally {
+    await f.cleanup();
+  }
+});

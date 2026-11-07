@@ -9,6 +9,8 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 // SPDX-License-Identifier: Apache-2.0
 import type { SourceIdentity } from "./cache.js";
+import type { CollationBudgetPlan, CollationBudgetTrim } from "./collation-budget.js";
+import { MAX_OUTPUT_TOKENS, TUNING_RANGES } from "./defaults.js";
 import { evidenceExtractions } from "./provenance.js";
 import { truncateContent } from "./util.js";
 import type { ExtractResult, ResearchSettings } from "./types.js";
@@ -113,6 +115,81 @@ export function buildCollationMessage(
       extraction: source.extraction,
     })),
   }, null, 2);
+}
+
+/**
+ * Render what the collation model did not receive, and where the full
+ * extraction is saved. Appended to the synthesis in both the tool result and
+ * report.md, so the calling agent can read the untrimmed file when the
+ * trimmed text it saw is not enough. Nothing on disk is changed: the saved
+ * extraction always holds the whole text.
+ */
+export function formatCollationTrimNotice(
+  plan: CollationBudgetPlan,
+  identity: SourceIdentity,
+): string {
+  const sourceCapped = plan.trims.filter((t) => t.sourceCap);
+  const sourceOnly = sourceCapped.filter((t) => !t.budget);
+  const both = sourceCapped.filter((t) => t.budget);
+  const budgetApplied = plan.trims.some((t) => t.budget);
+  const budgetTrimmed = plan.trims.filter((t) => t.budget && !t.sourceCap && t.action === "trimmed");
+  const dropped = plan.trims.filter((t) => !t.sourceCap && t.action === "dropped");
+  const chars = (n: number): string => `${n} characters`;
+  let out = `\n\n---\n`;
+  out += `**Collation input trimmed**: ${plan.trims.length} of ${plan.sources.length} extraction(s) reduced. `;
+  if (sourceCapped.length > 0) {
+    out += `${sourceCapped.length} exceeded the ${plan.sourceMaxTokens}-token per-source limit (collationSourceMaxTokens). `;
+  }
+  if (budgetApplied) {
+    out += `The run's total exceeded the ${plan.budgetTokens}-token input budget (collationInputBudgetTokens), including source headers. `;
+  }
+  out += `The model received ${chars(plan.charsAfter)} of ${chars(plan.charsBefore)}. `;
+  out += `Every extraction is saved in full, and nothing here changes what is on disk.\n`;
+  const line = (trim: CollationBudgetTrim): string => {
+    const file = identity.extractionFileFor(trim.url);
+    const full = file ? ` (full extraction: \`extractions/${file}\`)` : "";
+    return trim.action === "dropped"
+      ? `- ${trim.url}: left out entirely${full}\n`
+      : `- ${trim.url}: ${chars(trim.keptChars)} of ${chars(trim.originalChars)} sent${full}\n`;
+  };
+  if (sourceOnly.length > 0) {
+    out += `\nTrimmed to the per-source limit (${sourceOnly.length}):\n`;
+    for (const trim of sourceOnly) out += line(trim);
+  }
+  if (both.length > 0) {
+    out += `\nTrimmed by both limits (${both.length}):\n`;
+    for (const trim of both) out += line(trim);
+  }
+  if (budgetTrimmed.length > 0) {
+    out += `\nTrimmed to a fair share of the input budget (${budgetTrimmed.length}):\n`;
+    for (const trim of budgetTrimmed) out += line(trim);
+  }
+  if (dropped.length > 0) {
+    out += `\nLeft out to fit the input budget (${dropped.length}):\n`;
+    for (const trim of dropped) out += line(trim);
+  }
+  if (budgetApplied) {
+    out += `\nTrim order: the longest extractions first, inferred references before cited sources, down to a fair share `;
+    out += `of the input budget; whole sources are left out only when a fair share would keep too little to be useful, lowest-ranked first.\n`;
+  }
+  // Only offer a lever that can still move, and only the one that bound.
+  const advice: string[] = [];
+  if (sourceCapped.length > 0) {
+    advice.push(
+      plan.sourceMaxTokens >= MAX_OUTPUT_TOKENS
+        ? `collationSourceMaxTokens is already at the ${MAX_OUTPUT_TOKENS}-token maximum the settings accept.`
+        : `Raise collationSourceMaxTokens to send more of one page.`,
+    );
+  }
+  if (budgetApplied) {
+    advice.push(
+      plan.budgetTokens >= TUNING_RANGES.collationInputBudgetTokens[1]
+        ? `collationInputBudgetTokens is already at the ${TUNING_RANGES.collationInputBudgetTokens[1]}-token maximum the settings accept, so ask for fewer URLs to send more.`
+        : `Raise collationInputBudgetTokens if the collation model's context allows, or ask for fewer URLs, to send more overall.`,
+    );
+  }
+  if (advice.length > 0) out += `${advice.join(" ")}\n`;
+  return out;
 }
 
 /** A failed source rendered in the result appendix: the URL, a bounded
