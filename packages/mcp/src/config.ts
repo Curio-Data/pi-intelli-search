@@ -3,7 +3,7 @@
 
 import { readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
-import { MAX_OUTPUT_TOKENS, MIN_OUTPUT_TOKENS, tuningDefaults } from "../../../src/core/defaults.js";
+import { TUNING_RANGES, tuningDefaults } from "../../../src/core/defaults.js";
 import type { DeepReadonly } from "../../../src/core/contracts.js";
 import type { ModelConfig, ResearchSettings } from "../../../src/core/types.js";
 
@@ -67,29 +67,6 @@ function model(value: unknown, role: string): ModelConfig {
     throw new Error(`models.${role}.model must select a concrete provider/model identifier`);
   return { provider: "openrouter", model: id };
 }
-const ranges: Record<string, readonly [number, number]> = {
-  defaultUrls: [1, 100],
-  maxUrls: [1, 100],
-  extractMaxChars: [1, 2_000_000],
-  fetchTimeoutMs: [1, 600_000],
-  fetchConcurrency: [1, 32],
-  extractionConcurrency: [1, 32],
-  // The ceiling a budget retry may reach, single-sourced from the shared core.
-  extractionMaxTokens: [MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS],
-  collationMaxTokens: [MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS],
-  // Extra attempts after a spent output cap; 0 disables the retry.
-  outputBudgetRetries: [0, 5],
-  // Tokens for every extraction, its header and the synthesis.
-  collationInputBudgetTokens: [10_000, 1_000_000],
-  // Per-extraction ceiling on the text sent to collation.
-  collationSourceMaxTokens: [256, MAX_OUTPUT_TOKENS],
-  llmTimeoutMs: [1, 600_000],
-  llmRetryAttempts: [1, 10],
-  retryBaseDelayMs: [0, 120_000],
-  retryMaxDelayMs: [0, 120_000],
-  searchRetryAttempts: [1, 10],
-  minRequestIntervalMs: [0, 120_000],
-};
 export function validateDomains(value: unknown, label: string): string[] {
   if (
     !Array.isArray(value) ||
@@ -281,7 +258,7 @@ function parseDocument(value: unknown): {
   keys(
     tuning,
     [
-      ...Object.keys(ranges),
+      ...Object.keys(TUNING_RANGES),
       "cacheDir",
       "browserFingerprint",
       "disableTelemetry",
@@ -296,7 +273,7 @@ function parseDocument(value: unknown): {
     extractModel: model(models.extract, "extract"),
     collateModel: model(models.collate, "collate"),
   };
-  for (const [key, [min, max]] of Object.entries(ranges)) {
+  for (const [key, [min, max]] of Object.entries(TUNING_RANGES)) {
     if (tuning[key] !== undefined)
       Object.assign(settings, { [key]: integer(tuning[key], min, max, `tuning.${key}`) });
   }

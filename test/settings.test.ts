@@ -12,6 +12,7 @@ import {
   takeSettingsWarnings,
 } from "../src/settings.js";
 import type { ResearchSettings } from "../src/types.js";
+import { TUNING_RANGES } from "../src/core/defaults.js";
 
 const baseSettings: ResearchSettings = {
   searchModel: { provider: "openrouter", model: "perplexity/sonar" },
@@ -84,7 +85,7 @@ describe("loadSettings defaults", () => {
     assert.strictEqual(settings.collationMaxTokens, 8000);
     assert.strictEqual(settings.outputBudgetRetries, 2);
     assert.strictEqual(settings.collationInputBudgetTokens, 221_000);
-    assert.strictEqual(settings.collationSourceMaxTokens, 8000);
+    assert.strictEqual(settings.collationSourceMaxTokens, 32_000);
     assert.strictEqual(settings.browserFingerprint, "chrome_145");
     assert.strictEqual(settings.disableLlmsFullDiscovery, false);
     assert.strictEqual(settings.disableTelemetry, false);
@@ -853,7 +854,7 @@ describe("tuning validation", () => {
     });
     assert.strictEqual(settings.outputBudgetRetries, 2);
     assert.strictEqual(settings.collationInputBudgetTokens, 221_000);
-    assert.strictEqual(settings.collationSourceMaxTokens, 8000);
+    assert.strictEqual(settings.collationSourceMaxTokens, 32_000);
     assert.strictEqual(takeSettingsWarnings().length, 3);
   });
 
@@ -876,4 +877,47 @@ describe("tuning validation", () => {
       invalidateSettingsCache();
     }
   });
+});
+
+describe("shared tuning ranges drive native validation", () => {
+  async function load(content: Record<string, unknown>): Promise<ResearchSettings> {
+    const dir = mkdtempSync(join(tmpdir(), "pi-intelli-range-"));
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+    try {
+      writeFileSync(join(dir, "settings.json"), JSON.stringify(content));
+      invalidateSettingsCache();
+      takeSettingsWarnings();
+      return await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+      invalidateSettingsCache();
+    }
+  }
+
+  for (const [key, [min, max]] of Object.entries(TUNING_RANGES)) {
+    it(`"${key}" accepts its range bounds and falls back below the minimum`, async () => {
+      const atMin = await load({ "pi-intelli-search": { [key]: min } });
+      assert.strictEqual((atMin as unknown as Record<string, unknown>)[key], min);
+      assert.deepStrictEqual(takeSettingsWarnings(), [], `${key}=${min} is inside the range`);
+
+      invalidateSettingsCache();
+      const atMax = await load({ "pi-intelli-search": { [key]: max } });
+      assert.strictEqual((atMax as unknown as Record<string, unknown>)[key], max);
+      assert.deepStrictEqual(takeSettingsWarnings(), [], `${key}=${max} is inside the range`);
+
+      invalidateSettingsCache();
+      const below = await load({ "pi-intelli-search": { [key]: min - 1 } });
+      assert.notStrictEqual(
+        (below as unknown as Record<string, unknown>)[key],
+        min - 1,
+        `${key}=${min - 1} must be ignored`,
+      );
+      const warnings = takeSettingsWarnings();
+      assert.strictEqual(warnings.length, 1, `${key} should warn once`);
+      assert.match(warnings[0], new RegExp(`${key}`));
+      assert.match(warnings[0], new RegExp(`from ${min} to ${max}`));
+    });
+  }
 });

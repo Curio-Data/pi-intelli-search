@@ -18,6 +18,35 @@ export const MIN_OUTPUT_TOKENS = 16;
  */
 export const MAX_OUTPUT_TOKENS = 128_000;
 
+/**
+ * Every integer tuning range, in one table: the native settings validator and
+ * the standalone configuration schema both read it, so a bound cannot drift
+ * between the adapters. Ordered as the README settings table is; `as const
+ * satisfies` keeps each entry a two-number tuple for destructuring.
+ */
+export const TUNING_RANGES = {
+  defaultUrls: [1, 100],
+  maxUrls: [1, 100],
+  extractMaxChars: [1, 2_000_000],
+  fetchTimeoutMs: [1, 600_000],
+  fetchConcurrency: [1, 32],
+  extractionConcurrency: [1, 32],
+  extractionMaxTokens: [MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS],
+  collationMaxTokens: [MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS],
+  outputBudgetRetries: [0, 5],
+  collationInputBudgetTokens: [10_000, 1_000_000],
+  collationSourceMaxTokens: [256, MAX_OUTPUT_TOKENS],
+  llmTimeoutMs: [1, 600_000],
+  llmRetryAttempts: [1, 10],
+  retryBaseDelayMs: [0, 120_000],
+  retryMaxDelayMs: [0, 120_000],
+  searchRetryAttempts: [1, 10],
+  minRequestIntervalMs: [0, 120_000],
+} as const satisfies Record<string, readonly [number, number]>;
+
+/** A tuning key the adapters range-check. */
+export type TuningKey = keyof typeof TUNING_RANGES;
+
 /** Shared tuning only. Adapters own model selection and credential discovery. */
 export function tuningDefaults(): Omit<
   ResearchSettings,
@@ -61,10 +90,12 @@ export function tuningDefaults(): Omit<
     collationInputBudgetTokens: 221_000,
     // Per-extraction ceiling on the text sent to collation, independent of
     // the extraction's output cap: a retry's larger reasoning allowance must
-    // not let one page take the collation budget. 8,000 tokens (≈32,000
-    // characters) matches the default output cap, so observed extractions
-    // (median ≈1,000 tokens, 90th percentile ≈1,800) are never trimmed by it.
-    collationSourceMaxTokens: 8000,
+    // not let one page take the collation budget. 32,000 tokens (≈128,000
+    // characters) is the largest cap two retries can reach, so the owner's
+    // confirmed worst case (≈6 extractions each filling the 32,000-token
+    // retried cap) flows whole inside the 221,000-token budget, and the cap
+    // only binds when extractionMaxTokens is raised above it.
+    collationSourceMaxTokens: 32_000,
     browserFingerprint: "chrome_145",
     disableLlmsFullDiscovery: false,
     disableTelemetry: false,

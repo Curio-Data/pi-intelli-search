@@ -38,6 +38,14 @@ export interface CollationBudgetTrim {
   inferred: boolean;
   /** `trimmed` keeps a prefix; `dropped` sends none of this source. */
   action: "trimmed" | "dropped";
+  /**
+   * Which limit reduced this source. `source-cap` means only the
+   * per-extraction text cap bound and the total budget still had room;
+   * `budget` means the shared input budget did (a fair-share trim or a
+   * drop), whatever the per-source cap also did. The notice names the
+   * matching setting, so the reader is not sent to a lever that cannot help.
+   */
+  cause: "source-cap" | "budget";
   originalChars: number;
   keptChars: number;
 }
@@ -84,6 +92,7 @@ export function planCollationBudget(
   const overBudget = totalCapped > available;
 
   const dropped = new Set<number>();
+  const budgetLimited = new Set<number>();
   if (overBudget && items.length > 0) {
     let live = items.map((_, i) => i);
     const fairShare = (count: number): number =>
@@ -103,6 +112,7 @@ export function planCollationBudget(
         if (live.reduce((sum, j) => sum + kept[j], 0) <= available) break;
         if (kept[i] <= share) continue;
         kept[i] = truncateAtBoundary(items[i].text, Math.min(kept[i], share)).length;
+        budgetLimited.add(i);
       }
     }
   }
@@ -124,6 +134,7 @@ export function planCollationBudget(
       url: item.url,
       inferred: item.inferred === true,
       action: keptChars === 0 ? "dropped" : "trimmed",
+      cause: dropped.has(i) || budgetLimited.has(i) ? "budget" : "source-cap",
       originalChars: item.text.length,
       keptChars,
     });

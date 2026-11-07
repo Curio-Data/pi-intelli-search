@@ -14,6 +14,7 @@ import {
   MIN_COLLATION_SOURCE_CHARS,
   planCollationBudget,
 } from "../src/core/collation-budget.js";
+import { tuningDefaults } from "../src/core/defaults.js";
 import type { ExtractResult } from "../src/core/types.js";
 import { coreContext } from "./helpers/core-context.js";
 
@@ -60,8 +61,8 @@ it("caps one extraction's visible text without touching the others", () => {
     { budgetTokens: 200_000, sourceMaxTokens: 1_000 },
   );
   assert.deepEqual(
-    plan.trims.map((trim) => [trim.url, trim.action, trim.keptChars]),
-    [["https://one.example", "trimmed", 4_000]],
+    plan.trims.map((trim) => [trim.url, trim.action, trim.keptChars, trim.cause]),
+    [["https://one.example", "trimmed", 4_000, "source-cap"]],
   );
   assert.equal(plan.sources[1].text.length, 1_000);
   assert.equal(plan.overBudget, false);
@@ -80,8 +81,8 @@ it("trims the longest extraction down to a fair share when the total exceeds the
   assert.equal(plan.overBudget, true);
   // The cited source is longer and still keeps the fair share of 5,000.
   assert.deepEqual(
-    plan.trims.map((trim) => [trim.url, trim.keptChars]),
-    [["https://cited.example", 5_000]],
+    plan.trims.map((trim) => [trim.url, trim.keptChars, trim.cause]),
+    [["https://cited.example", 5_000, "budget"]],
   );
   assert.equal(plan.sources[1].text.length, 4_000, "the inferred source fits the fair share");
   assert.equal(plan.charsAfter, 9_000);
@@ -102,10 +103,10 @@ it("takes the trim from an inferred reference before a longer cited source", () 
     { budgetTokens, sourceMaxTokens: 8000 },
   );
   assert.deepEqual(
-    plan.trims.map((trim) => [trim.url, trim.action, trim.keptChars]),
+    plan.trims.map((trim) => [trim.url, trim.action, trim.keptChars, trim.cause]),
     [
-      ["https://cited-long.example", "trimmed", 3_333],
-      ["https://guess.example", "trimmed", 3_333],
+      ["https://cited-long.example", "trimmed", 3_333, "budget"],
+      ["https://guess.example", "trimmed", 3_333, "budget"],
     ],
   );
   // The short cited source is below the fair share and keeps its text.
@@ -135,6 +136,31 @@ it("leaves whole sources out, lowest-ranked first, when a fair share is too smal
   assert.equal(kept.length, 3);
   for (const source of kept) assert.ok(source.text.length <= 400);
   assert.ok(MIN_COLLATION_SOURCE_CHARS > 0);
+});
+
+it("sends six cap-filled post-retry extractions whole and trims at seven", () => {
+  // The owner's confirmed worst case: every extraction filled the 32,000-token
+  // cap left by two retries. Six fit the 221,000-token budget; seven do not.
+  const fill = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      url: `https://source-${i + 1}.example`,
+      text: "a".repeat(32_000 * 4),
+    }));
+  // The shipped defaults, not literals: a default that shrinks must fail here.
+  const defaults = tuningDefaults();
+  const options = {
+    budgetTokens: defaults.collationInputBudgetTokens,
+    sourceMaxTokens: defaults.collationSourceMaxTokens,
+  };
+  const six = planCollationBudget(fill(6), options);
+  assert.deepEqual(six.trims, [], "six cap-filled extractions fit the budget whole");
+  assert.equal(six.overBudget, false);
+  assert.equal(six.charsAfter, 6 * 32_000 * 4);
+
+  const seven = planCollationBudget(fill(7), options);
+  assert.equal(seven.overBudget, true);
+  assert.ok(seven.trims.length > 0);
+  assert.ok(seven.trims.every((trim) => trim.cause === "budget"));
 });
 
 it("sends nothing and says so when the budget cannot cover one header", () => {
@@ -199,9 +225,10 @@ it("trims a run just over the budget and names the untrimmed extraction files", 
   const sentChars = sent.sources.reduce((total, source) => total + source.extraction.length, 0);
   assert.ok(sentChars <= 39_200, `sent ${sentChars} characters to collation`);
   assert.match(result.text, /\*\*Collation input trimmed\*\*: 2 of 2 extraction/);
-  assert.match(result.text, /Trimmed to a fair share of the budget \(2\):/);
+  assert.match(result.text, /Trimmed to a fair share of the input budget \(2\):/);
   assert.match(result.text, /full extraction: `extractions\/01-/);
   assert.match(result.text, /Raise collationInputBudgetTokens/);
+  assert.doesNotMatch(result.text, /collationSourceMaxTokens/, "only the budget bound here");
   const cachePath = join(root, result.details.cachePath as string);
   const report = await readFile(join(cachePath, "report.md"), "utf8");
   assert.match(report, /\*\*Collation input trimmed\*\*/);
@@ -252,6 +279,20 @@ it("completes and reports the trim when every extraction fills its cap after ret
   );
   assert.equal(meta.stages.collate.inputBudget.trimmed, 2);
   assert.ok(meta.stages.collate.inputBudget.charsAfter < meta.stages.collate.inputBudget.charsBefore);
+});
+
+it("names the per-source setting when only the per-source cap trimmed", async (t) => {
+  const root = await workspace(t);
+  const { result } = await researchWithExtractions(root, 30_000, {
+    collationInputBudgetTokens: 1_000_000,
+    collationSourceMaxTokens: 1_000,
+  });
+  assert.equal(result.outcome, "completed");
+  assert.match(result.text, /\*\*Collation input trimmed\*\*/);
+  assert.match(result.text, /collationSourceMaxTokens/);
+  assert.match(result.text, /per-source limit/);
+  assert.doesNotMatch(result.text, /Raise collationInputBudgetTokens/);
+  assert.doesNotMatch(result.text, /exceeded the 1000000-token input budget/);
 });
 
 it("enforces the same budget for manual collation and keeps the supplied extractions whole", async (t) => {

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { ModelConfig, ResearchSettings } from "./types.js";
 import { getAgentDir } from "./agent-dir.js";
-import { MAX_OUTPUT_TOKENS, MIN_OUTPUT_TOKENS, tuningDefaults } from "./core/defaults.js";
+import { TUNING_RANGES, tuningDefaults } from "./core/defaults.js";
 
 export interface SettingsContext {
   cwd: string;
@@ -417,18 +417,12 @@ function isPresent(value: unknown): boolean {
 
 /**
  * Integer tuning keys the native loader validates before use, with the range
- * the standalone schema also enforces. A value outside its range, or one that
- * is not an integer, is dropped so the default applies, and reported once per
- * load: a typo must not silently break a paid run, and the loader cannot
- * throw without taking the session down.
+ * the standalone schema also enforces. The table lives in the shared core, so
+ * the two adapters cannot drift; a value outside its range, or one that is not
+ * an integer, is dropped so the default applies, and reported once per load: a
+ * typo must not silently break a paid run, and the loader cannot throw without
+ * taking the session down.
  */
-const TUNING_RANGES: Record<string, readonly [number, number]> = {
-  extractionMaxTokens: [MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS],
-  collationMaxTokens: [MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS],
-  outputBudgetRetries: [0, 5],
-  collationInputBudgetTokens: [10_000, 1_000_000],
-  collationSourceMaxTokens: [256, MAX_OUTPUT_TOKENS],
-};
 
 /** Warnings produced by the most recent load, drained by the session start. */
 let pendingSettingsWarnings: string[] = [];
