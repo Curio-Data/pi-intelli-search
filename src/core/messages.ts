@@ -153,6 +153,6 @@ export function formatCacheAppendix(
       out += `\n`;
     }
   }
-  out += `\nChoose exact extraction and full-page paths from the Source Assessment above. Not cached means no full-page file exists for that source.\n`;
+  out += `\nChoose exact extraction and full-page paths from the generated source lists above. Not cached means no full-page file exists for that source.\n`;
   return out;
 }
