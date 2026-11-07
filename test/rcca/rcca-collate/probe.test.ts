@@ -205,8 +205,10 @@ const cut = "## Best match\n\nThe only implementation is community-maintained [S
 test("C7 collate: nonempty summary cut at cap, finish_reason length, usage at cap", async () => {
   const o = await scenario("c7", { collate: ok(cut, "length", { prompt_tokens: 900, completion_tokens: 4000, total_tokens: 4900 }) });
   assert.equal(o.outcome, "completed");
-  // F4 corrected: retried once at a doubled cap, then committed with a warning.
-  assert.equal(o.calls.collate, 2);
+  // F4 corrected, and G1/C1 from the round-2 review: every configured retry
+  // runs while only truncated text is available (700 -> 1400 -> 2800 tokens
+  // here), then the longest candidate commits with a warning.
+  assert.equal(o.calls.collate, 3);
   assert.equal(o.meta?.stages.collate.truncated, true);
   assert.equal(o.textHasWarning, true);
 });

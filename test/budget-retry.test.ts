@@ -131,6 +131,59 @@ it("scales each attempt's timeout through the schedule and caps growth at 4x", a
   assert.deepEqual(timeouts, [100, 200, 400, 400]);
 });
 
+it("runs every configured collation retry when each attempt is truncated but usable", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const complete = context.models.complete;
+  const caps: Array<number | undefined> = [];
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    caps.push(request.maxTokens);
+    return request.maxTokens === 400
+      ? { text: "Complete synthesis [S1].", citations: [] }
+      : { text: `Truncated at ${request.maxTokens} [S1].`, citations: [], finishReason: "length" as const };
+  };
+  const result = await research({ query: "every retry for truncated text" }, context, dependencies);
+  assert.deepEqual(caps, [100, 200, 400], "the configured third attempt must run");
+  assert.match(result.text, /Complete synthesis \[S1\]/);
+  assert.doesNotMatch(result.text, /reached its cap/);
+});
+
+it("keeps the longest usable synthesis when every configured attempt is truncated", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const complete = context.models.complete;
+  const caps: Array<number | undefined> = [];
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    caps.push(request.maxTokens);
+    const text =
+      request.maxTokens === 100
+        ? "Short [S1]."
+        : request.maxTokens === 200
+          ? "A longer truncated synthesis [S1]."
+          : "The longest truncated synthesis of all three [S1].";
+    return { text, citations: [], finishReason: "length" as const };
+  };
+  const result = await research({ query: "all attempts truncated" }, context, dependencies);
+  assert.deepEqual(caps, [100, 200, 400]);
+  assert.match(result.text, /The longest truncated synthesis of all three/);
+  assert.doesNotMatch(result.text, /A longer truncated synthesis/);
+  assert.match(result.text, /Collation output reached its cap/);
+});
+
+it("reports the effective cap when a configured cap exceeds the ceiling", async (t) => {
+  const root = await workspace(t);
+  // Unreachable through either adapter's validation: a defensive case only.
+  const { context, dependencies } = coreContext(root, { collationMaxTokens: 200_000 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  const result = await research({ query: "configured cap above ceiling" }, context, dependencies);
+  assert.deepEqual(caps, [MAX_OUTPUT_TOKENS]);
+  assert.match(result.text, /Output cap of 128000 tokens reached/);
+  assert.doesNotMatch(result.text, /200000 tokens reached/);
+});
+
 it("records the retry count that was actually used for collation", async (t) => {
   const root = await workspace(t);
   const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });

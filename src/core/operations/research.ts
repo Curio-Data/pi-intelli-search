@@ -1274,8 +1274,18 @@ async function completeWithBudgetRetry(
     maxTokens: cap,
     timeoutMs: attemptTimeoutMs(p.settings.llmTimeoutMs, configuredCap, cap),
   });
-  // A usable answer cut off by the cap, kept in case a larger attempt is worse.
-  let first: BudgetedCompletion | undefined;
+  // Usable answers cut off by their cap, kept in case a larger attempt is
+  // worse. Every configured attempt runs while only truncated text is
+  // available; the longest of them is returned if none completes.
+  const candidates: BudgetedCompletion[] = [];
+  const best = (): (BudgetedCompletion & { alternate?: BudgetedCompletion }) | undefined => {
+    if (candidates.length === 0) return undefined;
+    const ranked = [...candidates].sort(
+      (a, b) => b.completion.text.trim().length - a.completion.text.trim().length,
+    );
+    const [preferred, second] = ranked;
+    return second ? { ...preferred, alternate: second } : { ...preferred };
+  };
 
   for (const [index, cap] of caps.entries()) {
     throwIfAborted(p.signal);
@@ -1296,26 +1306,20 @@ async function completeWithBudgetRetry(
       const spent = completionTruncated(completion, cap);
       if (!spent || (completion.text.trim() && !retryTruncated))
         return { completion, maxTokens: cap };
-      if (!completion.text.trim()) continue;
-      if (!first) {
-        first = { completion, maxTokens: cap };
-        continue;
-      }
-      // Two usable truncated answers: prefer the longer text, keeping the
-      // other in reserve, and stop rather than pay for a third.
-      const longerFirst = completion.text.trim().length < first.completion.text.trim().length;
-      const retried = { completion, maxTokens: cap };
-      return longerFirst ? { ...first, alternate: retried } : { ...retried, alternate: first };
+      // Usable but cut off: keep it and let the next configured cap try for a
+      // complete answer. The longest kept answer wins if none completes.
+      if (completion.text.trim()) candidates.push({ completion, maxTokens: cap });
     } catch (error) {
       throwIfAborted(p.signal);
       if (!isOutputBudgetExhausted(error)) {
         // Keep paid, usable output when a larger attempt fails (for example a
         // model whose output limit is below the doubled cap).
-        if (first) {
+        const kept = best();
+        if (kept) {
           p.logger.error(
             `Retry with ${cap} output tokens failed: ${failureDetail(errMsg(error))}`,
           );
-          return first;
+          return kept;
         }
         throw error;
       }
@@ -1324,16 +1328,19 @@ async function completeWithBudgetRetry(
     }
   }
 
-  if (first) return first;
-  const largest = caps[caps.length - 1];
+  const kept = best();
+  if (kept) return kept;
+  // Report the cap actually used: a configured cap above the ceiling was
+  // clamped, and naming the unclamped value would contradict the request.
+  const effectiveCap = caps[0];
   if (caps.length === 1) {
     throw new OutputBudgetExhaustedError(
-      configuredCap >= MAX_OUTPUT_TOKENS
-        ? `Output cap of ${configuredCap} tokens reached without visible text; the cap is already at the ${MAX_OUTPUT_TOKENS}-token maximum, so no larger retry is possible.`
-        : `Output cap of ${configuredCap} tokens reached without visible text; budget retries are disabled (outputBudgetRetries is 0).`,
+      effectiveCap >= MAX_OUTPUT_TOKENS
+        ? `Output cap of ${effectiveCap} tokens reached without visible text; the cap is already at the ${MAX_OUTPUT_TOKENS}-token maximum, so no larger retry is possible.`
+        : `Output cap of ${effectiveCap} tokens reached without visible text; budget retries are disabled (outputBudgetRetries is 0).`,
     );
   }
-  throw bothBudgetsSpent(stage, configuredCap, largest, caps.length - 1);
+  throw bothBudgetsSpent(stage, effectiveCap, caps[caps.length - 1], caps.length - 1);
 }
 
 interface BudgetedCompletion {
