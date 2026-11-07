@@ -79,6 +79,95 @@ it("runs all four operations with per-instance dependencies and no host context"
   assert.equal((await readIndex(context.paths.cacheRoot)).searches.length, 2);
 });
 
+it("keeps inferred file references, records asset fetch outcomes and saves code under sources", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 3, maxUrls: 3 });
+  const complete = base.context.models.complete;
+  base.context.models.complete = async (request) => {
+    if (request.model.model === "search") {
+      return {
+        text: "Read [the guide](https://one.example/page), then inspect manage.py and missing.py.",
+        citations: [],
+      };
+    }
+    return complete(request);
+  };
+  const dependencies: ResearchDependencies = {
+    ...base.dependencies,
+    fetchPages: async (urls) =>
+      urls.map((url) => {
+        if (url === "https://missing.py") {
+          return {
+            url,
+            title: "",
+            content: "",
+            status: "error" as const,
+            error: "HTTP 404: Not Found",
+          };
+        }
+        const inferred = url !== "https://one.example/page";
+        return {
+          url,
+          title: inferred ? "manage.py" : "Guide",
+          content: inferred ? "print('asset body')\n" : "Guide body",
+          status: "success" as const,
+          source: inferred ? "text" : "defuddle",
+          assetType: inferred ? ("code" as const) : ("page" as const),
+          contentType: inferred ? "text/plain; charset=utf-8" : "text/html",
+        };
+      }),
+  };
+  const result = await research({ query: "inferred source assets" }, base.context, dependencies);
+  assert.equal(result.outcome, "completed");
+  assert.match(result.text, /## Inferred Assets/);
+  assert.match(result.text, /manage\.py.*Code file.*text\/plain; charset=utf-8/);
+  assert.match(result.text, /missing\.py.*Nothing fetched: HTTP 404: Not Found/);
+  assert.match(result.text, /Inferred from text \(not a citation\); fetched and extracted/);
+  const assets = result.details.inferredAssets as Array<Record<string, unknown>>;
+  assert.deepEqual(assets.map((asset) => [asset.url, asset.outcome]), [
+    ["https://manage.py", "code"],
+    ["https://missing.py", "nothing"],
+  ]);
+  assert.equal(assets[0].sourceFile, "sources/02-manage-py.md");
+  const cachePath = join(root, result.details.cachePath as string);
+  const saved = await readFile(join(cachePath, "sources", "02-manage-py.md"), "utf8");
+  assert.match(saved, /print\('asset body'\)/);
+  assert.doesNotMatch(saved, /inferred/i);
+  const report = await readFile(join(cachePath, "report.md"), "utf8");
+  assert.match(report, /## Inferred Assets/);
+  assert.match(report, /missing\.py.*Nothing fetched/);
+  assert.match(report, /sources\/02-manage-py\.md/);
+});
+
+it("labels inferred references and records nothing when every inferred fetch fails", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 1, maxUrls: 1 });
+  const complete = base.context.models.complete;
+  base.context.models.complete = async (request) =>
+    request.model.model === "search"
+      ? { text: "Inspect manage.py for the answer.", citations: [] }
+      : complete(request);
+  const dependencies: ResearchDependencies = {
+    ...base.dependencies,
+    fetchPages: async (urls) => urls.map((url) => ({
+      url,
+      title: "",
+      content: "",
+      status: "error" as const,
+      error: "Unsupported content type: application/octet-stream",
+    })),
+  };
+  const result = await research({ query: "missing inferred asset" }, base.context, dependencies);
+  assert.equal(result.outcome, "fetch-failed");
+  assert.match(result.text, /manage\.py \[inferred from text, not a citation\]/);
+  assert.match(result.text, /Unsupported content type: application\/octet-stream/);
+  assert.deepEqual(result.details.inferredAssets, [{
+    url: "https://manage.py",
+    outcome: "nothing",
+    error: "Unsupported content type: application/octet-stream",
+  }]);
+});
+
 it("rejects empty standalone extraction with an actionable budget message", async (t) => {
   const root = await workspace(t);
   const base = coreContext(root);

@@ -17,7 +17,7 @@ import { Defuddle } from "defuddle/node";
 import { parseHTML } from "linkedom";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { FetchedPage } from "./types.js";
+import type { FetchedPage, FetchAssetType } from "./types.js";
 import { mapWithConcurrency, withMuzzledConsole, errMsg, truncateContent } from "./util.js";
 
 export interface FetchOptions {
@@ -102,9 +102,9 @@ function compareAndPick(a: FetchedPage, b: FetchedPage): FetchedPage {
   const bScore = scoreContent(b.content);
 
   if (bScore > aScore) {
-    return { ...b, status: "success", source: "markdown" };
+    return { ...b, status: "success", source: b.source ?? "markdown" };
   }
-  return { ...a, status: "success", source: "defuddle" };
+  return { ...a, status: "success", source: a.source ?? "defuddle" };
 }
 
 /** Score markdown content quality. Higher = cleaner and more useful. */
@@ -167,8 +167,12 @@ async function fetchViaDefuddle(
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
   const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("text/html") && !contentType.includes("application/xhtml")) {
-    throw new Error(`Not HTML: ${contentType}`);
+  const isHtml = contentType.includes("text/html") || contentType.includes("application/xhtml");
+  if (!isHtml) {
+    if (isSupportedTextAsset(contentType)) {
+      return processTextAssetResponse(url, response, opts, contentType);
+    }
+    throw new Error(`Unsupported content type: ${contentType || "not reported"}`);
   }
 
   const body = await response.text();
@@ -220,6 +224,8 @@ async function fetchViaDefuddle(
       content: truncateContent(content, opts.maxChars),
       status: "success",
       source: "defuddle-fallback",
+      assetType: "page",
+      contentType,
     };
   }
 
@@ -231,6 +237,8 @@ async function fetchViaDefuddle(
     content: truncateContent(content, opts.maxChars),
     status: "success",
     source: "defuddle",
+    assetType: "page",
+    contentType,
   };
 }
 
@@ -324,6 +332,90 @@ async function processMarkdownResponse(
     content: truncateContent(content, opts.maxChars),
     status: "success",
     source: "markdown",
+    assetType: "text",
+    contentType: response.headers.get("content-type") ?? "text/markdown",
+  };
+}
+
+/** Media types whose bodies are useful as source or text assets. HTML takes
+ *  the Defuddle path above; binary types remain rejected rather than being
+ *  saved as misleading text. Conventional x-* types are accepted as text,
+ *  never executed or treated as proof of registration. */
+const CODE_MEDIA_TYPES = new Set([
+  "application/json",
+  "application/javascript",
+  "application/ecmascript",
+  "application/x-javascript",
+  "application/x-ecmascript",
+  "application/xml",
+  "application/yaml",
+  "application/x-yaml",
+  "application/toml",
+  "application/x-sh",
+  "application/x-python",
+  "text/javascript",
+  "text/ecmascript",
+  "text/x-javascript",
+  "text/x-ecmascript",
+  "text/css",
+  "text/xml",
+  "text/x-python",
+  "text/x-c",
+  "text/x-c++",
+  "text/x-java-source",
+]);
+
+const CODE_EXTENSIONS = new Set([
+  "c", "cc", "cpp", "cxx", "h", "hh", "hpp", "css", "go", "java", "js",
+  "jsx", "ts", "tsx", "py", "rb", "php", "rs", "sh", "bash", "zsh", "fish",
+  "json", "jsonc", "xml", "yaml", "yml", "toml", "sql", "swift", "kt", "kts",
+]);
+
+function mediaEssence(contentType: string): string {
+  return contentType.split(";", 1)[0].trim().toLowerCase();
+}
+
+function isSupportedTextAsset(contentType: string): boolean {
+  const essence = mediaEssence(contentType);
+  return essence.startsWith("text/") || CODE_MEDIA_TYPES.has(essence);
+}
+
+function classifyTextAsset(url: string, contentType: string): FetchAssetType {
+  const essence = mediaEssence(contentType);
+  if (CODE_MEDIA_TYPES.has(essence)) return "code";
+  if (essence === "text/markdown") return "text";
+  try {
+    const finalSegment = new URL(url).pathname.split("/").filter(Boolean).at(-1) ?? "";
+    const extension = finalSegment.includes(".") ? finalSegment.split(".").at(-1)?.toLowerCase() : "";
+    if (extension && CODE_EXTENSIONS.has(extension)) return "code";
+  } catch {
+    // The URL was already fetched successfully; an unparseable name is text.
+  }
+  return "text";
+}
+
+async function processTextAssetResponse(
+  url: string,
+  response: Awaited<ReturnType<typeof rawFetch>>,
+  opts: FetchOptions,
+  contentType: string,
+): Promise<FetchedPage> {
+  const content = await response.text();
+  let title = "";
+  try {
+    const parsed = new URL(url);
+    title = parsed.pathname.split("/").filter(Boolean).at(-1) ?? parsed.hostname;
+  } catch {
+    // Keep an empty title when the fetched URL has no displayable name.
+  }
+  return {
+    url,
+    title,
+    content: truncateContent(content, opts.maxChars),
+    status: "success",
+    source: "text",
+    assetType: classifyTextAsset(url, contentType),
+    contentType,
   };
 }
 

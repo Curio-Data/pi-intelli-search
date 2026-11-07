@@ -2,7 +2,7 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
 import type { SourceIdentity } from "./cache.js";
-import type { ExtractResult } from "./types.js";
+import type { ExtractResult, FetchedPage } from "./types.js";
 
 /** Only successful, non-empty extractions can support a completed synthesis. */
 export function evidenceExtractions(extractions: readonly ExtractResult[]): ExtractResult[] {
@@ -173,7 +173,48 @@ function sourceTable(
   for (const [index, source] of sources.entries()) {
     const extractionFile = identity.extractionFileFor(source.url);
     const fullPage = identity.sourceFileFor(source.url);
-    result += `| S${index + 1} | ${cell(source.url)} | ${cell(source.sourceType)}${source.truncated ? " ⚠ truncated" : ""} | ${evidence === "fetched" ? "Fetched and extracted" : "Caller-supplied extraction"} | ${extractionFile ? cell(`${cachePath}/extractions/${extractionFile}`) : "Not cached"} | ${fullPage ? cell(`${cachePath}/sources/${fullPage}`) : "Not cached"} |\n`;
+    const evidenceLabel = evidence === "fetched"
+      ? source.inferred
+        ? "Inferred from text (not a citation); fetched and extracted"
+        : "Fetched and extracted"
+      : "Caller-supplied extraction";
+    result += `| S${index + 1} | ${cell(source.url)} | ${cell(source.sourceType)}${source.truncated ? " ⚠ truncated" : ""} | ${evidenceLabel} | ${extractionFile ? cell(`${cachePath}/extractions/${extractionFile}`) : "Not cached"} | ${fullPage ? cell(`${cachePath}/sources/${fullPage}`) : "Not cached"} |\n`;
+  }
+  return result.trimEnd();
+}
+
+/** Render every inferred reference, including fetches that returned nothing.
+ *  The result and report both include this section so an agent can distinguish
+ *  a prose guess from a citation and follow a saved code/text asset directly. */
+export function inferredAssetsSection(
+  pages: readonly FetchedPage[],
+  cachePath: string,
+  identity: SourceIdentity,
+): string {
+  const assets = pages.filter((page) => page.inferred);
+  if (assets.length === 0) return "";
+  let result = "## Inferred Assets\n\n" +
+    "These protocol-less references were guessed from search text, not supplied as citations. Fetch results describe the response, not the filename.\n\n" +
+    "| Source | Fetch result | Saved asset |\n" +
+    "|---|---|---|\n";
+  for (const page of assets) {
+    const sourceFile = identity.sourceFileFor(page.url);
+    let outcome: string;
+    if (page.status === "error") {
+      outcome = `Nothing fetched${page.error ? `: ${page.error}` : ""}`;
+    } else {
+      const kind = page.assetType === "page"
+        ? "Page"
+        : page.assetType === "code"
+          ? "Code file"
+          : page.assetType === "text"
+            ? "Text file"
+            : "Fetched content";
+      outcome = `${kind}${page.contentType ? ` (${page.contentType})` : ""}`;
+    }
+    result += `| ${cell(page.url)} | ${cell(outcome)} | ${
+      sourceFile ? cell(`${cachePath}/sources/${sourceFile}`) : "None"
+    } |\n`;
   }
   return result.trimEnd();
 }

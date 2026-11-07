@@ -4,18 +4,26 @@
 
 export interface SearchResult {
   summary: string;
-  sources: Array<{ url: string; title: string }>;
+  sources: Array<{ url: string; title: string; inferred?: true }>;
   query: string;
   timestamp: string;
 }
 
+export type FetchAssetType = "page" | "code" | "text";
+
 export interface FetchedPage {
   url: string;
   title: string;
-  content: string; // Defuddle-cleaned or raw markdown
+  content: string; // Defuddle-cleaned, raw markdown, or textual asset content
   status: "success" | "error";
   error?: string;
-  source?: string; // "defuddle", "markdown", or "llms-full"
+  source?: string; // "defuddle", "markdown", "text", or "llms-full"
+  /** Protocol-less prose guess, ranked after explicit links and citations. */
+  inferred?: true;
+  /** What the response contained, independent of the URL's file extension. */
+  assetType?: FetchAssetType;
+  /** Response Content-Type, including parameters such as charset when supplied. */
+  contentType?: string;
 }
 
 export interface ExtractResult {
@@ -36,6 +44,10 @@ export interface ExtractResult {
    *  "other" for anything else. Set by the pipeline from reported usage or
    *  its own adapter messages, never from free provider text. */
   failureKind?: "budget" | "other";
+  /** Provenance and fetched representation carried into the source inventory. */
+  inferred?: true;
+  assetType?: FetchAssetType;
+  contentType?: string;
   /** OpenRouter serving route when the adapter observed it (the `provider`
    *  stream-event or response field). Optional: absent on adapters, hosts
    *  or models without it. */

@@ -12,6 +12,11 @@ const routes: Record<string, [string, string]> = {
   "/plain-pdf": ["application/pdf", "%PDF-1.4 fake"],
   "/charset-pdf": ["application/pdf;charset=UTF-8", "%PDF-1.4 fake"],
   "/text": ["text/plain", "Some reStructuredText source\n====\nbody"],
+  "/python": ["text/x-python; charset=utf-8", "print('hello')\n"],
+  "/script.py": ["text/plain; charset=utf-8", "print('plain python')\n"],
+  "/json": ["application/json", "{\"answer\": 42}\n"],
+  "/javascript": ["application/javascript", "export const answer = 42;\n"],
+  "/xml": ["application/xml", "<answer>42</answer>\n"],
   "/html": ["text/html; charset=utf-8", "<html><head><title>T</title></head><body><article><h1>Hello</h1><p>" + "word ".repeat(200) + "</p></article></body></html>"],
   "/octet": ["application/octet-stream", "x"],
   "/md": ["text/markdown", "# MD title\n\n" + "body ".repeat(100)],
@@ -39,14 +44,30 @@ describe("F6b fetch gate", () => {
       console.log(`${p}\t${routes[p][0]}\t=> status=${out[i].status} source=${out[i].source ?? "-"} error=${out[i].error ?? "-"}`);
     }
   });
-  it("application/pdf is rejected as 'Not HTML'", async () => {
-    const [a, b, c] = await fetchPages([base + "/plain-pdf", base + "/charset-pdf", base + "/text"], undefined, { timeoutMs: 5000 });
-    assert.equal(a.status, "error"); assert.match(a.error ?? "", /Not HTML: application\/pdf/);
-    assert.equal(b.status, "error"); assert.match(b.error ?? "", /Not HTML: application\/pdf;charset=UTF-8/);
-    assert.equal(c.status, "error"); assert.match(c.error ?? "", /Not HTML: text\/plain/);
+  it("application/pdf and octet-stream are rejected as unsupported assets", async () => {
+    const [a, b, c] = await fetchPages([base + "/plain-pdf", base + "/charset-pdf", base + "/octet"], undefined, { timeoutMs: 5000 });
+    assert.equal(a.status, "error"); assert.match(a.error ?? "", /Unsupported content type: application\/pdf/);
+    assert.equal(b.status, "error"); assert.match(b.error ?? "", /Unsupported content type: application\/pdf;charset=UTF-8/);
+    assert.equal(c.status, "error"); assert.match(c.error ?? "", /Unsupported content type: application\/octet-stream/);
   });
-  it("html is accepted", async () => {
-    const [h] = await fetchPages([base + "/html"], undefined, { timeoutMs: 5000 });
-    assert.equal(h.status, "success");
-  });
+
+  const acceptedAssets = [
+    { path: "/text", assetType: "text", contentType: "text/plain" },
+    { path: "/python", assetType: "code", contentType: "text/x-python; charset=utf-8" },
+    { path: "/script.py", assetType: "code", contentType: "text/plain; charset=utf-8" },
+    { path: "/json", assetType: "code", contentType: "application/json" },
+    { path: "/javascript", assetType: "code", contentType: "application/javascript" },
+    { path: "/xml", assetType: "code", contentType: "application/xml" },
+    { path: "/md", assetType: "text", contentType: "text/markdown" },
+    { path: "/html", assetType: "page", contentType: "text/html; charset=utf-8" },
+  ] as const;
+  for (const { path, assetType, contentType } of acceptedAssets) {
+    it(`accepts ${contentType} as a ${assetType} asset`, async () => {
+      const [page] = await fetchPages([base + path], undefined, { timeoutMs: 5000 });
+      assert.equal(page.status, "success", page.error ?? "fetch failed");
+      assert.equal(page.assetType, assetType);
+      assert.equal(page.contentType, contentType);
+      assert.ok(page.content.length > 0);
+    });
+  }
 });
