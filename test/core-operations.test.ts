@@ -197,8 +197,8 @@ it("shows original tokens, redirect attribution and one bounded error per failed
   };
   const result = await research({ query: "redirect attribution" }, base.context, dependencies);
   assert.equal(result.outcome, "completed");
-  assert.match(result.text, /\| README\.md \| https:\/\/readme\.md \| Code file \(text\/plain\); redirected to a different host: https:\/\/downloads\.example\.net\/raw\/readme\.txt; content is not from the guessed site \|/);
-  assert.match(result.text, /\| Broken\.py \| https:\/\/broken\.py \| Nothing fetched; see Failed Sources below; redirected to a different host: https:\/\/static\.example\.net\/broken\.pdf; content is not from the guessed site \| None \|/);
+  assert.match(result.text, /\| README\.md \| https:\/\/readme\.md \| Code file \(text\/plain\); redirected to a different host \(downloads\.example\.net\): https:\/\/downloads\.example\.net\/raw\/readme\.txt \|/);
+  assert.match(result.text, /\| Broken\.py \| https:\/\/broken\.py \| Nothing fetched; see Failed Sources below; redirected to a different host \(static\.example\.net\): https:\/\/static\.example\.net\/broken\.pdf \| None \|/);
   assert.equal(result.text.match(/TRANSPORT_FAILURE/g)?.length, 1, "raw failure appears only in Failed Sources");
   assert.doesNotMatch(result.text, /multiline detail\nmultiline detail/);
   const assets = result.details.inferredAssets as Array<Record<string, unknown>>;
@@ -212,7 +212,7 @@ it("shows original tokens, redirect attribution and one bounded error per failed
   assert.match(report, /README\.md \| https:\/\/readme\.md/);
   assert.match(report, /## Failed Sources/);
   assert.doesNotMatch(report, /## Blocked\/Failed URLs/);
-  assert.match(report, /redirected to a different host: https:\/\/downloads\.example\.net/);
+  assert.match(report, /redirected to a different host \(downloads\.example\.net\): https:\/\/downloads\.example\.net/);
   assert.equal(report.match(/TRANSPORT_FAILURE/g)?.length, 1);
   assert.doesNotMatch(report, /multiline detail\nmultiline detail/);
   const reportFailure = report.match(/^- https:\/\/broken\.py: .*$/m)?.[0] ?? "";
@@ -246,7 +246,7 @@ it("keeps guessed identity and cross-host attribution for a selected alternate",
   };
   const result = await research({ query: "alternate identity" }, base.context, dependencies);
   assert.equal(result.outcome, "completed");
-  assert.match(result.text, /guide\.example\.com\/alternate \| Text file \(text\/markdown\); via alternate https:\/\/cdn\.example\.net\/raw\.md; content is not from the guessed site \|/);
+  assert.match(result.text, /guide\.example\.com\/alternate \| Text file \(text\/markdown\); via alternate https:\/\/cdn\.example\.net\/raw\.md on a different host \(cdn\.example\.net\) \|/);
   assert.doesNotMatch(result.text, /redirected to a different host/);
   const [asset] = result.details.inferredAssets as Array<Record<string, unknown>>;
   assert.equal(asset.url, "https://guide.example.com/alternate");
@@ -596,20 +596,29 @@ it("never replaces a successful report committed while collation was failing", a
   const query = "concurrent collate failure";
   const path = makeCachePath(query, root, context.paths.cacheRoot);
   const complete = context.models.complete;
-  dependencies.fetchPages = async (urls) => urls.map((url) => ({
-    url,
-    title: "manage.py",
-    content: "print('current attempt')",
-    status: "success" as const,
-    source: "text",
-    assetType: "code" as const,
-    contentType: "text/x-python",
-  }));
+  dependencies.fetchPages = async (urls) => urls.map((url) =>
+    url === "https://missing.py"
+      ? {
+          url,
+          title: "",
+          content: "",
+          status: "error" as const,
+          error: `PRESERVED_FAILURE ${"detail\n".repeat(60)}`,
+        }
+      : {
+          url,
+          title: "manage.py",
+          content: "print('current attempt')",
+          status: "success" as const,
+          source: "text",
+          assetType: "code" as const,
+          contentType: "text/x-python",
+        });
   let collated!: () => void;
   const collateDone = new Promise<void>((resolve) => (collated = resolve));
   context.models.complete = async (request) => {
     if (request.model.model === "search") {
-      return { text: "Inspect manage.py before continuing.", citations: [] };
+      return { text: "Inspect manage.py and missing.py before continuing.", citations: [] };
     }
     if (request.model.model !== "collate") return complete(request);
     collated();
@@ -631,12 +640,19 @@ it("never replaces a successful report committed while collation was failing", a
   assert.equal(result.details.cachePath, "");
   assert.ok(result.details.preservedCachePath);
   const inferred = result.details.inferredAssets as Array<Record<string, unknown>>;
-  assert.equal(inferred.length, 1);
+  assert.equal(inferred.length, 2);
   assert.equal(inferred[0].originalReference, "manage.py");
   assert.equal(inferred[0].url, "https://manage.py");
   assert.equal(inferred[0].sourceFile, undefined, "an uncommitted run must not advertise a saved file");
   assert.match(result.text, /## Inferred Assets/);
   assert.match(result.text, /manage\.py \| Code file \(text\/x-python\) \| Not saved in this attempt \|/);
+  assert.match(result.text, /missing\.py \| Nothing fetched: PRESERVED_FAILURE/);
+  assert.doesNotMatch(result.text, /missing\.py \| Nothing fetched; see Failed Sources below/);
+  assert.equal(result.text.match(/PRESERVED_FAILURE/g)?.length, 1);
+  assert.doesNotMatch(result.text, /detail\ndetail/);
+  const preservedRow = result.text.split("\n").find((line) => line.includes("| missing.py |")) ?? "";
+  assert.ok(preservedRow.length < 400, `preserved failure row is unbounded: ${preservedRow.length}`);
+  assert.equal((inferred[1].error as string).length, 300);
   assert.match(await readFile(join(path, "report.md"), "utf8"), /Concurrent success/);
   await assert.rejects(stat(`${path}.1`), /ENOENT/);
   const meta = JSON.parse(await readFile(join(path, "meta.json"), "utf8"));

@@ -392,16 +392,20 @@ Also bare reference https://kit.svelte.dev.
 describe("redirectedToDifferentHost", () => {
   const cases = [
     ["https://example.com", "https://www.example.com/docs", false],
-    ["https://docs.example.com", "https://www.example.com/docs", false],
-    ["https://a.example.com", "https://b.example.com/docs", false],
+    ["https://www.example.com", "https://example.com/docs", false],
+    ["https://www.example.com", "https://www.example.com/docs", false],
+    ["https://docs.example.com", "https://www.example.com/docs", true],
+    ["https://a.example.com", "https://b.example.com/docs", true],
     ["https://example.co.uk", "https://www.example.co.uk/docs", false],
-    ["https://a.example.co.uk", "https://b.example.co.uk/docs", false],
+    ["https://a.example.co.uk", "https://b.example.co.uk/docs", true],
+    ["https://alice.github.io", "https://bob.github.io/docs", true],
     ["https://example.com", "https://other.com/docs", true],
     ["https://example.co.uk", "https://other.co.uk/docs", true],
     ["https://example.com", "https://example.com.evil.net/docs", true],
+    ["https://192.168.1.1", "https://10.0.1.1/docs", true],
   ] as const;
   for (const [url, finalUrl, expected] of cases) {
-    it(`${url} -> ${finalUrl}: ${expected ? "different" : "same"} registrable host`, () => {
+    it(`${url} -> ${finalUrl}: ${expected ? "different" : "same"} hostname`, () => {
       assert.equal(redirectedToDifferentHost(url, finalUrl), expected);
     });
   }

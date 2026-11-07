@@ -20,6 +20,7 @@ const routes: Record<string, [string, string]> = {
   "/html": ["text/html; charset=utf-8", "<html><head><title>T</title></head><body><article><h1>Hello</h1><p>" + "word ".repeat(200) + "</p></article></body></html>"],
   "/upper.py": ["Text/Html; charset=utf-8", "<html><head><title>Upper</title></head><body><article><h1>Upper</h1><p>" + "html ".repeat(100) + "</p></article></body></html>"],
   "/upper.xhtml": ["Application/Xhtml+Xml; charset=utf-8", "<html><head><title>XHTML</title></head><body><article><h1>XHTML</h1><p>" + "xhtml ".repeat(100) + "</p></article></body></html>"],
+  "/bare.xhtml": ["application/xhtml", "<html><head><title>Bare XHTML</title></head><body><article><h1>Bare XHTML</h1><p>" + "bare ".repeat(100) + "</p></article></body></html>"],
   "/octet": ["application/octet-stream", "x"],
   "/md": ["text/markdown", "# MD title\n\n" + "body ".repeat(100)],
   "/raw.md": ["text/markdown", "# Alternate\n\n" + "Reference facts. ".repeat(200)],
@@ -45,6 +46,21 @@ before(async () => {
     if (req.url === "/redirect-alternate") {
       res.writeHead(200, { "content-type": "text/html" });
       res.end(alternatePage(`${base}/alias.md`));
+      return;
+    }
+    if (req.url === "/start-html-alternate") {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(alternatePage(`http://localhost:${port}/sub/body`));
+      return;
+    }
+    if (req.url === "/redirect-html-body") {
+      res.writeHead(302, { location: `http://localhost:${port}/sub/body` });
+      res.end();
+      return;
+    }
+    if (req.url === "/sub/body") {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(`<html><head><title>Body</title></head><body><article><h1>Body</h1><p>${"Instructions and details. ".repeat(100)}</p><a href="install">Install details</a></article></body></html>`);
       return;
     }
     if (req.url === "/redirect-relative-page") {
@@ -121,6 +137,7 @@ describe("F6b fetch gate", () => {
     { path: "/html", assetType: "page", contentType: "text/html; charset=utf-8" },
     { path: "/upper.py", assetType: "page", contentType: "Text/Html; charset=utf-8" },
     { path: "/upper.xhtml", assetType: "page", contentType: "Application/Xhtml+Xml; charset=utf-8" },
+    { path: "/bare.xhtml", assetType: "page", contentType: "application/xhtml" },
   ] as const;
   for (const { path, assetType, contentType } of acceptedAssets) {
     it(`accepts ${contentType} as a ${assetType} asset`, async () => {
@@ -195,5 +212,23 @@ describe("F6b fetch gate", () => {
     assert.equal(page.url, base + "/redirect-relative-page");
     assert.equal(page.alternateUrl, `http://localhost:${port}/sub/raw.md`);
     assert.equal(page.finalUrl, `http://localhost:${port}/sub/raw.md`);
+  });
+
+  it("resolves links inside selected HTML against the actual response URL", async () => {
+    const [alternate, redirected] = await fetchPages(
+      [base + "/start-html-alternate", base + "/redirect-html-body"],
+      undefined,
+      { timeoutMs: 5000 },
+    );
+    const port = (server.address() as AddressInfo).port;
+    for (const page of [alternate, redirected]) {
+      assert.equal(page.status, "success", page.error ?? "HTML representation failed");
+      assert.equal(page.finalUrl, `http://localhost:${port}/sub/body`);
+      assert.match(page.content, new RegExp(`http://localhost:${port}/sub/install`));
+      assert.doesNotMatch(page.content, new RegExp(`http://127\\.0\\.0\\.1:${port}/install`));
+    }
+    assert.equal(alternate.url, base + "/start-html-alternate");
+    assert.equal(alternate.alternateUrl, `http://localhost:${port}/sub/body`);
+    assert.equal(redirected.url, base + "/redirect-html-body");
   });
 });

@@ -203,7 +203,7 @@ async function processFetchedResponse(
 ): Promise<FetchedPage> {
   const contentType = response.headers.get("content-type") ?? "";
   const essence = mediaEssence(contentType);
-  if (essence === "text/html" || essence === "application/xhtml+xml") {
+  if (essence === "text/html" || essence === "application/xhtml+xml" || essence === "application/xhtml") {
     return processHtmlResponse(url, response, opts, alternateUrl);
   }
   if (essence === "text/markdown") {
@@ -227,7 +227,8 @@ async function processHtmlResponse(
   const contentType = response.headers.get("content-type") ?? "";
   const body = await response.text();
   const { document } = parseHTML(body);
-  cleanBrokenMetadata(document, url);
+  const documentUrl = response.url || url;
+  cleanBrokenMetadata(document, documentUrl);
 
   // Try Defuddle first. Failure modes handled:
   //   1. Defuddle throws (rare). Caught below.
@@ -244,7 +245,7 @@ async function processHtmlResponse(
   let degraded = false;
   try {
     const out = await withMuzzledConsole(
-      () => Defuddle(document, url, { markdown: true }),
+      () => Defuddle(document, documentUrl, { markdown: true }),
       DEFUDDLE_MUZZLE_TAGS,
     );
     extracted = out.value;
@@ -347,7 +348,7 @@ async function findMarkdownAlternate(
     const response = await rawFetch(url, opts, signal);
     if (!response.ok) return null;
     const essence = mediaEssence(response.headers.get("content-type") ?? "");
-    if (essence !== "text/html" && essence !== "application/xhtml+xml") return null;
+    if (essence !== "text/html" && essence !== "application/xhtml+xml" && essence !== "application/xhtml") return null;
 
     const html = await response.text();
     const { document } = parseHTML(html);

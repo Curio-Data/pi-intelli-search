@@ -3,7 +3,7 @@
 
 import type { SourceIdentity } from "./cache.js";
 import type { ExtractResult, FetchedPage } from "./types.js";
-import { redirectedToDifferentHost } from "./util.js";
+import { failureDetail, redirectedToDifferentHost } from "./util.js";
 
 /** Only successful, non-empty extractions can support a completed synthesis. */
 export function evidenceExtractions(extractions: readonly ExtractResult[]): ExtractResult[] {
@@ -20,6 +20,14 @@ export function evidenceExtractions(extractions: readonly ExtractResult[]): Extr
 
 function cell(value: string): string {
   return value.replaceAll("|", "\\|").replace(/[\r\n]+/g, " ");
+}
+
+function displayHostname(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return url;
+  }
 }
 
 function withoutCodeBlocks(text: string): string {
@@ -202,9 +210,11 @@ export function inferredAssetsSection(
     const sourceFile = identity?.sourceFileFor(page.url);
     let outcome: string;
     if (page.status === "error") {
-      // The same bounded reason appears once in Failed Sources below. Do not
-      // repeat a long native transport string in this table as well.
-      outcome = "Nothing fetched; see Failed Sources below";
+      // Committed results point at their shared failure list. A preserved
+      // result has no such list, so carry the bounded reason inline instead.
+      outcome = identity
+        ? "Nothing fetched; see Failed Sources below"
+        : `Nothing fetched${page.error ? `: ${failureDetail(page.error)}` : ""}`;
     } else {
       const kind = page.assetType === "page"
         ? "Page"
@@ -219,15 +229,14 @@ export function inferredAssetsSection(
       outcome += `; via alternate ${page.alternateUrl}`;
       if (page.finalUrl && page.finalUrl !== page.alternateUrl) {
         outcome += redirectedToDifferentHost(page.url, page.finalUrl)
-          ? `; redirected to a different host: ${page.finalUrl}`
+          ? `; redirected to a different host (${displayHostname(page.finalUrl)}): ${page.finalUrl}`
           : `; redirected to ${page.finalUrl}`;
-      }
-      if (page.finalUrl && redirectedToDifferentHost(page.url, page.finalUrl)) {
-        outcome += "; content is not from the guessed site";
+      } else if (page.finalUrl && redirectedToDifferentHost(page.url, page.finalUrl)) {
+        outcome += ` on a different host (${displayHostname(page.finalUrl)})`;
       }
     } else if (page.finalUrl) {
       outcome += redirectedToDifferentHost(page.url, page.finalUrl)
-        ? `; redirected to a different host: ${page.finalUrl}; content is not from the guessed site`
+        ? `; redirected to a different host (${displayHostname(page.finalUrl)}): ${page.finalUrl}`
         : `; redirected to ${page.finalUrl}`;
     }
     const saved = sourceFile
