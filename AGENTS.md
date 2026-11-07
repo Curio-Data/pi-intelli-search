@@ -250,6 +250,7 @@ src/
 │   ├── prompts.ts           # System prompts
 │   ├── progress.ts          # Host-neutral stage progress
 │   ├── telemetry.ts         # Local sidecar with injected identity
+│   ├── tlds.ts              # Generated delegated TLD set for protocol-less domain guesses
 │   ├── types.ts             # Shared data types
 │   └── util.ts              # URL, concurrency and resilience helpers
 ├── native-operation-context.ts # Trusted native settings, paths and result/progress mapping
@@ -318,6 +319,7 @@ scripts/
 ├── capture-changelog-fixture.mjs # Capture the Pi changelog parser behaviour into a test fixture
 ├── lib/markdown-links.mjs    # Shared fence-aware, inline-code-aware link mapping for generators
 ├── generate-toc.mjs         # README contents generator; --check is the drift gate
+├── generate-tlds.mjs        # src/core/tlds.ts from a downloaded IANA list; --check is the drift gate
 ├── generate-plugin-bundles.mjs # Plugin/marketplace generator; --check is the drift gate
 ├── verify-mcp-install.mjs    # Production-only install and native-fetch verification
 └── capture-native-contract.mts # Explicit compatibility-fixture regeneration
@@ -379,6 +381,7 @@ test/
 ├── settings.test.ts
 ├── smoke.ts
 ├── util.test.ts
+├── rcca/                     # Converted RCCA regressions (run by test:all); RCCA.md and FOLLOW-UP.md
 └── native-changelog.test.ts # PI_CHANGELOG.md drift, parser-parity and packaging gates
 ```
 

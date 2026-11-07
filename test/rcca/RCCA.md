@@ -83,4 +83,10 @@ The reference worktree `ref-mcp-v0.19.0` (detached at `mcp-v0.19.0`, with its ow
 `node_modules` and untracked 0.19.0 probe copies) is kept until the corrective
 actions are merged. Its removal, and disposal of the run's scratch, needs the
 owner's approval at that point; everything retained is under
-`evidence/agents/2026-11-06-rcca-mcp-research/`.
+`evidence/agents/2026-11-06-rcca-mcp-research/`, whose `CLEANUP.md` lists every
+artefact the run created.
+
+## Follow-Up
+
+The items still open before merge, and the method for finishing them, are in
+[FOLLOW-UP.md](FOLLOW-UP.md).
