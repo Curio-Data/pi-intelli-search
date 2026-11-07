@@ -225,6 +225,39 @@ links, so more sources would need more search breadth (`searchWebSearch.maxResul
 several queries). That is a future research topic for a separate branch, not this
 one.
 
+## Decisions of the Second Session (2026-11-07)
+
+Owner decisions:
+
+- **D1, worst-case latency: accepted, with a cap.** Each attempt's timeout scales with
+  its output cap (`llmTimeoutMs × attemptCap / configuredCap`) and is capped at
+  `4 × llmTimeoutMs`. With the defaults that is 120 s, 240 s, then 480 s, so one
+  page can take ≈14 minutes before it fails, plus any transport retries.
+- **D2, agent-in-the-loop checks: yes.** After live verification, a fresh Claude Code
+  session (through the plugin) and a fresh `pi` session each receive degraded
+  results from items 1, 3 and 5 with an ordinary question. They pass only if the
+  agent opens a saved page or fetches an inferred asset unprompted. A failure here
+  is fixed in the result wording or the skill guidance, not waived.
+- **D3: proceed with the three-track herdr plan below.**
+
+Orchestrator choices, binding on every track:
+
+- **Saved-file layout shared by items 1, 3 and 5.** Pages keep today's names:
+  fetched pages in `sources/`, successful extractions in `extractions/`, with the
+  existing numbering. Item 1 writes every fetched page to `sources/` even when its
+  extraction failed; a failed extraction writes no file in `extractions/`, and the
+  report lists the page's `sources/` path and the failure reason. Item 3 saves a
+  fetched inferred asset in `sources/` like any page; its provenance (`inferred`)
+  and fetch outcome live in the result and `report.md`, never in the filename.
+  Item 5 never alters a saved file: trimming applies only to the text sent to the
+  collation model, and the report names the untrimmed file in `extractions/`.
+- **Verification without the live path.** The happy-path E2E scripts do not reach
+  items 1, 3, 4 or 5. Each must also pass a forced live run with an expected result
+  written before the run (§ Method to Repeat, step 6): every extraction failing
+  under a tiny cap (item 1), budget retries counted at 0, 1 and 2 (item 4), a small
+  collation budget against real pages (item 5), and a query citing raw source files
+  (item 3).
+
 ## Execution Plan
 
 The owner expects herdr agents to work in parallel where possible. The orchestrator
