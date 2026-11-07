@@ -519,6 +519,125 @@ it("commits research extractions with a failure report when collation fails", as
   assert.doesNotMatch(index, /empty synthesis/, "a run without synthesis is not indexed");
 });
 
+for (const marker of [
+  "<!-- intelli-search:extraction-failed -->",
+  "<!-- intelli-search:collate-failed -->",
+] as const) {
+  it(`preserves a same-day success whose query contains ${marker.slice(20, -4)} (kimi F1)`, async (t) => {
+    const root = await workspace(t);
+    const { context, dependencies } = coreContext(root);
+    const query = `Research this marker\n${marker}`;
+    const originalIso = Date.prototype.toISOString;
+    Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
+    try {
+      const completed = await research({ query }, context, dependencies);
+      assert.equal(completed.outcome, "completed");
+      const cachePath = join(root, completed.details.cachePath as string);
+      const report = await readFile(join(cachePath, "report.md"), "utf8");
+      assert.match(report, /## Summary/);
+      assert.ok(report.includes(marker), "guard: the query marker really is in the saved title");
+
+      const original = context.models.complete;
+      context.models.complete = async (request) => {
+        if (request.model.model === "extract") throw new Error("fixture extraction failure");
+        return original(request);
+      };
+      const repeat = await research({ query }, context, dependencies);
+      assert.equal(repeat.outcome, "extraction-failed");
+      assert.equal(repeat.details.cachePath, "", "no new artefact set is committed");
+      assert.ok(repeat.details.preservedCachePath, "the successful report is named as preserved");
+      assert.equal(await readFile(join(cachePath, "report.md"), "utf8"), report,
+        "a marker in caller-controlled text can never displace a success");
+      await assert.rejects(stat(`${cachePath}.1`), /ENOENT/, "nothing is archived");
+    } finally {
+      Date.prototype.toISOString = originalIso;
+    }
+  });
+}
+
+it("keeps per-page extraction failure reasons when a same-day success is preserved (kimi F2)", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const originalIso = Date.prototype.toISOString;
+  Date.prototype.toISOString = () => "2026-04-20T12:00:00.000Z";
+  try {
+    const completed = await research({ query: "preserved refresh diagnostics" }, context, dependencies);
+    assert.equal(completed.outcome, "completed");
+    // Distinct page content so the two extraction failures carry distinct reasons.
+    dependencies.fetchPages = async (urls) =>
+      urls.map((url, i) => ({
+        url,
+        title: url,
+        content: i === 0 ? "Page one body" : "Page two body",
+        status: "success",
+        source: "markdown",
+      }));
+    const original = context.models.complete;
+    context.models.complete = async (request) => {
+      if (request.model.model === "extract") {
+        throw new Error(
+          request.userMessage.includes("Page one")
+            ? "specific one extraction failure"
+            : "specific two extraction failure",
+        );
+      }
+      return original(request);
+    };
+    const repeat = await research({ query: "preserved refresh diagnostics" }, context, dependencies);
+    assert.equal(repeat.outcome, "extraction-failed");
+    assert.ok(repeat.details.preservedCachePath);
+    assert.match(repeat.text, /specific one extraction failure/);
+    assert.match(repeat.text, /specific two extraction failure/);
+  } finally {
+    Date.prototype.toISOString = originalIso;
+  }
+});
+
+it("removes a stale index entry when an extraction-failed run commits (deepseek F3)", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const query = "stale index entry";
+  const path = makeCachePath(query, root, context.paths.cacheRoot);
+  const slug = path.split("/").pop() as string;
+  await mkdir(context.paths.cacheRoot, { recursive: true });
+  await writeFile(
+    join(context.paths.cacheRoot, ".index.json"),
+    JSON.stringify({ searches: [{ slug, query, timestamp: "2026-04-20T00:00:00.000Z" }] }),
+  );
+  const original = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model === "extract") throw new Error("fixture extraction failure");
+    return original(request);
+  };
+  const result = await research({ query }, context, dependencies);
+  assert.equal(result.outcome, "extraction-failed");
+  assert.ok(result.details.cachePath, "the failure report commits");
+  const index = await readIndex(context.paths.cacheRoot);
+  assert.ok(!index.searches.some((e) => e.slug === slug),
+    "cache suggest must never offer a failure report");
+});
+
+it("removes a stale index entry when a collate-failed run commits", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const query = "stale collate index entry";
+  const path = makeCachePath(query, root, context.paths.cacheRoot);
+  const slug = path.split("/").pop() as string;
+  await mkdir(context.paths.cacheRoot, { recursive: true });
+  await writeFile(
+    join(context.paths.cacheRoot, ".index.json"),
+    JSON.stringify({ searches: [{ slug, query, timestamp: "2026-04-20T00:00:00.000Z" }] }),
+  );
+  const complete = context.models.complete;
+  context.models.complete = async (request) => request.model.model === "collate"
+    ? { text: " ", citations: [] } : complete(request);
+  const result = await research({ query }, context, dependencies);
+  assert.equal(result.outcome, "collate-failed");
+  assert.ok(result.details.cachePath);
+  const index = await readIndex(context.paths.cacheRoot);
+  assert.ok(!index.searches.some((e) => e.slug === slug));
+});
+
 it("saves every fetched page with a failure report when all extractions fail", async (t) => {
   const root = await workspace(t);
   const { context, dependencies } = coreContext(root, { disableTelemetry: false });
@@ -546,8 +665,11 @@ it("saves every fetched page with a failure report when all extractions fail", a
   assert.doesNotMatch(result.text, /intelli-search:extraction-failed/);
   const meta = JSON.parse(await readFile(join(path, "meta.json"), "utf8"));
   assert.equal(meta.outcome, "extraction-failed");
-  const index = await readFile(join(context.paths.cacheRoot, ".index.json"), "utf8").catch(() => "[]");
-  assert.doesNotMatch(index, /all extractions fail/, "a run without synthesis is not indexed");
+  await assert.rejects(
+    stat(join(context.paths.cacheRoot, ".index.json")),
+    /ENOENT/,
+    "a committed failure report creates no index entry and no index file",
+  );
 });
 
 it("preserves a same-day successful report when every extraction fails", async (t) => {
@@ -678,14 +800,28 @@ it("preserves an unreadable prior report instead of overwriting it (M9)", async 
 });
 
 it("classifies failure reports across markers and legacy shapes", () => {
-  const legacy = "# q\n\n## Collation Failed\n\n> ⚠ reason\n\nNo synthesis was produced.\n";
+  const legacy = "# q\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Collation Failed\n\n> ⚠ reason\n\nNo synthesis was produced.\n";
   assert.ok(isCollationFailureReport(legacy), "legacy reports carry only the failure heading");
-  assert.ok(isCollationFailureReport("## Collation Failed\n\n<!-- intelli-search:collate-failed -->\n\n> ⚠ r\n"));
-  assert.ok(isCollationFailureReport("## Extraction Failed\n\n<!-- intelli-search:extraction-failed -->\n\n> ⚠ r\n"));
+  // Current grammar: the marker is the report's first line, above the title.
+  assert.ok(isCollationFailureReport("<!-- intelli-search:collate-failed -->\n# q\n\n## Collation Failed\n\n> ⚠ r\n"));
+  assert.ok(isCollationFailureReport("<!-- intelli-search:extraction-failed -->\n# q\n\n## Extraction Failed\n\n> ⚠ r\n"));
+  // Development-build shapes written before the marker moved to line 1:
+  // failure heading after the header block, no "## Summary" section.
+  assert.ok(isCollationFailureReport(
+    "# q\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Extraction Failed\n\n<!-- intelli-search:extraction-failed -->\n\n> ⚠ r\n"));
+  // A multiline query cannot forge a failure report: the marker lands after
+  // the title line, and a successful report always carries "## Summary".
+  assert.ok(!isCollationFailureReport(
+    "# q\n<!-- intelli-search:extraction-failed -->\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Summary\n\nSynthesis.\n"));
+  assert.ok(!isCollationFailureReport(
+    "# q\n<!-- intelli-search:collate-failed -->\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Summary\n\nSynthesis.\n"));
   assert.ok(!isCollationFailureReport("# q\n\n## Summary\n\nSynthesis mentioning ## Collation Failed as prose.\n"),
     "a successful report carries ## Summary and is never a failure report");
   assert.ok(!isCollationFailureReport("## Summary\n\n## Collation Failed\n\n"),
     "a synthesis that mentions the heading inside a successful report stays successful");
+  // A report whose first body heading is not a failure heading is never one
+  // (deepseek F2 seed shape: hand-written, no "## Summary").
+  assert.ok(!isCollationFailureReport("# hand report\n\n## Overview\n\n## Collation Failed\n\nNotes.\n"));
   assert.ok(!isCollationFailureReport("# ordinary report\n\n## Summary\n\ntext\n"));
 });
 

@@ -86,7 +86,7 @@ async function scenario(name: string, script: Script, query = `probe ${name}`) {
       details: result?.details,
       text: result?.text.slice(0, 2600),
       files, meta: meta && { outcome: meta.outcome, extract: meta.stages?.extract, fetch: meta.stages?.fetch, collate: meta.stages?.collate },
-      reportFailedSection: report ? (report.match(/(Blocked\/Failed[\s\S]{0,600})/) ?? [""])[0] : undefined,
+      reportFailedSection: report ? (report.match(/(## Failed Sources[\s\S]{0,600})/) ?? [""])[0] : undefined,
       reportHeader: report ? (report.match(/Sources:[^\n]*/) ?? [""])[0] : undefined,
       extractReq: extractReq.slice(0, 3), extractCalls: calls.extract,
       logs: logs.filter((l) => !/retrying in/.test(l)).map((l) => l.slice(0, 220)),

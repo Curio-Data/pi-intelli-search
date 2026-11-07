@@ -5,6 +5,7 @@
 import { mkdir, writeFile, readFile, rename, rm, stat, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveWorkspacePaths } from "./paths.js";
+import { splitFailureMarkerHead } from "./provenance.js";
 import { createHash, randomBytes } from "node:crypto";
 import { sleep, throwIfAborted } from "./util.js";
 import type { FetchedPage, ExtractResult } from "./types.js";
@@ -513,6 +514,11 @@ export async function clearCacheArtefacts(cachePath: string): Promise<void> {
  * references come from `identity`, so every advertised path matches a file
  * `writeCacheFiles` wrote with the same identity; absent optional full-page
  * content renders as a Not cached cell instead of a broken path.
+ *
+ * A failure-report body opens with its marker line; that line is hoisted
+ * above the query title so `isCollationFailureReport()` detects failure
+ * reports from line 1, a position caller-controlled text (a multiline
+ * query) can never occupy.
  */
 export async function writeReportFile(
   cachePath: string,
@@ -529,11 +535,16 @@ export async function writeReportFile(
   const succeeded = extractions.filter((e) => e.status === "success");
   const blocked = extractions.filter((e) => e.status !== "success");
 
-  let report = `# ${query}\n\n`;
+  const failureHead = splitFailureMarkerHead(collation);
+  const body = failureHead ? failureHead.body : collation;
+
+  let report = "";
+  if (failureHead) report += `${failureHead.marker}\n`;
+  report += `# ${query}\n\n`;
   report += `> Searched: ${now}\n`;
   report += `> Cache: ${displayPath}/\n`;
   report += `> Sources: ${succeeded.length} succeeded, ${blocked.length} failed\n\n`;
-  report += collation + "\n\n";
+  report += body + "\n\n";
 
   // Operations already rendered one authoritative inventory. Retain the
   // historical index only for low-level callers that supply raw collation.
@@ -551,7 +562,10 @@ export async function writeReportFile(
   }
 
   if (blocked.length > 0) {
-    report += `\n## Blocked/Failed URLs\n\n`;
+    // One name everywhere: the same "Failed Sources" heading the tool-result
+    // appendix uses (formatCacheAppendix), so a pointer in either artefact
+    // resolves without renaming.
+    report += `\n## Failed Sources\n\n`;
     for (const entry of blocked) {
       const fetchError = pages.find((page) => page.url === entry.url)?.error;
       const reason = entry.error ?? fetchError ?? (entry.status === "blocked" ? "Source marked blocked" : "Extraction failed");

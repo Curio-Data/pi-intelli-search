@@ -239,10 +239,25 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
       ...(fetchFailed > 0 ? [`${fetchFailed} page(s) failed to fetch`] : []),
       ...(extractFailed > 0 || fetchFailed === 0 ? [`${extractFailed} extraction(s) failed`] : []),
     ].join(" and ");
+    // Per-page reasons travel with every exit, including the preserved
+    // refresh: the pages of THIS attempt were not saved, so no source path
+    // is offered, but the bounded reason for each page must survive for the
+    // calling agent to act on (kimi F2).
+    const failureLines = allExtractions
+      .filter((e) => e.status !== "success")
+      .map((e) => {
+        const detail =
+          e.error ?? fetched.pages.find((pg) => pg.url === e.url)?.error;
+        return detail ? `- ${e.url}: ${failureDetail(String(detail))}` : `- ${e.url}`;
+      })
+      .slice(0, 10)
+      .join("\n");
     failureMessage =
       `${asSentence(reason)} No content was extracted. ${fetched.successPages.length} page(s) were ` +
       `fetched, but the report already saved for this query at ${p.cachePath} was preserved, ` +
-      `so this run's fetched pages were not saved.\n\nSearch summary:\n${search.searchResult}`;
+      `so this run's fetched pages were not saved.` +
+      (failureLines ? `\n\n**Failed Sources** (this attempt, up to 10):\n${failureLines}` : "") +
+      `\n\nSearch summary:\n${search.searchResult}`;
     outcome = "extraction-failed";
     collation = extractionFailureReport(
       asSentence(reason),
@@ -860,8 +875,21 @@ async function writeCacheArtifacts(
       // Atomic index update under a separate lock scoped to the cache
       // directory. Different cache paths contend only on this short
       // index update, not on the per-cache-path bulk writes. A run without
-      // a synthesis is not offered to later cache suggestions.
-      if (outcome !== "completed") return true;
+      // a synthesis is not indexed, and any stale entry left for this slug
+      // (for example by an interrupted earlier run) is removed: cache
+      // suggest must never offer a failure report as related research
+      // (deepseek F3). removeIndexEntry never creates the index file.
+      if (outcome !== "completed") {
+        await withLock(
+          indexLockDir(p.paths.cacheRoot),
+          async () => {
+            const slug = p.physicalCachePath.split("/").pop() ?? p.physicalCachePath;
+            await removeIndexEntry(p.paths.cacheRoot, slug);
+          },
+          p.signal,
+        );
+        return true;
+      }
       await withLock(
         indexLockDir(p.paths.cacheRoot),
         async () => {
