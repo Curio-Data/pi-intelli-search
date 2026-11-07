@@ -100,6 +100,7 @@ export function finalizeCollation(
   extractions: readonly ExtractResult[],
   identity: SourceIdentity,
   evidence: "fetched" | "supplied",
+  allowedSourceNumbers?: ReadonlySet<number>,
 ): string {
   if (!text.trim()) {
     throw new Error(
@@ -107,6 +108,7 @@ export function finalizeCollation(
     );
   }
   const sources = evidenceExtractions(extractions);
+  const allowedSourceIds = allowedSourceNumbers ?? new Set(sources.map((_, index) => index + 1));
   const summary = text
     // Model text can never carry a generated failure-report marker.
     .replaceAll(COLLATION_FAILED_MARKER, "")
@@ -141,8 +143,8 @@ export function finalizeCollation(
       continue;
     for (const match of bracket[1].matchAll(/\bS(\d+)\b/gi)) {
       const index = Number(match[1]);
-      if (index < 1 || index > sources.length || match[1] !== String(index))
-        invalid("unknown source ID");
+      if (match[1] !== String(index) || !allowedSourceIds.has(index))
+        invalid("unknown or omitted source ID");
     }
   }
   // Cross-links present in an extraction are evidence CONTENT, not extra

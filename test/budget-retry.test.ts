@@ -288,8 +288,8 @@ for (const hasCompleted of [false, true]) {
     assert.deepEqual(caps, [100, 200, 400]);
     assert.equal(result.outcome, "collate-failed");
     const report = await readFile(join(root, result.details.cachePath as string, "report.md"), "utf8");
-    const firstReason = hasCompleted ? "unknown source ID" : "a prose URL is absent from the supplied evidence";
-    const otherReason = hasCompleted ? /a prose URL is absent|generated a cache-file reference/ : /unknown source ID|generated a cache-file reference/;
+    const firstReason = hasCompleted ? "unknown or omitted source ID" : "a prose URL is absent from the supplied evidence";
+    const otherReason = hasCompleted ? /a prose URL is absent|generated a cache-file reference/ : /unknown or omitted source ID|generated a cache-file reference/;
     for (const output of [result.text, report]) {
       assert.ok(output.includes(`Collation provenance validation failed: ${firstReason}.`));
       assert.doesNotMatch(output, otherReason);
