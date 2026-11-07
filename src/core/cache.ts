@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { resolveWorkspacePaths } from "./paths.js";
 import { splitFailureMarkerHead } from "./provenance.js";
 import { createHash, randomBytes } from "node:crypto";
-import { sleep, throwIfAborted } from "./util.js";
+import { failureDetail, sleep, throwIfAborted } from "./util.js";
 import type { FetchedPage, ExtractResult } from "./types.js";
 
 export interface IndexEntry {
@@ -348,7 +348,9 @@ export async function writeCacheFiles(
       if (page.status !== "success") continue;
       const filename = identity.sourceFileFor(page.url);
       if (!filename) continue;
-      const header = `# ${page.title}\n\n> Source: ${page.url}\n\n---\n\n`;
+      const header = `# ${page.title}\n\n> Source: ${page.url}\n${
+        page.finalUrl ? `> Final URL: ${page.finalUrl}\n` : ""
+      }\n---\n\n`;
       await writeFile(join(stagingSources, filename), header + page.content, "utf-8");
       writtenSources.add(filename);
     }
@@ -563,14 +565,14 @@ export async function writeReportFile(
 
   if (blocked.length > 0) {
     // One name everywhere: the same "Failed Sources" heading the tool-result
-    // appendix uses (formatCacheAppendix), so a pointer in either artefact
-    // resolves without renaming.
+    // appendix and the inferred-table pointer use, so a pointer in either
+    // artefact resolves without renaming.
     report += `\n## Failed Sources\n\n`;
     for (const entry of blocked) {
       const fetchError = pages.find((page) => page.url === entry.url)?.error;
       const reason = entry.error ?? fetchError ?? (entry.status === "blocked" ? "Source marked blocked" : "Extraction failed");
       const savedSource = identity.sourceFileFor(entry.url);
-      report += `- ${entry.url}: ${reason}${
+      report += `- ${entry.url}: ${failureDetail(reason)}${
         savedSource ? ` (full page saved: sources/${savedSource})` : ""
       }\n`;
     }

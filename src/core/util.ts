@@ -3,8 +3,9 @@
 
 // Shared utilities
 
+import { domainToASCII } from "node:url";
 import type { ModelCompletion, ModelUsage } from "./contracts.js";
-import { FILE_EXTENSION_TLDS, TOP_LEVEL_DOMAINS } from "./tlds.js";
+import { TOP_LEVEL_DOMAINS } from "./tlds.js";
 
 /** True when reported completion tokens reached the requested cap, meaning
  *  the model's output (visible text plus any hidden reasoning) was cut off.
@@ -85,6 +86,27 @@ export function textContent(text: string): { type: "text"; text: string } {
 /** Extract a human-readable message from an unknown thrown value. */
 export function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** Bounded single-line failure reason shared by results, reports and details. */
+export function failureDetail(message: string): string {
+  const line = message.replace(/\s+/g, " ").trim();
+  return line.length > 300 ? `${line.slice(0, 299).trimEnd()}…` : line;
+}
+
+function comparisonHostname(url: string): string {
+  return domainToASCII(new URL(url).hostname).toLowerCase().replace(/^www\./, "");
+}
+
+/** Compare hostnames only: lowercase, IDN-normalise and remove one leading
+ *  `www.` from each side. No public-suffix or site-ownership inference. */
+export function redirectedToDifferentHost(url: string, finalUrl?: string): boolean {
+  if (!finalUrl) return false;
+  try {
+    return comparisonHostname(url) !== comparisonHostname(finalUrl);
+  } catch {
+    return false;
+  }
 }
 
 /** Unified marker appended whenever page content is truncated to a char cap. */
@@ -532,6 +554,8 @@ export interface SourceUrl {
   /** Set on protocol-less domain references (pass 3): a guess from prose,
    *  ranked after explicit links and harvested citations by mergeCitations(). */
   inferred?: true;
+  /** Exact reference token before lowercase and IDN normalisation. */
+  originalReference?: string;
 }
 
 export function extractSourceUrls(text: string): SourceUrl[] {
@@ -593,62 +617,51 @@ export function extractSourceUrls(text: string): SourceUrl[] {
     absoluteSpans.push({ start: m.index, end: m.index + m[0].length });
   }
   const domainPattern =
-    /(?<!:\/\/)(?<![A-Za-z0-9@._-])((?:www\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?:\/[^\s<>"{}*()|\\`\[\]]*)?)/g;
+    /(?<!:\/\/)(?<![\p{L}\p{N}\p{M}@._-])((?:www\.)?(?:[\p{L}\p{N}](?:[\p{L}\p{N}\p{M}-]{0,61}[\p{L}\p{N}\p{M}])?\.)+[\p{L}][\p{L}\p{N}\p{M}-]{1,62}(?::\d{1,5})?(?:(?:\/[^\s<>"{}*()|\\`\[\]]*|[?#][^\s<>"{}*()|\\`\[\]]*))?)/gu;
   for (const m of text.matchAll(domainPattern)) {
     if (absoluteSpans.some(({ start, end }) => m.index >= start && m.index < end)) continue;
-    // A match bordered by a letter, digit or hyphen (an IDN or punycode
-    // label, as in bücher.de), or followed by a port, query or fragment, is
-    // only part of a reference: skip it rather than fetch a different host or
-    // drop the rest. Punctuation and spaces of any script are boundaries.
+    // Never recover an ASCII-looking suffix from a larger Unicode token, or
+    // truncate an unsupported port or hyphenated suffix. A complete Unicode
+    // hostname is instead normalised to its ASCII form below.
     const before = text.slice(Math.max(0, m.index - 2), m.index);
     const after = text.slice(m.index + m[0].length, m.index + m[0].length + 2);
-    if (/[\p{L}\p{N}\p{M}]$/u.test(before) || /^[\p{L}\p{N}\p{M}-]|^:\d|^[?#]\S/u.test(after)) continue;
+    if (/[\p{L}\p{N}\p{M}]$/u.test(before) || /^[\p{L}\p{N}\p{M}-]|^:\S/u.test(after)) continue;
     const domainReference = m[1].replace(/[.,;:!]+$/, "");
-    if (!plausibleDomainReference(domainReference)) continue;
-    const slash = domainReference.indexOf("/");
-    const url =
-      slash === -1
-        ? `https://${domainReference.toLowerCase()}`
-        : `https://${domainReference.slice(0, slash).toLowerCase()}${domainReference.slice(slash)}`;
+    const suffixAt = domainReference.search(/[/?#]/);
+    const authority = suffixAt === -1 ? domainReference : domainReference.slice(0, suffixAt);
+    const suffix = suffixAt === -1 ? "" : domainReference.slice(suffixAt);
+    const port = authority.match(/:\d+$/)?.[0] ?? "";
+    const asciiHost = domainToASCII(authority.slice(0, authority.length - port.length)).toLowerCase();
+    if (!asciiHost || !plausibleDomainReference(`${asciiHost}${suffix}`)) continue;
+    const url = `https://${asciiHost}${port}${suffix}`;
     if (seen.has(url)) continue;
     try {
       const u = new URL(url);
       seen.add(url);
       const parts = u.pathname.split("/").filter(Boolean);
       const title = parts.length > 0 ? parts[parts.length - 1].replace(/\.[^.]+$/, "") : u.hostname;
-      urls.push({ url, title, inferred: true });
+      urls.push({ url, title, inferred: true, originalReference: domainReference });
     } catch {
-      // Defensive: the domain-shaped match should form a valid URL.
+      // Invalid ports and malformed domain-shaped matches never become sources.
     }
   }
 
   return urls;
 }
 
-/** Source-file extensions that, as the label before the TLD, mark a filename
- *  such as `main.js.map` or `config.h.in` rather than a host. */
-const SOURCE_EXTENSION_LABELS = new Set(["c", "cpp", "css", "h", "hpp", "js", "min", "ts"]);
-
 /**
- * Filter for protocol-less references found in prose. The final label must be
- * a delegated top-level domain, which rejects filenames and identifiers such as
- * `app.ini`, `robots.txt`, `Node.js` and `service.DISABLE`. A bare reference
- * ending in a TLD that is mostly seen as a file extension (`manage.py`,
- * `README.md`, `main.js.map`) needs a path, a `www.` prefix or a third label,
- * such as `docs.example.md`. Before such a TLD, or `.in`, a source-file
- * extension label marks a filename even with a path (`main.js.map`,
- * `config.h.in`); `vue.js.org` is unaffected. Guesses rank after real
- * citations, so the filter errs towards keeping real hosts.
+ * Filter for protocol-less references found in prose. The ASCII-normalised
+ * final label must be a delegated top-level domain, which rejects identifiers
+ * such as `app.ini`, `robots.txt`, `Node.js` and `service.DISABLE`. Delegated
+ * names that also look like files (`manage.py`, `README.md`, `main.js.map`)
+ * remain candidates: the fetch stage classifies what they return and every
+ * pass-3 candidate is labelled as inferred rather than cited.
  */
 function plausibleDomainReference(reference: string): boolean {
-  const slash = reference.indexOf("/");
-  const labels = (slash === -1 ? reference : reference.slice(0, slash)).toLowerCase().split(".");
-  const tld = labels[labels.length - 1];
-  if (!TOP_LEVEL_DOMAINS.has(tld)) return false;
-  const fileLike = FILE_EXTENSION_TLDS.has(tld) || tld === "in";
-  if (fileLike && SOURCE_EXTENSION_LABELS.has(labels[labels.length - 2] ?? "")) return false;
-  const hasPath = slash !== -1;
-  return hasPath || labels.length >= 3 || !FILE_EXTENSION_TLDS.has(tld);
+  const suffixAt = reference.search(/[/?#]/);
+  const host = suffixAt === -1 ? reference : reference.slice(0, suffixAt);
+  const labels = host.toLowerCase().split(".");
+  return TOP_LEVEL_DOMAINS.has(labels[labels.length - 1]);
 }
 
 /**

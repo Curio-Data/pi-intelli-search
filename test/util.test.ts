@@ -22,6 +22,7 @@ import {
   stripTrailingSourcesSection,
   budgetExhausted,
   reasoningOnlyCompletion,
+  redirectedToDifferentHost,
 } from "../src/util.js";
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 5));
@@ -213,38 +214,159 @@ Also bare reference https://kit.svelte.dev.
         url: "https://github.com/microsoft/TypeScript/releases",
         title: "releases",
         inferred: true,
+        originalReference: "github.com/microsoft/TypeScript/releases",
       },
       {
         url: "https://devblogs.microsoft.com/typescript",
         title: "typescript",
         inferred: true,
+        originalReference: "devblogs.microsoft.com/typescript",
       },
     ]);
   });
 
-  it("rejects filenames and identifiers as protocol-less domains", () => {
-    const urls = extractSourceUrls(
-      "Edit app.ini and robots.txt, run manage.py, read README.md, set user.name and " +
-        "service.DISABLE, use Node.js. Docs: www.example.md, docs.example.md/guide, example.io.",
-    ).map((u) => u.url);
-    assert.deepStrictEqual(urls, [
-      "https://www.example.md",
-      "https://docs.example.md/guide",
-      "https://example.io",
-    ]);
-  });
+  const protocolLessCases: Array<{
+    reference: string;
+    decision: "keep" | "reject";
+    expected?: string;
+    original?: string;
+  }> = [
+    { reference: "app.ini", decision: "reject" },
+    { reference: "robots.txt", decision: "reject" },
+    { reference: "manage.py", decision: "keep", expected: "https://manage.py" },
+    {
+      reference: "manage.py/runserver",
+      decision: "keep",
+      expected: "https://manage.py/runserver",
+    },
+    { reference: "README.md", decision: "keep", expected: "https://readme.md" },
+    { reference: "user.name", decision: "keep", expected: "https://user.name" },
+    { reference: "user.id", decision: "keep", expected: "https://user.id" },
+    { reference: "service.DISABLE", decision: "reject" },
+    { reference: "Node.js", decision: "reject" },
+    { reference: "install.sh", decision: "keep", expected: "https://install.sh" },
+    { reference: "main.cc", decision: "keep", expected: "https://main.cc" },
+    { reference: "libfoo.so", decision: "keep", expected: "https://libfoo.so" },
+    { reference: "main.js.map", decision: "keep", expected: "https://main.js.map" },
+    { reference: "config.h.in", decision: "keep", expected: "https://config.h.in" },
+    { reference: "www.example.md", decision: "keep", expected: "https://www.example.md" },
+    {
+      reference: "docs.example.md/guide",
+      decision: "keep",
+      expected: "https://docs.example.md/guide",
+    },
+    { reference: "example.io", decision: "keep", expected: "https://example.io" },
+    { reference: "notion.so", decision: "keep", expected: "https://notion.so" },
+    {
+      reference: "notion.so: a workspace tool",
+      decision: "keep",
+      expected: "https://notion.so",
+      original: "notion.so",
+    },
+    {
+      reference: "example.com:",
+      decision: "keep",
+      expected: "https://example.com",
+      original: "example.com",
+    },
+    { reference: "bun.sh", decision: "keep", expected: "https://bun.sh" },
+    {
+      reference: "publico.pt/2026/story",
+      decision: "keep",
+      expected: "https://publico.pt/2026/story",
+    },
+    { reference: "detik.id", decision: "keep", expected: "https://detik.id" },
+    { reference: "vue.js.org", decision: "keep", expected: "https://vue.js.org" },
+    {
+      reference: "bücher.de",
+      decision: "keep",
+      expected: "https://xn--bcher-kva.de",
+    },
+    {
+      reference: "例子.中国",
+      decision: "keep",
+      expected: "https://xn--fsqu00a.xn--fiqs8s",
+    },
+    {
+      reference: "example.xn--p1ai",
+      decision: "keep",
+      expected: "https://example.xn--p1ai",
+    },
+    {
+      reference: "example.net?q=1",
+      decision: "keep",
+      expected: "https://example.net?q=1",
+    },
+    {
+      reference: "example.com#install",
+      decision: "keep",
+      expected: "https://example.com#install",
+    },
+    {
+      reference: "example.com:8080/path",
+      decision: "keep",
+      expected: "https://example.com:8080/path",
+    },
+    { reference: "example.com:abc", decision: "reject" },
+    { reference: "gitea:3000", decision: "reject" },
+    { reference: "example.com:99999", decision: "reject" },
+    {
+      reference: "git.example.com/user/repo.git",
+      decision: "keep",
+      expected: "https://git.example.com/user/repo.git",
+    },
+    {
+      reference: "𐐀example.com",
+      decision: "keep",
+      expected: "https://xn--example-vd84b.com",
+    },
+    {
+      reference: "e\u0301xample.com",
+      decision: "keep",
+      expected: "https://xn--xample-9ua.com",
+    },
+    {
+      reference: "café.fr",
+      decision: "keep",
+      expected: "https://xn--caf-dma.fr",
+    },
+    {
+      reference: "cafe\u0301.fr",
+      decision: "keep",
+      expected: "https://xn--caf-dma.fr",
+    },
+    { reference: "example.comé", decision: "reject" },
+    { reference: "pre-example.com", decision: "keep", expected: "https://pre-example.com" },
+    { reference: "example.com-suffix", decision: "reject" },
+    { reference: "EXAMPLE.ORG/Docs", decision: "keep", expected: "https://example.org/Docs" },
+  ];
 
-  it("skips partial hosts and normalises host case in protocol-less references", () => {
-    const urls = extractSourceUrls(
-      "See bücher.de, example.xn--p1ai, example.com:8080/path, example.net?q=1, main.js.map, " +
-        "config.h.in, manage.py, vue.js.org, “notion.so” — publico.pt/2026/story, \u{10400}example.com, " +
-        "e\u0301xample.com and EXAMPLE.ORG/Docs.",
-    ).map((u) => u.url);
-    assert.deepStrictEqual(urls, [
-      "https://vue.js.org",
-      "https://notion.so",
-      "https://publico.pt/2026/story",
-      "https://example.org/Docs",
+  for (const { reference, decision, expected, original } of protocolLessCases) {
+    it(`${decision} protocol-less reference ${JSON.stringify(reference)}`, () => {
+      const urls = extractSourceUrls(reference);
+      if (decision === "reject") {
+        assert.deepStrictEqual(urls, []);
+        return;
+      }
+      const parsed = new URL(expected!);
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      const title = parts.length
+        ? parts[parts.length - 1].replace(/\.[^.]+$/, "")
+        : parsed.hostname;
+      assert.deepStrictEqual(urls, [
+        {
+          url: expected,
+          title,
+          inferred: true,
+          originalReference: original ?? reference,
+        },
+      ]);
+    });
+  }
+
+  it("keeps an absolute placeholder host with a numeric port as an explicit URL", () => {
+    assert.deepStrictEqual(extractSourceUrls("http://gitea:3000"), [
+      { url: "http://gitea:3000", title: "gitea" },
     ]);
   });
 
@@ -265,6 +387,28 @@ Also bare reference https://kit.svelte.dev.
       },
     ]);
   });
+});
+
+describe("redirectedToDifferentHost", () => {
+  const cases = [
+    ["https://example.com", "https://www.example.com/docs", false],
+    ["https://www.example.com", "https://example.com/docs", false],
+    ["https://www.example.com", "https://www.example.com/docs", false],
+    ["https://docs.example.com", "https://www.example.com/docs", true],
+    ["https://a.example.com", "https://b.example.com/docs", true],
+    ["https://example.co.uk", "https://www.example.co.uk/docs", false],
+    ["https://a.example.co.uk", "https://b.example.co.uk/docs", true],
+    ["https://alice.github.io", "https://bob.github.io/docs", true],
+    ["https://example.com", "https://other.com/docs", true],
+    ["https://example.co.uk", "https://other.co.uk/docs", true],
+    ["https://example.com", "https://example.com.evil.net/docs", true],
+    ["https://192.168.1.1", "https://10.0.1.1/docs", true],
+  ] as const;
+  for (const [url, finalUrl, expected] of cases) {
+    it(`${url} -> ${finalUrl}: ${expected ? "different" : "same"} hostname`, () => {
+      assert.equal(redirectedToDifferentHost(url, finalUrl), expected);
+    });
+  }
 });
 
 describe("mapWithConcurrency", () => {

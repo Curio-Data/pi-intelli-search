@@ -98,6 +98,34 @@ describe("buildCollationMessage", () => {
     assert.doesNotMatch(msg, /SEARCH SUMMARY|unfetched|failed|empty|\.search/);
   });
 
+  it("marks inferred sources and their final redirect URL for the collation model", () => {
+    const inferred = {
+      ...makeExt("https://readme.md", "README"),
+      inferred: true,
+      finalUrl: "https://downloads.example.net/readme.txt",
+    };
+    const cited = makeExt("https://docs.example/guide", "Guide");
+    const msg = buildCollationMessage("q", ".search/x", undefined, [cited, inferred]);
+    assert.deepEqual(JSON.parse(msg).sources, [
+      {
+        id: "S1",
+        url: "https://docs.example/guide",
+        title: "Guide",
+        type: "official docs",
+        extraction: "EXTRACTED:https://docs.example/guide",
+      },
+      {
+        id: "S2",
+        url: "https://readme.md",
+        title: "README",
+        type: "official docs",
+        extraction: "EXTRACTED:https://readme.md",
+        inferredFromText: true,
+        finalUrl: "https://downloads.example.net/readme.txt",
+      },
+    ]);
+  });
+
   it("omits the search summary section when not given", () => {
     const msg = buildCollationMessage("q", ".search/x", undefined, [
       makeExt("https://a.com/", "t"),

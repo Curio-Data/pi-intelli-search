@@ -46,6 +46,8 @@ import {
   sleep,
   createRateLimiter,
   errMsg,
+  failureDetail,
+  redirectedToDifferentHost,
   throwIfAborted,
   completionTruncated,
   isOutputBudgetExhausted,
@@ -72,6 +74,7 @@ import {
   collationFailureReport,
   extractionFailureReport,
   finalizeCollation,
+  inferredAssetsSection,
   isCollationFailureReport,
   stripFailureMarkers,
 } from "../provenance.js";
@@ -185,7 +188,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   throwIfAborted(p.signal);
   if (fetched.successPages.length === 0) {
     const fetchLines = fetched.pages
-      .map((pg) => `- ${pg.url}: ${failureDetail(pg.error ?? "no reason recorded")}`)
+      .map((pg) => `- ${pg.url}${pg.inferred ? " [inferred from text, not a citation]" : ""}: ${failureDetail(pg.error ?? "no reason recorded")}`)
       .slice(0, 10)
       .join("\n");
     return degradedReturn(
@@ -199,6 +202,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
         urlsSearched: search.urls.length,
         pagesFetched: 0,
         pagesFailed: search.urls.length,
+        ...inferredAssetDetailsField(fetched.pages),
       },
     );
   }
@@ -302,6 +306,15 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
     }
   }
 
+  // Keep inferred provenance and every fetch outcome beside the authoritative
+  // source inventory in both the tool result and report.md. This point is
+  // shared by completed, collate-failed and extraction-failed reports, so a
+  // committed extraction failure carries the same identity-bearing assets.
+  // The preserved return below renders current outcomes separately without
+  // identity (and with inline bounded reasons) because nothing was saved.
+  const inferredAssets = inferredAssetsSection(fetched.pages, p.cachePath, identity);
+  if (inferredAssets) collation += `\n\n${inferredAssets}`;
+
   // Start llms-full downloads BEFORE acquiring any lock, then write cache
   // artefacts under the per-cache-path lock (only local file I/O there).
   // A run without a synthesis skips supplementary documentation downloads.
@@ -337,8 +350,9 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   }
 
   if (!committed) {
+    const currentInferredAssets = inferredAssetsSection(fetched.pages, p.cachePath);
     return {
-      text: failureMessage,
+      text: failureMessage + (currentInferredAssets ? `\n\n${currentInferredAssets}` : ""),
       outcome,
       details: {
         cachePath: "",
@@ -349,6 +363,9 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
         pagesFetched: fetched.successPages.length,
         pagesFailed: fetched.pages.length - fetched.successPages.length,
         extractionFailed: allExtractions.filter((e) => e.status === "failed").length,
+        // This run was not committed: return its inferred outcomes, but do
+        // not advertise source files that were never saved.
+        ...inferredAssetDetailsField(fetched.pages),
       },
     };
   }
@@ -386,7 +403,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
         // the page never made it that far (blocked entries carry none).
         ...(e.error ? { error: e.error } : {}),
         ...(fetched.pages.find((page) => page.url === e.url)?.error
-          ? { error: fetched.pages.find((page) => page.url === e.url)!.error!.slice(0, 300) }
+          ? { error: failureDetail(fetched.pages.find((page) => page.url === e.url)!.error!) }
           : {}),
         // The full page stays on disk even when extraction failed; pointing
         // the agent at it recovers work that was already paid for.
@@ -415,6 +432,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
       // Extraction failures only (status "failed"); pagesFailed counts fetch
       // failures (status "blocked"), so the two never double-count a page.
       extractionFailed: extractionFailures,
+      ...inferredAssetDetailsField(fetched.pages, identity),
     },
   };
 }
@@ -423,7 +441,12 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
 
 interface SearchStageOut {
   searchResult: string;
-  urls: Array<{ url: string; title: string }>;
+  urls: Array<{
+    url: string;
+    title: string;
+    inferred?: true;
+    originalReference?: string;
+  }>;
   /** Iterations actually executed. */
   attemptsUsed: number;
   /** Configured cap on iterations (1 = no retry). */
@@ -442,7 +465,12 @@ async function runSearchStage(p: PipelineCtx): Promise<SearchStageOut> {
   // only covers transport errors, so retry the search call itself a bounded
   // number of times until it yields at least one URL.
   let searchResult = "";
-  let urls: Array<{ url: string; title: string }> = [];
+  let urls: Array<{
+    url: string;
+    title: string;
+    inferred?: true;
+    originalReference?: string;
+  }> = [];
   const maxAttempts = Math.max(1, p.settings.searchRetryAttempts);
   let attemptsUsed = 0;
   // Side channel for url_citation annotations: search-grounded models cite
@@ -517,13 +545,55 @@ interface FetchStageOut {
   successPages: FetchedPage[];
 }
 
+interface InferredAssetDetail {
+  url: string;
+  originalReference?: string;
+  alternateUrl?: string;
+  finalUrl?: string;
+  redirectedToDifferentHost?: true;
+  outcome: "page" | "code" | "text" | "unknown" | "nothing";
+  contentType?: string;
+  sourceFile?: string;
+  error?: string;
+}
+
+/** Structured companion to the rendered inferred-assets table. MCP passes
+ *  details through verbatim, so callers need not parse Markdown to follow up. */
+function inferredAssetDetailsField(
+  pages: readonly FetchedPage[],
+  identity?: SourceIdentity,
+): { inferredAssets?: InferredAssetDetail[] } {
+  const inferredAssets = pages.filter((page) => page.inferred).map((page): InferredAssetDetail => {
+    const sourceFile = identity?.sourceFileFor(page.url);
+    return {
+      url: page.url,
+      ...(page.originalReference ? { originalReference: page.originalReference } : {}),
+      ...(page.alternateUrl ? { alternateUrl: page.alternateUrl } : {}),
+      ...(page.finalUrl ? { finalUrl: page.finalUrl } : {}),
+      ...(redirectedToDifferentHost(page.url, page.finalUrl)
+        ? { redirectedToDifferentHost: true as const }
+        : {}),
+      outcome: page.status === "error" ? ("nothing" as const) : (page.assetType ?? "unknown"),
+      ...(page.contentType ? { contentType: page.contentType } : {}),
+      ...(sourceFile ? { sourceFile: `sources/${sourceFile}` } : {}),
+      ...(page.error ? { error: failureDetail(page.error) } : {}),
+    };
+  });
+  return inferredAssets.length > 0 ? { inferredAssets } : {};
+}
+
 async function runFetchStage(
   p: PipelineCtx,
-  urls: Array<{ url: string; title: string }>,
+  urls: Array<{
+    url: string;
+    title: string;
+    inferred?: true;
+    originalReference?: string;
+  }>,
 ): Promise<FetchStageOut> {
   p.onProgress?.(progress("fetch", `Fetching ${urls.length} pages...`));
   throwIfAborted(p.signal);
-  const pages = await p.dependencies.fetchPages(
+  const fetchedPages = await p.dependencies.fetchPages(
     urls.map((u) => u.url),
     p.signal,
     {
@@ -533,11 +603,18 @@ async function runFetchStage(
       proxy: p.settings.httpProxy,
     },
   );
+  const pages = fetchedPages.map((page, index) => ({
+    ...page,
+    ...(urls[index]?.inferred ? { inferred: true as const } : {}),
+    ...(urls[index]?.originalReference
+      ? { originalReference: urls[index].originalReference }
+      : {}),
+  }));
   const successPages = pages.filter((pg) => pg.status === "success");
 
   // Tally fetch-variant winners from the per-page `source` field that
-  // fetch.ts stamps ("defuddle" | "markdown"). Falls back to "unknown"
-  // for any page lacking the field.
+  // fetch.ts stamps ("defuddle" | "defuddle-fallback" | "markdown" | "text").
+  // Falls back to "unknown" for any page lacking the field.
   const fetchWinners: Record<string, number> = {};
   for (const pg of successPages) {
     const variant = pg.source ?? "unknown";
@@ -612,6 +689,14 @@ async function runExtractStage(
         sourceType: "unknown",
         currentness: "unknown",
         status: "failed" as const,
+        ...(successPages[i].inferred ? { inferred: true as const } : {}),
+        ...(successPages[i].originalReference
+          ? { originalReference: successPages[i].originalReference }
+          : {}),
+        ...(successPages[i].alternateUrl ? { alternateUrl: successPages[i].alternateUrl } : {}),
+        ...(successPages[i].finalUrl ? { finalUrl: successPages[i].finalUrl } : {}),
+        ...(successPages[i].assetType ? { assetType: successPages[i].assetType } : {}),
+        ...(successPages[i].contentType ? { contentType: successPages[i].contentType } : {}),
       },
   );
 
@@ -625,6 +710,11 @@ async function runExtractStage(
       sourceType: "unknown",
       currentness: "unknown",
       status: "blocked" as const,
+      ...(pg.inferred ? { inferred: true as const } : {}),
+      ...(pg.originalReference ? { originalReference: pg.originalReference } : {}),
+      ...(pg.alternateUrl ? { alternateUrl: pg.alternateUrl } : {}),
+      ...(pg.finalUrl ? { finalUrl: pg.finalUrl } : {}),
+      ...(pg.contentType ? { contentType: pg.contentType } : {}),
     }));
 
   // Telemetry: tally extract outcomes and char throughput. Input chars are
@@ -1245,6 +1335,12 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       // and telemetry can say so. Missing usage never flags.
       truncated: exhausted || undefined,
       ...(routeProvider ? { routeProvider } : {}),
+      ...(page.inferred ? { inferred: true as const } : {}),
+      ...(page.originalReference ? { originalReference: page.originalReference } : {}),
+      ...(page.alternateUrl ? { alternateUrl: page.alternateUrl } : {}),
+      ...(page.finalUrl ? { finalUrl: page.finalUrl } : {}),
+      ...(page.assetType ? { assetType: page.assetType } : {}),
+      ...(page.contentType ? { contentType: page.contentType } : {}),
     };
   } catch (err: unknown) {
     throwIfAborted(p.signal);
@@ -1266,15 +1362,14 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       // a match against our own adapter messages (never free provider text).
       failureKind: exhausted === true || isOutputBudgetExhausted(err) ? "budget" : "other",
       ...(routeProvider ? { routeProvider } : {}),
+      ...(page.inferred ? { inferred: true as const } : {}),
+      ...(page.originalReference ? { originalReference: page.originalReference } : {}),
+      ...(page.alternateUrl ? { alternateUrl: page.alternateUrl } : {}),
+      ...(page.finalUrl ? { finalUrl: page.finalUrl } : {}),
+      ...(page.assetType ? { assetType: page.assetType } : {}),
+      ...(page.contentType ? { contentType: page.contentType } : {}),
     };
   }
-}
-
-/** Bounded single-line failure reason for results, reports and telemetry,
- *  marked with an ellipsis when cut. */
-function failureDetail(message: string): string {
-  const line = message.replace(/\s+/g, " ").trim();
-  return line.length > 300 ? `${line.slice(0, 299).trimEnd()}…` : line;
 }
 
 /** A failure reason closed as a sentence, so further text can follow it. */

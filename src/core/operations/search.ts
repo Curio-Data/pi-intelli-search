@@ -72,7 +72,10 @@ function formatSearchResult(result: SearchResult): string {
   output += result.summary + "\n\n";
   output += `### Sources (${result.sources.length})\n\n`;
   for (const [i, source] of result.sources.entries()) {
-    output += `${i + 1}. [${source.title || source.url}](${source.url})\n`;
+    const inferred = source.inferred
+      ? ` (inferred from text, not a citation${source.originalReference ? `; original token: ${source.originalReference}` : ""})`
+      : "";
+    output += `${i + 1}. [${source.title || source.url}](${source.url})${inferred}\n`;
   }
   return output;
 }

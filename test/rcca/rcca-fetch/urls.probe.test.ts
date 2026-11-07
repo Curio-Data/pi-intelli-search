@@ -27,11 +27,19 @@ describe("F6a bogus URLs from prose", () => {
       console.log(`maxUrls=${n}: ` + merged.slice(0, n).map((u) => u.url).join(" | "));
     }
   });
-  // F6 corrected: filenames and identifiers are no longer candidates.
-  const hosts = ["app.ini", "robots.txt", "gitea.log", "manage.py", "service.DISABLE", "photo.jpg", "report.pdf"];
-  for (const h of hosts) {
+  // Non-delegated identifiers remain out. Delegated file-like names are
+  // inferred assets, not citations, and must survive for the fetch stage.
+  const rejectedHosts = ["app.ini", "robots.txt", "gitea.log", "service.DISABLE", "photo.jpg", "report.pdf"];
+  for (const h of rejectedHosts) {
     it(`text pass rejects '${h}'`, () => {
       assert.ok(!text.some((u) => new URL(u.url).hostname.toLowerCase() === h.toLowerCase()), h);
+    });
+  }
+  for (const h of ["manage.py"]) {
+    it(`text pass keeps inferred file-like asset '${h}'`, () => {
+      const asset = text.find((u) => new URL(u.url).hostname.toLowerCase() === h);
+      assert.ok(asset, h);
+      assert.equal(asset.inferred, true);
     });
   }
   it("real protocol-less references survive", () => {
@@ -52,7 +60,34 @@ describe("F6a bogus URLs from prose", () => {
     const firstAnnot = merged.findIndex((u) => u.url === ANNOT[0].url);
     const firstGuess = merged.findIndex((u) => u.url.startsWith("https://codeberg.org"));
     assert.ok(firstAnnot < firstGuess, `annotation ${firstAnnot}, guess ${firstGuess}`);
+    assert.equal(merged[firstGuess]?.inferred, true);
     const top5 = merged.slice(0, 5).map((u) => u.url);
     assert.ok(top5.includes(ANNOT[0].url), "first unique annotation kept within maxUrls=5");
+  });
+});
+
+describe("F6 follow-up reference rows", () => {
+  const cases = [
+    ["install.sh", "https://install.sh"],
+    ["manage.py", "https://manage.py"],
+    ["main.cc", "https://main.cc"],
+    ["例子.中国", "https://xn--fsqu00a.xn--fiqs8s"],
+    ["example.net?q=1", "https://example.net?q=1"],
+    ["example.com:8080/path", "https://example.com:8080/path"],
+    ["notion.so", "https://notion.so"],
+    ["bun.sh", "https://bun.sh"],
+    ["publico.pt/2026/story", "https://publico.pt/2026/story"],
+    ["detik.id", "https://detik.id"],
+    ["vue.js.org", "https://vue.js.org"],
+  ] as const;
+  for (const [reference, expected] of cases) {
+    it(`keeps ${reference} as inferred`, () => {
+      const [asset] = extractSourceUrls(reference);
+      assert.equal(asset?.url, expected);
+      assert.equal(asset?.inferred, true);
+    });
+  }
+  it("rejects a non-numeric port instead of truncating it", () => {
+    assert.deepEqual(extractSourceUrls("example.com:abc"), []);
   });
 });

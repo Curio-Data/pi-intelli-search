@@ -17,7 +17,7 @@ import { Defuddle } from "defuddle/node";
 import { parseHTML } from "linkedom";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { FetchedPage } from "./types.js";
+import type { FetchedPage, FetchAssetType } from "./types.js";
 import { mapWithConcurrency, withMuzzledConsole, errMsg, truncateContent } from "./util.js";
 
 export interface FetchOptions {
@@ -35,6 +35,26 @@ const DEFAULT_FETCH_OPTIONS: FetchOptions = {
   browser: "chrome_145",
   concurrency: 4,
 };
+
+class FetchResponseError extends Error {
+  constructor(message: string, readonly responseUrl: string) {
+    super(message);
+    this.name = "FetchResponseError";
+  }
+}
+
+/** Preserve a meaningful post-redirect URL without treating URL parser
+ *  normalisation (notably a root trailing slash) as a redirect. */
+function finalUrlMetadata(requestedUrl: string, responseUrl: string): { finalUrl?: string } {
+  if (!responseUrl) return {};
+  try {
+    return new URL(responseUrl).href !== new URL(requestedUrl).href
+      ? { finalUrl: responseUrl }
+      : {};
+  } catch {
+    return responseUrl !== requestedUrl ? { finalUrl: responseUrl } : {};
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Public API — single page (Defuddle vs markdown comparison)
@@ -58,6 +78,7 @@ async function fetchSingle(
       content: "",
       status: "error",
       error: errMsg(err),
+      ...(err instanceof FetchResponseError ? finalUrlMetadata(url, err.responseUrl) : {}),
     };
   }
 }
@@ -102,9 +123,9 @@ function compareAndPick(a: FetchedPage, b: FetchedPage): FetchedPage {
   const bScore = scoreContent(b.content);
 
   if (bScore > aScore) {
-    return { ...b, status: "success", source: "markdown" };
+    return { ...b, status: "success", source: b.source ?? "markdown" };
   }
-  return { ...a, status: "success", source: "defuddle" };
+  return { ...a, status: "success", source: a.source ?? "defuddle" };
 }
 
 /** Score markdown content quality. Higher = cleaner and more useful. */
@@ -164,16 +185,50 @@ async function fetchViaDefuddle(
   signal?: AbortSignal,
 ): Promise<FetchedPage> {
   const response = await rawFetch(url, opts, signal);
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("text/html") && !contentType.includes("application/xhtml")) {
-    throw new Error(`Not HTML: ${contentType}`);
+  if (!response.ok) {
+    throw new FetchResponseError(
+      `HTTP ${response.status}: ${response.statusText}`,
+      response.url,
+    );
   }
+  return processFetchedResponse(url, response, opts);
+}
 
+/** Apply the same media dispatch to direct, negotiated and alternate bodies. */
+async function processFetchedResponse(
+  url: string,
+  response: Awaited<ReturnType<typeof rawFetch>>,
+  opts: FetchOptions,
+  alternateUrl?: string,
+): Promise<FetchedPage> {
+  const contentType = response.headers.get("content-type") ?? "";
+  const essence = mediaEssence(contentType);
+  if (essence === "text/html" || essence === "application/xhtml+xml" || essence === "application/xhtml") {
+    return processHtmlResponse(url, response, opts, alternateUrl);
+  }
+  if (essence === "text/markdown") {
+    return processMarkdownResponse(url, response, opts, alternateUrl);
+  }
+  if (isSupportedTextAsset(contentType)) {
+    return processTextAssetResponse(url, response, opts, contentType, alternateUrl);
+  }
+  throw new FetchResponseError(
+    `Unsupported content type: ${contentType || "not reported"}`,
+    response.url,
+  );
+}
+
+async function processHtmlResponse(
+  url: string,
+  response: Awaited<ReturnType<typeof rawFetch>>,
+  opts: FetchOptions,
+  alternateUrl?: string,
+): Promise<FetchedPage> {
+  const contentType = response.headers.get("content-type") ?? "";
   const body = await response.text();
   const { document } = parseHTML(body);
-  cleanBrokenMetadata(document, url);
+  const documentUrl = response.url || url;
+  cleanBrokenMetadata(document, documentUrl);
 
   // Try Defuddle first. Failure modes handled:
   //   1. Defuddle throws (rare). Caught below.
@@ -190,7 +245,7 @@ async function fetchViaDefuddle(
   let degraded = false;
   try {
     const out = await withMuzzledConsole(
-      () => Defuddle(document, url, { markdown: true }),
+      () => Defuddle(document, documentUrl, { markdown: true }),
       DEFUDDLE_MUZZLE_TAGS,
     );
     extracted = out.value;
@@ -220,6 +275,10 @@ async function fetchViaDefuddle(
       content: truncateContent(content, opts.maxChars),
       status: "success",
       source: "defuddle-fallback",
+      assetType: "page",
+      contentType,
+      ...finalUrlMetadata(url, response.url),
+      ...(alternateUrl ? { alternateUrl } : {}),
     };
   }
 
@@ -231,6 +290,10 @@ async function fetchViaDefuddle(
     content: truncateContent(content, opts.maxChars),
     status: "success",
     source: "defuddle",
+    assetType: "page",
+    contentType,
+    ...finalUrlMetadata(url, response.url),
+    ...(alternateUrl ? { alternateUrl } : {}),
   };
 }
 
@@ -249,7 +312,7 @@ async function fetchMarkdownVariant(
 
   // b) Starlight/Astro: <link rel="alternate" type="text/markdown" href="...">
   const mdUrl = await findMarkdownAlternate(url, opts, signal);
-  if (mdUrl) return await fetchMarkdown(mdUrl, opts, signal);
+  if (mdUrl) return await fetchMarkdown(mdUrl, opts, signal, url);
 
   return null;
 }
@@ -269,8 +332,8 @@ async function fetchWithAcceptHeader(
       signal: combinedSignal,
     });
     if (!response.ok) return null;
-    if (!response.headers.get("content-type")?.includes("text/markdown")) return null;
-    return processMarkdownResponse(url, response, opts);
+    if (mediaEssence(response.headers.get("content-type") ?? "") !== "text/markdown") return null;
+    return processFetchedResponse(url, response, opts);
   } catch {
     return null;
   }
@@ -284,7 +347,8 @@ async function findMarkdownAlternate(
   try {
     const response = await rawFetch(url, opts, signal);
     if (!response.ok) return null;
-    if (!response.headers.get("content-type")?.includes("text/html")) return null;
+    const essence = mediaEssence(response.headers.get("content-type") ?? "");
+    if (essence !== "text/html" && essence !== "application/xhtml+xml" && essence !== "application/xhtml") return null;
 
     const html = await response.text();
     const { document } = parseHTML(html);
@@ -292,7 +356,7 @@ async function findMarkdownAlternate(
     const links = document.querySelectorAll('link[rel="alternate"][type="text/markdown"]');
     for (const link of Array.from(links)) {
       const href = link.getAttribute("href");
-      if (href) return new URL(href, url).href;
+      if (href) return new URL(href, response.url || url).href;
     }
     return null;
   } catch {
@@ -303,17 +367,24 @@ async function findMarkdownAlternate(
 async function fetchMarkdown(
   mdUrl: string,
   opts: FetchOptions,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  requestedUrl: string,
 ): Promise<FetchedPage> {
   const response = await rawFetch(mdUrl, opts, signal);
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  return processMarkdownResponse(mdUrl, response, opts);
+  if (!response.ok) {
+    throw new FetchResponseError(
+      `HTTP ${response.status}: ${response.statusText}`,
+      response.url,
+    );
+  }
+  return processFetchedResponse(requestedUrl, response, opts, mdUrl);
 }
 
 async function processMarkdownResponse(
   url: string,
   response: Awaited<ReturnType<typeof rawFetch>>,
   opts: FetchOptions,
+  alternateUrl?: string,
 ): Promise<FetchedPage> {
   let content = await response.text();
   content = sanitizeMarkdown(content);
@@ -324,6 +395,95 @@ async function processMarkdownResponse(
     content: truncateContent(content, opts.maxChars),
     status: "success",
     source: "markdown",
+    assetType: "text",
+    contentType: response.headers.get("content-type") ?? "text/markdown",
+    ...finalUrlMetadata(url, response.url),
+    ...(alternateUrl ? { alternateUrl } : {}),
+  };
+}
+
+/** Media types whose bodies are useful as source or text assets. HTML takes
+ *  the Defuddle path above; binary types remain rejected rather than being
+ *  saved as misleading text. Conventional x-* types are accepted as text,
+ *  never executed or treated as proof of registration. */
+const CODE_MEDIA_TYPES = new Set([
+  "application/json",
+  "application/javascript",
+  "application/ecmascript",
+  "application/x-javascript",
+  "application/x-ecmascript",
+  "application/xml",
+  "application/yaml",
+  "application/x-yaml",
+  "application/toml",
+  "application/x-sh",
+  "application/x-python",
+  "text/javascript",
+  "text/ecmascript",
+  "text/x-javascript",
+  "text/x-ecmascript",
+  "text/css",
+  "text/xml",
+  "text/x-python",
+  "text/x-c",
+  "text/x-c++",
+  "text/x-java-source",
+]);
+
+const CODE_EXTENSIONS = new Set([
+  "c", "cc", "cpp", "cxx", "h", "hh", "hpp", "css", "go", "java", "js",
+  "jsx", "ts", "tsx", "py", "rb", "php", "rs", "sh", "bash", "zsh", "fish",
+  "json", "jsonc", "xml", "yaml", "yml", "toml", "sql", "swift", "kt", "kts",
+]);
+
+function mediaEssence(contentType: string): string {
+  return contentType.split(";", 1)[0].trim().toLowerCase();
+}
+
+function isSupportedTextAsset(contentType: string): boolean {
+  const essence = mediaEssence(contentType);
+  return essence.startsWith("text/") || CODE_MEDIA_TYPES.has(essence);
+}
+
+function classifyTextAsset(url: string, contentType: string): FetchAssetType {
+  const essence = mediaEssence(contentType);
+  if (CODE_MEDIA_TYPES.has(essence)) return "code";
+  if (essence === "text/markdown") return "text";
+  try {
+    const finalSegment = new URL(url).pathname.split("/").filter(Boolean).at(-1) ?? "";
+    const extension = finalSegment.includes(".") ? finalSegment.split(".").at(-1)?.toLowerCase() : "";
+    if (extension && CODE_EXTENSIONS.has(extension)) return "code";
+  } catch {
+    // The URL was already fetched successfully; an unparseable name is text.
+  }
+  return "text";
+}
+
+async function processTextAssetResponse(
+  url: string,
+  response: Awaited<ReturnType<typeof rawFetch>>,
+  opts: FetchOptions,
+  contentType: string,
+  alternateUrl?: string,
+): Promise<FetchedPage> {
+  const content = await response.text();
+  let title = "";
+  try {
+    const parsed = new URL(response.url || url);
+    title = parsed.pathname.split("/").filter(Boolean).at(-1) ?? parsed.hostname;
+  } catch {
+    // Keep an empty title when the fetched URL has no displayable name.
+  }
+  return {
+    url,
+    title,
+    content: truncateContent(content, opts.maxChars),
+    status: "success",
+    source: "text",
+    assetType: classifyTextAsset(response.url || url, contentType),
+    contentType,
+    ...finalUrlMetadata(url, response.url),
+    ...(alternateUrl ? { alternateUrl } : {}),
   };
 }
 
