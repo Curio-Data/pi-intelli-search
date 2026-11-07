@@ -38,6 +38,8 @@ export interface FetchedPage {
 }
 
 export interface ExtractResult {
+  /** Original 1-based source position. Preserved when budget trimming omits a source. */
+  sourceNumber?: number;
   url: string;
   title: string;
   extraction: string;

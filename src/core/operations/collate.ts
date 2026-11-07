@@ -17,7 +17,7 @@ import {
   allocateSourceIdentity,
   rotateCacheArtefacts,
 } from "../cache.js";
-import { buildCollationMessage, formatCacheAppendix, formatCollationTrimNotice } from "../messages.js";
+import { buildCollationMessage, COLLATION_NO_EVIDENCE_MESSAGE, formatCacheAppendix, formatCollationTrimNotice } from "../messages.js";
 import { evidenceExtractions, finalizeCollation } from "../provenance.js";
 import type { ExtractResult } from "../types.js";
 import { errMsg, throwIfAborted, completionTruncated } from "../util.js";
@@ -45,6 +45,7 @@ export async function collate(
     currentness: "undated",
     status: e.status === "success" && !e.extraction.trim()
       ? "failed" : e.status as ExtractResult["status"],
+    ...(e.inferred ? { inferred: true } : {}),
     ...(e.truncated ? { truncated: true } : {}),
     ...(e.error ? { error: e.error } : {}),
   }));
@@ -82,8 +83,12 @@ export async function collate(
   );
   const evidence = succeeded.map((ext, index) => ({
     ...ext,
+    sourceNumber: index + 1,
     extraction: budget.sources[index]?.text ?? ext.extraction,
   }));
+  if (evidenceExtractions(evidence).length === 0) {
+    throw new Error(COLLATION_NO_EVIDENCE_MESSAGE);
+  }
   const userMessage = buildCollationMessage(
     params.query,
     cachePath,

@@ -396,6 +396,24 @@ it("surfaces per-page failure reasons, saved sources and telemetry classificatio
   assert.match(report, /full page saved: sources\//);
 });
 
+it("keeps the adapter token counts when every extraction budget is exhausted", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });
+  const complete = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model === "extract") {
+      throw new (await import("../src/core/util.js")).OutputBudgetExhaustedError(
+        "OpenRouter exhausted the output budget without visible text (100 output tokens, 95 hidden reasoning) (the cap includes any reasoning tokens).",
+      );
+    }
+    return complete(request);
+  };
+  const result = await research({ query: "adapter budget diagnostics" }, context, dependencies);
+  assert.equal(result.outcome, "extraction-failed");
+  assert.match(result.text, /100 output tokens, 95 hidden reasoning/);
+  assert.match(result.text, /Output cap reached without visible text at 100 tokens and again after 2 retries up to 400 tokens/);
+});
+
 it("counts fetch and extraction failures separately with fetch reasons in the appendix", async (t) => {
   const root = await workspace(t);
   const base = coreContext(root);
@@ -590,7 +608,8 @@ it("keeps a usable truncated synthesis when the doubled-budget retry fails", asy
   assert.equal(result.outcome, "completed");
   assert.equal(collateCalls, 2);
   assert.match(result.text, /Usable but truncated synthesis/);
-  assert.match(result.text, /Collation output reached its cap/);
+  assert.match(result.text, /Collation output reached its cap \(100 tokens\); a retry at a larger cap ran but did not return a better answer\. The synthesis may be cut off mid-sentence\./);
+  assert.doesNotMatch(result.text, /was considered/);
 });
 
 it("never replaces a successful report committed while collation was failing", async (t) => {
@@ -617,6 +636,11 @@ it("never replaces a successful report committed while collation was failing", a
           assetType: "code" as const,
           contentType: "text/x-python",
         });
+  let lockAttempted!: () => void;
+  const cacheLockAttempt = new Promise<void>((resolve) => (lockAttempted = resolve));
+  dependencies.beforeCacheLock = async () => {
+    lockAttempted();
+  };
   let collating!: () => void;
   const collateStarted = new Promise<void>((resolve) => (collating = resolve));
   // Hold the run inside its collation call, so the concurrent report is
@@ -633,16 +657,18 @@ it("never replaces a successful report committed while collation was failing", a
     await collateGate;
     return { text: " ", citations: [] };
   };
-  // Hold the cache lock so the failing run decides only after a concurrent
-  // run's successful report lands, as when that run commits first.
+  // Hold the cache lock until the failing run is demonstrably waiting for it,
+  // then publish the competing success before releasing acquisition. A prior
+  // read moved outside the lock observes no report and overwrites it instead.
   let run!: ReturnType<typeof research>;
   await mkdir(dirname(path), { recursive: true });
   await withLock(cacheLockDir(path), async () => {
     run = research({ query }, context, dependencies);
     await collateStarted;
+    releaseCollate();
+    await cacheLockAttempt;
     await mkdir(path, { recursive: true });
     await writeFile(join(path, "report.md"), "# Report\n\n## Summary\n\nConcurrent success.\n");
-    releaseCollate();
   });
   const result = await run;
   assert.equal(result.outcome, "collate-failed");
@@ -928,6 +954,118 @@ it("saves every fetched page with a failure report when all extractions fail", a
   );
 });
 
+it("keeps original source IDs after budget trimming and dropping", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies, requests } = coreContext(root, {
+    collationSourceMaxTokens: 256,
+  });
+  const complete = context.models.complete;
+  context.models.complete = async (request) => {
+    requests.push(request);
+    if (request.model.model === "search") {
+      return {
+        text: "[First](https://s1.example/page) [Second](https://s2.example/page)",
+        citations: [],
+      };
+    }
+    if (request.model.model === "extract") {
+      return request.userMessage.includes("FIRST_PAGE")
+        ? { text: `${" ".repeat(1024)}First-source-only fact.`, citations: [] }
+        : { text: "Second-source-only fact.", citations: [] };
+    }
+    if (request.model.model === "collate") {
+      return { text: "Answer derived from the second source [S2].", citations: [] };
+    }
+    return complete(request);
+  };
+  dependencies.fetchPages = async (urls) => urls.map((url) => ({
+    url,
+    title: url,
+    content: url.includes("s1.example") ? "FIRST_PAGE" : "SECOND_PAGE",
+    status: "success" as const,
+    source: "markdown",
+  }));
+  const result = await research({ query: "stable IDs after trimming" }, context, dependencies);
+  assert.equal(result.outcome, "completed");
+  const collation = requests.find((request) => request.model.model === "collate");
+  assert.ok(collation);
+  const prompt = JSON.parse(collation.userMessage);
+  assert.deepEqual(prompt.sources.map((source: { id: string }) => source.id), ["S2"]);
+  assert.equal(prompt.sources[0].url, "https://s2.example/page");
+  assert.match(result.text, /Answer derived from the second source \[S2\]/);
+  assert.match(result.text, /\| S2 \| https:\/\/s2\.example\/page \|/);
+  assert.match(result.text, /retained text is empty|left out because the retained text is empty/);
+});
+
+it("keeps original source IDs after an inferred manual-collation source is dropped", async (t) => {
+  const root = await workspace(t);
+  const { context, requests } = coreContext(root, { collationInputBudgetTokens: 500 });
+  const complete = context.models.complete;
+  context.models.complete = async (request) => {
+    requests.push(request);
+    return request.model.model === "collate"
+      ? { text: "Third-source fact [S3].", citations: [] }
+      : complete(request);
+  };
+  const result = await collate({
+    query: "stable IDs after dropping",
+    extractions: [
+      { url: "https://one.example/a", title: "One", extraction: "First fact.", sourceType: "docs", status: "success" },
+      {
+        url: "https://two.example/b",
+        title: "Two",
+        extraction: `official docs\n${"inferred text ".repeat(75)}`,
+        sourceType: "docs",
+        status: "success",
+        inferred: true,
+      },
+      { url: "https://three.example/c", title: "Three", extraction: "Third fact.", sourceType: "docs", status: "success" },
+    ],
+  }, context);
+  assert.equal(result.outcome, "completed");
+  const prompt = JSON.parse(requests[0].userMessage);
+  assert.deepEqual(prompt.sources.map((source: { id: string }) => source.id), ["S1", "S3"]);
+  assert.deepEqual(prompt.sources.map((source: { url: string }) => source.url), [
+    "https://one.example/a",
+    "https://three.example/c",
+  ]);
+  assert.match(result.text, /Third-source fact \[S3\]/);
+  assert.match(result.text, /\| S3 \| https:\/\/three\.example\/c \|/);
+  assert.match(result.text, /https:\/\/two\.example\/b: left out entirely/);
+});
+
+it("returns collate-failed without calling the model when the budget leaves no evidence", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies, requests } = coreContext(root, {
+    defaultUrls: 100,
+    maxUrls: 100,
+    collationInputBudgetTokens: 10_000,
+  });
+  const complete = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model === "search") {
+      return {
+        text: Array.from({ length: 100 }, (_, i) => `[S${i + 1}](https://s${i + 1}.example/page)`).join(" "),
+        citations: [],
+      };
+    }
+    if (request.model.model === "extract") {
+      return { text: `official docs, current\n${"useful text ".repeat(70)}`, citations: [] };
+    }
+    return complete(request);
+  };
+  const result = await research({ query: "no evidence fits collation" }, context, dependencies);
+  assert.equal(result.outcome, "collate-failed");
+  assert.equal(requests.filter((request) => request.model.model === "collate").length, 0);
+  assert.match(result.text, /collationInputBudgetTokens/);
+  assert.match(result.text, /collationSourceMaxTokens/);
+  assert.ok(result.details.cachePath, "the normal collate-failed path saves the run");
+  const cachePath = join(root, result.details.cachePath as string);
+  assert.equal((await readdir(join(cachePath, "extractions"))).length, 100);
+  assert.equal((await readdir(join(cachePath, "sources"))).length, 100);
+  assert.match(await readFile(join(cachePath, "report.md"), "utf8"), /## Collation Failed/);
+});
+
 it("drops inferred evidence before cited evidence through the merged research budget planner", async (t) => {
   const root = await workspace(t);
   const { context, dependencies, requests } = coreContext(root, {
@@ -964,6 +1102,7 @@ it("drops inferred evidence before cited evidence through the merged research bu
   const fullInferred = await readFile(join(cachePath, "extractions", "02-manage-py.md"), "utf8");
   assert.match(fullInferred, /official docs, current\ninferred text/, "the saved inferred extraction is not trimmed");
   assert.match(result.text, /Left out to fit the input budget/);
+  assert.match(result.text, /lowest-ranked first, inferred references before cited sources\./);
   assert.match(result.text, /https:\/\/manage\.py/);
   const meta = JSON.parse(await readFile(join(cachePath, "meta.json"), "utf8"));
   assert.equal(meta.stages.collate.inputBudget.dropped, 1);
@@ -1008,6 +1147,9 @@ it("includes inferred assets and identity in a committed extraction-failed resul
   assert.match(report, /## Inferred Assets/);
   assert.match(report, /## Failed Sources/);
   assert.match(report, /COMMITTED_EXTRACTION_FAILURE \(full page saved: sources\/01-manage-py\.md\)/);
+  assert.match(report, /names each failed source, the saved page's path when one exists, and why it failed/);
+  assert.match(report, /pass its content to `intelli_extract` to retry its extraction without refetching it/);
+  assert.doesNotMatch(report, /re-run the research/);
   assert.match(await readFile(join(path, "sources", "01-manage-py.md"), "utf8"), /print\('kept page'\)/);
 });
 

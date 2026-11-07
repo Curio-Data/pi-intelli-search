@@ -48,6 +48,7 @@ export interface CollateExtraction {
   /** Optional caller-supplied flags carried through from intelli_extract
    *  results so a manual collation keeps the diagnostics the extract step
    *  reported (truncation flag and bounded failure reason). */
+  inferred?: boolean;
   truncated?: boolean;
   error?: string;
 }

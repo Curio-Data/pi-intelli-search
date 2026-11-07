@@ -372,8 +372,8 @@ export function extractionFailureReport(
     failureReportHead("Extraction Failed", EXTRACTION_FAILED_MARKER, reason) +
     `No content was extracted, so no synthesis was produced. ${savedPages} fetched page(s) are saved under ` +
     `${cachePath}/sources/; the **Failed Sources** list below (in this result and in the saved ` +
-    "report) names each saved page and why its extraction failed. Read a saved page directly, or " +
-    "re-run the research; a later extraction retry needs no refetch.\n\n" +
+    "report) names each failed source, the saved page's path when one exists, and why it failed. " +
+    "Read a saved page directly, or pass its content to `intelli_extract` to retry its extraction without refetching it.\n\n" +
     `## Search summary\n\n${searchSummary.trim()}`
   );
 }

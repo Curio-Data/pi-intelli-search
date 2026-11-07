@@ -93,6 +93,9 @@ export function buildExtractionMessage(
   return msg;
 }
 
+export const COLLATION_NO_EVIDENCE_MESSAGE =
+  "Collation input budget left no non-empty evidence text; increase collationInputBudgetTokens or collationSourceMaxTokens, or request fewer URLs.";
+
 /**
  * Give synthesis only the supplied evidence, not the search model's claims or
  * cache paths. Legacy arguments remain accepted by this shared helper, but do
@@ -108,7 +111,7 @@ export function buildCollationMessage(
   return JSON.stringify({
     query,
     sources: evidenceExtractions(succeededExtractions).map((source, index) => ({
-      id: `S${index + 1}`,
+      id: `S${source.sourceNumber ?? index + 1}`,
       url: source.url,
       title: source.title,
       type: source.sourceType,
@@ -150,9 +153,12 @@ export function formatCollationTrimNotice(
   const line = (trim: CollationBudgetTrim): string => {
     const file = identity.extractionFileFor(trim.url);
     const full = file ? ` (full extraction: \`extractions/${file}\`)` : "";
-    return trim.action === "dropped"
-      ? `- ${trim.url}: left out entirely${full}\n`
-      : `- ${trim.url}: ${chars(trim.keptChars)} of ${chars(trim.originalChars)} sent${full}\n`;
+    const retained = plan.sources.find((source) => source.url === trim.url);
+    if (trim.action === "dropped") return `- ${trim.url}: left out entirely${full}\n`;
+    if (!retained?.text.trim()) {
+      return `- ${trim.url}: left out because the retained text is empty${full}\n`;
+    }
+    return `- ${trim.url}: ${chars(trim.keptChars)} of ${chars(trim.originalChars)} sent${full}\n`;
   };
   if (sourceOnly.length > 0) {
     out += `\nTrimmed to the per-source limit (${sourceOnly.length}):\n`;
@@ -172,7 +178,7 @@ export function formatCollationTrimNotice(
   }
   if (budgetApplied) {
     out += `\nTrim order: the longest extractions first, inferred references before cited sources, down to a fair share `;
-    out += `of the input budget; whole sources are left out only when a fair share would keep too little to be useful, lowest-ranked first.\n`;
+    out += `of the input budget; whole sources are left out only when a fair share would keep too little to be useful, lowest-ranked first, inferred references before cited sources.\n`;
   }
   // Only offer a lever that can still move, and only the one that bound.
   const advice: string[] = [];
