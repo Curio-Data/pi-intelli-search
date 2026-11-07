@@ -96,6 +96,46 @@ export function buildExtractionMessage(
 export const COLLATION_NO_EVIDENCE_MESSAGE =
   "Collation input budget left no non-empty evidence text; increase collationInputBudgetTokens or collationSourceMaxTokens, or request fewer URLs.";
 
+export const MANUAL_COLLATION_NO_EVIDENCE_MESSAGE =
+  "Collation input budget left no non-empty evidence text; raise collationInputBudgetTokens (or collationSourceMaxTokens when sources were cut to the per-source limit), or send fewer sources.";
+
+export interface CollationInputBudgetDetails {
+  budgetTokens: number;
+  sources: number;
+  trimmed: number;
+  dropped: number;
+  charsBefore: number;
+  charsAfter: number;
+}
+
+export class CollationNoEvidenceError extends Error {
+  constructor(
+    message: string,
+    readonly inputBudget: CollationInputBudgetDetails,
+  ) {
+    super(message);
+    this.name = "CollationNoEvidenceError";
+  }
+}
+
+/** Delivery metrics from the same non-empty evidence used by the prompt.
+ *  Whitespace-only retained prefixes count as dropped, not delivered text. */
+export function deliveredInputBudget(
+  plan: CollationBudgetPlan,
+  evidence: readonly ExtractResult[],
+): CollationInputBudgetDetails {
+  const delivered = evidenceExtractions(evidence);
+  const deliveredUrls = new Set(delivered.map((source) => source.url));
+  return {
+    budgetTokens: plan.budgetTokens,
+    sources: plan.sources.length,
+    trimmed: plan.trims.filter((trim) => trim.action === "trimmed" && deliveredUrls.has(trim.url)).length,
+    dropped: plan.trims.filter((trim) => trim.action === "dropped" || !deliveredUrls.has(trim.url)).length,
+    charsBefore: plan.charsBefore,
+    charsAfter: delivered.reduce((sum, source) => sum + source.extraction.length, 0),
+  };
+}
+
 /**
  * Give synthesis only the supplied evidence, not the search model's claims or
  * cache paths. Legacy arguments remain accepted by this shared helper, but do
@@ -132,13 +172,19 @@ export function buildCollationMessage(
 export function formatCollationTrimNotice(
   plan: CollationBudgetPlan,
   identity: SourceIdentity,
+  deliveredChars = plan.charsAfter,
 ): string {
-  const sourceCapped = plan.trims.filter((t) => t.sourceCap);
+  const isEmpty = (trim: CollationBudgetTrim): boolean =>
+    trim.action !== "dropped" && !(plan.sources.find((source) => source.url === trim.url)?.text.trim());
+  const empty = plan.trims.filter(isEmpty);
+  const isTrimmed = (trim: CollationBudgetTrim): boolean =>
+    trim.action === "trimmed" && !isEmpty(trim);
+  const sourceCapped = plan.trims.filter((t) => t.sourceCap && isTrimmed(t));
   const sourceOnly = sourceCapped.filter((t) => !t.budget);
   const both = sourceCapped.filter((t) => t.budget);
   const budgetApplied = plan.trims.some((t) => t.budget);
-  const budgetTrimmed = plan.trims.filter((t) => t.budget && !t.sourceCap && t.action === "trimmed");
-  const dropped = plan.trims.filter((t) => !t.sourceCap && t.action === "dropped");
+  const budgetTrimmed = plan.trims.filter((t) => t.budget && !t.sourceCap && isTrimmed(t));
+  const dropped = plan.trims.filter((t) => t.action === "dropped");
   const chars = (n: number): string => `${n} characters`;
   let out = `\n\n---\n`;
   out += `**Collation input trimmed**: ${plan.trims.length} of ${plan.sources.length} extraction(s) reduced. `;
@@ -148,7 +194,7 @@ export function formatCollationTrimNotice(
   if (budgetApplied) {
     out += `The run's total exceeded the ${plan.budgetTokens}-token input budget (collationInputBudgetTokens), including source headers. `;
   }
-  out += `The model received ${chars(plan.charsAfter)} of ${chars(plan.charsBefore)}. `;
+  out += `The model received ${chars(deliveredChars)} of ${chars(plan.charsBefore)}. `;
   out += `Every extraction is saved in full, and nothing here changes what is on disk.\n`;
   const line = (trim: CollationBudgetTrim): string => {
     const file = identity.extractionFileFor(trim.url);
@@ -171,6 +217,10 @@ export function formatCollationTrimNotice(
   if (budgetTrimmed.length > 0) {
     out += `\nTrimmed to a fair share of the input budget (${budgetTrimmed.length}):\n`;
     for (const trim of budgetTrimmed) out += line(trim);
+  }
+  if (empty.length > 0) {
+    out += `\nLeft out with empty retained text (${empty.length}):\n`;
+    for (const trim of empty) out += line(trim);
   }
   if (dropped.length > 0) {
     out += `\nLeft out to fit the input budget (${dropped.length}):\n`;

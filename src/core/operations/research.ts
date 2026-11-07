@@ -11,6 +11,7 @@ import { mergeCitations } from "../annotations.js";
 import type {
   ModelClient,
   ModelRequest,
+  ModelUsage,
   OperationContext,
   OperationResult,
   ResearchParams,
@@ -64,6 +65,8 @@ import {
   buildExtractionMessage,
   buildCollationMessage,
   COLLATION_NO_EVIDENCE_MESSAGE,
+  CollationNoEvidenceError,
+  deliveredInputBudget,
   formatCacheAppendix,
   formatCollationTrimNotice,
 } from "../messages.js";
@@ -295,6 +298,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
           ? { budgetRetried: true, budgetRetries: p.budgetRetries.collate }
           : {}),
         error: reason,
+        ...(error instanceof CollationNoEvidenceError ? { inputBudget: error.inputBudget } : {}),
       });
       failureMessage =
         `Collation failed: ${asSentence(reason)} ${succeededExtractions.length} page(s) were extracted, but ` +
@@ -795,8 +799,12 @@ async function runCollateStage(
     sourceNumber: index + 1,
     extraction: budget.sources[index]?.text ?? ext.extraction,
   }));
-  if (evidenceExtractions(evidence).length === 0) {
-    throw new Error(COLLATION_NO_EVIDENCE_MESSAGE);
+  const inputBudget = deliveredInputBudget(budget, evidence);
+  const suppliedSourceNumbers = new Set(
+    evidenceExtractions(evidence).map((ext) => ext.sourceNumber ?? 0),
+  );
+  if (suppliedSourceNumbers.size === 0) {
+    throw new CollationNoEvidenceError(COLLATION_NO_EVIDENCE_MESSAGE, inputBudget);
   }
 
   // Build collation prompt (no files written yet — lock is never held
@@ -837,7 +845,14 @@ async function runCollateStage(
   let collation: string;
   while (true) {
     try {
-      collation = finalizeCollation(completion.text, p.cachePath, succeededExtractions, identity, "fetched");
+      collation = finalizeCollation(
+        completion.text,
+        p.cachePath,
+        succeededExtractions,
+        identity,
+        "fetched",
+        suppliedSourceNumbers,
+      );
       break;
     } catch (error) {
       firstFailure ??= { error };
@@ -869,7 +884,9 @@ async function runCollateStage(
   }
 
   // Say what the collation model did not receive, and where the full text is.
-  if (budget.trims.length > 0) collation += formatCollationTrimNotice(budget, identity);
+  if (budget.trims.length > 0) {
+    collation += formatCollationTrimNotice(budget, identity, inputBudget.charsAfter);
+  }
 
   p.tel?.recordCollate({
     model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
@@ -878,18 +895,7 @@ async function runCollateStage(
     ...(p.budgetRetries.collate > 0
       ? { budgetRetried: true, budgetRetries: p.budgetRetries.collate }
       : {}),
-    ...(budget.trims.length > 0
-      ? {
-          inputBudget: {
-            budgetTokens: budget.budgetTokens,
-            sources: budget.sources.length,
-            trimmed: budget.trims.filter((trim) => trim.action === "trimmed").length,
-            dropped: budget.trims.filter((trim) => trim.action === "dropped").length,
-            charsBefore: budget.charsBefore,
-            charsAfter: budget.charsAfter,
-          },
-        }
-      : {}),
+    ...(budget.trims.length > 0 ? { inputBudget } : {}),
     ...(routeProvider ? { provider: routeProvider } : {}),
   });
 
@@ -1420,6 +1426,7 @@ async function completeWithBudgetRetry(
   };
 
   let lastBudgetError: unknown;
+  let lastBudgetUsage: ModelUsage | undefined;
   for (const [index, cap] of caps.entries()) {
     throwIfAborted(p.signal);
     if (index > 0) {
@@ -1437,6 +1444,7 @@ async function completeWithBudgetRetry(
     try {
       const completion = await p.models.complete(attempt(cap));
       const spent = completionTruncated(completion, cap);
+      if (spent) lastBudgetUsage = completion.usage;
       if (!spent || (completion.text.trim() && !retryTruncated)) {
         // Stop requesting retries, but rank all usable output before
         // validation, including this completed response.
@@ -1477,13 +1485,29 @@ async function completeWithBudgetRetry(
       (effectiveCap >= MAX_OUTPUT_TOKENS
         ? `Output cap of ${effectiveCap} tokens reached without visible text; the cap is already at the ${MAX_OUTPUT_TOKENS}-token maximum, so no larger retry is possible.`
         : `Output cap of ${effectiveCap} tokens reached without visible text; budget retries are disabled (outputBudgetRetries is 0).`) +
-        budgetDiagnostic(lastBudgetError),
+        budgetDiagnostic(lastBudgetError, lastBudgetUsage),
     );
   }
-  throw bothBudgetsSpent(stage, effectiveCap, caps[caps.length - 1], caps.length - 1, lastBudgetError);
+  throw bothBudgetsSpent(
+    stage,
+    effectiveCap,
+    caps[caps.length - 1],
+    caps.length - 1,
+    lastBudgetError,
+    lastBudgetUsage,
+  );
 }
 
-function budgetDiagnostic(error: unknown): string {
+function budgetDiagnostic(error: unknown, usage?: ModelUsage): string {
+  if (usage?.output != null) {
+    return ` Last attempt: ${usage.output} output tokens${
+      usage.reasoning != null ? `, ${usage.reasoning} hidden reasoning` : ""
+    }.`;
+  }
+  const counts = errMsg(error).match(/([\d,]+) output tokens(?:, ([\d,]+) hidden reasoning)?/);
+  if (counts) {
+    return ` Last attempt: ${counts[1]} output tokens${counts[2] ? `, ${counts[2]} hidden reasoning` : ""}.`;
+  }
   return error === undefined ? "" : ` Adapter diagnostic: ${failureDetail(errMsg(error))}`;
 }
 
@@ -1495,13 +1519,17 @@ function bothBudgetsSpent(
   maxTokens: number,
   retries: number,
   lastError?: unknown,
+  lastUsage?: ModelUsage,
 ): OutputBudgetExhaustedError {
   const setting = stage === "extract" ? "extractionMaxTokens" : "collationMaxTokens";
   const attempts = retries === 1 ? "one retry" : `${retries} retries`;
+  const reasoningReported = lastUsage?.reasoning != null || /hidden reasoning/.test(errMsg(lastError));
   return new OutputBudgetExhaustedError(
-    `${BOTH_SPENT}${cap} tokens and again after ${attempts} up to ${maxTokens} tokens;` +
-      budgetDiagnostic(lastError) +
-      ` the model's hidden reasoning consumed every budget. Raise ${setting}, ` +
-      "choose a model that reasons less for this stage, or re-run.",
+    `${BOTH_SPENT}${cap} tokens and again after ${attempts} up to ${maxTokens} tokens; ` +
+      (reasoningReported
+        ? `the model's hidden reasoning consumed every budget. Raise ${setting}, `
+        : `the output budget was exhausted before visible text was returned. Raise ${setting}, `) +
+      "choose a model that reasons less for this stage, or re-run." +
+      budgetDiagnostic(lastError, lastUsage),
   );
 }

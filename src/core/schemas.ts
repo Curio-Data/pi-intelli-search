@@ -11,7 +11,12 @@ const extractionSchema = Type.Object({
   status: Type.String(),
   // Optional provenance and diagnostics carried from extraction results.
   // Optional so strict argument sampling that knows only the core keys keeps working.
-  inferred: Type.Optional(Type.Boolean()),
+  inferred: Type.Optional(
+    Type.Boolean({
+      description:
+        "True when this source was guessed from search text rather than cited; collation treats it as a guess and trims it first.",
+    }),
+  ),
   truncated: Type.Optional(Type.Boolean()),
   error: Type.Optional(Type.String()),
 });

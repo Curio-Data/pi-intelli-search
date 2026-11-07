@@ -250,11 +250,11 @@ for (const scenario of ["complete", "truncated-errors", "mixed-errors"] as const
           assert.match(output, /Complete \[S1\]\./);
           assert.doesNotMatch(output, /A much longer but truncated synthesis|Collation output reached its cap/);
         } else {
-          const firstReason = scenario === "mixed-errors" ? "unknown source ID" : "a prose URL is absent from the supplied evidence";
+          const firstReason = scenario === "mixed-errors" ? "unknown or omitted source ID" : "a prose URL is absent from the supplied evidence";
           assert.ok(output.includes(`Collation provenance validation failed: ${firstReason}.`));
           assert.doesNotMatch(output, scenario === "mixed-errors"
             ? /a prose URL is absent|generated a cache-file reference/
-            : /unknown source ID|generated a cache-file reference/);
+            : /unknown or omitted source ID|generated a cache-file reference/);
         }
       }
     } finally {

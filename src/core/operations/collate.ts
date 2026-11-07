@@ -17,7 +17,7 @@ import {
   allocateSourceIdentity,
   rotateCacheArtefacts,
 } from "../cache.js";
-import { buildCollationMessage, COLLATION_NO_EVIDENCE_MESSAGE, formatCacheAppendix, formatCollationTrimNotice } from "../messages.js";
+import { buildCollationMessage, MANUAL_COLLATION_NO_EVIDENCE_MESSAGE, CollationNoEvidenceError, deliveredInputBudget, formatCacheAppendix, formatCollationTrimNotice } from "../messages.js";
 import { evidenceExtractions, finalizeCollation } from "../provenance.js";
 import type { ExtractResult } from "../types.js";
 import { errMsg, throwIfAborted, completionTruncated } from "../util.js";
@@ -86,8 +86,12 @@ export async function collate(
     sourceNumber: index + 1,
     extraction: budget.sources[index]?.text ?? ext.extraction,
   }));
-  if (evidenceExtractions(evidence).length === 0) {
-    throw new Error(COLLATION_NO_EVIDENCE_MESSAGE);
+  const inputBudget = deliveredInputBudget(budget, evidence);
+  const suppliedSourceNumbers = new Set(
+    evidenceExtractions(evidence).map((ext) => ext.sourceNumber ?? 0),
+  );
+  if (suppliedSourceNumbers.size === 0) {
+    throw new CollationNoEvidenceError(MANUAL_COLLATION_NO_EVIDENCE_MESSAGE, inputBudget);
   }
   const userMessage = buildCollationMessage(
     params.query,
@@ -106,7 +110,14 @@ export async function collate(
     signal,
   });
 
-  let collation = finalizeCollation(completion.text, cachePath, succeeded, identity, "supplied");
+  let collation = finalizeCollation(
+    completion.text,
+    cachePath,
+    succeeded,
+    identity,
+    "supplied",
+    suppliedSourceNumbers,
+  );
 
   // Mirrors the research path: a synthesis cut off by the output cap still
   // commits, but the reader must know it may end mid-sentence. A cap already
@@ -121,7 +132,9 @@ export async function collate(
   }
 
   // Say what the collation model did not receive, and where the full text is.
-  if (budget.trims.length > 0) collation += formatCollationTrimNotice(budget, identity);
+  if (budget.trims.length > 0) {
+    collation += formatCollationTrimNotice(budget, identity, inputBudget.charsAfter);
+  }
 
   // ═══════════════════════════════════════════════════════════════
   // Write cache artefacts under the per-cache-path lock so two

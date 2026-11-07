@@ -414,6 +414,49 @@ it("keeps the adapter token counts when every extraction budget is exhausted", a
   assert.match(result.text, /Output cap reached without visible text at 100 tokens and again after 2 retries up to 400 tokens/);
 });
 
+it("keeps native empty-length token counts and actionable advice", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });
+  const complete = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model === "extract") {
+      const cap = request.maxTokens ?? 100;
+      return {
+        text: "",
+        citations: [],
+        finishReason: "length" as const,
+        usage: { output: cap, reasoning: cap - 5 },
+      };
+    }
+    return complete(request);
+  };
+  const result = await research({ query: "native empty-length diagnostics" }, context, dependencies);
+  assert.equal(result.outcome, "extraction-failed");
+  assert.match(result.text, /Raise extractionMaxTokens/);
+  assert.match(result.text, /Last attempt: 400 output tokens, 395 hidden reasoning/);
+});
+
+it("keeps the setting and final counts on the truncated MCP diagnostic", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });
+  const complete = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model === "collate") {
+      throw new (await import("../src/core/util.js")).OutputBudgetExhaustedError(
+        "OpenRouter exhausted the output budget without visible text (400 output tokens, 395 hidden reasoning) (the cap includes any reasoning tokens). For extraction, review extractionMaxTokens; for synthesis, review collationMaxTokens. If this diagnostic came from search or cache suggestions, report the stage because those output caps are not exposed as tuning settings.",
+      );
+    }
+    return complete(request);
+  };
+  const result = await research({ query: "MCP budget advice survives truncation" }, context, dependencies);
+  assert.equal(result.outcome, "collate-failed");
+  const failureLine = result.text.split("\n").find((line) => line.includes("Output cap reached without visible text")) ?? "";
+  assert.ok(failureLine.length <= 300);
+  assert.match(failureLine, /Raise collationMaxTokens/);
+  assert.match(failureLine, /Last attempt: 400 output tokens, 395 hidden reasoning/);
+  assert.doesNotMatch(failureLine, /Adapter diagnostic/);
+});
+
 it("counts fetch and extraction failures separately with fetch reasons in the appendix", async (t) => {
   const root = await workspace(t);
   const base = coreContext(root);
@@ -994,7 +1037,35 @@ it("keeps original source IDs after budget trimming and dropping", async (t) => 
   assert.equal(prompt.sources[0].url, "https://s2.example/page");
   assert.match(result.text, /Answer derived from the second source \[S2\]/);
   assert.match(result.text, /\| S2 \| https:\/\/s2\.example\/page \|/);
-  assert.match(result.text, /retained text is empty|left out because the retained text is empty/);
+  assert.match(result.text, /Left out with empty retained text \(1\)/);
+  assert.match(result.text, /left out because the retained text is empty/);
+  const deliveredChars = prompt.sources[0].extraction.length;
+  assert.match(result.text, new RegExp(`The model received ${deliveredChars} characters`));
+  const meta = JSON.parse(await readFile(join(root, result.details.cachePath as string, "meta.json"), "utf8"));
+  assert.equal(meta.stages.collate.inputBudget.charsAfter, deliveredChars);
+  assert.equal(meta.stages.collate.inputBudget.trimmed, 0);
+  assert.equal(meta.stages.collate.inputBudget.dropped, 1);
+
+  context.models.complete = async (request) => {
+    if (request.model.model === "search") {
+      return {
+        text: "[First](https://s1.example/page) [Second](https://s2.example/page)",
+        citations: [],
+      };
+    }
+    if (request.model.model === "extract") {
+      return request.userMessage.includes("FIRST_PAGE")
+        ? { text: `${" ".repeat(1024)}First-source-only fact.`, citations: [] }
+        : { text: "Second-source-only fact.", citations: [] };
+    }
+    return request.model.model === "collate"
+      ? { text: "First-source fact [S1].", citations: [] }
+      : complete(request);
+  };
+  const rejected = await research({ query: "rejected emptied source ID" }, context, dependencies);
+  assert.equal(rejected.outcome, "collate-failed");
+  assert.match(rejected.text, /unknown or omitted source ID/);
+  assert.ok(rejected.details.cachePath, "the failed validation still saves the run");
 });
 
 it("keeps original source IDs after an inferred manual-collation source is dropped", async (t) => {
@@ -1032,6 +1103,28 @@ it("keeps original source IDs after an inferred manual-collation source is dropp
   assert.match(result.text, /Third-source fact \[S3\]/);
   assert.match(result.text, /\| S3 \| https:\/\/three\.example\/c \|/);
   assert.match(result.text, /https:\/\/two\.example\/b: left out entirely/);
+  context.models.complete = async (request) =>
+    request.model.model === "collate"
+      ? { text: "Invented claim from dropped source [S2].", citations: [] }
+      : complete(request);
+  await assert.rejects(
+    collate({
+      query: "rejected dropped source ID",
+      extractions: [
+        { url: "https://one.example/a", title: "One", extraction: "First fact.", sourceType: "docs", status: "success" },
+        {
+          url: "https://two.example/b",
+          title: "Two",
+          extraction: `official docs\n${"inferred text ".repeat(75)}`,
+          sourceType: "docs",
+          status: "success",
+          inferred: true,
+        },
+        { url: "https://three.example/c", title: "Three", extraction: "Third fact.", sourceType: "docs", status: "success" },
+      ],
+    }, context),
+    /unknown or omitted source ID/,
+  );
 });
 
 it("returns collate-failed without calling the model when the budget leaves no evidence", async (t) => {
@@ -1064,6 +1157,39 @@ it("returns collate-failed without calling the model when the budget leaves no e
   assert.equal((await readdir(join(cachePath, "extractions"))).length, 100);
   assert.equal((await readdir(join(cachePath, "sources"))).length, 100);
   assert.match(await readFile(join(cachePath, "report.md"), "utf8"), /## Collation Failed/);
+  const meta = JSON.parse(await readFile(join(cachePath, "meta.json"), "utf8"));
+  assert.equal(meta.stages.collate.inputBudget.sources, 100);
+  assert.equal(meta.stages.collate.inputBudget.dropped, 100);
+  assert.equal(meta.stages.collate.inputBudget.charsAfter, 0);
+});
+
+it("uses manual-specific no-evidence advice without research-only URL guidance", async (t) => {
+  const root = await workspace(t);
+  const { context, requests } = coreContext(root, { collationInputBudgetTokens: 10_000 });
+  const complete = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model === "collate") throw new Error("manual model must not be called");
+    return complete(request);
+  };
+  const extractions = Array.from({ length: 100 }, (_, i) => ({
+    url: `https://s${i + 1}.example/page`,
+    title: `S${i + 1}`,
+    extraction: `official docs\n${"useful text ".repeat(70)}`,
+    sourceType: "docs",
+    status: "success",
+  }));
+  await assert.rejects(
+    collate({ query: "manual no evidence", extractions }, context),
+    (error: Error) => {
+      assert.equal(
+        error.message,
+        "Collation input budget left no non-empty evidence text; raise collationInputBudgetTokens (or collationSourceMaxTokens when sources were cut to the per-source limit), or send fewer sources.",
+      );
+      assert.doesNotMatch(error.message, /fewer URLs/);
+      return true;
+    },
+  );
+  assert.equal(requests.filter((request) => request.model.model === "collate").length, 0);
 });
 
 it("drops inferred evidence before cited evidence through the merged research budget planner", async (t) => {
