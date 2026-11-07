@@ -98,7 +98,7 @@ cache and telemetry shapes by hand before committing.
 live: every attempt returns empty text with `finish_reason: length`. Freezing the
 preserved-report variant too is optional.
 
-### 3. Narrow the Domain-Guess Trade-Offs
+### 3. Handle Guessed and File-Like References as Assets
 
 Origin: kimi R3, R4 (`rcca-review-kimi.md`), N2 (`rcca-review-kimi-r2.md`; r3 has
 a different N2); deepseek M1, M2, N1, N6, N8 (`rcca-review-deepseek-r2.md`). Logic is
