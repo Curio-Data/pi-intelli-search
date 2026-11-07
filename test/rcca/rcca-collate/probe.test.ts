@@ -162,7 +162,8 @@ const saved = (o: Obs, collateCalls: number) => {
 
 // ---- Collate-stage response shapes -------------------------------------------------------
 test("C1 collate: content null + finish_reason length (reasoning exhausted the cap)", async () => {
-  saved(await scenario("c1", { collate: { message: { content: null, reasoning: "thinking..." }, finish: "length", usage: cap } }), 2);
+  // Two budget retries by default: 8,000, 16,000 then 32,000 tokens.
+  saved(await scenario("c1", { collate: { message: { content: null, reasoning: "thinking..." }, finish: "length", usage: cap } }), 3);
 });
 test("C2 collate: content null + finish_reason stop", async () => {
   saved(await scenario("c2", { collate: { message: { content: null }, finish: "stop" } }), 1);
@@ -171,7 +172,7 @@ test("C3 collate: content empty string + finish_reason stop", async () => {
   saved(await scenario("c3", { collate: ok("", "stop") }), 1);
 });
 test("C4 collate: content empty string + finish_reason length", async () => {
-  saved(await scenario("c4", { collate: ok("", "length", cap) }), 2);
+  saved(await scenario("c4", { collate: ok("", "length", cap) }), 3);
 });
 test("C5 collate: reasoning present, content null, stop", async () => {
   saved(await scenario("c5", { collate: { message: { content: null, reasoning: "long chain of thought", reasoning_details: [{ type: "reasoning.text", text: "x" }] }, finish: "stop", usage: cap } }), 1);

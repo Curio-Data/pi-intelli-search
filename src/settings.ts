@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { ModelConfig, ResearchSettings } from "./types.js";
 import { getAgentDir } from "./agent-dir.js";
-import { tuningDefaults } from "./core/defaults.js";
+import { MAX_OUTPUT_TOKENS, MIN_OUTPUT_TOKENS, tuningDefaults } from "./core/defaults.js";
 
 export interface SettingsContext {
   cwd: string;
@@ -361,6 +361,9 @@ const NESTED_KEYS = [
   "extractionConcurrency",
   "extractionMaxTokens",
   "collationMaxTokens",
+  "outputBudgetRetries",
+  "collationInputBudgetTokens",
+  "collationSourceMaxTokens",
   "browserFingerprint",
   "disableLlmsFullDiscovery",
   "disableTelemetry",
@@ -389,6 +392,9 @@ const FLAT_KEY_MAP: Record<string, keyof ResearchSettings> = {
   intelliFetchConcurrency: "fetchConcurrency",
   intelliExtractionMaxTokens: "extractionMaxTokens",
   intelliCollationMaxTokens: "collationMaxTokens",
+  intelliOutputBudgetRetries: "outputBudgetRetries",
+  intelliCollationInputBudgetTokens: "collationInputBudgetTokens",
+  intelliCollationSourceMaxTokens: "collationSourceMaxTokens",
   intelliBrowserFingerprint: "browserFingerprint",
   intelliDisableLlmsFullDiscovery: "disableLlmsFullDiscovery",
   intelliDisableTelemetry: "disableTelemetry",
@@ -407,6 +413,53 @@ const FLAT_KEY_MAP: Record<string, keyof ResearchSettings> = {
  */
 function isPresent(value: unknown): boolean {
   return value != null && !(typeof value === "string" && value.length === 0);
+}
+
+/**
+ * Integer tuning keys the native loader validates before use, with the range
+ * the standalone schema also enforces. A value outside its range, or one that
+ * is not an integer, is dropped so the default applies, and reported once per
+ * load: a typo must not silently break a paid run, and the loader cannot
+ * throw without taking the session down.
+ */
+const TUNING_RANGES: Record<string, readonly [number, number]> = {
+  extractionMaxTokens: [MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS],
+  collationMaxTokens: [MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS],
+  outputBudgetRetries: [0, 5],
+  collationInputBudgetTokens: [10_000, 1_000_000],
+  collationSourceMaxTokens: [256, MAX_OUTPUT_TOKENS],
+};
+
+/** Warnings produced by the most recent load, drained by the session start. */
+let pendingSettingsWarnings: string[] = [];
+
+/**
+ * Take the warnings from the last settings load, clearing them. The native
+ * session start surfaces each one through the host's notification channel;
+ * the loader itself never writes to the console, which would bypass the TUI
+ * renderer.
+ */
+export function takeSettingsWarnings(): string[] {
+  const warnings = pendingSettingsWarnings;
+  pendingSettingsWarnings = [];
+  return warnings;
+}
+
+/** Drop out-of-range tuning overrides and record why, once per distinct value. */
+function validateTuning(overrides: Partial<ResearchSettings>): Partial<ResearchSettings> {
+  for (const [key, [min, max]] of Object.entries(TUNING_RANGES)) {
+    const value = (overrides as Record<string, unknown>)[key];
+    if (value === undefined) continue;
+    if (typeof value === "number" && Number.isSafeInteger(value) && value >= min && value <= max)
+      continue;
+    delete (overrides as Record<string, unknown>)[key];
+    const fallback = (DEFAULT_SETTINGS as unknown as Record<string, unknown>)[key];
+    const message =
+      `[pi-intelli-search] Ignoring settings.json ${key}=${JSON.stringify(value)}: ` +
+      `expected an integer from ${min} to ${max}. Using the default (${String(fallback)}).`;
+    if (!pendingSettingsWarnings.includes(message)) pendingSettingsWarnings.push(message);
+  }
+  return overrides;
 }
 
 /**
@@ -449,7 +502,7 @@ function extractOverrides(parsed: Record<string, unknown>): Partial<ResearchSett
   // manually adds intelliDefaultUrls in 0.8.0+ without disabling the
   // deprecation notice is working against the tooling.
 
-  return overrides;
+  return validateTuning(overrides);
 }
 
 /**

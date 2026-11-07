@@ -165,3 +165,55 @@ test("rechecks cache containment at every operation before provider access", asy
     await f.cleanup();
   }
 });
+
+test("budget and collation-budget tuning defaults and ranges are the shared ones", async () => {
+  const f = await fixture();
+  try {
+    const cfg = await parseConfig(document(), f.dir);
+    assert.equal(cfg.settings.outputBudgetRetries, 2);
+    assert.equal(cfg.settings.collationInputBudgetTokens, 221_000);
+    assert.equal(cfg.settings.collationSourceMaxTokens, 8000);
+    assert.equal(cfg.settings.extractMaxChars, 400_000);
+    assert.equal(cfg.settings.extractionMaxTokens, 8000);
+    assert.equal(cfg.settings.collationMaxTokens, 8000);
+
+    // 0 disables the budget retry, which the schema must accept.
+    const zero = await parseConfig(
+      { ...document(), tuning: { ...document().tuning, outputBudgetRetries: 0 } },
+      f.dir,
+    );
+    assert.equal(zero.settings.outputBudgetRetries, 0);
+    const largest = await parseConfig(
+      {
+        ...document(),
+        tuning: {
+          ...document().tuning,
+          outputBudgetRetries: 5,
+          extractionMaxTokens: 128_000,
+          collationMaxTokens: 128_000,
+        },
+      },
+      f.dir,
+    );
+    assert.equal(largest.settings.outputBudgetRetries, 5);
+    assert.equal(largest.settings.collationMaxTokens, 128_000);
+
+    for (const tuning of [
+      { outputBudgetRetries: 6 },
+      { outputBudgetRetries: -1 },
+      { extractionMaxTokens: 128_001 },
+      { extractionMaxTokens: 15 },
+      { collationMaxTokens: 128_001 },
+      { collationInputBudgetTokens: 9_999 },
+      { collationInputBudgetTokens: 1_000_001 },
+      { collationSourceMaxTokens: 255 },
+    ])
+      await assert.rejects(
+        parseConfig({ ...document(), tuning }, f.dir),
+        /integer between/,
+        JSON.stringify(tuning),
+      );
+  } finally {
+    await f.cleanup();
+  }
+});

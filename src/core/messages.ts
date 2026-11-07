@@ -9,6 +9,7 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 // SPDX-License-Identifier: Apache-2.0
 import type { SourceIdentity } from "./cache.js";
+import type { CollationBudgetPlan, CollationBudgetTrim } from "./collation-budget.js";
 import { evidenceExtractions } from "./provenance.js";
 import { truncateContent } from "./util.js";
 import type { ExtractResult, ResearchSettings } from "./types.js";
@@ -113,6 +114,46 @@ export function buildCollationMessage(
       extraction: source.extraction,
     })),
   }, null, 2);
+}
+
+/**
+ * Render what the collation model did not receive, and where the full
+ * extraction is saved. Appended to the synthesis in both the tool result and
+ * report.md, so the calling agent can read the untrimmed file when the
+ * trimmed text it saw is not enough. Nothing on disk is changed: the saved
+ * extraction always holds the whole text.
+ */
+export function formatCollationTrimNotice(
+  plan: CollationBudgetPlan,
+  identity: SourceIdentity,
+): string {
+  const trimmed = plan.trims.filter((trim) => trim.action === "trimmed");
+  const dropped = plan.trims.filter((trim) => trim.action === "dropped");
+  const chars = (n: number): string => `${n.toLocaleString("en-US")} characters`;
+  let out = `\n\n---\n`;
+  out += `**Collation input trimmed**: ${plan.trims.length} of ${plan.sources.length} extraction(s) exceeded the `;
+  out += `${plan.budgetTokens.toLocaleString("en-US")}-token input budget for the collation model. `;
+  out += `It received ${chars(plan.charsAfter)} of ${chars(plan.charsBefore)}. `;
+  out += `Every extraction is saved in full, and nothing here changes what is on disk.\n`;
+  const line = (trim: CollationBudgetTrim): string => {
+    const file = identity.extractionFileFor(trim.url);
+    const full = file ? ` (full extraction: \`extractions/${file}\`)` : "";
+    return trim.action === "dropped"
+      ? `- ${trim.url}: left out entirely${full}\n`
+      : `- ${trim.url}: ${chars(trim.keptChars)} of ${chars(trim.originalChars)} sent${full}\n`;
+  };
+  if (trimmed.length > 0) {
+    out += `\nTrimmed to a fair share of the budget (${trimmed.length}):\n`;
+    for (const trim of trimmed) out += line(trim);
+  }
+  if (dropped.length > 0) {
+    out += `\nLeft out of the collation input (${dropped.length}):\n`;
+    for (const trim of dropped) out += line(trim);
+  }
+  out += `\nTrim order: the longest extractions first, inferred references before cited sources, down to a fair share `;
+  out += `of the budget; whole sources are left out only when a fair share would keep too little to be useful, lowest-ranked first. `;
+  out += `Raise collationInputBudgetTokens if the collation model's context allows, or ask for fewer URLs, to send more.\n`;
+  return out;
 }
 
 /** A failed source rendered in the result appendix: the URL, a bounded

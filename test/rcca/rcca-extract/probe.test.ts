@@ -106,9 +106,11 @@ const allFail = (r: Reply) => ({ pages: [A, B], extract: () => r });
 test("X1 extract: content null + length (reasoning exhausted cap) on every page", async () => {
   const o = await scenario("x1", allFail({ message: { content: null, reasoning: "thinking" }, finish: "length", usage: cap }));
   assert.equal(o.outcome, "extraction-failed");
-  // Corrected: each page is retried once at a doubled cap before it fails.
-  assert.equal(o.extractCalls, 4);
-  assert.equal(o.meta?.extract.budgetRetries, 2);
+  // Corrected: each page is retried at a doubled cap before it fails. The
+  // default outputBudgetRetries is 2 (8,000, 16,000 then 32,000), so two
+  // pages issue three attempts each.
+  assert.equal(o.extractCalls, 6);
+  assert.equal(o.meta?.extract.budgetRetries, 4);
   assert.equal(o.meta?.extract.failureReasons.budgetExhausted, 2);
 });
 test("X2 extract: content '' + length", async () => {

@@ -174,3 +174,52 @@ test("degraded research remains a result and malformed tool arguments never reac
     await f.cleanup();
   }
 });
+
+test("the collation input budget trims the prompt and the MCP result says what was trimmed", async () => {
+  const f = await fixture();
+  try {
+    let sent: Array<{ content: string }> = [];
+    const runtime = await createRuntime(
+      {
+        ...f.config,
+        settings: { ...f.config.settings, collationInputBudgetTokens: 10_000 },
+      } as typeof f.config,
+      {
+        env: { FIXTURE_KEY: "fixture-secret" },
+        logger,
+        fetch: fakeTransport((body) => {
+          sent = body.messages as Array<{ content: string }>;
+          return json(completion("Summary citing the evidence."));
+        }),
+      },
+    );
+    // Two 21,000-character extractions exceed the 40,000-character budget.
+    const line = "Evidence line for the collation input budget.\n";
+    const long = line.repeat(Math.ceil(21_000 / line.length)).slice(0, 21_000);
+    const result = await runtime.execute("intelli_collate", {
+      query: "collation input budget",
+      extractions: [
+        { ...extraction, url: "https://one.example", extraction: long },
+        { ...extraction, url: "https://two.example", extraction: long },
+      ],
+    });
+    assert.equal(result.outcome, "completed");
+    assert.match(result.text, /\*\*Collation input trimmed\*\*: 2 of 2 extraction/);
+    assert.match(result.text, /full extraction: `extractions\/01-/);
+    // The evidence actually sent, read back from the wire payload.
+    const payload = JSON.parse(sent[1].content) as {
+      sources: Array<{ extraction: string }>;
+    };
+    const sentChars = payload.sources.reduce((total, source) => total + source.extraction.length, 0);
+    assert.ok(sentChars <= 39_200, `sent ${sentChars} characters of extraction text`);
+    assert.ok(sentChars > 0);
+    // The standalone adapter reports the physical cache path, not a display path.
+    const saved = await readFile(
+      join(result.details.cachePath as string, "extractions", "01-one-example.md"),
+      "utf8",
+    );
+    assert.ok(saved.length > 21_000, "the saved extraction keeps the whole text");
+  } finally {
+    await f.cleanup();
+  }
+});

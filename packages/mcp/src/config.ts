@@ -3,7 +3,7 @@
 
 import { readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
-import { tuningDefaults } from "../../../src/core/defaults.js";
+import { MAX_OUTPUT_TOKENS, MIN_OUTPUT_TOKENS, tuningDefaults } from "../../../src/core/defaults.js";
 import type { DeepReadonly } from "../../../src/core/contracts.js";
 import type { ModelConfig, ResearchSettings } from "../../../src/core/types.js";
 
@@ -74,8 +74,15 @@ const ranges: Record<string, readonly [number, number]> = {
   fetchTimeoutMs: [1, 600_000],
   fetchConcurrency: [1, 32],
   extractionConcurrency: [1, 32],
-  extractionMaxTokens: [16, 128_000],
-  collationMaxTokens: [16, 128_000],
+  // The ceiling a budget retry may reach, single-sourced from the shared core.
+  extractionMaxTokens: [MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS],
+  collationMaxTokens: [MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS],
+  // Extra attempts after a spent output cap; 0 disables the retry.
+  outputBudgetRetries: [0, 5],
+  // Tokens for every extraction, its header and the synthesis.
+  collationInputBudgetTokens: [10_000, 1_000_000],
+  // Per-extraction ceiling on the text sent to collation.
+  collationSourceMaxTokens: [256, MAX_OUTPUT_TOKENS],
   llmTimeoutMs: [1, 600_000],
   llmRetryAttempts: [1, 10],
   retryBaseDelayMs: [0, 120_000],

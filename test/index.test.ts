@@ -724,4 +724,57 @@ describe("auth pre-flight check", () => {
       else delete process.env.PI_CODING_AGENT_DIR;
     }
   });
+
+  it("session_start warns when a tuning value is outside the shared range", async () => {
+    const savedKey = process.env.OPENROUTER_API_KEY;
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    delete process.env.OPENROUTER_API_KEY;
+
+    const notifications: Array<{ msg: string; type: string }> = [];
+    let sessionStartHandler: Function | undefined;
+    const mockPi = {
+      registerTool() {},
+      on(event: string, h: Function) {
+        if (event === "session_start") sessionStartHandler = h;
+      },
+    };
+    const mockCtx = {
+      hasUI: true,
+      get cwd() {
+        return process.cwd();
+      },
+      isProjectTrusted() {
+        return false;
+      },
+      ui: {
+        notify(msg: string, type: string) {
+          notifications.push({ msg, type });
+        },
+        setStatus() {},
+      },
+      modelRegistry: { refresh() {} },
+    };
+    try {
+      const dir = tempAgentDir();
+      process.env.PI_CODING_AGENT_DIR = dir;
+      writeFileSync(
+        join(dir, "settings.json"),
+        JSON.stringify({ "pi-intelli-search": { extractionMaxTokens: 300_000 } }),
+      );
+      const mod = await import("../src/index.js");
+      mod.default(mockPi);
+      assert.ok(sessionStartHandler, "session_start handler should be registered");
+      await sessionStartHandler!({}, mockCtx);
+      const tuningWarnings = notifications.filter(
+        (n) => n.type === "warning" && n.msg.includes("extractionMaxTokens=300000"),
+      );
+      assert.strictEqual(tuningWarnings.length, 1, "should warn once about the ignored value");
+      assert.ok(tuningWarnings[0].msg.includes("Using the default (8000)"));
+    } finally {
+      if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+    }
+  });
 });
