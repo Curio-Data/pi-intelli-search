@@ -110,7 +110,7 @@ export function finalizeCollation(
   const prose = withoutInlineCode(outsideBlocks);
   const invalid = (reason: string): never => {
     throw new Error(
-      `Collation provenance validation failed: ${reason}. No report was committed; rerun the operation.`,
+      `Collation provenance validation failed: ${reason}. The synthesis was not accepted.`,
     );
   };
   if (!sources.length) invalid("no successful extraction evidence");
