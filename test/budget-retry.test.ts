@@ -221,6 +221,28 @@ it("retains truncated candidates when a completed retry fails provenance", async
   assert.match(result.text, /cap \(100 tokens/);
 });
 
+it("validates every usable candidate longest first even when a shorter retry completes", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  const complete = context.models.complete;
+  const caps: Array<number | undefined> = [];
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    caps.push(request.maxTokens);
+    return request.maxTokens === 100
+      ? { text: "The longer valid synthesis with useful evidence [S1].", citations: [], finishReason: "length" as const }
+      : { text: "Short complete [S1].", citations: [], finishReason: "stop" as const };
+  };
+  const result = await research({ query: "rank every usable candidate" }, context, dependencies);
+  assert.deepEqual(caps, [100, 200], "a completed response still stops further model calls");
+  assert.equal(result.outcome, "completed");
+  assert.match(result.text, /The longer valid synthesis/);
+  assert.doesNotMatch(result.text, /Short complete/);
+  assert.match(result.text, /cap \(100 tokens/);
+  assert.match(result.text, /a retry at a larger cap was considered/);
+  assert.doesNotMatch(result.text, /retry at a larger cap did not complete/);
+});
+
 it("reports a provenance failure when every candidate is invalid", async (t) => {
   const root = await workspace(t);
   const { context, dependencies } = coreContext(root);

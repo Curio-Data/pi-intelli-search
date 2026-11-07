@@ -748,7 +748,7 @@ async function runCollateStage(
         ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens, after a retry at a larger cap); ` +
           `the synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
         : p.budgetRetries.collate > 0
-          ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens), and a retry at a larger cap did not complete; ` +
+          ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens), and a retry at a larger cap was considered; ` +
             `the synthesis may be cut off mid-sentence. Re-run, or choose a collation model that reasons less, if completeness matters.`
           : p.settings.collationMaxTokens >= MAX_OUTPUT_TOKENS
             ? `\n\n> ⚠ Collation output reached its cap (${maxTokens} tokens), which is already the maximum the settings accept; ` +
@@ -1278,9 +1278,9 @@ async function completeWithBudgetRetry(
     maxTokens: cap,
     timeoutMs: attemptTimeoutMs(p.settings.llmTimeoutMs, configuredCap, cap),
   });
-  // Usable answers cut off by their cap, kept in case a larger attempt is
-  // worse. Every configured attempt runs while only truncated text is
-  // available; the longest of them is returned if none completes.
+  // Keep every usable answer in case a larger attempt is worse. Every
+  // configured attempt runs while only truncated text is available; once
+  // calls stop, validation receives all candidates longest first.
   const candidates: BudgetedCompletion[] = [];
   const rankedCandidates = (): BudgetedCompletion[] => [...candidates].sort(
     (a, b) => b.completion.text.trim().length - a.completion.text.trim().length,
@@ -1308,9 +1308,10 @@ async function completeWithBudgetRetry(
       const completion = await p.models.complete(attempt(cap));
       const spent = completionTruncated(completion, cap);
       if (!spent || (completion.text.trim() && !retryTruncated)) {
-        // Prefer a completed answer, but do not lose earlier paid candidates
-        // if its provenance fails. Extraction ignores these alternatives.
-        return { completion, maxTokens: cap, alternatives: rankedCandidates() };
+        // Stop requesting retries, but rank all usable output before
+        // validation, including this completed response.
+        if (completion.text.trim()) candidates.push({ completion, maxTokens: cap });
+        return best() ?? { completion, maxTokens: cap, alternatives: [] };
       }
       // Usable but cut off: keep it and let the next configured cap try for a
       // complete answer. The longest kept answer wins if none completes.
