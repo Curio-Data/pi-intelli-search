@@ -264,6 +264,28 @@ Orchestrator choices, binding on every track:
 from round 3) and as the second reviewer on tracks A and B. Reports keep the
 reviewer's model in their file names.
 
+Orchestrator decisions taken during the build (2026-11-07), each settled through
+the track reviews:
+
+- **Item 1.** Failure reports are recognised only by a marker on line 1, which caller
+  text cannot reach. The legacy heuristic for unmarked reports was removed: no
+  published release wrote a failure report, so unmarked reports left by development
+  builds are preserved like any existing report.
+- **Item 3.** Queries, fragments and numeric ports are kept; non-numeric ports and
+  bare `host:port` without a TLD are rejected. A redirect or alternate is disclosed
+  whenever the hostname changes other than by a leading `www.`; there is no
+  public-suffix reasoning, because two hand-written approximations both missed and
+  invented site boundaries.
+- **Item 4.** A synthesis that keeps returning truncated text uses every configured
+  retry. Candidates are chosen completed first (latest attempt first), then truncated
+  longest first, and the first that passes provenance validation wins; when none
+  passes, the first-ranked candidate's error is reported.
+- **Item 5.** `collationSourceMaxTokens` defaults to 32,000 tokens, the largest
+  output after two retries, so the confirmed worst case of ≈6 cap-filled sources fits
+  whole. The trim notice names which limit bound (per-source, total or both) and the
+  matching setting. Every integer tuning key shares one range table, used by the
+  native validator and the MCP schema.
+
 ## Execution Plan
 
 The owner expects herdr agents to work in parallel where possible. The orchestrator
@@ -313,13 +335,18 @@ Integration, done by the orchestrator on `rcca/mcp-research-failures`:
 
 ## Open Review Findings
 
-Not yet recorded as fixed or accepted. Settle each in the first review round:
+Settled during the follow-up (track A reports `fu-a-build-r2.md` and `-r3.md`, and
+the combined review `fu-combined-review-*-r1.md`):
 
-- kimi-r3 N4: failure reports written before the marker existed read as successful.
-  Harmless only while 0.22.0 is unpublished.
-- deepseek-r2 M7: the raw HTML marker is visible to the calling agent.
-- deepseek-r2 M9: an unreadable prior report is preserved.
-- deepseek-r2 M10: a race test relies on a 100 ms wall-clock wait.
+- kimi-r3 N4: accepted. Failure reports are recognised only by a line-1 marker, and
+  unmarked development-build reports are preserved like any existing report.
+- deepseek-r2 M7: fixed. The marker is stripped from agent-visible text and kept in
+  the saved report.
+- deepseek-r2 M9: accepted, fail-closed. An unreadable prior report is preserved
+  rather than replaced, with a test pinning the behaviour.
+- deepseek-r2 M10: the 100 ms wait was replaced by an event-ordered test; the
+  combined review (astra C3) found it did not guard the cache lock, and it is
+  strengthened in round 6 of track B's builder.
 
 ## Method to Repeat
 
