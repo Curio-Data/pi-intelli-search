@@ -1,6 +1,6 @@
 # Fresh-Agent Resume Checkpoint
 
-Current state: the `rh-v5` pilot is closed at the corpus-review gate. Its implementation is validated and independently accepted, both subscription-main observers passed, and the single fresh capture completed. The fresh corpus reviewer rejected required setup, configuration and failure-evidence coverage, so charge qualification and both paid pilots remained unused. [Pilot Findings](PILOT-FINDINGS.md) records the outcome and settlement. Start with [Pilot Resume](RESUME.md) for the closed-series boundary; no further live work or measured sprint is authorised.
+Current state: the `rh-v6` continuation is complete and settled. Both paid routes passed machine and financial checks; the baseline answer received an adjudicated narrow pass and both independent reviewers failed the candidate answer. The baseline gate's format error was corrected under owner direction, preserving the failed receipt. This interrupted pair is not a successful quality-equivalent comparison. [Continuation Findings](CONTINUATION-FINDINGS.md) records the result. Start with [Pilot Resume](RESUME.md): the owner has directed clean repeats, and the next assignment is to remove administrative friction and prepare a fresh bounded series. No measured sprint has started.
 
 Historical `rh-v4` status: completed on 5 November 2026. The full-population Codemode mean was 1,920.5 main tokens lower, but two route-nonconforming baseline runs account for the entire reduction. As a descriptive sensitivity reading, the Codemode mean across the other eight pairs was 330.1 tokens higher. Only pair 2 had both runs conforming and adequate, and Codemode used 1,090 more main tokens in that pair. Only 8 of 20 runs met the completion, conformance and adequacy conditions that the frozen gate requires of every run, so it rejects an overall savings-with-preserved-usefulness claim. This result concerns one question, one corpus, `Pi` 1.5.0 and `openai-codex/gpt-6.1-sol`.
 
@@ -81,7 +81,7 @@ Both rejected PostgreSQL preparations remain under [`20261104T203243Z-rh-v3-meas
 
 ## Historical Repeat Boundary
 
-The following boundary belongs to the completed `rh-v4` series. The later `rh-v5` pilot is also closed; its result and unused-slot boundary are governed by [Pilot Resume](RESUME.md), not by reusing either series' allowance.
+The following boundary belongs to the completed `rh-v4` series. The later `rh-v5` and `rh-v6` pilots are also closed. The owner's subsequent repeat direction and current next assignment are recorded in [Pilot Resume](RESUME.md). The historical instructions below do not replace that direction or permit reuse of a settled root.
 
 Inspect or reproduce the completed analysis only. Do not resume collection, rerun a diagnostic, select a replacement source or infer an overall Codemode benefit from the full-population mean. Preserve all evidence under its existing identity. Any new question, recapture, package integration, publication, version bump, main merge or additional measured run requires a separate owner decision.
 

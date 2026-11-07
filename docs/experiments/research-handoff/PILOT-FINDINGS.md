@@ -1,5 +1,7 @@
 # Bounded Pilot Findings
 
+This page records the closed `rh-v5` series. The later `rh-v6` outcome is in [Continuation Findings](CONTINUATION-FINDINGS.md); [Pilot Resume](RESUME.md) is the current entrypoint.
+
 The `rh-v5` pilot closed at the corpus-review gate on 6 November 2026. Both subscription-main observer conversations passed independent review, but the single fresh capture lacked evidence required by the frozen task-usefulness rubric. No charge qualification or paid end-to-end conversation ran. The reported metered charge was USD 0.0057, with no unknown-charge holds, active reservations or overrun.
 
 ## Outcome and Authority
