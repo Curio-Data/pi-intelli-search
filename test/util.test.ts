@@ -22,6 +22,7 @@ import {
   stripTrailingSourcesSection,
   budgetExhausted,
   reasoningOnlyCompletion,
+  redirectedToDifferentHost,
 } from "../src/util.js";
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 5));
@@ -307,6 +308,8 @@ Also bare reference https://kit.svelte.dev.
       expected: "https://example.com:8080/path",
     },
     { reference: "example.com:abc", decision: "reject" },
+    { reference: "gitea:3000", decision: "reject" },
+    { reference: "example.com:99999", decision: "reject" },
     {
       reference: "git.example.com/user/repo.git",
       decision: "keep",
@@ -321,6 +324,16 @@ Also bare reference https://kit.svelte.dev.
       reference: "e\u0301xample.com",
       decision: "keep",
       expected: "https://xn--xample-9ua.com",
+    },
+    {
+      reference: "café.fr",
+      decision: "keep",
+      expected: "https://xn--caf-dma.fr",
+    },
+    {
+      reference: "cafe\u0301.fr",
+      decision: "keep",
+      expected: "https://xn--caf-dma.fr",
     },
     { reference: "example.comé", decision: "reject" },
     { reference: "pre-example.com", decision: "keep", expected: "https://pre-example.com" },
@@ -374,6 +387,24 @@ Also bare reference https://kit.svelte.dev.
       },
     ]);
   });
+});
+
+describe("redirectedToDifferentHost", () => {
+  const cases = [
+    ["https://example.com", "https://www.example.com/docs", false],
+    ["https://docs.example.com", "https://www.example.com/docs", false],
+    ["https://a.example.com", "https://b.example.com/docs", false],
+    ["https://example.co.uk", "https://www.example.co.uk/docs", false],
+    ["https://a.example.co.uk", "https://b.example.co.uk/docs", false],
+    ["https://example.com", "https://other.com/docs", true],
+    ["https://example.co.uk", "https://other.co.uk/docs", true],
+    ["https://example.com", "https://example.com.evil.net/docs", true],
+  ] as const;
+  for (const [url, finalUrl, expected] of cases) {
+    it(`${url} -> ${finalUrl}: ${expected ? "different" : "same"} registrable host`, () => {
+      assert.equal(redirectedToDifferentHost(url, finalUrl), expected);
+    });
+  }
 });
 
 describe("mapWithConcurrency", () => {

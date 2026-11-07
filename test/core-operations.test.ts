@@ -188,6 +188,7 @@ it("shows original tokens, redirect attribution and one bounded error per failed
           }
         : {
             url,
+            finalUrl: "https://static.example.net/broken.pdf",
             title: "",
             content: "",
             status: "error" as const,
@@ -197,23 +198,68 @@ it("shows original tokens, redirect attribution and one bounded error per failed
   const result = await research({ query: "redirect attribution" }, base.context, dependencies);
   assert.equal(result.outcome, "completed");
   assert.match(result.text, /\| README\.md \| https:\/\/readme\.md \| Code file \(text\/plain\); redirected to a different host: https:\/\/downloads\.example\.net\/raw\/readme\.txt; content is not from the guessed site \|/);
-  assert.match(result.text, /\| Broken\.py \| https:\/\/broken\.py \| Nothing fetched; see Failed Sources below \| None \|/);
+  assert.match(result.text, /\| Broken\.py \| https:\/\/broken\.py \| Nothing fetched; see Failed Sources below; redirected to a different host: https:\/\/static\.example\.net\/broken\.pdf; content is not from the guessed site \| None \|/);
   assert.equal(result.text.match(/TRANSPORT_FAILURE/g)?.length, 1, "raw failure appears only in Failed Sources");
   assert.doesNotMatch(result.text, /multiline detail\nmultiline detail/);
   const assets = result.details.inferredAssets as Array<Record<string, unknown>>;
   assert.deepEqual(assets.map((asset) => [asset.originalReference, asset.url, asset.finalUrl, asset.redirectedToDifferentHost]), [
     ["README.md", "https://readme.md", "https://downloads.example.net/raw/readme.txt", true],
-    ["Broken.py", "https://broken.py", undefined, undefined],
+    ["Broken.py", "https://broken.py", "https://static.example.net/broken.pdf", true],
   ]);
   assert.equal((assets[1].error as string).length, 300);
   assert.ok((assets[1].error as string).endsWith("…"));
   const report = await readFile(join(root, result.details.cachePath as string, "report.md"), "utf8");
   assert.match(report, /README\.md \| https:\/\/readme\.md/);
+  assert.match(report, /## Failed Sources/);
+  assert.doesNotMatch(report, /## Blocked\/Failed URLs/);
   assert.match(report, /redirected to a different host: https:\/\/downloads\.example\.net/);
   assert.equal(report.match(/TRANSPORT_FAILURE/g)?.length, 1);
   assert.doesNotMatch(report, /multiline detail\nmultiline detail/);
   const reportFailure = report.match(/^- https:\/\/broken\.py: .*$/m)?.[0] ?? "";
   assert.ok(reportFailure.length <= 300 + "- https://broken.py: ".length);
+  const saved = await readFile(join(root, result.details.cachePath as string, "sources", "01-readme-md.md"), "utf8");
+  assert.match(saved, /> Source: https:\/\/readme\.md/);
+  assert.match(saved, /> Final URL: https:\/\/downloads\.example\.net\/raw\/readme\.txt/);
+});
+
+it("keeps guessed identity and cross-host attribution for a selected alternate", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 1, maxUrls: 1 });
+  const complete = base.context.models.complete;
+  base.context.models.complete = async (request) =>
+    request.model.model === "search"
+      ? { text: "Read guide.example.com/alternate for the answer.", citations: [] }
+      : complete(request);
+  const dependencies: ResearchDependencies = {
+    ...base.dependencies,
+    fetchPages: async (urls) => urls.map((url) => ({
+      url,
+      alternateUrl: "https://cdn.example.net/raw.md",
+      finalUrl: "https://cdn.example.net/raw.md",
+      title: "Alternate",
+      content: "# Alternate\n\nUseful facts.",
+      status: "success" as const,
+      source: "markdown",
+      assetType: "text" as const,
+      contentType: "text/markdown",
+    })),
+  };
+  const result = await research({ query: "alternate identity" }, base.context, dependencies);
+  assert.equal(result.outcome, "completed");
+  assert.match(result.text, /guide\.example\.com\/alternate \| Text file \(text\/markdown\); via alternate https:\/\/cdn\.example\.net\/raw\.md; content is not from the guessed site \|/);
+  assert.doesNotMatch(result.text, /redirected to a different host/);
+  const [asset] = result.details.inferredAssets as Array<Record<string, unknown>>;
+  assert.equal(asset.url, "https://guide.example.com/alternate");
+  assert.equal(asset.alternateUrl, "https://cdn.example.net/raw.md");
+  assert.equal(asset.finalUrl, "https://cdn.example.net/raw.md");
+  assert.equal(asset.redirectedToDifferentHost, true);
+  assert.equal(asset.sourceFile, "sources/01-guide-example-com.md");
+  const saved = await readFile(
+    join(root, result.details.cachePath as string, "sources", "01-guide-example-com.md"),
+    "utf8",
+  );
+  assert.match(saved, /> Source: https:\/\/guide\.example\.com\/alternate/);
+  assert.match(saved, /> Final URL: https:\/\/cdn\.example\.net\/raw\.md/);
 });
 
 it("labels inferred references and records nothing when every inferred fetch fails", async (t) => {
@@ -550,6 +596,15 @@ it("never replaces a successful report committed while collation was failing", a
   const query = "concurrent collate failure";
   const path = makeCachePath(query, root, context.paths.cacheRoot);
   const complete = context.models.complete;
+  dependencies.fetchPages = async (urls) => urls.map((url) => ({
+    url,
+    title: "manage.py",
+    content: "print('current attempt')",
+    status: "success" as const,
+    source: "text",
+    assetType: "code" as const,
+    contentType: "text/x-python",
+  }));
   let collated!: () => void;
   const collateDone = new Promise<void>((resolve) => (collated = resolve));
   context.models.complete = async (request) => {
@@ -580,6 +635,8 @@ it("never replaces a successful report committed while collation was failing", a
   assert.equal(inferred[0].originalReference, "manage.py");
   assert.equal(inferred[0].url, "https://manage.py");
   assert.equal(inferred[0].sourceFile, undefined, "an uncommitted run must not advertise a saved file");
+  assert.match(result.text, /## Inferred Assets/);
+  assert.match(result.text, /manage\.py \| Code file \(text\/x-python\) \| Not saved in this attempt \|/);
   assert.match(await readFile(join(path, "report.md"), "utf8"), /Concurrent success/);
   await assert.rejects(stat(`${path}.1`), /ENOENT/);
   const meta = JSON.parse(await readFile(join(path, "meta.json"), "utf8"));

@@ -18,18 +18,61 @@ const routes: Record<string, [string, string]> = {
   "/javascript": ["application/javascript", "export const answer = 42;\n"],
   "/xml": ["application/xml", "<answer>42</answer>\n"],
   "/html": ["text/html; charset=utf-8", "<html><head><title>T</title></head><body><article><h1>Hello</h1><p>" + "word ".repeat(200) + "</p></article></body></html>"],
+  "/upper.py": ["Text/Html; charset=utf-8", "<html><head><title>Upper</title></head><body><article><h1>Upper</h1><p>" + "html ".repeat(100) + "</p></article></body></html>"],
+  "/upper.xhtml": ["Application/Xhtml+Xml; charset=utf-8", "<html><head><title>XHTML</title></head><body><article><h1>XHTML</h1><p>" + "xhtml ".repeat(100) + "</p></article></body></html>"],
   "/octet": ["application/octet-stream", "x"],
   "/md": ["text/markdown", "# MD title\n\n" + "body ".repeat(100)],
+  "/raw.md": ["text/markdown", "# Alternate\n\n" + "Reference facts. ".repeat(200)],
+  "/sub/raw.md": ["text/markdown", "# Relative alternate\n\n" + "Relative facts. ".repeat(200)],
+  "/binary": ["application/pdf", "%PDF-1.4\n" + "BINARY ".repeat(1000)],
+  "/binary-octet": ["application/octet-stream", "%PDF-1.4\n" + "OCTET ".repeat(1000)],
 };
 before(async () => {
   server = http.createServer((req, res) => {
+    const port = (server.address() as AddressInfo).port;
+    const alternatePage = (target: string) =>
+      `<html><head><title>Guide</title><link rel="alternate" type="text/markdown" href="${target}"></head><body><article><h1>Guide</h1><p>Short guide.</p></article></body></html>`;
+    if (req.url === "/alternate") {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(alternatePage(`http://localhost:${port}/raw.md`));
+      return;
+    }
+    if (req.url === "/same-alternate") {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(alternatePage(`${base}/raw.md`));
+      return;
+    }
+    if (req.url === "/redirect-alternate") {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(alternatePage(`${base}/alias.md`));
+      return;
+    }
+    if (req.url === "/redirect-relative-page") {
+      res.writeHead(302, { location: `http://localhost:${port}/sub/page` });
+      res.end();
+      return;
+    }
+    if (req.url === "/sub/page") {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(alternatePage("raw.md"));
+      return;
+    }
+    if (req.url === "/binary-alternate" || req.url === "/octet-alternate") {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(alternatePage(`${base}${req.url === "/binary-alternate" ? "/binary" : "/binary-octet"}`));
+      return;
+    }
+    if (req.url === "/alias.md") {
+      res.writeHead(302, { location: `http://localhost:${port}/raw.md` });
+      res.end();
+      return;
+    }
     if (req.url === "/redirect-code") {
       res.writeHead(302, { location: `${base}/script.py` });
       res.end();
       return;
     }
     if (req.url === "/redirect-cross-host") {
-      const port = (server.address() as AddressInfo).port;
       res.writeHead(302, { location: `http://localhost:${port}/script.py` });
       res.end();
       return;
@@ -76,6 +119,8 @@ describe("F6b fetch gate", () => {
     { path: "/xml", assetType: "code", contentType: "application/xml" },
     { path: "/md", assetType: "text", contentType: "text/markdown" },
     { path: "/html", assetType: "page", contentType: "text/html; charset=utf-8" },
+    { path: "/upper.py", assetType: "page", contentType: "Text/Html; charset=utf-8" },
+    { path: "/upper.xhtml", assetType: "page", contentType: "Application/Xhtml+Xml; charset=utf-8" },
   ] as const;
   for (const { path, assetType, contentType } of acceptedAssets) {
     it(`accepts ${contentType} as a ${assetType} asset`, async () => {
@@ -106,5 +151,49 @@ describe("F6b fetch gate", () => {
     assert.equal(page.status, "error");
     assert.equal(page.finalUrl, base + "/plain-pdf");
     assert.match(page.error ?? "", /Unsupported content type: application\/pdf/);
+  });
+
+  it("rejects PDF and octet-stream alternates and keeps the usable HTML page", async () => {
+    const [pdf, octet] = await fetchPages(
+      [base + "/binary-alternate", base + "/octet-alternate"],
+      undefined,
+      { timeoutMs: 5000 },
+    );
+    for (const page of [pdf, octet]) {
+      assert.equal(page.status, "success", page.error ?? "alternate fallback failed");
+      assert.equal(page.assetType, "page");
+      assert.equal(page.contentType, "text/html");
+      assert.match(page.content, /guide/i);
+      assert.doesNotMatch(page.content, /BINARY|OCTET/);
+      assert.equal(page.finalUrl, undefined);
+    }
+  });
+
+  it("keeps the guessed identity across same-host, cross-host and redirected alternates", async () => {
+    const [cross, same, redirected] = await fetchPages(
+      [base + "/alternate", base + "/same-alternate", base + "/redirect-alternate"],
+      undefined,
+      { timeoutMs: 5000 },
+    );
+    assert.equal(cross.status, "success", cross.error ?? "cross-host alternate failed");
+    assert.equal(cross.url, base + "/alternate");
+    assert.equal(cross.alternateUrl, `http://localhost:${(server.address() as AddressInfo).port}/raw.md`);
+    assert.equal(cross.finalUrl, cross.alternateUrl);
+    assert.equal(cross.assetType, "text");
+    assert.equal(same.url, base + "/same-alternate");
+    assert.equal(same.alternateUrl, base + "/raw.md");
+    assert.equal(same.finalUrl, base + "/raw.md");
+    assert.equal(redirected.url, base + "/redirect-alternate");
+    assert.equal(redirected.alternateUrl, base + "/alias.md");
+    assert.equal(redirected.finalUrl, cross.finalUrl);
+  });
+
+  it("resolves a relative alternate against the post-redirect page URL", async () => {
+    const [page] = await fetchPages([base + "/redirect-relative-page"], undefined, { timeoutMs: 5000 });
+    const port = (server.address() as AddressInfo).port;
+    assert.equal(page.status, "success", page.error ?? "relative alternate failed");
+    assert.equal(page.url, base + "/redirect-relative-page");
+    assert.equal(page.alternateUrl, `http://localhost:${port}/sub/raw.md`);
+    assert.equal(page.finalUrl, `http://localhost:${port}/sub/raw.md`);
   });
 });

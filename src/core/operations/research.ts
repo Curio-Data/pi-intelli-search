@@ -330,8 +330,9 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   }
 
   if (!committed) {
+    const currentInferredAssets = inferredAssetsSection(fetched.pages, p.cachePath);
     return {
-      text: failureMessage,
+      text: failureMessage + (currentInferredAssets ? `\n\n${currentInferredAssets}` : ""),
       outcome,
       details: {
         cachePath: "",
@@ -527,6 +528,7 @@ interface FetchStageOut {
 interface InferredAssetDetail {
   url: string;
   originalReference?: string;
+  alternateUrl?: string;
   finalUrl?: string;
   redirectedToDifferentHost?: true;
   outcome: "page" | "code" | "text" | "unknown" | "nothing";
@@ -546,6 +548,7 @@ function inferredAssetDetailsField(
     return {
       url: page.url,
       ...(page.originalReference ? { originalReference: page.originalReference } : {}),
+      ...(page.alternateUrl ? { alternateUrl: page.alternateUrl } : {}),
       ...(page.finalUrl ? { finalUrl: page.finalUrl } : {}),
       ...(redirectedToDifferentHost(page.url, page.finalUrl)
         ? { redirectedToDifferentHost: true as const }
@@ -670,6 +673,7 @@ async function runExtractStage(
         ...(successPages[i].originalReference
           ? { originalReference: successPages[i].originalReference }
           : {}),
+        ...(successPages[i].alternateUrl ? { alternateUrl: successPages[i].alternateUrl } : {}),
         ...(successPages[i].finalUrl ? { finalUrl: successPages[i].finalUrl } : {}),
         ...(successPages[i].assetType ? { assetType: successPages[i].assetType } : {}),
         ...(successPages[i].contentType ? { contentType: successPages[i].contentType } : {}),
@@ -688,6 +692,7 @@ async function runExtractStage(
       status: "blocked" as const,
       ...(pg.inferred ? { inferred: true as const } : {}),
       ...(pg.originalReference ? { originalReference: pg.originalReference } : {}),
+      ...(pg.alternateUrl ? { alternateUrl: pg.alternateUrl } : {}),
       ...(pg.finalUrl ? { finalUrl: pg.finalUrl } : {}),
       ...(pg.contentType ? { contentType: pg.contentType } : {}),
     }));
@@ -1248,6 +1253,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       ...(routeProvider ? { routeProvider } : {}),
       ...(page.inferred ? { inferred: true as const } : {}),
       ...(page.originalReference ? { originalReference: page.originalReference } : {}),
+      ...(page.alternateUrl ? { alternateUrl: page.alternateUrl } : {}),
       ...(page.finalUrl ? { finalUrl: page.finalUrl } : {}),
       ...(page.assetType ? { assetType: page.assetType } : {}),
       ...(page.contentType ? { contentType: page.contentType } : {}),
@@ -1274,6 +1280,7 @@ async function extractPage(p: PipelineCtx, page: FetchedPage): Promise<ExtractRe
       ...(routeProvider ? { routeProvider } : {}),
       ...(page.inferred ? { inferred: true as const } : {}),
       ...(page.originalReference ? { originalReference: page.originalReference } : {}),
+      ...(page.alternateUrl ? { alternateUrl: page.alternateUrl } : {}),
       ...(page.finalUrl ? { finalUrl: page.finalUrl } : {}),
       ...(page.assetType ? { assetType: page.assetType } : {}),
       ...(page.contentType ? { contentType: page.contentType } : {}),

@@ -27,6 +27,8 @@ export interface FetchedPage {
   inferred?: true;
   /** Exact prose token before normalisation. */
   originalReference?: string;
+  /** Discovered representation URL before any redirect it performs. */
+  alternateUrl?: string;
   /** Final response URL after redirects, when different from the requested URL. */
   finalUrl?: string;
   /** What the response contained, independent of the URL's file extension. */
@@ -57,6 +59,7 @@ export interface ExtractResult {
    *  Optional boolean is also the collation-budget planner's trim signal. */
   inferred?: boolean;
   originalReference?: string;
+  alternateUrl?: string;
   finalUrl?: string;
   assetType?: FetchAssetType;
   contentType?: string;

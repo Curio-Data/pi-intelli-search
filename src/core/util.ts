@@ -94,11 +94,45 @@ export function failureDetail(message: string): string {
   return line.length > 300 ? `${line.slice(0, 299).trimEnd()}…` : line;
 }
 
-/** True when a recorded response URL names a different host from the guess. */
+/** Common public second-level labels. When one of these is the penultimate
+ *  label (for example `co.uk` or `com.au`), the registrable comparison uses
+ *  three labels rather than two. This is a compact rule, not a network PSL read. */
+const PUBLIC_SECOND_LEVEL_LABELS = new Set([
+  "ac", "ad", "ae", "aero", "ag", "ai", "asso", "at", "au", "av", "aw",
+  "biz", "bj", "bo", "br", "bs", "bt", "bw", "by", "ca", "cc", "ci", "cl",
+  "cm", "cn", "co", "com", "cr", "cu", "cx", "cy", "do", "dz", "ec", "edu",
+  "ee", "eg", "es", "et", "eu", "fi", "fj", "fk", "fm", "fo", "fr", "ga",
+  "gb", "gd", "ge", "gf", "gg", "gh", "gi", "gl", "gm", "gn", "gob", "gouv",
+  "gov", "gr", "gs", "gt", "gu", "gv", "gw", "gy", "hk", "hm", "hn", "hr",
+  "ht", "hu", "id", "ie", "il", "im", "in", "info", "int", "io", "iq", "ir",
+  "is", "it", "je", "jm", "jo", "jp", "ke", "kg", "kh", "ki", "km", "kn",
+  "kp", "kr", "kw", "ky", "kz", "la", "lb", "lc", "li", "lk", "lr", "ls",
+  "lt", "ltd", "lu", "lv", "ly", "ma", "mc", "md", "me", "med", "mg", "mh",
+  "mil", "mk", "ml", "mm", "mn", "mo", "mobi", "mp", "mq", "mr", "ms", "mt",
+  "mu", "mv", "mw", "mx", "my", "na", "name", "nc", "ne", "net", "nf", "ng",
+  "ni", "nl", "no", "nom", "np", "nr", "nu", "nz", "off", "om", "on", "or",
+  "org", "pa", "pc", "pe", "pf", "pg", "ph", "pk", "pl", "pm", "pn", "po",
+  "pr", "pro", "ps", "pt", "pw", "py", "qa", "re", "ro", "rs", "ru", "rw",
+  "sa", "sb", "sc", "sd", "se", "sg", "sh", "si", "sj", "sk", "sl", "sm",
+  "sn", "so", "sr", "ss", "st", "su", "sv", "sx", "sy", "sz", "tc", "td",
+  "tf", "tg", "th", "tj", "tk", "tl", "tm", "tn", "to", "tp", "tr", "tt",
+  "tv", "tw", "tz", "ua", "ug", "uk", "uni", "us", "uy", "uz", "va", "vc",
+  "ve", "vg", "vi", "vn", "vu", "wf", "ws", "ye", "yt", "yu", "za", "zm", "zw",
+]);
+
+function registrableHost(url: string): string {
+  const hostname = domainToASCII(new URL(url).hostname).toLowerCase();
+  const labels = hostname.split(".").filter(Boolean);
+  const labelCount = labels.length >= 3 && PUBLIC_SECOND_LEVEL_LABELS.has(labels.at(-2) ?? "") ? 3 : 2;
+  return labels.slice(-labelCount).join(".");
+}
+
+/** True when the response belongs to a different registrable host. `www` and
+ *  other same-site subdomain transitions do not trigger the warning. */
 export function redirectedToDifferentHost(url: string, finalUrl?: string): boolean {
   if (!finalUrl) return false;
   try {
-    return new URL(url).hostname.toLowerCase() !== new URL(finalUrl).hostname.toLowerCase();
+    return registrableHost(url) !== registrableHost(finalUrl);
   } catch {
     return false;
   }
@@ -612,7 +646,7 @@ export function extractSourceUrls(text: string): SourceUrl[] {
     absoluteSpans.push({ start: m.index, end: m.index + m[0].length });
   }
   const domainPattern =
-    /(?<!:\/\/)(?<![\p{L}\p{N}\p{M}@._-])((?:www\.)?(?:[\p{L}\p{N}](?:[\p{L}\p{N}\p{M}-]{0,61}[\p{L}\p{N}])?\.)+[\p{L}][\p{L}\p{N}\p{M}-]{1,62}(?::\d{1,5})?(?:(?:\/[^\s<>"{}*()|\\`\[\]]*|[?#][^\s<>"{}*()|\\`\[\]]*))?)/gu;
+    /(?<!:\/\/)(?<![\p{L}\p{N}\p{M}@._-])((?:www\.)?(?:[\p{L}\p{N}](?:[\p{L}\p{N}\p{M}-]{0,61}[\p{L}\p{N}\p{M}])?\.)+[\p{L}][\p{L}\p{N}\p{M}-]{1,62}(?::\d{1,5})?(?:(?:\/[^\s<>"{}*()|\\`\[\]]*|[?#][^\s<>"{}*()|\\`\[\]]*))?)/gu;
   for (const m of text.matchAll(domainPattern)) {
     if (absoluteSpans.some(({ start, end }) => m.index >= start && m.index < end)) continue;
     // Never recover an ASCII-looking suffix from a larger Unicode token, or

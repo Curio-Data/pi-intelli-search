@@ -347,7 +347,9 @@ export async function writeCacheFiles(
       if (page.status !== "success") continue;
       const filename = identity.sourceFileFor(page.url);
       if (!filename) continue;
-      const header = `# ${page.title}\n\n> Source: ${page.url}\n\n---\n\n`;
+      const header = `# ${page.title}\n\n> Source: ${page.url}\n${
+        page.finalUrl ? `> Final URL: ${page.finalUrl}\n` : ""
+      }\n---\n\n`;
       await writeFile(join(stagingSources, filename), header + page.content, "utf-8");
       writtenSources.add(filename);
     }
@@ -551,7 +553,8 @@ export async function writeReportFile(
   }
 
   if (blocked.length > 0) {
-    report += `\n## Blocked/Failed URLs\n\n`;
+    // Match the tool-result appendix and the inferred-table pointer.
+    report += `\n## Failed Sources\n\n`;
     for (const entry of blocked) {
       const fetchError = pages.find((page) => page.url === entry.url)?.error;
       const reason = entry.error ?? fetchError ?? (entry.status === "blocked" ? "Source marked blocked" : "Extraction failed");

@@ -190,7 +190,7 @@ function sourceTable(
 export function inferredAssetsSection(
   pages: readonly FetchedPage[],
   cachePath: string,
-  identity: SourceIdentity,
+  identity?: SourceIdentity,
 ): string {
   const assets = pages.filter((page) => page.inferred);
   if (assets.length === 0) return "";
@@ -199,7 +199,7 @@ export function inferredAssetsSection(
     "| Original token | Normalised URL | Fetch result | Saved asset |\n" +
     "|---|---|---|---|\n";
   for (const page of assets) {
-    const sourceFile = identity.sourceFileFor(page.url);
+    const sourceFile = identity?.sourceFileFor(page.url);
     let outcome: string;
     if (page.status === "error") {
       // The same bounded reason appears once in Failed Sources below. Do not
@@ -215,14 +215,27 @@ export function inferredAssetsSection(
             : "Fetched content";
       outcome = `${kind}${page.contentType ? ` (${page.contentType})` : ""}`;
     }
-    if (page.finalUrl) {
+    if (page.alternateUrl) {
+      outcome += `; via alternate ${page.alternateUrl}`;
+      if (page.finalUrl && page.finalUrl !== page.alternateUrl) {
+        outcome += redirectedToDifferentHost(page.url, page.finalUrl)
+          ? `; redirected to a different host: ${page.finalUrl}`
+          : `; redirected to ${page.finalUrl}`;
+      }
+      if (page.finalUrl && redirectedToDifferentHost(page.url, page.finalUrl)) {
+        outcome += "; content is not from the guessed site";
+      }
+    } else if (page.finalUrl) {
       outcome += redirectedToDifferentHost(page.url, page.finalUrl)
         ? `; redirected to a different host: ${page.finalUrl}; content is not from the guessed site`
         : `; redirected to ${page.finalUrl}`;
     }
-    result += `| ${cell(page.originalReference ?? page.url)} | ${cell(page.url)} | ${cell(outcome)} | ${
-      sourceFile ? cell(`${cachePath}/sources/${sourceFile}`) : "None"
-    } |\n`;
+    const saved = sourceFile
+      ? cell(`${cachePath}/sources/${sourceFile}`)
+      : page.status === "success"
+        ? "Not saved in this attempt"
+        : "None";
+    result += `| ${cell(page.originalReference ?? page.url)} | ${cell(page.url)} | ${cell(outcome)} | ${saved} |\n`;
   }
   return result.trimEnd();
 }
