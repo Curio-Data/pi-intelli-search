@@ -211,6 +211,17 @@ export class TelemetryBuilder {
     summaryChars: number;
     truncated?: boolean;
     budgetRetried?: boolean;
+    /** Number of doubled-budget retries this stage issued (0 or more). */
+    budgetRetries?: number;
+    /** What the collation input budget reduced, when it reduced anything. */
+    inputBudget?: {
+      budgetTokens: number;
+      sources: number;
+      trimmed: number;
+      dropped: number;
+      charsBefore: number;
+      charsAfter: number;
+    };
     error?: string;
     provider?: string;
   }): void {

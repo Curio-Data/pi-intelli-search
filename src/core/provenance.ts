@@ -108,8 +108,9 @@ export function finalizeCollation(
   }
   const sources = evidenceExtractions(extractions);
   const summary = text
-    // Model text can never carry the generated failure-report marker.
+    // Model text can never carry a generated failure-report marker.
     .replaceAll(COLLATION_FAILED_MARKER, "")
+    .replaceAll(EXTRACTION_FAILED_MARKER, "")
     .replace(/^(?:[ \t]*\r?\n)+/, "")
     .replace(/^#{1,6}[ \t]+Summary(?:[ \t]*\r?\n|$)/i, "")
     .replace(/^(?:[ \t]*\r?\n)+/, "")
@@ -118,7 +119,7 @@ export function finalizeCollation(
   const prose = withoutInlineCode(outsideBlocks);
   const invalid = (reason: string): never => {
     throw new Error(
-      `Collation provenance validation failed: ${reason}. No report was committed; rerun the operation.`,
+      `Collation provenance validation failed: ${reason}. The synthesis was not accepted.`,
     );
   };
   if (!sources.length) invalid("no successful extraction evidence");
@@ -249,15 +250,86 @@ export function inferredAssetsSection(
   return result.trimEnd();
 }
 
-/** Generated marker identifying a failure report. finalizeCollation() strips
- *  it from model text, so a synthesis that merely mentions a collation
- *  failure is never mistaken for one. */
+/** Generated marker identifying a collation-failure report. finalizeCollation()
+ *  strips every failure-report marker from model text, so a synthesis that
+ *  merely mentions a collation failure is never mistaken for one. */
 const COLLATION_FAILED_MARKER = "<!-- intelli-search:collate-failed -->";
 
-/** True for a saved report written by collationFailureReport(). */
+/** Generated marker identifying an extraction-failure report: every
+ *  extraction failed, the fetched pages are saved without a synthesis. */
+const EXTRACTION_FAILED_MARKER = "<!-- intelli-search:extraction-failed -->";
+
+/** Both generated failure-report markers. A failure-report body opens with
+ *  its marker line; writeReportFile() hoists that line above the report
+ *  title so saved failure reports are detectable from a position caller
+ *  text can never reach (see isCollationFailureReport). */
+const FAILURE_MARKERS = new Set([COLLATION_FAILED_MARKER, EXTRACTION_FAILED_MARKER]);
+
+/** True for a saved report written by collationFailureReport() or
+ *  extractionFailureReport().
+ *
+ *  A failure report opens with its marker as the very first line, a line
+ *  only writeReportFile() writes, above the "# <query>" title. Caller-
+ *  controlled text cannot reach that position: every non-failure report
+ *  opens with the title line (always prefixed "# ", which no marker
+ *  matches), and a multiline query can only add lines *after* it.
+ *
+ *  Owner decision (2026-11-07, round 3): a report without a line-1 marker
+ *  is never a failure report. No published release ever wrote one (0.22.0
+ *  is unpublished), so unmarked development-build failure reports — the
+ *  pre-marker heading shape and the mid-body-marker shape, including
+ *  multiline queries and search summaries containing "## Summary" — are
+ *  preserved like any other existing report instead of replaced. Accepted
+ *  trade-off: a repeat over such a report preserves it and does not save
+ *  the new attempt's pages; nothing is ever displaced. */
 export function isCollationFailureReport(report: string): boolean {
-  // A whole line only: the query title is written unstripped into the report.
-  return report.split("\n").some((line) => line.trim() === COLLATION_FAILED_MARKER);
+  return FAILURE_MARKERS.has(report.split("\n", 1)[0]?.trim() ?? "");
+}
+
+/** Split a failure-report body that opens with its marker line into the
+ *  marker and the remainder (leading blanks stripped). Returns null when the
+ *  text does not open with a failure marker. writeReportFile() hoists the
+ *  marker above the report title so saved failure reports keep detection at
+ *  line 1. */
+export function splitFailureMarkerHead(
+  text: string,
+): { marker: string; body: string } | null {
+  for (const marker of FAILURE_MARKERS) {
+    if (text.startsWith(`${marker}\n`)) {
+      return { marker, body: text.slice(marker.length + 1).replace(/^(?:[ \t]*\n)+/, "") };
+    }
+  }
+  return null;
+}
+
+/** Remove generated failure-report marker lines from text shown to the
+ *  calling agent. Saved reports keep their marker: it is how a later run
+ *  recognises a prior failure report (isCollationFailureReport). Only the
+ *  marker line and the blank line after it are removed, so text without a
+ *  marker is returned unchanged. */
+export function stripFailureMarkers(text: string): string {
+  const lines: string[] = [];
+  let removedMarker = false;
+  for (const line of text.split("\n")) {
+    if (FAILURE_MARKERS.has(line.trim())) {
+      removedMarker = true;
+      continue;
+    }
+    if (removedMarker && line.trim() === "") {
+      removedMarker = false; // exactly one blank line stood after the marker
+      continue;
+    }
+    removedMarker = false;
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
+/** Shared shape of both failure reports: the marker line first (hoisted to
+ *  the top of the saved report by writeReportFile, stripped from the
+ *  agent-visible result text), then heading and the one-line reason. */
+function failureReportHead(heading: string, marker: string, reason: string): string {
+  return `${marker}\n\n## ${heading}\n\n> ⚠ ${reason}\n\n`;
 }
 
 /**
@@ -273,10 +345,35 @@ export function collationFailureReport(
 ): string {
   const sources = evidenceExtractions(extractions);
   return (
-    `## Collation Failed\n\n${COLLATION_FAILED_MARKER}\n\n> ⚠ ${reason}\n\n` +
+    failureReportHead("Collation Failed", COLLATION_FAILED_MARKER, reason) +
     `No synthesis was produced. The ${sources.length} extraction(s) below were saved; read the ` +
     "extraction files directly, or re-run the research.\n\n" +
     "## Source assessment\n\n" +
     sourceTable(sources, cachePath, identity, "fetched")
+  );
+}
+
+/**
+ * Report body for a research run in which every extraction failed (pages that
+ * failed to fetch never reach extraction, so a run reaching this report
+ * fetched at least one page). No synthesis exists and no extraction file is
+ * written; every fetched page is saved under sources/, and the report's
+ * failed-source list names each saved page and why its extraction failed, so
+ * the calling agent can revisit a page, or retry its extraction later, without
+ * refetching it.
+ */
+export function extractionFailureReport(
+  reason: string,
+  cachePath: string,
+  savedPages: number,
+  searchSummary: string,
+): string {
+  return (
+    failureReportHead("Extraction Failed", EXTRACTION_FAILED_MARKER, reason) +
+    `No content was extracted, so no synthesis was produced. ${savedPages} fetched page(s) are saved under ` +
+    `${cachePath}/sources/; the **Failed Sources** list below (in this result and in the saved ` +
+    "report) names each saved page and why its extraction failed. Read a saved page directly, or " +
+    "re-run the research; a later extraction retry needs no refetch.\n\n" +
+    `## Search summary\n\n${searchSummary.trim()}`
   );
 }

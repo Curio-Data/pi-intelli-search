@@ -258,6 +258,12 @@ Orchestrator choices, binding on every track:
   collation budget against real pages (item 5), and a query citing raw source files
   (item 3).
 
+**Model substitution (2026-11-07).** `deepseek/deepseek-flash` began returning
+`402 Insufficient Balance` during the track work. From round 2 on,
+`openai-codex/gpt-6-astra` replaced it: as track C's builder (`fu-c-build-astra`,
+from round 3) and as the second reviewer on tracks A and B. Reports keep the
+reviewer's model in their file names.
+
 ## Execution Plan
 
 The owner expects herdr agents to work in parallel where possible. The orchestrator

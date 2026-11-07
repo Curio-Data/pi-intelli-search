@@ -254,13 +254,13 @@ for label in "Cap3000" "Tight"; do
     # grep -c prints "0" AND exits 1 on no match; a trailing `|| echo 0` would
     # append a second line ("0\n0") and break the numeric test below. Use a
     # separate assignment on failure instead.
-    BLOCKED_LINE=$(grep -c "^## Blocked/Failed" "$ENTRY/report.md" 2>/dev/null) || BLOCKED_LINE=0
+    BLOCKED_LINE=$(grep -c "^## Failed Sources" "$ENTRY/report.md" 2>/dev/null) || BLOCKED_LINE=0
     EXT_COUNT=$(find "$ENTRY/extractions" -type f 2>/dev/null | wc -l)
     SRC_COUNT=$(find "$ENTRY/sources" -type f 2>/dev/null | wc -l)
     echo "🔍 $label: $SOURCE_LINE | extractions=$EXT_COUNT files | sources=$SRC_COUNT files | has_blocked_section=$BLOCKED_LINE"
     if [ "$BLOCKED_LINE" -gt 0 ]; then
       echo "   Blocked URLs:"
-      sed -n '/^## Blocked\/Failed/,/^##/p' "$ENTRY/report.md" 2>/dev/null | grep "^-" | while read -r line; do
+      sed -n '/^## Failed Sources/,/^##/p' "$ENTRY/report.md" 2>/dev/null | grep "^-" | while read -r line; do
         echo "   $line"
       done
     fi
@@ -286,7 +286,7 @@ if [ -n "$ENTRY_DEFAULT" ] && [ -n "$ENTRY_TIGHT" ]; then
       if [ "$SUCC_DEFAULT" -eq 0 ] && [ "$SUCC_TIGHT" -eq 0 ]; then
         echo "⚠️  Both runs had 0 successful page fetches — cannot compare extraction limits."
         echo "   This is a fetch reliability issue, not an extract-limits bug."
-        echo "   Check report.md Blocked/Failed section above for per-URL details."
+        echo "   Check report.md Failed Sources section above for per-URL details."
         echo "   Rerun the test; if it persists, the target URLs may have changed."
       elif [ "$SUCC_DEFAULT" -eq 0 ]; then
         echo "⚠️  Cap3000 run had 0 extractions (check the report: fetch or extraction-budget failure). Tight run cannot be compared."
