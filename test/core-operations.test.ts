@@ -757,18 +757,20 @@ it("saves fetched pages and a failure report with telemetry disabled", async (t)
   await assert.rejects(stat(join(path, "meta.json")), /ENOENT/, "telemetry stays disabled");
 });
 
-it("replaces a legacy pre-marker collation-failure report (N4)", async (t) => {
+it("preserves an unmarked legacy failure report instead of replacing it (owner decision, round 3)", async (t) => {
   const root = await workspace(t);
   const { context, dependencies } = coreContext(root);
   const query = "legacy failure report";
   const path = makeCachePath(query, root, context.paths.cacheRoot);
   await mkdir(path, { recursive: true });
   // Exact shape written by the 0.22.0 development builds before the marker:
-  // failure heading, no marker, no "## Summary" section.
-  await writeFile(
-    join(path, "report.md"),
-    "# legacy failure report\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Collation Failed\n\n> ⚠ legacy reason\n\nNo synthesis was produced.\n\n## Source assessment\n\n| ID | Source |\n|---|---|\n| S1 | https://one.example/page |\n",
-  );
+  // failure heading, no marker, no "## Summary" section. No published
+  // release ever wrote a failure report, so unmarked development-build
+  // failure reports are preserved like any other existing report (owner
+  // decision, round 3) instead of being recognised and replaced.
+  const legacy =
+    "# legacy failure report\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Collation Failed\n\n> ⚠ legacy reason\n\nNo synthesis was produced.\n\n## Source assessment\n\n| ID | Source |\n|---|---|\n| S1 | https://one.example/page |\n";
+  await writeFile(join(path, "report.md"), legacy);
   const original = context.models.complete;
   context.models.complete = async (request) => {
     if (request.model.model === "extract") throw new Error("fixture extraction failure");
@@ -776,8 +778,39 @@ it("replaces a legacy pre-marker collation-failure report (N4)", async (t) => {
   };
   const result = await research({ query }, context, dependencies);
   assert.equal(result.outcome, "extraction-failed");
-  assert.ok(result.details.cachePath, "a legacy failure report is replaced, not preserved");
-  assert.match(await readFile(join(path, "report.md"), "utf8"), /## Extraction Failed/);
+  assert.equal(result.details.cachePath, "", "an unmarked report is never replaced");
+  assert.ok(result.details.preservedCachePath, "the preserved report is named");
+  assert.equal(await readFile(join(path, "report.md"), "utf8"), legacy,
+    "the unmarked failure report survives byte-identically");
+  await assert.rejects(stat(`${path}.1`), /ENOENT/, "nothing was archived");
+});
+
+it("preserves a mid-body-marker development report with a multiline query and a ## Summary search heading", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root);
+  // The two grammars the round-2 reviewers reproduced (kimi R2-F1, astra A1):
+  // a bd51692-era extraction-failure report whose marker sat mid-body, whose
+  // query is multiline, and whose search summary contains "## Summary".
+  // Under the line-1-only rule it is preserved like any other report.
+  const query = "Legacy extract question\nsecond ordinary line";
+  const path = makeCachePath(query, root, context.paths.cacheRoot);
+  await mkdir(path, { recursive: true });
+  const legacy =
+    `# ${query}\n\n> Searched: 2026-11-07T00:00:00.000Z\n> Cache: ${path}/\n> Sources: 0 succeeded, 2 failed\n\n` +
+    "## Extraction Failed\n\n<!-- intelli-search:extraction-failed -->\n\n> ⚠ 2 extraction(s) failed.\n\n" +
+    "No content was extracted, so no synthesis was produced. 2 fetched page(s) are saved under sources/.\n\n" +
+    "## Search summary\n\n## Summary\n\nSearch model answer.\n";
+  await writeFile(join(path, "report.md"), legacy);
+  const original = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model === "extract") throw new Error("fixture extraction failure");
+    return original(request);
+  };
+  const result = await research({ query }, context, dependencies);
+  assert.equal(result.outcome, "extraction-failed");
+  assert.equal(result.details.cachePath, "", "no line-1 marker: never a failure report");
+  assert.ok(result.details.preservedCachePath);
+  assert.equal(await readFile(join(path, "report.md"), "utf8"), legacy);
 });
 
 it("preserves an unreadable prior report instead of overwriting it (M9)", async (t) => {
@@ -799,30 +832,32 @@ it("preserves an unreadable prior report instead of overwriting it (M9)", async 
   await assert.rejects(stat(`${path}.1`), /ENOENT/, "nothing was archived");
 });
 
-it("classifies failure reports across markers and legacy shapes", () => {
-  const legacy = "# q\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Collation Failed\n\n> ⚠ reason\n\nNo synthesis was produced.\n";
-  assert.ok(isCollationFailureReport(legacy), "legacy reports carry only the failure heading");
+it("classifies failure reports only by their line-1 marker", () => {
   // Current grammar: the marker is the report's first line, above the title.
   assert.ok(isCollationFailureReport("<!-- intelli-search:collate-failed -->\n# q\n\n## Collation Failed\n\n> ⚠ r\n"));
   assert.ok(isCollationFailureReport("<!-- intelli-search:extraction-failed -->\n# q\n\n## Extraction Failed\n\n> ⚠ r\n"));
-  // Development-build shapes written before the marker moved to line 1:
-  // failure heading after the header block, no "## Summary" section.
-  assert.ok(isCollationFailureReport(
-    "# q\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Extraction Failed\n\n<!-- intelli-search:extraction-failed -->\n\n> ⚠ r\n"));
-  // A multiline query cannot forge a failure report: the marker lands after
-  // the title line, and a successful report always carries "## Summary".
+  // A marker anywhere but line 1 never makes a failure report: this is what
+  // keeps a multiline query from forging one (kimi F1).
   assert.ok(!isCollationFailureReport(
     "# q\n<!-- intelli-search:extraction-failed -->\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Summary\n\nSynthesis.\n"));
   assert.ok(!isCollationFailureReport(
     "# q\n<!-- intelli-search:collate-failed -->\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Summary\n\nSynthesis.\n"));
-  assert.ok(!isCollationFailureReport("# q\n\n## Summary\n\nSynthesis mentioning ## Collation Failed as prose.\n"),
-    "a successful report carries ## Summary and is never a failure report");
-  assert.ok(!isCollationFailureReport("## Summary\n\n## Collation Failed\n\n"),
-    "a synthesis that mentions the heading inside a successful report stays successful");
-  // A report whose first body heading is not a failure heading is never one
-  // (deepseek F2 seed shape: hand-written, no "## Summary").
+  // Owner decision (round 3): every unmarked shape is preserved like any
+  // other existing report — including genuine development-build failure
+  // reports written before the line-1 marker existed.
+  assert.ok(!isCollationFailureReport(
+    "# q\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Collation Failed\n\n> ⚠ reason\n\nNo synthesis was produced.\n"),
+    "pre-marker development reports are preserved, not replaced");
+  assert.ok(!isCollationFailureReport(
+    "# q\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Extraction Failed\n\n<!-- intelli-search:extraction-failed -->\n\n> ⚠ r\n"),
+    "mid-body-marker development reports are preserved, not replaced");
+  assert.ok(!isCollationFailureReport(
+    "# multiline query\nsecond line\n\n> Searched: 2026-11-01T00:00:00.000Z\n\n## Extraction Failed\n\n<!-- intelli-search:extraction-failed -->\n\n> ⚠ r\n"));
   assert.ok(!isCollationFailureReport("# hand report\n\n## Overview\n\n## Collation Failed\n\nNotes.\n"));
+  assert.ok(!isCollationFailureReport("# q\n\n## Summary\n\nSynthesis mentioning ## Collation Failed as prose.\n"));
+  assert.ok(!isCollationFailureReport("## Summary\n\n## Collation Failed\n\n"));
   assert.ok(!isCollationFailureReport("# ordinary report\n\n## Summary\n\ntext\n"));
+  assert.ok(!isCollationFailureReport(""));
 });
 
 it("keeps the failure-report marker out of collate-failed result text (M7)", async (t) => {
