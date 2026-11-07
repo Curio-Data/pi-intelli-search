@@ -186,7 +186,7 @@ page median ≈4,100 characters (≈1,000 tokens), 90th percentile ≈7,100 (≈
 largest run mean ≈10,900 (≈2,700); total extraction text per run max ≈55,600
 characters (≈14,000 tokens). Token counts assume ≈4 characters per token.
 
-Working figures (to be confirmed with the owner before coding): 256,000 minus
+Working figures (**confirmed by the owner, 2026-11-07**): 256,000 minus
 ≈3,000 for prompts and search summary, minus 32,000 reserved for the synthesis
 (the largest cap after two retries), leaves ≈221,000 tokens for extractions, plus
 ≈100 tokens of headers per source. Sources that fit:
@@ -209,9 +209,68 @@ allowance cannot let one page take the budget. Then raise `extractMaxChars`
 the owner suggested 400,000 characters as a starting point. Settings: the budget,
 the per-extraction text cap and the page cut-off, all defaulted.
 
-The search stage is the other limit: no saved run returned more than 10 links.
-More sources need more search breadth (`searchWebSearch.maxResults`, more queries),
-which is a separate question for the owner.
+**Owner decision (2026-11-07): keep these numbers and handle overflow
+gracefully.** The worst cases (≈27 sources at full caps, ≈6 if every extraction
+was retried twice) are an acceptable balance. The protection is the overflow
+handling, not smaller numbers: a run that suddenly gets 10 heavy results instead of
+the median 3 must still complete, trim in a stated order, and tell the calling
+agent what was trimmed and where the full extraction is saved. Tests must cover a
+run under budget (nothing trimmed), a run just over, and a run where every
+extraction fills its cap after retries.
+
+## Out of Scope
+
+**Search breadth** (owner decision, 2026-11-07). No saved run returned more than 10
+links, so more sources would need more search breadth (`searchWebSearch.maxResults`,
+several queries). That is a future research topic for a separate branch, not this
+one.
+
+## Execution Plan
+
+The owner expects herdr agents to work in parallel where possible. The orchestrator
+plans, spawns, integrates and verifies; builders write code and tests; reviewers
+check each track. Load `curio-herdr` and read its `references/worktrees.md` before
+creating any worktree: a fresh worktree has no gitignored files (`node_modules/`,
+built `dist/`) and must be provisioned first.
+
+Three tracks, each a builder in its own worktree branched from
+`rcca/mcp-research-failures` (for example `rcca/fu-a-failures`), in its own herdr
+workspace. Builder models come from the roster's Builder rows; each track's two
+reviewers are on models other than its builder's.
+
+| Track | Items | Main files | Builder | Reviewers |
+|---|---|---|---|---|
+| A | 1, then 2 | `research.ts` failure paths, `provenance.ts`, native contract fixtures | `zai/glm-5.3` | `kimi-coding/k3.1-pro`, `deepseek/deepseek-flash` |
+| B | 3 | `util.ts`, `tlds.ts`, `annotations.ts`, the fetch content-type gate | `kimi-coding/k3.1-pro` | `zai/glm-5.3`, `deepseek/deepseek-flash` |
+| C | 4, then 5 | `completeWithBudgetRetry()`, timeouts, `defaults.ts`, `settings.ts`, MCP `config.ts`, the collation budget | `deepseek/deepseek-flash` | `zai/glm-5.3`, `kimi-coding/k3.1-pro` |
+
+Rules for the tracks:
+
+- **Builders do not edit user-facing docs** (`README.md`, `CHANGELOG.md`, `docs/`,
+  `guidance/`, `skills/`) or the generated files: all three tracks would conflict
+  there. Each builder writes a docs-change note in its report instead.
+- Tracks A and C both touch `research.ts`, in different functions. Merge A first,
+  then rebase C onto it.
+- Item 5 depends on item 4's retry count (the 32,000-token reserve), so they stay
+  in one track, in that order.
+- Item 1 also feeds item 5 (saved extractions are where trimmed text is kept);
+  agree the saved-file layout between tracks A and C before either codes it.
+- Run each track's deterministic tests in its own worktree. Do not run the full
+  gates or any E2E script while tracks are active: they share the provider key and
+  the machine (`worktrees.md` § Run gates sequentially).
+
+Integration, done by the orchestrator on `rcca/mcp-research-failures`:
+
+1. Merge each track after both of its reviewers report no must-fix.
+2. Write the docs and changelog from the builders' notes, folded into the
+   `[pi-0.22.0]` and `[mcp-0.22.0]` sections, then run one prose review over all of
+   it.
+3. Run one combined code review round over the integrated branch, which also covers
+   the review coverage gap and the open review findings below.
+4. Run the gates and live verification, one at a time (§ Method to Repeat, steps 6
+   and 7).
+5. Record every new worktree, branch, workspace and scratch folder in `CLEANUP.md`
+   as it is created.
 
 ## Open Review Findings
 
@@ -227,10 +286,12 @@ Not yet recorded as fixed or accepted. Settle each in the first review round:
 
 The 0.22.0 fix was built this way; repeat it.
 
-1. **Orchestrator builds.** Claude Code (Opus 5.5) in the worktree implements each
-   item with deterministic tests first. Mutation-check every new test: revert the
-   fix, confirm the test fails, restore. Two tests in round one could not fail and
-   were caught only by review.
+1. **Build with tests first.** For 0.22.0 the orchestrator built alone; for the
+   follow-up, builders do it in parallel tracks (§ Execution Plan) and the
+   orchestrator (Claude Code, Opus 5.5) integrates. Every builder writes
+   deterministic tests first and mutation-checks each one: revert the fix, confirm
+   the test fails, restore. Two tests in round one could not fail and were caught
+   only by review; reviewers must repeat the mutation check.
 2. **Two independent reviewers through herdr**, on models other than the
    builder's, one tab each in the repository's herdr workspace. Load the
    `curio-herdr` skill and run its `roster-check` first. Spawn with
