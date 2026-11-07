@@ -4,7 +4,12 @@
 
 export interface SearchResult {
   summary: string;
-  sources: Array<{ url: string; title: string; inferred?: true }>;
+  sources: Array<{
+    url: string;
+    title: string;
+    inferred?: true;
+    originalReference?: string;
+  }>;
   query: string;
   timestamp: string;
 }
@@ -20,6 +25,10 @@ export interface FetchedPage {
   source?: string; // "defuddle", "markdown", "text", or "llms-full"
   /** Protocol-less prose guess, ranked after explicit links and citations. */
   inferred?: true;
+  /** Exact prose token before normalisation. */
+  originalReference?: string;
+  /** Final response URL after redirects, when different from the requested URL. */
+  finalUrl?: string;
   /** What the response contained, independent of the URL's file extension. */
   assetType?: FetchAssetType;
   /** Response Content-Type, including parameters such as charset when supplied. */
@@ -44,8 +53,11 @@ export interface ExtractResult {
    *  "other" for anything else. Set by the pipeline from reported usage or
    *  its own adapter messages, never from free provider text. */
   failureKind?: "budget" | "other";
-  /** Provenance and fetched representation carried into the source inventory. */
-  inferred?: true;
+  /** Provenance and fetched representation carried into the source inventory.
+   *  Optional boolean is also the collation-budget planner's trim signal. */
+  inferred?: boolean;
+  originalReference?: string;
+  finalUrl?: string;
   assetType?: FetchAssetType;
   contentType?: string;
   /** OpenRouter serving route when the adapter observed it (the `provider`

@@ -23,6 +23,22 @@ const routes: Record<string, [string, string]> = {
 };
 before(async () => {
   server = http.createServer((req, res) => {
+    if (req.url === "/redirect-code") {
+      res.writeHead(302, { location: `${base}/script.py` });
+      res.end();
+      return;
+    }
+    if (req.url === "/redirect-cross-host") {
+      const port = (server.address() as AddressInfo).port;
+      res.writeHead(302, { location: `http://localhost:${port}/script.py` });
+      res.end();
+      return;
+    }
+    if (req.url === "/redirect-pdf") {
+      res.writeHead(302, { location: `${base}/plain-pdf` });
+      res.end();
+      return;
+    }
     const r = routes[req.url ?? ""];
     if (!r) { res.writeHead(404, { "content-type": "text/plain" }); res.end("nf"); return; }
     // text/markdown only when Accept asks for it, so /md exercises variant (a)
@@ -70,4 +86,25 @@ describe("F6b fetch gate", () => {
       assert.ok(page.content.length > 0);
     });
   }
+
+  it("records the final URL after same-host and cross-host redirects", async () => {
+    const [sameHost, crossHost] = await fetchPages(
+      [base + "/redirect-code", base + "/redirect-cross-host"],
+      undefined,
+      { timeoutMs: 5000 },
+    );
+    assert.equal(sameHost.status, "success", sameHost.error ?? "same-host redirect failed");
+    assert.equal(sameHost.url, base + "/redirect-code");
+    assert.equal(sameHost.finalUrl, base + "/script.py");
+    assert.equal(crossHost.status, "success", crossHost.error ?? "cross-host redirect failed");
+    assert.equal(crossHost.url, base + "/redirect-cross-host");
+    assert.match(crossHost.finalUrl ?? "", /^http:\/\/localhost:\d+\/script\.py$/);
+  });
+
+  it("retains the final URL when the redirected response is unsupported", async () => {
+    const [page] = await fetchPages([base + "/redirect-pdf"], undefined, { timeoutMs: 5000 });
+    assert.equal(page.status, "error");
+    assert.equal(page.finalUrl, base + "/plain-pdf");
+    assert.match(page.error ?? "", /Unsupported content type: application\/pdf/);
+  });
 });

@@ -6,7 +6,7 @@ import { mkdir, writeFile, readFile, rename, rm, stat, readdir } from "node:fs/p
 import { dirname, join } from "node:path";
 import { resolveWorkspacePaths } from "./paths.js";
 import { createHash, randomBytes } from "node:crypto";
-import { sleep, throwIfAborted } from "./util.js";
+import { failureDetail, sleep, throwIfAborted } from "./util.js";
 import type { FetchedPage, ExtractResult } from "./types.js";
 
 export interface IndexEntry {
@@ -556,7 +556,7 @@ export async function writeReportFile(
       const fetchError = pages.find((page) => page.url === entry.url)?.error;
       const reason = entry.error ?? fetchError ?? (entry.status === "blocked" ? "Source marked blocked" : "Extraction failed");
       const savedSource = identity.sourceFileFor(entry.url);
-      report += `- ${entry.url}: ${reason}${
+      report += `- ${entry.url}: ${failureDetail(reason)}${
         savedSource ? ` (full page saved: sources/${savedSource})` : ""
       }\n`;
     }

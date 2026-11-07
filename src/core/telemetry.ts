@@ -63,9 +63,9 @@ export interface TelemetryMeta {
       succeeded: number;
       failed: number;
       // Tally of the winning fetch variant per page. Keys come from
-      // FetchedPage.source as stamped by fetch.ts: "defuddle", "markdown", or
-      // "defuddle-fallback". The orchestrator falls back to "unknown" for any
-      // page lacking the field.
+      // FetchedPage.source as stamped by fetch.ts: "defuddle",
+      // "defuddle-fallback", "markdown", or "text". The orchestrator falls
+      // back to "unknown" for any page lacking the field.
       winners: Record<string, number>;
     };
     extract: {

@@ -3,6 +3,7 @@
 
 import type { SourceIdentity } from "./cache.js";
 import type { ExtractResult, FetchedPage } from "./types.js";
+import { redirectedToDifferentHost } from "./util.js";
 
 /** Only successful, non-empty extractions can support a completed synthesis. */
 export function evidenceExtractions(extractions: readonly ExtractResult[]): ExtractResult[] {
@@ -195,13 +196,15 @@ export function inferredAssetsSection(
   if (assets.length === 0) return "";
   let result = "## Inferred Assets\n\n" +
     "These protocol-less references were guessed from search text, not supplied as citations. Fetch results describe the response, not the filename.\n\n" +
-    "| Source | Fetch result | Saved asset |\n" +
-    "|---|---|---|\n";
+    "| Original token | Normalised URL | Fetch result | Saved asset |\n" +
+    "|---|---|---|---|\n";
   for (const page of assets) {
     const sourceFile = identity.sourceFileFor(page.url);
     let outcome: string;
     if (page.status === "error") {
-      outcome = `Nothing fetched${page.error ? `: ${page.error}` : ""}`;
+      // The same bounded reason appears once in Failed Sources below. Do not
+      // repeat a long native transport string in this table as well.
+      outcome = "Nothing fetched; see Failed Sources below";
     } else {
       const kind = page.assetType === "page"
         ? "Page"
@@ -212,7 +215,12 @@ export function inferredAssetsSection(
             : "Fetched content";
       outcome = `${kind}${page.contentType ? ` (${page.contentType})` : ""}`;
     }
-    result += `| ${cell(page.url)} | ${cell(outcome)} | ${
+    if (page.finalUrl) {
+      outcome += redirectedToDifferentHost(page.url, page.finalUrl)
+        ? `; redirected to a different host: ${page.finalUrl}; content is not from the guessed site`
+        : `; redirected to ${page.finalUrl}`;
+    }
+    result += `| ${cell(page.originalReference ?? page.url)} | ${cell(page.url)} | ${cell(outcome)} | ${
       sourceFile ? cell(`${cachePath}/sources/${sourceFile}`) : "None"
     } |\n`;
   }

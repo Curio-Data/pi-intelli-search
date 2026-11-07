@@ -213,11 +213,13 @@ Also bare reference https://kit.svelte.dev.
         url: "https://github.com/microsoft/TypeScript/releases",
         title: "releases",
         inferred: true,
+        originalReference: "github.com/microsoft/TypeScript/releases",
       },
       {
         url: "https://devblogs.microsoft.com/typescript",
         title: "typescript",
         inferred: true,
+        originalReference: "devblogs.microsoft.com/typescript",
       },
     ]);
   });
@@ -226,6 +228,7 @@ Also bare reference https://kit.svelte.dev.
     reference: string;
     decision: "keep" | "reject";
     expected?: string;
+    original?: string;
   }> = [
     { reference: "app.ini", decision: "reject" },
     { reference: "robots.txt", decision: "reject" },
@@ -253,6 +256,18 @@ Also bare reference https://kit.svelte.dev.
     },
     { reference: "example.io", decision: "keep", expected: "https://example.io" },
     { reference: "notion.so", decision: "keep", expected: "https://notion.so" },
+    {
+      reference: "notion.so: a workspace tool",
+      decision: "keep",
+      expected: "https://notion.so",
+      original: "notion.so",
+    },
+    {
+      reference: "example.com:",
+      decision: "keep",
+      expected: "https://example.com",
+      original: "example.com",
+    },
     { reference: "bun.sh", decision: "keep", expected: "https://bun.sh" },
     {
       reference: "publico.pt/2026/story",
@@ -313,7 +328,7 @@ Also bare reference https://kit.svelte.dev.
     { reference: "EXAMPLE.ORG/Docs", decision: "keep", expected: "https://example.org/Docs" },
   ];
 
-  for (const { reference, decision, expected } of protocolLessCases) {
+  for (const { reference, decision, expected, original } of protocolLessCases) {
     it(`${decision} protocol-less reference ${JSON.stringify(reference)}`, () => {
       const urls = extractSourceUrls(reference);
       if (decision === "reject") {
@@ -325,7 +340,14 @@ Also bare reference https://kit.svelte.dev.
       const title = parts.length
         ? parts[parts.length - 1].replace(/\.[^.]+$/, "")
         : parsed.hostname;
-      assert.deepStrictEqual(urls, [{ url: expected, title, inferred: true }]);
+      assert.deepStrictEqual(urls, [
+        {
+          url: expected,
+          title,
+          inferred: true,
+          originalReference: original ?? reference,
+        },
+      ]);
     });
   }
 

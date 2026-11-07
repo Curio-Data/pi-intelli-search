@@ -165,14 +165,24 @@ describe("mergeCitations", () => {
     const merged = mergeCitations(
       [
         { url: "https://explicit.example/a", title: "A" },
-        { url: "https://guess.example", title: "guess.example", inferred: true },
+        {
+          url: "https://guess.example",
+          title: "guess.example",
+          inferred: true,
+          originalReference: "Guess.Example",
+        },
       ],
       { citations: [{ url: "https://cited.example/b", title: "B" }] } as never,
     );
     assert.deepStrictEqual(merged, [
       { url: "https://explicit.example/a", title: "A" },
       { url: "https://cited.example/b", title: "B" },
-      { url: "https://guess.example", title: "guess.example", inferred: true },
+      {
+        url: "https://guess.example",
+        title: "guess.example",
+        inferred: true,
+        originalReference: "Guess.Example",
+      },
     ]);
   });
 

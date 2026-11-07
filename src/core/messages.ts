@@ -111,6 +111,8 @@ export function buildCollationMessage(
       title: source.title,
       type: source.sourceType,
       extraction: source.extraction,
+      ...(source.inferred ? { inferredFromText: true } : {}),
+      ...(source.finalUrl ? { finalUrl: source.finalUrl } : {}),
     })),
   }, null, 2);
 }

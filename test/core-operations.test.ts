@@ -79,6 +79,29 @@ it("runs all four operations with per-instance dependencies and no host context"
   assert.equal((await readIndex(context.paths.cacheRoot)).searches.length, 2);
 });
 
+it("labels inferred guesses in intelli_search text and structured sources", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 3, maxUrls: 3 });
+  const complete = base.context.models.complete;
+  base.context.models.complete = async (request) =>
+    request.model.model === "search"
+      ? {
+          text: "Read [the guide](https://one.example/page), then inspect README.md and notion.so: a workspace tool.",
+          citations: [],
+        }
+      : complete(request);
+  const result = await search({ query: "search labels" }, base.context);
+  assert.match(result.text, /\[the guide\]\(https:\/\/one\.example\/page\)\n/);
+  assert.match(result.text, /\[readme\.md\]\(https:\/\/readme\.md\) \(inferred from text, not a citation; original token: README\.md\)/);
+  assert.match(result.text, /\[notion\.so\]\(https:\/\/notion\.so\) \(inferred from text, not a citation; original token: notion\.so\)/);
+  const sources = result.details.sources as Array<Record<string, unknown>>;
+  assert.equal(sources[0].inferred, undefined);
+  assert.deepEqual(sources.slice(1).map((source) => [source.originalReference, source.inferred]), [
+    ["README.md", true],
+    ["notion.so", true],
+  ]);
+});
+
 it("keeps inferred file references, records asset fetch outcomes and saves code under sources", async (t) => {
   const root = await workspace(t);
   const base = coreContext(root, { defaultUrls: 3, maxUrls: 3 });
@@ -121,7 +144,8 @@ it("keeps inferred file references, records asset fetch outcomes and saves code 
   assert.equal(result.outcome, "completed");
   assert.match(result.text, /## Inferred Assets/);
   assert.match(result.text, /manage\.py.*Code file.*text\/plain; charset=utf-8/);
-  assert.match(result.text, /missing\.py.*Nothing fetched: HTTP 404: Not Found/);
+  assert.match(result.text, /missing\.py.*Nothing fetched; see Failed Sources below/);
+  assert.match(result.text, /\*\*Failed Sources\*\*:[\s\S]*https:\/\/missing\.py: HTTP 404: Not Found/);
   assert.match(result.text, /Inferred from text \(not a citation\); fetched and extracted/);
   const assets = result.details.inferredAssets as Array<Record<string, unknown>>;
   assert.deepEqual(assets.map((asset) => [asset.url, asset.outcome]), [
@@ -137,6 +161,59 @@ it("keeps inferred file references, records asset fetch outcomes and saves code 
   assert.match(report, /## Inferred Assets/);
   assert.match(report, /missing\.py.*Nothing fetched/);
   assert.match(report, /sources\/02-manage-py\.md/);
+});
+
+it("shows original tokens, redirect attribution and one bounded error per failed guess", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 2, maxUrls: 2 });
+  const complete = base.context.models.complete;
+  base.context.models.complete = async (request) =>
+    request.model.model === "search"
+      ? { text: "Inspect README.md and Broken.py for the build steps.", citations: [] }
+      : complete(request);
+  const longError = `TRANSPORT_FAILURE ${"multiline detail\n".repeat(30)}`;
+  const dependencies: ResearchDependencies = {
+    ...base.dependencies,
+    fetchPages: async (urls) => urls.map((url) =>
+      url === "https://readme.md"
+        ? {
+            url,
+            finalUrl: "https://downloads.example.net/raw/readme.txt",
+            title: "readme.txt",
+            content: "print('redirected code')",
+            status: "success" as const,
+            source: "text",
+            assetType: "code" as const,
+            contentType: "text/plain",
+          }
+        : {
+            url,
+            title: "",
+            content: "",
+            status: "error" as const,
+            error: longError,
+          }),
+  };
+  const result = await research({ query: "redirect attribution" }, base.context, dependencies);
+  assert.equal(result.outcome, "completed");
+  assert.match(result.text, /\| README\.md \| https:\/\/readme\.md \| Code file \(text\/plain\); redirected to a different host: https:\/\/downloads\.example\.net\/raw\/readme\.txt; content is not from the guessed site \|/);
+  assert.match(result.text, /\| Broken\.py \| https:\/\/broken\.py \| Nothing fetched; see Failed Sources below \| None \|/);
+  assert.equal(result.text.match(/TRANSPORT_FAILURE/g)?.length, 1, "raw failure appears only in Failed Sources");
+  assert.doesNotMatch(result.text, /multiline detail\nmultiline detail/);
+  const assets = result.details.inferredAssets as Array<Record<string, unknown>>;
+  assert.deepEqual(assets.map((asset) => [asset.originalReference, asset.url, asset.finalUrl, asset.redirectedToDifferentHost]), [
+    ["README.md", "https://readme.md", "https://downloads.example.net/raw/readme.txt", true],
+    ["Broken.py", "https://broken.py", undefined, undefined],
+  ]);
+  assert.equal((assets[1].error as string).length, 300);
+  assert.ok((assets[1].error as string).endsWith("…"));
+  const report = await readFile(join(root, result.details.cachePath as string, "report.md"), "utf8");
+  assert.match(report, /README\.md \| https:\/\/readme\.md/);
+  assert.match(report, /redirected to a different host: https:\/\/downloads\.example\.net/);
+  assert.equal(report.match(/TRANSPORT_FAILURE/g)?.length, 1);
+  assert.doesNotMatch(report, /multiline detail\nmultiline detail/);
+  const reportFailure = report.match(/^- https:\/\/broken\.py: .*$/m)?.[0] ?? "";
+  assert.ok(reportFailure.length <= 300 + "- https://broken.py: ".length);
 });
 
 it("labels inferred references and records nothing when every inferred fetch fails", async (t) => {
@@ -163,6 +240,7 @@ it("labels inferred references and records nothing when every inferred fetch fai
   assert.match(result.text, /Unsupported content type: application\/octet-stream/);
   assert.deepEqual(result.details.inferredAssets, [{
     url: "https://manage.py",
+    originalReference: "manage.py",
     outcome: "nothing",
     error: "Unsupported content type: application/octet-stream",
   }]);
@@ -475,6 +553,9 @@ it("never replaces a successful report committed while collation was failing", a
   let collated!: () => void;
   const collateDone = new Promise<void>((resolve) => (collated = resolve));
   context.models.complete = async (request) => {
+    if (request.model.model === "search") {
+      return { text: "Inspect manage.py before continuing.", citations: [] };
+    }
     if (request.model.model !== "collate") return complete(request);
     collated();
     return { text: " ", citations: [] };
@@ -494,6 +575,11 @@ it("never replaces a successful report committed while collation was failing", a
   assert.equal(result.outcome, "collate-failed");
   assert.equal(result.details.cachePath, "");
   assert.ok(result.details.preservedCachePath);
+  const inferred = result.details.inferredAssets as Array<Record<string, unknown>>;
+  assert.equal(inferred.length, 1);
+  assert.equal(inferred[0].originalReference, "manage.py");
+  assert.equal(inferred[0].url, "https://manage.py");
+  assert.equal(inferred[0].sourceFile, undefined, "an uncommitted run must not advertise a saved file");
   assert.match(await readFile(join(path, "report.md"), "utf8"), /Concurrent success/);
   await assert.rejects(stat(`${path}.1`), /ENOENT/);
   const meta = JSON.parse(await readFile(join(path, "meta.json"), "utf8"));

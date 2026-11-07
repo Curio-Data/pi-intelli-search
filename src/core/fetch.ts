@@ -36,6 +36,26 @@ const DEFAULT_FETCH_OPTIONS: FetchOptions = {
   concurrency: 4,
 };
 
+class FetchResponseError extends Error {
+  constructor(message: string, readonly responseUrl: string) {
+    super(message);
+    this.name = "FetchResponseError";
+  }
+}
+
+/** Preserve a meaningful post-redirect URL without treating URL parser
+ *  normalisation (notably a root trailing slash) as a redirect. */
+function finalUrlMetadata(requestedUrl: string, responseUrl: string): { finalUrl?: string } {
+  if (!responseUrl) return {};
+  try {
+    return new URL(responseUrl).href !== new URL(requestedUrl).href
+      ? { finalUrl: responseUrl }
+      : {};
+  } catch {
+    return responseUrl !== requestedUrl ? { finalUrl: responseUrl } : {};
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public API — single page (Defuddle vs markdown comparison)
 // ---------------------------------------------------------------------------
@@ -58,6 +78,7 @@ async function fetchSingle(
       content: "",
       status: "error",
       error: errMsg(err),
+      ...(err instanceof FetchResponseError ? finalUrlMetadata(url, err.responseUrl) : {}),
     };
   }
 }
@@ -164,7 +185,12 @@ async function fetchViaDefuddle(
   signal?: AbortSignal,
 ): Promise<FetchedPage> {
   const response = await rawFetch(url, opts, signal);
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  if (!response.ok) {
+    throw new FetchResponseError(
+      `HTTP ${response.status}: ${response.statusText}`,
+      response.url,
+    );
+  }
 
   const contentType = response.headers.get("content-type") ?? "";
   const isHtml = contentType.includes("text/html") || contentType.includes("application/xhtml");
@@ -172,7 +198,10 @@ async function fetchViaDefuddle(
     if (isSupportedTextAsset(contentType)) {
       return processTextAssetResponse(url, response, opts, contentType);
     }
-    throw new Error(`Unsupported content type: ${contentType || "not reported"}`);
+    throw new FetchResponseError(
+      `Unsupported content type: ${contentType || "not reported"}`,
+      response.url,
+    );
   }
 
   const body = await response.text();
@@ -226,6 +255,7 @@ async function fetchViaDefuddle(
       source: "defuddle-fallback",
       assetType: "page",
       contentType,
+      ...finalUrlMetadata(url, response.url),
     };
   }
 
@@ -239,6 +269,7 @@ async function fetchViaDefuddle(
     source: "defuddle",
     assetType: "page",
     contentType,
+    ...finalUrlMetadata(url, response.url),
   };
 }
 
@@ -314,7 +345,12 @@ async function fetchMarkdown(
   signal?: AbortSignal,
 ): Promise<FetchedPage> {
   const response = await rawFetch(mdUrl, opts, signal);
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  if (!response.ok) {
+    throw new FetchResponseError(
+      `HTTP ${response.status}: ${response.statusText}`,
+      response.url,
+    );
+  }
   return processMarkdownResponse(mdUrl, response, opts);
 }
 
@@ -334,6 +370,7 @@ async function processMarkdownResponse(
     source: "markdown",
     assetType: "text",
     contentType: response.headers.get("content-type") ?? "text/markdown",
+    ...finalUrlMetadata(url, response.url),
   };
 }
 
@@ -416,6 +453,7 @@ async function processTextAssetResponse(
     source: "text",
     assetType: classifyTextAsset(url, contentType),
     contentType,
+    ...finalUrlMetadata(url, response.url),
   };
 }
 

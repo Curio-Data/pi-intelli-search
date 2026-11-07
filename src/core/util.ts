@@ -88,6 +88,22 @@ export function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Bounded single-line failure reason shared by results, reports and details. */
+export function failureDetail(message: string): string {
+  const line = message.replace(/\s+/g, " ").trim();
+  return line.length > 300 ? `${line.slice(0, 299).trimEnd()}…` : line;
+}
+
+/** True when a recorded response URL names a different host from the guess. */
+export function redirectedToDifferentHost(url: string, finalUrl?: string): boolean {
+  if (!finalUrl) return false;
+  try {
+    return new URL(url).hostname.toLowerCase() !== new URL(finalUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 /** Unified marker appended whenever page content is truncated to a char cap. */
 export const TRUNCATED_MARKER = "\n\n[TRUNCATED]";
 
@@ -533,6 +549,8 @@ export interface SourceUrl {
   /** Set on protocol-less domain references (pass 3): a guess from prose,
    *  ranked after explicit links and harvested citations by mergeCitations(). */
   inferred?: true;
+  /** Exact reference token before lowercase and IDN normalisation. */
+  originalReference?: string;
 }
 
 export function extractSourceUrls(text: string): SourceUrl[] {
@@ -602,7 +620,7 @@ export function extractSourceUrls(text: string): SourceUrl[] {
     // hostname is instead normalised to its ASCII form below.
     const before = text.slice(Math.max(0, m.index - 2), m.index);
     const after = text.slice(m.index + m[0].length, m.index + m[0].length + 2);
-    if (/[\p{L}\p{N}\p{M}]$/u.test(before) || /^[\p{L}\p{N}\p{M}-]|^:/u.test(after)) continue;
+    if (/[\p{L}\p{N}\p{M}]$/u.test(before) || /^[\p{L}\p{N}\p{M}-]|^:\S/u.test(after)) continue;
     const domainReference = m[1].replace(/[.,;:!]+$/, "");
     const suffixAt = domainReference.search(/[/?#]/);
     const authority = suffixAt === -1 ? domainReference : domainReference.slice(0, suffixAt);
@@ -617,7 +635,7 @@ export function extractSourceUrls(text: string): SourceUrl[] {
       seen.add(url);
       const parts = u.pathname.split("/").filter(Boolean);
       const title = parts.length > 0 ? parts[parts.length - 1].replace(/\.[^.]+$/, "") : u.hostname;
-      urls.push({ url, title, inferred: true });
+      urls.push({ url, title, inferred: true, originalReference: domainReference });
     } catch {
       // Invalid ports and malformed domain-shaped matches never become sources.
     }

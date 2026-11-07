@@ -218,21 +218,43 @@ export function wrapFetchForAnnotations(
  * downstream FetchedPage entries always carry a displayable title.
  */
 export function mergeCitations(
-  textUrls: Array<{ url: string; title: string; inferred?: true }>,
+  textUrls: Array<{
+    url: string;
+    title: string;
+    inferred?: true;
+    originalReference?: string;
+  }>,
   sink: AnnotationSink,
-): Array<{ url: string; title: string; inferred?: true }> {
-  const merged: Array<{ url: string; title: string; inferred?: true }> = [];
+): Array<{
+  url: string;
+  title: string;
+  inferred?: true;
+  originalReference?: string;
+}> {
+  const merged: Array<{
+    url: string;
+    title: string;
+    inferred?: true;
+    originalReference?: string;
+  }> = [];
   const seen = new Set<string>();
-  const add = (url: string, title: string, inferred?: true) => {
+  const add = (url: string, title: string, inferred?: true, originalReference?: string) => {
     if (seen.has(url)) return;
     seen.add(url);
-    merged.push({ url, title, ...(inferred ? { inferred } : {}) });
+    merged.push({
+      url,
+      title,
+      ...(inferred ? { inferred } : {}),
+      ...(originalReference ? { originalReference } : {}),
+    });
   };
   // Explicit links first, then harvested citations, then protocol-less domain
   // guesses from prose, so a guess never displaces a real citation from the
   // maxUrls slice. The inferred flag survives for fetch and result rendering.
   for (const { url, title, inferred } of textUrls) if (!inferred) add(url, title);
   for (const { url, title } of sink.citations) add(url, title && title.length > 0 ? title : url);
-  for (const { url, title, inferred } of textUrls) if (inferred) add(url, title, inferred);
+  for (const { url, title, inferred, originalReference } of textUrls) {
+    if (inferred) add(url, title, inferred, originalReference);
+  }
   return merged;
 }
