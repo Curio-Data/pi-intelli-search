@@ -58,4 +58,4 @@ Separate observer and paid analyses reproduced byte for byte into fresh durable 
 
 ## Continuation
 
-The owner has directed clean repeats after completion of this run, with comparison quality unchanged. [Pilot Resume](RESUME.md) defines the next assignment: remove administrative friction, bind a fresh bounded series and complete the workflow without avoidable owner interventions. A substantive quality failure remains a result. Repetition must retain every attempt rather than present the first passing pair as representative evidence.
+The owner directed clean repeats after completion of this run, with comparison quality unchanged. The subsequently requested single `rh-v7` repeat is complete; [Repeat Findings](REPEAT-FINDINGS.md) records its clean workflow and negative quality result. [Pilot Resume](RESUME.md) is the current entrypoint. All attempts remain retained rather than selecting a passing pair as representative evidence.
