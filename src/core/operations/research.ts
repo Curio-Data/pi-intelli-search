@@ -67,8 +67,10 @@ import {
 import { progress } from "../progress.js";
 import {
   collationFailureReport,
+  extractionFailureReport,
   finalizeCollation,
   isCollationFailureReport,
+  stripFailureMarkers,
 } from "../provenance.js";
 
 /** Per-run I/O injection; no mutable global engine harness. */
@@ -218,9 +220,18 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   // cannot cite files this run never wrote.
   const identity = allocateSourceIdentity(allExtractions, fetched.pages);
 
-  // If no extractions produced useful content (all fetches failed or all
-  // extraction LLM calls errored), return the search summary without
-  // creating cache artefacts or running collation.
+  // If no extraction produced useful content (every extraction LLM call
+  // errored; all-fetch-failed exits earlier), keep every fetched page and a
+  // failure report instead of leaving only meta.json (owner decision,
+  // 2026-11-07): the saved pages let the calling agent revisit a page, or
+  // retry its extraction later, without refetching, and the failed-source
+  // list names each saved page's path and why its extraction failed. Like a
+  // collation failure, the write never displaces a same-day successful
+  // report and replaces an earlier failure report (both decided under the
+  // cache lock inside writeCacheArtifacts).
+  let collation: string;
+  let outcome: "completed" | "collate-failed" | "extraction-failed" = "completed";
+  let failureMessage = "";
   if (succeededExtractions.length === 0) {
     const fetchFailed = extracted.blockedExtractions.length;
     const extractFailed = extracted.extractions.filter((e) => e.status === "failed").length;
@@ -228,62 +239,62 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
       ...(fetchFailed > 0 ? [`${fetchFailed} page(s) failed to fetch`] : []),
       ...(extractFailed > 0 || fetchFailed === 0 ? [`${extractFailed} extraction(s) failed`] : []),
     ].join(" and ");
-    // Per-page reasons: the worst outcome must still explain itself. No cache
-    // is written on this path, so there is no saved source to point at.
+    // Per-page reasons travel with every exit, including the preserved
+    // refresh: the pages of THIS attempt were not saved, so no source path
+    // is offered, but the bounded reason for each page must survive for the
+    // calling agent to act on (kimi F2).
     const failureLines = allExtractions
-      .filter((e) => e.status !== "success" && (e.error || fetched.pages.find((pg) => pg.url === e.url)?.error))
+      .filter((e) => e.status !== "success")
       .map((e) => {
-        const detail = e.error ?? fetched.pages.find((pg) => pg.url === e.url)?.error;
-        return `- ${e.url}: ${String(detail).replace(/\s+/g, " ").slice(0, 200)}`;
+        const detail =
+          e.error ?? fetched.pages.find((pg) => pg.url === e.url)?.error;
+        return detail ? `- ${e.url}: ${failureDetail(String(detail))}` : `- ${e.url}`;
       })
       .slice(0, 10)
       .join("\n");
-    const failureBlock = failureLines ? `\n\nFailed Sources (up to 10 known reasons):\n${failureLines}` : "";
-    return degradedReturn(
-      p,
-      "extraction-failed",
-      `${reason}. No content was extracted.${failureBlock}\n\nSearch summary:\n${search.searchResult}`,
-      {
-        cachePath: "",
-        urlsSearched: search.urls.length,
-        pagesFetched: fetched.successPages.length,
-        pagesFailed: fetched.pages.length - fetched.successPages.length,
-        extractionFailed: extractFailed,
-      },
-    );
-  }
-
-  // A collation failure after paid extraction commits the extractions with a
-  // report that states the failure, instead of discarding the run. A
-  // successful report already in place for the same query (decided under the
-  // cache lock) is preserved like any degraded refresh: only the failed
-  // attempt's sidecar is recorded.
-  let collation: string;
-  let outcome: "completed" | "collate-failed" = "completed";
-  let failureMessage = "";
-  try {
-    collation = await runCollateStage(p, search.searchResult, succeededExtractions, identity);
-  } catch (error) {
-    throwIfAborted(p.signal);
-    const reason = failureDetail(errMsg(error)) || "collation failed";
-    p.logger.error(`Collation failed: ${reason}`);
-    p.tel?.recordCollate({
-      model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
-      summaryChars: 0,
-      ...(p.budgetRetries.collate ? { budgetRetried: true } : {}),
-      error: reason,
-    });
     failureMessage =
-      `Collation failed: ${asSentence(reason)} ${succeededExtractions.length} page(s) were extracted, but ` +
-      `the report already saved for this query at ${p.cachePath} was preserved, ` +
-      `so this run's extractions were not saved.\n\nSearch summary:\n${search.searchResult}`;
-    outcome = "collate-failed";
-    collation = collationFailureReport(
-      reason,
+      `${asSentence(reason)} No content was extracted. ${fetched.successPages.length} page(s) were ` +
+      `fetched, but the report already saved for this query at ${p.cachePath} was preserved, ` +
+      `so this run's fetched pages were not saved.` +
+      (failureLines ? `\n\n**Failed Sources** (this attempt, up to 10):\n${failureLines}` : "") +
+      `\n\nSearch summary:\n${search.searchResult}`;
+    outcome = "extraction-failed";
+    collation = extractionFailureReport(
+      asSentence(reason),
       p.cachePath,
-      succeededExtractions,
-      identity,
+      fetched.successPages.length,
+      search.searchResult,
     );
+  } else {
+    // A collation failure after paid extraction commits the extractions with a
+    // report that states the failure, instead of discarding the run. A
+    // successful report already in place for the same query (decided under the
+    // cache lock) is preserved like any degraded refresh: only the failed
+    // attempt's sidecar is recorded.
+    try {
+      collation = await runCollateStage(p, search.searchResult, succeededExtractions, identity);
+    } catch (error) {
+      throwIfAborted(p.signal);
+      const reason = failureDetail(errMsg(error)) || "collation failed";
+      p.logger.error(`Collation failed: ${reason}`);
+      p.tel?.recordCollate({
+        model: `${p.collateConfig.provider}/${p.collateConfig.model}`,
+        summaryChars: 0,
+        ...(p.budgetRetries.collate ? { budgetRetried: true } : {}),
+        error: reason,
+      });
+      failureMessage =
+        `Collation failed: ${asSentence(reason)} ${succeededExtractions.length} page(s) were extracted, but ` +
+        `the report already saved for this query at ${p.cachePath} was preserved, ` +
+        `so this run's extractions were not saved.\n\nSearch summary:\n${search.searchResult}`;
+      outcome = "collate-failed";
+      collation = collationFailureReport(
+        reason,
+        p.cachePath,
+        succeededExtractions,
+        identity,
+      );
+    }
   }
 
   // Start llms-full downloads BEFORE acquiring any lock, then write cache
@@ -378,7 +389,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
       };
     });
   const result =
-    collation +
+    stripFailureMarkers(collation) +
     formatCacheAppendix(
       p.cachePath,
       succeededExtractions.length,
@@ -864,8 +875,21 @@ async function writeCacheArtifacts(
       // Atomic index update under a separate lock scoped to the cache
       // directory. Different cache paths contend only on this short
       // index update, not on the per-cache-path bulk writes. A run without
-      // a synthesis is not offered to later cache suggestions.
-      if (outcome !== "completed") return true;
+      // a synthesis is not indexed, and any stale entry left for this slug
+      // (for example by an interrupted earlier run) is removed: cache
+      // suggest must never offer a failure report as related research
+      // (deepseek F3). removeIndexEntry never creates the index file.
+      if (outcome !== "completed") {
+        await withLock(
+          indexLockDir(p.paths.cacheRoot),
+          async () => {
+            const slug = p.physicalCachePath.split("/").pop() ?? p.physicalCachePath;
+            await removeIndexEntry(p.paths.cacheRoot, slug);
+          },
+          p.signal,
+        );
+        return true;
+      }
       await withLock(
         indexLockDir(p.paths.cacheRoot),
         async () => {
@@ -975,8 +999,10 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
 
 /**
  * Shared degraded-exit path: stamp the outcome, write the sidecar, and return
- * the fallback result. Every early return in executePipeline() goes through
- * here so the three degraded outcomes stay structurally uniform.
+ * the fallback result. The search-stage early returns (no-links,
+ * fetch-failed) go through here so the degraded exits stay structurally
+ * uniform; the extraction-failed exit writes its kept-pages artefact set via
+ * writeCacheArtifacts instead, because it has fetched pages to save.
  *
  * A previous successful run of the same query is preserved untouched (report,
  * extractions, numbered sources and index entry): a degraded refresh never

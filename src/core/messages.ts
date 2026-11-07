@@ -153,6 +153,12 @@ export function formatCacheAppendix(
       out += `\n`;
     }
   }
-  out += `\nChoose exact extraction and full-page paths from the Source Assessment above. Not cached means no full-page file exists for that source.\n`;
+  // With no successful extraction there is no extraction file to choose:
+  // name only full-page paths, from the Failed Sources list just above.
+  // Completed output keeps the pre-track sentence verbatim.
+  out +=
+    succeeded > 0
+      ? `\nChoose exact extraction and full-page paths from the Source Assessment above. Not cached means no full-page file exists for that source.\n`
+      : `\nChoose exact full-page paths from the **Failed Sources** list above. Not cached means no full-page file exists for that source.\n`;
   return out;
 }

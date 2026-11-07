@@ -84,9 +84,9 @@ async function scenario(name: string, script: Script, query = `probe ${name}`) {
       version: identity.version, scenario: name, error, outcome: result?.outcome,
       mcpResult: mcp && { isError: (mcp as { isError?: boolean }).isError ?? false, structuredKeys: Object.keys(mcp.structuredContent ?? {}), detailsKeys: Object.keys((mcp.structuredContent as { details: object })?.details ?? {}) },
       details: result?.details,
-      text: result?.text.slice(0, 700),
+      text: result?.text.slice(0, 2600),
       files, meta: meta && { outcome: meta.outcome, extract: meta.stages?.extract, fetch: meta.stages?.fetch, collate: meta.stages?.collate },
-      reportFailedSection: report ? (report.match(/(Blocked\/Failed[\s\S]{0,600})/) ?? [""])[0] : undefined,
+      reportFailedSection: report ? (report.match(/(## Failed Sources[\s\S]{0,600})/) ?? [""])[0] : undefined,
       reportHeader: report ? (report.match(/Sources:[^\n]*/) ?? [""])[0] : undefined,
       extractReq: extractReq.slice(0, 3), extractCalls: calls.extract,
       logs: logs.filter((l) => !/retrying in/.test(l)).map((l) => l.slice(0, 220)),
@@ -151,8 +151,10 @@ test("M3 call-9 shape: 3 pages, 1 fetch error, 2 fetched but both extractions fa
   const C = mk("c", "", "error", "HTTP 404");
   const o = await scenario("m3", { pages: [A, B, C], extract: () => ok("", "stop") });
   assert.equal(o.outcome, "extraction-failed");
-  // F5 corrected: the headline names both failure kinds.
-  assert.match(o.text ?? "", /^1 page\(s\) failed to fetch and 2 extraction\(s\) failed/);
+  // F5 corrected: the headline names both failure kinds. The 0.22.0 text
+  // opened with the headline; the kept-pages report carries it in the
+  // failure quote under the "## Extraction Failed" heading.
+  assert.match(o.text ?? "", /1 page\(s\) failed to fetch and 2 extraction\(s\) failed/);
 });
 test("M4 all fetched, all extractions fail (5 pages) -> details", async () => {
   const pages = ["a", "b", "c", "d", "e"].map((n) => mk(n, `## ${n}\nfacts`));
@@ -165,6 +167,37 @@ test("M5 all fetch fail -> fetch-failed; meta has URLs?", async () => {
   // F5 corrected: each failed URL is listed with its reason.
   assert.match(o.text ?? "", /docs\.example\/a: HTTP 403/);
   assert.match(o.text ?? "", /docs\.example\/b: Not HTML: application\/pdf/);
+});
+
+// ---- R5 corrected: every extraction fails keeps the fetched pages (owner decision 2026-11-07) ------
+test("K1 all extractions fail -> fetched pages saved with a failure report that names each page and reason", async () => {
+  const o = await scenario("k1", allFail(ok("", "stop")));
+  assert.equal(o.outcome, "extraction-failed");
+  assert.ok(typeof o.details?.cachePath === "string" && o.details.cachePath.length > 0,
+    "details.cachePath names the saved folder");
+  assert.ok(o.files.some((x) => x.endsWith("/report.md")), "failure report written");
+  assert.equal(o.files.filter((x) => x.includes("/sources/")).length, 2, "every fetched page saved");
+  assert.equal(o.files.filter((x) => x.includes("/extractions/")).length, 0,
+    "a failed extraction writes no extraction file");
+  assert.match(o.text ?? "", /## Extraction Failed/);
+  assert.match(o.text ?? "", /2 extraction\(s\) failed/);
+  assert.match(o.text ?? "", /full page saved: .*sources\/01-docs-example\.md/);
+  assert.doesNotMatch(o.text ?? "", /intelli-search:extraction-failed/,
+    "the failure-report marker is not shown to the calling agent");
+  assert.match(o.reportFailedSection ?? "", /full page saved: sources\/01-docs-example\.md/);
+  assert.match(o.reportFailedSection ?? "", /Extraction returned no visible text/);
+  assert.equal(o.meta?.outcome, "extraction-failed");
+  assert.equal(o.mcpResult?.isError, false, "degraded result is not a tool error");
+});
+test("K2 mixed: 1 fetch error, 2 fetched pages whose extractions fail -> fetched pages saved, fetch failure listed", async () => {
+  const C = mk("c", "", "error", "HTTP 404");
+  const o = await scenario("k2", { pages: [A, B, C], extract: () => ok("", "stop") });
+  assert.equal(o.outcome, "extraction-failed");
+  assert.ok(o.details?.cachePath, "the run commits its own artefact set");
+  assert.equal(o.files.filter((x) => x.includes("/sources/")).length, 2,
+    "only the pages that fetched are saved");
+  assert.match(o.text ?? "", /docs\.example\/c: HTTP 404/, "the fetch failure is listed with its reason");
+  assert.match(o.text ?? "", /full page saved: .*sources\/01-docs-example\.md/);
 });
 
 // ---- input size under shipped defaults ------------------------------------------------------
