@@ -21,6 +21,10 @@ Intelligent web research for coding agents: search, extract, collate, and cache 
 - 🌐 **Fetch:** Dual-fetch each page (Hypertext Markup Language (HTML) → [_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), compare quality, pick the cleaner version.
 - 📄 **Extract:** Per-page large language model (LLM) extraction guided by a _focused prompt_. Compresses ≈50K to ≈3-5K chars of query-relevant content.
 - 🔗 **Collate:** Cross-source deduplication, inconsistency detection, and synthesis into a focused ≈5K-character summary.
+- 🧠 **Reasoning-Aware Output Budget:** When a reasoning model spends its output cap on hidden reasoning, research retries at a doubled cap (8,000, then 16,000, then 32,000 tokens by default) instead of failing. See [Extraction Diagnostics](#extraction-diagnostics).
+- 📏 **Long Pages, Bounded Collation:** Extraction reads up to 400,000 characters of each page. When the extractions exceed the [collation input budget](#collation-input-budget), the longest are trimmed at clean boundaries, and the result gives the path of each trimmed extraction's full saved file.
+- 🧾 **Recoverable Failures:** When no extraction succeeds, research saves the fetched pages and a failure report; when synthesis fails, it saves the pages and extractions as well. The agent reads the saved files rather than repeating the paid stages. See [Extraction Diagnostics](#extraction-diagnostics).
+- 📂 **Code and Text Sources:** Raw source files and text responses are saved and extracted alongside HTML pages. References named in search text without a link are fetched as labelled guesses; see [Inferred Assets](#inferred-assets).
 - 💾 **Cache:** Persistent `.search/` cache with automatic cache suggest. Related previous searches surfaced on each query.
 - 🎯 **Configurable:** Select models independently for search, extract and collate. The native extension uses registered, authenticated `Pi` models (capability and context limits apply); the MCP server uses explicitly selected OpenRouter models.
 - 💰 **Cost:** see the [default research-run estimate](#cost).
@@ -78,6 +82,8 @@ The native extension uses `Pi` settings and authentication. Generic MCP registra
   - [Recipe 6: Stronger Collation](#recipe-6-stronger-collation)
   - [Recipe 7: Free-Tier Resilience](#recipe-7-free-tier-resilience)
   - [Recipe 8: Per-Project Override](#recipe-8-per-project-override)
+  - [Recipe 9: Large-Context Collation](#recipe-9-large-context-collation)
+  - [Recipe 10: Bounded Time and Spend](#recipe-10-bounded-time-and-spend)
 - [Model Configuration](#model-configuration)
   - [OpenRouter Routing for Sonar](#openrouter-routing-for-sonar)
   - [Source Harvesting from Citations](#source-harvesting-from-citations)
@@ -330,8 +336,10 @@ Two loader rules to keep in mind:
 | Better final summaries | [Stronger Collation](#recipe-6-stronger-collation) |
 | A free-tier or shared OpenRouter key | [Free-Tier Resilience](#recipe-7-free-tier-resilience) |
 | A different search model for one repo only | [Per-Project Override](#recipe-8-per-project-override) |
+| Wide runs with a large-context collate model | [Large-Context Collation](#recipe-9-large-context-collation) |
+| A short host deadline or predictable spend | [Bounded Time and Spend](#recipe-10-bounded-time-and-spend) |
 
-Every recipe is exercised end-to-end in its own isolated environment by [`test/e2e/10_config_recipes.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/test/e2e/10_config_recipes.sh); recipes 2 and 3 by `08_websearch_tool.sh` and `09_sonar_pro_search.sh`.
+Every recipe runs end-to-end in its own isolated environment in [`test/e2e/10_config_recipes.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/test/e2e/10_config_recipes.sh), recipes 2 and 3 in `08_websearch_tool.sh` and `09_sonar_pro_search.sh`; each script's header states what it proves.
 
 ### Recipe 1: Zero Configuration
 
@@ -476,6 +484,40 @@ A trusted project can override individual keys for one repository only. Put the 
 ```
 
 Use this to give a client project a dedicated cache directory and a stronger search model while every other project stays on the global defaults.
+
+### Recipe 9: Large-Context Collation
+
+The default `collationInputBudgetTokens` (221,000) keeps the collation request within the range in which MiniMax M3 was observed to work well. An extraction that is retried twice may return up to 32,000 tokens, the default `collationSourceMaxTokens`, so a run at the default `maxUrls` of 20 can in the worst case offer ≈640,000 tokens of extractions, and the default budget trims it. A collate model with a larger context and a larger budget lets more of each extraction reach the synthesis. _Gemini_ 3.7 Flash lists a context of ≈1M tokens and 65,536 output tokens on OpenRouter.
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "collateModel": {
+      "provider": "openrouter",
+      "model": "google/gemini-3.7-flash"
+    },
+    "collationInputBudgetTokens": 600000
+  }
+}
+```
+
+Keep the budget, the prompts and the largest retried synthesis cap (32,000 tokens with the defaults) within the model's context. Runs whose extractions stay at ≈3-5K characters each are not trimmed at either budget. A larger budget is billed as collation input when the extractions fill it; see [Cost](#cost) and [Collation Input Budget](#collation-input-budget).
+
+### Recipe 10: Bounded Time and Spend
+
+Release 0.22.0 added output budget retries and raised `extractMaxChars` and `collationMaxTokens`, and each can lengthen a research call or raise its cost. Where the host deadline is short or spend must stay predictable, restore the 0.21.0 values:
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "outputBudgetRetries": 0,
+    "extractMaxChars": 150000,
+    "collationMaxTokens": 4000
+  }
+}
+```
+
+With these values an output cap that runs out is not retried: an extraction with no visible text fails with a budget-exhaustion diagnostic, and a synthesis that reaches 4,000 tokens is kept truncated with a warning, or ends the run as `collate-failed` when it has no text. On a reasoning collate model such as MiniMax M3, 4,000 tokens is the cap at which the synthesis failures that 0.22.0 corrects were recorded. Each model call keeps the `llmTimeoutMs` limit, and long pages are cut at 150,000 characters (≈37,500 tokens), which can fall before the sections that answer the query. Lower `llmRetryAttempts` and `maxUrls` as well where the host deadline is shorter still. [Extraction Diagnostics](#extraction-diagnostics) gives the timing of each budget attempt.
 
 ## Model Configuration
 
@@ -734,6 +776,11 @@ The example below shows the default models and common tuning settings. The [Sett
     "extractionMaxTokens": 8000,
     "collationMaxTokens": 8000,
 
+    // Output budget retries and collation input
+    "outputBudgetRetries": 2,
+    "collationInputBudgetTokens": 221000,
+    "collationSourceMaxTokens": 32000,
+
     // Fetch behaviour
     "fetchTimeoutMs": 20000,
     "fetchConcurrency": 4,
@@ -756,7 +803,7 @@ The example below shows the default models and common tuning settings. The [Sett
 | `extractMaxChars` | 3. Extract | `400000` | Maximum characters of page content fed to the extract LLM per page (1 to 2,000,000). At ≈4 characters per token the default allows ≈100,000 input tokens per page, so a ten-page run over long pages can send ≈1M input tokens to the extract model; see [Cost](#cost). The model's tokenizer determines the actual count. Add prompt tokens and reserved output (`extractionMaxTokens`) before comparing with the token window. Lower this limit if that budget does not fit the extract model, or to bound input spend. Raised from 150,000 in 0.22.0 because long documentation pages were cut before the sections that answered the query. |
 | `extractionConcurrency` | 3. Extract | `4` | Number of per-page extractions sent to the extract model simultaneously. Bounded so a wide result set does not fire many concurrent LLM calls and trigger rate limiting. Raise it (6-8) on generous rate limits for faster extraction; lower it (1-2) on tight limits. |
 | `extractionMaxTokens` | 3. Extract | `8000` | Per-page output-token cap. For reasoning models on OpenRouter, the budget includes reasoning as well as visible text. Exhaustion can leave an empty or incomplete extraction; the larger default reduced empty-output failures in recorded probes but does not guarantee completion on every route or page. Within research, an empty extraction that stopped at the cap is retried with the cap doubled, up to `outputBudgetRetries` times; an empty extraction that remains fails with a reason and reported token counts when available. Nonempty extractions that stop at the cap, by finish reason or reported usage, are retained with a truncation warning. Reserve this output budget alongside input and prompt tokens within the model's limits. A higher cap can increase OpenRouter's in-flight credit reservation. See [Extraction Diagnostics](#extraction-diagnostics). |
-| `collationMaxTokens` | 4. Collate | `8000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. Lower this when using a collation model with a small context window (the output must fit alongside all extraction inputs); for such a model, also lower `collationInputBudgetTokens`. This bounds synthesis output, not the source and cache appendices added afterwards. Within research, a synthesis that stops at this cap is retried with the cap doubled, up to `outputBudgetRetries` times. |
+| `collationMaxTokens` | 4. Collate | `8000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. Lower this when using a collation model with a small context window (the output must fit alongside all extraction inputs); for such a model, also lower `collationInputBudgetTokens`. This bounds synthesis output, not the source and cache appendices added afterwards. Within research, a synthesis that stops at this cap is retried with the cap doubled, up to `outputBudgetRetries` times. Raised from 4,000 in 0.22.0 because reasoning models spend part of the cap on hidden reasoning. |
 | `outputBudgetRetries` | 3, 4 | `2` | Research retries for an extraction that stops at its output cap without visible text, or a synthesis that stops at its cap (0 to 5; `0` disables). Each retry doubles the cap, so the default runs 8,000, then 16,000, then 32,000 tokens, never above 128,000. Each attempt's timeout scales with its cap, up to four times `llmTimeoutMs`: 14 minutes across one page's three budget attempts with the defaults, before transport retries under `llmRetryAttempts`. See [Extraction Diagnostics](#extraction-diagnostics). |
 | `collationInputBudgetTokens` | 4. Collate | `221000` | Tokens available to the extractions and their headers in the collation request (10,000 to 1,000,000). The default leaves room for prompts and a 32,000-token synthesis within ≈256,000 tokens of request and response, the range in which the default collation model was observed to work well; its context window is larger. When the extractions exceed it, the longest are trimmed and the result names each untrimmed file. Raise it only within the collation model's context. See [Collation Input Budget](#collation-input-budget). |
 | `collationSourceMaxTokens` | 4. Collate | `32000` | Ceiling on one extraction's text sent to collation (256 to 128,000). The default equals the largest extraction output after two budget retries; it binds in research when `extractionMaxTokens` or `outputBudgetRetries` is raised, and in manual collation whenever a supplied extraction is longer. Raise it to send more of one long page. See [Collation Input Budget](#collation-input-budget). |
