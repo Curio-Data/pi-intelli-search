@@ -8,7 +8,7 @@ The runner supports configurable pair counts and bounded concurrent pairs throug
 
 ## Retained Evidence
 
-Continue in the existing `study/research-handoff-runner` worktree. Dependencies and ignored scientific evidence are provisioned here and do not travel with a clean clone.
+Continue in the existing `research-handoff-runner` worktree, on the branch `study/codemode-research-handoff` (renamed from `study/research-handoff-runner`). Dependencies and ignored scientific evidence are provisioned here and do not travel with a clean clone.
 
 - [Full-population inventory](../../../evidence/benchmarks/research-handoff/20261108T152419Z-rh-v8-suite/analysis/suite-inventory.json): every scheduled conversation, record, machine check and gate.
 - [Paired analysis](../../../evidence/benchmarks/research-handoff/20261108T152419Z-rh-v8-suite/analysis/suite-analysis.json): quality, tokens, charges, timing, concurrency and incidents.

@@ -156,7 +156,7 @@ The complete workflow was not operationally clean. The `rh-v8` analysis records 
 
 ## Records and Reproduction
 
-The detailed protocols, findings and runner are archived under the [`archive/codemode-research-handoff`](https://github.com/Curio-Data/pi-intelli-search/tree/archive/codemode-research-handoff) tag, which marks the final commit of the `study/research-handoff-runner` branch:
+The detailed protocols, findings and runner are archived under the [`archive/codemode-research-handoff`](https://github.com/Curio-Data/pi-intelli-search/tree/archive/codemode-research-handoff) tag, which marks the commit that added this summary on the study branch, `study/codemode-research-handoff` (formerly `study/research-handoff-runner`):
 
 - [Ten-Pair Study Findings](https://github.com/Curio-Data/pi-intelli-search/blob/archive/codemode-research-handoff/docs/experiments/research-handoff/SUITE-FINDINGS.md): canonical narrative for `rh-v8`.
 - [Suite Protocol](https://github.com/Curio-Data/pi-intelli-search/blob/archive/codemode-research-handoff/docs/experiments/research-handoff/SUITE-PROTOCOL.md): frozen method, rubric, gates and stop rules.

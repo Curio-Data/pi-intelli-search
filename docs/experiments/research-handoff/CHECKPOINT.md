@@ -10,7 +10,7 @@ Start with [Research Handoff Resume](RESUME.md) and [Ten-Pair Study Findings](SU
 
 ```text
 /srv/secure/repos/CURIO/.worktrees/pi-intelli-search/research-handoff-runner
-branch: study/research-handoff-runner
+branch: study/codemode-research-handoff (renamed from study/research-handoff-runner on 8 November 2026)
 ```
 
 Do not recreate, reset or retire this worktree. Preserve its ignored evidence. The evidence directories survive here, not in a clean clone or a new worktree. Do not clean them or substitute older scientific material when something is absent.

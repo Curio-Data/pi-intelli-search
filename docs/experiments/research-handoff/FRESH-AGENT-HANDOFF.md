@@ -8,7 +8,7 @@ Use the existing checkout:
 
 ```text
 /srv/secure/repos/CURIO/.worktrees/pi-intelli-search/research-handoff-runner
-branch: study/research-handoff-runner
+branch: study/codemode-research-handoff (renamed from study/research-handoff-runner on 8 November 2026)
 ```
 
 Read in this order:
