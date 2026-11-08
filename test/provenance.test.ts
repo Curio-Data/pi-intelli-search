@@ -81,6 +81,8 @@ it("rejects invented inventories, IDs, URLs and cache files before rendering", (
     "## Sources\nUnfetched sources.",
     "See [unfetched](https://unfetched.example/docs).",
     "A bare URL: https://unfetched.example/docs",
+    "**[unfetched](https://unfetched.example/docs)**",
+    "**https://unfetched.example/docs**",
     "## References\n[unfetched](https://unfetched.example/docs)",
     "Read `sources/17-docs-example.md`.",
     "Read `.search/other/extractions/01-docs-example.md`.",
@@ -157,6 +159,130 @@ it("accepts extracted cross-links and developer code without crediting extra fet
       "supplied",
     ),
   );
+});
+
+const markdownEmphasisCases = [
+  "**[label](URL)**.",
+  "**[label](URL)**",
+  "*[label](URL)*,",
+  "_[label](URL)_",
+  "__[label](URL)__;",
+  "**URL**.",
+  "**[label](URL)**.,",
+  "*[label](URL)*.",
+  "**Form: URL**",
+  "**Form: [label](URL)**",
+  "*Form: URL*",
+  "**Form (URL)**",
+  "**![image](URL)**.",
+  "*see _URL_*",
+  "**URL and URL**",
+  "_URL and [label](URL)_",
+  "**bold***URL*",
+  "** [label](URL)**",
+  "**_URL**",
+  "2*3 URL*",
+];
+
+it("normalises Markdown emphasis around evidence and prose URLs identically", () => {
+  const cleanUrl = "https://forms.gle/eX6pXvit1wBv77Yw5";
+  for (const markdown of markdownEmphasisCases) {
+    const decorated = markdown.replaceAll("URL", cleanUrl);
+    const evidenceSource = { ...entries[1], extraction: decorated };
+    assert.doesNotThrow(
+      () =>
+        finalizeCollation(
+          `See [the form](${cleanUrl}). [S1]`,
+          ".search/run",
+          [evidenceSource],
+          allocateSourceIdentity([evidenceSource], []),
+          "fetched",
+        ),
+      `decorated evidence: ${decorated}`,
+    );
+
+    const proseSource = { ...entries[1], extraction: `Evidence: ${cleanUrl}` };
+    assert.doesNotThrow(
+      () =>
+        finalizeCollation(
+          `${decorated} [S1]`,
+          ".search/run",
+          [proseSource],
+          allocateSourceIdentity([proseSource], []),
+          "fetched",
+        ),
+      `decorated prose: ${decorated}`,
+    );
+  }
+});
+
+it("preserves balanced parentheses and literal trailing emphasis characters in URLs", () => {
+  const cases = [
+    {
+      url: "https://en.wikipedia.org/wiki/Foo_(bar)",
+      markdown: "**[label](https://en.wikipedia.org/wiki/Foo_(bar))**.",
+    },
+    {
+      url: "https://example.com/name*",
+      markdown: "**[label](https://example.com/name*)**",
+    },
+    {
+      url: "https://example.com/name__",
+      markdown: "__[label](https://example.com/name__)__",
+    },
+    {
+      url: "https://example.com/x_",
+      markdown: "foo_https://example.com/x_",
+    },
+    {
+      url: "https://example.com/name*",
+      markdown: "2 * 3 = https://example.com/name*",
+    },
+    {
+      url: "https://example.com/x*",
+      markdown: "*note* https://example.com/x*",
+    },
+    {
+      url: "https://example.com/x_",
+      markdown: "see the _form_ at https://example.com/x_",
+    },
+    {
+      url: "https://example.com/name**",
+      markdown: "*note* https://example.com/name**",
+    },
+  ];
+  for (const { url, markdown } of cases) {
+    const source = { ...entries[1], extraction: markdown };
+    assert.doesNotThrow(() =>
+      finalizeCollation(
+        `See [the page](${url}). [S1]`,
+        ".search/run",
+        [source],
+        allocateSourceIdentity([source], []),
+        "fetched",
+      ),
+    );
+  }
+});
+
+it("does not conflate a literal trailing emphasis character with the undecorated resource", () => {
+  const plain = "https://example.com/name";
+  const literal = "https://example.com/name*";
+  for (const [extraction, prose] of [
+    [`Evidence: ${plain}`, `**${literal}***`],
+    [`Evidence: **${literal}***`, plain],
+  ]) {
+    const source = { ...entries[1], extraction };
+    assert.throws(() =>
+      finalizeCollation(
+        `${prose} [S1]`,
+        ".search/run",
+        [source],
+        allocateSourceIdentity([source], []),
+        "fetched",
+      ),
+    );
+  }
 });
 
 const citationSources: ExtractResult[] = [

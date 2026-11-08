@@ -59,12 +59,106 @@ function withoutInlineCode(text: string): string {
   return text.replace(/(`+)(?!`)[\s\S]*?\1(?!`)/g, "");
 }
 
-/** Preserve URL parentheses inside a path; trim only excess closing punctuation. */
+function isWhitespace(char: string | undefined): boolean {
+  return char === undefined || /\s/.test(char);
+}
+
+function isPunctuation(char: string | undefined): boolean {
+  return char !== undefined && /[\p{P}\p{S}]/u.test(char);
+}
+
+/**
+ * Return closers for emphasis delimiters still open at a URL. Pairing omits CommonMark's
+ * rule of three: surplus trailing markers stay URL content, keeping literal `*`/`_` resources
+ * distinct.
+ */
+function markdownEmphasisCloser(text: string, urlIndex: number, url: string): string {
+  const trailing = url.match(/[*_]+$/)?.[0];
+  if (!trailing) return "";
+  const lineStart = text.lastIndexOf("\n", urlIndex - 1) + 1;
+  const rawBefore = text.slice(lineStart, urlIndex);
+  // Mask URLs and inline code while preserving offsets: their delimiters are content.
+  const before = rawBefore
+    .replace(/https?:\/\/[^\s<>"`\]]+/g, (match) => " ".repeat(match.length))
+    .replace(/(`+)(?!`)[\s\S]*?\1(?!`)/g, (match) => " ".repeat(match.length));
+  const open: string[] = [];
+  for (const match of before.matchAll(/\*+|_+/g)) {
+    const run = match[0];
+    const index = match.index ?? 0;
+    let escaped = 0;
+    for (let cursor = index - 1; cursor >= 0 && before[cursor] === "\\"; cursor--) escaped++;
+    if (escaped % 2 === 1) continue;
+    const previous = rawBefore[index - 1];
+    const next =
+      index + run.length < rawBefore.length ? rawBefore[index + run.length] : text[urlIndex];
+    const leftFlanking =
+      !isWhitespace(next) &&
+      (!isPunctuation(next) || isWhitespace(previous) || isPunctuation(previous));
+    const rightFlanking =
+      !isWhitespace(previous) &&
+      (!isPunctuation(previous) || isWhitespace(next) || isPunctuation(next));
+    const canOpen =
+      leftFlanking && (run[0] === "*" || !rightFlanking || isPunctuation(previous));
+    const canClose =
+      rightFlanking && (run[0] === "*" || !leftFlanking || isPunctuation(next));
+    if (canClose) {
+      let opener = -1;
+      for (let index = open.length - 1; index >= 0; index--) {
+        if (open[index][0] === run[0]) {
+          opener = index;
+          break;
+        }
+      }
+      if (opener >= 0) open.splice(opener);
+    }
+    if (canOpen) open.push(run);
+  }
+  const openers = open.reverse().join("");
+  for (let index = 0; index < openers.length; index++) {
+    const candidate = openers.slice(index);
+    if (trailing.endsWith(candidate)) return candidate;
+  }
+  return "";
+}
+
+/** Preserve URL parentheses and literal trailing emphasis characters; trim Markdown closers. */
 function proseUrls(text: string): string[] {
   return [...text.matchAll(/https?:\/\/[^\s<>"`\]]+/g)].map((match) => {
-    let url = match[0].replace(/[.,;:!?]+$/, "");
-    while (url.endsWith(")") && (url.match(/\)/g)?.length ?? 0) > (url.match(/\(/g)?.length ?? 0))
-      url = url.slice(0, -1);
+    let url = match[0];
+    let closerPending = true;
+    let previous: string;
+    do {
+      previous = url;
+      url = url.replace(/[.,;:!?]+$/, "");
+      const before = text.slice(0, match.index ?? 0);
+      const trailingMarkers = url.match(/[*_]+$/)?.[0];
+      if (trailingMarkers && /\[[^\]\n]*\]\($/.test(before)) {
+        // Markers after a Markdown link's closing parenthesis are outside its URL.
+        let linkTarget = url.slice(0, -trailingMarkers.length);
+        const withMarkers = linkTarget;
+        while (
+          linkTarget.endsWith(")") &&
+          (linkTarget.match(/\)/g)?.length ?? 0) > (linkTarget.match(/\(/g)?.length ?? 0)
+        )
+          linkTarget = linkTarget.slice(0, -1);
+        if (linkTarget !== withMarkers) {
+          url = linkTarget;
+          closerPending = false;
+        }
+      }
+      const closer = closerPending
+        ? markdownEmphasisCloser(text, match.index ?? 0, url)
+        : "";
+      if (closer) {
+        url = url.slice(0, -closer.length);
+        closerPending = false;
+      }
+      while (
+        url.endsWith(")") &&
+        (url.match(/\)/g)?.length ?? 0) > (url.match(/\(/g)?.length ?? 0)
+      )
+        url = url.slice(0, -1);
+    } while (url !== previous);
     return url;
   });
 }
