@@ -216,6 +216,36 @@ it("accepts a valid sparse Markdown citation and a complete range", () => {
   );
 });
 
+it("compares repeated and single path slashes equally in bare and Markdown citations", () => {
+  const uvSource: ExtractResult = {
+    ...entries[1],
+    url: "https://docs.astral.sh/uv//reference/installer/",
+    extraction: "See [storage](https://docs.astral.sh/uv//reference/storage/).",
+  };
+  const uvIdentity = allocateSourceIdentity([uvSource], []);
+  for (const text of [
+    "See https://docs.astral.sh/uv/reference/installer/.",
+    "See [installer](https://docs.astral.sh/uv/reference/installer/).",
+    "See https://docs.astral.sh/uv/reference/storage/.",
+  ]) {
+    assert.doesNotThrow(
+      () => finalizeCollation(text, ".search/run", [uvSource], uvIdentity, "fetched"),
+      text,
+    );
+  }
+  assert.throws(
+    () => finalizeCollation(
+      "See https://docs.astral.sh/uv/reference/installer/?mode=/.",
+      ".search/run",
+      [{ ...uvSource, url: "https://docs.astral.sh/uv//reference/installer/?mode=//" }],
+      uvIdentity,
+      "fetched",
+    ),
+    /a prose URL is absent from the supplied evidence/,
+    "path normalisation must never collapse query values",
+  );
+});
+
 it("requires a real extraction identity and excludes empty successful entries", () => {
   const empty = { ...entries[1], extraction: " \n" };
   const result = finalizeCollation(

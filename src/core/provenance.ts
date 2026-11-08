@@ -81,6 +81,11 @@ function pageUrl(value: string): string {
           const char = String.fromCharCode(parseInt(encoded.slice(1), 16));
           return /[\w.~\-]/.test(char) ? char : encoded.toUpperCase();
         })
+        // A doubled path slash and a single slash name the same evidence for
+        // provenance comparison. Restrict this to pathname: scheme, host and
+        // query strings (including slash characters in query values) are
+        // never rewritten.
+        .replace(/\/+/g, "/")
         .replace(/\/$/, "") || "/";
     return url.href;
   } catch {
