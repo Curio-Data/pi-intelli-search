@@ -1444,7 +1444,10 @@ async function completeWithBudgetRetry(
     try {
       const completion = await p.models.complete(attempt(cap));
       const spent = completionTruncated(completion, cap);
-      if (spent) lastBudgetUsage = completion.usage;
+      if (spent) {
+        lastBudgetError = undefined;
+        lastBudgetUsage = completion.usage;
+      }
       if (!spent || (completion.text.trim() && !retryTruncated)) {
         // Stop requesting retries, but rank all usable output before
         // validation, including this completed response.
@@ -1472,6 +1475,7 @@ async function completeWithBudgetRetry(
       // remaining remedy, so continue. Keep the adapter's diagnostic too:
       // its output and hidden-reasoning counts explain the exhaustion.
       lastBudgetError = error;
+      lastBudgetUsage = undefined;
     }
   }
 
@@ -1499,13 +1503,13 @@ async function completeWithBudgetRetry(
 }
 
 function budgetDiagnostic(error: unknown, usage?: ModelUsage): string {
-  if (usage?.output != null) {
+  if (usage?.output != null && usage.output > 0) {
     return ` Last attempt: ${usage.output} output tokens${
       usage.reasoning != null ? `, ${usage.reasoning} hidden reasoning` : ""
     }.`;
   }
   const counts = errMsg(error).match(/([\d,]+) output tokens(?:, ([\d,]+) hidden reasoning)?/);
-  if (counts) {
+  if (counts && Number(counts[1].replaceAll(",", "")) > 0) {
     return ` Last attempt: ${counts[1]} output tokens${counts[2] ? `, ${counts[2]} hidden reasoning` : ""}.`;
   }
   return error === undefined ? "" : ` Adapter diagnostic: ${failureDetail(errMsg(error))}`;
@@ -1523,12 +1527,15 @@ function bothBudgetsSpent(
 ): OutputBudgetExhaustedError {
   const setting = stage === "extract" ? "extractionMaxTokens" : "collationMaxTokens";
   const attempts = retries === 1 ? "one retry" : `${retries} retries`;
-  const reasoningReported = lastUsage?.reasoning != null || /hidden reasoning/.test(errMsg(lastError));
+  const reasoningCount = lastUsage?.reasoning ?? Number(
+    errMsg(lastError).match(/([\d,]+) hidden reasoning/)?.[1].replaceAll(",", "") ?? 0,
+  );
+  const reasoningReported = reasoningCount > 0;
   return new OutputBudgetExhaustedError(
     `${BOTH_SPENT}${cap} tokens and again after ${attempts} up to ${maxTokens} tokens; ` +
       (reasoningReported
         ? `the model's hidden reasoning consumed every budget. Raise ${setting}, `
-        : `the output budget was exhausted before visible text was returned. Raise ${setting}, `) +
+        : `the output budget was exhausted without visible text. Raise ${setting}, `) +
       "choose a model that reasons less for this stage, or re-run." +
       budgetDiagnostic(lastError, lastUsage),
   );

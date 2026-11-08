@@ -436,6 +436,68 @@ it("keeps native empty-length token counts and actionable advice", async (t) => 
   assert.match(result.text, /Last attempt: 400 output tokens, 395 hidden reasoning/);
 });
 
+it("uses neutral wording and the actual final attempt when reasoning is zero or attempts are mixed", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });
+  const complete = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model === "extract") {
+      const cap = request.maxTokens ?? 100;
+      return {
+        text: "",
+        citations: [],
+        finishReason: "length" as const,
+        usage: { output: cap, reasoning: 0 },
+      };
+    }
+    return complete(request);
+  };
+  const zeroReasoning = await research({ query: "zero reasoning usage" }, context, dependencies);
+  assert.match(zeroReasoning.text, /the output budget was exhausted without visible text/);
+  assert.doesNotMatch(zeroReasoning.text, /hidden reasoning consumed every budget/);
+  assert.match(zeroReasoning.text, /400 output tokens, 0 hidden reasoning/);
+
+  let extractCalls = 0;
+  context.models.complete = async (request) => {
+    if (request.model.model !== "extract") return complete(request);
+    extractCalls += 1;
+    if (extractCalls === 1) {
+      return {
+        text: "",
+        citations: [],
+        finishReason: "length" as const,
+        usage: { output: 100, reasoning: 95 },
+      };
+    }
+    const cap = request.maxTokens ?? 400;
+    throw new (await import("../src/core/util.js")).OutputBudgetExhaustedError(
+      `OpenRouter exhausted the output budget without visible text (${cap} output tokens, ${cap - 5} hidden reasoning)`,
+    );
+  };
+  const mixed = await research({ query: "mixed returned and thrown attempts" }, context, dependencies);
+  assert.match(mixed.text, /Last attempt: 400 output tokens, 395 hidden reasoning/);
+  assert.doesNotMatch(mixed.text, /Last attempt: 100 output tokens, 95 hidden reasoning/);
+});
+
+it("omits a zero output-token measurement from the diagnostic", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 0 });
+  const complete = context.models.complete;
+  context.models.complete = async (request) =>
+    request.model.model === "collate"
+      ? {
+          text: "",
+          citations: [],
+          finishReason: "length" as const,
+          usage: { output: 0 },
+        }
+      : complete(request);
+  const result = await research({ query: "zero output usage" }, context, dependencies);
+  assert.equal(result.outcome, "collate-failed");
+  assert.doesNotMatch(result.text, /Last attempt: 0 output tokens/);
+  assert.match(result.text, /budget retries are disabled \(outputBudgetRetries is 0\)/);
+});
+
 it("keeps the setting and final counts on the truncated MCP diagnostic", async (t) => {
   const root = await workspace(t);
   const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });
@@ -1038,6 +1100,8 @@ it("keeps original source IDs after budget trimming and dropping", async (t) => 
   assert.match(result.text, /Answer derived from the second source \[S2\]/);
   assert.match(result.text, /\| S2 \| https:\/\/s2\.example\/page \|/);
   assert.match(result.text, /Left out with empty retained text \(1\)/);
+  assert.match(result.text, /256-token per-source limit \(collationSourceMaxTokens\)/);
+  assert.match(result.text, /Raise collationSourceMaxTokens to send more of one page/);
   assert.match(result.text, /left out because the retained text is empty/);
   const deliveredChars = prompt.sources[0].extraction.length;
   assert.match(result.text, new RegExp(`The model received ${deliveredChars} characters`));

@@ -159,6 +159,63 @@ it("accepts extracted cross-links and developer code without crediting extra fet
   );
 });
 
+const citationSources: ExtractResult[] = [
+  entries[1],
+  entries[2],
+  { ...entries[2], url: "https://third.example/", title: "Third" },
+];
+const sparseIdentity = allocateSourceIdentity(citationSources, []);
+const omittedForms = [
+  "Bare [S1]",
+  "Grouped [S1, S3]",
+  "Semicolon [S1; S3]",
+  "And [S1 and S3]",
+  "Markdown [S1](https://docs.example/page)",
+  "Markdown group [S1, S3](https://docs.example/page)",
+  "Hyphen range [S1-S3]",
+  "En-dash range [S1–S3]",
+  "Em-dash range [S1—S3]",
+  "Markdown range [S1-S3](https://docs.example/page)",
+];
+for (const text of omittedForms) {
+  it(`rejects an omitted source ID in ${text}`, () => {
+    assert.throws(
+      () => finalizeCollation(text, ".search/run", citationSources, sparseIdentity, "fetched", new Set([2, 3])),
+      /unknown or omitted source ID/,
+    );
+  });
+}
+
+it("rejects an omitted interior source ID in an inclusive range", () => {
+  assert.throws(
+    () => finalizeCollation("Inclusive range [S1–S3]", ".search/run", citationSources, sparseIdentity, "fetched", new Set([1, 3])),
+    /unknown or omitted source ID/,
+  );
+});
+
+it("accepts a valid sparse Markdown citation and a complete range", () => {
+  const sparse = finalizeCollation(
+    "Third source [S3](https://third.example/).",
+    ".search/run",
+    citationSources,
+    sparseIdentity,
+    "fetched",
+    new Set([3]),
+  );
+  assert.match(sparse, /Third source \[S3\]/);
+  assert.match(sparse, /\| S3 \| https:\/\/third\.example\/ \|/);
+  assert.doesNotThrow(() =>
+    finalizeCollation(
+      "Full range [S1–S3] and [Amazon S3](https://third.example/).",
+      ".search/run",
+      citationSources,
+      sparseIdentity,
+      "fetched",
+      new Set([1, 2, 3]),
+    ),
+  );
+});
+
 it("requires a real extraction identity and excludes empty successful entries", () => {
   const empty = { ...entries[1], extraction: " \n" };
   const result = finalizeCollation(

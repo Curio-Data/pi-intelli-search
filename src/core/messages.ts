@@ -179,9 +179,10 @@ export function formatCollationTrimNotice(
   const empty = plan.trims.filter(isEmpty);
   const isTrimmed = (trim: CollationBudgetTrim): boolean =>
     trim.action === "trimmed" && !isEmpty(trim);
-  const sourceCapped = plan.trims.filter((t) => t.sourceCap && isTrimmed(t));
-  const sourceOnly = sourceCapped.filter((t) => !t.budget);
-  const both = sourceCapped.filter((t) => t.budget);
+  const sourceCapped = plan.trims.filter((t) => t.sourceCap);
+  const displaySourceCapped = sourceCapped.filter(isTrimmed);
+  const sourceOnly = displaySourceCapped.filter((t) => !t.budget);
+  const both = displaySourceCapped.filter((t) => t.budget);
   const budgetApplied = plan.trims.some((t) => t.budget);
   const budgetTrimmed = plan.trims.filter((t) => t.budget && !t.sourceCap && isTrimmed(t));
   const dropped = plan.trims.filter((t) => t.action === "dropped");

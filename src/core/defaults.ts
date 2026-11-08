@@ -90,8 +90,10 @@ export function tuningDefaults(): Omit<
     // not let one page take the collation budget. 32,000 tokens (≈128,000
     // characters) is the largest cap two retries can reach, so the owner's
     // confirmed worst case (≈6 extractions each filling the 32,000-token
-    // retried cap) flows whole inside the 221,000-token budget, and the cap
-    // only binds when extractionMaxTokens is raised above it.
+    // retried cap) flows whole inside the 221,000-token budget. Within
+    // research the cap binds only when extractionMaxTokens or
+    // outputBudgetRetries is raised; manual collation applies it to whatever
+    // the caller supplies.
     collationSourceMaxTokens: 32_000,
     browserFingerprint: "chrome_145",
     disableLlmsFullDiscovery: false,
