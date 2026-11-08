@@ -85,4 +85,4 @@ Current scratch remains under `.tmp/rh7-once/` and the earlier retained scratch 
 
 ## Fresh-Session Prompt
 
-> Start with `docs/experiments/research-handoff/FULL-SUITE-HANDOFF.md`, then this resume. The clean one-shot test is complete; the owner has assigned the full comparison suite to a fresh agent. Verify that the checkout-root `.search` is absent and preserve new empty per-run workspaces and sessions. Prepare the new bounded multi-pair schedule and accepted driver without reopening settled roots, replacing observations or relaxing the rubric.
+> Start with `docs/experiments/research-handoff/FULL-SUITE-HANDOFF.md`, then this resume. The clean one-shot test is complete; the owner has assigned the full comparison suite to a fresh agent. Verify that the checkout-root `.search` is absent and create new empty per-run workspaces and sessions. Prepare the new bounded multi-pair schedule and accepted driver without reopening settled roots, replacing observations or relaxing the rubric.
