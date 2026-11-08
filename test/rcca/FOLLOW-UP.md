@@ -348,6 +348,20 @@ the combined review `fu-combined-review-*-r1.md`):
   combined review (astra C3) found it did not guard the cache lock, and it is
   strengthened in round 6 of track B's builder.
 
+## Accepted Trade-Offs at Review Close (2026-11-08)
+
+The combined review (`fu-combined-review-glm-r3.md`, `fu-combined-review-astra-r4.md`)
+and the prose review (`fu-prose-r4.md`) closed with no must-fix. Accepted as is:
+
+- astra R4-1 (Low): a Markdown link whose label is an S-number but whose URL points at
+  a different supplied source is accepted by URL. Treat it as a citation-grammar
+  limitation; a reserved citation form would be a later change.
+- astra R4-2 (Low): any positive reported reasoning count selects the wording
+  "hidden reasoning consumed every budget".
+- glm R2-3 (Nit): the mixed-script guard keeps Latin with Deseret to preserve an
+  existing keep row; it is not a full UTS #39 restriction.
+- prose O1 to O4, N9, N10 and R4-1 (optional): left unchanged.
+
 ## Method to Repeat
 
 The 0.22.0 fix was built this way; repeat it.
