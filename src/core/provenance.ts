@@ -137,20 +137,38 @@ export function finalizeCollation(
     // Only the reserved citation grammar is an ID group. Product names and
     // Markdown link labels such as [Amazon S3](...) are ordinary content.
     if (
-      !/^S\d+(?:\s*(?:[,;–-]|\band\b)\s*S\d+)*$/i.test(bracket[1].trim()) ||
-      prose.slice((bracket.index ?? 0) + bracket[0].length).startsWith("(")
+      !/^S\d+(?:\s*(?:[,;–—-]|\band\b)\s*S\d+)*$/i.test(bracket[1].trim())
     )
       continue;
-    for (const match of bracket[1].matchAll(/\bS(\d+)\b/gi)) {
-      const index = Number(match[1]);
-      if (match[1] !== String(index) || !allowedSourceIds.has(index))
-        invalid("unknown or omitted source ID");
+    const afterBracket = prose.slice((bracket.index ?? 0) + bracket[0].length);
+    if (afterBracket.startsWith("(")) {
+      const target = afterBracket.slice(1).match(/^([^\s)]+)/)?.[1];
+      const firstId = bracket[1].match(/\bS(\d+)\b/i)?.[1];
+      const targetIndex = target
+        ? sources.findIndex((source) => pageUrl(source.url) === pageUrl(target))
+        : -1;
+      if (targetIndex < 0 || firstId !== String(targetIndex + 1)) continue;
     }
+    const validateId = (raw: string): void => {
+      const index = Number(raw);
+      if (raw !== String(index) || !allowedSourceIds.has(index)) {
+        invalid("unknown or omitted source ID");
+      }
+    };
+    for (const range of bracket[1].matchAll(/\bS(\d+)\s*[-–—]\s*S(\d+)\b/gi)) {
+      const start = Number(range[1]);
+      const end = Number(range[2]);
+      for (let index = Math.min(start, end); index <= Math.max(start, end); index++) {
+        validateId(String(index));
+      }
+    }
+    for (const match of bracket[1].matchAll(/\bS(\d+)\b/gi)) validateId(match[1]);
   }
   // Cross-links present in an extraction are evidence CONTENT, not extra
   // fetched pages. They may appear in synthesis but never enter the inventory.
+  const suppliedSources = sources.filter((_, index) => allowedSourceIds.has(index + 1));
   const urls = new Set(
-    sources.flatMap((source) => [source.url, ...proseUrls(source.extraction)]).map(pageUrl),
+    suppliedSources.flatMap((source) => [source.url, ...proseUrls(source.extraction)]).map(pageUrl),
   );
   for (const url of proseUrls(prose)) {
     if (!urls.has(pageUrl(url))) invalid("a prose URL is absent from the supplied evidence");
