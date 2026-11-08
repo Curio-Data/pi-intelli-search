@@ -67,13 +67,15 @@ import {
   collationSourceOverheadChars,
   COLLATION_NO_EVIDENCE_MESSAGE,
   CollationNoEvidenceError,
+  CollationTrimmedInputError,
+  type CollationInputBudgetDetails,
   deliveredInputBudget,
   formatCacheAppendix,
   formatCollationTrimNotice,
 } from "../messages.js";
 import { MAX_OUTPUT_TOKENS } from "../defaults.js";
 import { attemptTimeoutMs, budgetCaps, rankBudgetedCompletions, type BudgetedCompletion } from "../output-budget.js";
-import { planCollationBudget, inferredSource } from "../collation-budget.js";
+import { planCollationBudget, inferredSource, type CollationBudgetPlan } from "../collation-budget.js";
 import { progress } from "../progress.js";
 import {
   collationFailureReport,
@@ -299,19 +301,18 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
           ? { budgetRetried: true, budgetRetries: p.budgetRetries.collate }
           : {}),
         error: reason,
-        ...(error instanceof CollationNoEvidenceError ? { inputBudget: error.inputBudget } : {}),
+        ...(error instanceof CollationNoEvidenceError || error instanceof CollationTrimmedInputError
+          ? { inputBudget: error.inputBudget }
+          : {}),
       });
       failureMessage =
         `Collation failed: ${asSentence(reason)} ${succeededExtractions.length} page(s) were extracted, but ` +
         `the report already saved for this query at ${p.cachePath} was preserved, ` +
         `so this run's extractions were not saved.\n\nSearch summary:\n${search.searchResult}`;
       outcome = "collate-failed";
-      collation = collationFailureReport(
-        reason,
-        p.cachePath,
-        succeededExtractions,
-        identity,
-      );
+      collation =
+        collationFailureReport(reason, p.cachePath, succeededExtractions, identity) +
+        (error instanceof CollationTrimmedInputError ? error.trimNotice : "");
     }
   }
 
@@ -821,6 +822,39 @@ async function runCollateStage(
   );
 
   throwIfAborted(p.signal);
+  try {
+    return await collateTrimmedEvidence(p, collationUserMsg, succeededExtractions, identity, {
+      budget,
+      evidence,
+      inputBudget,
+      suppliedSourceNumbers,
+    });
+  } catch (error) {
+    // A failure after trimming keeps the trim on record: the report and
+    // telemetry must say what the model was not sent (round-2 DS-F3).
+    if (budget.trims.length === 0 || p.signal?.aborted) throw error;
+    throw new CollationTrimmedInputError(
+      errMsg(error),
+      inputBudget,
+      formatCollationTrimNotice(budget, identity, p.cachePath, inputBudget.charsAfter),
+      { cause: error },
+    );
+  }
+}
+
+async function collateTrimmedEvidence(
+  p: PipelineCtx,
+  collationUserMsg: string,
+  succeededExtractions: ExtractResult[],
+  identity: SourceIdentity,
+  plan: {
+    budget: CollationBudgetPlan;
+    evidence: ExtractResult[];
+    inputBudget: CollationInputBudgetDetails;
+    suppliedSourceNumbers: Set<number>;
+  },
+): Promise<string> {
+  const { budget, evidence, inputBudget, suppliedSourceNumbers } = plan;
   // A truncated synthesis is retried too: one collation call is cheap next to
   // the extractions it would otherwise summarise incompletely.
   const chosen = await completeWithBudgetRetry(
@@ -999,9 +1033,10 @@ async function writeCacheArtifacts(
       }
 
       // Archive a previous run's artefact set to a numbered sibling folder
-      // (<cachePath>.1, .2, ...) before this run commits. Rotation happens
-      // only here, on the success path with the new results already in
-      // hand; degraded exits preserve the previous run in place instead.
+      // (<cachePath>.1, .2, ...) before this run commits, with the new
+      // results already in hand. A failed run reaches this point only when
+      // no successful report is in place, so it archives at most an earlier
+      // failure report; a successful one is preserved above.
       // Archiving is best-effort: a failure falls back to in-place
       // replacement rather than discarding the completed run.
       await rotateCacheArtefacts(p.physicalCachePath).catch((error) => {

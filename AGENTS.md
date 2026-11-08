@@ -242,6 +242,8 @@ src/
 │   ├── llm.ts               # Single model retry/timeout policy
 │   ├── paths.ts             # Physical roots and display policy
 │   ├── cache.ts             # Artifacts, locks and index
+│   ├── collation-budget.ts  # Collation input budget, boundary-safe cuts and trim order
+│   ├── output-budget.ts     # Budget-retry caps, timeouts and candidate ranking
 │   ├── fetch.ts             # Dual page fetch and documentation downloads
 │   ├── console.ts           # Async-scoped dependency diagnostic suppression
 │   ├── annotations.ts       # Citation harvesting
@@ -326,7 +328,11 @@ scripts/
 
 test/
 ├── annotations.test.ts
+├── budget-candidates.test.ts # Budget-retry candidate ranking
+├── budget-retry.test.ts      # Output-cap retries for extraction and collation
 ├── cache.test.ts
+├── claude-routing.test.ts
+├── collation-budget.test.ts  # Collation input budget, trim notice and delivered-text provenance
 ├── compat-guard.test.ts
 ├── core-boundary.test.ts     # Source/declaration audit and isolated runtime
 ├── core-cache.test.ts        # Independent-process cache writes and metadata
@@ -351,10 +357,12 @@ test/
 ├── probes/mcp-install.mjs     # Installed standalone operations and native fetch assets
 ├── tsconfig.native-contract.json # Type check for contract tests and generator
 ├── prompts.test.ts
+├── provenance.test.ts        # Collation provenance validation and failure reports
 ├── plugin-bundles.test.ts    # Generated plugin/marketplace shape, pins and drift gate
 ├── package-readmes.test.ts   # README block selection, link rewriting, drift gate and publish swap
 ├── providers.test.ts
 ├── research.test.ts
+├── renderer.test.ts
 ├── research-telemetry.test.ts
 ├── shared.test.ts
 ├── e2e/

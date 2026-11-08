@@ -405,8 +405,9 @@ async function commitStagedArtefacts(
  * entries (the held `.lock` directory, transient `.staging.*` directories)
  * are never moved.
  *
- * Called only from success paths, after the new results have been received;
- * degraded exits preserve the previous run in place instead. Returns the
+ * Called after the new results have been received: on success paths, and on
+ * failure paths only to archive an earlier failure report, since a degraded
+ * exit preserves a previous successful run in place. Returns the
  * archive path, or null when there was nothing to archive (missing directory
  * or only preserved/operational entries).
  *

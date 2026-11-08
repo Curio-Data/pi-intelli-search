@@ -291,7 +291,7 @@ for (const hasCompleted of [false, true]) {
     const firstReason = hasCompleted ? "unknown or omitted source ID" : "a prose URL is absent from the supplied evidence";
     const otherReason = hasCompleted ? /a prose URL is absent|generated a cache-file reference/ : /unknown or omitted source ID|generated a cache-file reference/;
     for (const output of [result.text, report]) {
-      assert.ok(output.includes(`Collation provenance validation failed: ${firstReason}.`));
+      assert.ok(output.includes(`Collation provenance validation failed: ${firstReason}`));
       assert.doesNotMatch(output, otherReason);
     }
   });

@@ -118,6 +118,23 @@ export class CollationNoEvidenceError extends Error {
   }
 }
 
+/**
+ * A collation that failed after its input was trimmed. The message is the
+ * underlying failure's; the trim travels with it so the failure report and
+ * telemetry can say what the model was not sent.
+ */
+export class CollationTrimmedInputError extends Error {
+  constructor(
+    message: string,
+    readonly inputBudget: CollationInputBudgetDetails,
+    readonly trimNotice: string,
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
+    this.name = "CollationTrimmedInputError";
+  }
+}
+
 /** Delivery metrics from the same non-empty evidence used by the prompt.
  *  Whitespace-only retained prefixes count as dropped, not delivered text. */
 export function deliveredInputBudget(

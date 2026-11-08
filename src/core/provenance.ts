@@ -189,7 +189,9 @@ export function finalizeCollation(
       .map(pageUrl),
   );
   for (const url of proseUrls(prose)) {
-    if (!urls.has(pageUrl(url))) invalid("a prose URL is absent from the supplied evidence");
+    if (!urls.has(pageUrl(url))) {
+      invalid(`a prose URL is absent from the supplied evidence (${url})`);
+    }
   }
   // Inline code often carries cache references, so keep it in this check.
   // Ordinary project filenames such as report.md are not cache declarations.

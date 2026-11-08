@@ -88,7 +88,14 @@ export function planCollationBudget(
   const charsBefore = items.reduce((sum, item) => sum + item.text.length, 0);
 
   // Step 1: the per-extraction text cap, independent of the output cap.
-  const kept = items.map((item) => Math.min(item.text.length, sourceCapChars));
+  // The cut ends at a boundary and never inside a link, URL or code fence:
+  // shown half a link, the model can complete it from memory, and provenance
+  // validation, which checks the delivered text, then rejects the run.
+  const kept = items.map((item) =>
+    item.text.length <= sourceCapChars
+      ? item.text.length
+      : safeCutLength(item.text, truncateAtBoundary(item.text, sourceCapChars).length),
+  );
   // The budget is spent in request characters: the request is JSON, so a
   // newline, quote or backslash costs two characters and a control character
   // six. Measuring raw text would let a line-heavy extraction overrun it.
@@ -120,7 +127,7 @@ export function planCollationBudget(
         if (live.reduce((sum, j) => sum + wire[j], 0) <= available) break;
         if (wire[i] <= share) continue;
         const limit = prefixWithin(items[i].text, kept[i], share);
-        kept[i] = truncateAtBoundary(items[i].text, limit).length;
+        kept[i] = safeCutLength(items[i].text, truncateAtBoundary(items[i].text, limit).length);
         wire[i] = serializedLength(items[i].text, kept[i]);
         budgetLimited.add(i);
       }
@@ -252,6 +259,37 @@ function truncateAtBoundary(text: string, limit: number): string {
     if (at >= floor) return window.slice(0, at + extra);
   }
   return window;
+}
+
+/**
+ * Shorten a cut of `text` to `n` characters so the kept prefix does not end
+ * inside a code fence, a Markdown link or image, or a split token such as a
+ * URL. Each step backs off only when at least half of the prefix survives, so
+ * a pathological extraction (one huge token) keeps its plain cut instead of
+ * being emptied. Only ever shortens. Exported for tests.
+ */
+export function safeCutLength(text: string, n: number): number {
+  if (n <= 0 || n >= text.length) return n;
+  const floor = Math.ceil(n / 2);
+  let end = n;
+  const backTo = (at: number): void => {
+    if (at >= floor && at < end) end = at;
+  };
+  // An odd number of fence lines leaves the last block open.
+  const fences = [...text.slice(0, end).matchAll(/^[ \t]*(?:```|~~~)/gm)];
+  if (fences.length % 2 === 1) backTo(fences[fences.length - 1].index ?? end);
+  // A token the cut split in two: back off to its start.
+  if (/\S/.test(text[end] ?? "") && /\S/.test(text[end - 1] ?? "")) {
+    const ws = text.slice(0, end).search(/\s\S*$/);
+    backTo(ws < 0 ? 0 : ws + 1);
+  }
+  // A link or image whose label or target is still open on the last line.
+  const lineStart = text.lastIndexOf("\n", end - 1) + 1;
+  const open = text.slice(lineStart, end).match(/!?\[[^\]\n]*(?:\]\([^)\n]*)?$/);
+  if (open?.index !== undefined) backTo(lineStart + open.index);
+  // Never leave a lone high surrogate.
+  if (end > 0 && isHigh(text, end - 1)) end--;
+  return end;
 }
 
 /**

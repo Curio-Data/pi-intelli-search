@@ -13,6 +13,7 @@ import {
   COLLATION_HEADER_TOKENS_PER_SOURCE,
   MIN_COLLATION_SOURCE_CHARS,
   planCollationBudget,
+  safeCutLength,
   serializedLength,
 } from "../src/core/collation-budget.js";
 import { buildCollationMessage, collationSourceOverheadChars } from "../src/core/messages.js";
@@ -477,8 +478,8 @@ const trimmedUrlExtraction =
   "Filler sentence that pads the extraction past its cap.\n".repeat(40) +
   "Trimmed fact from https://trimmed.example/secret\n";
 
-async function researchCiting(root: string, collation: string) {
-  const base = coreContext(root, { collationSourceMaxTokens: 256, disableTelemetry: true });
+async function researchCiting(root: string, collation: string, telemetry = false) {
+  const base = coreContext(root, { collationSourceMaxTokens: 256, disableTelemetry: !telemetry });
   const complete = base.context.models.complete;
   base.context.models.complete = async (request) => {
     if (request.model.model === "extract") return { text: trimmedUrlExtraction, citations: [] };
@@ -533,4 +534,91 @@ it("rejects a manual-collation citation that only the trimmed-away text held", a
     collate({ query: "manual trimmed citation", extractions }, context),
     /absent from the supplied evidence/,
   );
+});
+
+/** Filler lines, then a Markdown link that straddles the 1,024-character cap. */
+function straddlingLink(): string {
+  let text = "official docs, current\n";
+  while (text.length < 960) text += "Filler about tunnel failover behaviour.\n";
+  return (
+    text +
+    "- [Tunnel availability and failover](https://docs.example/tunnels/availability/)\n" +
+    "More text after the link that the cap removes.\n".repeat(20)
+  );
+}
+
+const OPEN_LINK = /!?\[[^\]\n]*(?:\]\([^)\n]*)?$/;
+
+it("never ends a per-source cut inside a Markdown link (round-2 DS-F1)", () => {
+  const text = straddlingLink();
+  const cap = 256 * 4;
+  assert.ok(text.indexOf("](https") < cap && text.indexOf("/availability/)") > cap, "the link straddles the cap");
+  const plan = planCollationBudget([{ url: "https://one.example", text }], {
+    budgetTokens: 1_000_000,
+    sourceMaxTokens: 256,
+  });
+  const sent = plan.sources[0].text;
+  assert.ok(sent.length > 0 && sent.length <= cap);
+  assert.doesNotMatch(sent, OPEN_LINK);
+  assert.doesNotMatch(sent, /docs\.example|Tunnel availability/);
+  assert.equal(plan.trims[0].keptChars, sent.length);
+});
+
+it("never ends a budget trim inside a Markdown link", () => {
+  // One long line: the last word boundary in the allowance is inside the label.
+  const text =
+    "official docs, current\n" +
+    "word ".repeat(200) +
+    "[Tunnel availability and failover guide](https://docs.example/tunnels/availability/) " +
+    "tail ".repeat(200);
+  const share = text.indexOf("failover guide") + 10;
+  const plan = planCollationBudget(
+    [
+      { url: "https://one.example", text },
+      { url: "https://two.example", text: body(share) },
+    ],
+    {
+      budgetTokens: Math.ceil((2 * share + 2 * COLLATION_HEADER_TOKENS_PER_SOURCE * 4) / 4),
+      sourceMaxTokens: 100_000,
+    },
+  );
+  assert.ok(plan.trims.some((t) => t.url === "https://one.example" && t.budget));
+  assert.doesNotMatch(plan.sources[0].text, OPEN_LINK);
+});
+
+it("backs a cut off an open fence, a split URL or an open link, and only shortens", () => {
+  const fence = "Intro line one.\nIntro line two.\n```sh\ncurl https://a.example/x\n";
+  assert.equal(safeCutLength(fence + "more\n```\n", fence.length), fence.indexOf("```"));
+  const url = "Some context before the reference. Read the guide at https://docs.example/a/b/c for details.";
+  const inUrl = url.indexOf("/b/");
+  assert.equal(safeCutLength(url, inUrl), url.indexOf("https"));
+  const link = "Plenty of text before the link here. [Guide](https://x.example/g) after.";
+  assert.equal(safeCutLength(link, link.indexOf("x.example")), link.indexOf("[Guide"));
+  // One huge token keeps its plain cut instead of being emptied.
+  const token = "h".repeat(2000);
+  assert.equal(safeCutLength(token, 1000), 1000);
+  // Never leaves a lone high surrogate.
+  const emoji = "word ".repeat(10) + "\u{1F600}".repeat(5);
+  const mid = emoji.length - 3;
+  assert.ok(safeCutLength(emoji, mid) <= mid);
+  assert.equal(safeCutLength("a b", 99), 99);
+});
+
+it("names the rejected URL and keeps the trim on record when trimmed collation fails (DS-F3)", async (t) => {
+  const root = await workspace(t);
+  const { result } = await researchCiting(
+    root,
+    "A claim [S1] from https://trimmed.example/secret.",
+    true,
+  );
+  assert.equal(result.outcome, "collate-failed");
+  const dir = join(root, result.details.cachePath as string);
+  const report = await readFile(join(dir, "report.md"), "utf8");
+  for (const output of [result.text, report]) {
+    assert.match(output, /absent from the supplied evidence \(https:\/\/trimmed\.example\/secret\)/);
+  }
+  assert.match(report, /Collation input trimmed/);
+  const meta = JSON.parse(await readFile(join(dir, "meta.json"), "utf8"));
+  assert.ok(meta.stages.collate.error);
+  assert.ok(meta.stages.collate.inputBudget.trimmed >= 1);
 });
