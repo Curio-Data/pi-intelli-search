@@ -163,7 +163,7 @@ An `Inferred Assets` table, also in `details.inferredAssets`, lists references g
 
 ### Trimmed Collation Input
 
-A **Collation input trimmed** notice means the synthesis did not see the full text of each listed extraction. Read the named `extractions/<file>` to recover the omitted text before re-running research. A per-source trim names `collationSourceMaxTokens`; raising it sends more of one long page. A budget trim names `collationInputBudgetTokens`; raising it, or requesting fewer URLs, sends more overall. A source trimmed by both limits needs both raised: raising only the budget does not recover text removed by the per-source cap. Report the setting to the maintainer rather than changing it.
+A **Collation input trimmed** notice means the synthesis did not see the full text of each listed extraction. Read each listed extraction file, at the full path the notice gives, to recover the omitted text; re-running research does not recover it. The notice's **Configuration** line is for whoever maintains the settings. A per-source trim names `collationSourceMaxTokens`; raising it sends more of one long page. A budget trim names `collationInputBudgetTokens`; raising it, or requesting fewer URLs, sends more overall. A source trimmed by both limits needs both raised: raising only the budget does not recover text removed by the per-source cap. Report the setting to the maintainer rather than changing it.
 
 ## Follow Up from Cache
 
