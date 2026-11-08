@@ -150,16 +150,34 @@ export function buildCollationMessage(
 ): string {
   return JSON.stringify({
     query,
-    sources: evidenceExtractions(succeededExtractions).map((source, index) => ({
-      id: `S${source.sourceNumber ?? index + 1}`,
-      url: source.url,
-      title: source.title,
-      type: source.sourceType,
-      extraction: source.extraction,
-      ...(source.inferred ? { inferredFromText: true } : {}),
-      ...(source.finalUrl ? { finalUrl: source.finalUrl } : {}),
-    })),
+    sources: evidenceExtractions(succeededExtractions).map((source, index) =>
+      collationSourceEntry(source, source.sourceNumber ?? index + 1),
+    ),
   }, null, 2);
+}
+
+/** One source as the collation request carries it. */
+function collationSourceEntry(source: ExtractResult, sourceNumber: number): object {
+  return {
+    id: `S${sourceNumber}`,
+    url: source.url,
+    title: source.title,
+    type: source.sourceType,
+    extraction: source.extraction,
+    ...(source.inferred ? { inferredFromText: true } : {}),
+    ...(source.finalUrl ? { finalUrl: source.finalUrl } : {}),
+  };
+}
+
+/**
+ * Characters a source's entry adds to the collation request besides its
+ * extraction text: keys, URL, title, type and the indentation of its nesting
+ * level, so the input budget charges long metadata in full.
+ */
+export function collationSourceOverheadChars(source: ExtractResult, sourceNumber: number): number {
+  const entry = JSON.stringify({ ...collationSourceEntry(source, sourceNumber), extraction: "" }, null, 2);
+  // The entry sits four spaces deeper in the request and is followed by ",\n".
+  return entry.length + 4 * entry.split("\n").length + 2;
 }
 
 /**

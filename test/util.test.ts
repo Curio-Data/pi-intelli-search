@@ -1176,3 +1176,23 @@ describe("reasoningOnlyCompletion", () => {
     assert.equal(reasoningOnlyCompletion(undefined, 3000), false);
   });
 });
+
+describe("extractSourceUrls link labels", () => {
+  it("does not infer a host from the label of a link to an absolute URL", () => {
+    const urls = extractSourceUrls(
+      "See [the README.md](https://github.com/foo/bar/blob/main/README.md) for details.",
+    );
+    assert.deepEqual(
+      urls.map((u) => u.url),
+      ["https://github.com/foo/bar/blob/main/README.md"],
+    );
+  });
+
+  it("still infers a bare file-like reference outside a link label", () => {
+    const urls = extractSourceUrls("Run install.sh, as [the guide](https://example.com/guide) says.");
+    assert.deepEqual(
+      urls.map((u) => u.url),
+      ["https://example.com/guide", "https://install.sh"],
+    );
+  });
+});

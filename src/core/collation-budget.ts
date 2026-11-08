@@ -24,6 +24,12 @@ export interface CollationBudgetItem {
   text: string;
   /** Guessed from search prose rather than cited by the search model. */
   inferred?: boolean;
+  /**
+   * Measured characters this source's entry adds to the request besides its
+   * extraction text (keys, URL, title, indentation). The fixed per-source
+   * header is the floor, so a long URL or title is charged in full.
+   */
+  overheadChars?: number;
 }
 
 export interface CollationBudgetOptions {
@@ -83,8 +89,14 @@ export function planCollationBudget(
 
   // Step 1: the per-extraction text cap, independent of the output cap.
   const kept = items.map((item) => Math.min(item.text.length, sourceCapChars));
-  const available = budgetChars - items.length * headerChars;
-  const totalCapped = kept.reduce((sum, n) => sum + n, 0);
+  // The budget is spent in request characters: the request is JSON, so a
+  // newline, quote or backslash costs two characters and a control character
+  // six. Measuring raw text would let a line-heavy extraction overrun it.
+  const wire = kept.map((n, i) => serializedLength(items[i].text, n));
+  const available =
+    budgetChars -
+    items.reduce((sum, item) => sum + Math.max(headerChars, item.overheadChars ?? 0), 0);
+  const totalCapped = wire.reduce((sum, n) => sum + n, 0);
   const overBudget = totalCapped > available;
 
   const dropped = new Set<number>();
@@ -100,14 +112,16 @@ export function planCollationBudget(
       dropped.add(victim);
       live = live.filter((i) => i !== victim);
     }
-    if (kept.reduce((sum, n) => sum + n, 0) > available) {
+    if (live.reduce((sum, j) => sum + wire[j], 0) > available) {
       // Step 2: trim the longest down to the fair share. Ordering is
       // observable because the loop stops as soon as the total fits.
       const share = fairShare(live.length);
-      for (const i of trimOrder(live, items, kept)) {
-        if (live.reduce((sum, j) => sum + kept[j], 0) <= available) break;
-        if (kept[i] <= share) continue;
-        kept[i] = truncateAtBoundary(items[i].text, Math.min(kept[i], share)).length;
+      for (const i of trimOrder(live, items, wire)) {
+        if (live.reduce((sum, j) => sum + wire[j], 0) <= available) break;
+        if (wire[i] <= share) continue;
+        const limit = prefixWithin(items[i].text, kept[i], share);
+        kept[i] = truncateAtBoundary(items[i].text, limit).length;
+        wire[i] = serializedLength(items[i].text, kept[i]);
         budgetLimited.add(i);
       }
     }
@@ -149,17 +163,68 @@ export function planCollationBudget(
   };
 }
 
-/** Trim order: inferred references first, then longest text first. */
+/** Trim order: inferred references first, then the longest in the request first. */
 function trimOrder(
   live: readonly number[],
   items: readonly CollationBudgetItem[],
-  kept: readonly number[],
+  wire: readonly number[],
 ): number[] {
   return [...live].sort((a, b) => {
     const inferredA = items[a].inferred === true ? 0 : 1;
     const inferredB = items[b].inferred === true ? 0 : 1;
-    return inferredA - inferredB || kept[b] - kept[a] || a - b;
+    return inferredA - inferredB || wire[b] - wire[a] || a - b;
   });
+}
+
+/** Characters one UTF-16 unit takes inside a JSON string, pairs counted per unit. */
+function unitWidth(text: string, i: number): number {
+  const c = text.charCodeAt(i);
+  if (c === 0x22 || c === 0x5c) return 2;
+  if (c < 0x20) return c === 8 || c === 9 || c === 10 || c === 12 || c === 13 ? 2 : 6;
+  if (c >= 0xd800 && c <= 0xdbff) {
+    const next = text.charCodeAt(i + 1);
+    return next >= 0xdc00 && next <= 0xdfff ? 1 : 6;
+  }
+  if (c >= 0xdc00 && c <= 0xdfff) {
+    const prev = i > 0 ? text.charCodeAt(i - 1) : 0;
+    return prev >= 0xd800 && prev <= 0xdbff ? 1 : 6;
+  }
+  return 1;
+}
+
+/**
+ * Length of `text.slice(0, n)` once escaped as a JSON string body, as
+ * `JSON.stringify` writes it (lone surrogates as `\uXXXX`). Exported for tests.
+ */
+export function serializedLength(text: string, n = text.length): number {
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    // A prefix that ends inside a pair leaves a lone high surrogate.
+    total += i === n - 1 && isHigh(text, i) ? 6 : unitWidth(text, i);
+  }
+  return total;
+}
+
+function isHigh(text: string, i: number): boolean {
+  const c = text.charCodeAt(i);
+  return c >= 0xd800 && c <= 0xdbff;
+}
+
+/**
+ * Longest prefix of at most `maxChars` whose serialized length fits `share`.
+ * A surrogate pair is kept or cut whole, so the prefix never ends inside one.
+ */
+function prefixWithin(text: string, maxChars: number, share: number): number {
+  let total = 0;
+  let i = 0;
+  while (i < maxChars) {
+    const step = isHigh(text, i) && unitWidth(text, i) === 1 && i + 1 < maxChars ? 2 : 1;
+    const width = step === 2 ? 2 : i === maxChars - 1 && isHigh(text, i) ? 6 : unitWidth(text, i);
+    if (total + width > share) return i;
+    total += width;
+    i += step;
+  }
+  return maxChars;
 }
 
 /** Lowest-ranked live source: inferred first, then last in the caller's order. */

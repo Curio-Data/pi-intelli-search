@@ -106,6 +106,13 @@ export function finalizeCollation(
   identity: SourceIdentity,
   evidence: "fetched" | "supplied",
   allowedSourceNumbers?: ReadonlySet<number>,
+  /**
+   * The extractions as the collation model received them, when the input
+   * budget trimmed any. Prose URLs are checked against this text, so a URL
+   * that only the trimmed-away part held cannot pass as supplied evidence.
+   * The full `extractions` still drive the inventory and file references.
+   */
+  delivered?: readonly ExtractResult[],
 ): string {
   if (!text.trim()) {
     throw new Error(
@@ -172,8 +179,14 @@ export function finalizeCollation(
   // Cross-links present in an extraction are evidence CONTENT, not extra
   // fetched pages. They may appear in synthesis but never enter the inventory.
   const suppliedSources = sources.filter((_, index) => allowedSourceIds.has(index + 1));
+  const deliveredText = new Map(delivered?.map((source) => [source.url, source.extraction]));
   const urls = new Set(
-    suppliedSources.flatMap((source) => [source.url, ...proseUrls(source.extraction)]).map(pageUrl),
+    suppliedSources
+      .flatMap((source) => [
+        source.url,
+        ...proseUrls(deliveredText.get(source.url) ?? source.extraction),
+      ])
+      .map(pageUrl),
   );
   for (const url of proseUrls(prose)) {
     if (!urls.has(pageUrl(url))) invalid("a prose URL is absent from the supplied evidence");

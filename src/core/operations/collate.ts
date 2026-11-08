@@ -17,7 +17,7 @@ import {
   allocateSourceIdentity,
   rotateCacheArtefacts,
 } from "../cache.js";
-import { buildCollationMessage, MANUAL_COLLATION_NO_EVIDENCE_MESSAGE, CollationNoEvidenceError, deliveredInputBudget, formatCacheAppendix, formatCollationTrimNotice } from "../messages.js";
+import { buildCollationMessage, collationSourceOverheadChars, MANUAL_COLLATION_NO_EVIDENCE_MESSAGE, CollationNoEvidenceError, deliveredInputBudget, formatCacheAppendix, formatCollationTrimNotice } from "../messages.js";
 import { evidenceExtractions, finalizeCollation } from "../provenance.js";
 import type { ExtractResult } from "../types.js";
 import { errMsg, throwIfAborted, completionTruncated } from "../util.js";
@@ -71,9 +71,10 @@ export async function collate(
   // supplied extractions' actual sizes, so a manual collation of heavy
   // extractions is trimmed the same way the research pipeline trims it.
   const budget = planCollationBudget(
-    succeeded.map((ext) => ({
+    succeeded.map((ext, index) => ({
       url: ext.url,
       text: ext.extraction,
+      overheadChars: collationSourceOverheadChars(ext, index + 1),
       ...(inferredSource(ext) ? { inferred: true } : {}),
     })),
     {
@@ -117,6 +118,7 @@ export async function collate(
     identity,
     "supplied",
     suppliedSourceNumbers,
+    evidence,
   );
 
   // Mirrors the research path: a synthesis cut off by the output cap still

@@ -13,7 +13,9 @@ import {
   COLLATION_HEADER_TOKENS_PER_SOURCE,
   MIN_COLLATION_SOURCE_CHARS,
   planCollationBudget,
+  serializedLength,
 } from "../src/core/collation-budget.js";
+import { buildCollationMessage, collationSourceOverheadChars } from "../src/core/messages.js";
 import { tuningDefaults } from "../src/core/defaults.js";
 import type { ExtractResult } from "../src/core/types.js";
 import { coreContext } from "./helpers/core-context.js";
@@ -399,4 +401,136 @@ it("enforces the same budget for manual collation and keeps the supplied extract
   const extractionFiles = (await readdir(join(cachePath, "extractions"))).sort();
   const saved = await readFile(join(cachePath, "extractions", extractionFiles[0]), "utf8");
   assert.ok(saved.length > 21_000, "manual collation saves the whole extraction");
+});
+
+it("measures text by its JSON-escaped length, as the collation request carries it", () => {
+  const corpus = [
+    "plain text",
+    "line one\nline two\r\n\ttabbed",
+    'quotes " and backslashes \\ here',
+    "control \u0001\u001f characters",
+    "astral 🚀 emoji and é combining",
+    "lone \ud800 high and \udc00 low surrogates",
+    "",
+  ];
+  for (const text of corpus) {
+    assert.equal(serializedLength(text), JSON.stringify(text).length - 2, JSON.stringify(text));
+  }
+  // A prefix that ends inside a surrogate pair is charged as a lone surrogate.
+  const pair = "a🚀";
+  assert.equal(serializedLength(pair, 2), JSON.stringify(pair.slice(0, 2)).length - 2);
+});
+
+it("keeps a line-heavy extraction's actual request inside the input budget", () => {
+  // 19,500 two-character lines: 39,000 raw characters, 58,500 once escaped.
+  const extraction: ExtractResult = {
+    url: "https://lines.example/raw.txt",
+    title: "Raw lines",
+    extraction: "a\n".repeat(19_500),
+    sourceType: "code",
+    currentness: "current",
+    status: "success",
+  };
+  const budgetTokens = 10_000;
+  const plan = planCollationBudget(
+    [
+      {
+        url: extraction.url,
+        text: extraction.extraction,
+        overheadChars: collationSourceOverheadChars(extraction, 1),
+      },
+    ],
+    { budgetTokens, sourceMaxTokens: 32_000 },
+  );
+  assert.equal(plan.overBudget, true, "raw length alone would have fitted");
+  const sent = buildCollationMessage("q", ".search/run", undefined, [
+    { ...extraction, sourceNumber: 1, extraction: plan.sources[0].text },
+  ]);
+  // Everything but the query and the request wrapper is inside the budget.
+  const wrapper = JSON.stringify({ query: "q", sources: [] }, null, 2).length;
+  assert.ok(
+    sent.length <= budgetTokens * 4 + wrapper,
+    `request is ${sent.length} characters for a ${budgetTokens * 4}-character budget`,
+  );
+});
+
+it("charges a source's measured metadata when it exceeds the fixed header", () => {
+  const long: ExtractResult = {
+    url: `https://meta.example/${"p".repeat(1_000)}`,
+    title: "T".repeat(2_000),
+    extraction: "x".repeat(8_000),
+    sourceType: "docs",
+    currentness: "current",
+    status: "success",
+  };
+  const overhead = collationSourceOverheadChars(long, 1);
+  assert.ok(overhead > COLLATION_HEADER_TOKENS_PER_SOURCE * 4);
+  const item = { url: long.url, text: long.extraction };
+  const budget = { budgetTokens: 2_500, sourceMaxTokens: 32_000 };
+  assert.equal(planCollationBudget([item], budget).overBudget, false);
+  assert.equal(planCollationBudget([{ ...item, overheadChars: overhead }], budget).overBudget, true);
+});
+
+/** An extraction whose second URL lies beyond the per-source cap of 256 tokens. */
+const trimmedUrlExtraction =
+  "official docs, current\nKept fact from https://kept.example/a\n" +
+  "Filler sentence that pads the extraction past its cap.\n".repeat(40) +
+  "Trimmed fact from https://trimmed.example/secret\n";
+
+async function researchCiting(root: string, collation: string) {
+  const base = coreContext(root, { collationSourceMaxTokens: 256, disableTelemetry: true });
+  const complete = base.context.models.complete;
+  base.context.models.complete = async (request) => {
+    if (request.model.model === "extract") return { text: trimmedUrlExtraction, citations: [] };
+    if (request.model.model === "collate") {
+      await complete(request);
+      return { text: collation, citations: [] };
+    }
+    return complete(request);
+  };
+  const result = await research({ query: "trimmed citation" }, base.context, base.dependencies);
+  const sent = base.requests.filter((r) => r.model.model === "collate").at(-1)!.userMessage;
+  return { result, sent };
+}
+
+it("rejects a research citation that only the trimmed-away extraction text held", async (t) => {
+  const { result, sent } = await researchCiting(
+    await workspace(t),
+    "A claim [S1] from https://trimmed.example/secret.",
+  );
+  assert.doesNotMatch(sent, /trimmed\.example/, "the model never received the URL");
+  assert.notEqual(result.outcome, "completed");
+  assert.doesNotMatch(result.text, /A claim \[S1\] from https:\/\/trimmed\.example/);
+});
+
+it("accepts a research citation that the delivered extraction text held", async (t) => {
+  const { result } = await researchCiting(
+    await workspace(t),
+    "A claim [S1] from https://kept.example/a.",
+  );
+  assert.equal(result.outcome, "completed");
+  assert.match(result.text, /Collation input trimmed/);
+});
+
+it("rejects a manual-collation citation that only the trimmed-away text held", async (t) => {
+  const root = await workspace(t);
+  const { context } = coreContext(root, { collationSourceMaxTokens: 256 });
+  context.models.complete = async () => ({
+    text: "A claim [S1] from https://trimmed.example/secret.",
+    citations: [],
+  });
+  const extractions: ExtractResult[] = [
+    {
+      url: "https://one.example/page",
+      title: "One",
+      extraction: trimmedUrlExtraction,
+      sourceType: "official docs",
+      currentness: "current",
+      status: "success",
+    },
+  ];
+  await assert.rejects(
+    collate({ query: "manual trimmed citation", extractions }, context),
+    /absent from the supplied evidence/,
+  );
 });

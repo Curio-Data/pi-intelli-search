@@ -616,6 +616,12 @@ export function extractSourceUrls(text: string): SourceUrl[] {
   for (const m of text.matchAll(absoluteSpanPattern)) {
     absoluteSpans.push({ start: m.index, end: m.index + m[0].length });
   }
+  // The label of a Markdown link to an absolute URL is the link's text, not a
+  // second reference: `[the README.md](https://github.com/...)` must not add
+  // `https://readme.md`. The link target was already captured above.
+  for (const m of text.matchAll(/\[([^\]\n]*)\]\(https?:\/\/[^\s)]*\)/g)) {
+    absoluteSpans.push({ start: m.index + 1, end: m.index + 1 + m[1].length });
+  }
   const domainPattern =
     /(?<!:\/\/)(?<![\p{L}\p{N}\p{M}@._-])((?:www\.)?(?:[\p{L}\p{N}](?:[\p{L}\p{N}\p{M}-]{0,61}[\p{L}\p{N}\p{M}])?\.)+[\p{L}][\p{L}\p{N}\p{M}-]{1,62}(?::\d{1,5})?(?:(?:\/[^\s<>"{}*()|\\`\[\]]*|[?#][^\s<>"{}*()|\\`\[\]]*))?)/gu;
   for (const m of text.matchAll(domainPattern)) {

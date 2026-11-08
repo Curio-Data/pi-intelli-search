@@ -64,6 +64,7 @@ import {
   buildSearchPayloadPatch,
   buildExtractionMessage,
   buildCollationMessage,
+  collationSourceOverheadChars,
   COLLATION_NO_EVIDENCE_MESSAGE,
   CollationNoEvidenceError,
   deliveredInputBudget,
@@ -784,9 +785,10 @@ async function runCollateStage(
   // applies only to the text sent to the model; the saved extractions are
   // written from the untouched results and the notice names each full file.
   const budget = planCollationBudget(
-    succeededExtractions.map((ext) => ({
+    succeededExtractions.map((ext, index) => ({
       url: ext.url,
       text: ext.extraction,
+      overheadChars: collationSourceOverheadChars(ext, index + 1),
       ...(inferredSource(ext) ? { inferred: true } : {}),
     })),
     {
@@ -852,6 +854,7 @@ async function runCollateStage(
         identity,
         "fetched",
         suppliedSourceNumbers,
+        evidence,
       );
       break;
     } catch (error) {
