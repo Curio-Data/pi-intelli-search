@@ -259,8 +259,8 @@ it("trims a run just over the budget and names the untrimmed extraction files", 
   assert.ok(sentChars <= 39_200, `sent ${sentChars} characters to collation`);
   assert.match(result.text, /\*\*Collation input trimmed\*\*: 2 of 2 extraction/);
   assert.match(result.text, /Trimmed to a fair share of the input budget \(2\):/);
-  assert.match(result.text, /full extraction: `extractions\/01-/);
-  assert.match(result.text, /Raise collationInputBudgetTokens/);
+  assert.match(result.text, /full extraction: `[^`]+\/extractions\/01-/);
+  assert.match(result.text, /raise collationInputBudgetTokens/);
   assert.doesNotMatch(result.text, /collationSourceMaxTokens/, "only the budget bound here");
   assert.match(result.text, /Trim order:/, "the fair-share machinery ran");
   const cachePath = join(root, result.details.cachePath as string);
@@ -325,7 +325,7 @@ it("names the per-source setting when only the per-source cap trimmed", async (t
   assert.match(result.text, /\*\*Collation input trimmed\*\*/);
   assert.match(result.text, /collationSourceMaxTokens/);
   assert.match(result.text, /per-source limit/);
-  assert.doesNotMatch(result.text, /Raise collationInputBudgetTokens/);
+  assert.doesNotMatch(result.text, /raise collationInputBudgetTokens/);
   assert.doesNotMatch(result.text, /exceeded the 1000000-token input budget/);
   assert.doesNotMatch(
     result.text,
@@ -353,13 +353,13 @@ it("names both limits when a source is capped and then trimmed to the budget", a
   assert.match(result.text, /collationSourceMaxTokens/);
   assert.match(result.text, /collationInputBudgetTokens/);
   assert.match(result.text, /Trimmed by both limits \(40\)/);
-  assert.match(result.text, /Raise collationSourceMaxTokens/);
-  assert.match(result.text, /Raise collationInputBudgetTokens/);
+  assert.match(result.text, /raise collationSourceMaxTokens/);
+  assert.match(result.text, /raise collationInputBudgetTokens/);
   const report = await readFile(join(root, result.details.cachePath as string, "report.md"), "utf8");
   assert.match(report, /collationSourceMaxTokens/);
   assert.match(report, /collationInputBudgetTokens/);
   assert.match(report, /Trimmed by both limits \(40\)/);
-  assert.match(report, /full extraction: `extractions\/01-source-0-example\.md`/);
+  assert.match(report, /full extraction: `[^`]+\/extractions\/01-source-0-example\.md`/);
   const saved = await readFile(join(root, result.details.cachePath as string, "extractions", "01-source-0-example.md"), "utf8");
   assert.ok(saved.includes("a".repeat(10_000)), "the saved extraction remains whole");
 });
@@ -394,7 +394,7 @@ it("enforces the same budget for manual collation and keeps the supplied extract
   };
   const sentChars = sent.sources.reduce((total, source) => total + source.extraction.length, 0);
   assert.ok(sentChars <= 39_200, `sent ${sentChars} characters to collation`);
-  assert.match(result.text, /full extraction: `extractions\/01-/);
+  assert.match(result.text, /full extraction: `[^`]+\/extractions\/01-/);
   const cachePath = join(root, result.details.cachePath as string);
   const extractionFiles = (await readdir(join(cachePath, "extractions"))).sort();
   const saved = await readFile(join(cachePath, "extractions", extractionFiles[0]), "utf8");

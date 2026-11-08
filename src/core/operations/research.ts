@@ -885,7 +885,7 @@ async function runCollateStage(
 
   // Say what the collation model did not receive, and where the full text is.
   if (budget.trims.length > 0) {
-    collation += formatCollationTrimNotice(budget, identity, inputBudget.charsAfter);
+    collation += formatCollationTrimNotice(budget, identity, p.cachePath, inputBudget.charsAfter);
   }
 
   p.tel?.recordCollate({

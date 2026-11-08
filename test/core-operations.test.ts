@@ -1059,6 +1059,28 @@ it("saves every fetched page with a failure report when all extractions fail", a
   );
 });
 
+it("uses caller-supplied file wording through manual intelli_collate", async (t) => {
+  const root = await workspace(t);
+  const { context } = coreContext(root, { collationSourceMaxTokens: 100 });
+  const result = await collate({
+    query: "manual trim guidance",
+    extractions: [
+      {
+        url: "https://one.example/a",
+        title: "One",
+        extraction: "a".repeat(3_000),
+        sourceType: "docs",
+        status: "success",
+      },
+    ],
+  }, context);
+  assert.equal(result.outcome, "completed");
+  assert.match(result.text, /The omitted text remains in your supplied extraction files below\. Read them for the missing detail; repeating collation will not recover it\./);
+  assert.doesNotMatch(result.text, /re-running research/);
+  assert.match(result.text, /full extraction: `[^`]+\/extractions\/01-one-example\.md`/);
+  assert.match(result.text, /\*\*Configuration\*\*: To send more next time, raise collationSourceMaxTokens\./);
+});
+
 it("keeps original source IDs after budget trimming and dropping", async (t) => {
   const root = await workspace(t);
   const { context, dependencies, requests } = coreContext(root, {
@@ -1101,7 +1123,9 @@ it("keeps original source IDs after budget trimming and dropping", async (t) => 
   assert.match(result.text, /\| S2 \| https:\/\/s2\.example\/page \|/);
   assert.match(result.text, /Left out with empty retained text \(1\)/);
   assert.match(result.text, /256-token per-source limit \(collationSourceMaxTokens\)/);
-  assert.match(result.text, /Raise collationSourceMaxTokens to send more of one page/);
+  assert.match(result.text, /full extraction: `[^`]+\/extractions\/01-s1-example\.md`/);
+  assert.match(result.text, /Read them for the missing detail; re-running research will not recover it\./);
+  assert.match(result.text, /\*\*Configuration\*\*: To send more next time, raise collationSourceMaxTokens\./);
   assert.match(result.text, /left out because the retained text is empty/);
   const deliveredChars = prompt.sources[0].extraction.length;
   assert.match(result.text, new RegExp(`The model received ${deliveredChars} characters`));

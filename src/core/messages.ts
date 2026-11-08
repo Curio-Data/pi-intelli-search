@@ -172,7 +172,9 @@ export function buildCollationMessage(
 export function formatCollationTrimNotice(
   plan: CollationBudgetPlan,
   identity: SourceIdentity,
+  cachePath: string,
   deliveredChars = plan.charsAfter,
+  operation: "research" | "collate" = "research",
 ): string {
   const isEmpty = (trim: CollationBudgetTrim): boolean =>
     trim.action !== "dropped" && !(plan.sources.find((source) => source.url === trim.url)?.text.trim());
@@ -188,18 +190,20 @@ export function formatCollationTrimNotice(
   const dropped = plan.trims.filter((t) => t.action === "dropped");
   const chars = (n: number): string => `${n} characters`;
   let out = `\n\n---\n`;
-  out += `**Collation input trimmed**: ${plan.trims.length} of ${plan.sources.length} extraction(s) reduced. `;
+  out += `**Collation input trimmed**: ${plan.trims.length} of ${plan.sources.length} extraction(s) reduced.\n`;
+  out += operation === "collate"
+    ? "The omitted text remains in your supplied extraction files below. Read them for the missing detail; repeating collation will not recover it.\n"
+    : "The omitted text is in the extraction files below. Read them for the missing detail; re-running research will not recover it.\n";
   if (sourceCapped.length > 0) {
     out += `${sourceCapped.length} exceeded the ${plan.sourceMaxTokens}-token per-source limit (collationSourceMaxTokens). `;
   }
   if (budgetApplied) {
     out += `The run's total exceeded the ${plan.budgetTokens}-token input budget (collationInputBudgetTokens), including source headers. `;
   }
-  out += `The model received ${chars(deliveredChars)} of ${chars(plan.charsBefore)}. `;
-  out += `Every extraction is saved in full, and nothing here changes what is on disk.\n`;
+  out += `The model received ${chars(deliveredChars)} of ${chars(plan.charsBefore)}.\n`;
   const line = (trim: CollationBudgetTrim): string => {
     const file = identity.extractionFileFor(trim.url);
-    const full = file ? ` (full extraction: \`extractions/${file}\`)` : "";
+    const full = file ? ` (full extraction: \`${cachePath}/extractions/${file}\`)` : "";
     const retained = plan.sources.find((source) => source.url === trim.url);
     if (trim.action === "dropped") return `- ${trim.url}: left out entirely${full}\n`;
     if (!retained?.text.trim()) {
@@ -237,17 +241,17 @@ export function formatCollationTrimNotice(
     advice.push(
       plan.sourceMaxTokens >= MAX_OUTPUT_TOKENS
         ? `collationSourceMaxTokens is already at the ${MAX_OUTPUT_TOKENS}-token maximum the settings accept.`
-        : `Raise collationSourceMaxTokens to send more of one page.`,
+        : `To send more next time, raise collationSourceMaxTokens.`,
     );
   }
   if (budgetApplied) {
     advice.push(
       plan.budgetTokens >= TUNING_RANGES.collationInputBudgetTokens[1]
         ? `collationInputBudgetTokens is already at the ${TUNING_RANGES.collationInputBudgetTokens[1]}-token maximum the settings accept, so ask for fewer URLs to send more.`
-        : `Raise collationInputBudgetTokens if the collation model's context allows, or ask for fewer URLs, to send more overall.`,
+        : `To send more next time, raise collationInputBudgetTokens if the collation model's context allows, or ask for fewer URLs.`,
     );
   }
-  if (advice.length > 0) out += `${advice.join(" ")}\n`;
+  if (advice.length > 0) out += `**Configuration**: ${advice.join(" ")}\n`;
   return out;
 }
 

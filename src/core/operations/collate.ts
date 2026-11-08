@@ -133,7 +133,7 @@ export async function collate(
 
   // Say what the collation model did not receive, and where the full text is.
   if (budget.trims.length > 0) {
-    collation += formatCollationTrimNotice(budget, identity, inputBudget.charsAfter);
+    collation += formatCollationTrimNotice(budget, identity, cachePath, inputBudget.charsAfter, "collate");
   }
 
   // ═══════════════════════════════════════════════════════════════
