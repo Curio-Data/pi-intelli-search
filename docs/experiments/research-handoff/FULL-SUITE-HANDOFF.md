@@ -1,5 +1,11 @@
 # Full Study Suite Handover
 
+## Completion Notice
+
+This incoming assignment is fulfilled. The configurable `rh-v8` runner collected the owner-approved ten matched pairs with two concurrent pairs, retained the complete population, graded every answer and settled the series. Start with [Ten-Pair Study Findings](SUITE-FINDINGS.md) and [Research Handoff Resume](RESUME.md). The text below is the preserved pre-collection handover, not authority to repeat the suite.
+
+## Original Handover
+
 The owner has assigned the full research-handoff comparison suite to a fresh agent. This handover prepares that work; it does not launch another paid run. The completed `rh-v7` one-shot test demonstrated a clean end-to-end workflow, with both answers failing quality. [Pilot Resume](RESUME.md) and [Repeat Findings](REPEAT-FINDINGS.md) record that checkpoint.
 
 The [latest owner direction](../../../evidence/agents/20261108T142141Z-suite-handoff/owner-direction.json) makes cache cleanliness the primary handover concern. The checkout-root `.search` is absent. Its old contents were archived intact, and deterministic checks verified isolation of new run workspaces. Historical output caches remain preserved outside those workspaces.

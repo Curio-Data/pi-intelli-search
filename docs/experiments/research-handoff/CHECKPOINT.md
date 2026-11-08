@@ -1,12 +1,12 @@
 # Fresh-Agent Resume Checkpoint
 
-Current state: the requested single `rh-v7` end-to-end test is complete and settled. The workflow ran without an operational incident; both paid routes passed machine and financial checks, and both answers failed quality. [Repeat Findings](REPEAT-FINDINGS.md) records the result. The one-shot request is fulfilled; no measured batch or additional repeat has started. The owner has assigned the full study suite to a fresh agent. Start with [Full Study Suite Handover](FULL-SUITE-HANDOFF.md) for that assignment and its clean-cache checks, then [Pilot Resume](RESUME.md) for the current evidence and reproduction commands.
+Current state: the owner-requested ten-pair `rh-v8` suite is complete, independently graded, settled and reproduced offline. [Ten-Pair Study Findings](SUITE-FINDINGS.md) records the results; [Research Handoff Resume](RESUME.md) gives the accepted identity and reproduction commands. The configurable runner supports future owner-authorised plans, but this settled request grants no additional collection authority. [Repeat Findings](REPEAT-FINDINGS.md) retains the earlier single-pair checkpoint.
 
 Historical `rh-v4` status: completed on 5 November 2026. The full-population Codemode mean was 1,920.5 main tokens lower, but two route-nonconforming baseline runs account for the entire reduction. As a descriptive sensitivity reading, the Codemode mean across the other eight pairs was 330.1 tokens higher. Only pair 2 had both runs conforming and adequate, and Codemode used 1,090 more main tokens in that pair. Only 8 of 20 runs met the completion, conformance and adequacy conditions that the frozen gate requires of every run, so it rejects an overall savings-with-preserved-usefulness claim. This result concerns one question, one corpus, `Pi` 1.5.0 and `openai-codex/gpt-6.1-sol`.
 
 ## Resume Here
 
-Start with [Full Study Suite Handover](FULL-SUITE-HANDOFF.md) for the incoming full-suite assignment. [Pilot Resume](RESUME.md) gives the accepted checkpoint identity and offline reproduction. Continue in the existing checkout and preserve the completed `rh-v4` evidence:
+Start with [Research Handoff Resume](RESUME.md) and [Ten-Pair Study Findings](SUITE-FINDINGS.md). [Full Study Suite Handover](FULL-SUITE-HANDOFF.md) preserves the fulfilled incoming assignment. Continue in the existing checkout and preserve every series' evidence:
 
 ```text
 /srv/secure/repos/CURIO/.worktrees/pi-intelli-search/research-handoff-runner

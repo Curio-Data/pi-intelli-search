@@ -1,88 +1,58 @@
-# Pilot Resume
+# Research Handoff Resume
 
 ## Current State
 
-The requested one-shot `rh-v7` end-to-end test is complete and settled. It ran without an operational incident. Both routes passed machine and financial checks, and both answers failed the unchanged quality gate. The baseline failed both initial reviews; the candidate failed after the planned adjudication of a reviewer disagreement. [Repeat Findings](REPEAT-FINDINGS.md) records the result and descriptive measurements.
+The owner-requested ten-pair `rh-v8` suite is complete, graded, financially settled and reproduced offline. Start with [Ten-Pair Study Findings](SUITE-FINDINGS.md) for the result and [Suite Protocol](SUITE-PROTOCOL.md) for the accepted method. No further collection is authorised by this completed request.
 
-The workflow is now demonstrated end to end on one clean pair. That establishes neither answer-quality equivalence nor savings. The owner has assigned the full study suite to another agent; start with [Full Study Suite Handover](FULL-SUITE-HANDOFF.md) for that incoming assignment. This handover session runs no paid suite. A cleanly collected negative result remains a negative result; do not replace it or relax criteria to turn it into a pass.
+The runner supports configurable pair counts and bounded concurrent pairs through an immutable plan. The measured implementation is commit `63abcd4`, source digest `441fc18b7bf62403e139de0e06dc54c190289afaeb39fa401377ca7da7a3b86f`; the protocol digest is `fc529eba1e38036843936ac47b3aa64246e473a877e2156ed4ffe01285af3e25`. The [acceptance](../../../evidence/agents/20261108T152419Z-full-suite/implementation-acceptance.json) binds the [plan](../../../evidence/agents/20261108T152419Z-full-suite/study-plan.json), owner directions and independent reviews.
 
-The checkout-root `.search` is absent. Its old files are archived intact, and fresh-workspace isolation has been verified. [Cache and Isolation](FULL-SUITE-HANDOFF.md#preserved-cache-and-isolation) distinguishes the clean active environment from historical caches retained as evidence.
+## Retained Evidence
 
-## Reading Order
+Continue in the existing `study/research-handoff-runner` worktree. Dependencies and ignored scientific evidence are provisioned here and do not travel with a clean clone.
 
-1. [Repeat Findings](REPEAT-FINDINGS.md).
-2. [Final inventory](../../../evidence/benchmarks/research-handoff/20261107T195837Z-rh-v7-once/inventory.json), [assessed outcome](../../../evidence/benchmarks/research-handoff/20261107T195837Z-rh-v7-once/assessed-outcome.json), [incidents](../../../evidence/benchmarks/research-handoff/20261107T195837Z-rh-v7-once/incidents.json) and [settlement](../../../evidence/benchmarks/research-handoff/20261107T195837Z-rh-v7-once/settlement-receipt.json).
-3. [Repeat Protocol](REPEAT-PROTOCOL.md), the frozen `rh-v7-once-1` contract, and its [implementation acceptance](../../../evidence/agents/20261107T195837Z-e2e-once/implementation-acceptance.json).
-4. [Independent implementation and prose review](../../../evidence/agents/20261107T195837Z-e2e-once/reports/review.md), [observer review](../../../evidence/agents/20261107T195837Z-e2e-once/reports/observer-review.md) and [paid machine review](../../../evidence/agents/20261107T195837Z-e2e-once/reports/paid-machine-review.md).
-5. [Continuation Findings](CONTINUATION-FINDINGS.md) for the interrupted `rh-v6` pair; [Pilot Findings](PILOT-FINDINGS.md) for the `rh-v5` corpus rejection; [Findings](FINDINGS.md) for the historical `rh-v4` comparison.
+- [Full-population inventory](../../../evidence/benchmarks/research-handoff/20261108T152419Z-rh-v8-suite/analysis/suite-inventory.json): every scheduled conversation, record, machine check and gate.
+- [Paired analysis](../../../evidence/benchmarks/research-handoff/20261108T152419Z-rh-v8-suite/analysis/suite-analysis.json): quality, tokens, charges, timing, concurrency and incidents.
+- [Settlement](../../../evidence/benchmarks/research-handoff/20261108T152419Z-rh-v8-suite/settlement-receipt.json): reconciled known charges and the cumulative ceiling.
+- [Machine review](../../../evidence/agents/20261108T152419Z-full-suite/reports/paid-machine-review.md): independent transmitted-return, concurrency and financial checks, including the provenance-validator false rejection.
+- [Gate verification](../../../evidence/agents/20261108T152419Z-full-suite/gate-verification.json): all answer gates recorded before settlement.
 
-## Checkout and Identity
-
-Continue in the existing checkout:
-
-```text
-/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/research-handoff-runner
-branch: study/research-handoff-runner
-```
-
-Commit `3088bd8` holds the accepted `rh-v7` implementation. Its acceptance binds code digest `02c7f60afc442de3f7166c77bf711618067c6ec2ccc07f031e5833559df93012` and protocol digest `5a8f1690df39df5f2dd583915343c8830560790d2622279bd8f0396925221add`. The close-out changes current notes, which are outside `sourceIdentity`. The expected handover state is committed and pushed on `study/research-handoff-runner`, with a clean `git status --short` and ignored evidence retained. Investigate unexpected changes rather than resetting or rebinding a closed series.
-
-The evidence is gitignored and exists in this worktree, not in a clean clone. Preserve the checkout, dependencies, all earlier series and scratch. No cleanup, package integration, publication, version bump or main merge is assigned.
-
-## Completed Scope
-
-The [latest owner direction](../../../evidence/agents/20261107T195837Z-e2e-once/owner-direction.json) commissioned one fresh matched pair. That request is fulfilled. The single-series root is settled and cannot be reused; remaining allowance and consumed claims are not new dispatch authority.
-
-The comparison used direct `intelli_research` and Codemode, the `Pi` JavaScript tool interface, with the same captured search and twelve page texts from `rh-v6`. Extraction and collation were live. Answer grading followed both paid conversations, eliminating review delays between arms. The corpus review was explicitly reused because its inputs and rubric were unchanged; the new [corpus acceptance](../../../evidence/benchmarks/research-handoff/20261107T195837Z-rh-v7-once/corpus-acceptance.json) records both rubric digests rather than claiming a fresh capture or review.
-
-The original repeat direction concerned removing avoidable harness friction while preserving comparison quality. The known JSON-rationale problem is now caught before immutable gates by the offline review preflight. Planned reviewer readiness checks precede long grading work, and substantive disagreement is handled by the frozen adjudication rule. Neither is a reason for an additional owner decision. All original grades remain intact.
-
-The incoming assignment is the full study comparison, under a new frozen multi-pair schedule and accepted accounting. The one-pair `rh7-` driver cannot execute it unchanged. [Full Study Suite Handover](FULL-SUITE-HANDOFF.md#incoming-assignment) gives the remaining implementation, review and execution sequence without treating a settled root as reusable. Keep this clean pair separate from the interrupted `rh-v6` pair and the older `rh-v4` setup; do not treat a selected passing subset as evidence of benefit.
+The root `.search` is absent. All per-run output caches, previous series, the archived root cache and scratch remain preserved. Nothing should be deleted or copied into a new measured workspace. No package integration, release, main merge or cleanup is assigned.
 
 ## Offline Reproduction
 
-Run from the checkout root. The source-identity check must pass before comparing new outputs. Machine analysis and quality assessment remain separate: reproduce the former with these commands and inspect the locked reviews and assessed outcome for the latter.
+Run from the checkout root. The output directory must not exist; the reproduction checks source identity before analysing and uses no credentials or network. A later source change requires the accepted implementation for reproduction rather than rebinding the old evidence.
 
 ```bash
 set -eu
 mkdir -p .tmp
-WORK=$(mktemp -d "$PWD/.tmp/rh7-reproduction.XXXXXXXX")
+WORK=$(mktemp -d "$PWD/.tmp/rh8-reproduction.XXXXXXXX")
 export TMPDIR="$WORK"
 node --import tsx --input-type=module <<'JS'
-import { readFile } from "node:fs/promises";
 import { sourceIdentity } from "./scripts/research-handoff/storage.ts";
-const acceptance = JSON.parse(await readFile(
-  "evidence/agents/20261107T195837Z-e2e-once/implementation-acceptance.json",
-  "utf8",
-));
-if ((await sourceIdentity(process.cwd())).digest !== acceptance.codeSha256) {
-  throw new Error("Source differs from the accepted repeat; stop");
+if ((await sourceIdentity(process.cwd())).digest !==
+    "441fc18b7bf62403e139de0e06dc54c190289afaeb39fa401377ca7da7a3b86f") {
+  throw new Error("Source differs from the accepted suite");
 }
 JS
-ROOT="$PWD/evidence/benchmarks/research-handoff/20261107T195837Z-rh-v7-once"
-npm run study:handoff -- rh7-analyse \
-  "$ROOT/observer-inventory.json" \
-  "$ROOT/observer/frozen-inputs.json" "$WORK/observers" no-charges
-npm run study:handoff -- rh7-analyse \
-  "$ROOT/paid-inventory.json" \
-  "$ROOT/corpus-import/frozen-inputs.json" "$WORK/paid" known-charges
-cmp "$ROOT/analysis/observers/pilot-analysis.json" \
-  "$WORK/observers/pilot-analysis.json"
-cmp "$ROOT/analysis/paid/pilot-analysis.json" \
-  "$WORK/paid/pilot-analysis.json"
-printf 'Both analyses match. Scratch retained: %s\n' "$WORK"
+ROOT="$PWD/evidence/benchmarks/research-handoff/20261108T152419Z-rh-v8-suite"
+PLAN="$PWD/evidence/agents/20261108T152419Z-full-suite/study-plan.json"
+node --import tsx scripts/research-handoff/cli.ts \
+  rh8-analyse "$ROOT" "$PLAN" "$WORK/analysis"
+cmp "$ROOT/analysis/suite-inventory.json" \
+  "$WORK/analysis/suite-inventory.json"
+cmp "$ROOT/analysis/suite-analysis.json" \
+  "$WORK/analysis/suite-analysis.json"
+printf 'Reproduced; scratch retained: %s\n' "$WORK"
 ```
 
-Historical reproductions require their own accepted source identities. The `rh-v6` identity was preserved through `8e0901e`; the current tree deliberately differs because it includes the repeat implementation. Do not reinterpret that expected mismatch as corruption or overwrite an earlier analysis. Its byte-identical reproduction and cold-review receipts remain linked from [Continuation Findings](CONTINUATION-FINDINGS.md).
+## Future Studies
 
-## Review Preflight and Retention
+`run-study --pairs N --parallel-pairs K --budget-usd X` prepares a plan when supplied with its new root, owner direction and output path. It is not a command that bypasses acceptance or starts paid work by itself. The [protocol](SUITE-PROTOCOL.md#study-plans) defines the supported bounds, direction schema and complete gate sequence. Shared conservative reservations can reduce concurrency while preserving the spending ceiling.
 
-`scripts/handoff-review-preflight.mjs` checks typed review bindings, makes lossless copies and calls the frozen pure evaluator before a gate is written. Run its explicit tests with `node --import tsx --test test/pilot-review-preflight.test.mjs`, with `TMPDIR` inside the checkout's `.tmp/`. The helper never dispatches research or writes a scientific gate.
+For an accepted future series, use one controller, grade only after collection, prepare exactly one neutral review bundle, and assemble gates serially. Before settlement, confirm collection is complete, stopped or explicitly closed and that every collected answer has its gate. Settlement permanently closes authority-bound commands, including grading. Inspect the settlement's `reconciled` field as well as its liabilities.
 
-A job file names `recordPath`, `frozenPath`, `protocolPath`, two `reviewPaths`, and optional `adjudicationPath`. Relative paths resolve from the working directory. For a live series, prepare copies in a new directory beneath its durable evidence root and pass the returned `assessment-lock.json` to the gate. Preserve the original reviews and digest mapping; never bind a gate to scratch. A valid preflight may return `assessment.passed: false`, which is a quality verdict, not malformed input. A completed negative adjudication also leaves the evaluator's `adjudicated` flag false; consult the retained adjudication and the assessed outcome rather than interpreting that flag as absence.
+The package's general live test suite is not this experiment. Implementation checks remain `npm run test:all`, `npm run test:handoff`, `npm run typecheck:handoff`, the review-preflight tests and the applicable builds and generators. Paid calls require current owner scope and fresh bound identities.
 
-Current scratch remains under `.tmp/rh7-once/` and the earlier retained scratch directories. Worker transpiler caches remain in the evidence tree and are excluded from scientific manifests. Preserve them unless cleanup is explicitly approved.
+## Historical Records
 
-## Fresh-Session Prompt
-
-> Start with `docs/experiments/research-handoff/FULL-SUITE-HANDOFF.md`, then this resume. The clean one-shot test is complete; the owner has assigned the full comparison suite to a fresh agent. Verify that the checkout-root `.search` is absent and create new empty per-run workspaces and sessions. Prepare the new bounded multi-pair schedule and accepted driver without reopening settled roots, replacing observations or relaxing the rubric.
+[Full Study Suite Handover](FULL-SUITE-HANDOFF.md) records the incoming assignment, now fulfilled. [Repeat Findings](REPEAT-FINDINGS.md) records the earlier single clean pair. [Continuation Findings](CONTINUATION-FINDINGS.md), [Pilot Findings](PILOT-FINDINGS.md) and [Findings](FINDINGS.md) retain the earlier outcomes. Their roots, claims, grades and financial receipts remain closed and unchanged. Results from those different series are not pooled into the current comparison.
