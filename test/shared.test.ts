@@ -250,12 +250,14 @@ describe("formatCollationTrimNotice", () => {
       ],
       { budgetTokens: 100_000, sourceMaxTokens: 100 },
     );
-    const out = formatCollationTrimNotice(plan, identity);
+    const out = formatCollationTrimNotice(plan, identity, ".search/run");
     assert.match(out, /per-source limit/);
     assert.match(out, /collationSourceMaxTokens/);
     assert.match(out, /400 characters of 3000 characters sent/);
-    assert.match(out, /`extractions\/01-a-example\.md`/);
-    assert.doesNotMatch(out, /Raise collationInputBudgetTokens/);
+    assert.match(out, /`\.search\/run\/extractions\/01-a-example\.md`/);
+    assert.match(out, /Read them for the missing detail; re-running research will not recover it\./);
+    assert.match(out, /\*\*Configuration\*\*: /);
+    assert.doesNotMatch(out, /raise collationInputBudgetTokens/);
     assert.doesNotMatch(out, /\d,\d{3}/, "numbers are written raw, like the rest of the result text");
     assert.doesNotMatch(out, /Trim order:/, "the fair-share machinery did not run");
   });
@@ -268,12 +270,13 @@ describe("formatCollationTrimNotice", () => {
       ],
       { budgetTokens: 1_000, sourceMaxTokens: 32_000 },
     );
-    const out = formatCollationTrimNotice(plan, identity);
+    const out = formatCollationTrimNotice(plan, identity, ".search/run");
     assert.match(out, /run's total exceeded the 1000-token input budget/);
     assert.match(out, /collationInputBudgetTokens/);
     assert.doesNotMatch(out, /collationSourceMaxTokens/);
     assert.match(out, /1600 characters of 3000 characters sent/);
     assert.match(out, /Trim order:/);
+    assert.ok(out.indexOf("full extraction") < out.indexOf("**Configuration**"), "configuration advice follows the file list");
     assert.doesNotMatch(out, /\d,\d{3}/);
   });
 
@@ -285,12 +288,24 @@ describe("formatCollationTrimNotice", () => {
       })),
       { budgetTokens: 10_000, sourceMaxTokens: 256 },
     );
-    const out = formatCollationTrimNotice(plan, identity);
+    const out = formatCollationTrimNotice(plan, identity, ".search/run");
     assert.match(out, /per-source limit \(collationSourceMaxTokens\)/);
     assert.match(out, /run's total exceeded the 10000-token input budget \(collationInputBudgetTokens\)/);
     assert.match(out, /Trimmed by both limits \(40\)/);
-    assert.match(out, /Raise collationSourceMaxTokens/);
-    assert.match(out, /Raise collationInputBudgetTokens/);
+    assert.match(out, /raise collationSourceMaxTokens/);
+    assert.match(out, /raise collationInputBudgetTokens/);
+  });
+
+  it("uses caller-supplied file wording for manual collation", () => {
+    const plan = planCollationBudget(
+      [{ url: "https://a.example/", text: "a".repeat(3_000) }],
+      { budgetTokens: 100_000, sourceMaxTokens: 100 },
+    );
+    const out = formatCollationTrimNotice(plan, identity, ".search/manual", undefined, "collate");
+    assert.match(out, /The omitted text remains in your supplied extraction files below\. Read them for the missing detail; repeating collation will not recover it\./);
+    assert.doesNotMatch(out, /re-running research/);
+    assert.match(out, /`\.search\/manual\/extractions\/01-a-example\.md`/);
+    assert.match(out, /\*\*Configuration\*\*: To send more next time, raise collationSourceMaxTokens\./);
   });
 });
 
@@ -317,9 +332,9 @@ describe("formatCollationTrimNotice at the settings maxima", () => {
       },
     );
     assert.ok(plan.trims.length > 0);
-    const out = formatCollationTrimNotice(plan, identity);
-    assert.match(out, /already at the 1000000-token maximum/);
-    assert.doesNotMatch(out, /Raise collationInputBudgetTokens/);
+    const out = formatCollationTrimNotice(plan, identity, ".search/run");
+    assert.match(out, /\*\*Configuration\*\*: .*already at the 1000000-token maximum/);
+    assert.doesNotMatch(out, /raise collationInputBudgetTokens/);
   });
 
   it("stops advising a raise when the per-source cap is already at its maximum", () => {
@@ -327,8 +342,8 @@ describe("formatCollationTrimNotice at the settings maxima", () => {
       [{ url: "https://a.example/", text: "a".repeat(MAX_OUTPUT_TOKENS * 4 + 1_000) }],
       { budgetTokens: 1_000_000, sourceMaxTokens: MAX_OUTPUT_TOKENS },
     );
-    const out = formatCollationTrimNotice(plan, identity);
-    assert.match(out, /already at the 128000-token maximum/);
-    assert.doesNotMatch(out, /Raise collationSourceMaxTokens/);
+    const out = formatCollationTrimNotice(plan, identity, ".search/run");
+    assert.match(out, /\*\*Configuration\*\*: .*already at the 128000-token maximum/);
+    assert.doesNotMatch(out, /raise collationSourceMaxTokens/);
   });
 });

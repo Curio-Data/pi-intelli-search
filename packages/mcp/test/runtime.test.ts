@@ -294,9 +294,11 @@ test("MCP dual-bound collation names both limits and preserves full extractions"
       assert.match(output, /Trimmed by both limits \(40\)/);
       assert.match(output, /per-source limit \(collationSourceMaxTokens\)/);
       assert.match(output, /run's total exceeded the 10000-token input budget \(collationInputBudgetTokens\)/);
-      assert.match(output, /Raise collationSourceMaxTokens/);
-      assert.match(output, /Raise collationInputBudgetTokens/);
-      assert.match(output, /full extraction: `extractions\/01-source-0-example\.md`/);
+      assert.match(output, /raise collationSourceMaxTokens/);
+      assert.match(output, /raise collationInputBudgetTokens/);
+      assert.match(output, /full extraction: `[^`]+\/extractions\/01-source-0-example\.md`/);
+      assert.match(output, /The omitted text remains in your supplied extraction files below\. Read them for the missing detail; repeating collation will not recover it\./);
+      assert.match(output, /\*\*Configuration\*\*: /);
     }
     const saved = await readFile(join(result.details.cachePath as string, "extractions", "01-source-0-example.md"), "utf8");
     assert.ok(saved.includes(text));
@@ -335,7 +337,7 @@ test("the collation input budget trims the prompt and the MCP result says what w
     });
     assert.equal(result.outcome, "completed");
     assert.match(result.text, /\*\*Collation input trimmed\*\*: 2 of 2 extraction/);
-    assert.match(result.text, /full extraction: `extractions\/01-/);
+    assert.match(result.text, /full extraction: `[^`]+\/extractions\/01-/);
     // The evidence actually sent, read back from the wire payload.
     const payload = JSON.parse(sent[1].content) as {
       sources: Array<{ extraction: string }>;
