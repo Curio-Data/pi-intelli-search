@@ -297,7 +297,7 @@ test("MCP dual-bound collation names both limits and preserves full extractions"
       assert.match(output, /raise collationSourceMaxTokens/);
       assert.match(output, /raise collationInputBudgetTokens/);
       assert.match(output, /full extraction: `[^`]+\/extractions\/01-source-0-example\.md`/);
-      assert.match(output, /The omitted text remains in your supplied extraction files below\. Read them for the missing detail; repeating collation will not recover it\./);
+      assert.match(output, /The omitted text is in the extraction files below, saved in full from the supplied extractions\. Read them for the missing detail; repeating collation will not recover it\./);
       assert.match(output, /\*\*Configuration\*\*: /);
     }
     const saved = await readFile(join(result.details.cachePath as string, "extractions", "01-source-0-example.md"), "utf8");

@@ -192,7 +192,7 @@ export function formatCollationTrimNotice(
   let out = `\n\n---\n`;
   out += `**Collation input trimmed**: ${plan.trims.length} of ${plan.sources.length} extraction(s) reduced.\n`;
   out += operation === "collate"
-    ? "The omitted text remains in your supplied extraction files below. Read them for the missing detail; repeating collation will not recover it.\n"
+    ? "The omitted text is in the extraction files below, saved in full from the supplied extractions. Read them for the missing detail; repeating collation will not recover it.\n"
     : "The omitted text is in the extraction files below. Read them for the missing detail; re-running research will not recover it.\n";
   if (sourceCapped.length > 0) {
     out += `${sourceCapped.length} exceeded the ${plan.sourceMaxTokens}-token per-source limit (collationSourceMaxTokens). `;

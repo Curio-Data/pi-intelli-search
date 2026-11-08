@@ -302,7 +302,7 @@ describe("formatCollationTrimNotice", () => {
       { budgetTokens: 100_000, sourceMaxTokens: 100 },
     );
     const out = formatCollationTrimNotice(plan, identity, ".search/manual", undefined, "collate");
-    assert.match(out, /The omitted text remains in your supplied extraction files below\. Read them for the missing detail; repeating collation will not recover it\./);
+    assert.match(out, /The omitted text is in the extraction files below, saved in full from the supplied extractions\. Read them for the missing detail; repeating collation will not recover it\./);
     assert.doesNotMatch(out, /re-running research/);
     assert.match(out, /`\.search\/manual\/extractions\/01-a-example\.md`/);
     assert.match(out, /\*\*Configuration\*\*: To send more next time, raise collationSourceMaxTokens\./);

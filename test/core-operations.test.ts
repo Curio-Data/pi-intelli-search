@@ -1075,7 +1075,7 @@ it("uses caller-supplied file wording through manual intelli_collate", async (t)
     ],
   }, context);
   assert.equal(result.outcome, "completed");
-  assert.match(result.text, /The omitted text remains in your supplied extraction files below\. Read them for the missing detail; repeating collation will not recover it\./);
+  assert.match(result.text, /The omitted text is in the extraction files below, saved in full from the supplied extractions\. Read them for the missing detail; repeating collation will not recover it\./);
   assert.doesNotMatch(result.text, /re-running research/);
   assert.match(result.text, /full extraction: `[^`]+\/extractions\/01-one-example\.md`/);
   assert.match(result.text, /\*\*Configuration\*\*: To send more next time, raise collationSourceMaxTokens\./);
