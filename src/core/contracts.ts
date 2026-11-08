@@ -161,6 +161,13 @@ export interface ModelClient {
   preflight(bindings: readonly ModelBinding[]): Promise<ModelBinding[]>;
   /** Adapters invoke the shared model policy exactly once; operations do not retry transport. */
   complete(request: ModelRequest): Promise<ModelCompletion>;
+  /**
+   * The model's maximum output tokens, when the adapter knows it from a
+   * registry or catalogue entry. A budget retry never requests more; the core
+   * sends the configured cap unchanged. Optional: undefined means unknown, and
+   * the shared ceiling applies alone.
+   */
+  outputLimit?(model: ModelConfig): number | undefined;
 }
 
 /** Implementations must use stderr or a private sink, never protocol stdout. */

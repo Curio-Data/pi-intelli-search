@@ -72,10 +72,11 @@ export function tuningDefaults(): Omit<
     // (evidence/2026-11-02-extract-failure-agentskills-io).
     extractionMaxTokens: 8000,
     collationMaxTokens: 8000,
-    // Budget retries: an output cap spent before any visible text is
-    // retried, doubling the cap each time up to MAX_OUTPUT_TOKENS. 2 gives
-    // 8,000, 16,000 then 32,000; 0 disables the retry. Only a failed call
-    // retries.
+    // Budget retries: an extraction cap spent before visible text, or a
+    // synthesis cap reached with or without text, is retried, doubling the
+    // cap each time up to MAX_OUTPUT_TOKENS or the model's output limit,
+    // whichever is lower. 2 gives 8,000, 16,000 then 32,000; 0 disables the
+    // retry.
     outputBudgetRetries: 2,
     // Collation input budget in tokens: what every extraction, its header
     // and the synthesis must fit inside the collation model's context. The

@@ -7,7 +7,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createRuntime, identity, StandaloneError } from "../src/runtime.js";
 import { CACHE_SUGGEST_PROMPT } from "../../../src/core/prompts.js";
-import { completion, fakeTransport, fixture, json, logger } from "./helpers.js";
+import { catalogue, completion, fakeTransport, fixture, json, logger } from "./helpers.js";
 import type { OperationInputs } from "../../../src/core/contracts.js";
 
 const page = { url: "https://docs.example/page", title: "Docs", content: "## Docs\nContent" };
@@ -170,6 +170,41 @@ test("degraded research remains a result and malformed tool arguments never reac
     const result = await runtime.execute("intelli_research", { query: "no sources" });
     assert.equal(result.outcome, "no-links");
     assert.equal(calls, 2);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("MCP research never retries above the catalogue's advertised output limit", async () => {
+  const f = await fixture();
+  try {
+    const caps: unknown[] = [];
+    const cat = catalogue();
+    for (const entry of cat.data) {
+      if (entry.id === "fixture/collate") Object.assign(entry, { top_provider: { max_completion_tokens: 150 } });
+    }
+    const transport = fakeTransport((body) => {
+      if (body.model === "perplexity/sonar") return json(completion(`[Docs](${page.url})`));
+      if (body.model === "fixture/extract") return json(completion("Official docs, current.\nFacts"));
+      caps.push(body.max_completion_tokens);
+      return json(completion("", { choices: [{ message: { content: "" }, finish_reason: "length" }] }));
+    });
+    const runtime = await createRuntime(
+      { ...f.config, settings: { ...f.config.settings, collationMaxTokens: 100, outputBudgetRetries: 2 } },
+      {
+        env: { FIXTURE_KEY: "fixture-secret" },
+        logger,
+        fetch: async (url, init) =>
+          String(url).endsWith("/models") ? json(cat) : transport(url, init),
+        researchDependencies: {
+          fetchPages: async () => [{ ...page, status: "success", source: "markdown" }],
+          downloadLlmsFullToCache: async () => null,
+        },
+      },
+    );
+    const result = await runtime.execute("intelli_research", { query: "catalogue output limit", maxUrls: 1 });
+    assert.deepEqual(caps, [100, 150]);
+    assert.equal(result.outcome, "collate-failed");
   } finally {
     await f.cleanup();
   }

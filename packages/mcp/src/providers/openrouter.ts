@@ -275,6 +275,13 @@ export function createOpenRouterClient(
       }
       return bindings.filter((binding) => !capabilities(binding));
     },
+    outputLimit(model) {
+      // The catalogue's top provider states the largest completion it accepts.
+      if (model.provider !== "openrouter" || !catalogue) return undefined;
+      const entry = catalogue.find((item) => item.id === model.model);
+      const limit = entry ? record(entry.top_provider).max_completion_tokens : undefined;
+      return typeof limit === "number" && Number.isInteger(limit) && limit > 0 ? limit : undefined;
+    },
     async complete(request) {
       throwIfAborted(request.signal);
       key();
@@ -395,5 +402,6 @@ export function createOpenRouterClient(
   return {
     preflight: (bindings) => safe(client.preflight(bindings)),
     complete: (request) => safe(client.complete(request)),
+    outputLimit: (model) => client.outputLimit?.(model),
   };
 }

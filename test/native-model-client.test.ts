@@ -41,6 +41,27 @@ function response(text = "answer", error?: string): AssistantMessage {
 }
 
 describe("native model client", () => {
+  it("reports the registry's maxTokens as the output limit only when it is a positive integer", () => {
+    const entries: Record<string, unknown> = {
+      limited: { maxTokens: 65_536 },
+      zero: { maxTokens: 0 },
+      fractional: { maxTokens: 1.5 },
+      absent: {},
+    };
+    const ctx = {
+      modelRegistry: { find: (_provider: string, id: string) => entries[id] },
+    } as unknown as ExtensionContext;
+    const client = createNativeModelClient(ctx, async () => {
+      throw new Error("no paid work");
+    });
+    const limit = (id: string) => client.outputLimit?.({ provider: "fixture", model: id });
+    assert.equal(limit("limited"), 65_536);
+    assert.equal(limit("zero"), undefined);
+    assert.equal(limit("fractional"), undefined);
+    assert.equal(limit("absent"), undefined);
+    assert.equal(limit("unregistered"), undefined);
+  });
+
   it("preflights exact model bindings without transport or auth calls", async () => {
     const ctx = {
       modelRegistry: {

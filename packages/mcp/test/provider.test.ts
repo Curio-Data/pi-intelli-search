@@ -567,3 +567,30 @@ test("catalogue requests are cancellable before any paid work", async () => {
     await f.cleanup();
   }
 });
+
+test("reports the catalogue's advertised output limit only after preflight and only when valid", async () => {
+  const f = await fixture();
+  try {
+    const cat = catalogue();
+    const [limited, invalid] = cat.data;
+    Object.assign(limited, { top_provider: { max_completion_tokens: 65_536 } });
+    Object.assign(invalid, { top_provider: { max_completion_tokens: "65536" } });
+    const client = createOpenRouterClient(f.config, {
+      logger,
+      env: { FIXTURE_KEY: "fixture-secret" },
+      fetch: async (url) => {
+        assert(String(url).endsWith("/models"));
+        return json(cat);
+      },
+    });
+    const model = (id: string) => ({ provider: "openrouter", model: id });
+    assert.equal(client.outputLimit?.(model(limited.id)), undefined);
+    await client.preflight([{ role: "search", config: f.config.settings.searchModel }]);
+    assert.equal(client.outputLimit?.(model(limited.id)), 65_536);
+    assert.equal(client.outputLimit?.(model(invalid.id)), undefined);
+    assert.equal(client.outputLimit?.({ provider: "other", model: limited.id }), undefined);
+    assert.equal(client.outputLimit?.(model("absent/model")), undefined);
+  } finally {
+    await f.cleanup();
+  }
+});

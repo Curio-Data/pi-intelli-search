@@ -44,8 +44,16 @@ export function rankBudgetedCompletions(
 export const MAX_TIMEOUT_MULTIPLE = 4;
 
 /**
+ * Smallest growth over the previous cap that justifies another paid attempt.
+ * A cap clamped to the ceiling that grows by less (16,000 to 16,384, say) is
+ * dropped: it costs a full call for almost no extra budget.
+ */
+export const MIN_RETRY_GROWTH = 1.25;
+
+/**
  * Output caps to try, in order: the configured cap, then each retry's doubled
- * cap, never above `ceiling` and never repeating a cap. A configured cap at or
+ * cap, never above `ceiling`, never repeating a cap and never growing the
+ * previous cap by less than `MIN_RETRY_GROWTH`. A configured cap at or
  * above the ceiling yields a single attempt, because a larger retry is
  * impossible. `retries` is the number of extra attempts, not the number of
  * attempts: 0 disables the retry.
@@ -58,10 +66,24 @@ export function budgetCaps(
   const caps = [Math.min(configuredCap, ceiling)];
   for (let i = 0; i < retries; i++) {
     const next = Math.min(caps[caps.length - 1] * 2, ceiling);
-    if (next <= caps[caps.length - 1]) break;
+    if (next < caps[caps.length - 1] * MIN_RETRY_GROWTH) break;
     caps.push(next);
   }
   return caps;
+}
+
+/**
+ * Ceiling for budget retries: the shared maximum, lowered to the model's
+ * output limit when the adapter reports a valid one. The
+ * configured cap itself is never lowered, so the first attempt is unchanged
+ * and a configured cap at or above the model limit yields no retry.
+ */
+export function retryCeiling(configuredCap: number, modelLimit: number | undefined): number {
+  const configured = Math.min(configuredCap, MAX_OUTPUT_TOKENS);
+  if (modelLimit === undefined || !Number.isInteger(modelLimit) || modelLimit <= 0) {
+    return MAX_OUTPUT_TOKENS;
+  }
+  return Math.max(configured, Math.min(modelLimit, MAX_OUTPUT_TOKENS));
 }
 
 /**

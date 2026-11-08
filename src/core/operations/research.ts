@@ -74,7 +74,14 @@ import {
   formatCollationTrimNotice,
 } from "../messages.js";
 import { MAX_OUTPUT_TOKENS } from "../defaults.js";
-import { attemptTimeoutMs, budgetCaps, rankBudgetedCompletions, type BudgetedCompletion } from "../output-budget.js";
+import {
+  attemptTimeoutMs,
+  budgetCaps,
+  MIN_RETRY_GROWTH,
+  rankBudgetedCompletions,
+  retryCeiling,
+  type BudgetedCompletion,
+} from "../output-budget.js";
 import { planCollationBudget, inferredSource, type CollationBudgetPlan } from "../collation-budget.js";
 import { progress } from "../progress.js";
 import {
@@ -1434,8 +1441,9 @@ function asSentence(reason: string): string {
  * One model call, retried with a doubled output budget when hidden reasoning
  * spent the cap before any visible text (or, when `retryTruncated` is set,
  * before the text finished). The number of retries is the
- * `outputBudgetRetries` setting (0 disables it), the cap never exceeds the
- * shared ceiling, and each attempt's timeout scales with the budget it is
+ * `outputBudgetRetries` setting (0 disables it), a retry's cap never exceeds
+ * the shared ceiling or the model's output limit, a near-duplicate cap is
+ * not retried, and each attempt's timeout scales with the budget it is
  * given so a retry that needs its allowance is not timed out first. Reasoning
  * models on some serving routes ignore the requested effort and the route is
  * chosen per call, so the same cap is never retried: the shared policy leaves
@@ -1448,7 +1456,21 @@ async function completeWithBudgetRetry(
   retryTruncated: boolean,
 ): Promise<BudgetedCompletion & { alternatives: BudgetedCompletion[] }> {
   const configuredCap = request.maxTokens;
-  const caps = budgetCaps(configuredCap, p.settings.outputBudgetRetries, MAX_OUTPUT_TOKENS);
+  let reported: number | undefined;
+  try {
+    reported = p.models.outputLimit?.(request.model);
+  } catch {
+    // A limit lookup is advisory: an unreadable entry leaves the shared ceiling.
+    reported = undefined;
+  }
+  // Normalised once, so the ceiling and every message agree on the limit.
+  const modelLimit =
+    reported !== undefined && Number.isInteger(reported) && reported > 0 ? reported : undefined;
+  const ceiling = retryCeiling(configuredCap, modelLimit);
+  // The model limit binds only below the shared maximum; at 128,000 no model
+  // can be given more, so the maximum is the bound to report.
+  const limitBinds = modelLimit !== undefined && modelLimit < MAX_OUTPUT_TOKENS && ceiling === modelLimit;
+  const caps = budgetCaps(configuredCap, p.settings.outputBudgetRetries, ceiling);
   const attempt = (cap: number): ModelRequest & { maxTokens: number } => ({
     ...request,
     maxTokens: cap,
@@ -1522,13 +1544,50 @@ async function completeWithBudgetRetry(
   // Report the cap actually used: a configured cap above the ceiling was
   // clamped, and naming the unclamped value would contradict the request.
   const effectiveCap = caps[0];
+  const setting = stage === "extract" ? "extractionMaxTokens" : "collationMaxTokens";
+  const { counts, adapterText } = budgetDiagnosticParts(lastBudgetError, lastBudgetUsage);
   if (caps.length === 1) {
-    throw new OutputBudgetExhaustedError(
-      (effectiveCap >= MAX_OUTPUT_TOKENS
-        ? `Output cap of ${effectiveCap} tokens reached without visible text; the cap is already at the ${MAX_OUTPUT_TOKENS}-token maximum, so no larger retry is possible.`
-        : `Output cap of ${effectiveCap} tokens reached without visible text; budget retries are disabled (outputBudgetRetries is 0).`) +
-        budgetDiagnostic(lastBudgetError, lastBudgetUsage),
-    );
+    // Name the real reason no retry ran, then the measured counts, then a
+    // remedy that can change the outcome. Research cuts a reason at 300
+    // characters from the end, so adapter text goes last.
+    const capReached = `Output cap of ${effectiveCap} tokens reached without visible text; `;
+    let reason: string;
+    let remedy: string;
+    if (modelLimit !== undefined && effectiveCap >= modelLimit) {
+      // Only the spent attempt is known, not where the model stopped: the
+      // recorded limit can be a host default below what the provider allows.
+      reason =
+        `No visible text within the ${effectiveCap}-token cap; the model's output limit of ` +
+        `${modelLimit} tokens is at or below the cap, so no larger retry was made.`;
+      remedy =
+        modelLimit < MAX_OUTPUT_TOKENS && p.identity.adapter === "pi"
+          ? NATIVE_LIMIT_REMEDY
+          : " Choose a model that reasons less, or re-run.";
+    } else if (effectiveCap >= MAX_OUTPUT_TOKENS) {
+      reason = `${capReached}the cap is already at the ${MAX_OUTPUT_TOKENS}-token maximum, so no larger retry is possible.`;
+      remedy = " Choose a model that reasons less, or re-run.";
+    } else if (
+      p.settings.outputBudgetRetries === 0 &&
+      budgetCaps(configuredCap, 1, ceiling).length > 1
+    ) {
+      // Only when enabling retries would actually issue one.
+      reason = `${capReached}budget retries are disabled (outputBudgetRetries is 0).`;
+      remedy = "";
+    } else if (limitBinds) {
+      reason = `${capReached}a retry within the model's output limit (${modelLimit} tokens) would add under a quarter, so none was made.`;
+      // Above 102,400 no limit up to the maximum could allow a retry, so
+      // one attempt at the limit is the only larger budget available.
+      remedy =
+        configuredCap * MIN_RETRY_GROWTH > MAX_OUTPUT_TOKENS
+          ? ` Set ${setting} to ${modelLimit} for one attempt at the limit, or change model.`
+          : p.identity.adapter === "pi"
+            ? NATIVE_LIMIT_REMEDY
+            : " Change model, or re-run.";
+    } else {
+      reason = `${capReached}a retry within the ${MAX_OUTPUT_TOKENS}-token maximum would add under a quarter, so none was made.`;
+      remedy = ` Set ${setting} to ${MAX_OUTPUT_TOKENS} for one attempt at the maximum.`;
+    }
+    throw new OutputBudgetExhaustedError(reason + counts + remedy + adapterText);
   }
   throw bothBudgetsSpent(
     stage,
@@ -1537,23 +1596,60 @@ async function completeWithBudgetRetry(
     caps.length - 1,
     lastBudgetError,
     lastBudgetUsage,
+    // What stopped the schedule: the shared maximum was reached, or the model
+    // limit set the ceiling and no further retry would have grown the last
+    // cap enough to be issued. Otherwise the retry count ran out.
+    // The limit is named when it prevented a larger attempt: it shortened the
+    // schedule, or it leaves no room for a retry worth issuing.
+    caps[caps.length - 1] >= MAX_OUTPUT_TOKENS
+      ? { kind: "maximum" }
+      : limitBinds &&
+          modelLimit !== undefined &&
+          (budgetCaps(configuredCap, p.settings.outputBudgetRetries, MAX_OUTPUT_TOKENS).at(-1)! >
+            caps[caps.length - 1] ||
+            modelLimit < caps[caps.length - 1] * MIN_RETRY_GROWTH)
+        ? { kind: "limit", limit: modelLimit }
+        : undefined,
+    p.identity.adapter,
   );
 }
 
-function budgetDiagnostic(error: unknown, usage?: ModelUsage): string {
+/**
+ * The last attempt's measured counts, or, when none were reported, the
+ * adapter's own diagnostic. Callers place counts before their remedy and the
+ * adapter text after it, so the 300-character cut takes adapter text first.
+ */
+function budgetDiagnosticParts(
+  error: unknown,
+  usage?: ModelUsage,
+): { counts: string; adapterText: string } {
   if (usage?.output != null && usage.output > 0) {
-    return ` Last attempt: ${usage.output} output tokens${
-      usage.reasoning != null ? `, ${usage.reasoning} hidden reasoning` : ""
-    }.`;
+    return {
+      counts: ` Last attempt: ${usage.output} output tokens${
+        usage.reasoning != null ? `, ${usage.reasoning} hidden reasoning` : ""
+      }.`,
+      adapterText: "",
+    };
   }
-  const counts = errMsg(error).match(/([\d,]+) output tokens(?:, ([\d,]+) hidden reasoning)?/);
-  if (counts && Number(counts[1].replaceAll(",", "")) > 0) {
-    return ` Last attempt: ${counts[1]} output tokens${counts[2] ? `, ${counts[2]} hidden reasoning` : ""}.`;
+  const found = errMsg(error).match(/([\d,]+) output tokens(?:, ([\d,]+) hidden reasoning)?/);
+  if (found && Number(found[1].replaceAll(",", "")) > 0) {
+    return {
+      counts: ` Last attempt: ${found[1]} output tokens${found[2] ? `, ${found[2]} hidden reasoning` : ""}.`,
+      adapterText: "",
+    };
   }
-  return error === undefined ? "" : ` Adapter diagnostic: ${failureDetail(errMsg(error))}`;
+  return {
+    counts: "",
+    adapterText: error === undefined ? "" : ` Adapter diagnostic: ${failureDetail(errMsg(error))}`,
+  };
 }
 
 const BOTH_SPENT = "Output cap reached without visible text at ";
+
+/** Native remedy when the recorded output limit binds: the limit lives in
+ *  the host's model registry (models.json, or modelOverrides for a built-in
+ *  model). The MCP catalogue limit has no override, so MCP omits it. */
+const NATIVE_LIMIT_REMEDY = " Change model, or raise its maxTokens in models.json if the provider allows more.";
 
 function bothBudgetsSpent(
   stage: "extract" | "collate",
@@ -1562,6 +1658,8 @@ function bothBudgetsSpent(
   retries: number,
   lastError?: unknown,
   lastUsage?: ModelUsage,
+  bound?: { kind: "maximum" } | { kind: "limit"; limit: number },
+  adapter: "pi" | "mcp" = "pi",
 ): OutputBudgetExhaustedError {
   const setting = stage === "extract" ? "extractionMaxTokens" : "collationMaxTokens";
   const attempts = retries === 1 ? "one retry" : `${retries} retries`;
@@ -1569,12 +1667,26 @@ function bothBudgetsSpent(
     errMsg(lastError).match(/([\d,]+) hidden reasoning/)?.[1].replaceAll(",", "") ?? 0,
   );
   const reasoningReported = reasoningCount > 0;
+  const parts = budgetDiagnosticParts(lastError, lastUsage);
+  const cause = reasoningReported
+    ? "the model's hidden reasoning consumed every budget."
+    : "the output budget was exhausted without visible text.";
+  // At a bound a larger setting cannot produce a larger retry.
+  const remedy =
+    bound?.kind === "maximum"
+      ? ` ${MAX_OUTPUT_TOKENS} is the maximum; choose a model that reasons less, or re-run.`
+      : bound?.kind === "limit"
+        ? adapter === "pi"
+          ? ` Model limit (${bound.limit}) stops retries: change model or raise maxTokens in models.json.`
+          : ` Model limit (${bound.limit}) stops retries: change model or re-run.`
+        : ` Raise ${setting}, choose a model that reasons less for this stage, or re-run.`;
   return new OutputBudgetExhaustedError(
     `${BOTH_SPENT}${cap} tokens and again after ${attempts} up to ${maxTokens} tokens; ` +
-      (reasoningReported
-        ? `the model's hidden reasoning consumed every budget. Raise ${setting}, `
-        : `the output budget was exhausted without visible text. Raise ${setting}, `) +
-      "choose a model that reasons less for this stage, or re-run." +
-      budgetDiagnostic(lastError, lastUsage),
+      cause +
+      // Measured counts before advice, adapter text last: research cuts a
+      // reason at 300 characters from the end.
+      parts.counts +
+      remedy +
+      parts.adapterText,
   );
 }

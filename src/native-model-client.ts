@@ -106,6 +106,13 @@ export function createNativeModelClient(
     async preflight(bindings) {
       return validateModelConfigs(ctx, bindings);
     },
+    outputLimit(model) {
+      // The registry entry's maxTokens. The host fills it with a default for a
+      // custom model defined without one, so it is not always provider-stated.
+      const limit = (ctx.modelRegistry.find(model.provider, model.model) as { maxTokens?: unknown } | undefined)
+        ?.maxTokens;
+      return typeof limit === "number" && Number.isInteger(limit) && limit > 0 ? limit : undefined;
+    },
     async complete(request) {
       const annotations = request.collectCitations ? createAnnotationSink() : undefined;
       let usage: ModelUsage | undefined;

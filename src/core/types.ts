@@ -116,9 +116,10 @@ export interface ResearchSettings {
   extractionMaxTokens: number;
   collationMaxTokens: number;
   // ── Output-budget retries ──
-  // Extra attempts after a call spends its output cap before any visible
-  // text. Each retry doubles the cap, never above the shared ceiling
-  // (MAX_OUTPUT_TOKENS); 0 disables the retry. Only a failed call retries.
+  // Extra attempts after an extraction spends its output cap before visible
+  // text, or a synthesis reaches its cap with or without text. Each retry
+  // doubles the cap, never above the shared ceiling (MAX_OUTPUT_TOKENS) or
+  // the model's output limit; 0 disables the retry.
   outputBudgetRetries: number;
   // ── Collation input budget ──
   // Tokens the collation model may receive for every extraction, its header

@@ -9,7 +9,8 @@ import { it } from "node:test";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { research } from "../src/core/index.js";
-import { budgetCaps, attemptTimeoutMs, MAX_TIMEOUT_MULTIPLE } from "../src/core/output-budget.js";
+import { OutputBudgetExhaustedError } from "../src/core/util.js";
+import { budgetCaps, attemptTimeoutMs, retryCeiling, MAX_TIMEOUT_MULTIPLE } from "../src/core/output-budget.js";
 import { MAX_OUTPUT_TOKENS } from "../src/core/defaults.js";
 import { coreContext } from "./helpers/core-context.js";
 
@@ -330,4 +331,232 @@ it("records the retry count that was actually used for collation", async (t) => 
   );
   assert.equal(meta.stages.collate.budgetRetried, true);
   assert.equal(meta.stages.collate.budgetRetries, 2);
+});
+
+it("lowers the retry ceiling to the model's advertised output limit without lowering the configured cap", () => {
+  assert.equal(retryCeiling(8000, undefined), MAX_OUTPUT_TOKENS);
+  assert.equal(retryCeiling(8000, 65_536), 65_536);
+  assert.equal(retryCeiling(8000, 500_000), MAX_OUTPUT_TOKENS);
+  // A configured cap at or above the limit keeps its value and gets no retry.
+  assert.equal(retryCeiling(70_000, 65_536), 70_000);
+  assert.deepEqual(budgetCaps(70_000, 2, retryCeiling(70_000, 65_536)), [70_000]);
+  // Invalid limits are ignored.
+  for (const bad of [0, -1, 1.5, Number.NaN]) assert.equal(retryCeiling(8000, bad), MAX_OUTPUT_TOKENS);
+  // The Gemini 3.7 Flash case: 32,000 doubles to 64,000; 65,536 would add
+  // under a quarter, so no third call is made.
+  assert.deepEqual(budgetCaps(32_000, 2, retryCeiling(32_000, 65_536)), [32_000, 64_000]);
+  // A host-default limit of 16,384 stops after 16,000 instead of retrying at 16,384.
+  assert.deepEqual(budgetCaps(8000, 2, retryCeiling(8000, 16_384)), [8000, 16_000]);
+  // A clamp that still grows the cap by a quarter or more is issued.
+  assert.deepEqual(budgetCaps(8000, 2, retryCeiling(8000, 20_000)), [8000, 16_000, 20_000]);
+});
+
+it("never requests more than the model's advertised output limit on a budget retry", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  context.models.outputLimit = (model) => (model.model === "collate" ? 150 : undefined);
+  const result = await research({ query: "model output limit" }, context, dependencies);
+  assert.deepEqual(caps, [100, 150]);
+  assert.equal(result.outcome, "collate-failed");
+  assert.match(result.text, /Model limit \(150\) stops retries: change model or re-run\./);
+  assert.doesNotMatch(result.text, /Raise collationMaxTokens/);
+});
+
+it("explains that no retry is possible when the configured cap already meets the model limit", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  context.models.outputLimit = () => 100;
+  const result = await research({ query: "limit already reached" }, context, dependencies);
+  assert.deepEqual(caps, [100]);
+  assert.match(result.text, /No visible text within the 100-token cap; the model's output limit of 100 tokens is at or below the cap, so no larger retry was made\. Choose a model that reasons less, or re-run\./);
+});
+
+it("falls back to the shared ceiling when the output-limit lookup throws", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  context.models.outputLimit = () => {
+    throw new Error("registry unavailable");
+  };
+  await research({ query: "limit lookup throws" }, context, dependencies);
+  assert.deepEqual(caps, [100, 200, 400]);
+});
+
+it("keeps the raise advice when the model limit did not bound the schedule", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  context.models.outputLimit = () => 100_000;
+  const result = await research({ query: "limit far above schedule" }, context, dependencies);
+  assert.deepEqual(caps, [100, 200, 400]);
+  assert.match(result.text, /Raise collationMaxTokens/);
+  assert.doesNotMatch(result.text, /output limit/);
+});
+
+it("attributes a skipped near-duplicate retry to the model limit, never claiming the cap meets it", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  // Configured 100, limit 110: the only retry would add 10%, so none is made.
+  context.models.outputLimit = () => 110;
+  const result = await research({ query: "limit just above cap" }, context, dependencies);
+  assert.deepEqual(caps, [100]);
+  assert.match(result.text, /a retry within the model's output limit \(110 tokens\) would add under a quarter, so none was made\. Change model, or re-run\./);
+  assert.doesNotMatch(result.text, /at or below the cap|undefined/);
+});
+
+it("attributes a skipped near-duplicate retry to the shared maximum when no model limit is known", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2, collationMaxTokens: 110_000 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  const result = await research({ query: "cap near the maximum" }, context, dependencies);
+  assert.deepEqual(caps, [110_000]);
+  assert.match(result.text, new RegExp(`a retry within the ${MAX_OUTPUT_TOKENS}-token maximum would add under a quarter, so none was made\\. Set collationMaxTokens to ${MAX_OUTPUT_TOKENS}`));
+  assert.doesNotMatch(result.text, /change model/);
+  assert.doesNotMatch(result.text, /model's output limit of undefined/);
+});
+
+it("does not advise raising the cap when the last retry already used the shared maximum", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2, collationMaxTokens: 100_000 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  const result = await research({ query: "last retry at maximum" }, context, dependencies);
+  assert.deepEqual(caps, [100_000, MAX_OUTPUT_TOKENS]);
+  assert.match(result.text, new RegExp(`${MAX_OUTPUT_TOKENS} is the maximum; choose a model that reasons less, or re-run\\.`));
+  assert.doesNotMatch(result.text, /Raise collationMaxTokens|change model/);
+});
+
+it("treats a model limit equal to the shared maximum as the maximum, not as a model to replace", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2, collationMaxTokens: 100_000 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  context.models.outputLimit = () => MAX_OUTPUT_TOKENS;
+  const result = await research({ query: "limit equals maximum" }, context, dependencies);
+  assert.deepEqual(caps, [100_000, MAX_OUTPUT_TOKENS]);
+  assert.match(result.text, new RegExp(`${MAX_OUTPUT_TOKENS} is the maximum`));
+  assert.doesNotMatch(result.text, /change model/);
+});
+
+it("ignores an invalid model limit in the messages as well as the schedule", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2, collationMaxTokens: 110_000 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  context.models.outputLimit = () => 0;
+  const result = await research({ query: "zero limit" }, context, dependencies);
+  assert.deepEqual(caps, [110_000]);
+  assert.doesNotMatch(result.text, /\(0 tokens|output limit/);
+});
+
+it("keeps the token counts in a limit-bounded reason despite the 300-character cut", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2, collationMaxTokens: 8000 });
+  const complete = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    const cap = request.maxTokens ?? 0;
+    return {
+      text: "",
+      citations: [],
+      finishReason: "length" as const,
+      usage: { output: cap, reasoning: cap - 50 },
+    };
+  };
+  context.models.outputLimit = () => 16_384;
+  const result = await research({ query: "counts survive the cut" }, context, dependencies);
+  assert.equal(result.outcome, "collate-failed");
+  assert.match(result.text, /16000 output tokens, 15950 hidden reasoning/);
+  assert.match(result.text, /Model limit \(16384\) stops retries: change model or re-run\./);
+});
+
+it("names the retry count, not a model limit, when the limit did not shorten the schedule", async (t) => {
+  const root = await workspace(t);
+  // 100, 200, 400 with or without a 600 limit, and 600 leaves room for a
+  // worthwhile retry: the count ran out, not the limit.
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  context.models.outputLimit = () => 600;
+  const result = await research({ query: "count ran out" }, context, dependencies);
+  assert.deepEqual(caps, [100, 200, 400]);
+  assert.match(result.text, /Raise collationMaxTokens/);
+  assert.doesNotMatch(result.text, /stops retries/);
+});
+
+it("offers one attempt at the limit when no limit up to the maximum could allow a retry", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2, collationMaxTokens: 110_000 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  context.models.outputLimit = () => 120_000;
+  const result = await research({ query: "cap above 102400 with limit" }, context, dependencies);
+  assert.deepEqual(caps, [110_000]);
+  assert.match(result.text, /Set collationMaxTokens to 120000 for one attempt at the limit, or change model\./);
+  assert.doesNotMatch(result.text, /raise the model's limit/);
+});
+
+it("does not imply that enabling retries helps when one retry would not be issued", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 0 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  // Limit 110 over a cap of 100: one retry would add under a quarter.
+  context.models.outputLimit = () => 110;
+  const result = await research({ query: "retries off near the limit" }, context, dependencies);
+  assert.deepEqual(caps, [100]);
+  assert.doesNotMatch(result.text, /budget retries are disabled/);
+  assert.match(result.text, /a retry within the model's output limit \(110 tokens\) would add under a quarter/);
+});
+
+it("puts adapter text after the remedy so the cut cannot remove the advice", async (t) => {
+  const root = await workspace(t);
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 1 });
+  const complete = context.models.complete;
+  context.models.complete = async (request) => {
+    if (request.model.model !== "collate") return complete(request);
+    throw new OutputBudgetExhaustedError(`Provider stopped at the cap. ${"Long adapter detail. ".repeat(20)}`);
+  };
+  const result = await research({ query: "adapter text without counts" }, context, dependencies);
+  assert.equal(result.outcome, "collate-failed");
+  assert.match(result.text, /Raise collationMaxTokens, choose a model that reasons less for this stage, or re-run\. Adapter diagnostic:/);
+});
+
+it("names the model limit when it leaves no room for a worthwhile retry", async (t) => {
+  const root = await workspace(t);
+  // 100, 200, 400 against a 410 limit: no setting can buy more than 410.
+  const { context, dependencies } = coreContext(root, { outputBudgetRetries: 2 });
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  context.models.outputLimit = () => 410;
+  const result = await research({ query: "limit leaves no room" }, context, dependencies);
+  assert.deepEqual(caps, [100, 200, 400]);
+  assert.match(result.text, /Model limit \(410\) stops retries/);
+  assert.doesNotMatch(result.text, /Raise collationMaxTokens/);
+});
+
+it("gives the native adapter a models.json remedy for a recorded limit", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { outputBudgetRetries: 2 });
+  const context = { ...base.context, identity: { ...base.context.identity, adapter: "pi" as const } };
+  const caps: Array<number | undefined> = [];
+  alwaysExhausted(context, caps);
+  context.models.outputLimit = () => 150;
+  const multi = await research({ query: "native limit remedy" }, context, base.dependencies);
+  assert.deepEqual(caps, [100, 150]);
+  assert.match(multi.text, /stops retries: change model or raise maxTokens in models\.json\./);
+  caps.length = 0;
+  context.models.outputLimit = () => 100;
+  const single = await research({ query: "native limit at cap" }, context, base.dependencies);
+  assert.deepEqual(caps, [100]);
+  assert.match(single.text, /at or below the cap, so no larger retry was made\. Change model, or raise its maxTokens in models\.json if the provider allows more\./);
 });

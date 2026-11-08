@@ -361,7 +361,7 @@ sleep "$GAP"
 if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"nodejs.org\"] to research: the Node.js fs promises API methods and their options."; then
   assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
   assert_eq "no extraction budget retries" "$(meta_value "$CWD/.search" '.stages.extract.budgetRetries // 0')" "0"
-  assert_eq "no collation budget retry" "$(meta_value "$CWD/.search" '.stages.collate.budgetRetried // false')" "false"
+  assert_eq "no collation budget retry" "$(meta_value "$CWD/.search" '.stages.collate.budgetRetried // "false" | tostring')" "false"
   assert_ge "extractions succeeded" "$(meta_value "$CWD/.search" '.stages.extract.succeeded // 0')" 1
   # totalInputCharsApprox sums min(page chars, extractMaxChars) over fetched
   # pages. Saved sources hold each full page plus a short header, so at the
