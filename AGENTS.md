@@ -661,7 +661,14 @@ All tools use the `intelli_` prefix to avoid collisions with other `Pi` extensio
 
 ## Repository Folders
 
-The global rules in § Repository Folders of the global `CLAUDE.md` (also `AGENTS.md`) apply, subject to the exceptions below: `.tmp/` never holds the only copy of anything that must be kept and is never cited, agent briefs and reports go to `evidence/agents/<run>/`, and durable proof lives in `evidence/`, which agents never delete. In this repository:
+This repository uses VFM. The global scratch, citation and informed-consent rules apply; the evidence conventions below are local to this project. This retention policy governs cleanup: older blanket no-deletion statements in planning material describe the default, not a prohibition on explicitly authorised consolidation.
 
-- **Other gitignored folders in use** (2026-10-27 inventory, not yet reviewed; do not delete their contents): `.search/` (registered research reports), `.e2e-logs/`, and `.plan/` and `evidence/`, which are gitignored here. `.e2e-auth/` holds a test login: never cite, copy or print it.
-- **Exceptions:** Migration pending (2026-10-27 survey): tracked files still cite paths under `.tmp/` (`.tmp/release-*` staging). Do not delete `.tmp/` content until those items are promoted to `evidence/` and the citations rewritten.
+| Folder | Holds | Default Retention |
+|---|---|---|
+| `evidence/` | Durable proof, timestamped and gitignored | Preserve historical records; do not overwrite them during ordinary development |
+| `evidence/agents/<run>/` | Agent briefs and reports, written here directly | Preserve; only disposable work and logs belong in scratch |
+| `.plan/` | Plan board and ledger | Preserve |
+
+- **Evidence Consolidation and Cleanup.** At the user's explicit request, evidence may be consolidated, archived or deleted. Before proceeding, identify the affected material, what will remain, and the consequences for citations, manifests, reproducibility and recovery. Explain any reliance on backups and obtain approval for the defined scope. Perform only that cleanup and record the outcome in retained project documentation. Consolidation must not misrepresent historical results or imply that removed evidence remains available locally; identify affected references and inventories without silently rewriting historical hashes or verdicts.
+- **Other Gitignored Folders.** The 2026-10-27 inventory identified `.search/` (registered research reports), `.e2e-logs/`, `.plan/` and `evidence/`. Preserve their contents by default; inclusion in that inventory is not cleanup approval. `.e2e-auth/` holds a test login: never cite, copy or print it.
+- **Pending Migration.** The 2026-10-27 survey found tracked citations to `.tmp/release-*` staging. Preserve referenced material until it is promoted to `evidence/` and the citations are rewritten, unless the user explicitly approves its disposal after the loss of supporting evidence has been explained. Record any resulting evidence gaps rather than leaving claims of locally available proof.
