@@ -1246,6 +1246,9 @@ pi install /path/to/pi-intelli-search
 - [Architecture](docs/ARCHITECTURE.md): Detailed design decisions and pipeline internals.
 - [Compatibility](docs/COMPATIBILITY.md): Tested host versions and artefacts for the native extension, MCP server and plugins.
 - [Components](docs/COMPONENTS.md): Third-party dependencies and licence attribution.
+<!-- packages:none -->
+- [Codemode Research Handoff Study](docs/CODEMODE.md): Controlled one-task comparison of calling `intelli_research` directly and through `Pi` Codemode; Codemode added main-conversation tokens, and neither route produced an answer that passed the quality gate.
+<!-- /packages -->
 <!-- packages:pi -->
 - [Native skill guide](skills/intelli-search/SKILL.md): Agent-facing usage instructions for `Pi`.
 - [Native release notes](PI_CHANGELOG.md): The generated native-only changelog that `Pi` 1.5.0 shows under Extension Updates after an update; derived from the [Changelog](CHANGELOG.md).
