@@ -29,6 +29,10 @@ only) and was rerun with a revised prompt recorded beforehand. Driver and traces
 The branch is pushed. Still open, for the owner: merge it into `main`, and approve
 the cleanup scope in the evidence run's `CLEANUP.md`.
 
+Since then the branch has had two adversarial review rounds, fixed in `a32dee4` and
+`cdcbead`. Its current state, verification and the owner's open decisions are in
+[HANDOVER.md](HANDOVER.md); start there.
+
 ## State at Handover
 
 - Branch `rcca/mcp-research-failures`, worktree
