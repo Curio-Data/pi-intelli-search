@@ -153,13 +153,10 @@ checkout (gitignored, preserved):
 
 ## Scratch Awaiting a Cleanup Decision
 
-The worktree's `.tmp/` holds about 1.1 GiB. This session added the following, none of which is
-cited and all of which is disposable:
-
-- the six reviewers' empty scratch folders under `.tmp/agents/2026-11-08-feature-framing/`
-- build, test and e2e logs whose retained copies are listed above
-
-Earlier sessions' scratch is inventoried in `CLEANUP.md`. Nothing is deleted without the owner's
+The worktree's scratch area holds about 1.1 GiB. This session's additions (reviewer scratch, and
+build, test and e2e logs whose retained copies are listed above) are uncited and disposable. They
+are inventoried in `2026-11-08-feature-framing/CLEANUP.md` under the evidence path above. Earlier
+sessions' scratch is inventoried in `2026-11-06-rcca-mcp-research/CLEANUP.md`. Nothing is deleted without the owner's
 approval of a stated scope.
 
 ## Rules for the Next Session
