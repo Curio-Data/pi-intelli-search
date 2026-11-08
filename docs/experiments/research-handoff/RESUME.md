@@ -4,7 +4,9 @@
 
 The requested one-shot `rh-v7` end-to-end test is complete and settled. It ran without an operational incident. Both routes passed machine and financial checks, and both answers failed the unchanged quality gate. The baseline failed both initial reviews; the candidate failed after the planned adjudication of a reviewer disagreement. [Repeat Findings](REPEAT-FINDINGS.md) records the result and descriptive measurements.
 
-The workflow is now demonstrated end to end on one clean pair. That establishes neither answer-quality equivalence nor savings. No additional test, repeat or measured batch was run under the owner's request to run the test once. A cleanly collected negative result remains a negative result; do not rerun or relax criteria to turn it into a pass.
+The workflow is now demonstrated end to end on one clean pair. That establishes neither answer-quality equivalence nor savings. The owner has assigned the full study suite to another agent; start with [Full Study Suite Handover](FULL-SUITE-HANDOFF.md) for that incoming assignment. This handover session runs no paid suite. A cleanly collected negative result remains a negative result; do not replace it or relax criteria to turn it into a pass.
+
+The checkout-root `.search` is absent. Its old files are archived intact, and fresh-workspace isolation has been verified. [Cache and Isolation](FULL-SUITE-HANDOFF.md#preserved-cache-and-isolation) distinguishes the clean active environment from historical caches retained as evidence.
 
 ## Reading Order
 
@@ -35,7 +37,7 @@ The comparison used direct `intelli_research` and Codemode, the `Pi` JavaScript 
 
 The original repeat direction concerned removing avoidable harness friction while preserving comparison quality. The known JSON-rationale problem is now caught before immutable gates by the offline review preflight. Planned reviewer readiness checks precede long grading work, and substantive disagreement is handled by the frozen adjudication rule. Neither is a reason for an additional owner decision. All original grades remain intact.
 
-The next study decision is the scope of any larger measured comparison, not another repair to this completed run. Any later series needs its own frozen schedule, new root and accepted accounting within the applicable owner direction. Keep this clean pair separate from the interrupted `rh-v6` pair and the older `rh-v4` setup; do not treat a selected passing subset as evidence of benefit.
+The incoming assignment is the full study comparison, under a new frozen multi-pair schedule and accepted accounting. The one-pair `rh7-` driver cannot execute it unchanged. [Full Study Suite Handover](FULL-SUITE-HANDOFF.md#incoming-assignment) gives the remaining implementation, review and execution sequence without treating a settled root as reusable. Keep this clean pair separate from the interrupted `rh-v6` pair and the older `rh-v4` setup; do not treat a selected passing subset as evidence of benefit.
 
 ## Offline Reproduction
 
@@ -83,4 +85,4 @@ Current scratch remains under `.tmp/rh7-once/` and the earlier retained scratch 
 
 ## Fresh-Session Prompt
 
-> Read `docs/experiments/research-handoff/RESUME.md`. The requested single `rh-v7` test is complete and settled: operationally clean, both routes technically successful, both answers failed quality. Inspect or reproduce the results. Do not rerun this series, replace observations, relax the rubric or start a measured batch from its unused allowance.
+> Start with `docs/experiments/research-handoff/FULL-SUITE-HANDOFF.md`, then this resume. The clean one-shot test is complete; the owner has assigned the full comparison suite to a fresh agent. Verify that the checkout-root `.search` is absent and preserve new empty per-run workspaces and sessions. Prepare the new bounded multi-pair schedule and accepted driver without reopening settled roots, replacing observations or relaxing the rubric.
