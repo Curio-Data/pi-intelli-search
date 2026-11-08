@@ -23,6 +23,7 @@ import { observedPipelineOutcome } from "./outcome.js";
 import { PILOT_SERIES_ROOT } from "./pilot-config.js";
 import { RH6_SERIES_ROOT } from "./pilot-continuation.js";
 import { RH7_SERIES_ROOT } from "./pilot-repeat.js";
+import { RH8_SERIES_ROOT } from "./pilot-suite.js";
 
 export const REPO_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 const PROTOCOL_PATH = join(REPO_ROOT, "docs/experiments/research-handoff/PROTOCOL.md");
@@ -62,6 +63,7 @@ export async function assertLiveEvidenceRoot(path: string): Promise<void> {
   if (resolve(path) === resolve(PILOT_SERIES_ROOT)) throw new Error("The rh-v5 pilot root accepts only pilot authority; historical rh-v4 operations are refused");
   if (resolve(path) === resolve(RH6_SERIES_ROOT)) throw new Error("The rh-v6 pilot root accepts only rh-v6 pilot authority; historical rh-v4 operations are refused");
   if (resolve(path) === resolve(RH7_SERIES_ROOT)) throw new Error("The rh-v7 repeat root accepts only rh-v7 pilot authority; historical rh-v4 operations are refused");
+  if (resolve(path) === resolve(RH8_SERIES_ROOT)) throw new Error("The rh-v8 suite root accepts only rh-v8 suite authority; historical rh-v4 operations are refused");
   const base = await realpath(join(REPO_ROOT, "evidence/benchmarks/research-handoff"));
   const actual = await realpath(resolve(path));
   const rel = relative(base, actual);
@@ -273,8 +275,11 @@ export async function executeWorker(cfg: WorkerConfig): Promise<RunRecord> {
   const log = createWriteStream(join(cfg.directory, "process.log"), { flags: "wx", mode: 0o600 });
   const env: NodeJS.ProcessEnv = { ...process.env, PI_CODING_AGENT_DIR: cfg.agentDir, HOME: cfg.agentDir, TMPDIR: cfg.agentDir };
   for (const key of Object.keys(env)) if (/(?:API_KEY|AUTH_TOKEN|OAUTH_TOKEN)$/.test(key)) delete env[key];
+  // rh-v8 suite workers run in their own process group, so a terminal interrupt reaches only the
+  // controller, which drains them. The controller still awaits each one. Earlier series are unchanged.
+  const detached = cfg.pilot?.revision === "rh-v8-suite-2";
   const child = spawn(process.execPath, ["--import", "tsx", join(REPO_ROOT, "scripts/research-handoff/cli.ts"), "worker", configPath],
-    { cwd: REPO_ROOT, env, stdio: ["ignore", "pipe", "pipe"], timeout: workerTimeoutMs });
+    { cwd: REPO_ROOT, env, stdio: ["ignore", "pipe", "pipe"], timeout: workerTimeoutMs, ...(detached ? { detached: true } : {}) });
   child.stdout.pipe(log, { end: false }); child.stderr.pipe(log, { end: false });
   let signal: NodeJS.Signals | null = null;
   const exit = await new Promise<number | null>((resolveExit, reject) => {

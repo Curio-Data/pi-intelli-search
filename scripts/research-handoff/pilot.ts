@@ -30,6 +30,8 @@ import { DurableJournal, createRunDirectory, digestFile, digestObject, digestTex
 import { executeWorker, evidenceAccess, REPO_ROOT, type WorkerConfig } from "./runner.js";
 import { observedPipelineOutcome } from "./outcome.js";
 import { analysePilotRun, type PilotMachineResult } from "./pilot-analysis.js";
+import { pilotChecksFor } from "./pilot-checks.js";
+export { pilotChecksFor } from "./pilot-checks.js";
 import {
   verifyPilotImplementation, verifyStageReceipt, claimPilotSlot, readPilotClaim, markPilotDispatch, assessPilotAnswerGate, assessRecoveryPurpose,
   type PilotAssessmentLock,
@@ -37,10 +39,12 @@ import {
 } from "./pilot-authority.js";
 import {
   PILOT_BUDGET, PILOT_CODEMODE_MAX_OUTPUT_TOKENS, PILOT_RUBRICS, PILOT_TOPICS, PILOT_MIN_GAP_MS, PILOT_PROFILE, PILOT_PROTOCOL_PATH, PILOT_PROTOCOL_REVISION, PILOT_SCOPE,
-  pilotAllocationFor, pilotParams, pilotRunId, pilotSettings, pilotTaskPrompt, pilotAllocation, RH5_PILOT, type PilotDefinition, type PilotSlot,
+  pilotAllocationFor, pilotParams, pilotRunId, pilotSettings, pilotTaskPrompt, pilotAllocation, RH5_PILOT, type AnyPilotSlot, type PilotDefinition, type PilotSlot,
 } from "./pilot-config.js";
 import { syntheticContinuationInputs } from "./pilot-continuation.js";
-import { pilotDefinitionFor, verifyReusedCorpus } from "./pilot-repeat.js";
+import { verifyReusedCorpus } from "./pilot-repeat.js";
+import { pilotDefinitionFor, suiteRunId } from "./pilot-suite.js";
+import { assertNoCheckoutRootCache, scheduleFor, suiteContextFor, verifySuitePreparation, verifyWorkerSlot } from "./suite-admission.js";
 import { isPilotPhase, type Arm, type FrozenInputs, type JournalEvent, type PilotSyntheticScenario, type PilotWorkerOptions, type RunManifest, type RunRecord } from "./contracts.js";
 
 /** On-wire and reservation guards for every downstream attempt of a pilot definition. */
@@ -254,7 +258,7 @@ export async function verifyPaidPrerequisites(authority: VerifiedPilotAuthority,
 }
 
 /** Live worker admission. The worker calls it without seams; tests pass isolated fixture authority only. */
-export async function validatePilotWorker(cfg: WorkerConfig, options: PilotAuthorityOptions & { now?: () => number } = {}): Promise<void> {
+export async function validatePilotWorker(cfg: WorkerConfig, options: PilotAuthorityOptions & { now?: () => number; repoRoot?: string } = {}): Promise<void> {
   if (!cfg.acceptancePath || !cfg.authPath) throw new Error("Live pilot inference requires an implementation acceptance and an explicit credential reference");
   const definition = pilotDefinitionFor(cfg.pilot?.revision);
   const authority = await verifyPilotImplementation(cfg.acceptancePath, { ...options, definition });
@@ -265,6 +269,7 @@ export async function validatePilotWorker(cfg: WorkerConfig, options: PilotAutho
   if (cfg.manifest.codeSha256 !== authority.acceptance.codeSha256 || cfg.manifest.protocolSha256 !== authority.acceptance.protocolSha256) {
     throw new Error("Pilot worker identity differs from the accepted implementation");
   }
+  if (authority.definition.suite) { await validateSuiteWorker(cfg, authority, options); return; }
   const slot = slotForRun(cfg.manifest.phase, cfg.manifest.arm);
   const claim = await readPilotClaim(authority.root, slot);
   if (!claim || claim.runId !== cfg.manifest.runId || claim.corpusSha256 !== cfg.manifest.corpusSha256
@@ -275,6 +280,42 @@ export async function validatePilotWorker(cfg: WorkerConfig, options: PilotAutho
     if (corpusSha256 !== cfg.manifest.corpusSha256) throw new Error("Paid pilot corpus differs from the accepted capture");
   } else if (cfg.pilot?.budgetNanoUsd !== 0 || cfg.pilot.financialMode !== "no-charges") {
     throw new Error("Observer diagnostics admit no chargeable downstream calls");
+  }
+  await markPilotDispatch(authority.root, slot, cfg.manifest.runId);
+}
+
+/**
+ * rh-v8 worker-side authority, without seams beyond the test fixture's root check: the acceptance
+ * and its bound study plan are re-verified (owner directions, prior settlements, identities), the
+ * checkout-root `.search` must be absent, and a paid conversation re-derives its admission from
+ * retained evidence: claimed and undispatched, reserved in the shared ledger at the full
+ * conversation allowance, admissions not blocked, earlier waves ended, and for a second arm the
+ * first arm ended safely at least 30 seconds earlier. Observers keep the unchanged no-charge rule.
+ */
+async function validateSuiteWorker(cfg: WorkerConfig, authority: VerifiedPilotAuthority, options: { now?: () => number; repoRoot?: string }): Promise<void> {
+  const definition = authority.definition;
+  await assertNoCheckoutRootCache(options.repoRoot);
+  let slot: AnyPilotSlot;
+  if (cfg.manifest.phase === "pilot") {
+    const spec = scheduleFor(definition).find(item => item.pair === cfg.manifest.pair && item.arm === cfg.manifest.arm);
+    if (!spec || cfg.manifest.runId !== suiteRunId(authority.root, spec)) throw new Error("Suite worker names no scheduled pair and arm");
+    slot = spec.slot as AnyPilotSlot;
+    const claim = await readPilotClaim(authority.root, slot);
+    if (!claim || claim.runId !== cfg.manifest.runId || claim.corpusSha256 !== cfg.manifest.corpusSha256
+      || claim.implementationAcceptanceSha256 !== authority.acceptanceSha256) throw new Error(`No matching ${slot} claim`);
+    if (cfg.pilot?.budgetNanoUsd !== definition.suite!.conversationReservationNanoUsd || cfg.pilot.financialMode !== "known-charges") {
+      throw new Error("Suite conversation allowance differs from the frozen reservation");
+    }
+    const prep = await verifySuitePreparation(authority, String(claim.corpusAcceptancePath));
+    if (prep.corpusSha256 !== cfg.manifest.corpusSha256 || resolve(cfg.frozenPath) !== resolve(prep.frozenPath)) throw new Error("Suite conversation corpus differs from the import");
+    await verifyWorkerSlot(suiteContextFor(authority), prep.frozen, spec, options.now?.() ?? Date.now(), options.repoRoot);
+    if (claim.planSha256 !== definition.suite!.planSha256) throw new Error("Suite claim binds another study plan");
+  } else {
+    slot = slotForRun(cfg.manifest.phase, cfg.manifest.arm);
+    const claim = await readPilotClaim(authority.root, slot);
+    if (!claim || claim.runId !== cfg.manifest.runId || claim.corpusSha256 !== cfg.manifest.corpusSha256
+      || claim.implementationAcceptanceSha256 !== authority.acceptanceSha256) throw new Error(`No matching ${slot} claim`);
+    if (cfg.pilot?.budgetNanoUsd !== 0 || cfg.pilot.financialMode !== "no-charges") throw new Error("Observer diagnostics admit no chargeable downstream calls");
   }
   await markPilotDispatch(authority.root, slot, cfg.manifest.runId);
 }
@@ -326,6 +367,9 @@ export async function runPilotWorker(cfg: WorkerConfig): Promise<RunRecord> {
   if (digestText(prompt) !== cfg.manifest.promptSha256) throw new Error("Rendered pilot prompt changed");
   const manifest: RunManifest = { ...cfg.manifest, status: "started", startedAt: new Date().toISOString(), host: host.identity };
   writeNewJson(join(cfg.directory, "started.json"), manifest);
+  // Credential-free rehearsal aid only: holds a synthetic worker open so a signal test can reach it mid-run. Ignored in every live mode.
+  const syntheticDelay = Number(process.env.RH8_SYNTHETIC_DELAY_MS ?? 0);
+  if (synthetic && Number.isFinite(syntheticDelay) && syntheticDelay > 0) await sleep(Math.min(syntheticDelay, 20_000));
   let failure: string | undefined;
   try {
     session = await createStudySession(host, {
@@ -368,30 +412,7 @@ export function persistPilotRunRecord(directory: string, record: RunRecord, budg
   return record;
 }
 
-/** Recompute machine checks from retained files, including a worker that never wrote its record. */
-export async function pilotChecksFor(directory: string, frozen: Pick<FrozenInputs, "pages">, financialMode: PilotWorkerOptions["financialMode"]): Promise<PilotMachineResult & { budgetReceipt: boolean }> {
-  let budget: Record<string, number> | undefined;
-  try { budget = await readJson(join(directory, "budget.json")) as Record<string, number>; } catch { /* absent after a killed worker */ }
-  let result: PilotMachineResult;
-  try {
-    const record = JSON.parse(await readFile(join(directory, "record.json"), "utf8")) as RunRecord;
-    result = analysePilotRun(record, frozen, financialMode, budget);
-  } catch (error) {
-    // A corrupt or unreadable record is an explicit failed observation, never a rejected command.
-    result = { runId: basename(directory), arm: "unknown", phase: "unknown", passed: false, analysisError: String(error),
-      checks: [{ id: "analysable", pass: false, detail: [`Record unreadable or unanalysable: ${String(error)}`] }],
-      returnCheck: { initialInvocationConforms: false, initialProblems: [], initialOptions: { applicable: false, problems: [] }, returnPreserved: false,
-        returnProblems: [], codemodeOutputTruncated: false, additionalWork: [], recoveryPermitted: false, fullTopologyConforms: false, recoveryLimitReached: false },
-      observedPipelineOutcome: "unknown", recoveryCalls: 0, financial: { knownNanoUsd: 0, unknownNanoUsd: 0, activeNanoUsd: 0, rejected: 0, overruns: 0 } };
-  }
-  if (!budget) {
-    result.passed = false;
-    result.checks.push({ id: "final-budget-receipt", pass: false, detail: ["No final budget receipt; the stage ceiling stays held"] });
-  }
-  return { ...result, budgetReceipt: budget !== undefined };
-}
-
-function pilotManifest(input: { runId: string; arm: Arm; phase: RunManifest["phase"]; host: RunManifest["host"]; codeSha256: string;
+export function pilotManifest(input: { runId: string; arm: Arm; phase: RunManifest["phase"]; host: RunManifest["host"]; codeSha256: string;
   protocolSha256: string; frozen: FrozenInputs; synthetic: boolean; scenario?: PilotSyntheticScenario; definition: PilotDefinition }): RunManifest {
   return { schemaVersion: 1, runId: input.runId, arm: input.arm, phase: input.phase, pair: 1, status: "scheduled", host: input.host,
     mainModel: input.synthetic ? { provider: SYNTHETIC_PROVIDER_ID, model: SYNTHETIC_MODEL_ID } : MAIN_MODEL,
@@ -461,7 +482,7 @@ export async function runPilotSyntheticSeries(output: string, scenarios: readonl
 // Live gate operations (each requires accepted authority; none is run by tests)
 // ---------------------------------------------------------------------------
 
-function binding(authority: VerifiedPilotAuthority) {
+export function binding(authority: VerifiedPilotAuthority) {
   return { scope: authority.definition.scope, protocolRevision: authority.definition.revision, seriesRoot: authority.root,
     implementationAcceptanceSha256: authority.acceptanceSha256, ownerDecisionSha256: authority.acceptance.ownerDecisionSha256,
     codeSha256: authority.acceptance.codeSha256, protocolSha256: authority.acceptance.protocolSha256 };
@@ -544,6 +565,18 @@ export function assertPilotRates(data: { data: CatalogueModel[] }, definition: P
     || Number(m3.pricing.prompt) > 0.0000003 || Number(m3.pricing.completion) > 0.0000012) {
     throw new Error("Current catalogue exceeds or does not establish the pilot cost bounds");
   }
+  if (definition.suite) {
+    // rh-v8: qualification and then one conversation at a time against the shared headroom; never a sum of per-pair budgets.
+    const cumulative = definition.cumulative, reservation = definition.suite.conversationReservationNanoUsd;
+    if (!cumulative || budget.captureNanoUsd !== 0 || 3 * budget.m3AttemptNanoUsd > budget.qualificationNanoUsd || 12 * budget.m3AttemptNanoUsd > reservation
+      || budget.baselinePilotNanoUsd !== reservation || budget.candidatePilotNanoUsd !== reservation
+      || budget.totalNanoUsd !== cumulative.combinedCeilingNanoUsd - cumulative.priorReportedNanoUsd
+      || cumulative.priorReportedNanoUsd + budget.qualificationNanoUsd + reservation > cumulative.combinedCeilingNanoUsd
+      || cumulative.priorReportedNanoUsd + definition.suite.parallelPairs * reservation > cumulative.combinedCeilingNanoUsd) {
+      throw new Error("Suite allocation arithmetic does not fit the stage reservations or the shared ceiling");
+    }
+    return { sonar, m3 };
+  }
   // Each pilot envelope must hold twelve full M3 reservations at once (both protocols, Financial Controls).
   // A reuse series (rh-v7) makes no search: its capture allowance must be exactly zero.
   const captureFits = definition.corpusReuse ? budget.captureNanoUsd === 0 : 6 * budget.sonarAttemptNanoUsd <= budget.captureNanoUsd;
@@ -575,9 +608,18 @@ export async function pilotAdmit(acceptancePath: string, diagnosticAcceptancePat
   writeNewJson(join(authority.root, "rates-at-admission.json"), { observedAt: new Date().toISOString(), ...rates });
   const path = join(authority.root, "financial-admission-receipt.json");
   const budget = authority.definition.budget;
+  const suite = authority.definition.suite, cumulative = authority.definition.cumulative;
   writeNewJson(path, { ...binding(authority), kind: "pilot-financial-admission", accepted: true, envelopeNanoUsd: budget.totalNanoUsd,
-    allocationNanoUsd: { capture: budget.captureNanoUsd, chargeQualification: budget.qualificationNanoUsd,
-      baselinePilot: budget.baselinePilotNanoUsd, candidatePilot: budget.candidatePilotNanoUsd },
+    ...(suite && cumulative
+      ? { sharedCeiling: { combinedCeilingNanoUsd: cumulative.combinedCeilingNanoUsd, priorReportedNanoUsd: cumulative.priorReportedNanoUsd,
+          headroomNanoUsd: cumulative.combinedCeilingNanoUsd - cumulative.priorReportedNanoUsd },
+        reservationsPerStageNanoUsd: { chargeQualification: budget.qualificationNanoUsd, eachAdmittedConversation: suite.conversationReservationNanoUsd },
+        scheduledConversations: 2 * suite.pairs, parallelPairs: suite.parallelPairs,
+        peakConcurrentReservationNanoUsd: suite.parallelPairs * suite.conversationReservationNanoUsd,
+        planPath: suite.planPath, planSha256: suite.planSha256, ledger: "ledger.jsonl",
+        rule: "Each admitted conversation reserves its full allowance in the shared ledger before its claim; known plus unknown plus active plus the new reservation never exceeds the ceiling, and a reservation is released only by a known final charge. Unsafe results stop new admissions. The schedule is not a promise that every worst-case reservation fits." }
+      : { allocationNanoUsd: { capture: budget.captureNanoUsd, chargeQualification: budget.qualificationNanoUsd,
+          baselinePilot: budget.baselinePilotNanoUsd, candidatePilot: budget.candidatePilotNanoUsd } }),
     reservationsNanoUsd: { sonarAttempt: budget.sonarAttemptNanoUsd, m3Attempt: budget.m3AttemptNanoUsd } });
   return path;
 }
@@ -717,6 +759,7 @@ export async function pilotQualify(acceptancePath: string, authPath: string, cor
 /** Steps 7-8: one paid conversation for the named arm. The candidate needs the passed baseline gate. */
 export async function pilotRun(acceptancePath: string, authPath: string, arm: Arm, corpusAcceptancePath: string, options: PilotOperationOptions = {}): Promise<{ runId: string; passed: boolean }> {
   const authority = await verifyPilotImplementation(acceptancePath, options);
+  if (authority.definition.suite) throw new Error("A suite runs paid conversations only through its schedule driver");
   const root = authority.root;
   const { corpusSha256, baseline } = await verifyPaidPrerequisites(authority, arm, corpusAcceptancePath, options.now?.());
   const { frozenPath } = await verifyCorpusStage(authority);
@@ -741,6 +784,7 @@ export async function pilotRun(acceptancePath: string, authPath: string, arm: Ar
 /** Records the gate for one paid answer: machine checks, settled known charges and the locked dual-rubric assessments. Write-once. */
 export async function pilotGate(acceptancePath: string, arm: Arm, lockPath: string, options: PilotOperationOptions = {}): Promise<{ passed: boolean; path: string }> {
   const authority = await verifyPilotImplementation(acceptancePath, options);
+  if (authority.definition.suite) throw new Error("A suite gates answers only through its schedule gate");
   const root = authority.root, runId = pilotRunId(root, "pilot", arm);
   const directory = join(root, "runs", runId);
   const stage = await verifyCorpusStage(authority);
@@ -781,7 +825,7 @@ async function assertPairCollected(authority: VerifiedPilotAuthority, frozen: Fr
   if (baseline.passed) throw new Error("Grades follow the pair: collect the candidate before writing any answer gate");
 }
 
-function settlementStages(definition: PilotDefinition): Array<{ slot: PilotSlot; cap: number; directory: (root: string) => string }> {
+function settlementStages(definition: PilotDefinition): Array<{ slot: AnyPilotSlot; cap: number; directory: (root: string) => string }> {
   const budget = definition.budget;
   return [
     { slot: "observer-baseline", cap: 0, directory: root => join(root, "runs", pilotRunId(root, "observer", "baseline")) },
@@ -797,6 +841,7 @@ function settlementStages(definition: PilotDefinition): Array<{ slot: PilotSlot;
 /** Walks only the claimed identities of this decision. A claimed stage without a valid final receipt is held at its full ceiling. */
 export async function pilotSettle(acceptancePath: string, options: PilotOperationOptions = {}, interruptionReceiptPaths: readonly string[] = []): Promise<string> {
   const authority = await verifyPilotImplementation(acceptancePath, options);
+  if (authority.definition.suite) throw new Error("A suite settles only through its shared ledger (rh8-settle)");
   const root = authority.root;
   let reported = 0, unknown = 0, active = 0;
   const receipts: unknown[] = [];

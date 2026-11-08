@@ -12,6 +12,13 @@ import { runPilotWorker, runPilotSyntheticSeries, analysePilotInventory, pilotOb
 import { RH5_PILOT, type PilotDefinition } from "./pilot-config.js";
 import { RH6_PILOT } from "./pilot-continuation.js";
 import { RH7_PILOT } from "./pilot-repeat.js";
+import { RH8_BASE, SUITE_MAX_PAIRS } from "./pilot-suite.js";
+import {
+  rehearseSuite, suiteAdmit, suiteClose, suiteCollect, suiteGate, suiteImport, suiteInterrupt, suiteObserve, suiteQualify, suiteReviewInputs, suiteSettle, suiteStatus,
+  SUITE_REHEARSAL_PLANS,
+} from "./suite.js";
+import { analyseSuite } from "./suite-analysis.js";
+import { prepareStudyPlan, verifyStudyPlan } from "./study-plan.js";
 import { admitAcceptedPreparation, prepareCapture, qualifyDownstreamCost, collectAcceptedSeries, settleAcceptedSeries } from "./collection.js";
 
 const USAGE = [
@@ -50,6 +57,30 @@ const USAGE = [
   "  rh7-capture is refused; after rh7-admit run   rh7-import <implementation-acceptance.json>   (credential-free byte-for-byte rh-v6 corpus reuse)",
   "  rh7-run candidate needs the baseline's passed machine checks and known charges, not its gate; rh7-gate runs for both answers after the pair",
   "  Credential-free: rh7-synthetic, rh7-analyse, rh7-review-inputs",
+  "rh-v8 paired suite (SUITE-PROTOCOL.md, rh-v8-suite-2). A plan freezes one authorised series; live commands need an acceptance binding it:",
+  "  Credential-free:",
+  `    run-study --pairs N --parallel-pairs K --budget-usd X --root <new-series-root> --owner-direction <json> [--owner-direction <amendment.json>] --out <new-plan.json>`,
+  `              prepares an immutable plan (N 1..${SUITE_MAX_PAIRS}; K 1..N and within the ceiling); it authorises nothing by itself`,
+  "    rh8-plan-verify <plan.json>                 re-verifies a plan against its owner directions; writes nothing",
+  "    rh8-synthetic <new-dir> [scenario,...]      actual-host worker cases for both arms",
+  "    rh8-rehearse <new-dir> [stop|clean|serial]  actual-host rehearsal of the concurrent controller (SIGINT pauses after draining)",
+  "    rh8-rehearse-resume <rehearsal-dir>         resume a paused rehearsal",
+  "    rh8-analyse <series-root> <plan.json> <new-dir>   full planned-population inventory and paired analysis (offline, reproducible)",
+  "    rh8-runs-analyse <inventory.json> <frozen-inputs.json> <new-dir> [known-charges|no-charges]   diagnostic only",
+  "  Implementation acceptance (binding planPath and planSha256) required, in gate order:",
+  "    rh8-observe <acceptance.json> <auth-file>",
+  "    rh8-admit <acceptance.json> <diagnostic-acceptance.json>      (financial admission and the shared ledger genesis)",
+  "    rh8-import <acceptance.json>",
+  "    rh8-qualify <acceptance.json> <auth-file> <corpus-acceptance.json>",
+  "    rh8-collect <acceptance.json> <auth-file> <corpus-acceptance.json>   (one controller; exit 0 complete, 2 stopped, 3 paused: rerun to resume,",
+  "                                                                       4 owner decision: ceiling, 5 blocked: in-flight slot needs rh8-interrupt)",
+  "    rh8-status <acceptance.json>                                       (read-only; after rh8-import)",
+  "    rh8-interrupt <acceptance.json> <interruption-receipt.json>       (slot without a record, or slot \"controller-lock\")",
+  "    rh8-close <acceptance.json> <reason>                               (takes the controller lock; refused while a slot is in flight)",
+  "    rh8-review-inputs <acceptance.json> <new-dir>                      (after collection)",
+  "    rh8-gate <acceptance.json> <pair-NN-arm> <assessment-lock.json>    (after collection; one at a time)",
+  "    rh8-settle <acceptance.json>",
+  "  rh8-capture, rh8-run, rh8-next and rh8-corpus-review-inputs are refused.",
   "Internal driver entry (live modes remain gated):",
   "  worker <worker.json>",
   "rh-v4: see docs/experiments/research-handoff/REPRODUCTION.md. rh-v5 pilot: see docs/experiments/research-handoff/PILOT-PROTOCOL.md, Gate Sequence and Schedule.",
@@ -63,6 +94,7 @@ async function main() {
     return value;
   };
   if (command === "--help" || command === "help") { console.log(USAGE); return; }
+  if (command?.startsWith("rh8-") || command === "run-study") { await rh8(command, args); return; }
   if (command?.startsWith("pilot-") || command?.startsWith("rh6-") || command?.startsWith("rh7-")) {
     // Each command family is bound to exactly one frozen definition; nothing infers it from a receipt.
     const definition: PilotDefinition = command.startsWith("rh7-") ? RH7_PILOT : command.startsWith("rh6-") ? RH6_PILOT : RH5_PILOT;
@@ -140,6 +172,122 @@ async function main() {
   } else if (command === "settle" && first && !second) {
     await settleAcceptedSeries(first);
     console.log("Financial close-out recorded.");
+  } else {
+    throw new Error(USAGE);
+  }
+}
+function flags(args: string[]): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (let index = 0; index < args.length; index += 2) {
+    const key = args[index], value = args[index + 1];
+    if (!key?.startsWith("--") || value === undefined || value.startsWith("--")) throw new Error(`Expected --flag value pairs; got ${key ?? "nothing"}\n${USAGE}`);
+    map.set(key, [...(map.get(key) ?? []), value]);
+  }
+  return map;
+}
+function integerFlag(map: Map<string, string[]>, key: string): number {
+  const value = map.get(key)?.[0];
+  if (!value || !/^[1-9][0-9]*$/.test(value)) throw new Error(`${key} must be a positive integer`);
+  return Number(value);
+}
+/**
+ * SIGINT or SIGTERM ends new admissions; admitted workers run in their own process groups, so a
+ * terminal interrupt does not reach them, and the controller waits for each to finish and settle.
+ */
+function drainOnSignal(): AbortSignal {
+  const controller = new AbortController();
+  for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => { console.error(`${signal}: no new admissions; draining admitted conversations`); controller.abort(); });
+  return controller.signal;
+}
+const COLLECT_EXIT = { complete: 0, stopped: 2, paused: 3, "owner-decision": 4, blocked: 5 } as const;
+const COLLECT_MESSAGES: Record<keyof typeof COLLECT_EXIT, (halt: string | null) => string> = {
+  complete: () => "COMPLETE: every planned conversation has a terminal record.",
+  paused: halt => `PAUSED, resumable: ${halt}. Resolve the cause, then rerun rh8-collect.`,
+  stopped: halt => `STOPPED under the Stop Rules: ${halt}. No further admission is possible; proceed to grading and settlement.`,
+  blocked: halt => `BLOCKED: ${halt}. Inspect the in-flight slot and record an interruption with rh8-interrupt before anything else.`,
+  "owner-decision": halt => `OWNER DECISION: ${halt}. Nothing is running and the next full reservation does not fit the shared ceiling.`,
+};
+/** rh-v8 suite commands. The family is bound to the plan-driven rh-v8 base; nothing infers authority from a receipt. */
+async function rh8(command: string, args: string[]): Promise<void> {
+  const refused: Record<string, string> = {
+    "rh8-capture": "rh8-capture is refused: rh-v8 reuses the rh-v6 corpus through rh8-import (SUITE-PROTOCOL.md, Corpus Reuse)",
+    "rh8-run": "rh8-run is refused: paid conversations run only through rh8-collect, in the frozen plan (SUITE-PROTOCOL.md, Schedule)",
+    "rh8-next": "rh8-next is refused: the unaccepted serial driver is superseded by rh8-collect (SUITE-PROTOCOL.md, Schedule)",
+    "rh8-corpus-review-inputs": "rh8-corpus-review-inputs is refused: the rh-v6 corpus review is reused (SUITE-PROTOCOL.md, Corpus Reuse)",
+  };
+  if (refused[command]) throw new Error(refused[command]);
+  if (command === "run-study" || command === "rh8-plan") {
+    const map = flags(args);
+    for (const key of map.keys()) if (!["--pairs", "--parallel-pairs", "--budget-usd", "--root", "--owner-direction", "--out"].includes(key)) throw new Error(`Unknown flag ${key}`);
+    const required = (key: string) => { const value = map.get(key); if (!value?.length) throw new Error(`${key} is required`); return value; };
+    const result = await prepareStudyPlan({ pairs: integerFlag(map, "--pairs"), parallelPairs: integerFlag(map, "--parallel-pairs"), budgetUsd: required("--budget-usd")[0],
+      root: required("--root")[0], directionPaths: required("--owner-direction") }, required("--out")[0]);
+    console.log(JSON.stringify({ planPath: result.path, planSha256: result.sha256, seriesRoot: result.plan.seriesRoot, pairs: result.plan.pairs,
+      parallelPairs: result.plan.parallelPairs, waves: result.plan.waves, budget: result.plan.budget,
+      launchOrder: result.plan.schedule.map(spec => `${spec.wave}:${spec.slot}`),
+      next: "Bind planPath and planSha256 in an implementation acceptance after independent review; the plan alone authorises nothing." }, null, 2));
+    return;
+  }
+  if (command === "rh8-plan-verify" && args.length === 1) {
+    const verified = await verifyStudyPlan(args[0]);
+    console.log(JSON.stringify({ planPath: verified.path, planSha256: verified.sha256, seriesRoot: verified.plan.seriesRoot, pairs: verified.plan.pairs,
+      parallelPairs: verified.plan.parallelPairs, authority: verified.plan.authority, verified: true }, null, 2));
+    return;
+  }
+  if (command === "rh8-synthetic" && args.length >= 1 && args.length <= 2) {
+    const scenarios = args[1] ? args[1].split(",") : [...PILOT_SYNTHETIC_SCENARIOS];
+    if (!scenarios.every(item => (PILOT_SYNTHETIC_SCENARIOS as readonly string[]).includes(item))) throw new Error(USAGE);
+    const result = await runPilotSyntheticSeries(args[0], scenarios as PilotSyntheticScenario[], undefined, RH8_BASE);
+    console.log(`Suite synthetic series ${result.passed ? "matched every expected verdict" : "MISMATCHED an expected verdict"}: ${resolve(args[0])}/series-outcome.json`);
+    if (!result.passed) process.exitCode = 1;
+    return;
+  }
+  if ((command === "rh8-rehearse" && args.length >= 1 && args.length <= 2 && (!args[1] || args[1] in SUITE_REHEARSAL_PLANS))
+    || (command === "rh8-rehearse-resume" && args.length === 1)) {
+    const result = await rehearseSuite(args[0], (args[1] ?? "stop") as keyof typeof SUITE_REHEARSAL_PLANS, { signal: drainOnSignal(), resume: command === "rh8-rehearse-resume" });
+    console.log(result.paused ? `Suite rehearsal PAUSED by signal after draining; resume with rh8-rehearse-resume: ${result.path}`
+      : `Suite rehearsal ${result.passed ? "matched its expected schedule" : `MISMATCHED: ${result.problems.join("; ")}`}: ${result.path}`);
+    if (result.paused) process.exitCode = 3; else if (!result.passed) process.exitCode = 1;
+    return;
+  }
+  if (command === "rh8-analyse" && args.length === 3) {
+    await analyseSuite(args[0], args[2], { phase: "pilot", planPath: args[1] });
+    console.log(`Suite inventory and paired analysis: ${resolve(args[2])}`);
+    return;
+  }
+  if (command === "rh8-runs-analyse" && args.length >= 3 && args.length <= 4 && (!args[3] || ["known-charges", "no-charges"].includes(args[3]))) {
+    await analysePilotInventory(args[0], args[1], args[2], (args[3] ?? "known-charges") as "known-charges" | "no-charges", RH8_BASE);
+    console.log(`Suite per-run machine analysis (diagnostic): ${resolve(args[2])}`);
+    return;
+  }
+  if (command === "rh8-observe" && args.length === 2) {
+    const result = await suiteObserve(args[0], args[1]);
+    console.log(`Observer diagnostics ${result.stopped ? "stopped" : "finished"}: ${result.outcomePath}`);
+    if (result.stopped) process.exitCode = 1;
+  } else if (command === "rh8-admit" && args.length === 2) {
+    console.log(`Suite financial admission and ledger genesis: ${await suiteAdmit(args[0], args[1])}`);
+  } else if (command === "rh8-import" && args.length === 1) {
+    console.log(`Corpus import: ${await suiteImport(args[0])}`);
+  } else if (command === "rh8-qualify" && args.length === 3) {
+    console.log(`Suite charge qualification: ${await suiteQualify(args[0], args[1], args[2])}`);
+  } else if (command === "rh8-collect" && args.length === 3) {
+    const result = await suiteCollect(args[0], args[1], args[2], { signal: drainOnSignal() });
+    console.log(JSON.stringify(result, null, 2));
+    console.log(COLLECT_MESSAGES[result.outcome](result.halt));
+    process.exitCode = COLLECT_EXIT[result.outcome];
+  } else if (command === "rh8-status" && args.length === 1) {
+    console.log(JSON.stringify(await suiteStatus(args[0]), null, 2));
+  } else if (command === "rh8-interrupt" && args.length === 2) {
+    console.log(`Interruption recorded: ${await suiteInterrupt(args[0], args[1])}`);
+  } else if (command === "rh8-close" && args.length === 2) {
+    console.log(`Collection closed: ${await suiteClose(args[0], args[1])}`);
+  } else if (command === "rh8-review-inputs" && args.length === 2) {
+    console.log(`Suite review inputs: ${await suiteReviewInputs(args[0], args[1])}`);
+  } else if (command === "rh8-gate" && args.length === 3) {
+    const result = await suiteGate(args[0], args[1], args[2]);
+    console.log(`${args[1]} gate ${result.passed ? "passed" : "failed"}: ${result.path}`);
+  } else if (command === "rh8-settle" && args.length === 1) {
+    console.log(`Suite settlement: ${await suiteSettle(args[0])}`);
   } else {
     throw new Error(USAGE);
   }

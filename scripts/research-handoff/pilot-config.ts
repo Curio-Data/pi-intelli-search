@@ -108,6 +108,9 @@ export const PILOT_SLOTS = [
   "corpus-import",
 ] as const;
 export type PilotSlot = typeof PILOT_SLOTS[number];
+/** rh-v8 scheduled conversation slots, such as `pair-03-candidate`, validated against the frozen schedule pattern. */
+export type SuiteSlot = `pair-${string}`;
+export type AnyPilotSlot = PilotSlot | SuiteSlot;
 export function pilotRunId(root: string, kind: "observer" | "pilot", arm: Arm): string {
   return `${resolve(root).split(/[\\/]/).at(-1)}-${kind}-${arm}`;
 }
@@ -153,8 +156,21 @@ export interface PilotDefinition {
   gradingAfterPair?: true;
   /** Earlier series roots this definition must never bind, beyond the closed rh-v5 root. */
   closedRoots?: readonly string[];
-  /** Cumulative accounting carried from settled earlier series (rh-v7). */
+  /** Cumulative accounting carried from settled earlier series (rh-v7, rh-v8). */
   cumulative?: CumulativeAccounting;
+  /**
+   * rh-v8 only. A multi-pair schedule whose conversations each reserve this allowance in
+   * turn against the shared cumulative ceiling; the single-pair pilot slots are unused.
+   */
+  suite?: SuiteDefinition;
+}
+/** Supplied only by a verified study plan (study-plan.ts); never a source constant. */
+export interface SuiteDefinition {
+  pairs: number;
+  parallelPairs: number;
+  conversationReservationNanoUsd: number;
+  planPath: string;
+  planSha256: string;
 }
 export interface CorpusReuse {
   /** Retained frozen-input file of the source series. */

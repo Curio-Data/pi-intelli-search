@@ -12,10 +12,12 @@ import { FINANCIAL_APPROVAL_SCOPE } from "./config.js";
 import {
   OWNER_DECISION_SHA256, PILOT_BUDGET, PILOT_OPERATION_LIMITS, PILOT_PROFILE, PILOT_PROTOCOL_PATH,
   PILOT_PROTOCOL_REVISION, PILOT_RUBRICS, PILOT_SCOPE, PILOT_SERIES_ROOT, PILOT_SLOTS, PILOT_TOPICS,
-  pilotSettings, RH5_PILOT, type PilotDefinition, type PilotSlot,
+  pilotSettings, RH5_PILOT, type AnyPilotSlot, type PilotDefinition,
 } from "./pilot-config.js";
 import { RH6_PROTOCOL_REVISION, verifyContinuationDirection } from "./pilot-continuation.js";
 import { RH7_PROTOCOL_REVISION, verifyRepeatDirection } from "./pilot-repeat.js";
+import { RH8_PROTOCOL_REVISION, SUITE_SLOT_PATTERN } from "./pilot-suite.js";
+import { verifyStudyPlan } from "./study-plan.js";
 import type { RunRecord } from "./contracts.js";
 
 const REPO = resolve(PILOT_PROTOCOL_PATH, "../../../..");
@@ -37,6 +39,8 @@ export interface PilotAuthorityOptions {
   designatedRoot?: string;
   ownerDecisionSha256?: string;
   rootCheck?: (path: string) => Promise<void>;
+  /** Test seam: the checkout scanned for other suite roots by plan verification. */
+  repoRoot?: string;
 }
 export async function assertPilotEvidenceRoot(path: string): Promise<void> {
   const base = await realpath(join(REPO, "evidence/benchmarks/research-handoff"));
@@ -54,6 +58,7 @@ export async function verifyOwnerDecision(path: string, options: PilotAuthorityO
   const designated = options.designatedRoot ?? definition.seriesRoot;
   if (definition.revision === RH6_PROTOCOL_REVISION) { await verifyContinuationDirection(d, designated); return d; }
   if (definition.revision === RH7_PROTOCOL_REVISION) { await verifyRepeatDirection(d, designated, definition); return d; }
+  if (definition.revision === RH8_PROTOCOL_REVISION) throw new Error("rh-v8 owner directions are verified through a bound study plan");
   if (definition !== RH5_PILOT) throw new Error(`No owner-record verifier for ${definition.revision}`);
   const allocation = object(d.coordinatorAllocationNanoUsd);
   const total = ["commonCapture", "chargeQualification", "baselinePilot", "candidatePilot"].reduce((sum, key) => sum + Number(allocation[key]), 0);
@@ -91,6 +96,9 @@ export interface PilotImplementationAcceptance {
   technicalReviewSha256: string;
   proseReviewPath: string;
   proseReviewSha256: string;
+  /** rh-v8 only: the immutable study plan this acceptance binds. */
+  planPath?: string;
+  planSha256?: string;
 }
 export interface VerifiedPilotAuthority {
   acceptance: PilotImplementationAcceptance;
@@ -101,6 +109,7 @@ export interface VerifiedPilotAuthority {
 }
 /** Verifies the implementation acceptance against the live tree; never accepts an rh-v4 receipt. */
 export async function verifyPilotImplementation(path: string, options: PilotAuthorityOptions = {}): Promise<VerifiedPilotAuthority> {
+  if ((options.definition ?? RH5_PILOT).revision === RH8_PROTOCOL_REVISION) return verifySuiteImplementation(path, options);
   const definition = options.definition ?? RH5_PILOT;
   const a = await readJson(path) as unknown as PilotImplementationAcceptance;
   const designated = resolve(options.designatedRoot ?? definition.seriesRoot);
@@ -128,9 +137,39 @@ export async function verifyPilotImplementation(path: string, options: PilotAuth
   return { acceptance: a, acceptancePath: path, acceptanceSha256, root: designated, definition };
 }
 
+/**
+ * rh-v8: the acceptance binds an immutable study plan by digest. The plan, re-verified against its
+ * owner directions on every call, supplies the root, scope, counts, concurrency and money; no test
+ * seam can substitute another root or owner digest.
+ */
+async function verifySuiteImplementation(path: string, options: PilotAuthorityOptions): Promise<VerifiedPilotAuthority> {
+  const a = await readJson(path) as unknown as PilotImplementationAcceptance;
+  if (a.schemaVersion !== 1 || a.kind !== "pilot-implementation-acceptance" || a.acceptedBy !== "coordinator" || a.accepted !== true
+    || a.protocolRevision !== RH8_PROTOCOL_REVISION || "financialMode" in a || "phase" in a || typeof a.planPath !== "string" || typeof a.planSha256 !== "string") {
+    throw new Error(`Not an accepted ${RH8_PROTOCOL_REVISION} suite implementation bound to a study plan; earlier receipts are not reusable`);
+  }
+  const verified = await verifyStudyPlan(a.planPath, a.planSha256, { repoRoot: options.repoRoot });
+  const definition = verified.definition, root = definition.seriesRoot;
+  if (a.scope !== definition.scope || resolve(a.seriesRoot) !== root) throw new Error("Suite acceptance names another scope or root than its plan");
+  if (resolve(root) === resolve(PILOT_SERIES_ROOT) || (definition.closedRoots ?? []).some(closed => resolve(closed) === root)) throw new Error("A closed earlier series root cannot be reopened by a later pilot");
+  await (options.rootCheck ?? assertPilotEvidenceRoot)(root);
+  if (await fileExists(join(root, "settlement-receipt.json"))) throw new Error("The pilot series is settled and closed to further live work");
+  if (resolve(a.ownerDecisionPath) !== definition.ownerDecisionPath || a.ownerDecisionSha256 !== definition.ownerDecisionSha256) throw new Error("Acceptance cites another owner direction than its plan");
+  if ((await sourceIdentity(REPO)).digest !== a.codeSha256) throw new Error("Pilot code identity changed since acceptance");
+  if (await digestFile(definition.protocolPath) !== a.protocolSha256) throw new Error("Pilot protocol identity changed since acceptance");
+  for (const [p, h] of [[a.technicalReviewPath, a.technicalReviewSha256], [a.proseReviewPath, a.proseReviewSha256]]) {
+    if (!p || await digestFile(p) !== h) throw new Error("Independent technical or prose review is missing or changed");
+  }
+  const acceptanceSha256 = await digestFile(path);
+  await bindRoot(root, definition, { ownerDecisionSha256: a.ownerDecisionSha256, implementationAcceptanceSha256: acceptanceSha256,
+    codeSha256: a.codeSha256, protocolSha256: a.protocolSha256, planSha256: verified.sha256 });
+  return { acceptance: a, acceptancePath: path, acceptanceSha256, root, definition };
+}
+
 /** One generation per root: the first verified use binds it, later uses must match exactly. */
 async function bindRoot(root: string, definition: PilotDefinition, binding: Record<string, string>): Promise<void> {
   const path = join(root, "pilot-root-binding.json");
+  if (definition.suite) await mkdir(root, { recursive: true });
   try {
     const existing = await readJson(path);
     if (!same(existing.binding, binding)) throw new Error("Designated root is already bound to another pilot generation or implementation");
@@ -141,8 +180,8 @@ async function bindRoot(root: string, definition: PilotDefinition, binding: Reco
 }
 
 /** Permanent, exclusive operation claim. A failed operation still consumes its slot. */
-export async function claimPilotSlot(root: string, slot: PilotSlot, details: Record<string, unknown>): Promise<string> {
-  if (!(PILOT_SLOTS as readonly string[]).includes(slot)) throw new Error(`Unauthorised pilot operation: ${String(slot)}`);
+export async function claimPilotSlot(root: string, slot: AnyPilotSlot, details: Record<string, unknown>): Promise<string> {
+  if (!(PILOT_SLOTS as readonly string[]).includes(slot) && !SUITE_SLOT_PATTERN.test(slot)) throw new Error(`Unauthorised pilot operation: ${String(slot)}`);
   const claims = join(root, "claims");
   await mkdir(claims, { recursive: true });
   try { await mkdir(join(claims, slot)); }
@@ -154,12 +193,12 @@ export async function claimPilotSlot(root: string, slot: PilotSlot, details: Rec
   writeNewJson(path, { schemaVersion: 1, slot, claimedAt: new Date().toISOString(), ...details });
   return path;
 }
-export async function readPilotClaim(root: string, slot: PilotSlot): Promise<Record<string, unknown> | undefined> {
+export async function readPilotClaim(root: string, slot: AnyPilotSlot): Promise<Record<string, unknown> | undefined> {
   try { return await readJson(join(root, "claims", slot, "claim.json")); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
 }
 /** Exclusive dispatch marker: one worker per claim, even if a worker config is replayed. */
-export async function markPilotDispatch(root: string, slot: PilotSlot, runId: string): Promise<void> {
+export async function markPilotDispatch(root: string, slot: AnyPilotSlot, runId: string): Promise<void> {
   const claim = await readPilotClaim(root, slot);
   if (!claim || claim.runId !== runId) throw new Error(`No ${slot} claim covers ${runId}`);
   try { await mkdir(join(root, "claims", slot, "dispatched")); }

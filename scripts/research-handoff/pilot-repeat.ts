@@ -70,11 +70,12 @@ export const RH7_PILOT: PilotDefinition = Object.freeze({
     priorSettlements: RH7_PRIOR_SETTLEMENTS }),
 });
 
-export const PILOT_DEFINITIONS: Readonly<Record<PilotRevision, PilotDefinition>> = {
+/** Registry of the single-pair revisions; rh-v8 extends it in pilot-suite.ts. */
+export const PILOT_DEFINITIONS: Readonly<Record<Exclude<PilotRevision, "rh-v8-suite-2">, PilotDefinition>> = {
   "rh-v5-pilot-1": RH5_PILOT, "rh-v6-pilot-1": RH6_PILOT, "rh-v7-once-1": RH7_PILOT,
 };
 export function pilotDefinitionFor(revision: unknown): PilotDefinition {
-  const definition = typeof revision === "string" ? PILOT_DEFINITIONS[revision as PilotRevision] : undefined;
+  const definition = typeof revision === "string" ? (PILOT_DEFINITIONS as Readonly<Record<string, PilotDefinition>>)[revision] : undefined;
   if (!definition) throw new Error(`Unknown pilot revision ${JSON.stringify(revision)}`);
   return definition;
 }
