@@ -18,14 +18,16 @@ expected results written before the runs, results appended): V0 to V4 pass, and 
 found the doubled-slash provenance defect, since fixed. V5 with `pi` passes for the
 extraction-failed case and, after the trim notice was made actionable, for the trim
 case. Three of the `pi` runs stalled in the agent loop and were killed; recorded as
-unproven.
+unproven. V5 with Claude Code (2.1.319, `sonnet`, the 0.22.0 local-tarball plugin)
+passes both cases: after `extraction-failed` the agent read a saved `sources/` page
+without re-running research, and after the trim notice it read all three named
+extractions. The first trim run was not exercised (the agent used `intelli_search`
+only) and was rerun with a revised prompt recorded beforehand. Driver and traces:
+`verify-fu/runs/v5-claude.sh` and `verify-fu/runs/v5-claude/`. Scenario
+`13_claude_code_plugin.sh` also passes on 0.22.0.
 
-Still open, all for the owner:
-
-- V5 with Claude Code needs a `CLAUDE_CODE_OAUTH_TOKEN` (`claude setup-token`, run
-  outside an agent session).
-- Push this branch, merge it into `main`, and approve the cleanup scope in the
-  evidence run's `CLEANUP.md`.
+The branch is pushed. Still open, for the owner: merge it into `main`, and approve
+the cleanup scope in the evidence run's `CLEANUP.md`.
 
 ## State at Handover
 
