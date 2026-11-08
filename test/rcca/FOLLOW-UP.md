@@ -8,6 +8,25 @@ as the 0.22.0 fix. A cold-start review of this handover
 (`reports/rcca-coldstart.md` in the evidence run) found it ready once its fixes were
 applied; they are applied here.
 
+## Status at 2026-11-08
+
+Items 1 to 5 are built, reviewed and merged into this branch (tracks A, C and B, then
+fix rounds from the combined, prose and live reviews). The combined code review and
+the prose review closed with no must-fix; accepted trade-offs are listed below. All
+gates pass. Live verification ran under the evidence run's `verify-fu/` (plan and
+expected results written before the runs, results appended): V0 to V4 pass, and V4
+found the doubled-slash provenance defect, since fixed. V5 with `pi` passes for the
+extraction-failed case and, after the trim notice was made actionable, for the trim
+case. Three of the `pi` runs stalled in the agent loop and were killed; recorded as
+unproven.
+
+Still open, all for the owner:
+
+- V5 with Claude Code needs a `CLAUDE_CODE_OAUTH_TOKEN` (`claude setup-token`, run
+  outside an agent session).
+- Push this branch, merge it into `main`, and approve the cleanup scope in the
+  evidence run's `CLEANUP.md`.
+
 ## State at Handover
 
 - Branch `rcca/mcp-research-failures`, worktree
