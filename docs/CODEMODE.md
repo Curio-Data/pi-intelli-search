@@ -36,7 +36,7 @@ A positive claim required lower main-conversation traffic without an unacceptabl
 
 ## Background
 
-The [feasibility assessment](https://github.com/Curio-Data/pi-intelli-search/blob/study/research-handoff-runner/docs/experiments/research-handoff/FEASIBILITY.md) established that the shared core accepts injected model and page-fetch dependencies. A benchmark adapter could therefore serve both routes the same captured search response and page bytes without changing the research algorithm or the public tool parameters.
+The [feasibility assessment](https://github.com/Curio-Data/pi-intelli-search/blob/archive/codemode-research-handoff/docs/experiments/research-handoff/FEASIBILITY.md) established that the shared core accepts injected model and page-fetch dependencies. A benchmark adapter could therefore serve both routes the same captured search response and page bytes without changing the research algorithm or the public tool parameters.
 
 The study ran as six numbered series, each with its own frozen protocol, evidence root and financial settlement. Results from different series are not pooled.
 
@@ -156,14 +156,14 @@ The complete workflow was not operationally clean. The `rh-v8` analysis records 
 
 ## Records and Reproduction
 
-The detailed protocols, findings and runner live on the [`study/research-handoff-runner`](https://github.com/Curio-Data/pi-intelli-search/tree/study/research-handoff-runner) branch:
+The detailed protocols, findings and runner are archived under the [`archive/codemode-research-handoff`](https://github.com/Curio-Data/pi-intelli-search/tree/archive/codemode-research-handoff) tag, which marks the final commit of the `study/research-handoff-runner` branch:
 
-- [Ten-Pair Study Findings](https://github.com/Curio-Data/pi-intelli-search/blob/study/research-handoff-runner/docs/experiments/research-handoff/SUITE-FINDINGS.md): canonical narrative for `rh-v8`.
-- [Suite Protocol](https://github.com/Curio-Data/pi-intelli-search/blob/study/research-handoff-runner/docs/experiments/research-handoff/SUITE-PROTOCOL.md): frozen method, rubric, gates and stop rules.
-- [Research Handoff Resume](https://github.com/Curio-Data/pi-intelli-search/blob/study/research-handoff-runner/docs/experiments/research-handoff/RESUME.md): accepted source identity and the offline reproduction command.
-- [Findings](https://github.com/Curio-Data/pi-intelli-search/blob/study/research-handoff-runner/docs/experiments/research-handoff/FINDINGS.md), [Continuation Findings](https://github.com/Curio-Data/pi-intelli-search/blob/study/research-handoff-runner/docs/experiments/research-handoff/CONTINUATION-FINDINGS.md) and [Repeat Findings](https://github.com/Curio-Data/pi-intelli-search/blob/study/research-handoff-runner/docs/experiments/research-handoff/REPEAT-FINDINGS.md): the `rh-v4`, `rh-v6` and `rh-v7` results.
-- [Brief](https://github.com/Curio-Data/pi-intelli-search/blob/study/research-handoff-runner/docs/experiments/research-handoff/BRIEF.md): the original objective and measurement requirements.
+- [Ten-Pair Study Findings](https://github.com/Curio-Data/pi-intelli-search/blob/archive/codemode-research-handoff/docs/experiments/research-handoff/SUITE-FINDINGS.md): canonical narrative for `rh-v8`.
+- [Suite Protocol](https://github.com/Curio-Data/pi-intelli-search/blob/archive/codemode-research-handoff/docs/experiments/research-handoff/SUITE-PROTOCOL.md): frozen method, rubric, gates and stop rules.
+- [Research Handoff Resume](https://github.com/Curio-Data/pi-intelli-search/blob/archive/codemode-research-handoff/docs/experiments/research-handoff/RESUME.md): accepted source identity and the offline reproduction command.
+- [Findings](https://github.com/Curio-Data/pi-intelli-search/blob/archive/codemode-research-handoff/docs/experiments/research-handoff/FINDINGS.md), [Continuation Findings](https://github.com/Curio-Data/pi-intelli-search/blob/archive/codemode-research-handoff/docs/experiments/research-handoff/CONTINUATION-FINDINGS.md) and [Repeat Findings](https://github.com/Curio-Data/pi-intelli-search/blob/archive/codemode-research-handoff/docs/experiments/research-handoff/REPEAT-FINDINGS.md): the `rh-v4`, `rh-v6` and `rh-v7` results.
+- [Brief](https://github.com/Curio-Data/pi-intelli-search/blob/archive/codemode-research-handoff/docs/experiments/research-handoff/BRIEF.md): the original objective and measurement requirements.
 
-The runner source is under `scripts/research-handoff/` on that branch, with tests in `test/handoff-*.test.ts`. The measured implementation is commit `63abcd4`.
+The runner source is under `scripts/research-handoff/` at that tag, with tests in `test/handoff-*.test.ts`. The measured implementation is commit `63abcd4`.
 
 Raw evidence (conversations, captured corpus, ledgers, locked grades, settlements and analyses) is gitignored and retained in the maintainer's study worktree, not in the repository. The `rh-v8` roots are `evidence/benchmarks/research-handoff/20261108T152419Z-rh-v8-suite/` and `evidence/agents/20261108T152419Z-full-suite/`, bound by a 5,036-file evidence manifest.
