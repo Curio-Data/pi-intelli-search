@@ -2,6 +2,8 @@
 
 This document records host versions, artefacts and evidence classes for `intelli-search`. A version absent from this matrix has no recorded verification here. Declared ranges in the [native](../package.json) and [standalone](../packages/mcp/package.json) manifests govern compatibility requirements; this matrix records the checks performed, not a narrower support range. MCP means Model Context Protocol; CLI means command-line interface.
 
+The verification sections for 0.16.0 to 0.19.1 (Provenance Generation, Floor-Modernisation, 0.18.0, 0.19.0 and 0.19.1) originally cited local logs, probes and review reports in the gitignored `.tmp/` scratch folder. Scratch is not a durable citation target, and that material was never promoted to `evidence/`, so the citations were removed on 2026-11-09. Those sections keep their recorded verdicts but name no retained local witness. Where a section links an exact-commit CI run, that run and the public registry metadata remain checkable; the 0.16.0 and 0.17.0 live-suite and installation results have no remaining witness beyond this record. From 0.20.0 the witnesses are indexed in `evidence/`.
+
 ## Evidence Classes
 
 | Class | Meaning |
@@ -176,6 +178,8 @@ The downloaded tarball's SHA-1 matches registry metadata (`09fa5ddd324feaf8c31d3
 
 ## 0.19.1 Candidate Verification (2026-10-27)
 
+Local witnesses for this section are not retained; see the note at the top of this page.
+
 Candidate `18781d1` passes exact-commit [release-branch CI](https://github.com/Curio-Data/pi-intelli-search/actions/runs/40480082522), both builds, 609 native and 59 standalone deterministic tests, native-contract types, generated-file checks, ShellCheck, dependency audits and both independent fresh-tarball installations. The native consumer resolves `pi-ai@1.4.0`. This MCP-only patch leaves the native package at `0.19.0`; no native release is required.
 
 Two serial full-suite attempts each passed 14 of 15 scenarios. The first exposed an archive-first cache-selector defect in scenario 05 after a successful retry; the corrected index-based selector has deterministic regression coverage, and scenarios 05 and 06 then passed on the same content. The second attempt passed every scenario except 05, whose attempts produced no completed sidecar after provider extraction timeouts. Every scenario therefore has a pass on the final content, but no single serial run achieved 15 of 15. The owner accepted that evidence scope for MCP staging and directed a future paced-parallel verification design rather than another serial rerun. Local-tarball plugin scenarios 12, 13 and 14 pass on the final content, including Codex zero-configuration startup, missing-key recovery and persistent-credential research.
@@ -188,7 +192,7 @@ Following maintainer approval, the registry records MCP publication at 11:38:14 
 - **Codex CLI 0.160.1:** the installed cache has the expected version, the pinned server is enabled, and prompt-input inspection discovers the skill at the versioned plugin-cache path. An enabled listing alone is not a connection check.
 - **Independent Registry Launcher:** a fresh npm cache and consumer directory resolve the executable under that cache's `_npx/`, not the repository workspace. Its manifest and `--version` identify the published package. A direct standard-input/output (stdio) probe verifies server identity, returns instructions naming `intelli_search`, and lists all four tools through `initialize` and `tools/list`. Standard output contains protocol frames only; standard error contains the expected startup banner, and the process exits cleanly.
 
-Evidence is retained under gitignored `.tmp/release-0191/registry/`, with `registry-verification.log` and `registry-protocol.log`. The probes are retained as `verify-registry.sh` and `registry-probe.mjs`. These checks establish registry installation, skill discovery, connection and tool listing, not a full research call through the registry-installed package. Credentialed full-research checks remain in the local-tarball class.
+These checks establish registry installation, skill discovery, connection and tool listing, not a full research call through the registry-installed package. Credentialed full-research checks remain in the local-tarball class.
 
 ## `Pi` 1.5.0 Verification (2026-11-03)
 
@@ -204,11 +208,13 @@ Two alignment changes ship in 0.21.0. The shared retry classifier is recaptured 
 
 ## 0.19.0 Candidate Verification (2026-10-16)
 
-All 15 mandatory scenarios in `test/run-e2e-all.sh` pass on candidate `af7bf41`, with none failed or skipped, including research on the pinned `Pi` 0.86.0 floor host (fetch-tee citation recovery live, `search.annotationsHarvested=18`) and both credentialed plugin sessions. An earlier full paced run on `29f97ee` also passed 15 of 15; the candidate commit differs by the two-reviewer findings below. Both builds, native (607) and standalone (46) tests, native-contract types, generated-file checks and the dependency audit pass; logs are retained under gitignored `.tmp/release-019/` (`live-final.log`, `test-all.log`, `build-all.log`, `native-contract.log`, `ts-130.log`, `mcp-install-final.log`, `publish-local-final.log`). The source also type-checks against the shipped `Pi` 1.3.0 declarations (`ts-130.log`, exit 0). Both fresh-tarball gates pass on the final tree: the standalone production install and the native local-tarball install, which resolves `pi-ai@1.3.0` as the peer.
+Local witnesses for this section are not retained; see the note at the top of this page.
 
-A two-reviewer pass ran on the branch before this verification, spawned through herdr with provenance checked from the session files: code review by [_Claude Code_](https://code.claude.com) (Opus 5.5) and prose review by `pi/openai-codex/gpt-6.1-sol`. Their reports are under `.tmp/agents/2026-10-16-pi130-review/reports/`; the applied findings are in `af7bf41` (word-bounded status codes, retained busy phrasings, the fixture parity gate, and corrections to the changelog, compatibility and architecture prose). At that candidate checkpoint, publication and registry-pin verification remained pending; the completed publication checks are recorded below.
+All 15 mandatory scenarios in `test/run-e2e-all.sh` pass on candidate `af7bf41`, with none failed or skipped, including research on the pinned `Pi` 0.86.0 floor host (fetch-tee citation recovery live, `search.annotationsHarvested=18`) and both credentialed plugin sessions. An earlier full paced run on `29f97ee` also passed 15 of 15; the candidate commit differs by the two-reviewer findings below. Both builds, native (607) and standalone (46) tests, native-contract types, generated-file checks and the dependency audit pass. The source also type-checks against the shipped `Pi` 1.3.0 declarations. Both fresh-tarball gates pass on the final tree: the standalone production install and the native local-tarball install, which resolves `pi-ai@1.3.0` as the peer.
 
-On 2026-10-17, all 15 mandatory scenarios pass again on merged commit `129114f`, with none failed or skipped. Its executable source, tests, scripts and manifests are unchanged from `af7bf41`. Both builds, all deterministic tests, generated-file checks, the dependency audit and both independent fresh-tarball installations also pass on the merged commit. The native consumer resolves `pi-ai@1.3.0`. Logs and exit witnesses are under `.tmp/release-019/merged/`. Exact-commit [release-branch CI](https://github.com/Curio-Data/pi-intelli-search/actions/runs/39024508290) passes, including the native-contract type check and [_ShellCheck_](https://www.shellcheck.net/). Before MCP publication, main's initial run stopped at the unpublished-MCP-pin guard and skipped the remaining steps; the same commit passes those steps in release-branch CI.
+A two-reviewer pass ran on the branch before this verification, spawned through herdr with provenance checked from the session files: code review by [_Claude Code_](https://code.claude.com) (Opus 5.5) and prose review by `pi/openai-codex/gpt-6.1-sol`. The applied findings are in `af7bf41` (word-bounded status codes, retained busy phrasings, the fixture parity gate, and corrections to the changelog, compatibility and architecture prose). At that candidate checkpoint, publication and registry-pin verification remained pending; the completed publication checks are recorded below.
+
+On 2026-10-17, all 15 mandatory scenarios pass again on merged commit `129114f`, with none failed or skipped. Its executable source, tests, scripts and manifests are unchanged from `af7bf41`. Both builds, all deterministic tests, generated-file checks, the dependency audit and both independent fresh-tarball installations also pass on the merged commit. The native consumer resolves `pi-ai@1.3.0`. Exact-commit [release-branch CI](https://github.com/Curio-Data/pi-intelli-search/actions/runs/39024508290) passes, including the native-contract type check and [_ShellCheck_](https://www.shellcheck.net/). Before MCP publication, main's initial run stopped at the unpublished-MCP-pin guard and skipped the remaining steps; the same commit passes those steps in release-branch CI.
 
 ### Published `0.19.0` Registry-Pin Verification (2026-10-17)
 
@@ -218,15 +224,17 @@ Following maintainer approval, the registry records MCP publication at 20:02:39 
 - **Codex CLI 0.160.1:** the installed cache has the expected version, the pinned server is enabled, and prompt-input inspection discovers its skill. An enabled listing alone is not a connection check.
 - **Independent Registry Launcher:** a fresh npm cache and consumer directory resolve the executable under that cache's `_npx/`, not the repository workspace. Its manifest and `--version` identify the published package. A direct standard-input/output (stdio) probe verifies server identity, returns instructions naming `intelli_search`, and lists all four tools through `initialize` and `tools/list`. The served `intelli_research` schema keeps the `maxUrls` minimum of 1 and the stated default of 10. Standard output contains protocol frames only; standard error contains the expected startup banner, and the process exits cleanly.
 
-Evidence is retained under gitignored `.tmp/release-019/`: fresh profiles in `registry/`, `registry-verification.log`, `registry-protocol.json`, `mcp-publication.json`, `mcp-public-dist.json` and `mcp-dist-tags.json`. The host-install and protocol probes are retained as `verify-registry.sh` and `registry-probe.mjs`; the protocol witness is written after all assertions pass. These checks establish registry installation, skill discovery, connection and tool listing, not a full research call through a registry-installed package. Credentialed full-research checks remain in the local-tarball class. Native registry installation is verified separately below.
+These checks establish registry installation, skill discovery, connection and tool listing, not a full research call through a registry-installed package. Credentialed full-research checks remain in the local-tarball class. Native registry installation is verified separately below.
 
 ### Published `0.19.0` Native Package Verification (2026-10-17)
 
 Following maintainer approval, the registry records native publication at 20:18:44 UTC; `latest` resolves to `0.19.0`, and registry metadata exposes signed provenance. `test/run-e2e-publish.sh` passes against that explicit version with `HOME`, `PI_CODING_AGENT_DIR`, npm cache and scratch isolated under repository `.tmp/`. The installed extension loads under plain Node, registers all four tools and its session-start subscription, and contains the expected source, build, skill and legal files. Tests, workflows and environment files are absent; host peer dependencies are not bundled.
 
-The downloaded tarball's SHA-1 matches registry metadata, and its README matches `pi.README.md` at `pi-v0.19.0` byte-for-byte. The verification script and evidence are retained under gitignored `.tmp/release-019/`: `verify-native-registry.sh`, `native-registry-install.log`, `native-registry-install.exit`, `native-publication.json`, `native-dist-tags.json`, `native-public-dist.json` and `native-public/`. These checks establish published-package installation, runtime loading and README derivation, not a live model call through the registry-installed native package.
+The downloaded tarball's SHA-1 matches registry metadata, and its README matches `pi.README.md` at `pi-v0.19.0` byte-for-byte. These checks establish published-package installation, runtime loading and README derivation, not a live model call through the registry-installed native package.
 
 ## 0.18.0 Candidate Verification (2026-10-13)
+
+Local witnesses for this section are not retained; see the note at the top of this page.
 
 All 15 mandatory scenarios in `test/run-e2e-all.sh` pass on candidate `5e74f96`, with none failed or skipped. The shipped runtime matches merge `879f6ee`; the intervening changes correct documentation and a test assertion. Both builds, native and standalone tests, native-contract types, generated-file checks, ShellCheck and the dependency audit pass. Both independent fresh-tarball installation gates passed on the merged runtime. [Exact-commit release-branch CI](https://github.com/Curio-Data/pi-intelli-search/actions/runs/38401566708) also passes. At that verification, main's CI failed only the unchanged unpublished-MCP-pin guard and neither candidate package was public.
 
@@ -240,7 +248,7 @@ All 15 mandatory scenarios in `test/run-e2e-all.sh` pass on candidate `5e74f96`,
 
 The initial paced run had 14 passes and one failure: the default-budget assertion rejected a raw `maxUrls: null`. A captured retry reproduced it. The host emits raw tool arguments before removing optional nulls during validation; null therefore represents no override in this test. The corrected assertion retains exact cap arguments and rejects explicit default overrides, wrong types, missing calls and duplicate calls. Deterministic regression coverage and independent code review pass, followed by the complete fresh suite above. This is a test correction, not a runtime change.
 
-Logs are retained under gitignored `.tmp/release-018/`: `live.log` records the failed first suite, `cap-retry-trace.jsonl` records the reproduction, and `live-final.log` records the complete passing suite. Deterministic and installation logs are `gates.log`, `docs-gates.log` and `null-gates.log`; independent prose and code reviews are under `.tmp/agents/release-018/reports/`. The agent loop uses native DeepSeek Flash, except for the floor scenario's configured OpenRouter model; pipeline roles retain each scenario's configuration. Both credentialed plugin checks confirm the operator's credentials were untouched. At candidate verification, registry-pin installation remained a post-publication gate; its completed checks are recorded below. Later release-preparation commits need their own exact-commit CI result.
+In this suite the agent loop uses native DeepSeek Flash, except for the floor scenario's configured OpenRouter model; pipeline roles retain each scenario's configuration. Both credentialed plugin checks confirm the operator's credentials were untouched. At candidate verification, registry-pin installation remained a post-publication gate; its completed checks are recorded below. Later release-preparation commits need their own exact-commit CI result.
 
 ### Published `0.18.0` Registry-Pin Verification (2026-10-13)
 
@@ -250,16 +258,18 @@ The maintainer approved the staged MCP package. The registry records publication
 - **Codex CLI 0.160.1:** the installed cache has the expected version, the pinned server is enabled, and prompt-input inspection discovers its skill. An enabled listing alone is not a connection check.
 - **Independent Registry Launcher:** a fresh npm cache and consumer directory resolve the executable under that cache's `_npx/`, not the repository workspace. Its manifest and `--version` identify the published package. A direct standard-input/output (stdio) probe verifies server identity, returns instructions naming `intelli_search`, and lists all four tools through `initialize` and `tools/list`. It also checks the new `maxUrls` minimum and corrected default description. Standard output contains protocol frames only; standard error contains the expected startup banner, and the process exits cleanly.
 
-Evidence is retained under gitignored `.tmp/release-018/registry/`, `registry-verification.log` and `registry-protocol.json`. This establishes registry installation, skill discovery, connection and tool listing, not a full research call through a registry-installed package. The credentialed full-research checks remain in the local-tarball class.
+This establishes registry installation, skill discovery, connection and tool listing, not a full research call through a registry-installed package. The credentialed full-research checks remain in the local-tarball class.
 
 ### Published `0.18.0` Native Package Verification (2026-10-13)
 
 The registry records native publication at 15:01:42 UTC following maintainer approval; `latest` resolves to the version at `pi-v0.18.0`, and registry metadata exposes signed provenance. `test/run-e2e-publish.sh` passes against that explicit version with `HOME`, `PI_CODING_AGENT_DIR`, npm cache and scratch isolated under repository `.tmp/`. The installed extension loads under plain Node, registers all four tools and its session-start subscription, and contains the expected source, build, skill and legal files. Tests, workflows and environment files are absent; host peer dependencies are not bundled.
 
-The downloaded tarball's SHA-1 matches registry metadata, and its README matches `pi.README.md` at the native release tag byte-for-byte. Evidence is retained under `.tmp/release-018/native-registry-install.log`, `native-public-dist.json`, `native-publication.json` and `native-public/`. These checks establish published-package installation, runtime loading and README derivation, not a live model call through the registry-installed native package.
+The downloaded tarball's SHA-1 matches registry metadata, and its README matches `pi.README.md` at the native release tag byte-for-byte. These checks establish published-package installation, runtime loading and README derivation, not a live model call through the registry-installed native package.
 
 <a id="current-candidate-verification"></a>
 ## Floor-Modernisation Verification
+
+Local witnesses for this section are not retained; see the note at the top of this page.
 
 The floor-modernisation generation merged to `main` at `99fea6f`. All 15 mandatory scenarios in `test/run-e2e-all.sh` passed on that commit on 2026-10-08, with none failed or skipped. Both packages in that generation are published. MCP registry-pin checks and native registry installation pass. The targeted implementation checks above remain separate from this merged-tree verification.
 
@@ -274,7 +284,7 @@ The floor-modernisation generation merged to `main` at `99fea6f`. All 15 mandato
 | Packaging | Both independent fresh-tarball installs pass on `99fea6f`; native consumer installation resolves pi-ai 1.1.0 | Installation and runtime loading, not live research through the published native package |
 | Registry Pins | The launchers at `mcp-v0.17.0` resolve the published package; the clean-profile checks below apply to that tag | Installation, skill discovery, connection and protocol checks, not full registry-pin research |
 
-Logs are retained under gitignored `.tmp/release-017/`, with the full paced output in `live.log`. The native agent loop used [_DeepSeek Flash_](https://www.deepseek.com) except for the floor scenario's configured [_OpenRouter_](https://openrouter.ai) model; pipeline roles retained each scenario's model configuration. Both credentialed host checks confirmed the operator's credential files were untouched.
+The native agent loop used [_DeepSeek Flash_](https://www.deepseek.com) except for the floor scenario's configured [_OpenRouter_](https://openrouter.ai) model; pipeline roles retained each scenario's model configuration. Both credentialed host checks confirmed the operator's credential files were untouched.
 
 ### Published `0.17.0` Registry-Pin Verification (2026-10-08)
 
@@ -284,15 +294,17 @@ The maintainer approved the staged MCP package. The registry records publication
 - **Codex CLI 0.160.1:** the installed cache has the expected version, the exact pinned server is enabled, and prompt-input inspection discovers its skill. An enabled listing alone is not a connection check.
 - **Independent Registry Launcher:** a fresh npm cache and consumer directory resolve the executable beneath that cache's `_npx/`, not the repository workspace. Its package identity and `--version` match the published pin. A direct standard-input/output (stdio) probe returns the expected server identity, routing instructions and all four tools through `initialize` and `tools/list`, then exits cleanly. Standard output contains protocol frames only; standard error contains the expected startup banner.
 
-Evidence is retained under `.tmp/release-017/registry/` and `.tmp/release-017/registry-verification.log`. This is registry installation, connection and tool-listing evidence, not a full research call or proof that a host model received an answer. The credentialed full-research checks remain in the local-tarball class.
+This is registry installation, connection and tool-listing evidence, not a full research call or proof that a host model received an answer. The credentialed full-research checks remain in the local-tarball class.
 
 ### Published `0.17.0` Native Package Verification (2026-10-08)
 
 The registry records native publication at 11:52:19 UTC; `latest` resolves to the version at `pi-v0.17.0`, and registry metadata exposes its signed provenance attestation. `test/run-e2e-publish.sh` passes against that explicit version with `HOME`, `PI_CODING_AGENT_DIR` and scratch isolated under repository `.tmp/`. The installed extension loads under plain Node, registers all four tools and its session-start subscription, and contains the expected source, build, skill and legal files. Tests, workflows and environment files are absent; host peer dependencies are not bundled.
 
-The downloaded tarball's SHA-1 matches registry metadata, and its README matches `pi.README.md` at the native release tag byte-for-byte. Evidence is retained under `.tmp/release-017/native-registry-install.log` and `.tmp/release-017/native-public/`. These checks establish published-package installation, runtime loading and README derivation, not a live model call through the registry-installed native package.
+The downloaded tarball's SHA-1 matches registry metadata, and its README matches `pi.README.md` at the native release tag byte-for-byte. These checks establish published-package installation, runtime loading and README derivation, not a live model call through the registry-installed native package.
 
 ## Provenance Generation Verification
+
+Local witnesses for this section are not retained; see the note at the top of this page.
 
 The provenance correction passed that generation's local verification. Local-tarball checks do not establish registry availability. The provenance-generation MCP package is published; [the registry-pin verification below](#published-0160-registry-pin-verification-2026-10-08) records independent installation of the launchers committed at that release.
 
@@ -306,13 +318,13 @@ The provenance correction passed that generation's local verification. Local-tar
 | Deterministic and Packaging | Both builds, all tests, frozen native contracts, generated gates, audit and both independent tarball installs pass; implementation CI is linked from Release Readiness | Require exact-commit CI again for later edits |
 | Codex Plugin | 0.160.1: scenario 14 passes on 2026-10-07 with the dedicated profile, completed research and `mcp` sidecar | Local-tarball class, not current-candidate registry-pin research |
 
-The full paced runner completed on merged commit `5605a2a` on 2026-10-07 with every mandatory scenario passing and none failed or skipped. Pipeline models retain each scenario's configuration; the `Pi` agent loop used native DeepSeek Flash. Both independent fresh-install gates passed, including native resolution of pi-ai 1.1.0 after a transient upstream tarball 404. Release logs are retained under gitignored `.tmp/release-016/`; exact-commit CI must validate subsequent release-preparation edits.
+The full paced runner completed on merged commit `5605a2a` on 2026-10-07 with every mandatory scenario passing and none failed or skipped. Pipeline models retain each scenario's configuration; the `Pi` agent loop used native DeepSeek Flash. Both independent fresh-install gates passed, including native resolution of pi-ai 1.1.0 after a transient upstream tarball 404. Exact-commit CI must validate subsequent release-preparation edits.
 
 ### Published Native Package Verification (2026-10-08)
 
 At this verification, the native package's `latest` tag resolved to the version at release tag `pi-v0.16.0`, not the subsequently prepared native manifest version. The registry records publication at 07:41:48 UTC and exposes its signed provenance attestation. `test/run-e2e-publish.sh` passes against the explicit published version in a clean installation, with `HOME` and `PI_CODING_AGENT_DIR` isolated under repository `.tmp/`. The installed extension loads under plain Node, registers all four tools with the required shapes and subscribes to session startup. Expected source, build, skill and legal files are present; test, workflow and environment files are absent; host peer dependencies are not bundled.
 
-The downloaded published tarball's SHA-1 matches registry metadata. Its README matches `pi.README.md` at the native release tag byte-for-byte, confirming that the publish hook shipped the native derivation rather than the repository README. Logs and the downloaded README are retained under gitignored `.tmp/release-016/native-registry-install.log` and `.tmp/release-016/native-public/`. These checks establish registry installation, package shape and runtime loading, not a live model call through the installed registry package.
+The downloaded published tarball's SHA-1 matches registry metadata. Its README matches `pi.README.md` at the native release tag byte-for-byte, confirming that the publish hook shipped the native derivation rather than the repository README. These checks establish registry installation, package shape and runtime loading, not a live model call through the installed registry package.
 
 ### Published `0.16.0` Registry-Pin Verification (2026-10-08)
 
@@ -322,7 +334,7 @@ The maintainer approved the staged MCP package; the registry records publication
 - **Codex CLI 0.160.1:** isolated `CODEX_HOME`, marketplace add, plugin install and forwarded variables. `codex mcp list --json` shows the server enabled with the committed pin; the installed plugin cache and `codex debug prompt-input` expose the current skill. Listing an enabled server is not itself a connection check.
 - **Independent Registry Launcher:** a fresh npm cache and consumer directory resolve the executable under that cache's `_npx/`, not the repository workspace. `--version` returns the pinned version. A direct standard-input/output (stdio) probe against that registry-downloaded executable receives the expected server identity, routing instructions and all four tools through `initialize` and `tools/list`, then exits cleanly. The expected startup banner stays on standard error; standard output contains protocol frames only.
 
-Evidence is retained under gitignored `.tmp/release-016/registry/`, with the coordinator log at `.tmp/release-016/registry-verification.log`. This is credential-free registry-pin installation, connection and tool-listing evidence, not a full research call or proof that a host model received a research answer. The first direct probe rejected the documented standard-error startup banner because its assertion was over-strict; the corrected assertion checks the exact banner, and the probe passed without changing package code.
+This is credential-free registry-pin installation, connection and tool-listing evidence, not a full research call or proof that a host model received a research answer. The first direct probe rejected the documented standard-error startup banner because its assertion was over-strict; the corrected assertion checks the exact banner, and the probe passed without changing package code.
 
 ## Release Candidate Verification
 
