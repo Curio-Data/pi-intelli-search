@@ -52,6 +52,16 @@ e2e_init_log() {
   E2E_ATTEMPT_DIR="${E2E_TRACE_DIR:-${LOG_FILE%.log}-attempts}"
 }
 
+# Attach the scenario log without creating a process-substitution descendant
+# under the supervisor. Standalone callers keep console and file output.
+e2e_attach_log() {
+  if [[ "${E2E_SUPERVISED:-0}" == "1" ]]; then
+    exec > "$LOG_FILE" 2>&1
+  else
+    exec > >(tee -a "$LOG_FILE") 2>&1
+  fi
+}
+
 # e2e_private_dir <var> <label> — a private temporary directory removed by
 # e2e_cleanup. Assigns the path to <var> (never use command substitution:
 # the cleanup list must be updated in this shell).

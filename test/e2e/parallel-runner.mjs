@@ -123,6 +123,7 @@ export function workerEnvironment(unit, paths, allPaths, artifacts, base = proce
     E2E_EXTENSION_PATH: unit.id === "15_pi_floor" ? frozen.floorExtension : frozen.extension,
     E2E_MCP_CLI: frozen.mcpCli, E2E_MCP_TARBALL: frozen.mcpTarball, E2E_FLOOR_BIN: frozen.floorBin,
     E2E_SKIP_BUILD: "1", E2E_COMPACT_JSON_OUTPUT: "1", E2E_KEEP_ARTIFACTS: "1",
+    E2E_SUPERVISED: "1",
     TEST_MODEL: LOOP_MODEL, E2E_LOOP_MODEL_ID: LOOP_MODEL,
     PI_INTELLI_E2E_SCENARIO: unit.id, PI_INTELLI_E2E_LOOP_MODEL: LOOP_MODEL,
     PI_INTELLI_E2E_HTTP_TRACE: join(paths.root, "http.jsonl"),

@@ -52,7 +52,7 @@ e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY \
 # is the configuration units' evidence class, not this one's.
 E2E_INVOCATION=agent
 e2e_init_log e2e-pi-floor
-exec > >(tee -a "$LOG_FILE") 2>&1
+e2e_attach_log
 echo "📝 Log: $LOG_FILE"
 
 E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"

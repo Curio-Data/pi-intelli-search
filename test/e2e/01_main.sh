@@ -49,7 +49,7 @@ e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
 # is the configuration units' evidence class, not this one's.
 E2E_INVOCATION=agent
 e2e_init_log e2e-main
-exec > >(tee -a "$LOG_FILE") 2>&1
+e2e_attach_log
 echo "📝 Log: $LOG_FILE"
 
 # Agent-loop model for the headless run; the pipeline models are pinned

@@ -676,9 +676,9 @@ describe("review corrections, round 2", () => {
     for (const script of (await readdir(dir)).filter((n) => /^\d\d_.*\.sh$/.test(n))) {
       const lines = (await readFile(join(dir, script), "utf8")).split("\n");
       const load = lines.findIndex((l) => /^\s*e2e_load_env /.test(l));
-      const log = lines.findIndex((l) => /exec > >\(tee/.test(l));
-      if (load < 0) continue;
-      assert.ok(log < 0 || load < log, `${script}: e2e_load_env (line ${load + 1}) after the log redirect (line ${log + 1})`);
+      const log = lines.findIndex((l) => /^\s*e2e_attach_log/.test(l));
+      if (load < 0 || /^(?:13|14)_/.test(script)) continue;
+      assert.ok(log >= 0 && load < log, `${script}: e2e_load_env (line ${load + 1}) after e2e_attach_log (line ${log + 1})`);
     }
   });
 
@@ -695,6 +695,15 @@ describe("review corrections, round 2", () => {
       assert.doesNotMatch(source, /mktemp "[^"]*XXXXXX\.log"/, `${file}: X run must end the template`);
       assert.match(source, /mktemp --suffix=\.log /);
     }
+  });
+
+  it("supervised logging writes directly without a tee descendant", async (t) => {
+    const logs = await scratch(t, "e2e-supervised-log-");
+    const run = spawnSync("bash", ["-c", 'set -euo pipefail; source "$1"; E2E_SUPERVISED=1 E2E_LOG_ROOT="$2"; e2e_init_log e2e-x; e2e_attach_log; printf "supervised-log-ok\n"', "fixture", LIB, logs], { encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout, "");
+    const file = (await readdir(logs))[0];
+    assert.equal(await readFile(join(logs, file), "utf8"), "supervised-log-ok\n");
   });
 
   it("12's key probe reads only its own servers' environments", async (t) => {

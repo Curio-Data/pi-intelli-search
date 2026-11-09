@@ -23,7 +23,7 @@ e2e_require_one_case E2E_CAP_CASE cap default
 # the natural-language prompt.
 E2E_INVOCATION="${E2E_INVOCATION:-auto}"
 e2e_init_log e2e-cap
-exec > >(tee -a "$LOG_FILE") 2>&1
+e2e_attach_log
 echo "📝 Log: $LOG_FILE"
 if [[ -z "${OPENROUTER_API_KEY:-}" && -f "$HOME/.pi/agent/auth.json" ]]; then
   OPENROUTER_API_KEY="$(jq -r '.openrouter.key // empty' "$HOME/.pi/agent/auth.json")"

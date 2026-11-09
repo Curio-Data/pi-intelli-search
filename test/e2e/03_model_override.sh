@@ -35,7 +35,7 @@ e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
 # the natural-language prompt.
 E2E_INVOCATION="${E2E_INVOCATION:-auto}"
 e2e_init_log e2e-model-override
-exec > >(tee -a "$LOG_FILE") 2>&1
+e2e_attach_log
 echo "📝 Log: $LOG_FILE"
 
 # ── Check prerequisites ────────────────────────────────────────────

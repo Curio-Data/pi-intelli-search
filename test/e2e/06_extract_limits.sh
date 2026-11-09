@@ -46,7 +46,7 @@ e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
 # the natural-language prompt.
 E2E_INVOCATION="${E2E_INVOCATION:-auto}"
 e2e_init_log "extract-limits${ARM:+-$ARM}"
-exec > >(tee -a "$LOG_FILE") 2>&1
+e2e_attach_log
 echo "📝 Log: $LOG_FILE"
 
 # arm_entry <workspace> <label> — the entry bound by that arm's verdict.

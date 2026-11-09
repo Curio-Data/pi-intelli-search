@@ -356,6 +356,7 @@ it("passes isolated environment and exact decomposition hooks without inherited 
   assert.equal(env.TEST_MODEL, "openrouter/google/gemini-3.8-flash");
   assert.equal(env.JITI_FS_CACHE, "false");
   assert.equal(env.PI_OFFLINE, "1");
+  assert.equal(env.E2E_SUPERVISED, "1");
   assert.ok(!env.NODE_OPTIONS.includes("evil"));
   const floor = workerEnvironment(manifest.units.find((unit) => unit.id === "15_pi_floor"), paths, new Map(), artifacts, base);
   assert.equal(floor.E2E_EXTENSION_PATH, "/floor/entry.js");
