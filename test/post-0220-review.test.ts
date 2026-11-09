@@ -125,10 +125,14 @@ it("closes unfinished list fences inside their container and stops at container 
     "no stray closer after the list ended",
   );
   assert.throws(() => finish(ended.replace(url, "https://unfetched.example/path")), /absent/);
-  for (const rule of ["* * *", "- - -"]) {
-    const text = `Facts [S1].\n\n${rule}\n  \`\`\`bash\ncurl https://unfetched.example/code\n  \`\`\`\nEnd [S1].`;
-    const rendered = finish(text);
-    assert.ok(rendered.includes("End [S1].\n\n## Source assessment"));
+  for (const rule of ["* * *", "- - -", "---", "***", "_ _ _"]) {
+    for (const prefix of ["Facts [S1].\n\n", "Facts [S1].\n\n- item\n"]) {
+      const text = `${prefix}${rule}\n  \`\`\`bash\ncurl https://unfetched.example/code\n  \`\`\`\nEnd [S1].`;
+      const rendered = finish(text);
+      assert.ok(rendered.includes("End [S1].\n\n## Source assessment"));
+    }
+    const nested = `- item\n\n  ${rule}\n\n  \`\`\`bash\n  curl https://unfetched.example/code\n  \`\`\`\nEnd [S1].`;
+    assert.doesNotThrow(() => finish(nested), "an indented rule stays in its list item");
   }
   // After a list exits, its apparent closer is a new top-level fence. The
   // following URL renders as code; without that fence it must be validated.
