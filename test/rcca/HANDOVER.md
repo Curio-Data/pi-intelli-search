@@ -58,13 +58,15 @@ completed, charged research run is discarded as `collate-failed`. The same shape
 `main`, so it predates 0.22.0. It was confirmed on this branch at `45e6ca5` with the one-line
 repro from the report.
 
-The report came from the research-handoff study session (`study/research-handoff-runner`). Read
-these in place, and do not copy or modify anything in that worktree:
+The report came from the research-handoff study session (worktree `research-handoff-runner`,
+branch `study/codemode-research-handoff`). The worktree was deleted on 2026-11-09 with the owner's
+approval. Before deletion, the two reports were copied with checksums to the main checkout's
+gitignored `evidence/`:
 
-- `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/research-handoff-runner/evidence/agents/20261108T201301Z-codemode-summary/reports/provenance-bold-url-defect.md`:
-  the cause, a `node -e` repro, suggested regression cases and an untested fix direction.
-- `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/research-handoff-runner/evidence/agents/20261108T152419Z-full-suite/reports/paid-machine-review.md`
-  § F1: the original observation.
+- `evidence/2026-11-09-codemode-study-retained/reports/provenance-bold-url-defect.md`: the cause,
+  a `node -e` repro, suggested regression cases and an untested fix direction.
+- `evidence/2026-11-09-codemode-study-retained/reports/paid-machine-review.md` § F1: the original
+  observation.
 
 The fix must normalise the evidence side and the prose side identically. The report's regression
 cases are `**[label](URL)**.`, `**[label](URL)**`, `*[label](URL)*,`, `_[label](URL)_`,
@@ -75,9 +77,8 @@ the validator are in `test/provenance.test.ts`. `proseUrls()` is not exported, s
 exported validation path or export it deliberately. Run the mutation check: revert the fix and
 confirm a regression test fails.
 
-When the fix is committed, tell the reporting session the commit hash. It records the fix in
-`docs/CODEMODE.md` on `study/research-handoff-runner`. Find its address with `ListAgents`; the
-report arrived from `research-handoff-runner-e8`. If it is gone, tell the owner instead.
+The fix (`086283f`) is recorded in `docs/CODEMODE.md` on `study/codemode-research-handoff`
+(commit `5860192`).
 
 ### 2. Judge the Documentation Impact With the Owner (Done)
 
