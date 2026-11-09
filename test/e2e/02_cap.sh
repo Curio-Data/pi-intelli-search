@@ -45,6 +45,10 @@ for scenario in cap default; do
   # shellcheck disable=SC2034
   E2E_TRACE_FILE="$ROOT/$scenario/trace.jsonl"
   e2e_run_pi "$AGENT" "$WORKSPACE" "$PROMPT"
+  if [[ -n "${E2E_TRACE_DIR:-}" ]]; then
+    mkdir -p "$E2E_TRACE_DIR"
+    cp "$E2E_TRACE_FILE" "$E2E_TRACE_DIR/$scenario.jsonl"
+  fi
   e2e_verify_page_budget "$WORKSPACE/.search" "$E2E_TRACE_FILE" "$scenario"
   echo "✅ $scenario: completed research, positive artefacts, correct tool arguments and requested-page budget"
   if [[ "$scenario" == cap ]]; then sleep "${E2E_RUN_GAP_SECONDS:-30}"; fi

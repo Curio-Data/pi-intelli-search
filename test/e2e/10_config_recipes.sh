@@ -28,9 +28,9 @@
 #                                      page exceeds it; collationMaxTokens is not
 #                                      recorded in telemetry)
 #
-# A single automatic retry per scenario guards the known transient pi
-# agent-loop failure mode (the post-tool model hop has no retry wrapper);
-# a scenario only fails when the retry also errors.
+# Up to three attempts per scenario guard the known transient pi agent-loop
+# failure mode (the post-tool model hop has no application retry wrapper);
+# a scenario fails only when every attempt leaves no completed sidecar.
 #
 # Usage:
 #   ./test/e2e/10_config_recipes.sh
@@ -113,7 +113,7 @@ run_pi() {
 # meta_value <cache_dir> <jq_path>
 meta_value() {
   local latest
-  latest="$(find "$1" -maxdepth 1 -mindepth 1 -type d -not -name '.*' 2>/dev/null | sort -r | head -1)"
+  latest="$(e2e_completed_cache_entry "$1")"
   [ -n "$latest" ] || { echo ""; return 1; }
   [ -f "$latest/meta.json" ] || { echo ""; return 1; }
   jq -r "$2 // empty" "$latest/meta.json" 2>/dev/null
@@ -165,7 +165,7 @@ if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"no
   assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
   assert_ge "sources fetched" "$(meta_value "$CWD/.search" '.stages.fetch.succeeded // 0')" 1
 else
-  echo "   ❌ pi failed both attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
 fi
 rm -rf "$AGENT" "$CWD"
 
@@ -191,7 +191,7 @@ if run_pi "$AGENT" "$CWD" "Use intelli_research and domains=[\"nodejs.org\"] to 
   assert_le "pages requested (defaultUrls cap)" "$(meta_value "$CWD/.search" '.stages.fetch.requested // 999')" 8
   assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
 else
-  echo "   ❌ pi failed both attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
 fi
 rm -rf "$AGENT" "$CWD"
 
@@ -221,7 +221,7 @@ if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"sq
   assert_eq "collate model overridden" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/google/gemini-3.7-flash"
   assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
 else
-  echo "   ❌ pi failed both attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
 fi
 rm -rf "$AGENT" "$CWD"
 
@@ -247,7 +247,7 @@ if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"sq
   assert_eq "extract model still default" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
   assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
 else
-  echo "   ❌ pi failed both attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
 fi
 rm -rf "$AGENT" "$CWD"
 
@@ -274,7 +274,7 @@ if run_pi "$AGENT" "$CWD" "Use intelli_research and domains=[\"nodejs.org\"] to 
   assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
   assert_ge "sources fetched" "$(meta_value "$CWD/.search" '.stages.fetch.succeeded // 0')" 1
 else
-  echo "   ❌ pi failed both attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
 fi
 rm -rf "$AGENT" "$CWD"
 
@@ -309,7 +309,7 @@ if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"sq
     echo "   ✅ default .search/ untouched (cacheDir override won)"
   fi
 else
-  echo "   ❌ pi failed both attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
 fi
 rm -rf "$AGENT" "$CWD"
 
@@ -336,7 +336,7 @@ if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"sq
   assert_eq "extract model still default" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
   assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
 else
-  echo "   ❌ pi failed both attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
 fi
 rm -rf "$AGENT" "$CWD"
 
@@ -367,7 +367,7 @@ if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"no
   # pages. Saved sources hold each full page plus a short header, so at the
   # recipe's cap the sum cannot exceed the sum of min(source chars, 150000);
   # at the 400,000 default any page above ≈150,000 characters breaks it.
-  LATEST="$(find "$CWD/.search" -maxdepth 1 -mindepth 1 -type d -not -name '.*' | sort -r | head -1)"
+  LATEST="$(e2e_completed_cache_entry "$CWD/.search")"
   LONGEST=0
   BOUND=0
   for f in "$LATEST"/sources/[0-9]*; do
@@ -383,7 +383,7 @@ if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"no
     echo "   ℹ️  cap not proven: longest saved source is $LONGEST characters"
   fi
 else
-  echo "   ❌ pi failed both attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
 fi
 rm -rf "$AGENT" "$CWD"
 
