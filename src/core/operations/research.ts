@@ -1572,9 +1572,9 @@ async function completeWithBudgetRetry(
     ) {
       // Only when enabling retries would actually issue one.
       reason = `${capReached}budget retries are disabled (outputBudgetRetries is 0).`;
-      remedy = "";
+      remedy = ` Raise outputBudgetRetries or ${setting}, or re-run.`;
     } else if (limitBinds) {
-      reason = `${capReached}a retry within the model's output limit (${modelLimit} tokens) would add under a quarter, so none was made.`;
+      reason = `${capReached}the model's output limit (${modelLimit} tokens) allows a retry under 25% larger, so none ran.`;
       // Above 102,400 no limit up to the maximum could allow a retry, so
       // one attempt at the limit is the only larger budget available.
       remedy =
@@ -1584,7 +1584,7 @@ async function completeWithBudgetRetry(
             ? NATIVE_LIMIT_REMEDY
             : " Change model, or re-run.";
     } else {
-      reason = `${capReached}a retry within the ${MAX_OUTPUT_TOKENS}-token maximum would add under a quarter, so none was made.`;
+      reason = `${capReached}the ${MAX_OUTPUT_TOKENS}-token maximum allows a retry under 25% larger, so none ran.`;
       remedy = ` Set ${setting} to ${MAX_OUTPUT_TOKENS} for one attempt at the maximum.`;
     }
     throw new OutputBudgetExhaustedError(reason + counts + remedy + adapterText);

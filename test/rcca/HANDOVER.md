@@ -38,9 +38,9 @@ Decisions the owner made in this session:
 
 ### 1. Fix the Bold-URL Provenance Defect (Done in `086283f`)
 
-`proseUrls()` in `src/core/provenance.ts:63` matches `https?:\/\/[^\s<>"`\]]+`, strips trailing
-`[.,;:!?]+`, then trims an unbalanced `)` only while the string ends in `)`. Evidence containing
-`**[Limit Increase Request Form](https://forms.gle/eX6pXvit1wBv77Yw5)**.` therefore yields
+Before the fix, `proseUrls()` in `src/core/provenance.ts:63` matched `https?:\/\/[^\s<>"`\]]+`, stripped trailing
+`[.,;:!?]+`, then trimmed an unbalanced `)` only while the string ends in `)`. Evidence containing
+`**[Limit Increase Request Form](https://forms.gle/eX6pXvit1wBv77Yw5)**.` therefore yielded
 `https://forms.gle/eX6pXvit1wBv77Yw5)**`. The synthesis cites the clean URL, which is not in the
 evidence set, so `finalizeCollation()` throws "Collation provenance validation failed". A
 completed, charged research run is discarded as `collate-failed`. The same shape applies to `*`,
@@ -90,7 +90,8 @@ owner deferred a seventh round to this step.
 
 Keep these known constraints in the brief:
 
-- **The 300-character cut.** `failureDetail()` keeps 299 characters and an ellipsis. Measure any
+- **The 300-character cut.** A reason of 300 characters or fewer is kept whole; a longer one keeps
+  299 characters and an ellipsis. Measure any
   new message wording at its worst case: six-digit caps and counts, and `extractionMaxTokens`.
 - **The frozen default remedy.** `Raise <setting>, choose a model that reasons less for this stage,
   or re-run.` is pinned by `test/fixtures/native-contract/collate-failed.json`. Changing it means
@@ -114,9 +115,14 @@ These are unchanged from the earlier handover, and each is the owner's call:
   `meta.json`; rejected `collate-failed` synthesis not kept; native settings warning names the
   built-in default; skill cites `details.cachePath`; archived failure report names live `sources/`
   paths; `collate-failed` advice versus the trim notice; ≈14-minute worst case per degraded page.
-  The text is at `997c926:test/rcca/HANDOVER.md`.
+  The text is at `997c926:test/rcca/HANDOVER.md`. Added by `prose-r7`: emphasis that wraps a
+  line break around a URL (`**Form:` then the URL and `**` on the next line) is still rejected,
+  because closers are matched only within the URL's line; it has no test.
 
 ## Verification at `45e6ca5`
+
+The deterministic suite was re-run on `086283f` (887 native and 157 standalone, 1,044 in total);
+the list below is the `45e6ca5` record.
 
 - **Deterministic (Observed):**
   - `npm run build:all`, and `npm run test:all` (884 native and 157 standalone, 1,041 in total,

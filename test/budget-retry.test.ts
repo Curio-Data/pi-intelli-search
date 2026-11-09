@@ -67,6 +67,7 @@ it("issues no budget retry when outputBudgetRetries is 0", async (t) => {
   assert.deepEqual(caps, [100]);
   assert.equal(result.outcome, "collate-failed");
   assert.match(result.text, /budget retries are disabled \(outputBudgetRetries is 0\)/);
+  assert.match(result.text, /Raise outputBudgetRetries or collationMaxTokens, or re-run\./);
 });
 
 it("issues exactly one retry when outputBudgetRetries is 1", async (t) => {
@@ -408,7 +409,7 @@ it("attributes a skipped near-duplicate retry to the model limit, never claiming
   context.models.outputLimit = () => 110;
   const result = await research({ query: "limit just above cap" }, context, dependencies);
   assert.deepEqual(caps, [100]);
-  assert.match(result.text, /a retry within the model's output limit \(110 tokens\) would add under a quarter, so none was made\. Change model, or re-run\./);
+  assert.match(result.text, /the model's output limit \(110 tokens\) allows a retry under 25% larger, so none ran\. Change model, or re-run\./);
   assert.doesNotMatch(result.text, /at or below the cap|undefined/);
 });
 
@@ -419,7 +420,7 @@ it("attributes a skipped near-duplicate retry to the shared maximum when no mode
   alwaysExhausted(context, caps);
   const result = await research({ query: "cap near the maximum" }, context, dependencies);
   assert.deepEqual(caps, [110_000]);
-  assert.match(result.text, new RegExp(`a retry within the ${MAX_OUTPUT_TOKENS}-token maximum would add under a quarter, so none was made\\. Set collationMaxTokens to ${MAX_OUTPUT_TOKENS}`));
+  assert.match(result.text, new RegExp(`the ${MAX_OUTPUT_TOKENS}-token maximum allows a retry under 25% larger, so none ran\\. Set collationMaxTokens to ${MAX_OUTPUT_TOKENS}`));
   assert.doesNotMatch(result.text, /change model/);
   assert.doesNotMatch(result.text, /model's output limit of undefined/);
 });
@@ -510,12 +511,12 @@ it("does not imply that enabling retries helps when one retry would not be issue
   const { context, dependencies } = coreContext(root, { outputBudgetRetries: 0 });
   const caps: Array<number | undefined> = [];
   alwaysExhausted(context, caps);
-  // Limit 110 over a cap of 100: one retry would add under a quarter.
+  // Limit 110 over a cap of 100: a retry would be under 25% larger.
   context.models.outputLimit = () => 110;
   const result = await research({ query: "retries off near the limit" }, context, dependencies);
   assert.deepEqual(caps, [100]);
   assert.doesNotMatch(result.text, /budget retries are disabled/);
-  assert.match(result.text, /a retry within the model's output limit \(110 tokens\) would add under a quarter/);
+  assert.match(result.text, /the model's output limit \(110 tokens\) allows a retry under 25% larger/);
 });
 
 it("puts adapter text after the remedy so the cut cannot remove the advice", async (t) => {
