@@ -242,6 +242,8 @@ src/
 │   ├── llm.ts               # Single model retry/timeout policy
 │   ├── paths.ts             # Physical roots and display policy
 │   ├── cache.ts             # Artifacts, locks and index
+│   ├── collation-budget.ts  # Collation input budget, boundary-safe cuts and trim order
+│   ├── output-budget.ts     # Budget-retry caps, timeouts and candidate ranking
 │   ├── fetch.ts             # Dual page fetch and documentation downloads
 │   ├── console.ts           # Async-scoped dependency diagnostic suppression
 │   ├── annotations.ts       # Citation harvesting
@@ -250,6 +252,7 @@ src/
 │   ├── prompts.ts           # System prompts
 │   ├── progress.ts          # Host-neutral stage progress
 │   ├── telemetry.ts         # Local sidecar with injected identity
+│   ├── tlds.ts              # Generated delegated TLD set for protocol-less domain guesses
 │   ├── types.ts             # Shared data types
 │   └── util.ts              # URL, concurrency and resilience helpers
 ├── native-operation-context.ts # Trusted native settings, paths and result/progress mapping
@@ -318,13 +321,18 @@ scripts/
 ├── capture-changelog-fixture.mjs # Capture the Pi changelog parser behaviour into a test fixture
 ├── lib/markdown-links.mjs    # Shared fence-aware, inline-code-aware link mapping for generators
 ├── generate-toc.mjs         # README contents generator; --check is the drift gate
+├── generate-tlds.mjs        # src/core/tlds.ts from a downloaded IANA list; --check is the drift gate
 ├── generate-plugin-bundles.mjs # Plugin/marketplace generator; --check is the drift gate
 ├── verify-mcp-install.mjs    # Production-only install and native-fetch verification
 └── capture-native-contract.mts # Explicit compatibility-fixture regeneration
 
 test/
 ├── annotations.test.ts
+├── budget-candidates.test.ts # Budget-retry candidate ranking
+├── budget-retry.test.ts      # Output-cap retries for extraction and collation
 ├── cache.test.ts
+├── claude-routing.test.ts
+├── collation-budget.test.ts  # Collation input budget, trim notice and delivered-text provenance
 ├── compat-guard.test.ts
 ├── core-boundary.test.ts     # Source/declaration audit and isolated runtime
 ├── core-cache.test.ts        # Independent-process cache writes and metadata
@@ -349,10 +357,12 @@ test/
 ├── probes/mcp-install.mjs     # Installed standalone operations and native fetch assets
 ├── tsconfig.native-contract.json # Type check for contract tests and generator
 ├── prompts.test.ts
+├── provenance.test.ts        # Collation provenance validation and failure reports
 ├── plugin-bundles.test.ts    # Generated plugin/marketplace shape, pins and drift gate
 ├── package-readmes.test.ts   # README block selection, link rewriting, drift gate and publish swap
 ├── providers.test.ts
 ├── research.test.ts
+├── renderer.test.ts
 ├── research-telemetry.test.ts
 ├── shared.test.ts
 ├── e2e/
@@ -379,6 +389,7 @@ test/
 ├── settings.test.ts
 ├── smoke.ts
 ├── util.test.ts
+├── rcca/                     # Converted RCCA regressions (run by test:all); RCCA.md and FOLLOW-UP.md
 └── native-changelog.test.ts # PI_CHANGELOG.md drift, parser-parity and packaging gates
 ```
 

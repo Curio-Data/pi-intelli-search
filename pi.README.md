@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-725%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1044%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -21,6 +21,10 @@ Intelligent web research for coding agents: search, extract, collate, and cache 
 - 🌐 **Fetch:** Dual-fetch each page (Hypertext Markup Language (HTML) → [_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), compare quality, pick the cleaner version.
 - 📄 **Extract:** Per-page large language model (LLM) extraction guided by a _focused prompt_. Compresses ≈50K to ≈3-5K chars of query-relevant content.
 - 🔗 **Collate:** Cross-source deduplication, inconsistency detection, and synthesis into a focused ≈5K-character summary.
+- 🧠 **Reasoning-Aware Output Budget:** When a reasoning model spends its output cap on hidden reasoning, research retries at a doubled cap (8,000, then 16,000, then 32,000 tokens by default) before reporting a failure. See [Output Budget Retry](#output-budget-retry).
+- 📏 **Long Pages, Bounded Collation:** Extraction reads up to 400,000 characters of each page. When the extractions exceed the [collation input budget](#collation-input-budget), the longest are trimmed at clean boundaries, and the result gives the path of each trimmed extraction's full saved file.
+- 🧾 **Recoverable Failures:** When no extraction succeeds, research saves the fetched pages and a failure report; when synthesis fails, it saves the pages and extractions as well. The result names the saved files, so the agent can read them rather than repeat the paid stages. See [Extraction Diagnostics](#extraction-diagnostics).
+- 📂 **Code and Text Sources:** Raw source files and text responses are saved and extracted alongside HTML pages. References named in search text without a link are fetched as labelled guesses; see [Inferred Assets](#inferred-assets).
 - 💾 **Cache:** Persistent `.search/` cache with automatic cache suggest. Related previous searches surfaced on each query.
 - 🎯 **Configurable:** Select models independently for search, extract and collate. The native extension uses registered, authenticated `Pi` models (capability and context limits apply); the MCP server uses explicitly selected OpenRouter models.
 - 💰 **Cost:** see the [default research-run estimate](#cost).
@@ -59,7 +63,10 @@ The native extension uses `Pi` settings and authentication. Generic MCP registra
     - [Customise (Optional)](#customise-optional)
 - [Tools](#tools)
   - [Evidence and Provenance](#evidence-and-provenance)
+  - [Inferred Assets](#inferred-assets)
   - [Extraction Diagnostics](#extraction-diagnostics)
+    - [Output Budget Retry](#output-budget-retry)
+  - [Collation Input Budget](#collation-input-budget)
 - [Usage Examples](#usage-examples)
   - [Quick Search](#quick-search)
   - [Deep Research](#deep-research)
@@ -76,6 +83,8 @@ The native extension uses `Pi` settings and authentication. Generic MCP registra
   - [Recipe 6: Stronger Collation](#recipe-6-stronger-collation)
   - [Recipe 7: Free-Tier Resilience](#recipe-7-free-tier-resilience)
   - [Recipe 8: Per-Project Override](#recipe-8-per-project-override)
+  - [Recipe 9: Large-Context Collation](#recipe-9-large-context-collation)
+  - [Recipe 10: Bounded Time and Spend](#recipe-10-bounded-time-and-spend)
 - [Model Configuration](#model-configuration)
   - [OpenRouter Routing for Sonar](#openrouter-routing-for-sonar)
   - [Source Harvesting from Citations](#source-harvesting-from-citations)
@@ -188,19 +197,55 @@ The native `intelli_research` schema declares `minimum: 1` for `maxUrls`. `Pi` 1
 
 Research collation receives only successful, non-empty page extractions, not the search model's summary. Code generates the Source Assessment inventory and cache-file references from the run's evidence manifest. Synthesis uses source IDs such as `[S1]`; unknown IDs, prose URLs absent from the supplied extractions and model-generated numbered cache references fail validation before a report is committed. Cross-links present in extracted text remain content, not additional fetched pages. Fenced, indented and inline code examples remain code, not evidence declarations. These checks establish reference consistency, not factual accuracy.
 
-Manual `intelli_collate` labels its evidence as caller-supplied extractions; it does not claim the server fetched those pages. Empty or duplicate source evidence is rejected. The optional `searchSummary` input remains accepted for compatibility but does not supply synthesis evidence. Per-source relevance and contribution ratings are no longer model-generated. Read exact cache paths from the inventory; `Not cached` means no full-page file was supplied.
+Manual `intelli_collate` labels its evidence as caller-supplied extractions; it does not claim the server fetched those pages. An extraction passed with `inferred: true` is treated as a guessed source: the synthesis model is told so, and the collation budget trims it before cited sources. Empty or duplicate source evidence is rejected. The optional `searchSummary` input remains accepted for compatibility but does not supply synthesis evidence. Per-source relevance and contribution ratings are no longer model-generated. Read exact cache paths from the inventory; `Not cached` means no full-page file was supplied.
+
+### Inferred Assets
+
+Search text can name a site or file without linking it, for example `install.sh`, `manage.py/runserver` or `docs.example.com/guide`. When such a reference ends in a delegated top-level domain (TLD), it is kept as an inferred reference: normalised to an `https://` URL, labelled inferred from text rather than a citation, and ranked after linked and cited URLs, so a guess cannot displace a citation from the `maxUrls` selection. The token becomes the host name, so `install.sh` fetches `https://install.sh`, and the fetch result records what that address served. Internationalised domain names are converted to their ASCII form, queries, fragments and numeric ports are kept, and a non-numeric port is rejected. `intelli_search` marks such sources `(inferred from text, not a citation)` with the original token. The label of a Markdown link to an absolute URL is not a reference: in `[the README.md](https://github.com/...)` only the link target is a source.
+
+Every fetched URL, cited or inferred, passes one media gate. HTML and Markdown responses are cleaned as pages; plain-text and source-code media types, such as `text/plain`, `application/json` or `text/x-python`, are saved as text or code files. Binary responses, including PDF, are rejected. A saved inferred asset uses the normal numbered `sources/` file.
+
+Research runs that reach extraction list every inferred reference in an `Inferred Assets` table in the result and in `report.md`; a `fetch-failed` result labels inferred URLs in its failed list. Each row shows the original token, the normalised URL, the fetch result (page, code file, text file, or nothing fetched with its reason) and the saved `sources/` path. A redirect or Markdown alternate records the final URL; a change of hostname other than a leading `www.` is shown as "redirected to a different host", which identifies a different hostname, not necessarily a different organisation. A code file is a media-type and file-extension classification, not proof of the source language. The same outcomes are in `details.inferredAssets`, with `url`, `outcome` (`page`, `code`, `text`, `unknown` or `nothing`) and, when known, `originalReference`, `alternateUrl`, `finalUrl`, `redirectedToDifferentHost`, `contentType`, `sourceFile` and `error`. A preserved run, which saved nothing, omits `sourceFile` and shows "Not saved in this attempt". The collation model receives inferred sources marked as guesses and is instructed not to give them citation-equivalent authority.
 
 ### Extraction Diagnostics
 
-A completed research result can contain failed or incomplete sources. `details.pagesFailed` counts fetch failures; `details.extractionFailed` counts failures after a page was fetched. Inspect the failed-source list before relying on a report's coverage. A saved full-page link is provided only when that page was written to the cache. If pages were fetched but no extraction succeeds, the `extraction-failed` result returns the search summary and up to ten known failure reasons without writing a new report or saved pages. If every fetch fails, the separate `fetch-failed` result returns the search summary without a per-source reason list.
+A completed research result can contain failed or incomplete sources. `details.pagesFailed` counts fetch failures; `details.extractionFailed` counts failures after a page was fetched. Inspect the **Failed Sources** list before relying on a report's coverage. A saved full-page link is provided only when that page was written to the cache.
 
-Nonempty output whose reported token count reaches the configured cap is kept with a truncation warning. `intelli_extract` returns `details.truncated`; research and manual collation mark affected sources in the Source Assessment inventory. A synthesis warning applies to the summary itself. Missing usage does not establish completeness, and `outcome: "completed"` does not guarantee complete source coverage.
+The degraded outcomes differ in what they save:
 
-For a budget-exhaustion diagnostic, review `extractionMaxTokens` for page extraction or `collationMaxTokens` for synthesis. On reasoning models, the budget includes reasoning as well as visible text. Increase the relevant cap within the model's output and context limits, or select a model with a smaller reasoning requirement. Lowering reasoning effort did not prevent exhaustion on the serving route identified in the investigation; it is not a guaranteed remedy. Read an available saved page before repeating paid research. Raising `llmTimeoutMs` addresses timer expiry, not an exhausted token budget or a host deadline.
+- **`fetch-failed`:** every fetch failed. The result returns the search summary and up to ten failed URLs with their fetch errors, and saves no report or pages.
+- **`extraction-failed`:** pages were fetched but no extraction succeeded. Research saves every fetched page under `sources/` and a failure report, and `details.cachePath` names the folder. The result's **Failed Sources** list, repeated under `## Failed Sources` in `report.md`, names each saved page's path and why its extraction failed. A saved page can be read directly, or passed to `intelli_extract` as content, without fetching it again.
+- **`collate-failed`:** synthesis failed after extraction. Research saves the extractions and pages with a report that names the failure and lists the saved extractions.
+
+When a successful report for the same query already exists from the same UTC date, including one committed by a concurrent run, an `extraction-failed` or `collate-failed` run preserves that report instead: this run's pages and extractions are not saved, `details.cachePath` is empty, and `details.preservedCachePath` names the preserved report's folder. An `extraction-failed` result still lists up to ten failed pages with their reasons. Neither failure outcome is added to the cache index or runs the cache-suggest judge.
+
+Nonempty output that stops at its output cap, shown by finish reason `length` or by a reported token count that reaches the cap, is kept with a truncation warning. `intelli_extract` returns `details.truncated`; research and manual collation mark affected sources in the Source Assessment inventory. A synthesis warning applies to the summary itself. Without either signal, the absence of a warning does not establish completeness, and `outcome: "completed"` does not guarantee complete source coverage.
+
+Research sidecars, when enabled, record extraction-budget failures, possible truncation, available serving routes and cache-judge degradation. See [Telemetry Sidecar](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md#telemetry-sidecar) for field definitions and absence semantics. Standalone extraction and collation do not write this sidecar.
+
+#### Output Budget Retry
+
+Within research, an output cap that runs out is retried with the cap doubled, up to `outputBudgetRetries` times (default 2, so 8,000, then 16,000, then 32,000 tokens), never above 128,000 tokens or the model's output limit. An extraction is retried only when it stops at its cap without visible text; nonempty truncated extraction text is kept with its warning. A synthesis is retried when it stops at its cap with or without text, and a synthesis that keeps returning truncated text uses every configured retry. Of the syntheses returned, a completed one is always preferred over a truncated one; truncated candidates follow, longest first, and the first candidate that passes source validation is used. Set `outputBudgetRetries` to `0` to disable the retry. Standalone `intelli_extract` and manual `intelli_collate` do not retry with a larger cap.
+
+A retry never exceeds the model's output limit, and a retry that would grow the cap by less than a quarter is skipped, so a limit can shorten the sequence or remove the retry. The native extension reads the limit from the model's `maxTokens` in the `Pi` model registry. `Pi` assigns 16,384 to a custom model defined without `maxTokens`, so such a model's default sequence is 8,000 then 16,000 tokens. To allow larger retries, set `maxTokens` in `models.json` to the provider's stated limit: in the model's `models` entry for a custom model, or in a `modelOverrides` entry for a built-in model. The MCP server reads the limit from the OpenRouter catalogue, and no setting overrides it. A configured cap at or above the model's output limit gets no retry, and neither does a configured cap above 102,400 tokens, because its doubled cap held to 128,000 would be less than a quarter larger. Research always requests the configured cap unchanged. A failure reason names the model's limit when it prevented a larger attempt.
+
+Each attempt's timeout scales with its cap, `llmTimeoutMs × attemptCap / configuredCap`, and is capped at four times `llmTimeoutMs`: 120, 240 and 480 seconds with the defaults. One page's budget attempts can therefore take 14 minutes, and the transport retries set by `llmRetryAttempts` repeat a timed-out attempt, so a failing page can take ≈30 minutes or more. With the default two retries, the budget attempts of one call can bill up to seven times the configured cap in output (8,000 + 16,000 + 32,000 tokens), and each transport retry of an attempt can bill again. A diagnostic or warning reports the cap of the attempt it describes.
+
+For a budget-exhaustion diagnostic that survives the retries, review `extractionMaxTokens` for page extraction or `collationMaxTokens` for synthesis. On reasoning models, the budget includes reasoning as well as visible text. Increase the relevant cap within the model's output and context limits, or select a model with a smaller reasoning requirement. Lowering reasoning effort did not prevent exhaustion on the serving route identified in the investigation; it is not a guaranteed remedy. Read an available saved page before repeating paid research. Raising `llmTimeoutMs` addresses timer expiry, not an exhausted token budget or a host deadline.
 
 A higher completion cap can permit more billable output and increase OpenRouter's in-flight credit reservation. The [Cost](#cost) estimate is a planning figure, not a spending limit; raising a cap does not mean every call consumes it.
 
-Research sidecars, when enabled, record extraction-budget failures, possible truncation, available serving routes and cache-judge degradation. See [Telemetry Sidecar](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md#telemetry-sidecar) for field definitions and absence semantics. Standalone extraction and collation do not write this sidecar.
+### Collation Input Budget
+
+Research and manual collation size the collation input at ≈4 characters per token. Each extraction is first capped at `collationSourceMaxTokens` (default 32,000 tokens), counted in its own characters. The total is measured as the space the extractions take in the collation request, which is JSON, so a newline, quote or backslash counts as two characters: an extraction heavy in code or tables uses more of the budget than its length suggests. Each source is also charged at least ≈100 tokens of header, more when its URL or title is long. If the total still exceeds `collationInputBudgetTokens` (default 221,000), the longest extractions are trimmed to a fair share of the budget, inferred references before cited sources. Whole sources are left out only when a fair share would keep too little to be useful, lowest-ranked first and inferred references first. Within research, the per-source cap binds only when an extraction's largest retried cap (`extractionMaxTokens` doubled `outputBudgetRetries` times, 32,000 tokens with the defaults) exceeds it, or when a page's text runs above ≈4 characters per token. In manual `intelli_collate` it applies to whatever the caller supplies. Trimming changes only the text sent to the collation model; saved extraction files are never altered.
+
+Every cut ends at a paragraph, line, sentence or word boundary where one is near, and backs off before a Markdown link, a URL or an open code block it would split, so the model is not shown half a link it might complete from memory, which would fail provenance validation. The back-off never discards more than half of the kept text, so a code block or token that began in the first half keeps the plain cut.
+
+A synthesis that cites a URL found only in the omitted text fails provenance validation, because that URL is not in the evidence the model received. Research then uses another synthesis already received from an output-cap retry when there is one, and otherwise ends as `collate-failed`; manual collation returns the error. The error names the first rejected URL; in research, a reason longer than 300 characters is shortened, so a very long URL can appear cut off. A saved `collate-failed` report also carries the **Collation input trimmed** notice described below: search the listed extraction files for the URL to see whether it was in the omitted text or in none of the sources.
+
+When anything was trimmed, the result and `report.md` carry a **Collation input trimmed** notice. It names the limit that bound: the per-source limit (`collationSourceMaxTokens`), the total input budget (`collationInputBudgetTokens`), or both. It lists each affected source under "Trimmed to the per-source limit", "Trimmed by both limits", "Trimmed to a fair share of the input budget", "Left out with empty retained text" or "Left out to fit the input budget", with the extraction characters sent and the path of its untrimmed extraction file, including the cache folder, ready to open from the workspace. The notice states that the omitted text is in those files and that re-running research does not recover it; read them for the missing detail. Its **Configuration** line names the setting to raise next time. Raising `collationSourceMaxTokens` sends more of one long page; raising `collationInputBudgetTokens`, within the collation model's context, or requesting fewer URLs sends more overall. Raising only the total budget does not recover text removed by the per-source cap. When a limit is already at its maximum, the notice says so instead of advising a raise.
+
+If the limits leave no extraction text at all, the synthesis model is not called. Research returns `collate-failed` with the extractions and pages saved, and manual `intelli_collate` returns an error; both name `collationInputBudgetTokens` and `collationSourceMaxTokens` as the settings to raise.
 
 <a id="quick-start"></a>
 ## Usage Examples
@@ -296,8 +341,10 @@ Two loader rules to keep in mind:
 | Better final summaries | [Stronger Collation](#recipe-6-stronger-collation) |
 | A free-tier or shared OpenRouter key | [Free-Tier Resilience](#recipe-7-free-tier-resilience) |
 | A different search model for one repo only | [Per-Project Override](#recipe-8-per-project-override) |
+| Wide runs with a large-context collate model | [Large-Context Collation](#recipe-9-large-context-collation) |
+| A short host deadline or predictable spend | [Bounded Time and Spend](#recipe-10-bounded-time-and-spend) |
 
-Every recipe is exercised end-to-end in its own isolated environment by [`test/e2e/10_config_recipes.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/test/e2e/10_config_recipes.sh); recipes 2 and 3 by `08_websearch_tool.sh` and `09_sonar_pro_search.sh`.
+Recipes 2 and 3 run end-to-end in `08_websearch_tool.sh` and `09_sonar_pro_search.sh`; every other recipe runs in its own isolated environment in [`test/e2e/10_config_recipes.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/test/e2e/10_config_recipes.sh). Each script's header states what it proves.
 
 ### Recipe 1: Zero Configuration
 
@@ -390,7 +437,7 @@ A full 10-page research run makes 10 extraction calls and one collation call, so
 }
 ```
 
-Convert `extractMaxChars` to an estimated input-token budget (150K chars is ≈37K tokens), then add prompt tokens and reserve `extractionMaxTokens` for output. Lower the character limit if that total exceeds the model's token window.
+Convert `extractMaxChars` to an estimated input-token budget (the default 400K chars is ≈100K tokens), then add prompt tokens and reserve `extractionMaxTokens` for output. Lower the character limit if that total exceeds the model's token window.
 
 ### Recipe 6: Stronger Collation
 
@@ -442,6 +489,40 @@ A trusted project can override individual keys for one repository only. Put the 
 ```
 
 Use this to give a client project a dedicated cache directory and a stronger search model while every other project stays on the global defaults.
+
+### Recipe 9: Large-Context Collation
+
+The default `collationInputBudgetTokens` (221,000) keeps the collation request within the range in which MiniMax M3 was observed to work well. An extraction that is retried twice may return up to 32,000 tokens, the default `collationSourceMaxTokens`, so a run at the default `maxUrls` of 20 can in the worst case offer ≈640,000 tokens of extractions, and the default budget trims it. A collate model with a larger context and a larger budget lets more of each extraction reach the synthesis. _Gemini_ 3.7 Flash lists a context of ≈1M tokens and 65,536 output tokens on OpenRouter.
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "collateModel": {
+      "provider": "openrouter",
+      "model": "google/gemini-3.7-flash"
+    },
+    "collationInputBudgetTokens": 600000
+  }
+}
+```
+
+Keep the budget, the prompts and the largest retried synthesis cap (32,000 tokens with the defaults) within the model's context. Runs whose extractions stay at ≈3-5K characters each are not trimmed at either budget. A larger budget is billed as collation input when the extractions fill it; see [Cost](#cost) and [Collation Input Budget](#collation-input-budget).
+
+### Recipe 10: Bounded Time and Spend
+
+Release 0.22.0 added output budget retries and raised `extractMaxChars` and `collationMaxTokens`, and each can lengthen a research call or raise its cost. Where the host deadline is short or spend must stay predictable, restore the 0.21.0 values:
+
+```jsonc
+{
+  "pi-intelli-search": {
+    "outputBudgetRetries": 0,
+    "extractMaxChars": 150000,
+    "collationMaxTokens": 4000
+  }
+}
+```
+
+With these values an output cap that runs out is not retried: an extraction with no visible text fails with a budget-exhaustion diagnostic, and a synthesis that reaches 4,000 tokens is kept truncated with a warning, or ends the run as `collate-failed` when it has no text. On a reasoning collate model such as MiniMax M3, 4,000 tokens is the cap at which the synthesis failures that 0.22.0 corrects were recorded. Each model call keeps the `llmTimeoutMs` limit, and long pages are cut at 150,000 characters (≈37,500 tokens), which can fall before the sections that answer the query. Lower `llmRetryAttempts` and `maxUrls` as well where the host deadline is shorter still. [Extraction Diagnostics](#extraction-diagnostics) gives the timing of each budget attempt.
 
 ## Model Configuration
 
@@ -605,7 +686,7 @@ For extraction and collation, the ideal model has:
 
 - **Low Cost per Token:** Up to 10 extractions, 1 collation and 1 cache suggestion per default research run, before retries.
 - **Good Instruction Following:** Must adhere to extraction prompts precisely.
-- **Sufficient Context:** Cleaned pages can be ≈50K chars (truncated to `extractMaxChars`).
+- **Sufficient Context:** Cleaned pages can be ≈50K chars; long pages are truncated to `extractMaxChars`, ≈100K tokens at the default.
 
 Models known to work well for extraction and collation: _MiniMax_ M3 (default, ≈1M context, via OpenRouter), MiniMax M2.7 (leaner extractions in the recorded benchmark, via OpenRouter), _Qwen_ 3.5-Flash (≈1M context, ≈$0.26/M output), _DeepSeek_ V4 Flash (≈1M context, ≈$0.28/M output), _Gemini_ 2.0 Flash Lite (≈1M context, ≈$0.30/M output), _GPT-4.1_ Nano (≈1M context, ≈$0.40/M output).
 
@@ -634,9 +715,9 @@ Run `/login openrouter` in `Pi` to authorise via OAuth (`Pi` 0.82.0 and later), 
 
 The illustration shows the native pipeline with the model configuration at its creation, including MiniMax M2.7 and `Pi` authentication; it does not show the current defaults or standalone authentication. All model assignments are configurable through [native model settings](#model-configuration) or [MCP configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#configuration); alternative search configurations use the same five-stage pipeline.
 
-The search stage merges text links with harvested citation annotations before selecting pages (see [Source Harvesting from Citations](#source-harvesting-from-citations)). Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈30-50K for 10 pages).
+The search stage merges text links with harvested citation annotations before selecting pages (see [Source Harvesting from Citations](#source-harvesting-from-citations)), and ranks [inferred references](#inferred-assets) after both. Each page is dual-fetched (HTML via Defuddle versus Markdown endpoint) and scored for quality; plain-text and source files are saved as fetched. Per-page extraction (guided by `focusPrompt`) compresses ≈50K chars to ≈3-5K of query-relevant content before collation, keeping the total context manageable (≈30-50K for 10 pages). The [collation input budget](#collation-input-budget) trims unusually long extractions before synthesis.
 
-Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it. Budget diagnostics and their absence semantics are defined in [Telemetry Sidecar](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md#telemetry-sidecar); the [script guide](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md#reported-metrics) explains the available aggregates.
+Completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`, `collate-failed`) attempt to write a local-only `meta.json` telemetry sidecar into the cache directory (see [Cache Structure](#cache-structure)). Set `"disableTelemetry": true` in the native `pi-intelli-search` namespace or the MCP `tuning` object to suppress it. Budget diagnostics and their absence semantics are defined in [Telemetry Sidecar](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md#telemetry-sidecar); the [script guide](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md#reported-metrics) explains the available aggregates.
 
 See [docs/ARCHITECTURE.md](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md) for detailed design decisions.
 
@@ -655,6 +736,8 @@ Per research run with the default 10 pages: ≈$0.09
 | Cache Suggest (M3 via OpenRouter)   | 1                     | ≈$0.0002  |
 
 Since v0.13.0 the search stage adds recovered provider citation URLs to prose links, increasing the candidate source set; `maxUrls` still caps page selection. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 and M2.7 had equal per-token prices in the recorded benchmark; M3 wrote ≈2× the extraction characters, with the cost estimate separately projecting greater token usage); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](#choosing-an-alternative-search-configuration) or [MCP configuration](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#configuration). The extract and collate rows scale with the selected models.
+
+The estimate assumes pages of ≈50K characters. `extractMaxChars` (default 400,000) caps the text sent to extraction at ≈100,000 input tokens per page, so a ten-page run over long pages can send ≈1M input tokens to the extract model before collation, at a correspondingly higher cost. Budget retries add output: with the default `outputBudgetRetries`, one affected call's budget attempts can bill up to seven times its configured output cap, before transport retries. Lower `extractMaxChars` or `outputBudgetRetries` to bound that spend.
 
 ## Settings
 
@@ -693,10 +776,15 @@ The example below shows the default models and common tuning settings. The [Sett
     "defaultUrls": 10,
     "maxUrls": 20,
     "cacheDir": ".search",
-    "extractMaxChars": 150000,
+    "extractMaxChars": 400000,
     "extractionConcurrency": 4,
     "extractionMaxTokens": 8000,
-    "collationMaxTokens": 4000,
+    "collationMaxTokens": 8000,
+
+    // Output budget retries and collation input
+    "outputBudgetRetries": 2,
+    "collationInputBudgetTokens": 221000,
+    "collationSourceMaxTokens": 32000,
 
     // Fetch behaviour
     "fetchTimeoutMs": 20000,
@@ -717,10 +805,13 @@ The example below shows the default models and common tuning settings. The [Sett
 | `defaultUrls` | 1 → 2 | `10` | Fallback when the agent does not pass `maxUrls` per call; also caps `intelli_search`'s rendered source list. Lower values reduce cost and latency but give less thorough results. The agent's [skill guide](https://github.com/Curio-Data/pi-intelli-search/blob/main/skills/intelli-search/SKILL.md) recommends 3 (targeted), 10 (broad), or 16 (exhaustive). Raised from 8 in v0.13.0: citation harvesting fills the URL list, so the pipeline can use more sources than prose links alone provided. |
 | `maxUrls` | 1 → 2 | `20` | Hard cap on URLs fetched. Lower caps mean faster responses and lower cost; higher caps allow more thorough research. Each extra successfully extracted page adds ≈$0.007 under the M3 output-volume estimate in [Cost](#cost). Requests above the cap are silently clamped. Raised from 16 in v0.13.0. |
 | `cacheDir` | 4, 5 | `.search` | Directory where research runs are cached. Change this to keep project-specific research separate. Example: `".my-research-cache"`. |
-| `extractMaxChars` | 3. Extract | `150000` | Maximum characters of page content fed to the extract LLM per page. Each 50K chars consumes ≈12K input tokens as a planning approximation; the model's tokenizer determines the actual count. Add prompt tokens and reserved output (`extractionMaxTokens`) before comparing with the token window. Lower this limit if that budget does not fit; raise it only with sufficient headroom. |
+| `extractMaxChars` | 3. Extract | `400000` | Maximum characters of page content fed to the extract LLM per page (1 to 2,000,000). At ≈4 characters per token the default allows ≈100,000 input tokens per page, so a ten-page run over long pages can send ≈1M input tokens to the extract model; see [Cost](#cost). The model's tokenizer determines the actual count. Add prompt tokens and reserved output (`extractionMaxTokens`) before comparing with the token window. Lower this limit if that budget does not fit the extract model, or to bound input spend. Raised from 150,000 in 0.22.0 because long documentation pages were cut before the sections that answered the query. |
 | `extractionConcurrency` | 3. Extract | `4` | Number of per-page extractions sent to the extract model simultaneously. Bounded so a wide result set does not fire many concurrent LLM calls and trigger rate limiting. Raise it (6-8) on generous rate limits for faster extraction; lower it (1-2) on tight limits. |
-| `extractionMaxTokens` | 3. Extract | `8000` | Per-page output-token cap. For reasoning models on OpenRouter, the budget includes reasoning as well as visible text. Exhaustion can leave an empty or incomplete extraction; the larger default reduced empty-output failures in recorded probes but does not guarantee completion on every route or page. Empty extractions fail with a reason and reported token counts when available. Nonempty extractions whose reported output reaches the configured cap are retained with a truncation warning. Reserve this output budget alongside input and prompt tokens within the model's limits. A higher cap can increase OpenRouter's in-flight credit reservation. See [Extraction Diagnostics](#extraction-diagnostics). |
-| `collationMaxTokens` | 4. Collate | `4000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. Lower this when using a collation model with a small context window (the output must fit alongside all extraction inputs). This bounds synthesis output, not the source and cache appendices added afterwards. |
+| `extractionMaxTokens` | 3. Extract | `8000` | Per-page output-token cap. For reasoning models on OpenRouter, the budget includes reasoning as well as visible text. Exhaustion can leave an empty or incomplete extraction; the larger default reduced empty-output failures in recorded probes but does not guarantee completion on every route or page. Within research, an empty extraction that stopped at the cap is retried with the cap doubled, up to `outputBudgetRetries` times; an empty extraction that remains fails with a reason and reported token counts when available. Nonempty extractions that stop at the cap, by finish reason or reported usage, are retained with a truncation warning. Reserve this output budget alongside input and prompt tokens within the model's limits. A higher cap can increase OpenRouter's in-flight credit reservation. See [Extraction Diagnostics](#extraction-diagnostics). |
+| `collationMaxTokens` | 4. Collate | `8000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. Lower this when using a collation model with a small context window (the output must fit alongside all extraction inputs); for such a model, also lower `collationInputBudgetTokens`. This bounds synthesis output, not the source and cache appendices added afterwards. Within research, a synthesis that stops at this cap is retried with the cap doubled, up to `outputBudgetRetries` times. Raised from 4,000 in 0.22.0 because reasoning models spend part of the cap on hidden reasoning. |
+| `outputBudgetRetries` | 3, 4 | `2` | Research retries for an extraction that stops at its output cap without visible text, or a synthesis that stops at its cap (0 to 5; `0` disables). Each retry doubles the cap, so the default runs 8,000, then 16,000, then 32,000 tokens, never above 128,000 or the model's output limit. Each attempt's timeout scales with its cap, up to four times `llmTimeoutMs`: 14 minutes across one page's three budget attempts with the defaults, before transport retries under `llmRetryAttempts`. See [Extraction Diagnostics](#extraction-diagnostics). |
+| `collationInputBudgetTokens` | 4. Collate | `221000` | Tokens available to the extractions and their headers in the collation request (10,000 to 1,000,000). The default leaves room for prompts and a 32,000-token synthesis within ≈256,000 tokens of request and response, the range in which the default collation model was observed to work well; its context window is larger. When the extractions exceed it, the longest are trimmed and the result names each untrimmed file. Raise it only within the collation model's context. See [Collation Input Budget](#collation-input-budget). |
+| `collationSourceMaxTokens` | 4. Collate | `32000` | Ceiling on one extraction's text sent to collation (256 to 128,000). The default equals the largest extraction output after two budget retries; it binds in research when `extractionMaxTokens` or `outputBudgetRetries` is raised, and in manual collation whenever a supplied extraction is longer. Raise it to send more of one long page. See [Collation Input Budget](#collation-input-budget). |
 | `fetchTimeoutMs` | 2. Fetch | `20000` | Per-page fetch timeout in milliseconds. Increase for sites known to be slow. Fetches run in parallel so this does not multiply by page count. |
 | `fetchConcurrency` | 2. Fetch | `4` | Number of pages fetched simultaneously. Higher values (6-8) complete the fetch stage faster but may trigger rate limiting. Lower values (2) are gentler on target servers. |
 | `browserFingerprint` | 2. Fetch | `chrome_145` | Transport Layer Security (TLS) fingerprint used by [_wreq-js_](https://github.com/sqdshguy/wreq-js) to impersonate a browser. Determines which Hypertext Transfer Protocol (HTTP) client signature the site sees. Available profiles include `chrome_*`, `firefox_*`, `safari_*`, `edge_*`, and `opera_*` across many versions. Change this if a site blocks the default fingerprint. |
@@ -729,9 +820,11 @@ The example below shows the default models and common tuning settings. The [Sett
 | `retryBaseDelayMs` | Research LLM | `1500` | Base delay for retry backoff. Attempt N waits a random duration up to `min(retryMaxDelayMs, retryBaseDelayMs * 2^(N-1))`. |
 | `retryMaxDelayMs` | Research LLM | `20000` | Upper bound on any single retry backoff, and the clamp applied to a Retry-After hint so a large hint cannot stall the pipeline. |
 | `searchRetryAttempts` | 1. Search | `2` | Total attempts for the search stage when it returns a valid response with zero usable links (a degraded result), including the first. Independent of `llmRetryAttempts`, which covers transport errors. |
-| `minRequestIntervalMs` | 3. Extract | `0` | Minimum gap in milliseconds between concurrent extract LLM calls. `0` disables the throttle. For an observed account limit of approximately 0.33 requests per second, use approximately `3000`. Adjust to observed limits rather than payment status. |
+| `minRequestIntervalMs` | 3. Extract | `0` | Minimum gap in milliseconds between concurrent extract LLM calls, including budget retries. `0` disables the throttle. For an observed account limit of approximately 0.33 requests per second, use approximately `3000`. Adjust to observed limits rather than payment status. |
 | `disableLlmsFullDiscovery` | Supplementary Fetch | `false` | Set `true` to skip automatic `llms-full.txt` probes and downloads. This does not disable page fetching or extraction. See [Automatic llms-full.txt Discovery](#automatic-llms-fulltxt-discovery). |
-| `disableTelemetry` | All | `false` | When `false`, completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`) attempt to write a local `meta.json` sidecar into the configured cache. It contains the full query and per-stage outcomes, which can include confidential information. The sidecar adds no network transmission or credential fields; ordinary research still sends requests to configured services. Set `true` to suppress it. |
+| `disableTelemetry` | All | `false` | When `false`, completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`, `collate-failed`) attempt to write a local `meta.json` sidecar into the configured cache. It contains the full query and per-stage outcomes, which can include confidential information. The sidecar adds no network transmission or credential fields; ordinary research still sends requests to configured services. Set `true` to suppress it. |
+
+Every integer tuning key is range-checked against the shared table in [`src/core/defaults.ts`](https://github.com/Curio-Data/pi-intelli-search/blob/main/src/core/defaults.ts), the same ranges the MCP server enforces. A value outside its range, or one that is not an integer, is ignored with a warning at session start, and the default applies: `[pi-intelli-search] Ignoring settings.json <key>=<value>: expected an integer from <min> to <max>. Using the default (<default>).` The deprecated flat aliases `intelliOutputBudgetRetries`, `intelliCollationInputBudgetTokens` and `intelliCollationSourceMaxTokens` are read as a fallback.
 
 `httpProxy` is a separate top-level `Pi` setting, not a `pi-intelli-search` namespace key; page fetching honours it too. Its default is unset.
 
@@ -766,7 +859,7 @@ Both packages write this format. The native extension resolves the cache against
 │   ├── extractions/            # Per-page LLM extractions (≈3-5K each)
 │   │   ├── 01-developers-cloudflare-com.md
 │   │   └── 02-developers-cloudflare-com.md
-│   └── sources/                # Full page content
+│   └── sources/                # Full page, code and text content
 │       ├── 01-developers-cloudflare-com.md
 │       ├── 02-developers-cloudflare-com.md
 │       └── llms-full-developers-cloudflare-com.md
@@ -780,7 +873,8 @@ Refresh behaviour:
 - A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and telemetry sidecar to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set.
 - Archive failure is logged and the completed run can replace canonical files in place; interrupted rotation can leave a partial archive.
 - Supplementary `llms-full-*` documentation downloads stay with the live folder and are not archived.
-- A degraded repeat preserves the earlier successful report, extractions, sources and index entry untouched and records only the failed attempt in `meta.json`.
+- A `no-links` or `fetch-failed` repeat preserves the earlier report, successful or failed, with its extractions, sources and any index entry, and records only the failed attempt in `meta.json`.
+- An `extraction-failed` or `collate-failed` repeat preserves a successful report in the same way, but archives and replaces an earlier `extraction-failed` or `collate-failed` report. A later run recognises a failure report only by its first line, the marker `<!-- intelli-search:extraction-failed -->` or `<!-- intelli-search:collate-failed -->`; the tool result omits the marker. Committing a failure report also removes any index entry for that folder, so the cache index lists only successful reports.
 - The numbered siblings are a same-day safety net, not a versioned archive: copy a report elsewhere if it must be retained long-term.
 
 **Local Telemetry (`meta.json`):** Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.

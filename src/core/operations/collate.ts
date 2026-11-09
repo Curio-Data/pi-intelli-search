@@ -4,6 +4,8 @@
 import { COLLATION_SYSTEM_PROMPT } from "../prompts.js";
 import type { CollateParams } from "../contracts.js";
 import { displayCachePath } from "../paths.js";
+import { MAX_OUTPUT_TOKENS } from "../defaults.js";
+import { planCollationBudget, inferredSource } from "../collation-budget.js";
 import {
   makeCachePath,
   writeCacheFiles,
@@ -15,10 +17,10 @@ import {
   allocateSourceIdentity,
   rotateCacheArtefacts,
 } from "../cache.js";
-import { buildCollationMessage, formatCacheAppendix } from "../messages.js";
+import { buildCollationMessage, collationSourceOverheadChars, MANUAL_COLLATION_NO_EVIDENCE_MESSAGE, CollationNoEvidenceError, deliveredInputBudget, formatCacheAppendix, formatCollationTrimNotice } from "../messages.js";
 import { evidenceExtractions, finalizeCollation } from "../provenance.js";
 import type { ExtractResult } from "../types.js";
-import { errMsg, throwIfAborted, budgetExhausted } from "../util.js";
+import { errMsg, throwIfAborted, completionTruncated } from "../util.js";
 import type { OperationContext, OperationResult } from "../contracts.js";
 
 export async function collate(
@@ -43,6 +45,7 @@ export async function collate(
     currentness: "undated",
     status: e.status === "success" && !e.extraction.trim()
       ? "failed" : e.status as ExtractResult["status"],
+    ...(e.inferred ? { inferred: true } : {}),
     ...(e.truncated ? { truncated: true } : {}),
     ...(e.error ? { error: e.error } : {}),
   }));
@@ -64,17 +67,43 @@ export async function collate(
   const identity = allocateSourceIdentity(extractResults, fetchedPages);
 
   // Build collation prompt (no files written yet — lock is never held
-  // across an LLM call).
+  // across an LLM call). The input budget is enforced here too, from the
+  // supplied extractions' actual sizes, so a manual collation of heavy
+  // extractions is trimmed the same way the research pipeline trims it.
+  const budget = planCollationBudget(
+    succeeded.map((ext, index) => ({
+      url: ext.url,
+      text: ext.extraction,
+      overheadChars: collationSourceOverheadChars(ext, index + 1),
+      ...(inferredSource(ext) ? { inferred: true } : {}),
+    })),
+    {
+      budgetTokens: settings.collationInputBudgetTokens,
+      sourceMaxTokens: settings.collationSourceMaxTokens,
+    },
+  );
+  const evidence = succeeded.map((ext, index) => ({
+    ...ext,
+    sourceNumber: index + 1,
+    extraction: budget.sources[index]?.text ?? ext.extraction,
+  }));
+  const inputBudget = deliveredInputBudget(budget, evidence);
+  const suppliedSourceNumbers = new Set(
+    evidenceExtractions(evidence).map((ext) => ext.sourceNumber ?? 0),
+  );
+  if (suppliedSourceNumbers.size === 0) {
+    throw new CollationNoEvidenceError(MANUAL_COLLATION_NO_EVIDENCE_MESSAGE, inputBudget);
+  }
   const userMessage = buildCollationMessage(
     params.query,
     cachePath,
     params.searchSummary,
-    succeeded,
+    evidence,
     identity,
   );
 
   // Call LLM for collation (no lock — never hold locks across LLM calls)
-  const { text, usage } = await models.complete({
+  const completion = await models.complete({
     model: collateConfig,
     systemPrompt: COLLATION_SYSTEM_PROMPT,
     userMessage,
@@ -82,14 +111,31 @@ export async function collate(
     signal,
   });
 
-  let collation = finalizeCollation(text, cachePath, succeeded, identity, "supplied");
+  let collation = finalizeCollation(
+    completion.text,
+    cachePath,
+    succeeded,
+    identity,
+    "supplied",
+    suppliedSourceNumbers,
+    evidence,
+  );
 
   // Mirrors the research path: a synthesis cut off by the output cap still
-  // commits, but the reader must know it may end mid-sentence.
-  if (budgetExhausted(usage, settings.collationMaxTokens)) {
+  // commits, but the reader must know it may end mid-sentence. A cap already
+  // at the ceiling is not told to rise.
+  if (completionTruncated(completion, settings.collationMaxTokens)) {
     collation +=
       `\n\n> ⚠ Collation output reached collationMaxTokens (${settings.collationMaxTokens}); ` +
-      `the synthesis may be cut off mid-sentence. Raise collationMaxTokens or re-run if completeness matters.`;
+      `the synthesis may be cut off mid-sentence. ` +
+      (settings.collationMaxTokens >= MAX_OUTPUT_TOKENS
+        ? `collationMaxTokens is already the maximum the settings accept; re-run, or choose a collation model that reasons less, if completeness matters.`
+        : `Raise collationMaxTokens or re-run if completeness matters.`);
+  }
+
+  // Say what the collation model did not receive, and where the full text is.
+  if (budget.trims.length > 0) {
+    collation += formatCollationTrimNotice(budget, identity, cachePath, inputBudget.charsAfter, "collate");
   }
 
   // ═══════════════════════════════════════════════════════════════

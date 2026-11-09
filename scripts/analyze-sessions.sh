@@ -300,7 +300,7 @@ else
   echo "cache-judge degradation (0.20.0+ sidecars):"
   jq -rs '[.[] | select(.stages.cacheSuggest.degraded == true)] | length' "$tmp_meta" 2>/dev/null
   echo ""
-  echo "Defuddle vs Markdown fetch winners (summed across sidecars):"
+  echo "Fetch winners (Defuddle, Markdown, text and fallbacks; summed across sidecars):"
   jq -rs 'map(.stages.fetch.winners // {})
           | reduce .[] as $obj ({};
               reduce ($obj | to_entries)[] as $e (.;

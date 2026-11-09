@@ -18,6 +18,15 @@
 #   Recipe 7 (free-tier resilience) -> scenario R7
 #   Recipe 8 (per-project override) -> scenario R8 (first E2E coverage of
 #                                      project-level settings via pre-seeded trust.json)
+#   Recipe 9 (large-context collation) -> scenario R9 (collate-model override
+#                                      and a completed run; telemetry records
+#                                      the input budget only when it trims, so
+#                                      the 600,000 value is covered by unit tests)
+#   Recipe 10 (bounded time and spend) -> scenario R10 (completed run with no
+#                                      budget retries and extract input within
+#                                      the 150,000-character cap when a fetched
+#                                      page exceeds it; collationMaxTokens is not
+#                                      recorded in telemetry)
 #
 # A single automatic retry per scenario guards the known transient pi
 # agent-loop failure mode (the post-tool model hop has no retry wrapper);
@@ -298,6 +307,80 @@ if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"sq
     ERRORS=$((ERRORS + 1))
   else
     echo "   ✅ default .search/ untouched (cacheDir override won)"
+  fi
+else
+  echo "   ❌ pi failed both attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+fi
+rm -rf "$AGENT" "$CWD"
+
+# ── R9: Large-context collation ────────────────────────────────────
+echo ""
+echo "═══ R9: large-context collation (collateModel + collationInputBudgetTokens) ═══"
+read -r AGENT CWD <<<"$(make_env r9)"
+cat > "$AGENT/settings.json" <<EOF
+{
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
+  "pi-intelli-search": {
+    "collateModel": {
+      "provider": "openrouter",
+      "model": "google/gemini-3.7-flash"
+    },
+    "collationInputBudgetTokens": 600000
+  }
+}
+EOF
+sleep "$GAP"
+if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
+  assert_eq "collate model overridden" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/google/gemini-3.7-flash"
+  assert_eq "extract model still default" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
+  assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
+else
+  echo "   ❌ pi failed both attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+fi
+rm -rf "$AGENT" "$CWD"
+
+# ── R10: Bounded time and spend (0.21.0 values) ────────────────────
+echo ""
+echo "═══ R10: bounded time and spend (0.21.0 values: outputBudgetRetries=0, extractMaxChars=150000, collationMaxTokens=4000) ═══"
+read -r AGENT CWD <<<"$(make_env r10)"
+cat > "$AGENT/settings.json" <<EOF
+{
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
+  "pi-intelli-search": {
+    "outputBudgetRetries": 0,
+    "extractMaxChars": 150000,
+    "collationMaxTokens": 4000
+  }
+}
+EOF
+sleep "$GAP"
+# The Node.js fs API reference exceeds 150,000 characters after cleaning
+# when it is fetched; the check below reports whether the cap bound.
+if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"nodejs.org\"] to research: the Node.js fs promises API methods and their options."; then
+  assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
+  assert_eq "no extraction budget retries" "$(meta_value "$CWD/.search" '.stages.extract.budgetRetries // 0')" "0"
+  assert_eq "no collation budget retry" "$(meta_value "$CWD/.search" '.stages.collate.budgetRetried // "false" | tostring')" "false"
+  assert_ge "extractions succeeded" "$(meta_value "$CWD/.search" '.stages.extract.succeeded // 0')" 1
+  # totalInputCharsApprox sums min(page chars, extractMaxChars) over fetched
+  # pages. Saved sources hold each full page plus a short header, so at the
+  # recipe's cap the sum cannot exceed the sum of min(source chars, 150000);
+  # at the 400,000 default any page above ≈150,000 characters breaks it.
+  LATEST="$(find "$CWD/.search" -maxdepth 1 -mindepth 1 -type d -not -name '.*' | sort -r | head -1)"
+  LONGEST=0
+  BOUND=0
+  for f in "$LATEST"/sources/[0-9]*; do
+    [ -f "$f" ] || continue
+    n="$(LC_ALL=C.UTF-8 wc -m <"$f")"
+    [ "$n" -gt "$LONGEST" ] && LONGEST="$n"
+    BOUND=$((BOUND + (n < 150000 ? n : 150000)))
+  done
+  if [ "$LONGEST" -gt 150000 ]; then
+    assert_le "extract input within the 150,000-character cap per page" \
+      "$(meta_value "$CWD/.search" '.stages.extract.totalInputCharsApprox // 999999999')" "$BOUND"
+  else
+    echo "   ℹ️  cap not proven: longest saved source is $LONGEST characters"
   fi
 else
   echo "   ❌ pi failed both attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5

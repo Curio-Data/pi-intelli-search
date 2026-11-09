@@ -68,6 +68,9 @@ describe("COLLATION_SYSTEM_PROMPT", () => {
     assert.ok(COLLATION_SYSTEM_PROMPT.includes("ONLY the supplied source extractions"));
     assert.ok(COLLATION_SYSTEM_PROMPT.includes("Never invent IDs"));
     assert.ok(COLLATION_SYSTEM_PROMPT.includes("application appends the authoritative inventory"));
+    assert.ok(COLLATION_SYSTEM_PROMPT.includes("inferredFromText"));
+    assert.ok(COLLATION_SYSTEM_PROMPT.includes("guessed from search text, not supplied as citations"));
+    assert.ok(COLLATION_SYSTEM_PROMPT.includes("Do not give them citation-equivalent authority"));
     assert.ok(COLLATION_SYSTEM_PROMPT.includes("without a\nSource assessment or Sources section"));
   });
 });

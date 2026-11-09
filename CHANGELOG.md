@@ -6,6 +6,53 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [pi-0.22.0] - 2026-11-09
+
+Research-failure corrective actions. A root cause and corrective action analysis of intermittent research failures found that the default extract and collate model, [_MiniMax_](https://minimax.io) M3, spends the whole output cap on hidden reasoning on some [_OpenRouter_](https://openrouter.ai) serving routes and returns no text or cut-off text. Per-call routing made the failures intermittent. A failed synthesis, or a run in which every extraction failed, then discarded the fetched and extracted work.
+
+Research now retries an exhausted output budget at a doubled cap before failing, reads up to 400,000 characters of each page, bounds the collation input with a notice that names the saved full extraction of each trimmed source, keeps the work of a failed run for the agent to read, extracts raw source and text files, and fetches unlinked references from search text as labelled guesses.
+
+### Changed
+
+- Research retries an output cap that runs out with the cap doubled, up to the new `outputBudgetRetries` setting (default 2, range 0 to 5; `0` disables): 8,000, then 16,000, then 32,000 tokens by default. A retry never exceeds 128,000 tokens or the model's output limit, which the native extension reads from the model's registry entry; the configured cap is requested unchanged. A retry that would grow the cap by less than a quarter is skipped. `Pi` assigns 16,384 to a custom model defined without `maxTokens`, so such a model's default sequence stops at 16,000 tokens; set `maxTokens` in the model's `models.json` entry, or in a `modelOverrides` entry there for a built-in model, to allow larger retries.
+- An extraction is retried when it stops at its cap without visible text; a synthesis is retried when it stops at its cap with or without text, and one that keeps returning truncated text uses every configured retry. A completed synthesis is always preferred over a truncated one; truncated candidates follow, longest first, and the first that passes source validation is used. When none passes, the preferred candidate's error is reported. An extraction retry observes `minRequestIntervalMs`. The shared retry policy no longer repeats an exhausted budget at the same cap. Standalone extraction and manual collation do not retry with a larger cap.
+- Each budget attempt's timeout scales with its cap, `llmTimeoutMs × attemptCap / configuredCap`, capped at four times `llmTimeoutMs`: 120, 240 and 480 seconds with the defaults. One page's budget attempts can therefore take 14 minutes, and `llmRetryAttempts` transport retries repeat a timed-out attempt, so a failing page can take ≈30 minutes or more. With the default two retries, the budget attempts of one call can bill up to seven times the configured output cap, and each transport retry of an attempt can bill again.
+- The default `collationMaxTokens` rises from 4,000 to 8,000. Configurations that set `collationMaxTokens` explicitly, including copies of the earlier README example, keep their value; model defaults and the minimum supported `Pi` version are unchanged. A larger output cap can increase OpenRouter's in-flight credit reservation on low-balance accounts.
+- The default `extractMaxChars` rises from 150,000 to 400,000, because long documentation pages were cut before the sections that answered the query. One page can now send ≈100,000 input tokens to the extract model, so a ten-page run over long pages can send ≈1M input tokens before collation. Configurations that set `extractMaxChars` explicitly keep their value.
+- An `extraction-failed` run now saves every fetched page under `sources/` and a failure report, and `details.cachePath` names the folder; previously it saved neither. The result's **Failed Sources** list, repeated under `## Failed Sources` in `report.md`, names each saved page's path and why its extraction failed, so a page can be read, or extracted again, without refetching. A same-day successful report is preserved instead, with `details.preservedCachePath` naming it and up to ten failed pages' reasons still in the result; a repeat archives and replaces an earlier failure report. The `collate-failed` report uses the same `## Failed Sources` section name. Completed-run result text is unchanged.
+- Protocol-less references guessed from search text, such as `install.sh`, `manage.py/runserver` or `README.md`, are kept when they end in a delegated top-level domain, labelled inferred from text rather than a citation, and ranked after linked and cited URLs, so a guess cannot displace a citation from the `maxUrls` selection. The token becomes the host name (`install.sh` fetches `https://install.sh`). Internationalised domain names are converted to their ASCII form, queries, fragments and numeric ports are kept, non-numeric ports are rejected, and host names are lowercased. `intelli_search` labels inferred sources, and the collation prompt marks them as guesses. Linked and cited URLs are unaffected, and the label of a Markdown link to an absolute URL is not read as a reference.
+- Every fetched URL passes one media gate. Plain-text and source-code responses, such as a raw `.py` file or `application/json`, are saved as text or code files and extracted instead of failing as not HTML; binary responses, including PDF, are still rejected. Selected HTML resolves its relative links against the final response URL.
+- Truncation warnings also use the provider's finish reason, so text cut off at the cap is flagged when the provider reports a length stop without usage that reaches the cap.
+- Every integer tuning key is range-checked on the native path against the same shared table the MCP server enforces. An out-of-range or non-integer value is ignored with a warning at session start and the default applies.
+
+### Added
+
+- When search prose yields inferred references, research results and `report.md` include an `Inferred Assets` table listing each inferred reference's original token, normalised URL, fetch result (page, code file, text file, or nothing fetched with its reason) and saved `sources/` path. When no page could be fetched, no report is written and the result's failed-source list marks inferred references instead. A redirect or Markdown alternate records its final URL, and a hostname change other than a leading `www.` is disclosed as "redirected to a different host". The same outcomes are in `details.inferredAssets`. Saved sources record a `> Final URL:` header when the response came from a different URL.
+- New settings `collationInputBudgetTokens` (default 221,000, range 10,000 to 1,000,000) and `collationSourceMaxTokens` (default 32,000, range 256 to 128,000) bound what research and manual collation send to the collation model, at ≈4 characters per token. Each extraction is capped at the per-source limit first; if the space the extractions and their metadata take in the JSON collation request still exceeds the budget, the longest extractions are trimmed to a fair share, inferred references before cited sources, and whole sources are left out only when a fair share would keep too little, lowest-ranked and inferred first. Saved extraction files are never altered. A **Collation input trimmed** notice in the result and report names the limit that bound (per-source, total budget or both), gives the path of each untrimmed extraction file and says to read it, because re-running research does not recover the omitted text, and names the setting to raise next time.
+- Every collation input cut ends at a nearby paragraph, line, sentence or word boundary and backs off before a Markdown link, a URL or an open code block it would split, unless that would discard more than half of the kept text.
+- A synthesis that cites a URL found only in text omitted from the collation input fails provenance validation, so research can end as `collate-failed`. The error names the first rejected URL, and a saved `collate-failed` report after trimming carries the same **Collation input trimmed** notice.
+- Manual `intelli_collate` accepts an optional `inferred` flag on each extraction, so a guessed source is labelled for the synthesis model and trimmed before cited sources.
+- When the collation limits leave no extraction text, no synthesis is attempted: research returns `collate-failed` with its work saved, and manual collation returns an error naming the settings to raise.
+- Deprecated flat aliases `intelliOutputBudgetRetries`, `intelliCollationInputBudgetTokens` and `intelliCollationSourceMaxTokens` are read as a fallback for the new settings.
+- A synthesis failure after successful extraction returns the new `collate-failed` outcome instead of an execution error. Unless a successful report for the same query already exists from the same UTC date, research saves the extractions, fetched pages, a report that states the reason and lists the saved extractions, and the telemetry sidecar with `stages.collate.error`; an earlier failure report is archived and replaced. The run is not added to the cache index, any earlier index entry for the folder is removed, and no cache-suggest call is made. A successful report, including one a concurrent run commits meanwhile, is preserved: this run's extractions are not saved, only this run's sidecar is recorded, replacing the successful run's `meta.json`, and `details.preservedCachePath` names the preserved folder.
+- The all-fetch-failed result lists up to ten failed URLs with their fetch errors.
+- Telemetry records `stages.extract.budgetRetries` (retry attempts across pages), `stages.collate.budgetRetried` and `stages.collate.budgetRetries`, and `stages.collate.inputBudget` when collation input was trimmed, including when collation then failed. Fetch winners can include `text` for a saved text or code file.
+
+### Fixed
+
+- When some pages failed to fetch and every fetched page failed extraction, the degraded result's first line named only the fetch failures. It now states both counts.
+- A research run whose evidence or synthesis wrapped a URL in Markdown emphasis, such as `**[form](https://example.com/form)**.`, failed with "Collation provenance validation failed: a prose URL is absent from the supplied evidence": the closing markers were read as part of the URL, so a correct citation did not match its evidence. Validation now removes emphasis closers from evidence and synthesis URLs alike. Balanced parentheses, and a trailing `*` or `_` that closes no open emphasis, stay part of the URL.
+
+## [mcp-0.22.0] - 2026-11-09
+
+Core behaviour is shared with [pi-0.22.0] and recorded there.
+
+### Changed
+
+- The `tuning` schema accepts `outputBudgetRetries` (integer from 0 to 5), `collationInputBudgetTokens` (10,000 to 1,000,000) and `collationSourceMaxTokens` (256 to 128,000), and rejects out-of-range values like every other tuning key. The schema ranges and the native validator now read one shared table.
+- The [_OpenRouter_](https://openrouter.ai) adapter reports each completion's finish reason to the core, and marks budget exhaustion with a structured signal that survives its error wrapping, so the core retry does not depend on diagnostic text.
+- Budget retries never exceed the model's output limit, read from the OpenRouter catalogue's `top_provider.max_completion_tokens`.
+
 ## [pi-0.21.0] - 2026-11-03
 
 Published on `npm`; [isolated registry installation](docs/COMPATIBILITY.md#published-0210-native-package-verification-2026-11-03) passes. The tarball checksum matches registry metadata, the packaged README matches the native release tag, and the tarball ships `PI_CHANGELOG.md` with the manifest's `changelogPath` intact.
@@ -586,6 +633,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[mcp-0.22.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.22.0
+[pi-0.22.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.22.0
 [mcp-0.21.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.21.0
 [pi-0.21.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.21.0
 [mcp-0.20.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.20.0

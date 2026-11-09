@@ -5,8 +5,9 @@
 import { mkdir, writeFile, readFile, rename, rm, stat, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveWorkspacePaths } from "./paths.js";
+import { splitFailureMarkerHead } from "./provenance.js";
 import { createHash, randomBytes } from "node:crypto";
-import { sleep, throwIfAborted } from "./util.js";
+import { failureDetail, sleep, throwIfAborted } from "./util.js";
 import type { FetchedPage, ExtractResult } from "./types.js";
 
 export interface IndexEntry {
@@ -347,7 +348,9 @@ export async function writeCacheFiles(
       if (page.status !== "success") continue;
       const filename = identity.sourceFileFor(page.url);
       if (!filename) continue;
-      const header = `# ${page.title}\n\n> Source: ${page.url}\n\n---\n\n`;
+      const header = `# ${page.title}\n\n> Source: ${page.url}\n${
+        page.finalUrl ? `> Final URL: ${page.finalUrl}\n` : ""
+      }\n---\n\n`;
       await writeFile(join(stagingSources, filename), header + page.content, "utf-8");
       writtenSources.add(filename);
     }
@@ -402,8 +405,9 @@ async function commitStagedArtefacts(
  * entries (the held `.lock` directory, transient `.staging.*` directories)
  * are never moved.
  *
- * Called only from success paths, after the new results have been received;
- * degraded exits preserve the previous run in place instead. Returns the
+ * Called after the new results have been received: on success paths, and on
+ * failure paths only to archive an earlier failure report, since a degraded
+ * exit preserves a previous successful run in place. Returns the
  * archive path, or null when there was nothing to archive (missing directory
  * or only preserved/operational entries).
  *
@@ -513,6 +517,11 @@ export async function clearCacheArtefacts(cachePath: string): Promise<void> {
  * references come from `identity`, so every advertised path matches a file
  * `writeCacheFiles` wrote with the same identity; absent optional full-page
  * content renders as a Not cached cell instead of a broken path.
+ *
+ * A failure-report body opens with its marker line; that line is hoisted
+ * above the query title so `isCollationFailureReport()` detects failure
+ * reports from line 1, a position caller-controlled text (a multiline
+ * query) can never occupy.
  */
 export async function writeReportFile(
   cachePath: string,
@@ -529,11 +538,16 @@ export async function writeReportFile(
   const succeeded = extractions.filter((e) => e.status === "success");
   const blocked = extractions.filter((e) => e.status !== "success");
 
-  let report = `# ${query}\n\n`;
+  const failureHead = splitFailureMarkerHead(collation);
+  const body = failureHead ? failureHead.body : collation;
+
+  let report = "";
+  if (failureHead) report += `${failureHead.marker}\n`;
+  report += `# ${query}\n\n`;
   report += `> Searched: ${now}\n`;
   report += `> Cache: ${displayPath}/\n`;
   report += `> Sources: ${succeeded.length} succeeded, ${blocked.length} failed\n\n`;
-  report += collation + "\n\n";
+  report += body + "\n\n";
 
   // Operations already rendered one authoritative inventory. Retain the
   // historical index only for low-level callers that supply raw collation.
@@ -551,12 +565,15 @@ export async function writeReportFile(
   }
 
   if (blocked.length > 0) {
-    report += `\n## Blocked/Failed URLs\n\n`;
+    // One name everywhere: the same "Failed Sources" heading the tool-result
+    // appendix and the inferred-table pointer use, so a pointer in either
+    // artefact resolves without renaming.
+    report += `\n## Failed Sources\n\n`;
     for (const entry of blocked) {
       const fetchError = pages.find((page) => page.url === entry.url)?.error;
       const reason = entry.error ?? fetchError ?? (entry.status === "blocked" ? "Source marked blocked" : "Extraction failed");
       const savedSource = identity.sourceFileFor(entry.url);
-      report += `- ${entry.url}: ${reason}${
+      report += `- ${entry.url}: ${failureDetail(reason)}${
         savedSource ? ` (full page saved: sources/${savedSource})` : ""
       }\n`;
     }

@@ -48,6 +48,7 @@ export interface CollateExtraction {
   /** Optional caller-supplied flags carried through from intelli_extract
    *  results so a manual collation keeps the diagnostics the extract step
    *  reported (truncation flag and bounded failure reason). */
+  inferred?: boolean;
   truncated?: boolean;
   error?: string;
 }
@@ -72,7 +73,13 @@ export interface OperationInputs {
   intelli_research: ResearchParams;
 }
 
-export type OperationOutcome = "completed" | "no-links" | "fetch-failed" | "extraction-failed";
+/** "collate-failed" commits the extractions and a report without a synthesis. */
+export type OperationOutcome =
+  | "completed"
+  | "no-links"
+  | "fetch-failed"
+  | "extraction-failed"
+  | "collate-failed";
 
 /** Execution failures throw; degraded research remains a usable result. */
 export interface OperationResult<Details = Record<string, unknown>> {
@@ -143,6 +150,10 @@ export interface ModelCompletion {
    *  `provider` stream-event or response field). Optional: adapters
    *  without route visibility omit it. */
   routeProvider?: string;
+  /** Why generation stopped, normalised: "length" means the output cap was
+   *  reached, so nonempty text is truncated. Optional: adapters without the
+   *  signal omit it and callers fall back to reported usage. */
+  finishReason?: "stop" | "length" | "other";
 }
 
 export interface ModelClient {
@@ -150,6 +161,13 @@ export interface ModelClient {
   preflight(bindings: readonly ModelBinding[]): Promise<ModelBinding[]>;
   /** Adapters invoke the shared model policy exactly once; operations do not retry transport. */
   complete(request: ModelRequest): Promise<ModelCompletion>;
+  /**
+   * The model's maximum output tokens, when the adapter knows it from a
+   * registry or catalogue entry. A budget retry never requests more; the core
+   * sends the configured cap unchanged. Optional: undefined means unknown, and
+   * the shared ceiling applies alone.
+   */
+  outputLimit?(model: ModelConfig): number | undefined;
 }
 
 /** Implementations must use stderr or a private sink, never protocol stdout. */

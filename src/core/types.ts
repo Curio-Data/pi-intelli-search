@@ -4,21 +4,42 @@
 
 export interface SearchResult {
   summary: string;
-  sources: Array<{ url: string; title: string }>;
+  sources: Array<{
+    url: string;
+    title: string;
+    inferred?: true;
+    originalReference?: string;
+  }>;
   query: string;
   timestamp: string;
 }
 
+export type FetchAssetType = "page" | "code" | "text";
+
 export interface FetchedPage {
   url: string;
   title: string;
-  content: string; // Defuddle-cleaned or raw markdown
+  content: string; // Defuddle-cleaned, raw markdown, or textual asset content
   status: "success" | "error";
   error?: string;
-  source?: string; // "defuddle", "markdown", or "llms-full"
+  source?: string; // "defuddle", "markdown", "text", or "llms-full"
+  /** Protocol-less prose guess, ranked after explicit links and citations. */
+  inferred?: true;
+  /** Exact prose token before normalisation. */
+  originalReference?: string;
+  /** Discovered representation URL before any redirect it performs. */
+  alternateUrl?: string;
+  /** Final response URL after redirects, when different from the requested URL. */
+  finalUrl?: string;
+  /** What the response contained, independent of the URL's file extension. */
+  assetType?: FetchAssetType;
+  /** Response Content-Type, including parameters such as charset when supplied. */
+  contentType?: string;
 }
 
 export interface ExtractResult {
+  /** Original 1-based source position. Preserved when budget trimming omits a source. */
+  sourceNumber?: number;
   url: string;
   title: string;
   extraction: string;
@@ -36,6 +57,14 @@ export interface ExtractResult {
    *  "other" for anything else. Set by the pipeline from reported usage or
    *  its own adapter messages, never from free provider text. */
   failureKind?: "budget" | "other";
+  /** Provenance and fetched representation carried into the source inventory.
+   *  Optional boolean is also the collation-budget planner's trim signal. */
+  inferred?: boolean;
+  originalReference?: string;
+  alternateUrl?: string;
+  finalUrl?: string;
+  assetType?: FetchAssetType;
+  contentType?: string;
   /** OpenRouter serving route when the adapter observed it (the `provider`
    *  stream-event or response field). Optional: absent on adapters, hosts
    *  or models without it. */
@@ -86,6 +115,20 @@ export interface ResearchSettings {
   extractionConcurrency: number;
   extractionMaxTokens: number;
   collationMaxTokens: number;
+  // ── Output-budget retries ──
+  // Extra attempts after an extraction spends its output cap before visible
+  // text, or a synthesis reaches its cap with or without text. Each retry
+  // doubles the cap, never above the shared ceiling (MAX_OUTPUT_TOKENS) or
+  // the model's output limit; 0 disables the retry.
+  outputBudgetRetries: number;
+  // ── Collation input budget ──
+  // Tokens the collation model may receive for every extraction, its header
+  // and the synthesis. Trimming starts only when the extractions actually
+  // exceed it.
+  collationInputBudgetTokens: number;
+  // Per-extraction ceiling on the text sent to collation, in tokens,
+  // independent of that extraction's output cap.
+  collationSourceMaxTokens: number;
   browserFingerprint: string;
   disableLlmsFullDiscovery: boolean;
   // When false (default), a local-only meta.json telemetry sidecar is written

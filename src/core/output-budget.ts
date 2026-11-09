@@ -1,0 +1,103 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
+// Output-budget retries: attempt caps, timeouts and candidate preference.
+// Pure functions, testable without a model call.
+
+import type { ModelCompletion } from "./contracts.js";
+import { MAX_OUTPUT_TOKENS } from "./defaults.js";
+import { completionTruncated } from "./util.js";
+
+export interface BudgetedCompletion {
+  completion: ModelCompletion;
+  maxTokens: number;
+}
+
+/**
+ * Input is in attempt order. Prefer completed candidates, latest first,
+ * then truncated candidates, longest first. Retain every candidate so the
+ * caller can validate provenance and fall back without losing paid output.
+ */
+export function rankBudgetedCompletions(
+  candidates: readonly BudgetedCompletion[],
+): BudgetedCompletion[] {
+  return candidates
+    .map((candidate, index) => ({
+      candidate,
+      index,
+      truncated: completionTruncated(candidate.completion, candidate.maxTokens),
+    }))
+    .sort((a, b) => Number(a.truncated) - Number(b.truncated) || (
+      a.truncated
+        ? b.candidate.completion.text.trim().length - a.candidate.completion.text.trim().length
+        : b.index - a.index
+    ))
+    .map(({ candidate }) => candidate);
+}
+
+/**
+ * How many times a single attempt's timeout may grow over `llmTimeoutMs`.
+ * At the observed ≈95-104 tokens/s a 32,000-token attempt needs ≈320 s, so the
+ * scaling has to reach well past the base timeout; the cap bounds a hung
+ * provider connection at four times the configured timeout instead of letting
+ * a failing page run for the whole budget schedule.
+ */
+export const MAX_TIMEOUT_MULTIPLE = 4;
+
+/**
+ * Smallest growth over the previous cap that justifies another paid attempt.
+ * A cap clamped to the ceiling that grows by less (16,000 to 16,384, say) is
+ * dropped: it costs a full call for almost no extra budget.
+ */
+export const MIN_RETRY_GROWTH = 1.25;
+
+/**
+ * Output caps to try, in order: the configured cap, then each retry's doubled
+ * cap, never above `ceiling`, never repeating a cap and never growing the
+ * previous cap by less than `MIN_RETRY_GROWTH`. A configured cap at or
+ * above the ceiling yields a single attempt, because a larger retry is
+ * impossible. `retries` is the number of extra attempts, not the number of
+ * attempts: 0 disables the retry.
+ */
+export function budgetCaps(
+  configuredCap: number,
+  retries: number,
+  ceiling: number = MAX_OUTPUT_TOKENS,
+): number[] {
+  const caps = [Math.min(configuredCap, ceiling)];
+  for (let i = 0; i < retries; i++) {
+    const next = Math.min(caps[caps.length - 1] * 2, ceiling);
+    if (next < caps[caps.length - 1] * MIN_RETRY_GROWTH) break;
+    caps.push(next);
+  }
+  return caps;
+}
+
+/**
+ * Ceiling for budget retries: the shared maximum, lowered to the model's
+ * output limit when the adapter reports a valid one. The
+ * configured cap itself is never lowered, so the first attempt is unchanged
+ * and a configured cap at or above the model limit yields no retry.
+ */
+export function retryCeiling(configuredCap: number, modelLimit: number | undefined): number {
+  const configured = Math.min(configuredCap, MAX_OUTPUT_TOKENS);
+  if (modelLimit === undefined || !Number.isInteger(modelLimit) || modelLimit <= 0) {
+    return MAX_OUTPUT_TOKENS;
+  }
+  return Math.max(configured, Math.min(modelLimit, MAX_OUTPUT_TOKENS));
+}
+
+/**
+ * Timeout for one attempt, scaled to its output cap so an attempt allowed a
+ * larger budget also has time to spend it: `llmTimeoutMs × attemptCap /
+ * configuredCap`, capped at `MAX_TIMEOUT_MULTIPLE × llmTimeoutMs`. The first
+ * attempt always gets the configured timeout unchanged.
+ */
+export function attemptTimeoutMs(
+  llmTimeoutMs: number,
+  configuredCap: number,
+  attemptCap: number,
+): number {
+  if (configuredCap <= 0 || attemptCap <= configuredCap) return llmTimeoutMs;
+  const scaled = (llmTimeoutMs * attemptCap) / configuredCap;
+  return Math.round(Math.min(scaled, llmTimeoutMs * MAX_TIMEOUT_MULTIPLE));
+}

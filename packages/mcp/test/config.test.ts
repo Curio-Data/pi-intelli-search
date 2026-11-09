@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { mkdir, rm, symlink, writeFile, link, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { parseConfig, loadConfig, ConfigurationError } from "../src/config.js";
+import { TUNING_RANGES } from "../../../src/core/defaults.js";
 import { createRuntime } from "../src/runtime.js";
 import { workspacePaths } from "../src/workspace.js";
 import { document, fixture } from "./helpers.js";
@@ -161,6 +162,95 @@ test("rechecks cache containment at every operation before provider access", asy
     await symlink(join(f.dir, "absent"), join(f.dir, ".search"));
     await assert.rejects(runtime.execute("intelli_search", { query: "test" }), /links/);
     assert.equal(calls, 0);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("budget and collation-budget tuning defaults and ranges are the shared ones", async () => {
+  const f = await fixture();
+  try {
+    const cfg = await parseConfig(document(), f.dir);
+    assert.equal(cfg.settings.outputBudgetRetries, 2);
+    assert.equal(cfg.settings.collationInputBudgetTokens, 221_000);
+    assert.equal(cfg.settings.collationSourceMaxTokens, 32_000);
+    assert.equal(cfg.settings.extractMaxChars, 400_000);
+    assert.equal(cfg.settings.extractionMaxTokens, 8000);
+    assert.equal(cfg.settings.collationMaxTokens, 8000);
+
+    // 0 disables the budget retry, which the schema must accept.
+    const zero = await parseConfig(
+      { ...document(), tuning: { ...document().tuning, outputBudgetRetries: 0 } },
+      f.dir,
+    );
+    assert.equal(zero.settings.outputBudgetRetries, 0);
+    const largest = await parseConfig(
+      {
+        ...document(),
+        tuning: {
+          ...document().tuning,
+          outputBudgetRetries: 5,
+          extractionMaxTokens: 128_000,
+          collationMaxTokens: 128_000,
+        },
+      },
+      f.dir,
+    );
+    assert.equal(largest.settings.outputBudgetRetries, 5);
+    assert.equal(largest.settings.collationMaxTokens, 128_000);
+
+    for (const tuning of [
+      { outputBudgetRetries: 6 },
+      { outputBudgetRetries: -1 },
+      { extractionMaxTokens: 128_001 },
+      { extractionMaxTokens: 15 },
+      { collationMaxTokens: 128_001 },
+      { collationInputBudgetTokens: 9_999 },
+      { collationInputBudgetTokens: 1_000_001 },
+      { collationSourceMaxTokens: 255 },
+    ])
+      await assert.rejects(
+        parseConfig({ ...document(), tuning }, f.dir),
+        /integer between/,
+        JSON.stringify(tuning),
+      );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("the shared tuning table bounds the standalone schema for every key", async () => {
+  const f = await fixture();
+  try {
+    // defaultUrls must not exceed maxUrls, so pair the two url keys.
+    const companion = (key: string, value: number): Record<string, number> => {
+      if (key === "defaultUrls") return { maxUrls: value };
+      if (key === "maxUrls") return { defaultUrls: Math.min(10, value) };
+      if (key === "retryBaseDelayMs") return { retryMaxDelayMs: Math.max(value, 20_000) };
+      if (key === "retryMaxDelayMs") return { retryBaseDelayMs: Math.min(1_500, value) };
+      return {};
+    };
+    for (const [key, [min, max]] of Object.entries(TUNING_RANGES)) {
+      for (const [value, label] of [
+        [min, "minimum"],
+        [max, "maximum"],
+      ] as const) {
+        const cfg = await parseConfig(
+          { ...document(), tuning: { ...document().tuning, [key]: value, ...companion(key, value) } },
+          f.dir,
+        );
+        assert.equal((cfg.settings as unknown as Record<string, unknown>)[key], value, `${key} ${label}`);
+      }
+      for (const value of [min - 1, max + 1])
+        await assert.rejects(
+          parseConfig(
+            { ...document(), tuning: { ...document().tuning, [key]: value, ...companion(key, value) } },
+            f.dir,
+          ),
+          /integer between/,
+          `${key}=${value} must be rejected`,
+        );
+    }
   } finally {
     await f.cleanup();
   }

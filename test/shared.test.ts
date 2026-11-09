@@ -13,6 +13,9 @@ import {
   buildCollationMessage,
   formatCacheAppendix,
 } from "../src/tools/shared.js";
+import { formatCollationTrimNotice } from "../src/core/messages.js";
+import { planCollationBudget } from "../src/core/collation-budget.js";
+import { MAX_OUTPUT_TOKENS, TUNING_RANGES } from "../src/core/defaults.js";
 import { allocateSourceIdentity } from "../src/core/cache.js";
 import { TRUNCATED_MARKER, truncateContent } from "../src/util.js";
 import type { ExtractResult } from "../src/types.js";
@@ -93,6 +96,34 @@ describe("buildCollationMessage", () => {
       ],
     });
     assert.doesNotMatch(msg, /SEARCH SUMMARY|unfetched|failed|empty|\.search/);
+  });
+
+  it("marks inferred sources and their final redirect URL for the collation model", () => {
+    const inferred = {
+      ...makeExt("https://readme.md", "README"),
+      inferred: true,
+      finalUrl: "https://downloads.example.net/readme.txt",
+    };
+    const cited = makeExt("https://docs.example/guide", "Guide");
+    const msg = buildCollationMessage("q", ".search/x", undefined, [cited, inferred]);
+    assert.deepEqual(JSON.parse(msg).sources, [
+      {
+        id: "S1",
+        url: "https://docs.example/guide",
+        title: "Guide",
+        type: "official docs",
+        extraction: "EXTRACTED:https://docs.example/guide",
+      },
+      {
+        id: "S2",
+        url: "https://readme.md",
+        title: "README",
+        type: "official docs",
+        extraction: "EXTRACTED:https://readme.md",
+        inferredFromText: true,
+        finalUrl: "https://downloads.example.net/readme.txt",
+      },
+    ]);
   });
 
   it("omits the search summary section when not given", () => {
@@ -199,5 +230,120 @@ describe("buildSearchPayloadPatch", () => {
     const patch = buildSearchPayloadPatch(baseSettings, "openrouter");
     const existing = { tools: [{ type: "function", function: { name: "x" } }] };
     assert.strictEqual(patch(existing), existing);
+  });
+});
+
+describe("formatCollationTrimNotice", () => {
+  const identity = allocateSourceIdentity(
+    [
+      { url: "https://a.example/", title: "a", extraction: "x", sourceType: "docs", currentness: "current", status: "success" as const },
+      { url: "https://b.example/", title: "b", extraction: "x", sourceType: "docs", currentness: "current", status: "success" as const },
+    ],
+    [],
+  );
+
+  it("writes raw numbers, blames the per-source cap, and omits the trim order it did not run", () => {
+    const plan = planCollationBudget(
+      [
+        { url: "https://a.example/", text: "a".repeat(3_000) },
+        { url: "https://b.example/", text: "b".repeat(500) },
+      ],
+      { budgetTokens: 100_000, sourceMaxTokens: 100 },
+    );
+    const out = formatCollationTrimNotice(plan, identity, ".search/run");
+    assert.match(out, /per-source limit/);
+    assert.match(out, /collationSourceMaxTokens/);
+    assert.match(out, /400 characters of 3000 characters sent/);
+    assert.match(out, /`\.search\/run\/extractions\/01-a-example\.md`/);
+    assert.match(out, /Read them for the missing detail; re-running research will not recover it\./);
+    assert.match(out, /\*\*Configuration\*\*: /);
+    assert.doesNotMatch(out, /raise collationInputBudgetTokens/);
+    assert.doesNotMatch(out, /\d,\d{3}/, "numbers are written raw, like the rest of the result text");
+    assert.doesNotMatch(out, /Trim order:/, "the fair-share machinery did not run");
+  });
+
+  it("says the run's total exceeded the budget and names its lever", () => {
+    const plan = planCollationBudget(
+      [
+        { url: "https://a.example/", text: "a".repeat(3_000) },
+        { url: "https://b.example/", text: "b".repeat(3_000) },
+      ],
+      { budgetTokens: 1_000, sourceMaxTokens: 32_000 },
+    );
+    const out = formatCollationTrimNotice(plan, identity, ".search/run");
+    assert.match(out, /run's total exceeded the 1000-token input budget/);
+    assert.match(out, /collationInputBudgetTokens/);
+    assert.doesNotMatch(out, /collationSourceMaxTokens/);
+    assert.match(out, /1600 characters of 3000 characters sent/);
+    assert.match(out, /Trim order:/);
+    assert.ok(out.indexOf("full extraction") < out.indexOf("**Configuration**"), "configuration advice follows the file list");
+    assert.doesNotMatch(out, /\d,\d{3}/);
+  });
+
+  it("names both limits and both levers for a dual-bound source", () => {
+    const plan = planCollationBudget(
+      Array.from({ length: 40 }, (_, i) => ({
+        url: `https://s${i}.example/`,
+        text: "a".repeat(10_000),
+      })),
+      { budgetTokens: 10_000, sourceMaxTokens: 256 },
+    );
+    const out = formatCollationTrimNotice(plan, identity, ".search/run");
+    assert.match(out, /per-source limit \(collationSourceMaxTokens\)/);
+    assert.match(out, /run's total exceeded the 10000-token input budget \(collationInputBudgetTokens\)/);
+    assert.match(out, /Trimmed by both limits \(40\)/);
+    assert.match(out, /raise collationSourceMaxTokens/);
+    assert.match(out, /raise collationInputBudgetTokens/);
+  });
+
+  it("uses caller-supplied file wording for manual collation", () => {
+    const plan = planCollationBudget(
+      [{ url: "https://a.example/", text: "a".repeat(3_000) }],
+      { budgetTokens: 100_000, sourceMaxTokens: 100 },
+    );
+    const out = formatCollationTrimNotice(plan, identity, ".search/manual", undefined, "collate");
+    assert.match(out, /The omitted text is in the extraction files below, saved in full from the supplied extractions\. Read them for the missing detail; repeating collation will not recover it\./);
+    assert.doesNotMatch(out, /re-running research/);
+    assert.match(out, /`\.search\/manual\/extractions\/01-a-example\.md`/);
+    assert.match(out, /\*\*Configuration\*\*: To send more next time, raise collationSourceMaxTokens\./);
+  });
+});
+
+describe("formatCollationTrimNotice at the settings maxima", () => {
+  const identity = allocateSourceIdentity(
+    [
+      { url: "https://a.example/", title: "a", extraction: "x", sourceType: "docs", currentness: "current", status: "success" as const },
+      { url: "https://b.example/", title: "b", extraction: "x", sourceType: "docs", currentness: "current", status: "success" as const },
+    ],
+    [],
+  );
+
+  it("stops advising a raise when the budget is already at its maximum", () => {
+    // 100 sources of 40,001 characters overflow the 4,000,000-character
+    // ceiling, so the advice branch is the one under test.
+    const plan = planCollationBudget(
+      Array.from({ length: 100 }, (_, i) => ({
+        url: `https://s${i}.example/`,
+        text: "a".repeat(40_001),
+      })),
+      {
+        budgetTokens: TUNING_RANGES.collationInputBudgetTokens[1],
+        sourceMaxTokens: 32_000,
+      },
+    );
+    assert.ok(plan.trims.length > 0);
+    const out = formatCollationTrimNotice(plan, identity, ".search/run");
+    assert.match(out, /\*\*Configuration\*\*: .*already at the 1000000-token maximum/);
+    assert.doesNotMatch(out, /raise collationInputBudgetTokens/);
+  });
+
+  it("stops advising a raise when the per-source cap is already at its maximum", () => {
+    const plan = planCollationBudget(
+      [{ url: "https://a.example/", text: "a".repeat(MAX_OUTPUT_TOKENS * 4 + 1_000) }],
+      { budgetTokens: 1_000_000, sourceMaxTokens: MAX_OUTPUT_TOKENS },
+    );
+    const out = formatCollationTrimNotice(plan, identity, ".search/run");
+    assert.match(out, /\*\*Configuration\*\*: .*already at the 128000-token maximum/);
+    assert.doesNotMatch(out, /raise collationSourceMaxTokens/);
   });
 });

@@ -11,7 +11,11 @@ import type {
 } from "../../../../src/core/contracts.js";
 import { parseCitations, type FetchFunction } from "../../../../src/core/annotations.js";
 import { runModelWithPolicy, type AttemptHints } from "../../../../src/core/llm.js";
-import { throwIfAborted } from "../../../../src/core/util.js";
+import {
+  markOutputBudgetExhausted,
+  OutputBudgetExhaustedError,
+  throwIfAborted,
+} from "../../../../src/core/util.js";
 import type { StandaloneConfig } from "../config.js";
 import { StandaloneError } from "../errors.js";
 
@@ -271,6 +275,13 @@ export function createOpenRouterClient(
       }
       return bindings.filter((binding) => !capabilities(binding));
     },
+    outputLimit(model) {
+      // The catalogue's top provider states the largest completion it accepts.
+      if (model.provider !== "openrouter" || !catalogue) return undefined;
+      const entry = catalogue.find((item) => item.id === model.model);
+      const limit = entry ? record(entry.top_provider).max_completion_tokens : undefined;
+      return typeof limit === "number" && Number.isInteger(limit) && limit > 0 ? limit : undefined;
+    },
     async complete(request) {
       throwIfAborted(request.signal);
       key();
@@ -340,7 +351,7 @@ export function createOpenRouterClient(
             const counts =
               reported?.output != null ? ` (${reported.output} output tokens` +
                 (reported.reasoning ? `, ${reported.reasoning} hidden reasoning` : "") + ")" : "";
-            throw new Error(
+            throw new OutputBudgetExhaustedError(
               "OpenRouter exhausted the output budget without visible text" + counts +
                 " (the cap includes any reasoning tokens). " +
                 "For extraction, review extractionMaxTokens; for synthesis, review collationMaxTokens. " +
@@ -354,6 +365,14 @@ export function createOpenRouterClient(
               text: content,
               citations: request.collectCitations ? parseCitations(raw) : [],
               usage: usage(data.usage),
+              ...(typeof choice.finish_reason === "string"
+                ? {
+                    finishReason:
+                      choice.finish_reason === "length" || choice.finish_reason === "stop"
+                        ? choice.finish_reason
+                        : "other",
+                  }
+                : {}),
               ...(typeof data.provider === "string" && data.provider
                 ? { routeProvider: data.provider }
                 : {}),
@@ -371,14 +390,18 @@ export function createOpenRouterClient(
       return await call;
     } catch (error) {
       if (error instanceof StandaloneError) throw error;
-      throw new StandaloneError(
-        "PROVIDER",
-        error instanceof Error ? error.message : "OpenRouter request failed",
+      throw markOutputBudgetExhausted(
+        new StandaloneError(
+          "PROVIDER",
+          error instanceof Error ? error.message : "OpenRouter request failed",
+        ),
+        error,
       );
     }
   }
   return {
     preflight: (bindings) => safe(client.preflight(bindings)),
     complete: (request) => safe(client.complete(request)),
+    outputLimit: (model) => client.outputLimit?.(model),
   };
 }

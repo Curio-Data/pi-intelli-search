@@ -3,7 +3,9 @@
 
 // Shared utilities
 
-import type { ModelUsage } from "./contracts.js";
+import { domainToASCII } from "node:url";
+import type { ModelCompletion, ModelUsage } from "./contracts.js";
+import { TOP_LEVEL_DOMAINS } from "./tlds.js";
 
 /** True when reported completion tokens reached the requested cap, meaning
  *  the model's output (visible text plus any hidden reasoning) was cut off.
@@ -17,6 +19,16 @@ export function budgetExhausted(
   return usage.output >= maxTokens;
 }
 
+/** True when generation stopped at the output cap: the adapter reported finish
+ *  reason "length", or reported usage reached the cap. Nonempty text is then
+ *  truncated. */
+export function completionTruncated(
+  completion: Pick<ModelCompletion, "usage" | "finishReason">,
+  maxTokens: number | undefined,
+): boolean {
+  return completion.finishReason === "length" || budgetExhausted(completion.usage, maxTokens);
+}
+
 /** True when the completion budget was exhausted with (almost) the whole cap
  *  spent on hidden reasoning, i.e. a reasoning-only response with no visible
  *  text. Used to classify a failed call as budget exhaustion rather than
@@ -27,6 +39,37 @@ export function reasoningOnlyCompletion(
 ): boolean {
   if (usage?.output == null || usage.reasoning == null || maxTokens == null) return false;
   return usage.output >= maxTokens && usage.reasoning >= usage.output - 1;
+}
+
+/**
+ * Thrown by a model adapter when a completion stopped at the output cap
+ * without visible text (hidden reasoning consumed the budget). The marker
+ * property survives adapter error wrapping (copy it with
+ * markOutputBudgetExhausted), so operations can retry with a larger budget
+ * without parsing message text, and the shared policy does not retry it at
+ * the same cap.
+ */
+export class OutputBudgetExhaustedError extends Error {
+  readonly outputBudgetExhausted = true;
+  constructor(message: string) {
+    super(message);
+    this.name = "OutputBudgetExhaustedError";
+  }
+}
+
+export function isOutputBudgetExhausted(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { outputBudgetExhausted?: unknown }).outputBudgetExhausted === true
+  );
+}
+
+/** Carry the budget-exhaustion marker from `from` onto a wrapping error. */
+export function markOutputBudgetExhausted<E extends Error>(error: E, from: unknown): E {
+  if (isOutputBudgetExhausted(from))
+    Object.defineProperty(error, "outputBudgetExhausted", { value: true, enumerable: false });
+  return error;
 }
 
 export function throwIfAborted(signal?: AbortSignal): void {
@@ -43,6 +86,27 @@ export function textContent(text: string): { type: "text"; text: string } {
 /** Extract a human-readable message from an unknown thrown value. */
 export function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** Bounded single-line failure reason shared by results, reports and details. */
+export function failureDetail(message: string): string {
+  const line = message.replace(/\s+/g, " ").trim();
+  return line.length > 300 ? `${line.slice(0, 299).trimEnd()}…` : line;
+}
+
+function comparisonHostname(url: string): string {
+  return domainToASCII(new URL(url).hostname).toLowerCase().replace(/^www\./, "");
+}
+
+/** Compare hostnames only: lowercase, IDN-normalise and remove one leading
+ *  `www.` from each side. No public-suffix or site-ownership inference. */
+export function redirectedToDifferentHost(url: string, finalUrl?: string): boolean {
+  if (!finalUrl) return false;
+  try {
+    return comparisonHostname(url) !== comparisonHostname(finalUrl);
+  } catch {
+    return false;
+  }
 }
 
 /** Unified marker appended whenever page content is truncated to a char cap. */
@@ -484,8 +548,18 @@ export function createRateLimiter(minIntervalMs: number): (signal?: AbortSignal)
  *
  * In all passes, URLs never contain whitespace, so a space ends the match.
  */
-export function extractSourceUrls(text: string): Array<{ url: string; title: string }> {
-  const urls: Array<{ url: string; title: string }> = [];
+export interface SourceUrl {
+  url: string;
+  title: string;
+  /** Set on protocol-less domain references (pass 3): a guess from prose,
+   *  ranked after explicit links and harvested citations by mergeCitations(). */
+  inferred?: true;
+  /** Exact reference token before lowercase and IDN normalisation. */
+  originalReference?: string;
+}
+
+export function extractSourceUrls(text: string): SourceUrl[] {
+  const urls: SourceUrl[] = [];
   const seen = new Set<string>();
 
   // Pass 1: markdown links [title](url)
@@ -542,25 +616,73 @@ export function extractSourceUrls(text: string): Array<{ url: string; title: str
   for (const m of text.matchAll(absoluteSpanPattern)) {
     absoluteSpans.push({ start: m.index, end: m.index + m[0].length });
   }
+  // The label of a Markdown link to an absolute URL is the link's text, not a
+  // second reference: `[the README.md](https://github.com/...)` must not add
+  // `https://readme.md`. The link target was already captured above.
+  for (const m of text.matchAll(/\[([^\]\n]*)\]\(https?:\/\/[^\s)]*\)/g)) {
+    absoluteSpans.push({ start: m.index + 1, end: m.index + 1 + m[1].length });
+  }
   const domainPattern =
-    /(?<!:\/\/)(?<![A-Za-z0-9@._-])((?:www\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?:\/[^\s<>"{}*()|\\`\[\]]*)?)/g;
+    /(?<!:\/\/)(?<![\p{L}\p{N}\p{M}@._-])((?:www\.)?(?:[\p{L}\p{N}](?:[\p{L}\p{N}\p{M}-]{0,61}[\p{L}\p{N}\p{M}])?\.)+[\p{L}][\p{L}\p{N}\p{M}-]{1,62}(?::\d{1,5})?(?:(?:\/[^\s<>"{}*()|\\`\[\]]*|[?#][^\s<>"{}*()|\\`\[\]]*))?)/gu;
   for (const m of text.matchAll(domainPattern)) {
     if (absoluteSpans.some(({ start, end }) => m.index >= start && m.index < end)) continue;
+    // Never recover an ASCII-looking suffix from a larger Unicode token, or
+    // truncate an unsupported port or hyphenated suffix. A complete Unicode
+    // hostname is instead normalised to its ASCII form below.
+    const before = text.slice(Math.max(0, m.index - 2), m.index);
+    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 2);
+    if (/[\p{L}\p{N}\p{M}]$/u.test(before) || /^[\p{L}\p{N}\p{M}-]|^:\S/u.test(after)) continue;
     const domainReference = m[1].replace(/[.,;:!]+$/, "");
-    const url = `https://${domainReference}`;
+    const suffixAt = domainReference.search(/[/?#]/);
+    const authority = suffixAt === -1 ? domainReference : domainReference.slice(0, suffixAt);
+    const suffix = suffixAt === -1 ? "" : domainReference.slice(suffixAt);
+    const port = authority.match(/:\d+$/)?.[0] ?? "";
+    const unicodeHost = authority.slice(0, authority.length - port.length);
+    if (hasMixedProseLabels(unicodeHost)) continue;
+    const asciiHost = domainToASCII(unicodeHost).toLowerCase();
+    if (!asciiHost || !plausibleDomainReference(`${asciiHost}${suffix}`)) continue;
+    const url = `https://${asciiHost}${port}${suffix}`;
     if (seen.has(url)) continue;
     try {
       const u = new URL(url);
       seen.add(url);
       const parts = u.pathname.split("/").filter(Boolean);
       const title = parts.length > 0 ? parts[parts.length - 1].replace(/\.[^.]+$/, "") : u.hostname;
-      urls.push({ url, title });
+      urls.push({ url, title, inferred: true, originalReference: domainReference });
     } catch {
-      // Defensive: the domain-shaped match should form a valid URL.
+      // Invalid ports and malformed domain-shaped matches never become sources.
     }
   }
 
   return urls;
+}
+
+/** Reject a label that mixes Latin with a non-Deseret script. This catches
+ *  prose runs such as Cyrillic or Han text immediately followed by a domain,
+ *  while retaining the explicitly required Deseret-plus-Latin keep row.
+ *  Combining marks and numbers do not trigger the guard. */
+function hasMixedProseLabels(host: string): boolean {
+  return host.split(".").some((label) => {
+    if (!/\p{Script=Latin}/u.test(label)) return false;
+    return (label.match(/\p{L}/gu) ?? []).some(
+      (letter) => !/\p{Script=Latin}/u.test(letter) && !/\p{Script=Deseret}/u.test(letter),
+    );
+  });
+}
+
+/**
+ * Filter for protocol-less references found in prose. The ASCII-normalised
+ * final label must be a delegated top-level domain, which rejects identifiers
+ * such as `app.ini`, `robots.txt`, `Node.js` and `service.DISABLE`. Delegated
+ * names that also look like files (`manage.py`, `README.md`, `main.js.map`)
+ * remain candidates: the fetch stage classifies what they return and every
+ * pass-3 candidate is labelled as inferred rather than cited.
+ */
+function plausibleDomainReference(reference: string): boolean {
+  const suffixAt = reference.search(/[/?#]/);
+  const host = suffixAt === -1 ? reference : reference.slice(0, suffixAt);
+  const labels = host.toLowerCase().split(".");
+  return TOP_LEVEL_DOMAINS.has(labels[labels.length - 1]);
 }
 
 /**

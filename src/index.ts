@@ -17,6 +17,7 @@ import {
   migrateDefaults,
   loadSettings,
   setMigrationContext,
+  takeSettingsWarnings,
 } from "./settings.js";
 import { getAgentDir } from "./agent-dir.js";
 import { errMsg, logErr } from "./util.js";
@@ -259,6 +260,17 @@ export default function piWebResearchExtension(pi: ExtensionAPI) {
     } catch (err: unknown) {
       // Version tracking is best-effort; never break session startup
       logErr("Version tracking error:", err);
+    }
+
+    // Tuning validation notice. loadSettings() drops an out-of-range value so
+    // the default applies, and records why; a silent fallback would leave the
+    // user believing a cap of 300,000 took effect.
+    try {
+      await loadSettings({ cwd: ctx.cwd, projectTrusted: ctx.isProjectTrusted() });
+      for (const warning of takeSettingsWarnings()) notify(warning, "warning");
+    } catch (err: unknown) {
+      // Validation is best-effort; never block session startup
+      logErr("Settings validation error:", err);
     }
   });
 

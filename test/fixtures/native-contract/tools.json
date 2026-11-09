@@ -124,6 +124,10 @@
                 "status": {
                   "type": "string"
                 },
+                "inferred": {
+                  "type": "boolean",
+                  "description": "True when this source was guessed from search text rather than cited; collation treats it as a guess and trims it first."
+                },
                 "truncated": {
                   "type": "boolean"
                 },

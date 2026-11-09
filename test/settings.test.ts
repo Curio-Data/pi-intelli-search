@@ -9,8 +9,10 @@ import {
   loadSettings,
   hasFlatKeys,
   invalidateSettingsCache,
+  takeSettingsWarnings,
 } from "../src/settings.js";
 import type { ResearchSettings } from "../src/types.js";
+import { TUNING_RANGES } from "../src/core/defaults.js";
 
 const baseSettings: ResearchSettings = {
   searchModel: { provider: "openrouter", model: "perplexity/sonar" },
@@ -75,12 +77,15 @@ describe("loadSettings defaults", () => {
     assert.strictEqual(settings.defaultUrls, 10);
     assert.strictEqual(settings.maxUrls, 20);
     assert.strictEqual(settings.cacheDir, ".search");
-    assert.strictEqual(settings.extractMaxChars, 150_000);
+    assert.strictEqual(settings.extractMaxChars, 400_000);
     assert.strictEqual(settings.fetchTimeoutMs, 20_000);
     assert.strictEqual(settings.fetchConcurrency, 4);
     assert.strictEqual(settings.extractionConcurrency, 4);
     assert.strictEqual(settings.extractionMaxTokens, 8000);
-    assert.strictEqual(settings.collationMaxTokens, 4000);
+    assert.strictEqual(settings.collationMaxTokens, 8000);
+    assert.strictEqual(settings.outputBudgetRetries, 2);
+    assert.strictEqual(settings.collationInputBudgetTokens, 221_000);
+    assert.strictEqual(settings.collationSourceMaxTokens, 32_000);
     assert.strictEqual(settings.browserFingerprint, "chrome_145");
     assert.strictEqual(settings.disableLlmsFullDiscovery, false);
     assert.strictEqual(settings.disableTelemetry, false);
@@ -677,6 +682,9 @@ describe("parametric settings round-trip (all keys)", () => {
     ["extractionConcurrency", 6],
     ["extractionMaxTokens", 3333],
     ["collationMaxTokens", 4444],
+    ["outputBudgetRetries", 1],
+    ["collationInputBudgetTokens", 200_000],
+    ["collationSourceMaxTokens", 4000],
     ["browserFingerprint", "firefox_test"],
     ["disableLlmsFullDiscovery", true],
     ["disableTelemetry", true],
@@ -699,6 +707,9 @@ describe("parametric settings round-trip (all keys)", () => {
     intelliFetchConcurrency: "fetchConcurrency",
     intelliExtractionMaxTokens: "extractionMaxTokens",
     intelliCollationMaxTokens: "collationMaxTokens",
+    intelliOutputBudgetRetries: "outputBudgetRetries",
+    intelliCollationInputBudgetTokens: "collationInputBudgetTokens",
+    intelliCollationSourceMaxTokens: "collationSourceMaxTokens",
     intelliBrowserFingerprint: "browserFingerprint",
     intelliDisableLlmsFullDiscovery: "disableLlmsFullDiscovery",
     intelliDisableTelemetry: "disableTelemetry",
@@ -775,4 +786,163 @@ describe("parametric settings round-trip (all keys)", () => {
     const settings = await loadWith({ httpProxy: "http://127.0.0.1:8123" });
     assert.strictEqual(settings.httpProxy, "http://127.0.0.1:8123");
   });
+});
+
+describe("tuning validation", () => {
+  async function loadRaw(content: Record<string, unknown>): Promise<ResearchSettings> {
+    const dir = mkdtempSync(join(tmpdir(), "pi-intelli-tuning-"));
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+    try {
+      writeFileSync(join(dir, "settings.json"), JSON.stringify(content));
+      invalidateSettingsCache();
+      takeSettingsWarnings();
+      return await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+      invalidateSettingsCache();
+    }
+  }
+
+  it("accepts zero budget retries, which disables the retry", async () => {
+    const settings = await loadRaw({ "pi-intelli-search": { outputBudgetRetries: 0 } });
+    assert.strictEqual(settings.outputBudgetRetries, 0);
+    assert.deepStrictEqual(takeSettingsWarnings(), []);
+  });
+
+  it("accepts an output cap at the shared ceiling", async () => {
+    const settings = await loadRaw({
+      "pi-intelli-search": { extractionMaxTokens: 128_000, collationMaxTokens: 128_000 },
+    });
+    assert.strictEqual(settings.extractionMaxTokens, 128_000);
+    assert.strictEqual(settings.collationMaxTokens, 128_000);
+    assert.deepStrictEqual(takeSettingsWarnings(), []);
+  });
+
+  it("falls back to the default and warns above the 128,000-token ceiling", async () => {
+    const settings = await loadRaw({
+      "pi-intelli-search": { extractionMaxTokens: 300_000 },
+    });
+    assert.strictEqual(settings.extractionMaxTokens, 8000, "the default applies");
+    const warnings = takeSettingsWarnings();
+    assert.strictEqual(warnings.length, 1);
+    assert.match(warnings[0], /extractionMaxTokens=300000/);
+    assert.match(warnings[0], /16 to 128000/);
+    assert.match(warnings[0], /Using the default \(8000\)/);
+  });
+
+  it("rejects a non-integer or below-range cap the same way", async () => {
+    const settings = await loadRaw({
+      "pi-intelli-search": { collationMaxTokens: "8000" },
+    });
+    assert.strictEqual(settings.collationMaxTokens, 8000);
+    assert.match(takeSettingsWarnings()[0], /collationMaxTokens/);
+    invalidateSettingsCache();
+    const low = await loadRaw({ "pi-intelli-search": { collationMaxTokens: 4 } });
+    assert.strictEqual(low.collationMaxTokens, 8000);
+    assert.match(takeSettingsWarnings()[0], /collationMaxTokens=4/);
+  });
+
+  it("validates the collation budget keys and the retry count", async () => {
+    const settings = await loadRaw({
+      "pi-intelli-search": {
+        outputBudgetRetries: 9,
+        collationInputBudgetTokens: 500,
+        collationSourceMaxTokens: 0,
+      },
+    });
+    assert.strictEqual(settings.outputBudgetRetries, 2);
+    assert.strictEqual(settings.collationInputBudgetTokens, 221_000);
+    assert.strictEqual(settings.collationSourceMaxTokens, 32_000);
+    assert.strictEqual(takeSettingsWarnings().length, 3);
+  });
+
+  it("warns once per distinct bad value across the global and project files", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-intelli-tuning-project-"));
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+    try {
+      mkdirSync(join(dir, ".pi"), { recursive: true });
+      writeFileSync(join(dir, "settings.json"), JSON.stringify({ "pi-intelli-search": { outputBudgetRetries: 9 } }));
+      writeFileSync(join(dir, ".pi", "settings.json"), JSON.stringify({ "pi-intelli-search": { outputBudgetRetries: 9 } }));
+      invalidateSettingsCache();
+      takeSettingsWarnings();
+      const settings = await loadSettings({ cwd: dir, projectTrusted: true });
+      assert.strictEqual(settings.outputBudgetRetries, 2);
+      assert.strictEqual(takeSettingsWarnings().length, 1);
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+      invalidateSettingsCache();
+    }
+  });
+});
+
+describe("shared tuning ranges drive native validation", () => {
+  it("pins every range value, so a changed bound cannot travel silently", () => {
+    // Deliberately a second copy: this assertion is the value pin. The
+    // parametric test below proves enforcement of whatever the table says;
+    // changing a bound must fail here first.
+    assert.deepStrictEqual(TUNING_RANGES, {
+      defaultUrls: [1, 100],
+      maxUrls: [1, 100],
+      extractMaxChars: [1, 2_000_000],
+      fetchTimeoutMs: [1, 600_000],
+      fetchConcurrency: [1, 32],
+      extractionConcurrency: [1, 32],
+      extractionMaxTokens: [16, 128_000],
+      collationMaxTokens: [16, 128_000],
+      outputBudgetRetries: [0, 5],
+      collationInputBudgetTokens: [10_000, 1_000_000],
+      collationSourceMaxTokens: [256, 128_000],
+      llmTimeoutMs: [1, 600_000],
+      llmRetryAttempts: [1, 10],
+      retryBaseDelayMs: [0, 120_000],
+      retryMaxDelayMs: [0, 120_000],
+      searchRetryAttempts: [1, 10],
+      minRequestIntervalMs: [0, 120_000],
+    });
+  });
+
+  async function load(content: Record<string, unknown>): Promise<ResearchSettings> {
+    const dir = mkdtempSync(join(tmpdir(), "pi-intelli-range-"));
+    const savedDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+    try {
+      writeFileSync(join(dir, "settings.json"), JSON.stringify(content));
+      invalidateSettingsCache();
+      takeSettingsWarnings();
+      return await loadSettings({ cwd: "/nonexistent", projectTrusted: true });
+    } finally {
+      if (savedDir !== undefined) process.env.PI_CODING_AGENT_DIR = savedDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+      invalidateSettingsCache();
+    }
+  }
+
+  for (const [key, [min, max]] of Object.entries(TUNING_RANGES)) {
+    it(`"${key}" accepts its range bounds and falls back below the minimum`, async () => {
+      const atMin = await load({ "pi-intelli-search": { [key]: min } });
+      assert.strictEqual((atMin as unknown as Record<string, unknown>)[key], min);
+      assert.deepStrictEqual(takeSettingsWarnings(), [], `${key}=${min} is inside the range`);
+
+      invalidateSettingsCache();
+      const atMax = await load({ "pi-intelli-search": { [key]: max } });
+      assert.strictEqual((atMax as unknown as Record<string, unknown>)[key], max);
+      assert.deepStrictEqual(takeSettingsWarnings(), [], `${key}=${max} is inside the range`);
+
+      invalidateSettingsCache();
+      const below = await load({ "pi-intelli-search": { [key]: min - 1 } });
+      assert.notStrictEqual(
+        (below as unknown as Record<string, unknown>)[key],
+        min - 1,
+        `${key}=${min - 1} must be ignored`,
+      );
+      const warnings = takeSettingsWarnings();
+      assert.strictEqual(warnings.length, 1, `${key} should warn once`);
+      assert.match(warnings[0], new RegExp(`${key}`));
+      assert.match(warnings[0], new RegExp(`from ${min} to ${max}`));
+    });
+  }
 });

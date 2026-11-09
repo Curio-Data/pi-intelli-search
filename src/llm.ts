@@ -140,6 +140,9 @@ export async function callLlm(
      *  hosts on pi-ai < 0.99 ignore the stream hook, so the route stays
      *  absent there and is never an error. */
     onRouteProvider?: (provider: string) => void;
+    /** Stop reason of the final successful attempt ("length" means the
+     *  output cap was reached). */
+    onStopReason?: (reason: string) => void;
   },
 ): Promise<string> {
   // 1. Resolve model from registry
@@ -270,6 +273,7 @@ export async function callLlm(
   );
 
   if (response.usage) options?.onUsage?.(response.usage);
+  if (response.stopReason) options?.onStopReason?.(response.stopReason);
   return response.content
     .filter((c): c is { type: "text"; text: string } => c.type === "text")
     .map((c) => c.text)
