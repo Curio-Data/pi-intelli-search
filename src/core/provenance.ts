@@ -75,8 +75,21 @@ function isPunctuation(char: string | undefined): boolean {
 function markdownEmphasisCloser(text: string, urlIndex: number, url: string): string {
   const trailing = url.match(/[*_]+$/)?.[0];
   if (!trailing) return "";
-  const lineStart = text.lastIndexOf("\n", urlIndex - 1) + 1;
-  const rawBefore = text.slice(lineStart, urlIndex);
+  // Include soft line breaks in ordinary paragraphs. Stop conservatively at
+  // block boundaries so an unrelated heading/list/code opener cannot strip a
+  // literal suffix from the URL. Same-line handling remains unchanged.
+  const prefix = text.slice(0, urlIndex);
+  let paragraphStart = 0;
+  let offset = 0;
+  for (const line of prefix.split("\n")) {
+    const completeLine = offset + line.length < prefix.length;
+    const blockStart = /^(?: {4}|\t| {0,3}(?:#{1,6}(?:\s|$)|>|`{3,}|~{3,}|(?:[-+*]|\d+[.)])\s|(?:[-*_]\s*){3,}$))/.test(line);
+    if ((completeLine && !line.trim()) || blockStart) {
+      paragraphStart = completeLine ? offset + line.length + 1 : offset;
+    }
+    offset += line.length + 1;
+  }
+  const rawBefore = prefix.slice(paragraphStart);
   // Mask URLs and inline code while preserving offsets: their delimiters are content.
   const before = rawBefore
     .replace(/https?:\/\/[^\s<>"`\]]+/g, (match) => " ".repeat(match.length))
@@ -476,12 +489,15 @@ export function collationFailureReport(
   cachePath: string,
   extractions: readonly ExtractResult[],
   identity: SourceIdentity,
+  inputTrimmed = false,
+  synthesisRejected = false,
 ): string {
   const sources = evidenceExtractions(extractions);
   return (
     failureReportHead("Collation Failed", COLLATION_FAILED_MARKER, reason) +
-    `No synthesis was produced. The ${sources.length} extraction(s) below were saved; read the ` +
-    "extraction files directly, or re-run the research.\n\n" +
+    (inputTrimmed
+      ? `No synthesis was accepted. The ${sources.length} extraction(s) below were saved. Read the saved extraction files to recover omitted text; review the input limits listed in the trim notice before another collation.\n\n`
+      : `No synthesis was ${synthesisRejected ? "accepted" : "produced"}. The ${sources.length} extraction(s) below were saved; read the extraction files directly, or re-run the research.\n\n`) +
     "## Source assessment\n\n" +
     sourceTable(sources, cachePath, identity, "fetched")
   );

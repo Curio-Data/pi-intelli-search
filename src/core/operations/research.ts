@@ -175,6 +175,8 @@ interface PipelineCtx extends OperationContext {
   cachePath: string;
   /** Doubled-budget retries issued: extraction pages, and collation. */
   budgetRetries: { extract: number; collate: number };
+  rejectedSyntheses?: Array<{ text: string; reason: string; maxTokens: number }>;
+  rejectedSynthesisPath?: string;
 }
 
 /**
@@ -318,7 +320,10 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
         `so this run's extractions were not saved.\n\nSearch summary:\n${search.searchResult}`;
       outcome = "collate-failed";
       collation =
-        collationFailureReport(reason, p.cachePath, succeededExtractions, identity) +
+        collationFailureReport(
+          reason, p.cachePath, succeededExtractions, identity,
+          error instanceof CollationTrimmedInputError, !!p.rejectedSyntheses?.length,
+        ) +
         (error instanceof CollationTrimmedInputError ? error.trimNotice : "");
     }
   }
@@ -369,7 +374,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   if (!committed) {
     const currentInferredAssets = inferredAssetsSection(fetched.pages, p.cachePath);
     return {
-      text: failureMessage + (currentInferredAssets ? `\n\n${currentInferredAssets}` : ""),
+      text: failureMessage + (currentInferredAssets ? `\n\n${currentInferredAssets}` : "") + rejectedSynthesisNotice(p),
       outcome,
       details: {
         cachePath: "",
@@ -429,6 +434,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
     });
   const result =
     stripFailureMarkers(collation) +
+    rejectedSynthesisNotice(p) +
     formatCacheAppendix(
       p.cachePath,
       succeededExtractions.length,
@@ -885,6 +891,7 @@ async function collateTrimmedEvidence(
   let { completion, maxTokens } = chosen;
   const alternatives = [...chosen.alternatives];
   let firstFailure: { error: unknown } | undefined;
+  const rejected: NonNullable<PipelineCtx["rejectedSyntheses"]> = [];
   let collation: string;
   while (true) {
     try {
@@ -900,8 +907,14 @@ async function collateTrimmedEvidence(
       break;
     } catch (error) {
       firstFailure ??= { error };
+      if (completion.text.trim()) {
+        rejected.push({ text: completion.text, reason: errMsg(error), maxTokens });
+      }
       const next = alternatives.shift();
-      if (!next) throw firstFailure.error;
+      if (!next) {
+        p.rejectedSyntheses = rejected;
+        throw firstFailure.error;
+      }
       ({ completion, maxTokens } = next);
     }
   }
@@ -1034,7 +1047,7 @@ async function writeCacheArtifacts(
           (error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? undefined : ""),
         );
         if (prior !== undefined && !isCollationFailureReport(prior)) {
-          await writeTelemetrySidecar(p.logger, p.tel, p.physicalCachePath, outcome);
+          await writePreservedAttempt(p, outcome);
           return false;
         }
       }
@@ -1046,7 +1059,7 @@ async function writeCacheArtifacts(
       // failure report; a successful one is preserved above.
       // Archiving is best-effort: a failure falls back to in-place
       // replacement rather than discarding the completed run.
-      await rotateCacheArtefacts(p.physicalCachePath).catch((error) => {
+      await rotateCacheArtefacts(p.physicalCachePath, p.cachePath).catch((error) => {
         p.logger.error(`Cache archive failed: ${errMsg(error)}`);
       });
 
@@ -1061,11 +1074,12 @@ async function writeCacheArtifacts(
         identity,
       );
 
+      await writeRejectedSyntheses(p, p.physicalCachePath);
       // Write report (atomic via temp-file + rename)
       await writeReportFile(
         p.physicalCachePath,
         p.params.query,
-        collation,
+        collation + rejectedSynthesisNotice(p),
         allExtractions,
         fetched.pages,
         p.cachePath,
@@ -1210,8 +1224,8 @@ async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
  *
  * A previous successful run of the same query is preserved untouched (report,
  * extractions, numbered sources and index entry): a degraded refresh never
- * displaces a good report, and the failed attempt is recorded in `meta.json`
- * only, so degradation remains visible to scripts/analyze-sessions.sh. When
+ * displaces a good report or its metadata. Failed attempts receive separate
+ * sidecars under attempts/, still visible to scripts/analyze-sessions.sh. When
  * no previous report exists, partial artefacts from an interrupted write are
  * cleared and any dangling index entry removed, so a fresh degraded query
  * leaves only its telemetry sidecar.
@@ -1254,7 +1268,8 @@ async function degradedReturn(
             p.signal,
           );
         }
-        await writeTelemetrySidecar(p.logger, p.tel, p.physicalCachePath, outcome);
+        if (hasReport) await writePreservedAttempt(p, outcome);
+        else await writeTelemetrySidecar(p.logger, p.tel, p.physicalCachePath, outcome);
       },
       p.signal,
     );
@@ -1311,6 +1326,40 @@ async function writeLockedTelemetry(p: PipelineCtx, outcome: TelemetryOutcome): 
   } catch (error) {
     throwIfAborted(p.signal);
     p.logger.error(`Telemetry write failed: ${errMsg(error)}`);
+  }
+}
+
+function rejectedSynthesisNotice(p: PipelineCtx): string {
+  return p.rejectedSynthesisPath
+    ? `\n\nRejected synthesis is saved for diagnosis only: ${p.rejectedSynthesisPath}. It failed source validation and is not accepted evidence.`
+    : "";
+}
+
+async function writeRejectedSyntheses(p: PipelineCtx, directory: string): Promise<void> {
+  if (!p.rejectedSyntheses?.length) return;
+  try {
+    await writeFile(
+      join(directory, "rejected-synthesis.json"),
+      JSON.stringify({ schemaVersion: 1, accepted: false, candidates: p.rejectedSyntheses }, null, 2) + "\n",
+      "utf8",
+    );
+    p.rejectedSynthesisPath = `${displayCachePath(p.paths, directory)}/rejected-synthesis.json`;
+  } catch (error) {
+    p.logger.error(`Rejected synthesis diagnostic write failed: ${errMsg(error)}`);
+  }
+}
+
+/** Keep failed-attempt diagnostics separate from the report being preserved. */
+async function writePreservedAttempt(p: PipelineCtx, outcome: TelemetryOutcome): Promise<void> {
+  if (!p.tel && !p.rejectedSyntheses?.length) return;
+  try {
+    const attempts = join(p.physicalCachePath, "attempts");
+    await mkdir(attempts, { recursive: true });
+    const directory = await mkdtemp(join(attempts, "attempt-"));
+    await writeTelemetrySidecar(p.logger, p.tel, directory, outcome);
+    await writeRejectedSyntheses(p, directory);
+  } catch (error) {
+    p.logger.error(`Failed attempt diagnostic write failed: ${errMsg(error)}`);
   }
 }
 

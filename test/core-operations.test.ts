@@ -795,7 +795,9 @@ it("never replaces a successful report committed while collation was failing", a
   assert.equal((inferred[1].error as string).length, 300);
   assert.match(await readFile(join(path, "report.md"), "utf8"), /Concurrent success/);
   await assert.rejects(stat(`${path}.1`), /ENOENT/);
-  const meta = JSON.parse(await readFile(join(path, "meta.json"), "utf8"));
+  const attempts = await readdir(join(path, "attempts"));
+  assert.equal(attempts.length, 1);
+  const meta = JSON.parse(await readFile(join(path, "attempts", attempts[0], "meta.json"), "utf8"));
   assert.equal(meta.outcome, "collate-failed");
 });
 
@@ -1449,8 +1451,8 @@ it("preserves a same-day successful report when every extraction fails", async (
     await assert.rejects(stat(`${cachePath}.1`), /ENOENT/, "no archive is created");
     assert.equal(
       JSON.parse(await readFile(join(cachePath, "meta.json"), "utf8")).outcome,
-      "extraction-failed",
-      "the failed attempt is recorded in the sidecar only",
+      "completed",
+      "the preserved report retains its successful metadata",
     );
   } finally {
     Date.prototype.toISOString = originalIso;
@@ -1685,10 +1687,10 @@ it("preserves a previous successful run's artefacts on a degraded refresh of the
     assert.ok((await readdir(join(cachePath, "sources"))).length > 1);
     assert.ok((await readdir(join(cachePath, "sources"))).includes("llms-full-one.example.md"));
     await assert.rejects(stat(`${cachePath}.1`), /ENOENT/);
-    // The failed attempt is recorded in meta.json only.
+    // The preserved report retains its successful metadata.
     assert.equal(
       JSON.parse(await readFile(join(cachePath, "meta.json"), "utf8")).outcome,
-      "no-links",
+      "completed",
     );
     // The index entry is retained: the report it points at still exists.
     assert.ok((await readIndex(context.paths.cacheRoot)).searches.some((e) => e.slug === slug));
@@ -1776,7 +1778,8 @@ it("archives a previous successful run to numbered siblings on same-day repeats"
     const secondReport = await readFile(join(cachePath, "report.md"), "utf8");
     assert.match(secondReport, /Summary v2\./);
     const archived = `${cachePath}.1`;
-    assert.equal(await readFile(join(archived, "report.md"), "utf8"), firstReport);
+    const archivedFirstReport = firstReport.replaceAll(`${first.details.cachePath}/`, `${first.details.cachePath}.1/`);
+    assert.equal(await readFile(join(archived, "report.md"), "utf8"), archivedFirstReport);
     assert.equal(await readFile(join(archived, "query.txt"), "utf8"), "archive");
     assert.ok((await readdir(join(archived, "extractions"))).length > 0);
     assert.ok(
@@ -1801,8 +1804,8 @@ it("archives a previous successful run to numbered siblings on same-day repeats"
     // A third same-day run archives the second to .2, leaving .1 untouched.
     const third = await research({ query: "archive" }, context, dependencies);
     assert.equal(third.outcome, "completed");
-    assert.equal(await readFile(join(`${cachePath}.2`, "report.md"), "utf8"), secondReport);
-    assert.equal(await readFile(join(archived, "report.md"), "utf8"), firstReport);
+    assert.equal(await readFile(join(`${cachePath}.2`, "report.md"), "utf8"), secondReport.replaceAll(`${second.details.cachePath}/`, `${second.details.cachePath}.2/`));
+    assert.equal(await readFile(join(archived, "report.md"), "utf8"), archivedFirstReport);
     assert.match(await readFile(join(cachePath, "report.md"), "utf8"), /Summary v2\./);
   } finally {
     Date.prototype.toISOString = originalIso;

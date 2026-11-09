@@ -447,10 +447,9 @@ function validateTuning(overrides: Partial<ResearchSettings>): Partial<ResearchS
     if (typeof value === "number" && Number.isSafeInteger(value) && value >= min && value <= max)
       continue;
     delete (overrides as Record<string, unknown>)[key];
-    const fallback = (DEFAULT_SETTINGS as unknown as Record<string, unknown>)[key];
     const message =
       `[pi-intelli-search] Ignoring settings.json ${key}=${JSON.stringify(value)}: ` +
-      `expected an integer from ${min} to ${max}. Using the default (${String(fallback)}).`;
+      `expected an integer from ${min} to ${max}. Valid settings from other files still apply; otherwise the built-in default applies.`;
     if (!pendingSettingsWarnings.includes(message)) pendingSettingsWarnings.push(message);
   }
   return overrides;
