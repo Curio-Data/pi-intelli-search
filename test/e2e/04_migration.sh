@@ -10,7 +10,13 @@
 # The test writes a 0.7.0 version marker and old-style settings,
 # then runs the current extension. Verifies:
 # - The pipeline works with the migrated model (search + extract + collate)
-# - Cache artifacts are created
+# - The run's recorded extract/collate models are the migrated defaults
+# - Cache artifacts are created in this unit's own workspace
+#
+# The research runs in a private, empty workspace (E2E_WORKSPACE when the
+# runner supplies one), never in the repository: the repository's .search/
+# holds registered research that cache suggest would read and that a
+# completed-sidecar scan could mistake for this run's evidence.
 #
 # Usage:
 #   ./test/04_migration.sh
@@ -24,20 +30,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TARGET_VERSION="$(jq -r '.version' "$PROJECT_DIR/package.json")"
 
-LOG_DIR="$PROJECT_DIR/.e2e-logs"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-LOG_FILE="$LOG_DIR/e2e-migration-${TIMESTAMP}.log"
-mkdir -p "$LOG_DIR"
-exec > >(tee -a "$LOG_FILE") 2>&1
-echo "📝 Log: $LOG_FILE"
-
-# Load .env if it exists
-# Read .env if it exists (gitignored): parsed, never executed, and only the
-# documented keys (see test/e2e/env.sh). Other credentials kept there stay out.
+# shellcheck source=test/e2e/lib.sh
+source "$SCRIPT_DIR/lib.sh"
+# Read .env BEFORE output reaches the retained log: a malformed line must
+# never be echoed into it (see test/e2e/env.sh). The file is parsed, never
+# executed, and only the documented keys are read.
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+e2e_init_log e2e-migration
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "📝 Log: $LOG_FILE"
 
 # ── Check prerequisites ────────────────────────────────────────────
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
@@ -63,15 +67,15 @@ if ! command -v pi &>/dev/null; then
   exit 1
 fi
 
-# shellcheck source=/dev/null
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 e2e_setup_loop_model || exit 1
 
 # ── Create isolated agent directory ────────────────────────────────
-ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-migration-XXXXXX)"
-trap 'rm -rf "$ISOLATED_AGENT_DIR"' EXIT
+trap e2e_cleanup EXIT
+e2e_private_dir ISOLATED_AGENT_DIR migration
+e2e_unit_workspace E2E_CWD migration-cwd
 
 echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR"
+echo "📂 Isolated working directory: $E2E_CWD"
 
 mkdir -p "$ISOLATED_AGENT_DIR/sessions"
 
@@ -129,14 +133,16 @@ echo "╚═══════════════════════�
 echo ""
 
 # ── Extension path ─────────────────────────────────────────────────
-E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
+E2E_EXTENSION_PATH="${E2E_EXTENSION_PATH:-$PROJECT_DIR/dist/index.js}"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 PROMPT="Use intelli_research with maxUrls=3 to research: what is the latest Bun version"
+E2E_EXPECT_ARGS='{"maxUrls":3}'
+E2E_EXPECT_CACHE_DIR=".search"
 
-if ! e2e_run_pi "$ISOLATED_AGENT_DIR" "$PROJECT_DIR" "$PROMPT"; then
+if ! e2e_run_pi "$ISOLATED_AGENT_DIR" "$E2E_CWD" "$PROMPT"; then
   echo ""
-  echo "❌ pi failed (no cache sidecar after retries)"
+  echo "❌ pi failed: ${E2E_LAST_VERDICT_REASON:-no completed research after retries}"
   echo ""
   echo "--- pi output ---"
   echo "$E2E_LAST_OUTPUT"
@@ -181,7 +187,7 @@ else
 fi
 
 # 3. Cache artifacts must exist — proves pipeline ran end-to-end
-CACHE_DIR="$PROJECT_DIR/.search"
+CACHE_DIR="$E2E_CWD/.search"
 
 if [ -d "$CACHE_DIR" ]; then
   echo "✅ .search/ cache directory exists"
@@ -197,9 +203,16 @@ else
   ERRORS=$((ERRORS + 1))
 fi
 
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.*' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+# The entry bound to this run's own research call (lib.sh, e2e_run_pi).
+LATEST_CACHE="$E2E_BOUND_ENTRY"
 if [ -n "$LATEST_CACHE" ]; then
   echo "✅ Cache entry directory: $(basename "$LATEST_CACHE")"
+
+  # The scenario subject: the 0.7.0 default extract/collate model was
+  # migrated in memory to the current default for this run.
+  e2e_assert_meta "extract model migrated" '.stages.extract.model' "openrouter/minimax/minimax-m3"
+  e2e_assert_meta "collate model migrated" '.stages.collate.model' "openrouter/minimax/minimax-m3"
+  e2e_assert_meta "search model" '.stages.search.model' "openrouter/perplexity/sonar"
 
   if [ -f "$LATEST_CACHE/report.md" ]; then
     echo "✅ report.md exists ($(wc -c < "$LATEST_CACHE/report.md") bytes)"

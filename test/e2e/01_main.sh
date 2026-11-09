@@ -35,29 +35,25 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-LOG_DIR="$PROJECT_DIR/.e2e-logs"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-LOG_FILE="$LOG_DIR/e2e-main-${TIMESTAMP}.log"
-mkdir -p "$LOG_DIR"
-exec > >(tee -a "$LOG_FILE") 2>&1
-echo "📝 Log: $LOG_FILE"
-
-# Read .env if it exists (gitignored): parsed, never executed, and only the
-# documented keys (see test/e2e/env.sh). Other credentials kept there stay out.
+# shellcheck source=test/e2e/lib.sh
+source "$SCRIPT_DIR/lib.sh"
+# Read .env BEFORE output reaches the retained log: a malformed line must
+# never be echoed into it (see test/e2e/env.sh). The file is parsed, never
+# executed, and only the documented keys are read.
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+e2e_init_log e2e-main
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "📝 Log: $LOG_FILE"
 
 # Agent-loop model for the headless run; the pipeline models are pinned
 # in settings.json below. The loop model is incidental to what this test
 # proves; m2.7 keeps loop-call cost down.
 E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
 
-# shellcheck source=/dev/null
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
-# shellcheck disable=SC2034  # consumed by e2e_setup_loop_model in lib.sh
-E2E_LOOP_MODEL_ID="${TEST_MODEL:-}"
+# TEST_MODEL overrides the loop model through e2e_setup_loop_model (lib.sh).
 
 # ── Check prerequisites ────────────────────────────────────────────
 # Auto-detect OPENROUTER_API_KEY from ~/.pi/agent/auth.json if not
@@ -90,9 +86,9 @@ fi
 e2e_setup_loop_model || exit 1
 
 # ── Create isolated agent directory ────────────────────────────────
-ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-agent-XXXXXX)"
-E2E_CWD="$(mktemp -d -t pi-e2e-cwd-XXXXXX)"
-trap 'rm -rf "$ISOLATED_AGENT_DIR" "$E2E_CWD"' EXIT
+trap e2e_cleanup EXIT
+e2e_private_dir ISOLATED_AGENT_DIR agent
+e2e_unit_workspace E2E_CWD cwd
 
 echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR"
 echo "📂 Isolated working directory: $E2E_CWD"
@@ -149,14 +145,16 @@ echo "║  Running pi — print mode (isolated env)              ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
-E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
+E2E_EXTENSION_PATH="${E2E_EXTENSION_PATH:-$PROJECT_DIR/dist/index.js}"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 PROMPT='Use intelli_research with maxUrls=1 and domains=["typescriptlang.org"] to research: the current TypeScript release. Return the official release source.'
+E2E_EXPECT_ARGS='{"maxUrls":1,"domains":["typescriptlang.org"]}'
+E2E_EXPECT_CACHE_DIR=".search"
 
 if ! e2e_run_pi "$ISOLATED_AGENT_DIR" "$E2E_CWD" "$PROMPT" "${E2E_TIMEOUT_SECONDS}"; then
   echo ""
-  echo "❌ pi failed (no cache sidecar after retries)"
+  echo "❌ pi failed: ${E2E_LAST_VERDICT_REASON:-no completed research after retries}"
   echo ""
   echo "--- pi output ---"
   echo "$E2E_LAST_OUTPUT"
@@ -209,10 +207,9 @@ else
   INDEX_MISSING=true
 fi
 
-# Find the most recently modified cache subdirectory. Uses mtime, not
-# lexicographic order, so a stale dir whose name sorts later cannot mask the
-# dir the live run just created.
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.*' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+# The entry bound to this run's own research call (lib.sh, e2e_run_pi). No
+# directory is chosen by modification time, name order or index order.
+LATEST_CACHE="$E2E_BOUND_ENTRY"
 if [ -n "$LATEST_CACHE" ]; then
   echo "✅ Cache entry directory: $(basename "$LATEST_CACHE")"
 

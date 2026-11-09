@@ -2,44 +2,163 @@
 #
 # test/06_extract_limits.sh — E2E test for extractMaxChars and extractionMaxTokens
 #
-# Proves both settings are enforced by running the same single-URL
-# research query twice (back-to-back): first with default limits,
-# then with aggressively low limits. Compares extraction file sizes
-# to confirm truncation and token limiting took effect.
+# Runs the same single-URL research twice, first with pinned default limits,
+# then with aggressively low limits, and compares the extraction sizes.
 #
-# Output is tee'd to .e2e-logs/extract-limits-<timestamp>.log for
-# out-of-band inspection of failures.
+# Each arm searches independently and both caps change together, so a size
+# difference shows that the tight settings reached the live pipeline; it does
+# not isolate either mechanism. The comparison records each arm's source
+# hashes. Deterministic tests cover each cap separately. A comparison that
+# cannot be made is reported as unproven and fails; it is never a pass.
 #
 # Usage:
-#   ./test/06_extract_limits.sh
+#   ./test/06_extract_limits.sh                   # both arms, then compare
+#   E2E_LIMIT_ARM=default|tight E2E_WORKSPACE=... # one live arm
+#   E2E_LIMIT_ARM=compare \
+#     E2E_COMPARE_DEFAULT_WORKSPACE=... E2E_COMPARE_TIGHT_WORKSPACE=...
+#                                                 # offline comparison only
 #
 # Environment:
-#   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
+#   OPENROUTER_API_KEY   Required for the live arms. Get one from https://openrouter.ai
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CACHE_DEFAULT="$PROJECT_DIR/.e2e-extract-default"
-CACHE_TIGHT="$PROJECT_DIR/.e2e-extract-tight"
-RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-30}"
-LOG_DIR="$PROJECT_DIR/.e2e-logs"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-LOG_FILE="$LOG_DIR/extract-limits-${TIMESTAMP}.log"
-mkdir -p "$LOG_DIR"
+CACHE_NAME_DEFAULT=".e2e-extract-default"
+CACHE_NAME_TIGHT=".e2e-extract-tight"
+# shellcheck source=test/e2e/lib.sh
+source "$SCRIPT_DIR/lib.sh"
+e2e_require_one_case E2E_LIMIT_ARM default tight compare
+ARM="${E2E_LIMIT_ARM:-}"
 
-# Tee all output to log file
-exec > >(tee -a "$LOG_FILE") 2>&1
-
-echo "📝 Log: $LOG_FILE"
-
-# Load .env if it exists
-# Read .env if it exists (gitignored): parsed, never executed, and only the
-# documented keys (see test/e2e/env.sh). Other credentials kept there stay out.
+# Read .env BEFORE output reaches the retained log: a malformed line must
+# never be echoed into it (see test/e2e/env.sh). The file is parsed, never
+# executed, and only the documented keys are read.
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+e2e_init_log "extract-limits${ARM:+-$ARM}"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "📝 Log: $LOG_FILE"
+
+# arm_entry <workspace> <label> — the entry bound by that arm's verdict.
+arm_entry() {
+  local ws=$1 label=$2 receipt rel
+  receipt="$ws/.e2e-unit/arm.json"
+  if [ ! -f "$receipt" ] || ! jq -e '.status == "pass"' "$receipt" >/dev/null 2>&1; then
+    echo "❌ $label arm has no passing receipt at $receipt" >&2
+    return 1
+  fi
+  rel="$(jq -r '.entryRelative' "$receipt")"
+  if [ ! -f "$ws/$rel/meta.json" ]; then
+    echo "❌ $label arm entry is missing: $ws/$rel" >&2
+    return 1
+  fi
+  printf '%s\n' "$ws/$rel"
+}
+
+# report_sources <entry_default> <entry_tight> — record what each arm read.
+report_sources() {
+  local a b
+  a="$(node "$E2E_VERDICT_HELPER" sources --entry "$1" | jq -c '[.[] | {url, sha256}]')"
+  b="$(node "$E2E_VERDICT_HELPER" sources --entry "$2" | jq -c '[.[] | {url, sha256}]')"
+  echo "🔍 Default arm sources: $a"
+  echo "🔍 Tight arm sources:   $b"
+  if [ "$a" = "$b" ]; then
+    echo "✅ Both arms read identical source content"
+  else
+    echo "⚠️  The arms read different source content: the size difference does not isolate the caps"
+  fi
+}
+
+# compare_arms <default_workspace> <tight_workspace> — offline: no provider
+# call and no credentials.
+compare_arms() {
+  local ws_default=$1 ws_tight=$2 entry_default entry_tight label entry
+  echo ""
+  echo "══ Comparison ═════════════════════════════════════════════════════════"
+  ERRORS=0
+  entry_default="$(arm_entry "$ws_default" default)" || ERRORS=$((ERRORS + 1))
+  entry_tight="$(arm_entry "$ws_tight" tight)" || ERRORS=$((ERRORS + 1))
+
+  # ── Diagnostic: source counts from each report ──
+  for label in "Cap3000" "Tight"; do
+    if [ "$label" = "Cap3000" ]; then entry="$entry_default"; else entry="$entry_tight"; fi
+    if [ -n "$entry" ] && [ -f "$entry/report.md" ]; then
+      local source_line blocked_line ext_count src_count
+      source_line=$(grep "^> Sources:" "$entry/report.md" 2>/dev/null || echo "")
+      # grep -c prints "0" AND exits 1 on no match; assign separately on failure.
+      blocked_line=$(grep -c "^## Failed Sources" "$entry/report.md" 2>/dev/null) || blocked_line=0
+      ext_count=$(find "$entry/extractions" -type f 2>/dev/null | wc -l)
+      src_count=$(find "$entry/sources" -type f 2>/dev/null | wc -l)
+      echo "🔍 $label: $source_line | extractions=$ext_count files | sources=$src_count files | has_blocked_section=$blocked_line"
+    fi
+  done
+  echo ""
+
+  if [ -n "$entry_default" ] && [ -n "$entry_tight" ]; then
+    report_sources "$entry_default" "$entry_tight"
+    local file_default file_tight
+    file_default=$(find "$entry_default/extractions" -type f 2>/dev/null | sort | head -1)
+    file_tight=$(find "$entry_tight/extractions" -type f 2>/dev/null | sort | head -1)
+    if [ -z "$file_default" ] || [ -z "$file_tight" ]; then
+      # A tight extractionMaxTokens can leave a reasoning extract model no
+      # visible text, so the empty-extraction guard writes no file. That is
+      # consistent with the limit but proves nothing about it.
+      echo "❌ UNPROVEN: an arm wrote no extraction file (default: ${file_default:-none}, tight: ${file_tight:-none}); the sizes cannot be compared"
+      ERRORS=$((ERRORS + 1))
+    else
+      local size_default size_tight chars_tight
+      size_default=$(wc -c < "$file_default")
+      size_tight=$(wc -c < "$file_tight")
+      chars_tight=$(wc -m < "$file_tight")
+      echo "📄 Cap3000 extraction: ${size_default} bytes"
+      echo "📄 Tight extraction:   ${size_tight} bytes, ${chars_tight} chars"
+      if [ "$size_tight" -lt "$size_default" ]; then
+        echo "✅ Tight extraction is smaller than default (tight limits reached the pipeline)"
+      else
+        echo "❌ Tight extraction is NOT smaller (${size_tight} >= ${size_default})"
+        ERRORS=$((ERRORS + 1))
+      fi
+      # Approximately 4 chars/token, so ≤4000 chars with 1000 output tokens.
+      if [ "$chars_tight" -le 4000 ]; then
+        echo "✅ Tight extraction ≤4000 chars (consistent with extractionMaxTokens=1000)"
+      else
+        echo "⚠️  Tight extraction is ${chars_tight} chars (>4000, may still be correct depending on model)"
+      fi
+      echo ""
+      echo "── Cap3000 extraction (first 200 chars) ──"
+      head -c 200 "$file_default" 2>/dev/null || echo "(empty)"
+      echo ""
+      echo "── Tight extraction (first 200 chars) ──"
+      head -c 200 "$file_tight" 2>/dev/null || echo "(empty)"
+      echo ""
+      if grep -qi "truncat\|exceeded" "$file_tight" 2>/dev/null; then
+        echo "✅ Tight extraction mentions truncation (extractMaxChars=500 marker)"
+      else
+        echo "⚠️  Tight extraction does not mention truncation (extract LLM may not echo the marker)"
+      fi
+    fi
+  fi
+
+  echo ""
+  if [ "$ERRORS" -gt 0 ]; then
+    echo "❌ E2E extract-limits comparison FAILED ($ERRORS error(s))"
+    return 1
+  fi
+  echo "✅ E2E extract-limits comparison PASSED (tight extraction limits reached the live pipeline)"
+}
+
+if [[ "$ARM" == "compare" ]]; then
+  : "${E2E_COMPARE_DEFAULT_WORKSPACE:?E2E_COMPARE_DEFAULT_WORKSPACE is required for E2E_LIMIT_ARM=compare}"
+  : "${E2E_COMPARE_TIGHT_WORKSPACE:?E2E_COMPARE_TIGHT_WORKSPACE is required for E2E_LIMIT_ARM=compare}"
+  compare_arms "$E2E_COMPARE_DEFAULT_WORKSPACE" "$E2E_COMPARE_TIGHT_WORKSPACE"
+  exit $?
+fi
+
+RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-30}"
 
 # ── Check prerequisites ────────────────────────────────────────────
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
@@ -60,44 +179,42 @@ if [ -z "${OPENROUTER_API_KEY:-}" ]; then
   exit 1
 fi
 
-if ! command -v pi &>/dev/null; then
+if ! command -v "${E2E_PI_BIN:-pi}" &>/dev/null; then
   echo "❌ pi is not installed"
   exit 1
 fi
 
-# shellcheck source=/dev/null
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 e2e_setup_loop_model || exit 1
 
-E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
+E2E_EXTENSION_PATH="${E2E_EXTENSION_PATH:-$PROJECT_DIR/dist/index.js}"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
+trap e2e_cleanup EXIT
 
 # ── Shared prompt: small-but-redundant research against content-heavy pages ─
 # The official Python documentation provides stable, content-rich input.
-# Restrict to one source to reduce rate-limit pressure between the paired runs.
 RESEARCH_PROMPT='Use intelli_research with maxUrls=1 and domains=["docs.python.org"] to research: Python data model reference. Use focusPrompt="Extract the data-model details and canonical API terminology."'
+# shellcheck disable=SC2034  # consumed by e2e_run_pi in lib.sh
+E2E_EXPECT_ARGS='{"maxUrls":1,"domains":["docs.python.org"],"focusPrompt":"Extract the data-model details and canonical API terminology."}'
 
-# ═══════════════════════════════════════════════════════════════════
-# Run 1: Pinned legacy cap 3,000 (the 0.20.0+ default is 8,000; both runs
-# pin their caps explicitly so the truncation comparison stays deterministic)
-# ═══════════════════════════════════════════════════════════════════
-
-echo ""
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║  RUN 1: Pinned legacy cap 3,000                      ║"
-echo "║  extractMaxChars=150000  extractionMaxTokens=3000    ║"
-echo "╚══════════════════════════════════════════════════════╝"
-echo ""
-
-ISO1="$(mktemp -d -t pi-e2e-extlim1-XXXXXX)"
-# shellcheck disable=SC2064
-trap "rm -rf $ISO1 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
-
-mkdir -p "$ISO1/sessions"
-
-e2e_write_auth "$ISO1"
-
-cat > "$ISO1/settings.json" <<EOF
+# run_arm <default|tight> <workspace> — one live research. The default arm
+# pins the legacy cap 3,000 (the 0.20.0+ default is 8,000); both arms pin
+# their caps explicitly so the comparison stays deterministic in settings.
+run_arm() {
+  local arm=$1 ws=$2 agent="" max_chars max_tokens cache_name errors=0
+  if [[ "$arm" == default ]]; then
+    max_chars=150000; max_tokens=3000; cache_name="$CACHE_NAME_DEFAULT"
+  else
+    max_chars=500; max_tokens=1000; cache_name="$CACHE_NAME_TIGHT"
+  fi
+  echo ""
+  echo "╔══════════════════════════════════════════════════════╗"
+  echo "║  ARM: ${arm}  extractMaxChars=${max_chars}  extractionMaxTokens=${max_tokens}"
+  echo "╚══════════════════════════════════════════════════════╝"
+  echo ""
+  e2e_private_dir agent "extlim-${arm}"
+  mkdir -p "$agent/sessions"
+  e2e_write_auth "$agent"
+  cat > "$agent/settings.json" <<EOF
 {
   "defaultProvider": "$E2E_LOOP_PROVIDER",
   "defaultModel": "$E2E_LOOP_MODEL",
@@ -117,258 +234,47 @@ cat > "$ISO1/settings.json" <<EOF
     "defaultUrls": 1,
     "maxUrls": 1,
     "searchRetryAttempts": 4,
-    "extractMaxChars": 150000,
-    "extractionMaxTokens": 3000,
+    "extractMaxChars": $max_chars,
+    "extractionMaxTokens": $max_tokens,
     "collationMaxTokens": 4000,
-    "cacheDir": ".e2e-extract-default"
+    "cacheDir": "$cache_name"
   }
 }
 EOF
-
-cat > "$ISO1/models.json" <<'MEOF'
-{}
-MEOF
-
-if ! e2e_run_pi "$ISO1" "$PROJECT_DIR" "$RESEARCH_PROMPT"; then
-  echo ""
-  echo "❌ Run 1 (pinned legacy cap) failed (no cache sidecar after retries)"
+  printf '{}\n' > "$agent/models.json"
+  E2E_EXPECT_CACHE_DIR="$cache_name"
+  E2E_ATTEMPT_PREFIX="${arm}-"
+  if ! e2e_run_pi "$agent" "$ws" "$RESEARCH_PROMPT"; then
+    echo "$E2E_LAST_OUTPUT"
+    echo ""
+    echo "❌ ${arm} arm failed: ${E2E_LAST_VERDICT_REASON:-no completed research after retries}"
+    return 1
+  fi
   echo "$E2E_LAST_OUTPUT"
-  exit 1
-fi
-OUTPUT1="$E2E_LAST_OUTPUT"
+  ERRORS=0
+  e2e_assert_meta "${arm}: extract model" '.stages.extract.model' "openrouter/minimax/minimax-m2.7"
+  e2e_assert_meta "${arm}: outcome" '.outcome' "completed"
+  errors=$ERRORS
+  mkdir -p "$ws/.e2e-unit"
+  jq --arg arm "$arm" --argjson errors "$errors" \
+    '. + {arm: $arm, armErrors: $errors} | if $errors > 0 then .status = "arm-fail" else . end' \
+    "$E2E_LAST_VERDICT_FILE" > "$ws/.e2e-unit/arm.json"
+  [ "$errors" -eq 0 ]
+}
 
-echo "$OUTPUT1"
-rm -rf "$ISO1"
-echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run to refill the provider bucket..."
+if [[ -n "$ARM" ]]; then
+  e2e_unit_workspace WS "extlim-${ARM}"
+  run_arm "$ARM" "$WS"
+  echo "✅ E2E extract-limits ${ARM} arm PASSED (comparison runs separately)"
+  exit 0
+fi
+
+WS_DEFAULT=""
+WS_TIGHT=""
+e2e_private_dir WS_DEFAULT extlim-default-ws
+e2e_private_dir WS_TIGHT extlim-tight-ws
+run_arm default "$WS_DEFAULT"
+echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run..."
 sleep "$RUN_GAP_SECONDS"
-
-# ═══════════════════════════════════════════════════════════════════
-# Run 2: Tight limits (extractMaxChars=500, extractionMaxTokens=1000)
-# ═══════════════════════════════════════════════════════════════════
-
-echo ""
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║  RUN 2: Tight limits                                 ║"
-echo "║  extractMaxChars=500    extractionMaxTokens=1000     ║"
-echo "╚══════════════════════════════════════════════════════╝"
-echo ""
-
-ISO2="$(mktemp -d -t pi-e2e-extlim2-XXXXXX)"
-# shellcheck disable=SC2064
-trap "rm -rf $ISO2 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
-
-mkdir -p "$ISO2/sessions"
-
-e2e_write_auth "$ISO2"
-
-cat > "$ISO2/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "searchModel": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "defaultUrls": 1,
-    "maxUrls": 1,
-    "searchRetryAttempts": 4,
-    "extractMaxChars": 500,
-    "extractionMaxTokens": 1000,
-    "collationMaxTokens": 4000,
-    "cacheDir": ".e2e-extract-tight"
-  }
-}
-EOF
-
-cat > "$ISO2/models.json" <<'MEOF'
-{}
-MEOF
-
-if ! e2e_run_pi "$ISO2" "$PROJECT_DIR" "$RESEARCH_PROMPT"; then
-  echo ""
-  echo "❌ Run 2 (tight) failed (no cache sidecar after retries)"
-  echo "$E2E_LAST_OUTPUT"
-  exit 1
-fi
-OUTPUT2="$E2E_LAST_OUTPUT"
-
-echo "$OUTPUT2"
-rm -rf "$ISO2"
-
-# ═══════════════════════════════════════════════════════════════════
-# Compare extraction sizes
-# ═══════════════════════════════════════════════════════════════════
-
-echo ""
-echo "══ Comparison ═════════════════════════════════════════════════════════"
-
-ERRORS=0
-
-# Select each completed canonical run, not a numbered archive remnant.
-ENTRY_DEFAULT=$(e2e_completed_cache_entry "$CACHE_DEFAULT")
-ENTRY_TIGHT=$(e2e_completed_cache_entry "$CACHE_TIGHT")
-
-# A missing cache entry usually means the search stage returned a degraded 200
-# (a valid reply with no markdown links), so the pipeline returned early without
-# writing a cache. Distinguish that from a genuine extraction bug. The agent
-# paraphrases the tool's wording, so match the underlying signal loosely
-# (this branch only runs when a cache entry is already missing).
-DEGRADED_RE="degraded|parseable links|no usable links|no markdown links|returned no links|without markdown links"
-
-if [ -z "$ENTRY_DEFAULT" ]; then
-  if echo "${OUTPUT1:-}" | grep -qiE "$DEGRADED_RE"; then
-    echo "⚠️  Cap3000 run: search returned 0 URLs (degraded LLM response), not a fetch/extract bug — rerun"
-  else
-    echo "❌ No cache entry found in .e2e-extract-default/"
-    ERRORS=$((ERRORS + 1))
-  fi
-fi
-
-if [ -z "$ENTRY_TIGHT" ]; then
-  if echo "${OUTPUT2:-}" | grep -qiE "$DEGRADED_RE"; then
-    echo "⚠️  Tight run: search returned 0 URLs (degraded LLM response), not a fetch/extract bug — rerun"
-  else
-    echo "❌ No cache entry found in .e2e-extract-tight/"
-    ERRORS=$((ERRORS + 1))
-  fi
-fi
-
-# ── Diagnostic: read source counts from each report ──
-for label in "Cap3000" "Tight"; do
-  if [ "$label" = "Cap3000" ]; then
-    ENTRY="$ENTRY_DEFAULT"
-  else
-    ENTRY="$ENTRY_TIGHT"
-  fi
-  if [ -n "$ENTRY" ] && [ -f "$ENTRY/report.md" ]; then
-    SOURCE_LINE=$(grep "^> Sources:" "$ENTRY/report.md" 2>/dev/null || echo "")
-    # grep -c prints "0" AND exits 1 on no match; a trailing `|| echo 0` would
-    # append a second line ("0\n0") and break the numeric test below. Use a
-    # separate assignment on failure instead.
-    BLOCKED_LINE=$(grep -c "^## Failed Sources" "$ENTRY/report.md" 2>/dev/null) || BLOCKED_LINE=0
-    EXT_COUNT=$(find "$ENTRY/extractions" -type f 2>/dev/null | wc -l)
-    SRC_COUNT=$(find "$ENTRY/sources" -type f 2>/dev/null | wc -l)
-    echo "🔍 $label: $SOURCE_LINE | extractions=$EXT_COUNT files | sources=$SRC_COUNT files | has_blocked_section=$BLOCKED_LINE"
-    if [ "$BLOCKED_LINE" -gt 0 ]; then
-      echo "   Blocked URLs:"
-      sed -n '/^## Failed Sources/,/^##/p' "$ENTRY/report.md" 2>/dev/null | grep "^-" | while read -r line; do
-        echo "   $line"
-      done
-    fi
-  fi
-done
-echo ""
-
-if [ -n "$ENTRY_DEFAULT" ] && [ -n "$ENTRY_TIGHT" ]; then
-  EXTRACT_DIR_DEFAULT="$ENTRY_DEFAULT/extractions"
-  EXTRACT_DIR_TIGHT="$ENTRY_TIGHT/extractions"
-
-  if [ -d "$EXTRACT_DIR_DEFAULT" ] && [ -d "$EXTRACT_DIR_TIGHT" ]; then
-    FILE_DEFAULT=$(find "$EXTRACT_DIR_DEFAULT" -type f | head -1)
-    FILE_TIGHT=$(find "$EXTRACT_DIR_TIGHT" -type f | head -1)
-
-    if [ -z "$FILE_DEFAULT" ] || [ -z "$FILE_TIGHT" ]; then
-      # Check whether this is a fetch failure (0 pages) or extraction failure
-      SRC_LINE_DEFAULT=$(grep "^> Sources:" "$ENTRY_DEFAULT/report.md" 2>/dev/null || echo "")
-      SRC_LINE_TIGHT=$(grep "^> Sources:" "$ENTRY_TIGHT/report.md" 2>/dev/null || echo "")
-      SUCC_DEFAULT=$(echo "$SRC_LINE_DEFAULT" | grep -oP '\d+(?= succeeded)' || echo "0")
-      SUCC_TIGHT=$(echo "$SRC_LINE_TIGHT" | grep -oP '\d+(?= succeeded)' || echo "0")
-
-      if [ "$SUCC_DEFAULT" -eq 0 ] && [ "$SUCC_TIGHT" -eq 0 ]; then
-        echo "⚠️  Both runs had 0 successful page fetches — cannot compare extraction limits."
-        echo "   This is a fetch reliability issue, not an extract-limits bug."
-        echo "   Check report.md Failed Sources section above for per-URL details."
-        echo "   Rerun the test; if it persists, the target URLs may have changed."
-      elif [ "$SUCC_DEFAULT" -eq 0 ]; then
-        echo "⚠️  Cap3000 run had 0 extractions (check the report: fetch or extraction-budget failure). Tight run cannot be compared."
-        echo "   Rerun the test."
-      elif [ "$SUCC_TIGHT" -eq 0 ]; then
-        echo "⚠️  Tight run had 0 extractions (check the report: fetch or extraction-budget failure). Cap3000 run cannot be compared."
-        echo "   Rerun the test."
-      elif [ -n "$FILE_DEFAULT" ] && [ -z "$FILE_TIGHT" ]; then
-        # Pages fetched, but the tight run wrote no extraction file. With a very
-        # low extractionMaxTokens a reasoning extract model can spend its whole
-        # budget on thinking and emit no text; the empty-extraction guard then
-        # skips the file. That is the token limit being enforced (aggressively),
-        # not a bug. The size comparison is not possible at this setting.
-        echo "⚠️  Tight run produced no extraction text: extractionMaxTokens was low enough"
-        echo "   that the reasoning extract model emitted no text (empty-extraction guard"
-        echo "   skipped the file). The limit was enforced; size comparison not possible here."
-      else
-        echo "❌ Extractions succeeded but no extraction files written (code bug)"
-        ERRORS=$((ERRORS + 1))
-      fi
-    else
-      SIZE_DEFAULT=$(wc -c < "$FILE_DEFAULT" || echo "0")
-      SIZE_TIGHT=$(wc -c < "$FILE_TIGHT" || echo "0")
-      CHARS_DEFAULT=$(wc -m < "$FILE_DEFAULT" || echo "0")
-      CHARS_TIGHT=$(wc -m < "$FILE_TIGHT" || echo "0")
-
-      echo "📄 Cap3000 extraction: ${SIZE_DEFAULT} bytes, ${CHARS_DEFAULT} chars"
-      echo "📄 Tight extraction:   ${SIZE_TIGHT} bytes, ${CHARS_TIGHT} chars"
-
-      # Tight extraction must be smaller than default
-      if [ "$SIZE_TIGHT" -lt "$SIZE_DEFAULT" ]; then
-        echo "✅ Tight extraction is smaller than default (token limit enforced)"
-      else
-        echo "❌ Tight extraction is NOT smaller (${SIZE_TIGHT} >= ${SIZE_DEFAULT})"
-        ERRORS=$((ERRORS + 1))
-      fi
-
-      # Tight extraction should be short (approximately 4 chars/token, so
-      # ≤4000 chars with 1000 output tokens).
-      if [ "$CHARS_TIGHT" -le 4000 ]; then
-        echo "✅ Tight extraction ≤4000 chars (extractionMaxTokens=1000 enforced)"
-      else
-        echo "⚠️  Tight extraction is ${CHARS_TIGHT} chars (>4000, may still be correct depending on model)"
-      fi
-
-      # Show first 200 chars of each for manual inspection
-      echo ""
-      echo "── Cap3000 extraction (first 200 chars) ──"
-      head -c 200 "$FILE_DEFAULT" 2>/dev/null || echo "(empty)"
-      echo ""
-      echo "── Tight extraction (first 200 chars) ──"
-      head -c 200 "$FILE_TIGHT" 2>/dev/null || echo "(empty)"
-      echo ""
-
-      # Check if tight extraction mentions truncation
-      if grep -qi "truncat\|TRUNCAT\|exceeded" "$FILE_TIGHT" 2>/dev/null; then
-        echo "✅ Tight extraction mentions truncation (extractMaxChars=500 enforced)"
-      else
-        echo "⚠️  Tight extraction does not mention truncation (extract LLM may not echo the marker)"
-      fi
-    fi
-  else
-    echo "❌ Missing extractions directory in one or both caches"
-    ERRORS=$((ERRORS + 1))
-  fi
-fi
-
-echo ""
-echo "── Report sizes ──"
-if [ -n "$ENTRY_DEFAULT" ] && [ -f "$ENTRY_DEFAULT/report.md" ]; then
-  SIZE_RPT_DEFAULT=$(wc -c < "$ENTRY_DEFAULT/report.md")
-  echo "   Cap3000 report: ${SIZE_RPT_DEFAULT} bytes"
-fi
-if [ -n "$ENTRY_TIGHT" ] && [ -f "$ENTRY_TIGHT/report.md" ]; then
-  SIZE_RPT_TIGHT=$(wc -c < "$ENTRY_TIGHT/report.md")
-  echo "   Tight report:   ${SIZE_RPT_TIGHT} bytes"
-fi
-
-echo ""
-if [ "$ERRORS" -gt 0 ]; then
-  echo "❌ E2E extract-limits test FAILED ($ERRORS error(s))"
-  exit 1
-fi
-
-echo "✅ E2E extract-limits test PASSED — both limits are enforced"
+run_arm tight "$WS_TIGHT"
+compare_arms "$WS_DEFAULT" "$WS_TIGHT"

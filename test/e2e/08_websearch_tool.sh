@@ -29,19 +29,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-LOG_DIR="$PROJECT_DIR/.e2e-logs"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-LOG_FILE="$LOG_DIR/e2e-websearch-tool-${TIMESTAMP}.log"
-mkdir -p "$LOG_DIR"
-exec > >(tee -a "$LOG_FILE") 2>&1
-echo "📝 Log: $LOG_FILE"
-
-# Read .env if it exists (gitignored): parsed, never executed, and only the
-# documented keys (see test/e2e/env.sh). Other credentials kept there stay out.
+# shellcheck source=test/e2e/lib.sh
+source "$SCRIPT_DIR/lib.sh"
+# Read .env BEFORE output reaches the retained log: a malformed line must
+# never be echoed into it (see test/e2e/env.sh). The file is parsed, never
+# executed, and only the documented keys are read.
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+e2e_init_log e2e-websearch-tool
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "📝 Log: $LOG_FILE"
 
 # ── Check prerequisites ────────────────────────────────────────────
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
@@ -68,14 +67,12 @@ if ! command -v pi &>/dev/null; then
   exit 1
 fi
 
-# shellcheck source=/dev/null
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 e2e_setup_loop_model || exit 1
 
 # ── Create isolated agent directory ────────────────────────────────
-ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-websearch-XXXXXX)"
-E2E_CWD="$(mktemp -d -t pi-e2e-websearch-cwd-XXXXXX)"
-trap 'rm -rf "$ISOLATED_AGENT_DIR" "$E2E_CWD"' EXIT
+trap e2e_cleanup EXIT
+e2e_private_dir ISOLATED_AGENT_DIR websearch
+e2e_unit_workspace E2E_CWD websearch-cwd
 
 echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR"
 echo "📂 Isolated working directory: $E2E_CWD"
@@ -137,14 +134,16 @@ echo "║  Search: gpt-5-nano + openrouter:web_search server tool  ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 
-E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
+E2E_EXTENSION_PATH="${E2E_EXTENSION_PATH:-$PROJECT_DIR/dist/index.js}"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 PROMPT='Use intelli_research with maxUrls=2 and domains=["nodejs.org"] to research: the current Node.js LTS schedule. Return the official schedule source.'
+E2E_EXPECT_ARGS='{"maxUrls":2,"domains":["nodejs.org"]}'
+E2E_EXPECT_CACHE_DIR=".e2e-websearch-cache"
 
 if ! e2e_run_pi "$ISOLATED_AGENT_DIR" "$E2E_CWD" "$PROMPT" "${E2E_TIMEOUT_SECONDS:-300}"; then
   echo ""
-  echo "❌ pi failed (no cache sidecar after retries)"
+  echo "❌ pi failed: ${E2E_LAST_VERDICT_REASON:-no completed research after retries}"
   echo ""
   echo "--- pi output ---"
   echo "$E2E_LAST_OUTPUT"
@@ -171,7 +170,9 @@ else
   ERRORS=$((ERRORS + 1))
 fi
 
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.*' | sort -r | head -1)
+# The entry bound to this run's own research call (lib.sh). A reverse name
+# sort would put a numbered archive (<slug>.1) ahead of the live entry.
+LATEST_CACHE="$E2E_BOUND_ENTRY"
 META_FILE="$LATEST_CACHE/meta.json"
 
 if [ -n "$LATEST_CACHE" ] && [ -f "$META_FILE" ]; then

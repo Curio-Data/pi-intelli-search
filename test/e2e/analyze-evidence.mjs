@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 
-// Summarise a run produced by test/run-e2e-parallel.sh without retaining
-// prompts, completions, credentials, or full provider payloads.
+// Summarise units/<id> or historical one-level runs. Legacy analysis retains
+// research tool arguments; readUnitEvidence exports metadata only, never payloads.
 
 import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const runDir = process.argv[2];
-if (!runDir) throw new Error("Usage: node test/e2e/analyze-evidence.mjs <run-directory>");
-
-function jsonl(path) {
-  if (!existsSync(path)) return [];
+function jsonl(path, health) {
+  if (!existsSync(path)) { if (health) health.missing.push(basename(path)); return []; }
   return readFileSync(path, "utf8")
     .split("\n")
     .filter(Boolean)
@@ -19,6 +17,7 @@ function jsonl(path) {
       try {
         return [JSON.parse(line)];
       } catch {
+        if (health) health.malformedRecords++;
         return [];
       }
     });
@@ -50,23 +49,67 @@ function latencyStats(values) {
   };
 }
 
-const scenarioDirs = readdirSync(runDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory() && existsSync(join(runDir, entry.name, "extension.jsonl")))
-  .map((entry) => entry.name)
-  .sort();
+function readJson(path) {
+  try { return JSON.parse(readFileSync(path, "utf8")); } catch { return null; }
+}
 
+/** Selected metadata only: never copy prompt/completion bodies into unit receipts. */
+export function readUnitEvidence(dir) {
+  const health = { missing: [], malformedRecords: 0, malformedVerdicts: 0 };
+  const responses = [
+    ...jsonl(join(dir, "extension.jsonl"), health).filter((event) =>
+      ["extension_http_response", "agent_http_response"].includes(event.type)),
+    ...jsonl(join(dir, "http.jsonl"), health).filter((event) => event.type === "http_response"),
+  ];
+  const non200 = responses.filter((event) => Number.isInteger(event.status) && event.status !== 200);
+  const retryAfter = responses.flatMap((event) => {
+    const value = event.retryAfter ?? event.headers?.["retry-after"];
+    return value === undefined || value === null || value === "" ? [] :
+      [{ type: event.type, status: event.status, retryAfter: String(value).slice(0, 200) }];
+  });
+  const traceDir = join(dir, existsSync(join(dir, "traces")) ? "traces" : "pi-traces");
+  const verdictFiles = existsSync(traceDir) ? readdirSync(traceDir).filter((file) => file.endsWith(".verdict.json")).sort() : [];
+  const attempts = verdictFiles.flatMap((file) => {
+    const verdict = readJson(join(traceDir, file));
+    if (!verdict || typeof verdict.status !== "string") { health.malformedVerdicts++; return []; }
+    return [{ file, status: verdict.status,
+      binding: ["tool-call", "workspace-only"].includes(verdict.binding) ? verdict.binding : "unknown" }];
+  });
+  const accepted = attempts.filter((attempt) => attempt.status === "pass");
+  const bindings = [...new Set((accepted.length ? accepted : attempts).map((attempt) => attempt.binding))];
+  return { binding: bindings.length === 1 ? bindings[0] : bindings.length ? "mixed" : "unavailable", attempts,
+    providerSignals: { responseRecords: responses.length, non200: non200.length,
+      unknownStatusRecords: responses.filter((event) => !Number.isInteger(event.status)).length,
+      non200StatusCounts: countBy(non200.map((event) => event.status)),
+      retryAfter, saw429: non200.some((event) => event.status === 429),
+      scope: "observed response records; channels may overlap; not a complete request census", health } };
+}
+
+export function analyzeRun(runDir) {
+const unitLayout = existsSync(join(runDir, "units"));
+const directoryRoot = unitLayout ? join(runDir, "units") : runDir;
+const manifest = readJson(join(runDir, "manifest.json"));
+const suite = readJson(join(runDir, "results.json"));
+const expected = manifest?.units?.map((unit) => unit.id) ?? suite?.scenarios?.map((unit) => unit.id ?? unit.scenario?.replace(/\.sh$/, ""));
+const discovered = readdirSync(directoryRoot, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && (unitLayout || existsSync(join(directoryRoot, entry.name, "extension.jsonl"))))
+  .map((entry) => entry.name);
+const scenarioDirs = [...new Set(expected ?? discovered)]
+  .filter((name) => typeof name === "string" && /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(name) && name !== "_preparation").sort();
 const scenarios = [];
 for (const name of scenarioDirs) {
-  const dir = join(runDir, name);
+  const dir = join(directoryRoot, name);
+  const unitEvidence = readUnitEvidence(dir);
   const extension = jsonl(join(dir, "extension.jsonl"));
   const http = jsonl(join(dir, "http.jsonl"));
-  const traceDir = join(dir, "pi-traces");
+  const traceDir = join(dir, existsSync(join(dir, "traces")) ? "traces" : "pi-traces");
   const traceFiles = existsSync(traceDir)
     ? readdirSync(traceDir).filter((file) => file.endsWith(".jsonl")).sort()
     : [];
   const trace = traceFiles.flatMap((file) => jsonl(join(traceDir, file)));
   const resultPath = join(dir, "result.json");
-  const result = existsSync(resultPath) ? JSON.parse(readFileSync(resultPath, "utf8")) : null;
+  const result = readJson(resultPath) ?? readJson(join(dir, "supervision-failure.json")) ??
+    suite?.scenarios?.find((unit) => (unit.id ?? unit.scenario?.replace(/\.sh$/, "")) === name) ?? null;
 
   const agentMessages = trace.flatMap((event) => {
     const message = event.type === "message_end" ? event.message : undefined;
@@ -125,6 +168,7 @@ for (const name of scenarioDirs) {
   scenarios.push({
     scenario: name,
     result,
+    ...unitEvidence,
     providerEvidence: {
       extensionStatusCounts: countBy(extensionResponses.map((event) => event.status)),
       agentStatusCounts: countBy(agentResponses.map((event) => event.status)),
@@ -170,6 +214,7 @@ for (const name of scenarioDirs) {
 const analysis = {
   generatedAt: new Date().toISOString(),
   runName: basename(runDir),
+  layout: unitLayout ? "units" : "legacy",
   scenarios,
   totals: {
     scenarioCount: scenarios.length,
@@ -177,15 +222,28 @@ const analysis = {
     agentMessages: scenarios.reduce((sum, item) => sum + item.agent.messageCount, 0),
     extensionNon200: scenarios.reduce((sum, item) =>
       sum + Object.entries(item.providerEvidence.extensionStatusCounts)
-        .filter(([status]) => !status.startsWith("2"))
+        .filter(([status]) => status !== "200")
         .reduce((count, [, value]) => count + value, 0), 0),
     agentNon200: scenarios.reduce((sum, item) =>
       sum + Object.entries(item.providerEvidence.agentStatusCounts)
-        .filter(([status]) => !status.startsWith("2"))
+        .filter(([status]) => status !== "200")
         .reduce((count, [, value]) => count + value, 0), 0),
     retryNotices: scenarios.reduce((sum, item) => sum + item.retryNotices.length, 0),
+    observedNon200: scenarios.reduce((sum, item) => sum + item.providerSignals.non200, 0),
+    retryAfterRecords: scenarios.reduce((sum, item) => sum + item.providerSignals.retryAfter.length, 0),
+    unitsWith429: scenarios.filter((item) => item.providerSignals.saw429).map((item) => item.scenario),
+    missingResults: scenarios.filter((item) => !item.result).map((item) => item.scenario),
+    malformedRecords: scenarios.reduce((sum, item) => sum + item.providerSignals.health.malformedRecords, 0),
   },
 };
-const output = join(runDir, "analysis.json");
-writeFileSync(output, `${JSON.stringify(analysis, null, 2)}\n`, { mode: 0o600 });
-console.log(JSON.stringify({ output, totals: analysis.totals }, null, 2));
+return analysis;
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const runDir = process.argv[2];
+  if (!runDir) throw new Error("Usage: node test/e2e/analyze-evidence.mjs <run-directory> (units or legacy layout)");
+  const analysis = analyzeRun(runDir);
+  const output = join(runDir, "analysis.json");
+  writeFileSync(output, `${JSON.stringify(analysis, null, 2)}\n`, { mode: 0o600 });
+  console.log(JSON.stringify({ output, totals: analysis.totals }, null, 2));
+}

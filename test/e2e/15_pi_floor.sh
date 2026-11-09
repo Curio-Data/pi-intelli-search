@@ -26,6 +26,8 @@
 #   OPENROUTER_API_KEY  Required (auto-detected from ~/.pi/agent/auth.json).
 #   PI_FLOOR_VERSION    Pinned floor host to install (default: 0.86.0).
 #                       Bump it here when the peer range floor moves.
+#   E2E_FLOOR_BIN       A prepared floor-host binary. When set, nothing is
+#                       installed or deleted; the binary's version is checked.
 #
 # Network: npm registry access (installing the pinned host) plus live
 # OpenRouter calls. The pinned install is cached under .tmp/ and reused.
@@ -36,22 +38,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PI_FLOOR_VERSION="${PI_FLOOR_VERSION:-0.86.0}"
 
-LOG_DIR="$PROJECT_DIR/.e2e-logs"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-LOG_FILE="$LOG_DIR/e2e-pi-floor-${TIMESTAMP}.log"
-mkdir -p "$LOG_DIR"
-exec > >(tee -a "$LOG_FILE") 2>&1
-echo "📝 Log: $LOG_FILE"
-
-# Read .env if it exists (gitignored): parsed, never executed, and only the
-# documented keys (see test/e2e/env.sh). Other credentials kept there stay out.
+# shellcheck source=test/e2e/lib.sh
+source "$SCRIPT_DIR/lib.sh"
+# Read .env BEFORE output reaches the retained log: a malformed line must
+# never be echoed into it (see test/e2e/env.sh). The file is parsed, never
+# executed, and only the documented keys are read.
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
-
-# shellcheck source=/dev/null
-source "$SCRIPT_DIR/lib.sh"
+e2e_init_log e2e-pi-floor
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "📝 Log: $LOG_FILE"
 
 E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
 
@@ -75,9 +73,19 @@ fi
 # Cached under the repository's gitignored .tmp/ (never /tmp: the install is
 # registry data, but the habit keeps every scenario uniform). Reused when the
 # marker version matches.
-FLOOR_ROOT="$PROJECT_DIR/.tmp/pi-floor/$PI_FLOOR_VERSION"
-FLOOR_BIN="$FLOOR_ROOT/node_modules/.bin/pi"
-if [ ! -x "$FLOOR_BIN" ] || ! "$FLOOR_BIN" --version 2>/dev/null | grep -q "$PI_FLOOR_VERSION"; then
+# A prepared floor binary (E2E_FLOOR_BIN) is read-only input: never repaired,
+# reinstalled or deleted here, so concurrent consumers cannot race on it.
+if [ -n "${E2E_FLOOR_BIN:-}" ]; then
+  FLOOR_BIN="$E2E_FLOOR_BIN"
+  if [ ! -x "$FLOOR_BIN" ]; then
+    echo "❌ E2E_FLOOR_BIN is not executable: $FLOOR_BIN"
+    exit 1
+  fi
+else
+  FLOOR_ROOT="$PROJECT_DIR/.tmp/pi-floor/$PI_FLOOR_VERSION"
+  FLOOR_BIN="$FLOOR_ROOT/node_modules/.bin/pi"
+fi
+if [ -z "${E2E_FLOOR_BIN:-}" ] && { [ ! -x "$FLOOR_BIN" ] || ! "$FLOOR_BIN" --version 2>/dev/null | grep -q "$PI_FLOOR_VERSION"; }; then
   echo "⬇️  Installing @earendil-works/pi-coding-agent@$PI_FLOOR_VERSION into $FLOOR_ROOT"
   rm -rf "$FLOOR_ROOT"
   mkdir -p "$FLOOR_ROOT"
@@ -105,9 +113,11 @@ for flag in --no-skills --no-prompt-templates --no-context-files --no-session; d
 done
 
 # ── Isolated agent environment ─────────────────────────────────────
-ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-floor-agent-XXXXXX)"
-E2E_CWD="$(mktemp -d -t pi-e2e-floor-cwd-XXXXXX)"
-trap 'rm -rf "$ISOLATED_AGENT_DIR" "$E2E_CWD"' EXIT
+trap e2e_cleanup EXIT
+ISOLATED_AGENT_DIR=""
+E2E_CWD=""
+e2e_private_dir ISOLATED_AGENT_DIR floor-agent
+e2e_unit_workspace E2E_CWD floor-cwd
 echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR"
 echo "📂 Isolated working directory: $E2E_CWD"
 mkdir -p "$ISOLATED_AGENT_DIR/sessions"
@@ -149,60 +159,28 @@ cat > "$ISOLATED_AGENT_DIR/models.json" <<'MEOF'
 MEOF
 
 # ── Run one real research through the floor host ───────────────────
-# Local variant of e2e_run_pi: same retry/fresh-sidecar contract, but it
-# invokes the pinned floor binary and the probed flag set. PATH is prepended
-# inside the subshell so nothing else resolves the old binary.
-E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
+# The shared e2e_run_pi with the pinned floor binary and the probed flag set.
+# The binary's directory is prepended to PATH inside the attempt, so nothing
+# else resolves a different pi. The floor host predates the `Pi` 1.2.0
+# truncation exit code and keeps its exit-0 gate; a completed research with a
+# nonzero exit fails without repeating the paid work.
+E2E_EXTENSION_PATH="${E2E_EXTENSION_PATH:-$PROJECT_DIR/dist/index.js}"
 PROMPT='Use intelli_research with maxUrls=1 and domains=["typescriptlang.org"] to research: the current TypeScript release. Return the official release source.'
-
-run_floor_pi() {
-  local attempt out ec ran ref
-  local trace_extension_args=()
-  if [[ -n "${E2E_TRACE_EXTENSION_PATH:-}" ]]; then
-    trace_extension_args=(-e "${E2E_TRACE_EXTENSION_PATH}")
-  fi
-  ref="$(mktemp)"
-  for attempt in 1 2 3; do
-    out="$(
-      cd "$E2E_CWD"
-      PATH="$FLOOR_ROOT/node_modules/.bin:$PATH" \
-      PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" \
-        timeout --foreground "${E2E_TIMEOUT_SECONDS}s" pi \
-          "${FLOOR_FLAGS[@]}" \
-          -e "${E2E_EXTENSION_PATH}" "${trace_extension_args[@]}" \
-          -p "${PROMPT}" 2>&1
-    )" && ec=0 || ec=$?
-    if [[ -n "${E2E_TRACE_DIR:-}" ]]; then
-      mkdir -p "${E2E_TRACE_DIR}"
-      printf '%s\n' "$out" > "${E2E_TRACE_DIR}/floor-attempt-${attempt}.log"
-    fi
-    ran=0
-    if [ "${ec}" -eq 0 ]; then
-      if find "${E2E_CWD}" -maxdepth 4 -name meta.json -newer "${ref}" \
-        -exec jq -e 'select(.outcome == "completed" and .stages.fetch.succeeded > 0 and .stages.collate.summaryChars > 0)' {} \; \
-        -print 2>/dev/null | grep -q '^/'; then
-        ran=1
-      fi
-    fi
-    if [ "${ran}" -eq 1 ]; then
-      rm -f "${ref}"
-      E2E_LAST_OUTPUT="${out}"
-      return 0
-    fi
-    if [[ "${ec}" -eq 124 ]]; then
-      echo "   ⚠️  floor-pi attempt ${attempt}/3 TIMED OUT after ${E2E_TIMEOUT_SECONDS}s without a completed sidecar" >&2
-    else
-      echo "   ⚠️  floor-pi attempt ${attempt}/3 failed (exit ${ec}, cache written: ${ran})" >&2
-    fi
-    if [[ "${attempt}" -lt 3 ]]; then
-      echo "   ⏳ retrying after 30s" >&2
-      sleep 30
-    fi
-  done
-  rm -f "${ref}"
-  E2E_LAST_OUTPUT="${out}"
-  return 1
-}
+E2E_PI_BIN="$FLOOR_BIN"
+E2E_PI_FLAGS=("${FLOOR_FLAGS[@]}")
+E2E_REQUIRE_EXIT_ZERO=1
+E2E_EXPECT_CACHE_DIR=".search"
+E2E_EXPECT_ARGS='{"maxUrls":1,"domains":["typescriptlang.org"]}'
+# Call binding needs the JSON event stream. A floor host without --mode falls
+# back to workspace-only binding (one fresh completed entry in this unit's
+# cache root), and the verdict file records that weaker binding.
+# Word boundary: "--model" must not count as "--mode".
+if printf '%s' "$FLOOR_HELP" | grep -qE -- '--mode\b'; then
+  E2E_JSON_MODE=1
+else
+  E2E_JSON_MODE=0
+  echo "   ℹ️  floor host lacks --mode; binding by the unit cache root only"
+fi
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
@@ -210,9 +188,9 @@ echo "║  Running pinned pi ${PI_FLOOR_VERSION} — print mode (isolated env)  
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
-if ! run_floor_pi; then
+if ! e2e_run_pi "$ISOLATED_AGENT_DIR" "$E2E_CWD" "$PROMPT" "$E2E_TIMEOUT_SECONDS"; then
   echo ""
-  echo "❌ Floor-host pi failed (no completed cache sidecar after retries)"
+  echo "❌ Floor-host pi failed: ${E2E_LAST_VERDICT_REASON:-no completed research after retries}"
   echo ""
   echo "--- pi output ---"
   echo "${E2E_LAST_OUTPUT:-<none>}"
@@ -225,7 +203,8 @@ echo "$E2E_LAST_OUTPUT"
 CACHE_DIR="$E2E_CWD/.search"
 ERRORS=0
 
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.*' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+# The entry bound by e2e_run_pi (lib.sh), never chosen by modification time.
+LATEST_CACHE="$E2E_BOUND_ENTRY"
 if [ -z "$LATEST_CACHE" ] || [ ! -f "$LATEST_CACHE/meta.json" ]; then
   echo "❌ No cache entry with meta.json under $CACHE_DIR"
   exit 1

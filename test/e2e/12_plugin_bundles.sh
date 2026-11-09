@@ -44,13 +44,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-LOG_DIR="$PROJECT_DIR/.e2e-logs"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-LOG_FILE="$LOG_DIR/e2e-plugin-bundles-${TIMESTAMP}.log"
+LOG_DIR="${E2E_LOG_ROOT:-$PROJECT_DIR/.e2e-logs}"
 mkdir -p "$LOG_DIR"
+LOG_FILE="$(mktemp --suffix=.log "$LOG_DIR/e2e-plugin-bundles-$(date +%Y%m%d-%H%M%S)-XXXXXX")"
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "📝 Log: $LOG_FILE"
 
+# shellcheck source=test/e2e/lib.sh
+source "$SCRIPT_DIR/lib.sh"
 E2E_ROOT="$(mktemp -d "${TMPDIR:-$PROJECT_DIR/.tmp}/intelli-plugin-e2e-XXXXXXXX")"
 echo "📁 Scratch: $E2E_ROOT"
 
@@ -94,18 +95,25 @@ check() { # check <label> <command...>
 
 echo
 echo "── Step 1: build and pack @curio-data/mcp-intelli-search"
-if [[ "${E2E_SKIP_BUILD:-0}" == "1" ]]; then
-  ok "using prebuilt standalone artifact"
+# E2E_MCP_TARBALL names a prepared artefact: no build or pack runs, so this
+# scenario cannot rewrite packages/mcp/dist under a concurrent consumer.
+if [[ -n "${E2E_MCP_TARBALL:-}" ]]; then
+  TARBALL="$E2E_MCP_TARBALL"
+  if [[ -f "$TARBALL" ]]; then ok "using prepared tarball $(basename "$TARBALL")"; else bad "E2E_MCP_TARBALL does not exist: $TARBALL"; exit 1; fi
 else
-  (cd "$PROJECT_DIR" && npm run build:mcp >/dev/null 2>&1)
+  if [[ "${E2E_SKIP_BUILD:-0}" == "1" ]]; then
+    ok "using prebuilt standalone artifact"
+  else
+    (cd "$PROJECT_DIR" && npm run build:mcp >/dev/null 2>&1)
+  fi
+  TARBALL_DIR="$E2E_ROOT/pack"
+  mkdir -p "$TARBALL_DIR"
+  PACK_ARGS=()
+  if [[ "${E2E_SKIP_BUILD:-0}" == "1" ]]; then PACK_ARGS=(--ignore-scripts); fi
+  TARBALL="$(cd "$PROJECT_DIR" && npm pack --workspace @curio-data/mcp-intelli-search --pack-destination "$TARBALL_DIR" "${PACK_ARGS[@]}" 2>/dev/null | tail -1)"
+  TARBALL="$TARBALL_DIR/$(basename "$TARBALL")"
+  if [[ -f "$TARBALL" ]]; then ok "packed $(basename "$TARBALL")"; else bad "npm pack produced no tarball"; exit 1; fi
 fi
-TARBALL_DIR="$E2E_ROOT/pack"
-mkdir -p "$TARBALL_DIR"
-PACK_ARGS=()
-if [[ "${E2E_SKIP_BUILD:-0}" == "1" ]]; then PACK_ARGS=(--ignore-scripts); fi
-TARBALL="$(cd "$PROJECT_DIR" && npm pack --workspace @curio-data/mcp-intelli-search --pack-destination "$TARBALL_DIR" "${PACK_ARGS[@]}" 2>/dev/null | tail -1)"
-TARBALL="$TARBALL_DIR/$(basename "$TARBALL")"
-if [[ -f "$TARBALL" ]]; then ok "packed $(basename "$TARBALL")"; else bad "npm pack produced no tarball"; exit 1; fi
 
 # ── Step 2: generate tarball-mode bundles and vendor the artifact ─
 
@@ -211,16 +219,10 @@ server_env_key() {
   ( grace=0
     while [[ "$grace" -lt 60 ]]; do
       if [[ -e "$done_flag" ]]; then grace=$((grace + 1)); fi
-      # Match by this scenario's workspace: a directory marketplace runs the
-      # server from its source path, and other sessions may run their own.
-      for pid in $(pgrep -f "[m]cp-intelli-search/dist/cli.js" || true); do
-        local env_lines
-        env_lines="$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null || true)"
-        if rg -q --fixed-strings -x "INTELLI_SEARCH_WORKSPACE=$E2E_ROOT/claude-workspace" <<<"$env_lines"; then
-          rg '^OPENROUTER_API_KEY=' <<<"$env_lines" >> "$out" || true
-          echo "SERVER_SEEN" >> "$out"
-        fi
-      done
+      # Only this scenario's own servers are read (lib.sh,
+      # e2e_scoped_server_env): the command line is checked before any
+      # environment is opened.
+      e2e_scoped_server_env "$E2E_ROOT" "$E2E_ROOT/claude-workspace" >> "$out"
       sleep 0.05
     done ) &
   local sampler=$!
@@ -331,7 +333,10 @@ check "installed cache populated" test -f "$CODEX_HOME/plugins/cache/curio-data-
 
 # The plugin skill must be listed in the model-visible prompt input as
 # intelli-search:intelli-search (no credentials or model request needed).
-SKILL_DESCRIPTION="$(awk '/^description: / { sub(/^description: /, ""); print; exit }' "$PROJECT_DIR/plugins/codex/skills/intelli-search/SKILL.md" | jq -r '.')"
+# Compare against the skill this scenario generated and installed, not the
+# checkout's committed copy (generator drift is check:plugins' job), so the
+# scenario reads nothing from a checkout a frozen harness does not carry.
+SKILL_DESCRIPTION="$(awk '/^description: / { sub(/^description: /, ""); print; exit }' "$WORK/plugins/codex/skills/intelli-search/SKILL.md" | jq -r '.')"
 if codex debug prompt-input "test" > "$E2E_ROOT/codex-prompt.txt" 2>/dev/null \
   && rg -Fq "intelli-search:intelli-search: $SKILL_DESCRIPTION" "$E2E_ROOT/codex-prompt.txt"; then
   ok "codex discovers the plugin skill (prompt input listing)"

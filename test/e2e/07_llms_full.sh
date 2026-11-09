@@ -4,7 +4,12 @@
 #
 # Proves the HEAD-probe auto-discovery works by targeting a site known
 # to publish llms-full.txt at the standard /llms-full.txt root path.
-# Verifies the file lands in sources/llms-full-*.md in the cache.
+# Verifies the file lands in sources/llms-full-<target host>.md of the cache
+# entry produced by this run's own research call. A run that finds no such
+# file, or only a small one, has not proven discovery and fails.
+#
+# The research runs in a private, empty workspace (E2E_WORKSPACE when the
+# runner supplies one), never in the repository.
 #
 # Usage:
 #   ./test/07_llms_full.sh
@@ -16,21 +21,20 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CACHE_DIR="$PROJECT_DIR/.e2e-llmsfull"
+CACHE_NAME=".e2e-llmsfull"
 
-LOG_DIR="$PROJECT_DIR/.e2e-logs"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-LOG_FILE="$LOG_DIR/e2e-llmsfull-${TIMESTAMP}.log"
-mkdir -p "$LOG_DIR"
-exec > >(tee -a "$LOG_FILE") 2>&1
-echo "📝 Log: $LOG_FILE"
-
-# Read .env if it exists (gitignored): parsed, never executed, and only the
-# documented keys (see test/e2e/env.sh). Other credentials kept there stay out.
+# shellcheck source=test/e2e/lib.sh
+source "$SCRIPT_DIR/lib.sh"
+# Read .env BEFORE output reaches the retained log: a malformed line must
+# never be echoed into it (see test/e2e/env.sh). The file is parsed, never
+# executed, and only the documented keys are read.
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+e2e_init_log e2e-llmsfull
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "📝 Log: $LOG_FILE"
 
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
   if [ -f "$HOME/.pi/agent/auth.json" ]; then
@@ -51,11 +55,9 @@ if ! command -v pi &>/dev/null; then
   exit 1
 fi
 
-# shellcheck source=/dev/null
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 e2e_setup_loop_model || exit 1
 
-E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
+E2E_EXTENSION_PATH="${E2E_EXTENSION_PATH:-$PROJECT_DIR/dist/index.js}"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 # ═══════════════════════════════════════════════════════════════════
@@ -112,8 +114,11 @@ echo "║  Running intelli_research targeting $FOUND_HOSTNAME"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
-ISO="$(mktemp -d -t pi-e2e-llmsfull-XXXXXX)"
-trap 'rm -rf "$ISO" "$CACHE_DIR"' EXIT
+trap e2e_cleanup EXIT
+ISO=""
+E2E_CWD=""
+e2e_private_dir ISO llmsfull
+e2e_unit_workspace E2E_CWD llmsfull-cwd
 
 mkdir -p "$ISO/sessions"
 
@@ -141,7 +146,7 @@ cat > "$ISO/settings.json" <<EOF
     "extractMaxChars": 150000,
     "extractionMaxTokens": 3000,
     "collationMaxTokens": 4000,
-    "cacheDir": ".e2e-llmsfull"
+    "cacheDir": "$CACHE_NAME"
   }
 }
 EOF
@@ -154,16 +159,17 @@ MEOF
 # discovered hostname. The domains filter is applied at the Sonar search stage
 # and keeps the result set small (maxUrls=1), so the first returned page is
 # almost certainly from the target domain.
-if ! e2e_run_pi "$ISO" "$PROJECT_DIR" "Use intelli_research with maxUrls=1 and domains=[\"$FOUND_HOSTNAME\"] to research: getting started guide"; then
+E2E_EXPECT_ARGS="$(jq -cn --arg host "$FOUND_HOSTNAME" '{maxUrls: 1, domains: [$host]}')"
+E2E_EXPECT_CACHE_DIR="$CACHE_NAME"
+if ! e2e_run_pi "$ISO" "$E2E_CWD" "Use intelli_research with maxUrls=1 and domains=[\"$FOUND_HOSTNAME\"] to research: getting started guide"; then
   echo ""
-  echo "❌ pi failed (no cache sidecar after retries)"
+  echo "❌ pi failed: ${E2E_LAST_VERDICT_REASON:-no completed research after retries}"
   echo "$E2E_LAST_OUTPUT"
   exit 1
 fi
 OUTPUT="$E2E_LAST_OUTPUT"
 
 echo "$OUTPUT"
-rm -rf "$ISO"
 
 # ═══════════════════════════════════════════════════════════════════
 # Verify llms-full.txt landed in the cache
@@ -174,34 +180,9 @@ echo "══ Verification ══════════════════
 
 ERRORS=0
 
-if [ ! -d "$CACHE_DIR" ]; then
-  echo "❌ Cache directory .e2e-llmsfull/ not found"
-  ERRORS=$((ERRORS + 1))
-else
-  # Find llms-full-*.md files anywhere in the cache
-  LLMS_FILES=$(find "$CACHE_DIR" -name "llms-full-*.md" -type f 2>/dev/null || true)
-
-  if [ -z "$LLMS_FILES" ]; then
-    echo "⚠️  No llms-full-*.md file found in cache"
-    echo "   The site may not have llms-full.txt at the standard path,"
-    echo "   or the search returned a different domain."
-    echo ""
-    echo "   Cache contents:"
-    find "$CACHE_DIR" -type f 2>/dev/null | head -20 || echo "   (empty)"
-  else
-    for f in $LLMS_FILES; do
-      SIZE=$(wc -c < "$f" || echo "0")
-      echo "✅ Found: $f (${SIZE} bytes)"
-      if [ "$SIZE" -gt 500 ]; then
-        echo "   Content looks substantial (${SIZE} bytes)"
-        head -c 200 "$f" 2>/dev/null
-        echo ""
-      else
-        echo "   ⚠️  File is small (${SIZE} bytes) — may not be full documentation"
-      fi
-    done
-  fi
-fi
+# Only the entry bound to this run's research call counts (lib.sh). Its
+# llms-full download must belong to the probed target host and be substantial.
+e2e_check_llms_full "$E2E_BOUND_ENTRY" "$FOUND_HOSTNAME" "$FOUND_URL"
 
 echo ""
 if [ "$ERRORS" -gt 0 ]; then

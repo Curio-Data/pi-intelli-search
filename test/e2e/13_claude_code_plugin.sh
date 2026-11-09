@@ -38,9 +38,9 @@ fi
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY CLAUDE_CODE_OAUTH_TOKEN
-LOG_DIR="$PROJECT_DIR/.e2e-logs"
-LOG_FILE="$LOG_DIR/e2e-claude-code-plugin-$(date +%Y%m%d-%H%M%S).log"
+LOG_DIR="${E2E_LOG_ROOT:-$PROJECT_DIR/.e2e-logs}"
 mkdir -p "$LOG_DIR"
+LOG_FILE="$(mktemp "$LOG_DIR/e2e-claude-code-plugin-$(date +%Y%m%d-%H%M%S)-XXXXXX.log")"
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "Log: $LOG_FILE"
 
@@ -107,10 +107,17 @@ if ! jq -e '.authMethod == "oauth_token"' <<<"$AUTH_STATUS" >/dev/null; then
 fi
 ok "isolated profile authenticates with CLAUDE_CODE_OAUTH_TOKEN"
 
-(cd "$PROJECT_DIR" && npm run build:mcp >/dev/null 2>&1)
-mkdir -p "$E2E_ROOT/pack"
-TARBALL="$(cd "$PROJECT_DIR" && npm pack --workspace @curio-data/mcp-intelli-search --pack-destination "$E2E_ROOT/pack" 2>/dev/null | tail -1)"
-TARBALL="$E2E_ROOT/pack/$(basename "$TARBALL")"
+# E2E_MCP_TARBALL names a prepared artefact: no build or pack runs here, so
+# this scenario cannot delete packages/mcp/dist under a concurrent consumer.
+if [[ -n "${E2E_MCP_TARBALL:-}" ]]; then
+  TARBALL="$E2E_MCP_TARBALL"
+  [[ -f "$TARBALL" ]] || { echo "E2E_MCP_TARBALL does not exist: $TARBALL"; exit 1; }
+else
+  (cd "$PROJECT_DIR" && npm run build:mcp >/dev/null 2>&1)
+  mkdir -p "$E2E_ROOT/pack"
+  TARBALL="$(cd "$PROJECT_DIR" && npm pack --workspace @curio-data/mcp-intelli-search --pack-destination "$E2E_ROOT/pack" 2>/dev/null | tail -1)"
+  TARBALL="$E2E_ROOT/pack/$(basename "$TARBALL")"
+fi
 WORK="$E2E_ROOT/bundles"
 node "$PROJECT_DIR/scripts/generate-plugin-bundles.mjs" \
   --mode tarball --output "$WORK" \

@@ -2,42 +2,146 @@
 #
 # test/05_collation_limits.sh — E2E test for collationMaxTokens
 #
-# Proves collationMaxTokens is enforced by running the same single-URL
-# research query twice (back-to-back): first with the default 4000
-# tokens, then with a tight 200-token limit. Compares report sizes to
-# confirm the output was clamped.
+# Runs the same single-URL research twice, once with the default 4000
+# collation tokens and once with a tight 200-token limit, then compares the
+# report sizes to confirm the output was clamped.
+#
+# Each arm searches independently, so the two arms can read different
+# pages. The comparison records each arm's source hashes: a size difference
+# from different content does not by itself isolate the cap. Deterministic
+# tests cover the mechanism; this scenario proves the live wiring.
 #
 # Usage:
-#   ./test/05_collation_limits.sh
+#   ./test/05_collation_limits.sh                 # both arms, then compare
+#   E2E_LIMIT_ARM=default|tight E2E_WORKSPACE=... # one live arm
+#   E2E_LIMIT_ARM=compare \
+#     E2E_COMPARE_DEFAULT_WORKSPACE=... E2E_COMPARE_TIGHT_WORKSPACE=...
+#                                                 # offline comparison only
 #
 # Environment:
-#   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
+#   OPENROUTER_API_KEY   Required for the live arms. Get one from https://openrouter.ai
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CACHE_DEFAULT="$PROJECT_DIR/.e2e-collate-default"
-CACHE_TIGHT="$PROJECT_DIR/.e2e-collate-tight"
+CACHE_NAME_DEFAULT=".e2e-collate-default"
+CACHE_NAME_TIGHT=".e2e-collate-tight"
+# shellcheck source=test/e2e/lib.sh
+source "$SCRIPT_DIR/lib.sh"
+e2e_require_one_case E2E_LIMIT_ARM default tight compare
+ARM="${E2E_LIMIT_ARM:-}"
 
-LOG_DIR="$PROJECT_DIR/.e2e-logs"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-LOG_FILE="$LOG_DIR/e2e-collation-limits-${TIMESTAMP}.log"
-mkdir -p "$LOG_DIR"
-exec > >(tee -a "$LOG_FILE") 2>&1
-echo "📝 Log: $LOG_FILE"
-
-# Load .env if it exists
-# Read .env if it exists (gitignored): parsed, never executed, and only the
-# documented keys (see test/e2e/env.sh). Other credentials kept there stay out.
+# Read .env BEFORE output reaches the retained log: a malformed line must
+# never be echoed into it (see test/e2e/env.sh). The file is parsed, never
+# executed, and only the documented keys are read.
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
-RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-30}"
+e2e_init_log "e2e-collation-limits${ARM:+-$ARM}"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "📝 Log: $LOG_FILE"
+
 # A non-reasoning collation model makes the 200-token comparison measure
 # visible output rather than a reasoning budget. Empty summaries remain failures.
 COLLATE_MODEL="openai/gpt-4.1-mini"
+
+# compare_arms <default_workspace> <tight_workspace> — offline: no provider
+# call, no credentials. Reads each arm's receipt to find the entry that arm's
+# own research call produced; never selects by index or directory order.
+compare_arms() {
+  local ws_default=$1 ws_tight=$2 entry_default entry_tight
+  echo ""
+  echo "══ Comparison ═════════════════════════════════════════════════════════"
+  ERRORS=0
+  entry_default="$(arm_entry "$ws_default" default)" || ERRORS=$((ERRORS + 1))
+  entry_tight="$(arm_entry "$ws_tight" tight)" || ERRORS=$((ERRORS + 1))
+
+  if [ -n "$entry_default" ] && [ -n "$entry_tight" ]; then
+    local report_default="$entry_default/report.md" report_tight="$entry_tight/report.md"
+    if [ -f "$report_default" ] && [ -f "$report_tight" ]; then
+      local size_default size_tight chars_tight
+      size_default=$(wc -c < "$report_default")
+      size_tight=$(wc -c < "$report_tight")
+      chars_tight=$(wc -m < "$report_tight")
+      echo "📄 Default report: ${size_default} bytes (collationMaxTokens=4000)"
+      echo "📄 Tight report:   ${size_tight} bytes, ${chars_tight} chars (collationMaxTokens=200)"
+      report_sources "$entry_default" "$entry_tight"
+
+      if [ "$size_tight" -lt "$size_default" ]; then
+        echo "✅ Tight report is smaller than default (collationMaxTokens enforced)"
+      else
+        echo "❌ Tight report is NOT smaller (${size_tight} >= ${size_default})"
+        ERRORS=$((ERRORS + 1))
+      fi
+
+      # With 200 tokens (≈800 chars at 4 chars/token), the report should be short
+      if [ "$chars_tight" -le 1000 ]; then
+        echo "✅ Tight report ≤1000 chars (collationMaxTokens=200 enforced)"
+      else
+        echo "⚠️  Tight report is ${chars_tight} chars (>1000, may still be correct depending on model)"
+      fi
+
+      echo ""
+      echo "── Default report (first 300 chars) ──"
+      head -c 300 "$report_default" 2>/dev/null || echo "(empty)"
+      echo ""
+      echo "── Tight report (first 300 chars) ──"
+      head -c 300 "$report_tight" 2>/dev/null || echo "(empty)"
+      echo ""
+    else
+      echo "❌ Missing report.md in one or both bound entries"
+      ERRORS=$((ERRORS + 1))
+    fi
+  fi
+
+  echo ""
+  if [ "$ERRORS" -gt 0 ]; then
+    echo "❌ E2E collation-limits comparison FAILED ($ERRORS error(s))"
+    return 1
+  fi
+  echo "✅ E2E collation-limits comparison PASSED (live wiring of collationMaxTokens)"
+}
+
+# arm_entry <workspace> <label> — the entry bound by that arm's verdict.
+arm_entry() {
+  local ws=$1 label=$2 receipt rel
+  receipt="$ws/.e2e-unit/arm.json"
+  if [ ! -f "$receipt" ] || ! jq -e '.status == "pass"' "$receipt" >/dev/null 2>&1; then
+    echo "❌ $label arm has no passing receipt at $receipt" >&2
+    return 1
+  fi
+  rel="$(jq -r '.entryRelative' "$receipt")"
+  if [ ! -f "$ws/$rel/meta.json" ]; then
+    echo "❌ $label arm entry is missing: $ws/$rel" >&2
+    return 1
+  fi
+  printf '%s\n' "$ws/$rel"
+}
+
+# report_sources <entry_default> <entry_tight> — record what each arm read.
+report_sources() {
+  local a b
+  a="$(node "$E2E_VERDICT_HELPER" sources --entry "$1" | jq -c '[.[] | {url, sha256}]')"
+  b="$(node "$E2E_VERDICT_HELPER" sources --entry "$2" | jq -c '[.[] | {url, sha256}]')"
+  echo "🔍 Default arm sources: $a"
+  echo "🔍 Tight arm sources:   $b"
+  if [ "$a" = "$b" ]; then
+    echo "✅ Both arms read identical source content"
+  else
+    echo "⚠️  The arms read different source content: the size difference does not isolate the cap"
+  fi
+}
+
+if [[ "$ARM" == "compare" ]]; then
+  : "${E2E_COMPARE_DEFAULT_WORKSPACE:?E2E_COMPARE_DEFAULT_WORKSPACE is required for E2E_LIMIT_ARM=compare}"
+  : "${E2E_COMPARE_TIGHT_WORKSPACE:?E2E_COMPARE_TIGHT_WORKSPACE is required for E2E_LIMIT_ARM=compare}"
+  compare_arms "$E2E_COMPARE_DEFAULT_WORKSPACE" "$E2E_COMPARE_TIGHT_WORKSPACE"
+  exit $?
+fi
+
+RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-30}"
 
 # ── Check prerequisites ────────────────────────────────────────────
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
@@ -58,17 +162,16 @@ if [ -z "${OPENROUTER_API_KEY:-}" ]; then
   exit 1
 fi
 
-if ! command -v pi &>/dev/null; then
+if ! command -v "${E2E_PI_BIN:-pi}" &>/dev/null; then
   echo "❌ pi is not installed"
   exit 1
 fi
 
-# shellcheck source=/dev/null
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 e2e_setup_loop_model || exit 1
 
-E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
+E2E_EXTENSION_PATH="${E2E_EXTENSION_PATH:-$PROJECT_DIR/dist/index.js}"
 echo "🧪 Extension: $E2E_EXTENSION_PATH"
+trap e2e_cleanup EXIT
 
 # ── Shared prompt ───────────────────────────────────────────────────
 # A small-but-redundant query against content-rich pages gives the collation
@@ -76,26 +179,23 @@ echo "🧪 Extension: $E2E_EXTENSION_PATH"
 # to one official documentation source to limit live-provider load and avoid
 # unrelated, low-quality search results.
 RESEARCH_PROMPT='Use intelli_research with maxUrls=1 and domains=["docs.python.org"] to research: Python data model reference. Use focusPrompt="Extract the data-model details and canonical API terminology."'
+# shellcheck disable=SC2034  # consumed by e2e_run_pi in lib.sh
+E2E_EXPECT_ARGS='{"maxUrls":1,"domains":["docs.python.org"],"focusPrompt":"Extract the data-model details and canonical API terminology."}'
 
-# ═══════════════════════════════════════════════════════════════════
-# Run 1: Default collation limit (4000 tokens)
-# ═══════════════════════════════════════════════════════════════════
-
-echo ""
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║  RUN 1: Default collation (4000 tokens)               ║"
-echo "╚══════════════════════════════════════════════════════╝"
-echo ""
-
-ISO1="$(mktemp -d -t pi-e2e-collim1-XXXXXX)"
-# shellcheck disable=SC2064
-trap "rm -rf $ISO1 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
-
-mkdir -p "$ISO1/sessions"
-
-e2e_write_auth "$ISO1"
-
-cat > "$ISO1/settings.json" <<EOF
+# run_arm <default|tight> <workspace> — one live research with that arm's
+# settings; writes the arm receipt into <workspace>/.e2e-unit/arm.json.
+run_arm() {
+  local arm=$1 ws=$2 agent="" tokens cache_name
+  if [[ "$arm" == default ]]; then tokens=4000; cache_name="$CACHE_NAME_DEFAULT"; else tokens=200; cache_name="$CACHE_NAME_TIGHT"; fi
+  echo ""
+  echo "╔══════════════════════════════════════════════════════╗"
+  echo "║  ARM: ${arm} collation (${tokens} tokens)"
+  echo "╚══════════════════════════════════════════════════════╝"
+  echo ""
+  e2e_private_dir agent "collim-${arm}"
+  mkdir -p "$agent/sessions"
+  e2e_write_auth "$agent"
+  cat > "$agent/settings.json" <<EOF
 {
   "defaultProvider": "$E2E_LOOP_PROVIDER",
   "defaultModel": "$E2E_LOOP_MODEL",
@@ -117,199 +217,52 @@ cat > "$ISO1/settings.json" <<EOF
     "searchRetryAttempts": 4,
     "extractMaxChars": 150000,
     "extractionMaxTokens": 3000,
-    "collationMaxTokens": 4000,
-    "cacheDir": ".e2e-collate-default"
+    "collationMaxTokens": $tokens,
+    "cacheDir": "$cache_name"
   }
 }
 EOF
-
-cat > "$ISO1/models.json" <<'MEOF'
-{}
-MEOF
-
-if ! e2e_run_pi "$ISO1" "$PROJECT_DIR" "$RESEARCH_PROMPT"; then
-  echo ""
-  echo "❌ Run 1 (default) failed (no cache sidecar after retries)"
+  printf '{}\n' > "$agent/models.json"
+  E2E_EXPECT_CACHE_DIR="$cache_name"
+  E2E_ATTEMPT_PREFIX="${arm}-"
+  if ! e2e_run_pi "$agent" "$ws" "$RESEARCH_PROMPT"; then
+    echo "$E2E_LAST_OUTPUT"
+    echo ""
+    echo "❌ ${arm} arm failed: ${E2E_LAST_VERDICT_REASON:-no completed research after retries}"
+    return 1
+  fi
   echo "$E2E_LAST_OUTPUT"
-  exit 1
-fi
-OUTPUT1="$E2E_LAST_OUTPUT"
+  local errors=0
+  ERRORS=0
+  e2e_assert_meta "${arm}: collate model" '.stages.collate.model' "openrouter/$COLLATE_MODEL"
+  e2e_assert_meta "${arm}: outcome" '.outcome' "completed"
+  errors=$ERRORS
+  if [ "$(e2e_meta '.stages.collate.summaryChars // 0')" -gt 0 ] 2>/dev/null; then
+    echo "   ✅ ${arm}: visible synthesis"
+  else
+    echo "   ❌ ${arm}: empty collation summary"
+    errors=$((errors + 1))
+  fi
+  mkdir -p "$ws/.e2e-unit"
+  jq --arg arm "$arm" --argjson errors "$errors" \
+    '. + {arm: $arm, armErrors: $errors} | if $errors > 0 then .status = "arm-fail" else . end' \
+    "$E2E_LAST_VERDICT_FILE" > "$ws/.e2e-unit/arm.json"
+  [ "$errors" -eq 0 ]
+}
 
-echo "$OUTPUT1"
-rm -rf "$ISO1"
-echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run to refill the provider bucket..."
+if [[ -n "$ARM" ]]; then
+  e2e_unit_workspace WS "collim-${ARM}"
+  run_arm "$ARM" "$WS"
+  echo "✅ E2E collation-limits ${ARM} arm PASSED (comparison runs separately)"
+  exit 0
+fi
+
+WS_DEFAULT=""
+WS_TIGHT=""
+e2e_private_dir WS_DEFAULT collim-default-ws
+e2e_private_dir WS_TIGHT collim-tight-ws
+run_arm default "$WS_DEFAULT"
+echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run..."
 sleep "$RUN_GAP_SECONDS"
-
-# ═══════════════════════════════════════════════════════════════════
-# Run 2: Tight collation limit (200 tokens)
-# ═══════════════════════════════════════════════════════════════════
-
-echo ""
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║  RUN 2: Tight collation (200 tokens)                  ║"
-echo "╚══════════════════════════════════════════════════════╝"
-echo ""
-
-ISO2="$(mktemp -d -t pi-e2e-collim2-XXXXXX)"
-# shellcheck disable=SC2064
-trap "rm -rf $ISO2 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
-
-mkdir -p "$ISO2/sessions"
-
-e2e_write_auth "$ISO2"
-
-cat > "$ISO2/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "searchModel": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "$COLLATE_MODEL"
-    },
-    "defaultUrls": 1,
-    "maxUrls": 1,
-    "searchRetryAttempts": 4,
-    "extractMaxChars": 150000,
-    "extractionMaxTokens": 3000,
-    "collationMaxTokens": 200,
-    "cacheDir": ".e2e-collate-tight"
-  }
-}
-EOF
-
-cat > "$ISO2/models.json" <<'MEOF'
-{}
-MEOF
-
-if ! e2e_run_pi "$ISO2" "$PROJECT_DIR" "$RESEARCH_PROMPT"; then
-  echo ""
-  echo "❌ Run 2 (tight) failed (no cache sidecar after retries)"
-  echo "$E2E_LAST_OUTPUT"
-  exit 1
-fi
-OUTPUT2="$E2E_LAST_OUTPUT"
-
-echo "$OUTPUT2"
-rm -rf "$ISO2"
-
-# ═══════════════════════════════════════════════════════════════════
-# Compare report sizes
-# ═══════════════════════════════════════════════════════════════════
-
-echo ""
-echo "══ Comparison ═════════════════════════════════════════════════════════"
-
-ERRORS=0
-
-ENTRY_DEFAULT=$(e2e_completed_cache_entry "$CACHE_DEFAULT")
-ENTRY_TIGHT=$(e2e_completed_cache_entry "$CACHE_TIGHT")
-
-# A missing cache entry usually means the search stage returned a degraded 200
-# (a valid reply with no markdown links), so the pipeline returned early without
-# writing a cache. Distinguish that from a genuine collation bug. The agent
-# paraphrases the tool's wording, so match the underlying signal loosely
-# (this branch only runs when a cache entry is already missing).
-DEGRADED_RE="degraded|parseable links|no usable links|no markdown links|returned no links|without markdown links"
-
-if [ -z "$ENTRY_DEFAULT" ]; then
-  if echo "${OUTPUT1:-}" | grep -qiE "$DEGRADED_RE"; then
-    echo "❌ Default run degraded; verification is incomplete"
-    ERRORS=$((ERRORS + 1))
-  else
-    echo "❌ No cache entry found in .e2e-collate-default/"
-    ERRORS=$((ERRORS + 1))
-  fi
-fi
-
-if [ -z "$ENTRY_TIGHT" ]; then
-  if echo "${OUTPUT2:-}" | grep -qiE "$DEGRADED_RE"; then
-    echo "❌ Tight run degraded; verification is incomplete"
-    ERRORS=$((ERRORS + 1))
-  else
-    echo "❌ No cache entry found in .e2e-collate-tight/"
-    ERRORS=$((ERRORS + 1))
-  fi
-fi
-
-if [ -n "$ENTRY_DEFAULT" ] && [ -n "$ENTRY_TIGHT" ]; then
-  REPORT_DEFAULT="$ENTRY_DEFAULT/report.md"
-  REPORT_TIGHT="$ENTRY_TIGHT/report.md"
-
-  if [ -f "$REPORT_DEFAULT" ] && [ -f "$REPORT_TIGHT" ]; then
-    SIZE_DEFAULT=$(wc -c < "$REPORT_DEFAULT" || echo "0")
-    SIZE_TIGHT=$(wc -c < "$REPORT_TIGHT" || echo "0")
-    CHARS_DEFAULT=$(wc -m < "$REPORT_DEFAULT" || echo "0")
-    CHARS_TIGHT=$(wc -m < "$REPORT_TIGHT" || echo "0")
-
-    jq -e --arg m "openrouter/$COLLATE_MODEL" '.outcome == "completed" and .stages.collate.model == $m and .stages.collate.summaryChars > 0' "$ENTRY_DEFAULT/meta.json" >/dev/null
-    jq -e --arg m "openrouter/$COLLATE_MODEL" '.outcome == "completed" and .stages.collate.model == $m and .stages.collate.summaryChars > 0' "$ENTRY_TIGHT/meta.json" >/dev/null
-    echo "✅ Both runs used $COLLATE_MODEL and produced visible synthesis"
-    echo "📄 Default report: ${SIZE_DEFAULT} bytes, ${CHARS_DEFAULT} chars (collationMaxTokens=4000)"
-    echo "📄 Tight report:   ${SIZE_TIGHT} bytes, ${CHARS_TIGHT} chars (collationMaxTokens=200)"
-
-    if [ "$SIZE_TIGHT" -lt "$SIZE_DEFAULT" ]; then
-      echo "✅ Tight report is smaller than default (collationMaxTokens enforced)"
-    else
-      echo "❌ Tight report is NOT smaller (${SIZE_TIGHT} >= ${SIZE_DEFAULT})"
-      ERRORS=$((ERRORS + 1))
-    fi
-
-    # With 200 tokens (~800 chars at 4 chars/token), the report should be short
-    if [ "$CHARS_TIGHT" -le 1000 ]; then
-      echo "✅ Tight report ≤1000 chars (collationMaxTokens=200 enforced)"
-    else
-      echo "⚠️  Tight report is ${CHARS_TIGHT} chars (>1000, may still be correct depending on model)"
-    fi
-
-    # Extraction files should be similar sizes (extraction settings unchanged)
-    EXTRACT_DIR_DEFAULT="$ENTRY_DEFAULT/extractions"
-    EXTRACT_DIR_TIGHT="$ENTRY_TIGHT/extractions"
-    if [ -d "$EXTRACT_DIR_DEFAULT" ] && [ -d "$EXTRACT_DIR_TIGHT" ]; then
-      FILE_DEFAULT=$(find "$EXTRACT_DIR_DEFAULT" -type f | head -1)
-      FILE_TIGHT=$(find "$EXTRACT_DIR_TIGHT" -type f | head -1)
-      if [ -n "$FILE_DEFAULT" ] && [ -n "$FILE_TIGHT" ]; then
-        SIZE_EXT_DEFAULT=$(wc -c < "$FILE_DEFAULT" || echo "0")
-        SIZE_EXT_TIGHT=$(wc -c < "$FILE_TIGHT" || echo "0")
-        DIFF=$((SIZE_EXT_DEFAULT - SIZE_EXT_TIGHT))
-        # Allow some variance (±30%) since LLM output is non-deterministic
-        if [ "$DIFF" -lt 0 ]; then DIFF=$(( -DIFF )); fi
-        THRESHOLD=$(( SIZE_EXT_DEFAULT * 30 / 100 ))
-        if [ "$DIFF" -le "$THRESHOLD" ]; then
-          echo "✅ Extraction sizes are similar (extraction settings unchanged, as expected)"
-        else
-          echo "⚠️  Extraction sizes differ noticeably (${SIZE_EXT_DEFAULT} vs ${SIZE_EXT_TIGHT})"
-        fi
-      fi
-    fi
-
-    # Show report previews
-    echo ""
-    echo "── Default report (first 300 chars) ──"
-    head -c 300 "$REPORT_DEFAULT" 2>/dev/null || echo "(empty)"
-    echo ""
-    echo "── Tight report (first 300 chars) ──"
-    head -c 300 "$REPORT_TIGHT" 2>/dev/null || echo "(empty)"
-    echo ""
-
-  else
-    echo "❌ Missing report.md in one or both caches"
-    ERRORS=$((ERRORS + 1))
-  fi
-fi
-
-echo ""
-if [ "$ERRORS" -gt 0 ]; then
-  echo "❌ E2E collation-limits test FAILED ($ERRORS error(s))"
-  exit 1
-fi
-
-echo "✅ E2E collation-limits test PASSED — collationMaxTokens is enforced"
+run_arm tight "$WS_TIGHT"
+compare_arms "$WS_DEFAULT" "$WS_TIGHT"

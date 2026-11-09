@@ -25,26 +25,22 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-LOG_DIR="$PROJECT_DIR/.e2e-logs"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-LOG_FILE="$LOG_DIR/e2e-mcp-stdio-${TIMESTAMP}.log"
-mkdir -p "$LOG_DIR"
-exec > >(tee -a "$LOG_FILE") 2>&1
-echo "📝 Log: $LOG_FILE"
-
-# Read .env if it exists (gitignored): parsed, never executed, and only the
-# documented keys (see test/e2e/env.sh). Other credentials kept there stay out.
+# shellcheck source=test/e2e/lib.sh
+source "$SCRIPT_DIR/lib.sh"
+# Read .env BEFORE output reaches the retained log: a malformed line must
+# never be echoed into it (see test/e2e/env.sh). The file is parsed, never
+# executed, and only the documented keys are read.
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+e2e_init_log e2e-mcp-stdio
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "📝 Log: $LOG_FILE"
 
 E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
 
-# shellcheck source=/dev/null
-source "$SCRIPT_DIR/lib.sh"
-# shellcheck disable=SC2034  # consumed by e2e_setup_loop_model in lib.sh
-E2E_LOOP_MODEL_ID="${TEST_MODEL:-}"
+# TEST_MODEL overrides the loop model through e2e_setup_loop_model (lib.sh).
 
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
   if [ -f "$HOME/.pi/agent/auth.json" ]; then
@@ -69,7 +65,10 @@ export OPENROUTER_API_KEY
 e2e_setup_loop_model || exit 1
 
 # ── Build the standalone artifact ──────────────────────────────────
-if [[ "${E2E_SKIP_BUILD:-0}" == "1" ]]; then
+# E2E_MCP_CLI names a prepared, frozen server entry and is never rebuilt.
+if [[ -n "${E2E_MCP_CLI:-}" ]]; then
+  echo "🔨 Using the prepared server: $E2E_MCP_CLI"
+elif [[ "${E2E_SKIP_BUILD:-0}" == "1" ]]; then
   echo "🔨 Using the prebuilt @curio-data/mcp-intelli-search artifact"
 else
   echo "🔨 Building @curio-data/mcp-intelli-search"
@@ -78,16 +77,18 @@ else
     exit 1
   }
 fi
-MCP_CLI="$PROJECT_DIR/packages/mcp/dist/cli.js"
+MCP_CLI="${E2E_MCP_CLI:-$PROJECT_DIR/packages/mcp/dist/cli.js}"
 if [ ! -f "$MCP_CLI" ]; then
   echo "❌ Missing built server: $MCP_CLI"
   exit 1
 fi
 
 # ── Create isolated agent directory and workspace ──────────────────
-ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-mcp-agent-XXXXXX)"
-E2E_CWD="$(mktemp -d -t pi-e2e-mcp-cwd-XXXXXX)"
-trap 'rm -rf "$ISOLATED_AGENT_DIR" "$E2E_CWD"' EXIT
+trap e2e_cleanup EXIT
+ISOLATED_AGENT_DIR=""
+E2E_CWD=""
+e2e_private_dir ISOLATED_AGENT_DIR mcp-agent
+e2e_unit_workspace E2E_CWD mcp-cwd
 WORKSPACE="$E2E_CWD/workspace"
 mkdir -p "$ISOLATED_AGENT_DIR/sessions" "$WORKSPACE"
 
@@ -167,7 +168,7 @@ echo ""
 
 # ── Validate the connection before spending inference quota ────────
 echo "── pi mcp list ───────────────────────────────────────────────────"
-if PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" pi mcp list; then
+if PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" timeout --kill-after=15s 120s "${E2E_PI_BIN:-pi}" mcp list </dev/null; then
   echo "✅ pi connected to the standalone server"
 else
   echo "❌ pi could not connect to the standalone server"
@@ -182,78 +183,27 @@ echo ""
 
 PROMPT='Call the tool mcp__intelli_search__intelli_research with query "the current TypeScript release", maxUrls 1, domains ["typescriptlang.org"] and focusPrompt "the official release announcement, version number and release date". Then answer with the version and the source URL.'
 
-run_pi() {
-  local mode_args=()
-  local trace_extension_args=()
-  if [[ -n "${E2E_TRACE_DIR:-}" ]]; then mode_args=(--mode json); fi
-  if [[ -n "${E2E_TRACE_EXTENSION_PATH:-}" ]]; then
-    trace_extension_args=(-e "${E2E_TRACE_EXTENSION_PATH}")
-  fi
-  (
-    cd "$E2E_CWD"
-    # MCP support lives in pi's built-in extensions; --no-extensions would
-    # disconnect the servers. The isolated profile installs no other
-    # extensions, so the session still loads nothing but the MCP client and
-    # the explicitly requested harness tracer.
-    PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" \
-      timeout --foreground "${E2E_TIMEOUT_SECONDS}s" pi \
-        --no-skills --no-prompt-templates \
-        --no-context-files --no-session \
-        "${trace_extension_args[@]}" "${mode_args[@]}" \
-        -p "$PROMPT" 2>&1
-  )
-}
+# MCP support lives in pi's built-in extensions; --no-extensions would
+# disconnect the servers. The isolated profile installs no other extensions,
+# so the session loads nothing but the MCP client and the optional tracer.
+E2E_PI_FLAGS=(--no-skills --no-prompt-templates --no-context-files --no-session)
+E2E_EXTENSION_PATH=""
+E2E_RESEARCH_TOOL="mcp__intelli_search__intelli_research"
+E2E_VERDICT_WORKSPACE="$WORKSPACE"
+E2E_EXPECT_CACHE_DIR=".search"
+E2E_EXPECT_ARGS='{"query":"the current TypeScript release","maxUrls":1,"domains":["typescriptlang.org"],"focusPrompt":"the official release announcement, version number and release date"}'
 
-OUTPUT=""
-RAN=0
-REF="$(mktemp)"
-for ATTEMPT in 1 2 3; do
-  # The fresh completed sidecar is the verdict regardless of exit code:
-  # `Pi` 1.2.0 print mode exits 1 when the agent-loop summary is
-  # truncated at the output token limit, even after a completed
-  # research. The floor host (15_pi_floor.sh) predates that behaviour
-  # and keeps its exit-0 gate. The predicate matches lib.sh exactly: a
-  # completed outcome with successful fetch and collation, so a degraded
-  # attempt still retries.
-  OUTPUT="$(run_pi)" && ATTEMPT_EC=0 || ATTEMPT_EC=$?
-  if [[ -n "${E2E_TRACE_DIR:-}" ]]; then
-    mkdir -p "${E2E_TRACE_DIR}"
-    printf '%s\n' "$OUTPUT" > "${E2E_TRACE_DIR}/mcp-attempt-${ATTEMPT}.jsonl"
-    if [[ "${E2E_COMPACT_JSON_OUTPUT:-0}" == "1" ]]; then
-      COMPACT="$(printf '%s\n' "$OUTPUT" | e2e_compact_json_output)"
-      if [[ -n "${COMPACT}" ]]; then OUTPUT="${COMPACT}"; fi
-    fi
-  fi
-  if find "$WORKSPACE" -maxdepth 4 -name meta.json -newer "$REF" \
-    -exec jq -e 'select(.outcome == "completed" and .stages.fetch.succeeded > 0 and .stages.collate.summaryChars > 0)' {} \; \
-    -print -quit 2>/dev/null | grep -q '^/'; then
-    RAN=1
-    if [[ "${ATTEMPT_EC}" -eq 124 ]]; then
-      echo "   ⚠️  pi attempt ${ATTEMPT} TIMED OUT after ${E2E_TIMEOUT_SECONDS}s but wrote a fresh completed sidecar; research accepted, agent-loop timeout recorded" >&2
-    elif [[ "${ATTEMPT_EC}" -ne 0 ]]; then
-      echo "   ℹ️  pi attempt ${ATTEMPT} exited ${ATTEMPT_EC} but wrote a fresh completed sidecar; research accepted, nonzero agent-loop exit recorded" >&2
-    fi
-    break
-  fi
-  if [[ "${ATTEMPT_EC}" -eq 124 ]]; then
-    echo "   ⚠️  pi attempt ${ATTEMPT}/3 TIMED OUT after ${E2E_TIMEOUT_SECONDS}s without a fresh completed sidecar" >&2
-  else
-    echo "   ⚠️  pi attempt ${ATTEMPT}/3 exited ${ATTEMPT_EC} without a fresh completed sidecar" >&2
-  fi
-  if [[ "${ATTEMPT}" -lt 3 ]]; then
-    echo "   ⏳ retrying after 30s" >&2
-    sleep 30
-  fi
-done
-rm -f "$REF"
-
-if [[ "$RAN" -ne 1 ]]; then
-  echo "❌ pi failed (no cache sidecar after retries)"
+# The bound research is the verdict regardless of exit code: `Pi` 1.2.0
+# print mode exits 1 when the agent-loop summary is truncated at the output
+# token limit, even after a completed research.
+if ! e2e_run_pi "$ISOLATED_AGENT_DIR" "$E2E_CWD" "$PROMPT" "$E2E_TIMEOUT_SECONDS"; then
+  echo "❌ pi failed: ${E2E_LAST_VERDICT_REASON:-no completed research after retries}"
   echo "--- pi output ---"
-  echo "$OUTPUT"
+  echo "$E2E_LAST_OUTPUT"
   echo "-----------------"
   exit 1
 fi
+OUTPUT="$E2E_LAST_OUTPUT"
 
 echo "$OUTPUT"
 echo ""
@@ -267,7 +217,9 @@ else
   echo "⚠️  No explicit MCP tool mention in output (cache artifacts are authoritative)"
 fi
 
-CACHE_DIR="$(find "$WORKSPACE/.search" -maxdepth 1 -mindepth 1 -type d -name '20*' | head -n 1 || true)"
+# The entry bound to this run's own MCP research call (lib.sh), never the
+# first matching directory.
+CACHE_DIR="$E2E_BOUND_ENTRY"
 if [ -n "$CACHE_DIR" ] && [ -f "$CACHE_DIR/report.md" ] && [ -f "$CACHE_DIR/meta.json" ]; then
   echo "✅ Standalone cache written: $CACHE_DIR"
 else
