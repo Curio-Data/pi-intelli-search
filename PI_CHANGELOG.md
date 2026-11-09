@@ -4,7 +4,7 @@
 
 Native `Pi` extension release notes, generated from the repository `CHANGELOG.md`. Standalone Model Context Protocol (MCP) server release notes remain in that canonical changelog.
 
-## [0.22.0] - 2026-11-06
+## [0.22.0] - 2026-11-09
 
 Research-failure corrective actions. A root cause and corrective action analysis of intermittent research failures found that the default extract and collate model, [_MiniMax_](https://minimax.io) M3, spends the whole output cap on hidden reasoning on some [_OpenRouter_](https://openrouter.ai) serving routes and returns no text or cut-off text. Per-call routing made the failures intermittent. A failed synthesis, or a run in which every extraction failed, then discarded the fetched and extracted work.
 

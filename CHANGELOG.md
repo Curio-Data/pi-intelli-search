@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-## [pi-0.22.0] - 2026-11-06
+## [pi-0.22.0] - 2026-11-09
 
 Research-failure corrective actions. A root cause and corrective action analysis of intermittent research failures found that the default extract and collate model, [_MiniMax_](https://minimax.io) M3, spends the whole output cap on hidden reasoning on some [_OpenRouter_](https://openrouter.ai) serving routes and returns no text or cut-off text. Per-call routing made the failures intermittent. A failed synthesis, or a run in which every extraction failed, then discarded the fetched and extracted work.
 
@@ -43,7 +43,7 @@ Research now retries an exhausted output budget at a doubled cap before failing,
 - When some pages failed to fetch and every fetched page failed extraction, the degraded result's first line named only the fetch failures. It now states both counts.
 - A research run whose evidence or synthesis wrapped a URL in Markdown emphasis, such as `**[form](https://example.com/form)**.`, failed with "Collation provenance validation failed: a prose URL is absent from the supplied evidence": the closing markers were read as part of the URL, so a correct citation did not match its evidence. Validation now removes emphasis closers from evidence and synthesis URLs alike. Balanced parentheses, and a trailing `*` or `_` that closes no open emphasis, stay part of the URL.
 
-## [mcp-0.22.0] - 2026-11-06
+## [mcp-0.22.0] - 2026-11-09
 
 Core behaviour is shared with [pi-0.22.0] and recorded there.
 
