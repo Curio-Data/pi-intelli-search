@@ -829,7 +829,7 @@ describe("tuning validation", () => {
     assert.strictEqual(warnings.length, 1);
     assert.match(warnings[0], /extractionMaxTokens=300000/);
     assert.match(warnings[0], /16 to 128000/);
-    assert.match(warnings[0], /Using the default \(8000\)/);
+    assert.match(warnings[0], /Valid settings from other files still apply; otherwise the built-in default applies/);
   });
 
   it("rejects a non-integer or below-range cap the same way", async () => {

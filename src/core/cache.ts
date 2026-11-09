@@ -5,7 +5,7 @@
 import { mkdir, writeFile, readFile, rename, rm, stat, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveWorkspacePaths } from "./paths.js";
-import { splitFailureMarkerHead } from "./provenance.js";
+import { SOURCE_ASSESSMENT_PREAMBLE, splitFailureMarkerHead } from "./provenance.js";
 import { createHash, randomBytes } from "node:crypto";
 import { failureDetail, sleep, throwIfAborted } from "./util.js";
 import type { FetchedPage, ExtractResult } from "./types.js";
@@ -414,7 +414,7 @@ async function commitStagedArtefacts(
  * The caller MUST hold the per-cache-path lock: suffix allocation and the
  * per-entry renames are serialised by it.
  */
-export async function rotateCacheArtefacts(cachePath: string): Promise<string | null> {
+export async function rotateCacheArtefacts(cachePath: string, displayPath: string = cachePath): Promise<string | null> {
   let entries: string[];
   try {
     entries = await readdir(cachePath);
@@ -462,6 +462,42 @@ export async function rotateCacheArtefacts(cachePath: string): Promise<string | 
   for (const move of moves) {
     await mkdir(dirname(join(archive, move.to)), { recursive: true });
     await rename(move.from, join(archive, move.to));
+  }
+  // Rebase the report's cache references after moving its files. This also
+  // applies to successful reports: their inventory uses the same display root.
+  const reportPath = join(archive, "report.md");
+  const report = await readFile(reportPath, "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return undefined;
+    throw error;
+  });
+  if (report !== undefined) {
+    const archivedDisplay = `${displayPath}.${suffix}`;
+    // Older accepted syntheses can end inside a fence. The final exact
+    // generated preamble, not a heading quoted in model code, ends that body.
+    const inventory = report.lastIndexOf(`\n${SOURCE_ASSESSMENT_PREAMBLE}`);
+    const inventoryStart = inventory < 0 ? -1 : inventory + 1;
+    let lineOffset = 0;
+    let fence: { char: string; length: number } | undefined;
+    const rebased = report.split("\n").map((line) => {
+      if (lineOffset === inventoryStart) fence = undefined;
+      lineOffset += line.length + 1;
+      const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      if (fence) {
+        if (marker && marker[1][0] === fence.char && marker[1].length >= fence.length && !marker[2].trim()) fence = undefined;
+        return line;
+      }
+      if (marker) {
+        fence = { char: marker[1][0], length: marker[1].length };
+        return line;
+      }
+      if (/^(?: {4}|\t)/.test(line)) return line;
+      if (line === `> Cache: ${displayPath}/`) return `> Cache: ${archivedDisplay}/`;
+      for (const entry of ["sources/", "extractions/", "report.md", "rejected-synthesis.json", "attempts/"]) {
+        line = line.replaceAll(`${displayPath}/${entry}`, `${archivedDisplay}/${entry}`);
+      }
+      return line;
+    }).join("\n");
+    if (rebased !== report) await atomicWriteFile(reportPath, rebased);
   }
   return archive;
 }

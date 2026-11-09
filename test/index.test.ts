@@ -769,7 +769,7 @@ describe("auth pre-flight check", () => {
         (n) => n.type === "warning" && n.msg.includes("extractionMaxTokens=300000"),
       );
       assert.strictEqual(tuningWarnings.length, 1, "should warn once about the ignored value");
-      assert.ok(tuningWarnings[0].msg.includes("Using the default (8000)"));
+      assert.ok(tuningWarnings[0].msg.includes("Valid settings from other files still apply"));
     } finally {
       if (savedKey !== undefined) process.env.OPENROUTER_API_KEY = savedKey;
       else delete process.env.OPENROUTER_API_KEY;

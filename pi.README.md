@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1044%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1064%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -215,9 +215,9 @@ The degraded outcomes differ in what they save:
 
 - **`fetch-failed`:** every fetch failed. The result returns the search summary and up to ten failed URLs with their fetch errors, and saves no report or pages.
 - **`extraction-failed`:** pages were fetched but no extraction succeeded. Research saves every fetched page under `sources/` and a failure report, and `details.cachePath` names the folder. The result's **Failed Sources** list, repeated under `## Failed Sources` in `report.md`, names each saved page's path and why its extraction failed. A saved page can be read directly, or passed to `intelli_extract` as content, without fetching it again.
-- **`collate-failed`:** synthesis failed after extraction. Research saves the extractions and pages with a report that names the failure and lists the saved extractions.
+- **`collate-failed`:** synthesis failed after extraction. Research saves the extractions and pages with a report that names the failure and lists the saved extractions. If source validation rejected nonempty synthesis candidates, research also attempts to save them with their rejection reasons in `rejected-synthesis.json`. This is diagnostic text, not accepted evidence; the result names the file only when saved.
 
-When a successful report for the same query already exists from the same UTC date, including one committed by a concurrent run, an `extraction-failed` or `collate-failed` run preserves that report instead: this run's pages and extractions are not saved, `details.cachePath` is empty, and `details.preservedCachePath` names the preserved report's folder. An `extraction-failed` result still lists up to ten failed pages with their reasons. Neither failure outcome is added to the cache index or runs the cache-suggest judge.
+When a successful report for the same query already exists from the same UTC date, including one committed by a concurrent run, an `extraction-failed` or `collate-failed` run preserves that report instead: this run's pages and extractions are not saved, `details.cachePath` is empty, and `details.preservedCachePath` names the preserved report's folder. The preserved report keeps its own metadata; failed-attempt telemetry and any rejected-synthesis diagnostic go in a separate `attempts/attempt-*` folder beneath it. An `extraction-failed` result still lists up to ten failed pages with their reasons. Neither failure outcome is added to the cache index or runs the cache-suggest judge.
 
 Nonempty output that stops at its output cap, shown by finish reason `length` or by a reported token count that reaches the cap, is kept with a truncation warning. `intelli_extract` returns `details.truncated`; research and manual collation mark affected sources in the Source Assessment inventory. A synthesis warning applies to the summary itself. Without either signal, the absence of a warning does not establish completeness, and `outcome: "completed"` does not guarantee complete source coverage.
 
@@ -870,10 +870,10 @@ Each research run writes a cache entry named `<date>-<slug>-<hash>`. The `<hash>
 
 Refresh behaviour:
 
-- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and telemetry sidecar to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set.
+- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and diagnostics to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set. Rotation also attempts to update the archived report's cache references to that sibling. An unclosed code fence in an extraction-failure report's search summary can still leave saved-asset references pointing to the live folder.
 - Archive failure is logged and the completed run can replace canonical files in place; interrupted rotation can leave a partial archive.
 - Supplementary `llms-full-*` documentation downloads stay with the live folder and are not archived.
-- A `no-links` or `fetch-failed` repeat preserves the earlier report, successful or failed, with its extractions, sources and any index entry, and records only the failed attempt in `meta.json`.
+- A `no-links` or `fetch-failed` repeat preserves the earlier report, successful or failed, with its metadata, extractions, sources and any index entry. When telemetry is enabled, the failed attempt is recorded separately in `attempts/attempt-*/meta.json` beneath that cache folder.
 - An `extraction-failed` or `collate-failed` repeat preserves a successful report in the same way, but archives and replaces an earlier `extraction-failed` or `collate-failed` report. A later run recognises a failure report only by its first line, the marker `<!-- intelli-search:extraction-failed -->` or `<!-- intelli-search:collate-failed -->`; the tool result omits the marker. Committing a failure report also removes any index entry for that folder, so the cache index lists only successful reports.
 - The numbered siblings are a same-day safety net, not a versioned archive: copy a report elsewhere if it must be retained long-term.
 

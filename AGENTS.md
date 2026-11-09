@@ -248,7 +248,7 @@ src/
 │   ├── console.ts           # Async-scoped dependency diagnostic suppression
 │   ├── annotations.ts       # Citation harvesting
 │   ├── messages.ts          # Message and appendix builders
-│   ├── provenance.ts        # Evidence validation and deterministic source inventory
+│   ├── provenance.ts        # Evidence validation, Markdown fence and container tracking, source inventory
 │   ├── prompts.ts           # System prompts
 │   ├── progress.ts          # Host-neutral stage progress
 │   ├── telemetry.ts         # Local sidecar with injected identity
@@ -358,6 +358,8 @@ test/
 ├── tsconfig.native-contract.json # Type check for contract tests and generator
 ├── prompts.test.ts
 ├── provenance.test.ts        # Collation provenance validation and failure reports
+├── post-0220-minors.test.ts  # Degraded-repeat attempts, rejected synthesis, archive rebasing, multiline emphasis, settings warning, skill cache text, line-one marker
+├── post-0220-review.test.ts  # List and quote emphasis, list-container fences, generated-inventory boundaries, trimmed-failure guidance
 ├── plugin-bundles.test.ts    # Generated plugin/marketplace shape, pins and drift gate
 ├── package-readmes.test.ts   # README block selection, link rewriting, drift gate and publish swap
 ├── providers.test.ts
@@ -444,7 +446,7 @@ Loaded from `~/.pi/agent/settings.json` and, only for trusted projects, `<projec
 
 ### Cache
 
-Written to `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. A successful same-day repeat archives the previous run's artefact set to a numbered sibling folder (`<slug>.1`, then `.2`; `rotateCacheArtefacts()`, best-effort with a logged fallback to in-place replacement) before committing the new set; `llms-full-*` downloads stay with the live folder. A degraded repeat preserves a prior successful report, extractions, sources and index entry untouched and records only the failed attempt in `meta.json`. Physical paths, including indexes and locks, resolve against `ctx.cwd` rather than the process directory. Prompts, report headers and results use a separate configured display path. `makeCachePath()` returns an absolute physical path; use `displayCachePath()` for native text. Absolute and parent-relative native cache settings remain supported.
+Written to `.search/<date>-<slug>-<hash>/` with `report.md`, `query.txt`, `meta.json`, `extractions/`, `sources/`, and `.index.json`. A successful same-day repeat archives the previous run's artefact set to a numbered sibling folder (`<slug>.1`, then `.2`; `rotateCacheArtefacts()`, best-effort with a logged fallback to in-place replacement) before committing the new set; `llms-full-*` downloads stay with the live folder. A degraded repeat preserves a prior successful report, metadata, extractions, sources and index entry, recording the failed attempt separately under `attempts/attempt-*/meta.json` when telemetry is enabled. Rejected nonempty synthesis candidates are saved best-effort in `rejected-synthesis.json`, beside the failure report or in the separate attempt folder; they are diagnostics, never accepted evidence. Physical paths, including indexes and locks, resolve against `ctx.cwd` rather than the process directory. Prompts, report headers and results use a separate configured display path. `makeCachePath()` returns an absolute physical path; use `displayCachePath()` for native text. Absolute and parent-relative native cache settings remain supported.
 
 Documentation downloads use unique directories below the configured cache root's `.staging/`. No download runs under a cache lock. Writers settle before cleanup in `finally`, including cancellation and cache-write failure. Optional staging setup and cleanup errors are logged without discarding the research result. Native absolute and parent-relative cache settings remain valid, so staging can lie outside the workspace; standalone containment checks are a separate adapter responsibility.
 

@@ -150,7 +150,7 @@ export async function collate(
       // Archive the previous run before committing this one (success path
       // only: the new collation is already in hand). Best-effort: a failure
       // falls back to in-place replacement.
-      await rotateCacheArtefacts(physicalPath).catch((error) => {
+      await rotateCacheArtefacts(physicalPath, cachePath).catch((error) => {
         context.logger.error(`Cache archive failed: ${errMsg(error)}`);
       });
 
