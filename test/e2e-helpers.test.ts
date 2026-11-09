@@ -694,6 +694,9 @@ describe("review corrections, round 2", () => {
       const source = await readFile(file, "utf8");
       assert.doesNotMatch(source, /mktemp "[^"]*XXXXXX\.log"/, `${file}: X run must end the template`);
       assert.match(source, /mktemp --suffix=\.log /);
+      if (file.endsWith("12_plugin_bundles.sh")) {
+        assert.ok(source.indexOf('source "$SCRIPT_DIR/lib.sh"') < source.indexOf("e2e_attach_log"), "12: log helper must be sourced before use");
+      }
     }
   });
 

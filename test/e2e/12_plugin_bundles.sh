@@ -44,14 +44,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# shellcheck source=test/e2e/lib.sh
+source "$SCRIPT_DIR/lib.sh"
+
 LOG_DIR="${E2E_LOG_ROOT:-$PROJECT_DIR/.e2e-logs}"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$(mktemp --suffix=.log "$LOG_DIR/e2e-plugin-bundles-$(date +%Y%m%d-%H%M%S)-XXXXXX")"
 e2e_attach_log
 echo "📝 Log: $LOG_FILE"
 
-# shellcheck source=test/e2e/lib.sh
-source "$SCRIPT_DIR/lib.sh"
 E2E_ROOT="$(mktemp -d "${TMPDIR:-$PROJECT_DIR/.tmp}/intelli-plugin-e2e-XXXXXXXX")"
 echo "📁 Scratch: $E2E_ROOT"
 
