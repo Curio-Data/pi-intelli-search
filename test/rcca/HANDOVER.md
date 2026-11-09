@@ -14,6 +14,12 @@ written at `997c926`.
 `pi-v0.22.0` and `mcp-v0.22.0`); the verification is in `docs/COMPATIBILITY.md` § 0.22.0 Candidate
 Verification. The state below is the pre-release record, kept for history.
 
+**Worktree retained (owner's decision, 2026-11-09).** The branch is merged, but the worktree at
+`/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/rcca-mcp-research-failures` and the remote
+branch are kept until the owner decides to retire them. Its gitignored `.tmp/` (≈1.1 GiB) is
+inventoried in the `CLEANUP.md` files under `evidence/agents/` in the main checkout; it holds no
+real key copies. Retiring it deletes those files, so it needs the owner's approval of that scope.
+
 - **Branch:** `rcca/mcp-research-failures`, worktree
   `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/rcca-mcp-research-failures`. Pushed to
   `origin` (GitHub `Curio-Data/pi-intelli-search`). **Not merged**: `origin/main` is at `7c8ac9f`.
