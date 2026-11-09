@@ -25,7 +25,7 @@ Queries in a batch reach the same sites but almost never the same pages, so shar
 
 The completed [_Codemode_ research handoff study](https://github.com/Curio-Data/pi-intelli-search/blob/archive/codemode-research-handoff/docs/CODEMODE.md) tested a single question on one host and main model. It found that a direct `intelli_research` call is already a single self-contained boundary, and that wrapping the call in a _Codemode_ script (the `Pi` JavaScript tool interface) added 526 input tokens to each conversation's first request and carried them again in the resumption request. The batch feature keeps the direct call and adds no wrapper.
 
-The survey's labels come from one rater on a sample of 30 batches. Its report and data are gitignored evidence in the study worktree (`evidence/agents/20261108T204300Z-research-batch-survey/`), because the data contains client query text; they are to be promoted to the main checkout's `evidence/` before that worktree is retired.
+The survey's labels come from one rater on a sample of 30 batches. Its report and data are kept as gitignored evidence in the main checkout (`evidence/agents/20261108T204300Z-research-batch-survey/`), because the data contains client query text.
 
 ## Interface
 
