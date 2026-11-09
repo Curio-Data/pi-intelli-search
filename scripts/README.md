@@ -1,6 +1,6 @@
 # Scripts
 
-Developer and operator tools for `intelli-search`: download charts, local usage analysis and generated host plugins. These scripts are not part of the published npm package.
+Developer and operator tools for `intelli-search`: download charts, local usage analysis, generated host plugins and the live end-to-end (E2E) runners. These scripts are not part of the published npm package.
 
 ## `plot-downloads.mts`
 
@@ -95,7 +95,7 @@ node scripts/generate-plugin-bundles.mjs --mode tarball \
 
 This command generates bundles only; it does not build, pack, vendor-install or install them into a host. Codex performs no path expansion in plugin MCP configuration, so tarball mode requires the absolute vendor directory at generation time. Claude Code resolves `${CLAUDE_PLUGIN_ROOT}` at launch.
 
-The tested full installation flow is [`test/e2e/12_plugin_bundles.sh`](../test/e2e/12_plugin_bundles.sh): build and pack the MCP workspace, generate local bundles, install the tarball into both vendor directories, then install the marketplaces into isolated host profiles and check connection and skill discovery. It uses dummy credentials, not a copied operator credential store. Set `TMPDIR` beneath the repository's gitignored `.tmp/` on encrypted hosts before running it. Credentialed research is a separate check in scenarios 13 and 14; see [Compatibility](../docs/COMPATIBILITY.md#host-plugins) for evidence classes and limits.
+The tested full installation flow is [`test/e2e/12_plugin_bundles.sh`](../test/e2e/12_plugin_bundles.sh): build and pack the MCP workspace (or take a prepacked tarball from `E2E_MCP_TARBALL`, as the parallel runner supplies), generate local bundles, install the tarball into both vendor directories, then install the marketplaces into isolated host profiles and check connection and skill discovery. It uses dummy credentials, not a copied operator credential store. Set `TMPDIR` beneath the repository's gitignored `.tmp/` on encrypted hosts before running it. Credentialed research is a separate check in scenarios 13 and 14; see [Compatibility](../docs/COMPATIBILITY.md#host-plugins) for evidence classes and limits.
 
 ## `generate-tlds.mjs`
 
@@ -108,6 +108,15 @@ node scripts/generate-tlds.mjs --check .tmp/tlds.txt  # exit 1 on drift
 ```
 
 It rewrites only the version line and the delegated-TLD literal. The `FILE_EXTENSION_TLDS` policy in the same file is maintained by hand and must stay a subset of the delegated set, which `test/util.test.ts` checks. Run the check before a release.
+
+## Live E2E Runners
+
+The live scenarios under `test/e2e/` run through two runners, both of which consume provider quota:
+
+- [`test/run-e2e-parallel.sh`](../test/run-e2e-parallel.sh) runs 25 units concurrently, with comparisons after their arms, from prepacked native and MCP tarballs whose SHA-256 values are supplied (`E2E_NATIVE_TARBALL`, `E2E_NATIVE_SHA256`, `E2E_MCP_TARBALL`, `E2E_MCP_SHA256`). `--dry-run` lists the units; `--prepare-only` installs and verifies the frozen runtimes without starting a scenario. Scenarios 13 and 14 are not included.
+- [`test/run-e2e-all.sh`](../test/run-e2e-all.sh) runs all 15 scripts one at a time from the checkout. Use it, or a single-script run, for scenarios 13 and 14, which require maintainer-owned host logins.
+
+[`AGENTS.md`](../AGENTS.md#live-e2e-runners) is the reference for both: tarball preparation, evidence classes (direct invocation for configuration scenarios 02 to 11, agent-loop routing for 01 and 15), unit isolation, process settlement, credentials, the `PI_OFFLINE` difference between the lanes, provider signals and the recorded acceptance runs. [`test/e2e/analyze-evidence.mjs`](../test/e2e/analyze-evidence.mjs) summarises a run's provider responses and traces.
 
 ## Claude Tool Routing
 
