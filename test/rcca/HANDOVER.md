@@ -1,8 +1,8 @@
-# Branch Handover: `rcca/mcp-research-failures` Before the Provenance Fix
+# Branch Handover: `rcca/mcp-research-failures` Before Release
 
-This note hands the branch to a fresh session. That session fixes one provenance defect on this
-branch, then reviews with the owner how the change affects the changelog and README, then runs a
-prose review. Read this file first, then [RCCA.md](RCCA.md) for the root cause and
+This note records the branch state before release. The provenance defect below is fixed
+(`086283f`) and its documentation impact was agreed with the owner on 2026-11-09; what remains
+is the prose review and the release gates. Read this file first, then [RCCA.md](RCCA.md) for the root cause and
 [FOLLOW-UP.md](FOLLOW-UP.md) for how the follow-up items were built.
 
 Written 2026-11-08 by the orchestrating session (Claude Code, Opus 5.5). It replaces the handover
@@ -12,19 +12,20 @@ written at `997c926`.
 
 - **Branch:** `rcca/mcp-research-failures`, worktree
   `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/rcca-mcp-research-failures`. Pushed to
-  `origin` (GitHub `Curio-Data/pi-intelli-search`). **Not merged**: `main` is at `d2ec506`.
-- **Tip:** the commit that adds this file, on top of `45e6ca5` and `9cf531b` (both described
-  below).
+  `origin` (GitHub `Curio-Data/pi-intelli-search`). **Not merged**: `origin/main` is at `7c8ac9f`.
+- **Tip:** the commit that updates this file, on top of `086283f`, `45e6ca5` and `9cf531b` (all
+  described below).
 - **Version:** both packages at 0.22.0, **unpublished and untagged**. Check with
   `git tag -l '*0.22*'` and `npm view @curio-data/mcp-intelli-search versions`.
-- **`main` checkout:** the owner has an uncommitted edit to `AGENTS.md` § Repository Folders there.
-  Do not touch it. This branch edits `AGENTS.md` only in the Source Structure map.
+- **`main` checkout:** the owner's `AGENTS.md` § Repository Folders edit is committed on local
+  `main`. This branch edits `AGENTS.md` only in the Source Structure map; the trial merge is clean.
 
 ## What This Session Added
 
 | Commit | Change |
 |---|---|
 | `9cf531b` | README Features bullets for the 0.22.0 capabilities (output budget retry, long pages with bounded collation, recoverable failures, code and text sources). Recipes 9 (Large-Context Collation) and 10 (Bounded Time and Spend, the 0.21.0 values), with e2e scenarios R9 and R10 in `test/e2e/10_config_recipes.sh`. The three new keys in the Settings example. A one-paragraph summary at the top of the CHANGELOG `pi-0.22.0` entry. |
+| `086283f` | Provenance URL matching removes Markdown emphasis closers (`**`, `*`, `_`, `__`) identically from evidence and synthesis, keeping balanced parentheses and literal trailing `*`/`_`. Three tests over 20 decorated shapes plus controls. Documented in the CHANGELOG `Fixed` list and `docs/ARCHITECTURE.md` § Collation Evidence; the badge is 1,044. |
 | `45e6ca5` | Budget retries never exceed the model's output limit. `ModelClient.outputLimit()` is optional: native reads the registry entry's `maxTokens`, MCP the catalogue's `top_provider.max_completion_tokens`. `retryCeiling()` lowers only the retry ceiling, never the configured cap. A retry that grows the cap by less than a quarter (`MIN_RETRY_GROWTH`) is skipped. Exhaustion messages name the bound that prevented a larger attempt and give adapter-specific remedies. Token counts come before the advice and any adapter text comes last, because `failureDetail()` cuts a reason at 300 characters from the end. Also fixes the R10 `budgetRetried` jq check. |
 
 Decisions the owner made in this session:
@@ -35,7 +36,7 @@ Decisions the owner made in this session:
 
 ## Next Work, in Order
 
-### 1. Fix the Bold-URL Provenance Defect
+### 1. Fix the Bold-URL Provenance Defect (Done in `086283f`)
 
 `proseUrls()` in `src/core/provenance.ts:63` matches `https?:\/\/[^\s<>"`\]]+`, strips trailing
 `[.,;:!?]+`, then trims an unbalanced `)` only while the string ends in `)`. Evidence containing
@@ -68,7 +69,10 @@ When the fix is committed, tell the reporting session the commit hash. It record
 `docs/CODEMODE.md` on `study/research-handoff-runner`. Find its address with `ListAgents`; the
 report arrived from `research-handoff-runner-e8`. If it is gone, tell the owner instead.
 
-### 2. Judge the Documentation Impact With the Owner
+### 2. Judge the Documentation Impact With the Owner (Done)
+
+Agreed on 2026-11-09: a `Fixed` bullet, one sentence in `docs/ARCHITECTURE.md`, the badge, and
+no README or skill change. The original instruction follows.
 
 Once the fix is complete, go through the CHANGELOG `pi-0.22.0` entry (a `Fixed` item is likely)
 and the README with the owner, and decide together what changes. The owner expects the impact to

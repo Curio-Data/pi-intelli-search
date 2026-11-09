@@ -38,6 +38,7 @@ Research now retries an exhausted output budget at a doubled cap instead of fail
 ### Fixed
 
 - When some pages failed to fetch and every fetched page failed extraction, the degraded result's first line named only the fetch failures. It now states both counts.
+- A research run whose evidence or synthesis wrapped a URL in Markdown emphasis, such as `**[form](https://example.com/form)**.`, could end as `collate-failed`: the closing markers were read as part of the URL, so a correct citation did not match its evidence. Validation now removes emphasis closers from evidence and synthesis URLs alike. Balanced parentheses and a literal trailing `*` or `_` stay part of the URL.
 
 ## [0.21.0] - 2026-11-03
 
