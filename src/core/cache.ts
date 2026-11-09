@@ -5,7 +5,7 @@
 import { mkdir, writeFile, readFile, rename, rm, stat, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveWorkspacePaths } from "./paths.js";
-import { splitFailureMarkerHead } from "./provenance.js";
+import { SOURCE_ASSESSMENT_PREAMBLE, splitFailureMarkerHead } from "./provenance.js";
 import { createHash, randomBytes } from "node:crypto";
 import { failureDetail, sleep, throwIfAborted } from "./util.js";
 import type { FetchedPage, ExtractResult } from "./types.js";
@@ -472,8 +472,15 @@ export async function rotateCacheArtefacts(cachePath: string, displayPath: strin
   });
   if (report !== undefined) {
     const archivedDisplay = `${displayPath}.${suffix}`;
+    // Older accepted syntheses can end inside a fence. The final exact
+    // generated preamble, not a heading quoted in model code, ends that body.
+    const inventory = report.lastIndexOf(`\n${SOURCE_ASSESSMENT_PREAMBLE}`);
+    const inventoryStart = inventory < 0 ? -1 : inventory + 1;
+    let lineOffset = 0;
     let fence: { char: string; length: number } | undefined;
     const rebased = report.split("\n").map((line) => {
+      if (lineOffset === inventoryStart) fence = undefined;
+      lineOffset += line.length + 1;
       const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
       if (fence) {
         if (marker && marker[1][0] === fence.char && marker[1].length >= fence.length && !marker[2].trim()) fence = undefined;

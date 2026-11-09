@@ -30,12 +30,37 @@ function displayHostname(url: string): string {
   }
 }
 
+/** The generated inventory boundary also identifies legacy reports during rotation. */
+export const SOURCE_ASSESSMENT_PREAMBLE =
+  "## Source assessment\n\n" +
+  "Source inventory is generated from this run's successful, non-empty extractions, not from search citations. Cross-links in synthesis are not additional fetched sources. Types are extraction metadata, not independent quality ratings.\n\n";
+
+/** Close only a still-open model fence before appending generated report sections. */
+function closeOpenFence(text: string): string {
+  let fence: { char: string; length: number } | undefined;
+  for (const line of text.split("\n")) {
+    const match = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (!match) continue;
+    if (!fence) fence = { char: match[1][0], length: match[1].length };
+    else if (match[1][0] === fence.char && match[1].length >= fence.length && !match[2].trim()) fence = undefined;
+  }
+  return fence ? `${text}\n${fence.char.repeat(fence.length)}` : text;
+}
+
 function withoutCodeBlocks(text: string): string {
   let fence: { char: string; length: number } | undefined;
+  let listIndent = 0;
+  let afterBlank = false;
   return text
     .split("\n")
     .map((line) => {
-      const match = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      const item = !fence && line.match(/^ {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+/);
+      if (item) listIndent = item[0].length;
+      else if (!fence && ((afterBlank && line.trim() && !line.startsWith(" ".repeat(listIndent))) || /^ {0,3}(?:#{1,6}(?:\s|$)|>)/.test(line))) listIndent = 0;
+      const content = item ? line.slice(item[0].length)
+        : listIndent && line.startsWith(" ".repeat(listIndent)) ? line.slice(listIndent) : line;
+      afterBlank = !line.trim();
+      const match = content.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
       if (fence) {
         if (
           match &&
@@ -50,7 +75,7 @@ function withoutCodeBlocks(text: string): string {
         fence = { char: match[1][0], length: match[1].length };
         return "";
       }
-      return /^(?: {4}|\t)/.test(line) ? "" : line;
+      return /^(?: {4}|\t)/.test(content) ? "" : line;
     })
     .join("\n");
 }
@@ -67,6 +92,67 @@ function isPunctuation(char: string | undefined): boolean {
   return char !== undefined && /[\p{P}\p{S}]/u.test(char);
 }
 
+/** Keep the current inline paragraph, including list/quote continuations.
+ * Container markers are structural, not emphasis delimiters. A new item or
+ * quote depth starts a new paragraph; lazy continuation lines retain it. */
+function emphasisPrefix(text: string, urlIndex: number): string {
+  const prefix = text.slice(0, urlIndex);
+  const lines = prefix.split("\n");
+  let paragraph = "";
+  let listIndent = 0;
+  let quoteDepth = 0;
+  let fence: { char: string; length: number } | undefined;
+  for (const [index, rawLine] of lines.entries()) {
+    const completeLine = index < lines.length - 1;
+    let line = rawLine;
+    let depth = 0;
+    let quote: RegExpMatchArray | null;
+    while ((quote = line.match(/^ {0,3}>[ \t]?/))) {
+      depth++;
+      line = line.slice(quote[0].length);
+    }
+    if (depth && depth !== quoteDepth) {
+      paragraph = "";
+      listIndent = 0;
+    }
+    if (depth) quoteDepth = depth;
+    if (completeLine && !line.trim()) {
+      paragraph = "";
+      listIndent = 0;
+      quoteDepth = depth;
+      continue;
+    }
+    const item = line.match(/^( *)(?:[-+*]|\d{1,9}[.)])[ \t]+/);
+    const thematic = /^ {0,3}(?:([-*_])(?:[ \t]*\1){2,})[ \t\r]*$/.test(line);
+    if (item && !thematic && (item[1].length <= 3 || listIndent > 0)) {
+      paragraph = "";
+      listIndent = item[0].length;
+      line = line.slice(listIndent);
+    } else if (listIndent && line.startsWith(" ".repeat(listIndent))) {
+      line = line.slice(listIndent);
+    }
+    const fenceMarker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (fenceMarker && fenceMarker[1][0] === fence.char && fenceMarker[1].length >= fence.length && !fenceMarker[2].trim()) fence = undefined;
+      paragraph = "";
+      continue;
+    }
+    if (completeLine && fenceMarker) {
+      fence = { char: fenceMarker[1][0], length: fenceMarker[1].length };
+      paragraph = "";
+      continue;
+    }
+    const blockStart = thematic || /^(?: {4}|\t| {0,3}(?:#{1,6}(?:\s|$)|`{3,}|~{3,}|=+[ \t\r]*$))/.test(line);
+    if (blockStart) {
+      paragraph = completeLine ? "" : line;
+      if (completeLine) listIndent = 0;
+      continue;
+    }
+    paragraph += line + (completeLine ? "\n" : "");
+  }
+  return paragraph;
+}
+
 /**
  * Return closers for emphasis delimiters still open at a URL. Pairing omits CommonMark's
  * rule of three: surplus trailing markers stay URL content, keeping literal `*`/`_` resources
@@ -75,21 +161,7 @@ function isPunctuation(char: string | undefined): boolean {
 function markdownEmphasisCloser(text: string, urlIndex: number, url: string): string {
   const trailing = url.match(/[*_]+$/)?.[0];
   if (!trailing) return "";
-  // Include soft line breaks in ordinary paragraphs. Stop conservatively at
-  // block boundaries so an unrelated heading/list/code opener cannot strip a
-  // literal suffix from the URL. Same-line handling remains unchanged.
-  const prefix = text.slice(0, urlIndex);
-  let paragraphStart = 0;
-  let offset = 0;
-  for (const line of prefix.split("\n")) {
-    const completeLine = offset + line.length < prefix.length;
-    const blockStart = /^(?: {4}|\t| {0,3}(?:#{1,6}(?:\s|$)|>|`{3,}|~{3,}|(?:[-+*]|\d+[.)])\s|(?:[-*_]\s*){3,}$))/.test(line);
-    if ((completeLine && !line.trim()) || blockStart) {
-      paragraphStart = completeLine ? offset + line.length + 1 : offset;
-    }
-    offset += line.length + 1;
-  }
-  const rawBefore = prefix.slice(paragraphStart);
+  const rawBefore = emphasisPrefix(text, urlIndex);
   // Mask URLs and inline code while preserving offsets: their delimiters are content.
   const before = rawBefore
     .replace(/https?:\/\/[^\s<>"`\]]+/g, (match) => " ".repeat(match.length))
@@ -313,8 +385,8 @@ export function finalizeCollation(
     if (!identity.extractionFileFor(source.url)) invalid("an evidence source has no extraction file");
   }
   return (
-    `## Summary\n\n${summary}\n\n## Source assessment\n\n` +
-    "Source inventory is generated from this run's successful, non-empty extractions, not from search citations. Cross-links in synthesis are not additional fetched sources. Types are extraction metadata, not independent quality ratings.\n\n" +
+    `## Summary\n\n${closeOpenFence(summary)}\n\n` +
+    SOURCE_ASSESSMENT_PREAMBLE +
     sourceTable(sources, cachePath, identity, evidence)
   );
 }
@@ -481,7 +553,7 @@ function failureReportHead(heading: string, marker: string, reason: string): str
 
 /**
  * Report body for a research run whose collation failed after extraction
- * succeeded. No synthesis exists, so the body states the failure and lists the
+ * succeeded. No accepted synthesis exists, so the body states the failure and lists the
  * saved extractions; their files carry the paid-for content.
  */
 export function collationFailureReport(
@@ -496,7 +568,7 @@ export function collationFailureReport(
   return (
     failureReportHead("Collation Failed", COLLATION_FAILED_MARKER, reason) +
     (inputTrimmed
-      ? `No synthesis was accepted. The ${sources.length} extraction(s) below were saved. Read the saved extraction files to recover omitted text; review the input limits listed in the trim notice before another collation.\n\n`
+      ? `No synthesis was ${synthesisRejected ? "accepted" : "produced"}. The ${sources.length} extraction(s) below were saved. Read the saved extraction files to recover omitted text. A repeat may recover synthesis after a transient failure, but does not recover text omitted by the input limits. The trim notice names those limits.\n\n`
       : `No synthesis was ${synthesisRejected ? "accepted" : "produced"}. The ${sources.length} extraction(s) below were saved; read the extraction files directly, or re-run the research.\n\n`) +
     "## Source assessment\n\n" +
     sourceTable(sources, cachePath, identity, "fetched")
