@@ -215,6 +215,11 @@ plugins/                    # Generated Claude Code and Codex bundles (manifests
 │   ├── report.md                              # Synthesis + authoritative source inventory
 │   ├── query.txt                              # Original search query
 │   ├── meta.json                              # Local-only telemetry sidecar (v0.11.0+)
+│   ├── rejected-synthesis.json                # Rejected synthesis candidates (collate-failed, diagnostic only)
+│   ├── attempts/                              # Failed same-day repeats beside a preserved report
+│   │   └── attempt-<id>/                      # One failed repeat (random suffix)
+│   │       ├── meta.json                      # Its telemetry (when enabled)
+│   │       └── rejected-synthesis.json        # Its rejected candidates, if any
 │   ├── extractions/                           # Per-page LLM extractions (≈3-5K each)
 │   │   ├── 01-developers-cloudflare-com.md
 │   │   └── 02-developers-cloudflare-com.md

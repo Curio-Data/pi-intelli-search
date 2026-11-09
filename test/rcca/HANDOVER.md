@@ -12,13 +12,43 @@ written at `997c926`.
 
 **Released 2026-11-09.** Both packages are published at 0.22.0 from merge commit `71cce34` (tags
 `pi-v0.22.0` and `mcp-v0.22.0`); the verification is in `docs/COMPATIBILITY.md` § 0.22.0 Candidate
-Verification. The state below is the pre-release record, kept for history.
+Verification. The two paragraphs that follow are current. The bullets after the open-limits list are
+the pre-release record, kept for history.
 
 **Worktree retained (owner's decision, 2026-11-09).** The branch is merged, but the worktree at
 `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/rcca-mcp-research-failures` and the remote
 branch are kept until the owner decides to retire them. Its gitignored `.tmp/` (≈1.1 GiB) is
 inventoried in the `CLEANUP.md` files under `evidence/agents/` in the main checkout; it holds no
 real key copies. Retiring it deletes those files, so it needs the owner's approval of that scope.
+
+**Post-release minors (2026-11-09).** Branch `fix/post-0220-minors` fixes the seven minors listed
+under § 4 other than the ≈14-minute worst case per degraded page. It accepts that item with
+reasons, together with two notes from the earlier handover (`997c926`): the blank first line on a
+hand-edited failure report and the top-level-domain list's version-only drift. The fixes are
+unreleased, under `CHANGELOG.md` `Unreleased`. The builder's report is
+`evidence/agents/2026-11-09-post-release/reports/post-0220-minors.md`. Round three, final
+acceptance at `c752509` and the promoted receipts are under
+`evidence/agents/2026-11-09-post-0220-adversarial-r3/`; rounds one and two are in
+`evidence/agents/2026-11-09-post-0220-adversarial/` and `…-adversarial-r2/`. Open limits after
+that branch, not fixed by it:
+
+1. An unclosed code fence in the search summary of an `extraction-failed` report can hide
+   Inferred Assets and Failed Sources when rendered, and archived inferred-asset links can still
+   name the live folder.
+2. Tab-indented list markers and some deeply nested list or rule shapes can still differ from
+   renderer behaviour; the fence tracker is not a full list-indent stack.
+3. Some quoted code examples with unfetched illustrative URLs are still validated as prose and
+   rejected. This predates the branch.
+4. A delayed completed run can overwrite the canonical `meta.json` after a newer completed run
+   owns the report (reviewer-observed with an injected interleaving, not re-run by the
+   coordinator).
+5. The native skill still names hidden `details` fields for manual extraction, truncation and
+   inferred assets; only the cache-path instruction was fixed.
+6. Emphasis inside HTML comments or tables, hand-edited CRLF headers, rotation I/O failures after
+   the move and stale diagnostics after a failed rotation remain follow-ups. Attempt folders are
+   never pruned.
+
+Pre-release record:
 
 - **Branch:** `rcca/mcp-research-failures`, worktree
   `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/rcca-mcp-research-failures`. Pushed to
@@ -114,20 +144,22 @@ Keep these known constraints in the brief:
 
 ### 4. Release Gates and Decisions
 
-These are unchanged from the earlier handover, and each is the owner's call:
+These are carried from the earlier handover, and each is the owner's call:
 
 - **Publish order.** The committed plugin bundles pin `@curio-data/mcp-intelli-search@0.22.0`,
   served from the repository marketplaces. Publish before, or together with, the merge.
 - **Full live suite.** Run `./test/run-e2e-all.sh` on the final tip. Decide on scenarios 13 and 14
   (14 needs the dedicated Codex login) and 15.
 - **Compatibility.** Add a 0.22.0 entry to `docs/COMPATIBILITY.md`.
-- **Unfixed minors.** The list from the earlier handover: degraded rerun overwrites the good
-  `meta.json`; rejected `collate-failed` synthesis not kept; native settings warning names the
-  built-in default; skill cites `details.cachePath`; archived failure report names live `sources/`
-  paths; `collate-failed` advice versus the trim notice; ≈14-minute worst case per degraded page.
-  The text is at `997c926:test/rcca/HANDOVER.md`. Added by `prose-r7`: emphasis that wraps a
-  line break around a URL (`**Form:` then the URL and `**` on the next line) is still rejected,
-  because closers are matched only within the URL's line; it has no test.
+- **Unfixed minors.** After release, `fix/post-0220-minors` fixed all of these except the
+  ≈14-minute worst case, which it accepted (see § State). The list from the earlier handover:
+  degraded rerun overwrites the good `meta.json`; rejected `collate-failed` synthesis not kept;
+  native settings warning names the built-in default; skill cites `details.cachePath`; archived
+  failure report names live `sources/` paths; `collate-failed` advice versus the trim notice;
+  ≈14-minute worst case per degraded page. The text is at `997c926:test/rcca/HANDOVER.md`. Added
+  by `prose-r7`: emphasis that wraps a line break around a URL (`**Form:` then the URL and `**`
+  on the next line) is still rejected, because closers are matched only within the URL's line; it
+  has no test.
 
 ## Verification at `45e6ca5`
 
