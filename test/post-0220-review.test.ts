@@ -108,6 +108,25 @@ it("keeps a truncated open fence outside generated inventories on success and ar
   }
 });
 
+it("closes unfinished list fences inside their container and stops at container exit", () => {
+  for (const [opening, indent] of [
+    ["- Example:\n\n  ```js\n  call();", "  "],
+    ["1. Example:\n   ```js\n   call();", "   "],
+    ["- ```js\n  call();", "  "],
+    ["  ```js\ncall();", "  "],
+  ]) {
+    const result = finish(opening);
+    assert.ok(result.includes(`call();\n${indent}\`\`\`\n\n## Source assessment`), opening);
+  }
+  const ended = `- Example:\n    \`\`\`js\n    call();\n${url}`;
+  const result = finish(ended);
+  assert.ok(
+    result.includes(`${url}\n\n## Source assessment`),
+    "no stray closer after the list ended",
+  );
+  assert.throws(() => finish(ended.replace(url, "https://unfetched.example/path")), /absent/);
+});
+
 it("rebases legacy unclosed reports at the generated inventory, not a quoted heading", async (t) => {
   const root = await workspace(t);
   const live = join(root, "run");

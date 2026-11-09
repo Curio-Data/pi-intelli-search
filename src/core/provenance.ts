@@ -37,23 +37,32 @@ export const SOURCE_ASSESSMENT_PREAMBLE =
 
 /** Close only a still-open model fence before appending generated report sections. */
 function closeOpenFence(text: string): string {
-  let fence: { char: string; length: number } | undefined;
-  for (const line of text.split("\n")) {
-    const match = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
-    if (!match) continue;
-    if (!fence) fence = { char: match[1][0], length: match[1].length };
-    else if (match[1][0] === fence.char && match[1].length >= fence.length && !match[2].trim()) fence = undefined;
-  }
-  return fence ? `${text}\n${fence.char.repeat(fence.length)}` : text;
+  const { fence } = codeBlockView(text);
+  return fence ? `${text}\n${fence.prefix}${fence.char.repeat(fence.length)}` : text;
 }
 
 function withoutCodeBlocks(text: string): string {
-  let fence: { char: string; length: number } | undefined;
+  return codeBlockView(text).prose;
+}
+
+/** Share fence/container state between validation and final report rendering. */
+function codeBlockView(text: string): {
+  prose: string;
+  fence?: { char: string; length: number; indent: number; prefix: string };
+} {
+  let fence: { char: string; length: number; indent: number; prefix: string } | undefined;
   let listIndent = 0;
   let afterBlank = false;
-  return text
+  const prose = text
     .split("\n")
     .map((line) => {
+      // A list's fenced block ends with its container, unlike a top-level
+      // fence. Dedented prose must return to provenance validation.
+      if (fence?.indent && line.trim() && !line.startsWith(" ".repeat(fence.indent))) {
+        fence = undefined;
+        listIndent = 0;
+      }
+      if (!fence && listIndent && !line.startsWith(" ".repeat(listIndent)) && /^ {0,3}(?:`{3,}|~{3,})/.test(line)) listIndent = 0;
       const item = !fence && line.match(/^ {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+/);
       if (item) listIndent = item[0].length;
       else if (!fence && ((afterBlank && line.trim() && !line.startsWith(" ".repeat(listIndent))) || /^ {0,3}(?:#{1,6}(?:\s|$)|>)/.test(line))) listIndent = 0;
@@ -72,12 +81,16 @@ function withoutCodeBlocks(text: string): string {
         return "";
       }
       if (match) {
-        fence = { char: match[1][0], length: match[1].length };
+        fence = {
+          char: match[1][0], length: match[1].length, indent: listIndent,
+          prefix: " ".repeat(listIndent) + (content.match(/^ */)?.[0] ?? ""),
+        };
         return "";
       }
       return /^(?: {4}|\t)/.test(content) ? "" : line;
     })
     .join("\n");
+  return { prose, fence };
 }
 
 function withoutInlineCode(text: string): string {

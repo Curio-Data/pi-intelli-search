@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1063%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1064%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -870,7 +870,7 @@ Each research run writes a cache entry named `<date>-<slug>-<hash>`. The `<hash>
 
 Refresh behaviour:
 
-- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and diagnostics to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set. The archived report's cache references are updated to that sibling.
+- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and diagnostics to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set. Rotation also attempts to update the archived report's cache references to that sibling. An unclosed code fence in an extraction-failure report's search summary can still leave saved-asset references pointing to the live folder.
 - Archive failure is logged and the completed run can replace canonical files in place; interrupted rotation can leave a partial archive.
 - Supplementary `llms-full-*` documentation downloads stay with the live folder and are not archived.
 - A `no-links` or `fetch-failed` repeat preserves the earlier report, successful or failed, with its metadata, extractions, sources and any index entry. When telemetry is enabled, the failed attempt is recorded separately in `attempts/attempt-*/meta.json` beneath that cache folder.

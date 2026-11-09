@@ -8,9 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Fixed
 
-- Shared core: provenance matching accepts Markdown emphasis spanning soft line breaks in paragraphs, list items and blockquotes, while keeping literal URL suffixes and separate blocks distinct.
+- Shared core: provenance matching accepts Markdown emphasis spanning soft line breaks in paragraphs, list items and blockquotes, while keeping literal URL suffixes distinct across paragraph, list-item, heading and code-block boundaries.
 - Shared core: a failed collation after input trimming distinguishes absent synthesis from rejected text. Recovery guidance separates reading omitted input from retrying synthesis after a transient failure.
-- Shared core: degraded repeats keep the preserved report's metadata and write failed-attempt telemetry separately under `attempts/attempt-*/meta.json`. Rejected nonempty synthesis candidates are retained best-effort as diagnostics in `rejected-synthesis.json`, never as accepted evidence. Archived reports point to their own cache files rather than the live folder, including generated inventories after an unclosed synthesis code fence. New synthesis output closes an unfinished code fence before the generated inventory.
+- Shared core: degraded repeats keep the preserved report's metadata and write failed-attempt telemetry separately under `attempts/attempt-*/meta.json`. Rejected nonempty synthesis candidates are retained best-effort as diagnostics in `rejected-synthesis.json`, never as accepted evidence.
+- Shared core: archive rotation rebases cache references to the numbered sibling, including completed reports' generated inventories after an unclosed synthesis code fence. New synthesis output keeps generated inventories outside unfinished top-level or list code fences. An unclosed search-summary fence in an extraction-failure report remains a limitation: its archived saved-asset references can still point to the live folder.
 - Native `Pi`: settings warnings no longer claim the built-in default is active when a valid setting from another file survives. Cache-recovery skill guidance uses model-visible result text instead of hidden `details` fields.
 
 ## [pi-0.22.0] - 2026-11-09
