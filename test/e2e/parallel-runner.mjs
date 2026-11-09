@@ -143,6 +143,9 @@ export function workerEnvironment(unit, paths, allPaths, artifacts, base = proce
   for (const key of ["E2E_RUN_GAP_SECONDS", "E2E_GAP_SECONDS"])
     if (base[key] !== undefined) env[key] = base[key];
   if (unit.kind === "provider") {
+    env.E2E_TOOL_ALLOWLIST = unit.id === "11_mcp_stdio"
+      ? "mcp__intelli_search__intelli_research"
+      : "intelli_research";
     env.E2E_TIMEOUT_SECONDS = String(unit.budget.attemptSeconds);
     env.E2E_RETRY_SLEEP_SECONDS = String(unit.budget.retrySeconds);
     env.E2E_KILL_AFTER_SECONDS = String(unit.budget.killSeconds);

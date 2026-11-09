@@ -351,7 +351,7 @@ e2e_run_pi() {
   local verdict_ws="${E2E_VERDICT_WORKSPACE:-$cwd}"
   local cache_dir="${E2E_EXPECT_CACHE_DIR:-.search}"
   local attempt_dir="${E2E_ATTEMPT_DIR:-${E2E_TRACE_DIR:-}}"
-  local host_flags=() extension_args=() trace_extension_args=() mode_args=() verdict_args=() path_prefix=""
+  local host_flags=() extension_args=() trace_extension_args=() mode_args=() verdict_args=() tool_args=() path_prefix=""
   if [[ -z "$attempt_dir" ]]; then
     echo "e2e_run_pi: no attempt directory (call e2e_init_log or set E2E_TRACE_DIR)" >&2
     return 3
@@ -365,6 +365,7 @@ e2e_run_pi() {
   if [[ -n "${E2E_TRACE_EXTENSION_PATH:-}" ]]; then
     trace_extension_args=(-e "${E2E_TRACE_EXTENSION_PATH}")
   fi
+  if [[ -n "${E2E_TOOL_ALLOWLIST:-}" ]]; then tool_args=(--tools "${E2E_TOOL_ALLOWLIST}"); fi
   if [[ "${E2E_JSON_MODE:-1}" == "1" ]]; then
     mode_args=(--mode json)
     verdict_args=(--trace)
@@ -398,7 +399,7 @@ e2e_run_pi() {
       PATH="${path_prefix}${PATH}" \
       PI_CODING_AGENT_DIR="$agent" \
         timeout --kill-after="${E2E_KILL_AFTER_SECONDS:-15}s" "${tmo}s" "$host_bin" \
-          "${host_flags[@]}" "${extension_args[@]}" "${trace_extension_args[@]}" "${mode_args[@]}" \
+          "${host_flags[@]}" "${extension_args[@]}" "${trace_extension_args[@]}" "${mode_args[@]}" "${tool_args[@]}" \
           -p "${prompt}" </dev/null >"$trace" 2>"$err"
     ) && ec=0 || ec=$?
     E2E_LAST_EXIT_CODE="${ec}"

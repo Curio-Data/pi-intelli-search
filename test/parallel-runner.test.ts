@@ -363,6 +363,9 @@ it("passes isolated environment and exact decomposition hooks without inherited 
   assert.equal(floor.E2E_TIMEOUT_SECONDS, "600");
   assert.equal(floor.E2E_RETRY_SLEEP_SECONDS, "30");
   assert.equal(floor.E2E_KILL_AFTER_SECONDS, "15");
+  assert.equal(floor.E2E_TOOL_ALLOWLIST, "intelli_research");
+  const mcp = workerEnvironment(manifest.units.find((unit) => unit.id === "11_mcp_stdio"), paths, new Map(), artifacts, base);
+  assert.equal(mcp.E2E_TOOL_ALLOWLIST, "mcp__intelli_search__intelli_research");
 });
 
 it("hashes the full graph, seals permissions and detects same-sized content tampering", async () => {
