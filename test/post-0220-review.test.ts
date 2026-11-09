@@ -125,6 +125,17 @@ it("closes unfinished list fences inside their container and stops at container 
     "no stray closer after the list ended",
   );
   assert.throws(() => finish(ended.replace(url, "https://unfetched.example/path")), /absent/);
+  for (const rule of ["* * *", "- - -"]) {
+    const text = `Facts [S1].\n\n${rule}\n  \`\`\`bash\ncurl https://unfetched.example/code\n  \`\`\`\nEnd [S1].`;
+    const rendered = finish(text);
+    assert.ok(rendered.includes("End [S1].\n\n## Source assessment"));
+  }
+  // After a list exits, its apparent closer is a new top-level fence. The
+  // following URL renders as code; without that fence it must be validated.
+  const orphanCloser =
+    "- Example:\n\n  ```python\n  call();\n\nprint()\n  ```\n\nSee https://unfetched.example/code";
+  assert.doesNotThrow(() => finish(orphanCloser));
+  assert.throws(() => finish(orphanCloser.replace("print()\n  ```", "print()")), /absent/);
 });
 
 it("rebases legacy unclosed reports at the generated inventory, not a quoted heading", async (t) => {

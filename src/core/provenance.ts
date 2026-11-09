@@ -63,7 +63,8 @@ function codeBlockView(text: string): {
         listIndent = 0;
       }
       if (!fence && listIndent && !line.startsWith(" ".repeat(listIndent)) && /^ {0,3}(?:`{3,}|~{3,})/.test(line)) listIndent = 0;
-      const item = !fence && line.match(/^ {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+/);
+      const thematic = /^ {0,3}(?:([-*_])(?:[ \t]*\1){2,})[ \t\r]*$/.test(line);
+      const item = !fence && !thematic && line.match(/^ {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+/);
       if (item) listIndent = item[0].length;
       else if (!fence && ((afterBlank && line.trim() && !line.startsWith(" ".repeat(listIndent))) || /^ {0,3}(?:#{1,6}(?:\s|$)|>)/.test(line))) listIndent = 0;
       const content = item ? line.slice(item[0].length)
