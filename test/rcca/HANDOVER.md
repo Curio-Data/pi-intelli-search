@@ -10,6 +10,10 @@ written at `997c926`.
 
 ## State
 
+**Released 2026-11-09.** Both packages are published at 0.22.0 from merge commit `71cce34` (tags
+`pi-v0.22.0` and `mcp-v0.22.0`); the verification is in `docs/COMPATIBILITY.md` § 0.22.0 Candidate
+Verification. The state below is the pre-release record, kept for history.
+
 - **Branch:** `rcca/mcp-research-failures`, worktree
   `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/rcca-mcp-research-failures`. Pushed to
   `origin` (GitHub `Curio-Data/pi-intelli-search`). **Not merged**: `origin/main` is at `7c8ac9f`.

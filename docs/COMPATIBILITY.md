@@ -48,10 +48,10 @@ The software development kit (SDK) and native fetch assets are verified separate
 
 | Host | Tested Version | Evidence |
 |---|---|---|
-| Claude Code | 2.1.289, 2.1.292, 2.1.293, 2.1.294, 2.1.296, 2.1.301, 2.1.302, 2.1.311, 2.1.316, 2.1.317 | Credential-free installation and key-delivery checks; credentialed local-tarball research. Latest registry-pin installation, connection and skill discovery pass on 2.1.317; historical checks and evidence limits are recorded below |
+| Claude Code | 2.1.289, 2.1.292, 2.1.293, 2.1.294, 2.1.296, 2.1.301, 2.1.302, 2.1.311, 2.1.316, 2.1.317, 2.1.319 | Credential-free installation and key-delivery checks; credentialed local-tarball research. Latest registry-pin installation, connection and skill discovery pass on 2.1.319; historical checks and evidence limits are recorded below |
 | Codex CLI | 0.144.5, 0.160.1 | Credential-free installation and credentialed local-tarball research. Current-candidate zero-configuration startup, missing-key recovery and research pass on 0.160.1. Latest registry-pin installation, enabled-server listing and skill discovery pass on 0.160.1; the independent registry protocol probe is separate from the host's enabled listing |
 
-The latest [registry-pin verification](#published-0210-registry-pin-verification-2026-11-03) covers both hosts. It does not establish full registry-pin research; earlier checks remain evidence for their recorded package and host versions.
+The latest [registry-pin verification](#published-0220-registry-pin-verification-2026-11-09) covers both hosts. It does not establish full registry-pin research; earlier checks remain evidence for their recorded package and host versions.
 
 ### Claude Code Evidence and Limits
 
@@ -98,6 +98,33 @@ The 1.3.0 [upstream release](https://github.com/earendil-works/pi/releases/tag/v
 The recorded live check passed `test/e2e/01_main.sh` on 2026-10-16 against the 0.18.0 runtime (tree `a26040e`, before the classifier alignment), with the agent loop on `kimi-coding/k3`, exercising the provider's new protocol: completed outcome, `fetch.succeeded=1`, nonempty synthesis (`collate.summaryChars=1302`) and pipeline stages on the OpenRouter defaults. This is a targeted research check of the host interfaces, not a full paced-suite result; live evidence for the 0.19.0 runtime is recorded in [0.19.0 Candidate Verification](#0190-candidate-verification-2026-10-16).
 
 Three upstream changes were assessed as opportunities. Two are pure host behaviour and prompted no code change: malformed tool-call arguments now fail validation with the raw text shown to the model instead of silently running partially parsed arguments, and `--model` now prefers a credentialed provider when several providers offer the match. The third did prompt a change: the host's automatic retry now covers gateway `Unable to forward upstream stream` and `The service is temporarily unavailable` errors for its agent loop, and the extension's shared retry classifier was aligned with the full `Pi` 1.3.0 retry list, including the quota/billing fail-fast exclusions, in 0.19.0 (see the [changelog](../CHANGELOG.md#pi-0190---2026-10-17)). The peer floor remains `Pi` >= 0.86.0 and model defaults are unchanged.
+
+## 0.22.0 Candidate Verification (2026-11-09)
+
+Merge commit `71cce34`, which both release tags identify, passes both builds, 887 native and 157 standalone deterministic tests, native-contract types, generated-file checks, [_ShellCheck_](https://www.shellcheck.net/), the dependency audit (0 vulnerabilities) and both independent fresh-tarball installations. Exact-commit [release-branch CI](https://github.com/Curio-Data/pi-intelli-search/actions/runs/42606775156) passes; the `main` run stopped only at the unpublished-catalogue-pin guard, as designed before publication. The host was `Pi` 1.5.0.
+
+The full paced live suite passed 13 of 15 scenarios on `71cce34`, including both credentialed plugin sessions (_Claude Code_ 2.1.319, _Codex_ 0.160.1) and research on the pinned `Pi` 0.86.0 floor host with the fetch-tee citation channel live (`search.annotationsHarvested=36`). Both other scenarios passed in isolated re-runs on the same tree:
+
+- **`02_cap.sh`:** the paced run failed the check of the agent-loop model's tool arguments, before any pipeline result was examined. The isolated re-run passed both the cap and default cases.
+- **`10_config_recipes.sh`:** the paced run exceeded the runner's 1,200-second per-script limit after its seventh recipe, before reaching recipes R8 to R10. The isolated re-run passed all ten recipes, including R9 (large-context collation) and R10 (bounded time and spend, with the 150,000-character cap proven on a page that exceeded it), in 24 minutes, so the scenario's elapsed time alone exceeds that limit. The log records no rate-limit error, but it does not capture provider retries, so rate limiting is neither shown nor excluded.
+
+The durable local witnesses are indexed in `evidence/2026-11-09-0220-release-verification/verification-receipt.md`.
+
+### Published `0.22.0` Registry-Pin Verification (2026-11-09)
+
+Following maintainer approval, the registry records MCP publication at 11:50:36 Coordinated Universal Time (UTC); `latest` resolves to `0.22.0`, and registry metadata exposes signed provenance attestations. Both plugins install from the committed repository marketplaces into fresh profiles without copied login credentials, using a dummy inference key.
+
+- **Claude Code 2.1.319:** the exact committed `npx` pin connects, and the installed plugin exposes its skill. The connection check ran from an isolated consumer directory with a fresh npm cache, so `npx` resolved the registry package rather than the repository workspace.
+- **Codex CLI 0.160.1:** the installed cache has the expected version, the pinned server is enabled, and prompt-input inspection discovers the skill at the versioned plugin-cache path. An enabled listing alone is not a connection check.
+- **Independent Registry Launcher:** a fresh npm cache and an isolated consumer project resolve the executable under that cache's `_npx/`, not the repository workspace. Its manifest and `--version` identify the published package. A direct standard-input/output (stdio) probe verifies server identity, returns instructions naming `intelli_search`, and lists all four tools through `initialize` and `tools/list`. Standard output contains protocol frames only; standard error contains the expected startup banner, and the process exits cleanly.
+
+Run from inside the repository, `npx` resolves the workspace's own linked package when its version satisfies the pin; the first launcher check did so and was repeated from the isolated consumer. These checks establish registry installation, skill discovery, connection and tool listing, not a full research call through the registry-installed package. Credentialed full-research checks remain in the local-tarball class.
+
+### Published `0.22.0` Native Package Verification (2026-11-09)
+
+Following maintainer approval, the registry records native publication at 11:57:35 UTC; `latest` resolves to `0.22.0`, and registry metadata exposes signed provenance attestations. `test/run-e2e-publish.sh 0.22.0` passes with `HOME`, `PI_CODING_AGENT_DIR`, npm cache and scratch isolated under repository `.tmp/`. The installed extension loads under plain _Node.js_, registers all four tools and its session-start subscription, and `ensureCustomModels()` is idempotent.
+
+The downloaded tarball's SHA-1 matches registry metadata (`6cfc169a58fd980f694a505ae1cc4899e158544a`), and its README matches `pi.README.md` at `pi-v0.22.0` byte-for-byte. The tarball ships `PI_CHANGELOG.md` with its newest heading `## [0.22.0] - 2026-11-09`, and the manifest's `pi` object is intact: `extensions`, `skills`, `image` and `changelogPath` are all present. These checks establish published-package installation, runtime loading, README derivation and changelog packaging, not a live model call through the registry-installed native package.
 
 ## 0.21.0 Candidate Verification (2026-11-03)
 
