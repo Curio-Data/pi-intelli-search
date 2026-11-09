@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Fixed
+
+- Shared core: provenance matching accepts Markdown emphasis spanning soft line breaks in ordinary paragraphs, while keeping literal URL suffixes distinct. A failed collation after input trimming directs recovery to saved extractions and the named input limits rather than an unchanged research repeat.
+- Shared core: degraded repeats keep the preserved report's metadata and write failed-attempt telemetry separately under `attempts/attempt-*/meta.json`. Rejected nonempty synthesis candidates are retained best-effort as diagnostics in `rejected-synthesis.json`, never as accepted evidence. Archived reports point to their own cache files rather than the live folder.
+- Native `Pi`: settings warnings no longer claim the built-in default is active when a valid setting from another file survives. Cache-recovery skill guidance uses model-visible result text instead of hidden `details` fields.
+
 ## [pi-0.22.0] - 2026-11-09
 
 Research-failure corrective actions. A root cause and corrective action analysis of intermittent research failures found that the default extract and collate model, [_MiniMax_](https://minimax.io) M3, spends the whole output cap on hidden reasoning on some [_OpenRouter_](https://openrouter.ai) serving routes and returns no text or cut-off text. Per-call routing made the failures intermittent. A failed synthesis, or a run in which every extraction failed, then discarded the fetched and extracted work.
