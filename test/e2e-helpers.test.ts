@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { bindAttempt, argumentMismatches, resultCachePath } from "./e2e/scenario-verdict.mjs";
+import { directArguments, resolveSdkFromHostBin } from "./e2e/direct-tool.mjs";
 
 const LIB = resolve("test/e2e/lib.sh");
 const VERDICT = resolve("test/e2e/scenario-verdict.mjs");
@@ -275,9 +276,11 @@ it("no attempt transcript passes through a shell variable", async () => {
     if (line.trimStart().startsWith("#") || !line.includes("$(")) continue;
     assert.doesNotMatch(line, /"\$\{?(trace|err)\}?"/, `lib.sh reads a raw attempt file into a variable: ${line.trim()}`);
   }
-  // The display variable is only ever the bounded tail of the display file.
+  // The display variable is only ever empty or the bounded tail of the
+  // display file.
   const assignments = [...lib.matchAll(/^\s*E2E_LAST_OUTPUT=(.*)$/gm)].map((m) => m[1]);
-  assert.deepEqual(assignments, ['"$(e2e_display_tail "$display")"']);
+  assert.ok(assignments.includes('"$(e2e_display_tail "$display")"'), "the bounded tail is assigned");
+  for (const rhs of assignments) assert.ok(rhs === '"$(e2e_display_tail "$display")"' || rhs === '""', `unexpected E2E_LAST_OUTPUT source: ${rhs}`);
   for (const script of (await readdir(resolve("test/e2e"))).filter((n) => /^\d\d_.*\.sh$/.test(n))) {
     const source = await readFile(resolve("test/e2e", script), "utf8");
     assert.doesNotMatch(source, /\$\(\s*cat\s+"?\$\{?E2E_LAST_TRACE_FILE/, `${script}: raw trace read into a variable`);
@@ -326,9 +329,43 @@ it("prompts and their argument oracles agree", async () => {
   }
   const recipes = await readFile(join(dir, "10_config_recipes.sh"), "utf8");
   const vars = Object.fromEntries([...recipes.matchAll(/^(\w+_ARGS)='(.*)'$/gm)].map((m) => [m[1], JSON.parse(m[2])]));
-  const calls = [...recipes.matchAll(/run_recipe (r\d+) (\S+) "\$(\w+)" "(.*)"; then$/gm)];
+  const calls = [...recipes.matchAll(/run_recipe (r\d+) (\S+) "\$(\w+)" "([^"]*)" "(.*)"; then$/gm)];
   assert.deepEqual(calls.map((m) => m[1]), ["r1", "r4", "r5", "r6", "r7", "r8", "r9", "r10"]);
-  for (const [, recipe, , variable, prompt] of calls) checkPromptOracle(`10 ${recipe}`, prompt.replace(/\\"/g, '"'), vars[variable]);
+  for (const [, recipe, , variable, query, rawPrompt] of calls) {
+    const prompt = rawPrompt.replace(/\\"/g, '"');
+    checkPromptOracle(`10 ${recipe}`, prompt, vars[variable]);
+    // The direct invocation's query is the prompt's research subject.
+    assert.ok(prompt.includes(`to research: ${query}.`), `10 ${recipe}: query "${query}" is not the prompt's subject`);
+  }
+});
+
+it("direct-mode research queries match their prompts, and evidence classes are fixed", async () => {
+  const dir = resolve("test/e2e");
+  for (const script of ["02_cap.sh", "03_model_override.sh", "04_migration.sh", "05_collation_limits.sh",
+    "06_extract_limits.sh", "07_llms_full.sh", "08_websearch_tool.sh", "09_sonar_pro_search.sh"]) {
+    const source = await readFile(join(dir, script), "utf8");
+    const prompts = [...source.matchAll(/^[ \t]*(?:RESEARCH_)?PROMPT=(['"])(.*)\1[ \t]*$/gm)].map((m) => m[2]);
+    const queries = [...source.matchAll(/^[ \t]*E2E_RESEARCH_QUERY="(.*)"[ \t]*$/gm)].map((m) => m[1]);
+    if (script === "07_llms_full.sh") {
+      // 07's prompt is built at run time around the probed host.
+      assert.match(source, /to research: getting started guide"/);
+      assert.deepEqual(queries, ["getting started guide"]);
+    } else {
+      assert.equal(queries.length, prompts.length, `${script}: one query per prompt`);
+      prompts.forEach((prompt, i) => assert.ok(prompt.includes(queries[i]), `${script}: query "${queries[i]}" absent from its prompt`));
+    }
+    assert.match(source, /^E2E_INVOCATION="\$\{E2E_INVOCATION:-auto\}"$/m, `${script}: configuration unit defaults to direct (auto)`);
+  }
+  for (const script of ["10_config_recipes.sh", "11_mcp_stdio.sh"]) {
+    assert.match(await readFile(join(dir, script), "utf8"), /^E2E_INVOCATION="\$\{E2E_INVOCATION:-auto\}"$/m, script);
+  }
+  // 11's oracle already names the query; direct mode sends exactly it.
+  assert.match(await readFile(join(dir, "11_mcp_stdio.sh"), "utf8"), /^E2E_EXPECT_ARGS='\{"query":/m);
+  for (const script of ["01_main.sh", "15_pi_floor.sh"]) {
+    const source = await readFile(join(dir, script), "utf8");
+    assert.match(source, /^E2E_INVOCATION=agent$/m, `${script}: routing evidence keeps the agent loop`);
+    assert.doesNotMatch(source, /E2E_RESEARCH_QUERY/, `${script}: no direct query`);
+  }
 });
 
 it("the prompt/oracle check catches drift in each argument", () => {
@@ -720,5 +757,297 @@ echo "RC=$rc"`;
       assert.equal(await exited, 130);
       assert.ok(await gone(dir), "grandchild survived Ctrl-C");
     });
+  });
+});
+
+describe("direct registered-tool invocation (direct-tool.mjs)", () => {
+  // The repository's own dev copy of the host SDK, so the fixtures never
+  // depend on the operator's installed Pi.
+  const SDK = resolve("node_modules/@earendil-works/pi-coding-agent");
+  const DRIVER = resolve("test/e2e/direct-tool.mjs");
+  // A fixture extension standing in for intelli_research: it records exactly
+  // what the host passed and behaves according to the query.
+  const FIXTURE = `import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { Type } from "typebox";
+export default function (pi) {
+  pi.on("session_start", (_e, ctx) => {
+    writeFileSync(join(ctx.cwd, "session-start.json"), JSON.stringify({ trusted: ctx.isProjectTrusted() }));
+  });
+  pi.registerTool({
+    name: "intelli_research", label: "fixture", description: "fixture research",
+    parameters: Type.Object({ query: Type.String(), maxUrls: Type.Optional(Type.Number()),
+      domains: Type.Optional(Type.Array(Type.String())), focusPrompt: Type.Optional(Type.String()) }),
+    async execute(_id, params, signal, onUpdate, ctx) {
+      writeFileSync(join(ctx.cwd, "received.json"), JSON.stringify(params));
+      if (params.query === "loop") {
+        pi.sendUserMessage("start an agent turn");
+        await new Promise((r) => setTimeout(r, 500));
+        return { content: [{ type: "text", text: "loop" }], details: {} };
+      }
+      if (params.query === "wait-abort") {
+        writeFileSync(join(ctx.cwd, "started"), "");
+        await new Promise((r) => signal.addEventListener("abort", r, { once: true }));
+        writeFileSync(join(ctx.cwd, "aborted"), "");
+        return { content: [{ type: "text", text: "aborted" }], details: {} };
+      }
+      onUpdate?.({ content: [{ type: "text", text: "progress" }], details: {} });
+      const slug = "2026-11-09-fixture";
+      mkdirSync(join(ctx.cwd, ".search", slug), { recursive: true });
+      writeFileSync(join(ctx.cwd, ".search", slug, "meta.json"), JSON.stringify({ outcome: "completed",
+        stages: { fetch: { succeeded: 1 }, collate: { summaryChars: 5 } } }));
+      return { content: [{ type: "text", text: "done\\n**Cache**: \`.search/" + slug + "/\`" }], details: { cachePath: ".search/" + slug } };
+    },
+  });
+}
+`;
+  // A local fake loop provider on an unroutable loopback port: even a failed
+  // guard could not reach a real endpoint.
+  const MODELS = { providers: { e2efake: { baseUrl: "http://127.0.0.1:9/v1", api: "openai-completions", apiKey: "dummy",
+    models: [{ id: "fake-model", name: "fake", reasoning: false, input: ["text"], contextWindow: 8000, maxTokens: 1000,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] } } };
+
+  async function setup(t: { after: (fn: () => Promise<void>) => void }) {
+    const root = await scratch(t, "e2e-direct-");
+    for (const sub of ["agent", "ws", "home", "attempts"]) await mkdir(join(root, sub));
+    await writeFile(join(root, "fixture-ext.mjs"), FIXTURE);
+    await writeFile(join(root, "agent/settings.json"), JSON.stringify({ defaultProvider: "e2efake", defaultModel: "fake-model" }));
+    await writeFile(join(root, "agent/models.json"), JSON.stringify(MODELS));
+    return root;
+  }
+  const env = (root: string) => ({ PATH: process.env.PATH ?? "", HOME: join(root, "home"), PI_OFFLINE: "1", PI_CODING_AGENT_DIR: join(root, "agent") });
+  const driverArgs = (root: string, args: Json, extra: string[] = [], tool = "intelli_research") => [DRIVER, "--sdk", SDK,
+    "--agent-dir", join(root, "agent"), "--cwd", join(root, "ws"), "--tool", tool, "--args", JSON.stringify(args),
+    "--extension", join(root, "fixture-ext.mjs"), "--no-extensions", ...extra];
+  const records = (stdout: string) => stdout.trim().split("\n").filter(Boolean).map((l) => JSON.parse(l) as Json);
+
+  it("sends exactly the oracle's arguments, null omissions dropped, and the verdict binds the call", async (t) => {
+    const root = await setup(t);
+    const since = Date.now();
+    const run = spawnSync(process.execPath, driverArgs(root, { query: "q", maxUrls: 2, domains: ["a.org"], focusPrompt: null }, ["--tools", "intelli_research"]),
+      { cwd: join(root, "ws"), encoding: "utf8", env: env(root), timeout: 60_000 });
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(JSON.parse(await readFile(join(root, "ws/received.json"), "utf8")), { query: "q", maxUrls: 2, domains: ["a.org"] });
+    const events = records(run.stdout);
+    const starts = events.filter((e) => e.type === "tool_execution_start");
+    assert.equal(starts.length, 1);
+    assert.deepEqual(starts[0].args, { query: "q", maxUrls: 2, domains: ["a.org"] });
+    assert.ok(events.some((e) => e.type === "tool_execution_update"), "progress updates are streamed");
+    assert.deepEqual(events.at(-1), { type: "e2e_direct_settled", agentLoopModelCalls: 0, agentLoopEvents: 0, exitCode: 0 });
+    assert.equal(events[0].type, "e2e_direct_driver");
+    assert.ok(existsSync(join(root, "ws/session-start.json")), "session_start reached the extension");
+    const verdict = bindAttempt({ traceText: run.stdout, workspace: join(root, "ws"), cacheRoot: ".search", tool: "intelli_research",
+      sinceMs: since, expect: { query: "q", maxUrls: 2, domains: ["a.org"], focusPrompt: null } });
+    assert.equal(verdict.status, "pass", verdict.reason);
+  });
+
+  it("refuses an agent-loop model call and exits 71", async (t) => {
+    const root = await setup(t);
+    const run = spawnSync(process.execPath, driverArgs(root, { query: "loop" }), { cwd: join(root, "ws"), encoding: "utf8", env: env(root), timeout: 60_000 });
+    assert.equal(run.status, 71, run.stderr);
+    const settled = records(run.stdout).at(-1) as Json;
+    assert.equal(settled.type, "e2e_direct_settled");
+    assert.ok(Number(settled.agentLoopModelCalls) >= 1, "the refused call is counted");
+    assert.equal(settled.exitCode, 71);
+  });
+
+  it("resolves project trust as the host does and hands the extension the same decision", async (t) => {
+    for (const trusted of [true, false]) {
+      const root = await setup(t);
+      await mkdir(join(root, "ws/.pi"));
+      await writeFile(join(root, "ws/.pi/settings.json"), JSON.stringify({ "pi-intelli-search": { cacheDir: ".search-client-x" } }));
+      if (trusted) await writeFile(join(root, "agent/trust.json"), JSON.stringify({ [join(root, "ws")]: true }));
+      const run = spawnSync(process.execPath, driverArgs(root, { query: "q" }), { cwd: join(root, "ws"), encoding: "utf8", env: env(root), timeout: 60_000 });
+      assert.equal(run.status, 0, run.stderr);
+      const header = records(run.stdout)[0];
+      const seen = JSON.parse(await readFile(join(root, "ws/session-start.json"), "utf8"));
+      assert.equal(seen.trusted, header.projectTrusted, `driver and extension agree (trust.json: ${trusted})`);
+      if (trusted) assert.equal(seen.trusted, true);
+    }
+  });
+
+  it("reports an unavailable host explicitly (69) and an uncallable tool as a harness error (72)", async (t) => {
+    const root = await setup(t);
+    const fake = join(root, "fake-sdk");
+    await mkdir(join(fake, "dist"), { recursive: true });
+    await writeFile(join(fake, "package.json"), JSON.stringify({ name: "@earendil-works/pi-coding-agent", version: "0.0.0", type: "module" }));
+    await writeFile(join(fake, "dist/index.js"), "export const VERSION = '0.0.0';\n");
+    const args = driverArgs(root, { query: "q" });
+    args[2] = fake;
+    const missing = spawnSync(process.execPath, args, { cwd: join(root, "ws"), encoding: "utf8", env: env(root), timeout: 60_000 });
+    assert.equal(missing.status, 69, missing.stderr);
+    assert.match(records(missing.stdout).at(-1)?.reason as string, /lacks createAgentSession/);
+    args[2] = join(root, "nowhere");
+    assert.equal(spawnSync(process.execPath, args, { cwd: join(root, "ws"), encoding: "utf8", env: env(root) }).status, 69);
+    const notCallable = spawnSync(process.execPath, driverArgs(root, { query: "q" }, ["--tool-wait-ms", "300"], "intelli_missing"),
+      { cwd: join(root, "ws"), encoding: "utf8", env: env(root), timeout: 60_000 });
+    assert.equal(notCallable.status, 72, notCallable.stderr);
+    assert.ok(records(notCallable.stdout).some((e) => e.type === "e2e_direct_not_callable"));
+  });
+
+  it("an MCP call goes through the host's MCP client to the stdio server with the exact arguments", async (t) => {
+    const root = await setup(t);
+    // A minimal stdio MCP server: initialize, tools/list, tools/call. It logs
+    // the arguments it receives.
+    const server = `import { createInterface } from "node:readline";
+import { appendFileSync } from "node:fs";
+const send = (m) => process.stdout.write(JSON.stringify(m) + "\\n");
+createInterface({ input: process.stdin }).on("line", (line) => {
+  let msg; try { msg = JSON.parse(line); } catch { return; }
+  if (msg.method === "initialize") send({ jsonrpc: "2.0", id: msg.id, result: { protocolVersion: msg.params?.protocolVersion ?? "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "fixture", version: "1.0.0" } } });
+  else if (msg.method === "tools/list") send({ jsonrpc: "2.0", id: msg.id, result: { tools: [{ name: "intelli_research", description: "fixture", inputSchema: { type: "object", properties: { query: { type: "string" }, maxUrls: { type: "number" } }, required: ["query"] } }] } });
+  else if (msg.method === "tools/call") { appendFileSync(process.argv[2], JSON.stringify(msg.params.arguments) + "\\n"); send({ jsonrpc: "2.0", id: msg.id, result: { content: [{ type: "text", text: "fixture result" }] } }); }
+  else if (msg.id !== undefined) send({ jsonrpc: "2.0", id: msg.id, result: {} });
+});
+`;
+    await writeFile(join(root, "server.mjs"), server);
+    await writeFile(join(root, "agent/mcp.json"), JSON.stringify({ mcpServers: { "intelli-search": {
+      command: process.execPath, args: [join(root, "server.mjs"), join(root, "calls.jsonl")], exposure: "direct" } } }));
+    const tool = "mcp__intelli_search__intelli_research";
+    const run = spawnSync(process.execPath, [DRIVER, "--sdk", SDK, "--agent-dir", join(root, "agent"), "--cwd", join(root, "ws"),
+      "--tool", tool, "--args", JSON.stringify({ query: "q", maxUrls: 1, focusPrompt: null }), "--tools", tool, "--tool-wait-ms", "15000"],
+      { cwd: join(root, "ws"), encoding: "utf8", env: env(root), timeout: 60_000 });
+    assert.equal(run.status, 0, run.stderr);
+    const events = records(run.stdout);
+    assert.deepEqual(events[0].builtinExtensions && (events[0].builtinExtensions as string[]).includes("mcp"), true, "the MCP client is loaded");
+    assert.ok(events.some((e) => e.type === "tool_execution_end" && e.toolName === tool && e.isError === false));
+    assert.deepEqual((await readFile(join(root, "calls.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l)), [{ query: "q", maxUrls: 1 }]);
+    assert.deepEqual(events.at(-1), { type: "e2e_direct_settled", agentLoopModelCalls: 0, agentLoopEvents: 0, exitCode: 0 });
+  });
+
+  it("SIGTERM aborts the running call and exits 143 after shutdown", async (t) => {
+    const root = await setup(t);
+    const { spawn } = await import("node:child_process");
+    const child = spawn(process.execPath, driverArgs(root, { query: "wait-abort" }), { cwd: join(root, "ws"), env: env(root), stdio: "ignore" });
+    const exited = new Promise<number | null>((r) => child.on("exit", (code) => r(code)));
+    for (let i = 0; i < 300 && !existsSync(join(root, "ws/started")); i += 1) await new Promise((r) => setTimeout(r, 100));
+    assert.ok(existsSync(join(root, "ws/started")), "the call started");
+    child.kill("SIGTERM");
+    assert.equal(await exited, 143);
+    assert.ok(existsSync(join(root, "ws/aborted")), "the tool saw the abort signal");
+  });
+
+  it("locates the host SDK from an npm bin link or the managed launcher, and drops null arguments", async (t) => {
+    const root = await scratch(t, "e2e-sdk-resolve-");
+    const pkg = join(root, "install/node_modules/@earendil-works/pi-coding-agent");
+    await mkdir(join(pkg, "dist"), { recursive: true });
+    await writeFile(join(pkg, "package.json"), JSON.stringify({ name: "@earendil-works/pi-coding-agent", version: "9.9.9" }));
+    await writeFile(join(pkg, "dist/cli.js"), "#!/usr/bin/env node\n");
+    await mkdir(join(root, "install/node_modules/.bin"));
+    const { symlink } = await import("node:fs/promises");
+    await symlink("../@earendil-works/pi-coding-agent/dist/cli.js", join(root, "install/node_modules/.bin/pi"));
+    assert.equal(resolveSdkFromHostBin(join(root, "install/node_modules/.bin/pi")), pkg);
+
+    const agent = join(root, "agent");
+    const managed = join(agent, "install/releases/9.9.9/node_modules/@earendil-works/pi-coding-agent");
+    await mkdir(managed, { recursive: true });
+    await writeFile(join(managed, "package.json"), JSON.stringify({ name: "@earendil-works/pi-coding-agent", version: "9.9.9" }));
+    await writeFile(join(agent, "install/current-version"), "9.9.9\n");
+    await mkdir(join(agent, "bin"));
+    await writeFile(join(agent, "bin/pi"), "#!/bin/sh\npi_current_file=$pi_agent_dir/install/current-version\n");
+    assert.equal(resolveSdkFromHostBin(join(agent, "bin/pi")), managed);
+    await writeFile(join(agent, "install/current-version"), "../../etc\n");
+    assert.equal(resolveSdkFromHostBin(join(agent, "bin/pi")), undefined, "an unsafe version name is refused");
+    await writeFile(join(root, "other"), "#!/bin/sh\necho hi\n");
+    assert.equal(resolveSdkFromHostBin(join(root, "other")), undefined);
+
+    assert.deepEqual(directArguments({ query: "q", maxUrls: null, domains: ["a"], focusPrompt: undefined }), { query: "q", domains: ["a"] });
+  });
+
+  it("lib.sh plans direct arguments and the oracle from E2E_EXPECT_ARGS and the query", () => {
+    const plan = (expect: string, query: string) => spawnSync("bash", ["-c", 'source "$1"; e2e_direct_plan "$2" "$3"', "fixture", LIB, expect, query], { encoding: "utf8" });
+    const two = plan('{"maxUrls":null,"focusPrompt":"f"}', "the q").stdout.trim().split("\n").map((l) => JSON.parse(l));
+    assert.deepEqual(two, [{ focusPrompt: "f", query: "the q" }, { maxUrls: null, focusPrompt: "f", query: "the q" }]);
+    const own = plan('{"query":"oracle q","maxUrls":1}', "ignored").stdout.trim().split("\n").map((l) => JSON.parse(l));
+    assert.deepEqual(own[0], { query: "oracle q", maxUrls: 1 }, "an oracle query wins");
+    assert.notEqual(plan('{"maxUrls":1}', "").status, 0, "no query, no plan");
+  });
+
+  describe("e2e_run_pi invocation modes", () => {
+    // A fake agent-loop host: one correct research call, as print mode would log it.
+    const FAKE_PI = `#!/usr/bin/env bash
+echo invoked >> "$FAKE_STATE"
+mkdir -p .search/agent-entry
+printf '%s' '{"outcome":"completed","stages":{"fetch":{"succeeded":1},"collate":{"summaryChars":9}}}' > .search/agent-entry/meta.json
+printf '{"type":"tool_execution_start","toolCallId":"a1","toolName":"intelli_research","args":{"query":"agent words","maxUrls":2}}\\n'
+printf '{"type":"tool_execution_end","toolCallId":"a1","toolName":"intelli_research","isError":false,"result":{"content":[{"type":"text","text":"done"}],"details":{"cachePath":".search/agent-entry"}}}\\n'
+`;
+    const runLib = async (root: string, settings: string) => {
+      await writeFile(join(root, "fake-pi"), FAKE_PI);
+      await chmod(join(root, "fake-pi"), 0o755);
+      return spawnSync("bash", ["-c", `set -euo pipefail; source "$1"; ${settings}
+E2E_PI_BIN="$2/fake-pi"; E2E_EXTENSION_PATH="$2/fixture-ext.mjs"; E2E_ATTEMPT_DIR="$2/attempts"; E2E_RETRY_SLEEP_SECONDS=0
+E2E_EXPECT_ARGS='{"maxUrls":2,"focusPrompt":null}'
+rc=0; e2e_run_pi "$2/agent" "$2/ws" "prompt" 60 || rc=$?
+printf 'RC=%s INVOCATION=%s ENTRY=%s FALLBACK=%s\\n' "$rc" "\${E2E_LAST_INVOCATION:-}" "$E2E_BOUND_ENTRY" "\${E2E_INVOCATION_FALLBACK:-}"`, "fixture", LIB, root],
+      { encoding: "utf8", env: { ...env(root), FAKE_STATE: join(root, "fake-state") }, timeout: 120_000 });
+    };
+
+    it("direct mode binds an exact call and records the evidence class", async (t) => {
+      const root = await setup(t);
+      const out = await runLib(root, `E2E_INVOCATION=direct; E2E_PI_SDK="${SDK}"; E2E_RESEARCH_QUERY="the q"`);
+      assert.match(out.stdout, /RC=0 INVOCATION=direct ENTRY=.*\/ws\/\.search\/2026-11-09-fixture FALLBACK=$/m, out.stderr);
+      assert.ok(!existsSync(join(root, "fake-state")), "the agent-loop host was never started");
+      assert.deepEqual(JSON.parse(await readFile(join(root, "ws/received.json"), "utf8")), { maxUrls: 2, query: "the q" });
+      const verdict = JSON.parse(await readFile(join(root, "attempts/001-attempt-1.verdict.json"), "utf8"));
+      assert.equal(verdict.invocation, "direct");
+      assert.equal(verdict.status, "pass");
+    });
+
+    it("auto falls back to the agent loop only with a written report; direct refuses", async (t) => {
+      const root = await setup(t);
+      const fake = join(root, "fake-sdk");
+      await mkdir(join(fake, "dist"), { recursive: true });
+      await writeFile(join(fake, "package.json"), JSON.stringify({ name: "@earendil-works/pi-coding-agent", version: "0.0.0", type: "module" }));
+      await writeFile(join(fake, "dist/index.js"), "export {};\n");
+      const auto = await runLib(root, `E2E_INVOCATION=auto; E2E_PI_SDK="${fake}"; E2E_RESEARCH_QUERY="the q"`);
+      assert.match(auto.stdout, /RC=0 INVOCATION=agent-loop ENTRY=.*agent-entry FALLBACK=.*invocation-fallback\.json$/m, auto.stderr);
+      assert.match(auto.stderr, /DIRECT INVOCATION UNAVAILABLE/);
+      const report = JSON.parse(await readFile(join(root, "attempts/invocation-fallback.json"), "utf8"));
+      assert.equal(report.requested, "auto");
+      assert.equal(report.used, "agent-loop");
+      assert.match(report.reason, /lacks createAgentSession/);
+      const verdict = JSON.parse(await readFile(join(root, "attempts/002-attempt-1.verdict.json"), "utf8"));
+      assert.equal(verdict.invocation, "agent-loop");
+      assert.match(verdict.invocationFallback, /invocation-fallback\.json$/);
+      assert.equal(verdict.status, "pass", "the agent-loop oracle is the original one, without the direct query");
+
+      const strict = await setup(t);
+      const refused = await runLib(strict, `E2E_INVOCATION=direct; E2E_PI_SDK="${fake}"; E2E_RESEARCH_QUERY="the q"`);
+      assert.match(refused.stdout, /RC=3 /, refused.stderr);
+      assert.match(refused.stderr, /No weaker oracle is substituted/);
+      assert.ok(!existsSync(join(strict, "fake-state")), "no agent-loop fallback under direct");
+      assert.equal(JSON.parse(await readFile(join(strict, "attempts/invocation-fallback.json"), "utf8")).used, "none");
+    });
+
+    it("direct mode without a query is a harness error before any host starts", async (t) => {
+      const root = await setup(t);
+      const out = await runLib(root, `E2E_INVOCATION=direct; E2E_PI_SDK="${SDK}"`);
+      assert.match(out.stdout, /RC=3 /);
+      assert.match(out.stderr, /needs E2E_RESEARCH_QUERY/);
+      assert.deepEqual(await readdir(join(root, "attempts")), []);
+    });
+  });
+
+  it("the parallel runner requests strict direct mode for configuration units only", async () => {
+    // The runner's modules ship without declarations; load them untyped.
+    const runnerModule: string = "./e2e/parallel-runner.mjs";
+    const manifestModule: string = "./e2e/parallel-manifest.mjs";
+    const { workerEnvironment } = await import(runnerModule);
+    const { createManifest } = await import(manifestModule);
+    const paths = Object.fromEntries(["root", "home", "tmp", "workspace", "logs", "traces", "agent", "npm-cache",
+      "xdg-cache", "xdg-config", "xdg-data", "xdg-state", "xdg-runtime"].map((k) => [k, `/units/x/${k}`]));
+    const artifacts = { paths: { currentBin: "/f/bin/pi", floorBin: "/fl/bin/pi", extension: "/f/e.js", floorExtension: "/fl/e.js",
+      mcpCli: "/f/m.js", mcpTarball: "/f/m.tgz", traceExtension: "/f/t.mjs", traceFetch: "/f/f.mjs" } };
+    const base = { PATH: "/usr/bin", HOME: "/operator", OPENROUTER_API_KEY: "dummy-fixture" };
+    const byUnit: Record<string, string | undefined> = {};
+    for (const unit of createManifest().units.filter((u: { kind: string }) => u.kind === "provider")) {
+      byUnit[unit.id] = workerEnvironment(unit, paths, new Map(), artifacts, base).E2E_INVOCATION;
+    }
+    for (const [id, invocation] of Object.entries(byUnit)) {
+      const expected = /^(01|15)_/.test(id) ? undefined : "direct";
+      assert.equal(invocation, expected, id);
+    }
+    assert.ok(Object.keys(byUnit).length >= 20, "provider units were enumerated");
   });
 });

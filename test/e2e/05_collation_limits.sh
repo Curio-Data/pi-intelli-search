@@ -39,6 +39,12 @@ ARM="${E2E_LIMIT_ARM:-}"
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+# Configuration unit: by default the research call is made exactly, through
+# the host's registered-tool pipeline with no agent-loop model call
+# (lib.sh, direct-tool.mjs). auto falls back to the agent loop only when the
+# host lacks that API, and says so; direct refuses to fall back; agent keeps
+# the natural-language prompt.
+E2E_INVOCATION="${E2E_INVOCATION:-auto}"
 e2e_init_log "e2e-collation-limits${ARM:+-$ARM}"
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "📝 Log: $LOG_FILE"
@@ -181,6 +187,7 @@ trap e2e_cleanup EXIT
 RESEARCH_PROMPT='Use intelli_research with maxUrls=1 and domains=["docs.python.org"] to research: Python data model reference. Use focusPrompt="Extract the data-model details and canonical API terminology."'
 # shellcheck disable=SC2034  # consumed by e2e_run_pi in lib.sh
 E2E_EXPECT_ARGS='{"maxUrls":1,"domains":["docs.python.org"],"focusPrompt":"Extract the data-model details and canonical API terminology."}'
+E2E_RESEARCH_QUERY="Python data model reference"
 
 # run_arm <default|tight> <workspace> — one live research with that arm's
 # settings; writes the arm receipt into <workspace>/.e2e-unit/arm.json.

@@ -37,6 +37,7 @@
 
 E2E_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 E2E_VERDICT_HELPER="${E2E_LIB_DIR}/scenario-verdict.mjs"
+E2E_DIRECT_DRIVER="${E2E_LIB_DIR}/direct-tool.mjs"
 E2E_CLEANUP_PATHS=()
 
 # e2e_init_log <name> — open this scenario's log with exclusive creation and
@@ -303,11 +304,41 @@ e2e_compact_json_output() {
       $event.result.content[]? | select(.type == "text") | .text
     elif $event.type == "tool_execution_update" then
       $event.partialResult.content[]? | select(.type == "text") | .text
+    elif ($event.type | tostring | startswith("e2e_direct_")) then
+      "[direct] " + ($event | del(.args) | tojson)
     elif $event.type == "message_end" and $event.message.role == "assistant" then
       ($event.message.content[]? | select(.type == "text") | .text),
       ($event.message.errorMessage // empty)
     else empty end
   ' 2>/dev/null
+}
+
+# e2e_direct_plan <expect_json> <query> — print two JSON lines: the exact
+# arguments a direct invocation sends (the oracle's named values, null
+# omissions dropped, plus the query) and the oracle that judges it (the same
+# values, with the query and the null omissions kept). Fails without a query.
+e2e_direct_plan() {
+  local expect=$1 query=$2
+  jq -cn --argjson e "$expect" --arg q "$query" '
+    (if ($e | has("query")) then $e else $e + {query: $q} end) as $oracle |
+    if ($oracle.query // "") == "" then error("no research query for direct invocation") else . end |
+    ($oracle | with_entries(select(.value != null))), $oracle'
+}
+
+# e2e_invocation_fallback <attempt_dir> <requested> <driver_output> — record
+# that direct invocation was unavailable, in invocation-fallback.json beside
+# the attempts, and set E2E_INVOCATION_FALLBACK to its path. Only the driver's
+# e2e_direct_unavailable record is read; no transcript enters a variable.
+e2e_invocation_fallback() {
+  local dir=$1 requested=$2 reasons=$3 report
+  report="${dir}/${E2E_ATTEMPT_PREFIX:-}invocation-fallback.json"
+  jq -n --arg requested "$requested" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --slurpfile records "$reasons" \
+    '{requested: $requested, used: (if $requested == "direct" then "none" else "agent-loop" end),
+      reason: ([$records[] | select(.type == "e2e_direct_unavailable") | .reason] | first // "unknown"),
+      evidenceClass: "natural-language routing, not exact invocation", at: $at}' > "$report" 2>/dev/null \
+    || printf '{"requested":"%s","reason":"unreadable driver output"}\n' "$requested" > "$report"
+  E2E_INVOCATION_FALLBACK="$report"
 }
 
 # e2e_run_pi <agent_dir> <cwd> <prompt> [timeout_s]
@@ -331,6 +362,18 @@ e2e_compact_json_output() {
 #                          hosts without it (workspace-only binding)
 #   E2E_REQUIRE_EXIT_ZERO  1 to keep an exit-0 gate (floor host)
 #   E2E_ATTEMPT_PREFIX     Optional attempt file prefix
+#   E2E_INVOCATION         agent (default): the prompt runs through the agent
+#                          loop (routing evidence). direct: exactly one
+#                          registered-tool call through direct-tool.mjs, no
+#                          agent-loop model call; fails if the host cannot.
+#                          auto: direct when the host supports it, otherwise the
+#                          agent loop, with invocation-fallback.json written
+#                          and the downgrade printed.
+#   E2E_RESEARCH_QUERY     The query for direct invocation (unless
+#                          E2E_EXPECT_ARGS names one). Direct mode judges the
+#                          call against the oracle plus this query.
+#   E2E_PI_SDK             Optional coding-agent package for the driver
+#                          (default: resolved from the host binary)
 #
 # Outputs: E2E_BOUND_ENTRY, E2E_LAST_OUTPUT (bounded display text, never the
 # raw transcript), E2E_LAST_OUTPUT_FILE (full display), E2E_LAST_EXIT_CODE,
@@ -340,18 +383,32 @@ e2e_compact_json_output() {
 # E2E_RETRY_SLEEP_SECONDS (default 30) spaces retries; E2E_KILL_AFTER_SECONDS
 # (default 15) is the grace period before KILL after the attempt timeout.
 #
+# Outputs also E2E_LAST_INVOCATION (direct or agent-loop) and, after a
+# fallback, E2E_INVOCATION_FALLBACK (the report path).
+#
 # Returns 0 pass, 1 no completed research (or exit-0 gate), 2 oracle or
-# product failure (not retried), 3 harness error.
+# product failure (not retried), 3 harness error (including direct mode
+# requested but unavailable, or a driver failure).
 e2e_run_pi() {
   local agent="$1" cwd="$2" prompt="$3" tmo="${4:-${E2E_TIMEOUT_SECONDS:-360}}"
   local attempt ec vrc since base trace err verdict_file display
   local expect="${E2E_EXPECT_ARGS:-}"
+  local invocation="${E2E_INVOCATION:-agent}" mode direct_args="" direct_oracle="" plan host_path sdk_args=() direct_flags=()
   local host_bin="${E2E_PI_BIN:-pi}"
   local tool="${E2E_RESEARCH_TOOL:-intelli_research}"
   local verdict_ws="${E2E_VERDICT_WORKSPACE:-$cwd}"
   local cache_dir="${E2E_EXPECT_CACHE_DIR:-.search}"
   local attempt_dir="${E2E_ATTEMPT_DIR:-${E2E_TRACE_DIR:-}}"
   local host_flags=() extension_args=() trace_extension_args=() mode_args=() verdict_args=() tool_args=() path_prefix=""
+  # Outputs exist from the start, so a caller under set -u can read them after
+  # any early return.
+  E2E_BOUND_ENTRY=""
+  E2E_LAST_VERDICT_STATUS=""
+  E2E_LAST_VERDICT_REASON=""
+  E2E_LAST_VERDICT_FILE=""
+  E2E_LAST_INVOCATION=""
+  E2E_INVOCATION_FALLBACK=""
+  E2E_LAST_OUTPUT=""
   if [[ -z "$attempt_dir" ]]; then
     echo "e2e_run_pi: no attempt directory (call e2e_init_log or set E2E_TRACE_DIR)" >&2
     return 3
@@ -374,11 +431,36 @@ e2e_run_pi() {
   fi
   if [[ "$host_bin" == /* ]]; then path_prefix="$(dirname "$host_bin"):"; fi
   if [[ -z "$expect" ]]; then expect='{}'; fi
+  case "$invocation" in
+    agent) mode=agent ;;
+    direct|auto)
+      mode=direct
+      if ! plan="$(e2e_direct_plan "$expect" "${E2E_RESEARCH_QUERY:-}" 2>&1)"; then
+        echo "e2e_run_pi: E2E_INVOCATION=$invocation needs E2E_RESEARCH_QUERY or a query in E2E_EXPECT_ARGS ($plan)" >&2
+        return 3
+      fi
+      direct_args="$(sed -n 1p <<<"$plan")"
+      direct_oracle="$(sed -n 2p <<<"$plan")"
+      if [[ -n "${E2E_PI_SDK:-}" ]]; then
+        sdk_args=(--sdk "$(cd "$E2E_PI_SDK" 2>/dev/null && pwd || printf '%s' "$E2E_PI_SDK")")
+      elif host_path="$(command -v "$host_bin" 2>/dev/null)"; then
+        sdk_args=(--host-bin "$host_path")
+      else
+        sdk_args=(--host-bin "$host_bin")
+      fi
+      [[ -n "${E2E_EXTENSION_PATH:-}" ]] && direct_flags+=(--extension "${E2E_EXTENSION_PATH}")
+      [[ -n "${E2E_TRACE_EXTENSION_PATH:-}" ]] && direct_flags+=(--extension "${E2E_TRACE_EXTENSION_PATH}")
+      if [[ " ${host_flags[*]} " == *" --no-extensions "* ]]; then direct_flags+=(--no-extensions); fi
+      [[ -n "${E2E_TOOL_ALLOWLIST:-}" ]] && direct_flags+=(--tools "${E2E_TOOL_ALLOWLIST}")
+      ;;
+    *)
+      echo "e2e_run_pi: E2E_INVOCATION must be agent, direct or auto (got '$invocation')" >&2
+      return 3
+      ;;
+  esac
   mkdir -p "$attempt_dir"
-  E2E_BOUND_ENTRY=""
-  E2E_LAST_VERDICT_STATUS=""
-  E2E_LAST_VERDICT_REASON=""
-  for attempt in 1 2 3; do
+  attempt=1
+  while [[ "$attempt" -le 3 ]]; do
     E2E_TRACE_SEQUENCE=$(( ${E2E_TRACE_SEQUENCE:-0} + 1 ))
     printf -v base '%s/%s%03d-attempt-%d' "$attempt_dir" "${E2E_ATTEMPT_PREFIX:-}" \
       "${E2E_TRACE_SEQUENCE}" "${attempt}"
@@ -394,14 +476,53 @@ e2e_run_pi() {
     # No --foreground: timeout signals the whole process group, so an expired
     # attempt cannot leave pi or its children making paid calls. stdin is
     # /dev/null so the host never waits on, or is stopped by, a terminal.
-    (
-      cd "$cwd"
-      PATH="${path_prefix}${PATH}" \
-      PI_CODING_AGENT_DIR="$agent" \
-        timeout --kill-after="${E2E_KILL_AFTER_SECONDS:-15}s" "${tmo}s" "$host_bin" \
-          "${host_flags[@]}" "${extension_args[@]}" "${trace_extension_args[@]}" "${mode_args[@]}" "${tool_args[@]}" \
-          -p "${prompt}" </dev/null >"$trace" 2>"$err"
-    ) && ec=0 || ec=$?
+    if [[ "$mode" == direct ]]; then
+      # Exactly one registered-tool call, no agent-loop model call. The tool
+      # wait stays inside the attempt deadline.
+      (
+        cd "$cwd"
+        PATH="${path_prefix}${PATH}" \
+        PI_CODING_AGENT_DIR="$agent" \
+          timeout --kill-after="${E2E_KILL_AFTER_SECONDS:-15}s" "${tmo}s" node "$E2E_DIRECT_DRIVER" \
+            "${sdk_args[@]}" --agent-dir "$agent" --cwd "$cwd" --tool "$tool" --args "$direct_args" \
+            "${direct_flags[@]}" --tool-wait-ms "${E2E_DIRECT_TOOL_WAIT_MS:-60000}" \
+            </dev/null >"$trace" 2>"$err"
+      ) && ec=0 || ec=$?
+      if [[ "$ec" -eq 69 ]]; then
+        e2e_invocation_fallback "$attempt_dir" "$invocation" "$trace"
+        printf '{"status":"direct-unavailable","reason":"see %s"}\n' "$E2E_INVOCATION_FALLBACK" >"$verdict_file"
+        if [[ "$invocation" == direct ]]; then
+          echo "   ❌ E2E_INVOCATION=direct but direct invocation is unavailable on this host; see ${E2E_INVOCATION_FALLBACK}. No weaker oracle is substituted." >&2
+          return 3
+        fi
+        echo "   ⚠️  DIRECT INVOCATION UNAVAILABLE: falling back to the agent loop. This run is natural-language routing evidence, not exact invocation; see ${E2E_INVOCATION_FALLBACK}" >&2
+        mode=agent
+        continue
+      fi
+      if [[ "$ec" -eq 70 || "$ec" -eq 71 || "$ec" -eq 72 ]]; then
+        e2e_display_file "$trace" "$err" "$display"
+        E2E_LAST_OUTPUT_FILE="${display}"
+        E2E_LAST_OUTPUT="$(e2e_display_tail "$display")"
+        E2E_LAST_TRACE_FILE="${trace}"
+        E2E_LAST_INVOCATION=direct
+        printf '{"status":"harness-error","reason":"direct driver exit %s"}\n' "$ec" >"$verdict_file"
+        E2E_LAST_VERDICT_FILE="${verdict_file}"
+        E2E_LAST_VERDICT_REASON="direct driver exit ${ec} (70 error, 71 agent-loop call refused, 72 tool not callable)"
+        echo "   ❌ attempt ${attempt}: ${E2E_LAST_VERDICT_REASON}; see ${err}" >&2
+        return 3
+      fi
+    else
+      (
+        cd "$cwd"
+        PATH="${path_prefix}${PATH}" \
+        PI_CODING_AGENT_DIR="$agent" \
+          timeout --kill-after="${E2E_KILL_AFTER_SECONDS:-15}s" "${tmo}s" "$host_bin" \
+            "${host_flags[@]}" "${extension_args[@]}" "${trace_extension_args[@]}" "${mode_args[@]}" "${tool_args[@]}" \
+            -p "${prompt}" </dev/null >"$trace" 2>"$err"
+      ) && ec=0 || ec=$?
+    fi
+    E2E_LAST_INVOCATION="$mode"
+    [[ "$mode" == agent ]] && E2E_LAST_INVOCATION="agent-loop"
     E2E_LAST_EXIT_CODE="${ec}"
     E2E_LAST_TIMED_OUT=0
     if [[ "${ec}" -eq 124 || "${ec}" -eq 137 ]]; then E2E_LAST_TIMED_OUT=1; fi
@@ -412,9 +533,12 @@ e2e_run_pi() {
     e2e_display_file "$trace" "$err" "$display"
     E2E_LAST_OUTPUT_FILE="${display}"
     E2E_LAST_OUTPUT="$(e2e_display_tail "$display")"
-    node "$E2E_VERDICT_HELPER" bind "${verdict_args[@]}" "$trace" \
+    local oracle="$expect" judged_args=("${verdict_args[@]}")
+    if [[ "$mode" == direct ]]; then oracle="$direct_oracle"; judged_args=(--trace); fi
+    node "$E2E_VERDICT_HELPER" bind "${judged_args[@]}" "$trace" \
       --workspace "$verdict_ws" --cache-root "$cache_dir" --tool "$tool" \
-      --since-ms "$since" --expect "$expect" >"$verdict_file" && vrc=0 || vrc=$?
+      --since-ms "$since" --expect "$oracle" --invocation "$E2E_LAST_INVOCATION" \
+      ${E2E_INVOCATION_FALLBACK:+--fallback-report "$E2E_INVOCATION_FALLBACK"} >"$verdict_file" && vrc=0 || vrc=$?
     E2E_LAST_VERDICT_STATUS="$(jq -r '.status // empty' "$verdict_file" 2>/dev/null || true)"
     E2E_LAST_VERDICT_REASON="$(jq -r '.reason // empty' "$verdict_file" 2>/dev/null || true)"
     case "${vrc}" in
@@ -433,7 +557,7 @@ e2e_run_pi() {
             echo "   ℹ️  pi attempt ${attempt} exited ${ec}; its research call completed; research accepted, nonzero agent-loop exit recorded" >&2
           fi
         fi
-        echo "   🔗 bound research: ${E2E_BOUND_ENTRY} (attempt ${attempt}, ${verdict_file})" >&2
+        echo "   🔗 bound research: ${E2E_BOUND_ENTRY} (attempt ${attempt}, ${E2E_LAST_INVOCATION} invocation, ${verdict_file})" >&2
         return 0
         ;;
       3)
@@ -456,6 +580,7 @@ e2e_run_pi() {
       echo "   ⏳ retrying after ${E2E_RETRY_SLEEP_SECONDS:-30}s" >&2
       sleep "${E2E_RETRY_SLEEP_SECONDS:-30}"
     fi
+    attempt=$((attempt + 1))
   done
   return 1
 }

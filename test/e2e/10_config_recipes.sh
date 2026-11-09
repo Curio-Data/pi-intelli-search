@@ -64,6 +64,12 @@ if [[ -n "${E2E_RECIPE:-}" ]]; then RECIPES=("$E2E_RECIPE"); fi
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+# Configuration unit: by default the research call is made exactly, through
+# the host's registered-tool pipeline with no agent-loop model call
+# (lib.sh, direct-tool.mjs). auto falls back to the agent loop only when the
+# host lacks that API, and says so; direct refuses to fall back; agent keeps
+# the natural-language prompt.
+E2E_INVOCATION="${E2E_INVOCATION:-auto}"
 e2e_init_log "e2e-config-recipes${E2E_RECIPE:+-$E2E_RECIPE}"
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "📝 Log: $LOG_FILE"
@@ -110,13 +116,15 @@ make_env() {
   echo '{}' > "$AGENT/models.json"
 }
 
-# run_recipe <name> <cache_dir> <expected_args_json> <prompt> — one research
-# bound to its own call. Returns nonzero when no bound completed research.
+# run_recipe <name> <cache_dir> <expected_args_json> <query> <prompt> — one
+# research bound to its own call: exact (direct) by default, or the prompt
+# through the agent loop. Returns nonzero when no bound completed research.
 run_recipe() {
   E2E_ATTEMPT_PREFIX="$1-"
   E2E_EXPECT_CACHE_DIR="$2"
   E2E_EXPECT_ARGS="$3"
-  if e2e_run_pi "$AGENT" "$CWD" "$4"; then
+  E2E_RESEARCH_QUERY="$4"
+  if e2e_run_pi "$AGENT" "$CWD" "$5"; then
     return 0
   fi
   echo "   ❌ $1: ${E2E_LAST_VERDICT_REASON:-no completed research after retries} (verdict: ${E2E_LAST_VERDICT_FILE:-none})"
@@ -173,7 +181,7 @@ recipe_r1() {
   cat > "$AGENT/settings.json" <<EOF
 {"defaultProvider": "$E2E_LOOP_PROVIDER", "defaultModel": "$E2E_LOOP_MODEL"}
 EOF
-  if run_recipe r1 .search "$NODE_ARGS" "Use intelli_research with maxUrls=2 and domains=[\"nodejs.org\"] to research: the current Node.js LTS schedule."; then
+  if run_recipe r1 .search "$NODE_ARGS" "the current Node.js LTS schedule" "Use intelli_research with maxUrls=2 and domains=[\"nodejs.org\"] to research: the current Node.js LTS schedule."; then
     assert_eq "search model defaulted" "$(meta_value '.stages.search.model')" "openrouter/perplexity/sonar"
     assert_eq "extract model defaulted" "$(meta_value '.stages.extract.model')" "openrouter/minimax/minimax-m3"
     assert_eq "outcome" "$(meta_value '.outcome')" "completed"
@@ -198,7 +206,7 @@ recipe_r4() {
 EOF
   # No maxUrls in the call (checked on the raw arguments): the agent fallback
   # (defaultUrls=8) must apply, and the models must still default.
-  if run_recipe r4 .search "$NODE_DEFAULT_ARGS" "Use intelli_research and domains=[\"nodejs.org\"] to research: the current Node.js LTS schedule. Do not pass maxUrls; let the default apply."; then
+  if run_recipe r4 .search "$NODE_DEFAULT_ARGS" "the current Node.js LTS schedule" "Use intelli_research and domains=[\"nodejs.org\"] to research: the current Node.js LTS schedule. Do not pass maxUrls; let the default apply."; then
     assert_eq "search model still defaulted" "$(meta_value '.stages.search.model')" "openrouter/perplexity/sonar"
     assert_le "pages requested (defaultUrls cap)" "$(meta_value '.stages.fetch.requested // 999')" 8
     assert_eq "outcome" "$(meta_value '.outcome')" "completed"
@@ -226,7 +234,7 @@ recipe_r5() {
   }
 }
 EOF
-  if run_recipe r5 .search "$SQLITE_ARGS" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
+  if run_recipe r5 .search "$SQLITE_ARGS" "SQLite WAL mode trade-offs" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
     assert_eq "extract model overridden" "$(meta_value '.stages.extract.model')" "openrouter/google/gemini-3.7-flash"
     assert_eq "collate model overridden" "$(meta_value '.stages.collate.model')" "openrouter/google/gemini-3.7-flash"
     assert_eq "outcome" "$(meta_value '.outcome')" "completed"
@@ -250,7 +258,7 @@ recipe_r6() {
   }
 }
 EOF
-  if run_recipe r6 .search "$SQLITE_ARGS" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
+  if run_recipe r6 .search "$SQLITE_ARGS" "SQLite WAL mode trade-offs" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
     assert_eq "collate model overridden" "$(meta_value '.stages.collate.model')" "openrouter/openai/gpt-5-mini"
     assert_eq "extract model still default" "$(meta_value '.stages.extract.model')" "openrouter/minimax/minimax-m3"
     assert_eq "outcome" "$(meta_value '.outcome')" "completed"
@@ -275,7 +283,7 @@ recipe_r7() {
   }
 }
 EOF
-  if run_recipe r7 .search "$NODE_DEFAULT_ARGS" "Use intelli_research and domains=[\"nodejs.org\"] to research: the Node.js release schedule. Do not pass maxUrls; let the default apply."; then
+  if run_recipe r7 .search "$NODE_DEFAULT_ARGS" "the Node.js release schedule" "Use intelli_research and domains=[\"nodejs.org\"] to research: the Node.js release schedule. Do not pass maxUrls; let the default apply."; then
     assert_le "pages requested (defaultUrls=5)" "$(meta_value '.stages.fetch.requested // 999')" 5
     assert_eq "outcome" "$(meta_value '.outcome')" "completed"
     assert_ge "sources fetched" "$(meta_value '.stages.fetch.succeeded // 0')" 1
@@ -304,7 +312,7 @@ recipe_r8() {
   }
 }
 EOF
-  if run_recipe r8 .search-client-x "$SQLITE_ARGS" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
+  if run_recipe r8 .search-client-x "$SQLITE_ARGS" "SQLite WAL mode trade-offs" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
     assert_eq "project search model applied" "$(meta_value '.stages.search.model')" "openrouter/perplexity/sonar-pro-search"
     assert_eq "outcome" "$(meta_value '.outcome')" "completed"
     # The cacheDir override: the verdict bound this call's entry directly inside
@@ -339,7 +347,7 @@ recipe_r9() {
   }
 }
 EOF
-  if run_recipe r9 .search "$SQLITE_ARGS" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
+  if run_recipe r9 .search "$SQLITE_ARGS" "SQLite WAL mode trade-offs" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
     assert_eq "collate model overridden" "$(meta_value '.stages.collate.model')" "openrouter/google/gemini-3.7-flash"
     assert_eq "extract model still default" "$(meta_value '.stages.extract.model')" "openrouter/minimax/minimax-m3"
     assert_eq "outcome" "$(meta_value '.outcome')" "completed"
@@ -365,7 +373,7 @@ recipe_r10() {
 EOF
   # The Node.js fs API reference exceeds 150,000 characters after cleaning
   # when it is fetched; the check below reports whether the cap bound.
-  if run_recipe r10 .search "$NODE_ARGS" "Use intelli_research with maxUrls=2 and domains=[\"nodejs.org\"] to research: the Node.js fs promises API methods and their options."; then
+  if run_recipe r10 .search "$NODE_ARGS" "the Node.js fs promises API methods and their options" "Use intelli_research with maxUrls=2 and domains=[\"nodejs.org\"] to research: the Node.js fs promises API methods and their options."; then
     assert_eq "outcome" "$(meta_value '.outcome')" "completed"
     assert_eq "no extraction budget retries" "$(meta_value '.stages.extract.budgetRetries // 0')" "0"
     assert_eq "no collation budget retry" "$(meta_value '.stages.collate.budgetRetried // "false" | tostring')" "false"

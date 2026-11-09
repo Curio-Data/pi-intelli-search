@@ -466,8 +466,14 @@ it("drains late grandchildren spawned by a TERM handler before publication", { t
   const late = 'process.on("SIGTERM",()=>{}); console.log("LATE",process.pid); setInterval(()=>console.log("late-tick"),20);';
   const code = `const {spawn}=require('node:child_process'); let once=false; process.on('SIGTERM',()=>{if(once)return;once=true;spawn(process.execPath,['-e',${JSON.stringify(late)}],{stdio:'inherit'});setTimeout(()=>process.exit(0),100);});console.log('ready');setInterval(()=>{},100);`;
   const logPath = join(root, "late.log");
-  const receipt = await supervise({ command: process.execPath, args: ["-e", code], cwd: root, env: process.env,
-    logPath, timeoutMs: 400, graceMs: 300 });
+  const running = supervise({ command: process.execPath, args: ["-e", code], cwd: root, env: process.env,
+    logPath, timeoutMs: 2000, graceMs: 300 });
+  for (let i = 0; i < 100; i++) {
+    if (await readFile(logPath, "utf8").catch(() => "").then((text) => text.includes("ready"))) break;
+    await delay(10);
+  }
+  assert.match(await readFile(logPath, "utf8"), /ready/);
+  const receipt = await running;
   assert.equal(receipt.settled, true);
   assert.equal(receipt.outcome, "timeout");
   assert.match(await readFile(logPath, "utf8"), /LATE/);

@@ -34,6 +34,13 @@ source "$SCRIPT_DIR/lib.sh"
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+# By default the MCP research call is made exactly through the host's own MCP
+# client and the stdio server (lib.sh, direct-tool.mjs), with no agent-loop
+# model call: the protocol path is qualified, only the model's choice of call
+# is removed. auto falls back to the agent loop only when the
+# host lacks that API, and says so; direct refuses to fall back; agent keeps
+# the natural-language prompt.
+E2E_INVOCATION="${E2E_INVOCATION:-auto}"
 e2e_init_log e2e-mcp-stdio
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "📝 Log: $LOG_FILE"

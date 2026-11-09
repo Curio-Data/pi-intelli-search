@@ -146,6 +146,10 @@ export function workerEnvironment(unit, paths, allPaths, artifacts, base = proce
     env.E2E_TOOL_ALLOWLIST = unit.id === "11_mcp_stdio"
       ? "mcp__intelli_search__intelli_research"
       : "intelli_research";
+    // Configuration units 02-11 make their research call exactly (no agent
+    // loop) and fail rather than fall back when the host cannot; 01 and 15
+    // keep natural-language routing as a separate evidence class.
+    if (/^(0[2-9]|1[01])_/.test(unit.script)) env.E2E_INVOCATION = "direct";
     env.E2E_TIMEOUT_SECONDS = String(unit.budget.attemptSeconds);
     env.E2E_RETRY_SLEEP_SECONDS = String(unit.budget.retrySeconds);
     env.E2E_KILL_AFTER_SECONDS = String(unit.budget.killSeconds);

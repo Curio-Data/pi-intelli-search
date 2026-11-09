@@ -16,6 +16,7 @@
 // Usage:
 //   node scenario-verdict.mjs bind --trace FILE --workspace DIR --cache-root DIR
 //       --tool NAME --since-ms EPOCH_MS [--expect JSON] [--no-trace]
+//       [--invocation direct|agent-loop] [--fallback-report PATH]
 //
 // Prints one JSON verdict on stdout. Exit status:
 //   0  pass          exactly one call, expected arguments, bound completed sidecar
@@ -264,7 +265,7 @@ export function sourceInventory(entry) {
 }
 
 function parseArgs(argv) {
-  /** @type {{ expect?: unknown, noTrace: boolean, trace?: string, workspace?: string, cacheRoot?: string, tool?: string, sinceMs?: number, entry?: string }} */
+  /** @type {{ expect?: unknown, noTrace: boolean, trace?: string, workspace?: string, cacheRoot?: string, tool?: string, sinceMs?: number, entry?: string, invocation?: string, fallbackReport?: string }} */
   const out = { expect: undefined, noTrace: false };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -283,6 +284,8 @@ function parseArgs(argv) {
       case "--expect": out.expect = JSON.parse(value()); break;
       case "--no-trace": out.noTrace = true; break;
       case "--entry": out.entry = value(); break;
+      case "--invocation": out.invocation = value(); break;
+      case "--fallback-report": out.fallbackReport = value(); break;
       default: throw new Error(`unknown argument ${flag}`);
     }
   }
@@ -321,6 +324,10 @@ function main(argv) {
   let verdict;
   try {
     verdict = bindAttempt({ ...opts, traceText });
+    // The evidence class travels with the verdict: exact invocation and
+    // natural-language routing are different claims.
+    if (opts.invocation) verdict = { ...verdict, invocation: opts.invocation };
+    if (opts.fallbackReport) verdict = { ...verdict, invocationFallback: opts.fallbackReport };
   } catch (error) {
     process.stderr.write(`scenario-verdict: ${error.message}\n`);
     return EXIT.usage;

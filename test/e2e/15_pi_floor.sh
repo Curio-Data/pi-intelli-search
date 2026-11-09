@@ -47,6 +47,10 @@ source "$SCRIPT_DIR/lib.sh"
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+# Routing evidence: this scenario keeps the natural-language prompt through the
+# agent loop, whatever E2E_INVOCATION the environment sets. Exact invocation
+# is the configuration units' evidence class, not this one's.
+E2E_INVOCATION=agent
 e2e_init_log e2e-pi-floor
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "📝 Log: $LOG_FILE"

@@ -16,6 +16,12 @@ mkdir -p "$TMPDIR"
 # shellcheck source=test/e2e/lib.sh
 source "$SCRIPT_DIR/lib.sh"
 e2e_require_one_case E2E_CAP_CASE cap default
+# Configuration unit: by default the research call is made exactly, through
+# the host's registered-tool pipeline with no agent-loop model call
+# (lib.sh, direct-tool.mjs). auto falls back to the agent loop only when the
+# host lacks that API, and says so; direct refuses to fall back; agent keeps
+# the natural-language prompt.
+E2E_INVOCATION="${E2E_INVOCATION:-auto}"
 e2e_init_log e2e-cap
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "📝 Log: $LOG_FILE"
@@ -41,10 +47,12 @@ for scenario in "${CASES[@]}"; do
     DEFAULT=8; CAP=3
     PROMPT='Call intelli_research exactly once with maxUrls=12 and focusPrompt="Official release version and date": what is the latest Node.js LTS version?'
     E2E_EXPECT_ARGS='{"maxUrls":12,"focusPrompt":"Official release version and date"}'
+    E2E_RESEARCH_QUERY="what is the latest Node.js LTS version?"
   else
     DEFAULT=3; CAP=6
     PROMPT='Call intelli_research exactly once to find the current TypeScript version, with focusPrompt="Official version and date". Omit maxUrls entirely: this test verifies the configured default. Do not set it even if the skill normally recommends a value.'
     E2E_EXPECT_ARGS='{"maxUrls":null,"focusPrompt":"Official version and date"}'
+    E2E_RESEARCH_QUERY="the current TypeScript version"
   fi
   jq -n --arg provider "$E2E_LOOP_PROVIDER" --arg model "$E2E_LOOP_MODEL" \
     --argjson default "$DEFAULT" --argjson cap "$CAP" '{

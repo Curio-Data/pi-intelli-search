@@ -38,6 +38,12 @@ source "$SCRIPT_DIR/lib.sh"
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+# Configuration unit: by default the research call is made exactly, through
+# the host's registered-tool pipeline with no agent-loop model call
+# (lib.sh, direct-tool.mjs). auto falls back to the agent loop only when the
+# host lacks that API, and says so; direct refuses to fall back; agent keeps
+# the natural-language prompt.
+E2E_INVOCATION="${E2E_INVOCATION:-auto}"
 e2e_init_log e2e-websearch-tool
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "📝 Log: $LOG_FILE"
@@ -139,6 +145,7 @@ echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 PROMPT='Use intelli_research with maxUrls=2 and domains=["nodejs.org"] to research: the current Node.js LTS schedule. Return the official schedule source.'
 E2E_EXPECT_ARGS='{"maxUrls":2,"domains":["nodejs.org"]}'
+E2E_RESEARCH_QUERY="the current Node.js LTS schedule"
 E2E_EXPECT_CACHE_DIR=".e2e-websearch-cache"
 
 if ! e2e_run_pi "$ISOLATED_AGENT_DIR" "$E2E_CWD" "$PROMPT" "${E2E_TIMEOUT_SECONDS:-300}"; then

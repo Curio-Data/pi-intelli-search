@@ -19,6 +19,8 @@ export interface Verdict {
   candidates?: string[];
   malformedLines?: number;
   meta?: Record<string, unknown>;
+  invocation?: "direct" | "agent-loop";
+  invocationFallback?: string;
 }
 
 export interface BindOptions {
