@@ -9,5 +9,7 @@ export function resolveProjectTrust(
   sdk: Record<string, unknown>,
   cwd: string,
   agentDir: string,
-): { projectTrusted: boolean | undefined; basis: string };
+  defaultProjectTrust?: string,
+): { projectTrusted: boolean | undefined; basis: string; projectTrustExtensionEvent: string };
+export function parseBudget(value: string | undefined): number | undefined;
 export function run(argv: string[]): Promise<number>;

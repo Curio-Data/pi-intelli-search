@@ -90,17 +90,42 @@ export function directArguments(args) {
   return Object.fromEntries(Object.entries(args ?? {}).filter(([, value]) => value !== null && value !== undefined));
 }
 
-/** Project trust as `pi` resolves it non-interactively (main.js, project-trust.js). */
-export function resolveProjectTrust(sdk, cwd, agentDir) {
+/**
+ * Project trust as `pi` resolves it non-interactively (main.js `createRuntime`,
+ * core/project-trust.js `resolveProjectTrusted`):
+ *   1. no trust-requiring project resources: the store decision, else trusted;
+ *   2. an extension answering the `project_trust` event (not reproduced: the
+ *      driver resolves trust before extensions load; recorded in the result);
+ *   3. the store decision;
+ *   4. the global `defaultProjectTrust` setting: always → trusted, never →
+ *      untrusted, ask → untrusted, because a print-mode run has no UI to ask.
+ * `defaultProjectTrust` is the value `SettingsManager.getDefaultProjectTrust()`
+ * returns from global settings, as main.js reads it.
+ */
+export function resolveProjectTrust(sdk, cwd, agentDir, defaultProjectTrust = "ask") {
   if (typeof sdk.ProjectTrustStore !== "function" || typeof sdk.hasTrustRequiringProjectResources !== "function") {
-    return { projectTrusted: undefined, basis: "host-default" };
+    return { projectTrusted: undefined, basis: "host-default", projectTrustExtensionEvent: "unknown" };
   }
   const decision = new sdk.ProjectTrustStore(agentDir).get(cwd);
   if (!sdk.hasTrustRequiringProjectResources(cwd)) {
-    return { projectTrusted: decision ?? true, basis: decision === null ? "no-trust-requiring-resources" : "trust-store" };
+    return {
+      projectTrusted: decision ?? true,
+      basis: decision === null || decision === undefined ? "no-trust-requiring-resources" : "trust-store",
+      projectTrustExtensionEvent: "not-applicable",
+    };
   }
-  if (decision !== null && decision !== undefined) return { projectTrusted: decision, basis: "trust-store" };
-  return { projectTrusted: false, basis: "untrusted-by-default (non-interactive)" };
+  // The host would emit `project_trust` to extensions before reading the store.
+  const projectTrustExtensionEvent = "not-emitted (the driver resolves trust before extensions load)";
+  if (decision !== null && decision !== undefined) return { projectTrusted: decision, basis: "trust-store", projectTrustExtensionEvent };
+  if (defaultProjectTrust === "always") return { projectTrusted: true, basis: "defaultProjectTrust: always", projectTrustExtensionEvent };
+  if (defaultProjectTrust === "never") return { projectTrusted: false, basis: "defaultProjectTrust: never", projectTrustExtensionEvent };
+  return { projectTrusted: false, basis: "defaultProjectTrust: ask, no UI (untrusted)", projectTrustExtensionEvent };
+}
+
+/** Harness-only research-call budget (E2E_RESEARCH_CALL_BUDGET); undefined when off. */
+export function parseBudget(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 ? n : undefined;
 }
 
 function parseArgs(argv) {
@@ -188,7 +213,16 @@ export async function run(argv) {
     return unavailable("host built-in extensions (MCP client) cannot be loaded", { sdkVersion });
   }
 
-  const trust = resolveProjectTrust(sdk, opts.cwd, opts.agentDir);
+  // main.js reads the default from a startup settings manager (global settings).
+  let defaultProjectTrust = "ask";
+  try {
+    const startup = sdk.SettingsManager.create(opts.cwd, opts.agentDir);
+    if (typeof startup.getDefaultProjectTrust === "function") defaultProjectTrust = startup.getDefaultProjectTrust();
+  } catch {
+    // An unreadable settings file leaves the host default.
+  }
+  const researchCallBudget = parseBudget(process.env.E2E_RESEARCH_CALL_BUDGET);
+  const trust = resolveProjectTrust(sdk, opts.cwd, opts.agentDir, defaultProjectTrust);
   const args = directArguments(opts.args);
   emit({
     type: "e2e_direct_driver",
@@ -203,6 +237,9 @@ export async function run(argv) {
     builtinExtensions: builtinsLoaded ? builtInExtensions.map((e) => e?.name ?? "unnamed") : null,
     projectTrusted: trust.projectTrusted ?? null,
     projectTrustBasis: trust.basis,
+    defaultProjectTrust,
+    projectTrustExtensionEvent: trust.projectTrustExtensionEvent,
+    researchCallBudget: researchCallBudget ?? null,
   });
 
   const controller = new AbortController();
@@ -256,17 +293,38 @@ export async function run(argv) {
       return unavailable("host session lacks extensionRunner.createToolContext or bindExtensions", { sdkVersion });
     }
 
-    // Refuse any agent-loop model call; record it so the run fails loudly.
+    // Refuse any agent-loop model call; record it so the run fails loudly. A
+    // host that exposes neither known property cannot be guarded, so direct
+    // invocation is unavailable there rather than silently unguarded.
     const agent = session.agent;
-    const streamKey = "streamFunction" in agent ? "streamFunction" : "streamFn";
+    const streamKey = ["streamFunction", "streamFn"].find((key) => key in agent);
+    if (!streamKey) return unavailable("host agent exposes no known stream property (streamFunction, streamFn)", { sdkVersion });
     agent[streamKey] = () => {
       agentLoopCalls += 1;
       throw new Error("e2e direct driver: agent-loop model call refused");
     };
 
+    let researchStarts = 0;
+    const overBudget = new Set();
     session.subscribe((event) => {
       if (event.type === "tool_execution_start" || event.type === "tool_execution_update" || event.type === "tool_execution_end") {
         emit(event);
+        // The harness budget. The tracer extension's tool_call hook blocks the
+        // over-budget call itself (its result carries the budget marker the
+        // verdict counts); the driver records the overrun at the start and
+        // stops the attempt once that call has ended. Aborting at the start
+        // would pre-empt the block and lose the marker.
+        if (researchCallBudget !== undefined && event.toolName === opts.tool) {
+          if (event.type === "tool_execution_start") {
+            researchStarts += 1;
+            if (researchStarts > researchCallBudget) {
+              overBudget.add(event.toolCallId);
+              emit({ type: "e2e_direct_budget_exceeded", tool: opts.tool, calls: researchStarts, limit: researchCallBudget });
+            }
+          } else if (event.type === "tool_execution_end" && overBudget.has(event.toolCallId) && !controller.signal.aborted) {
+            controller.abort(new Error("research-call budget exceeded"));
+          }
+        }
       } else if (event.type === "agent_start" || event.type === "turn_start") {
         agentLoopEvents += 1;
       }

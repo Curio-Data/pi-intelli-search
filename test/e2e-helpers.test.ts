@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { bindAttempt, argumentMismatches, resultCachePath } from "./e2e/scenario-verdict.mjs";
-import { directArguments, resolveSdkFromHostBin } from "./e2e/direct-tool.mjs";
+import { directArguments, resolveProjectTrust, resolveSdkFromHostBin } from "./e2e/direct-tool.mjs";
 
 const LIB = resolve("test/e2e/lib.sh");
 const VERDICT = resolve("test/e2e/scenario-verdict.mjs");
@@ -359,6 +359,19 @@ it("direct-mode research queries match their prompts, and evidence classes are f
   for (const script of ["10_config_recipes.sh", "11_mcp_stdio.sh"]) {
     assert.match(await readFile(join(dir, script), "utf8"), /^E2E_INVOCATION="\$\{E2E_INVOCATION:-auto\}"$/m, script);
   }
+  // Scenario 10 passes each query to run_recipe positionally. Every call site
+  // must parse (a reshaped call is a failure, not a skip) and its query must
+  // be its prompt's research subject.
+  const recipes = await readFile(join(dir, "10_config_recipes.sh"), "utf8");
+  const sites = recipes.split("\n").filter((l) => /^\s*if run_recipe /.test(l));
+  assert.equal(sites.length, 8, "eight run_recipe call sites");
+  for (const site of sites) {
+    const m = site.match(/run_recipe (r\d+) (\S+) "\$(\w+)" "([^"]+)" "(.*)"; then$/);
+    assert.ok(m, `unparseable run_recipe call: ${site.trim()}`);
+    const [, recipe, , , query, rawPrompt] = m;
+    const prompt = rawPrompt.replace(/\\"/g, '"');
+    assert.ok(prompt.includes(query), `10 ${recipe}: query "${query}" absent from its prompt`);
+  }
   // 11's oracle already names the query; direct mode sends exactly it.
   assert.match(await readFile(join(dir, "11_mcp_stdio.sh"), "utf8"), /^E2E_EXPECT_ARGS='\{"query":/m);
   for (const script of ["01_main.sh", "15_pi_floor.sh"]) {
@@ -690,23 +703,57 @@ describe("review corrections, round 2", () => {
     assert.notEqual(a, b);
     for (const file of [a, b]) assert.match(file, /\/e2e-x-\d{8}-\d{6}-[A-Za-z0-9]{6}\.log$/);
     assert.deepEqual((await readdir(logs)).length, 2);
-    for (const file of [LIB, resolve("test/e2e/12_plugin_bundles.sh")]) {
-      const source = await readFile(file, "utf8");
-      assert.doesNotMatch(source, /mktemp "[^"]*XXXXXX\.log"/, `${file}: X run must end the template`);
-      assert.match(source, /mktemp --suffix=\.log /);
-      if (file.endsWith("12_plugin_bundles.sh")) {
-        assert.ok(source.indexOf('source "$SCRIPT_DIR/lib.sh"') < source.indexOf("e2e_attach_log"), "12: log helper must be sourced before use");
-      }
-    }
+    const lib = await readFile(LIB, "utf8");
+    assert.doesNotMatch(lib, /mktemp "[^"]*XXXXXX\.log"/, "lib.sh: X run must end the template");
+    assert.match(lib, /mktemp --suffix=\.log /);
+    assert.match(await readFile(resolve("test/e2e/12_plugin_bundles.sh"), "utf8"), /^e2e_init_log e2e-plugin-bundles$/m, "12 opens its log through lib.sh");
   });
 
-  it("supervised logging writes directly without a tee descendant", async (t) => {
-    const logs = await scratch(t, "e2e-supervised-log-");
-    const run = spawnSync("bash", ["-c", 'set -euo pipefail; source "$1"; E2E_SUPERVISED=1 E2E_LOG_ROOT="$2"; e2e_init_log e2e-x; e2e_attach_log; printf "supervised-log-ok\n"', "fixture", LIB, logs], { encoding: "utf8" });
+  it("every script sources lib.sh before calling its log helpers", async () => {
+    const dir = resolve("test/e2e");
+    let checked = 0;
+    for (const script of (await readdir(dir)).filter((n) => /^\d\d_.*\.sh$/.test(n))) {
+      const lines = (await readFile(join(dir, script), "utf8")).split("\n");
+      const use = lines.findIndex((l) => /^\s*e2e_(init|attach)_log\b/.test(l));
+      if (use < 0) continue;
+      const source = lines.findIndex((l) => /^\s*source "\$SCRIPT_DIR\/lib\.sh"\s*$/.test(l));
+      // A missing source line must fail, not compare -1 < n.
+      assert.ok(source >= 0, `${script}: calls a lib.sh log helper but never sources lib.sh`);
+      assert.ok(source < use, `${script}: lib.sh sourced at line ${source + 1}, after its first log helper at line ${use + 1}`);
+      checked += 1;
+    }
+    assert.ok(checked >= 13, `only ${checked} scripts checked`);
+  });
+
+  it("supervised logging keeps the supervisor's own log, with no tee descendant and no second file", async (t) => {
+    const root = await scratch(t, "e2e-supervised-log-");
+    const logs = join(root, "logs");
+    await mkdir(logs);
+    const logPath = join(root, "scenario.log");
+    // The real supervisor captures the script's stdout and stderr in logPath,
+    // exactly as the parallel runner does; E2E_LOG_FILE names the same file.
+    const supervisorModule: string = "./e2e/parallel-supervisor.mjs";
+    const { supervise } = await import(supervisorModule);
+    const script = 'set -euo pipefail; source "$1"; e2e_init_log e2e-x; e2e_attach_log; printf "supervised-log-ok\\n"; printf "to-stderr\\n" >&2; printf "%s\\n" "$LOG_FILE"';
+    const result = await supervise({ command: "bash", args: ["-c", script, "fixture", LIB], cwd: root, timeoutMs: 30_000, logPath,
+      env: { PATH: process.env.PATH ?? "", HOME: root, E2E_SUPERVISED: "1", E2E_LOG_ROOT: logs, E2E_LOG_FILE: logPath } });
+    assert.equal(result.outcome, "passed", JSON.stringify(result));
+    assert.equal(await readFile(logPath, "utf8"), `supervised-log-ok\nto-stderr\n${logPath}\n`);
+    assert.deepEqual(await readdir(logs), [], "no second log under E2E_LOG_ROOT");
+
+    // Supervised without E2E_LOG_FILE (stdout elsewhere): append to a new log.
+    const other = await scratch(t, "e2e-supervised-log2-");
+    const run = spawnSync("bash", ["-c", 'set -euo pipefail; source "$1"; E2E_SUPERVISED=1 E2E_LOG_ROOT="$2"; e2e_init_log e2e-x; e2e_attach_log; printf "appended\\n"', "fixture", LIB, other], { encoding: "utf8" });
     assert.equal(run.status, 0, run.stderr);
     assert.equal(run.stdout, "");
-    const file = (await readdir(logs))[0];
-    assert.equal(await readFile(join(logs, file), "utf8"), "supervised-log-ok\n");
+    assert.equal(await readFile(join(other, (await readdir(other))[0]), "utf8"), "appended\n");
+
+    // Standalone keeps the tee: console and file both receive the output.
+    const standalone = await scratch(t, "e2e-standalone-log-");
+    const tee = spawnSync("bash", ["-c", 'set -euo pipefail; source "$1"; E2E_LOG_FILE="$2/named.log"; e2e_init_log e2e-x; e2e_attach_log; printf "teed\\n"; sleep 0.2', "fixture", LIB, standalone], { encoding: "utf8" });
+    assert.equal(tee.status, 0, tee.stderr);
+    assert.equal(tee.stdout, "teed\n");
+    assert.equal(await readFile(join(standalone, "named.log"), "utf8"), "teed\n");
   });
 
   it("12's key probe reads only its own servers' environments", async (t) => {
@@ -1053,13 +1100,200 @@ printf 'RC=%s INVOCATION=%s ENTRY=%s FALLBACK=%s\\n' "$rc" "\${E2E_LAST_INVOCATI
       mcpCli: "/f/m.js", mcpTarball: "/f/m.tgz", traceExtension: "/f/t.mjs", traceFetch: "/f/f.mjs" } };
     const base = { PATH: "/usr/bin", HOME: "/operator", OPENROUTER_API_KEY: "dummy-fixture" };
     const byUnit: Record<string, string | undefined> = {};
+    const { scenarioLogPath } = await import(runnerModule);
     for (const unit of createManifest().units.filter((u: { kind: string }) => u.kind === "provider")) {
-      byUnit[unit.id] = workerEnvironment(unit, paths, new Map(), artifacts, base).E2E_INVOCATION;
+      const unitEnv = workerEnvironment(unit, paths, new Map(), artifacts, base);
+      byUnit[unit.id] = unitEnv.E2E_INVOCATION;
+      // The research-call budget covers every provider unit, on its own tool.
+      assert.equal(unitEnv.E2E_RESEARCH_CALL_BUDGET, "1", unit.id);
+      assert.equal(unitEnv.E2E_RESEARCH_BUDGET_TOOLS, unitEnv.E2E_TOOL_ALLOWLIST, unit.id);
+      // Scenarios log to the very file the supervisor captures.
+      assert.equal(unitEnv.E2E_LOG_FILE, scenarioLogPath(paths), unit.id);
     }
+    const twelve = createManifest().units.find((u: { id: string }) => u.id === "12_plugin_bundles");
+    const twelveEnv = workerEnvironment(twelve, paths, new Map(), artifacts, base);
+    assert.equal(twelveEnv.E2E_RESEARCH_CALL_BUDGET, undefined, "no budget outside provider units");
+    assert.equal(twelveEnv.E2E_LOG_FILE, scenarioLogPath(paths));
     for (const [id, invocation] of Object.entries(byUnit)) {
       const expected = /^(01|15)_/.test(id) ? undefined : "direct";
       assert.equal(invocation, expected, id);
     }
     assert.ok(Object.keys(byUnit).length >= 20, "provider units were enumerated");
+  });
+});
+
+describe("harness research-call budget", () => {
+  const SDK = resolve("node_modules/@earendil-works/pi-coding-agent");
+  const PI_AI = resolve("node_modules/@earendil-works/pi-ai");
+  const TRACER = resolve("test/e2e/trace-extension.mjs");
+  const DRIVER = resolve("test/e2e/direct-tool.mjs");
+  // Fixture research tool: records each executed call; "nested" makes a
+  // second research call from inside the first through ctx.executeTool.
+  const FIXTURE = `import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { Type } from "typebox";
+export default function (pi) {
+  pi.registerTool({
+    name: "intelli_research", label: "fixture", description: "fixture research",
+    parameters: Type.Object({ query: Type.String() }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      appendFileSync(join(ctx.cwd, "executed.jsonl"), JSON.stringify(params) + "\\n");
+      if (params.query === "nested") await ctx.executeTool("intelli_research", { query: "inner" });
+      const slug = "2026-11-10-" + params.query;
+      mkdirSync(join(ctx.cwd, ".search", slug), { recursive: true });
+      writeFileSync(join(ctx.cwd, ".search", slug, "meta.json"), JSON.stringify({ outcome: "completed",
+        stages: { fetch: { succeeded: 1 }, collate: { summaryChars: 5 } } }));
+      return { content: [{ type: "text", text: "done" }], details: { cachePath: ".search/" + slug } };
+    },
+  });
+}
+`;
+  // Drives the real agent loop of the dev SDK with a scripted faux model
+  // stream: no network, no provider.
+  const HARNESS = `import { pathToFileURL } from "node:url";
+const [sdkDir, piAiDir, fixture, tracer, cwd, agentDir, mode] = process.argv.slice(2);
+const sdk = await import(pathToFileURL(sdkDir + "/dist/index.js").href);
+const piAi = await import(pathToFileURL(piAiDir + "/dist/index.js").href);
+const settingsManager = sdk.SettingsManager.create(cwd, agentDir);
+const resourceLoader = new sdk.DefaultResourceLoader({ cwd, agentDir, settingsManager,
+  additionalExtensionPaths: [fixture, tracer], noExtensions: true, noSkills: true, noPromptTemplates: true, noContextFiles: true });
+await resourceLoader.reload();
+const { session } = await sdk.createAgentSession({ cwd, agentDir, resourceLoader, settingsManager,
+  sessionManager: sdk.SessionManager.inMemory(cwd) });
+const core = piAi.createFauxCore({});
+const call = (id, query) => piAi.fauxToolCall("intelli_research", { query }, { id });
+const tools = (...calls) => piAi.fauxAssistantMessage(calls, { stopReason: "toolUse" });
+core.setResponses(mode === "batch"
+  ? [tools(call("c1", "one"), call("c2", "two")), piAi.fauxAssistantMessage("done")]
+  : [tools(call("c1", "one")), tools(call("c2", "two")), tools(call("c3", "three")), piAi.fauxAssistantMessage("done")]);
+session.agent["streamFunction" in session.agent ? "streamFunction" : "streamFn"] = core.streamSimple;
+session.subscribe((event) => {
+  if (String(event.type).startsWith("tool_execution_")) process.stdout.write(JSON.stringify(event) + "\\n");
+});
+await session.bindExtensions({ mode: "json" });
+try { await session.prompt("go"); } catch (error) { process.stderr.write(String(error) + "\\n"); }
+process.stdout.write(JSON.stringify({ type: "harness_summary", streamCalls: core.state.callCount }) + "\\n");
+session.dispose();
+process.exit(0);
+`;
+  const MODELS = { providers: { e2efake: { baseUrl: "http://127.0.0.1:9/v1", api: "openai-completions", apiKey: "dummy",
+    models: [{ id: "fake-model", name: "fake", reasoning: false, input: ["text"], contextWindow: 8000, maxTokens: 1000,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] } } };
+
+  async function setup(t: { after: (fn: () => Promise<void>) => void }) {
+    const root = await scratch(t, "e2e-budget-");
+    for (const sub of ["agent", "ws", "home"]) await mkdir(join(root, sub));
+    await writeFile(join(root, "fixture.mjs"), FIXTURE);
+    await writeFile(join(root, "harness.mjs"), HARNESS);
+    await writeFile(join(root, "agent/settings.json"), JSON.stringify({ defaultProvider: "e2efake", defaultModel: "fake-model" }));
+    await writeFile(join(root, "agent/models.json"), JSON.stringify(MODELS));
+    return root;
+  }
+  const env = (root: string, budget: boolean) => ({ PATH: process.env.PATH ?? "", HOME: join(root, "home"), PI_OFFLINE: "1",
+    PI_CODING_AGENT_DIR: join(root, "agent"), PI_INTELLI_E2E_EXTENSION_TRACE: join(root, "extension.jsonl"),
+    ...(budget ? { E2E_RESEARCH_CALL_BUDGET: "1", E2E_RESEARCH_BUDGET_TOOLS: "intelli_research" } : {}) });
+  const executed = async (root: string) =>
+    existsSync(join(root, "ws/executed.jsonl")) ? (await readFile(join(root, "ws/executed.jsonl"), "utf8")).trim().split("\n").length : 0;
+  const agentLoop = (root: string, mode: string, budget: boolean) => spawnSync(process.execPath,
+    [join(root, "harness.mjs"), SDK, PI_AI, join(root, "fixture.mjs"), TRACER, join(root, "ws"), join(root, "agent"), mode],
+    { cwd: join(root, "ws"), encoding: "utf8", env: env(root, budget), timeout: 60_000 });
+
+  it("blocks the second call and stops the hook's run; off unless configured", async () => {
+    const tracerModule: string = "./e2e/trace-extension.mjs";
+    const { installResearchBudget } = await import(tracerModule);
+    const handlers: Record<string, (event: unknown, ctx: unknown) => unknown> = {};
+    const pi = { on: (name: string, fn: (event: unknown, ctx: unknown) => unknown) => { handlers[name] = fn; } };
+    assert.equal(installResearchBudget(pi, {}), false, "off without E2E_RESEARCH_CALL_BUDGET");
+    assert.equal(handlers.tool_call, undefined);
+    assert.equal(installResearchBudget(pi, { E2E_RESEARCH_CALL_BUDGET: "1" }), true);
+    let aborts = 0;
+    const ctx = { abort: () => { aborts += 1; } };
+    const toolCall = handlers.tool_call as unknown as (event: unknown, ctx: unknown) => unknown;
+    assert.equal(toolCall({ toolName: "read", toolCallId: "r" }, ctx), undefined, "other tools are not counted");
+    assert.equal(toolCall({ toolName: "intelli_research", toolCallId: "a" }, ctx), undefined);
+    const blocked = toolCall({ toolName: "mcp__intelli_search__intelli_research", toolCallId: "b" }, ctx) as Json;
+    assert.equal(blocked.block, true);
+    assert.equal(blocked.terminate, true);
+    assert.match(String(blocked.reason), /E2E research-call budget: research call 2 exceeds the harness limit of 1/);
+    assert.equal(aborts, 0, "the run is ended by terminate, not aborted (an abort would replace the marker)");
+  });
+
+  it("agent loop: a second sequential research call is never executed and no further turn runs", async (t) => {
+    const root = await setup(t);
+    const run = agentLoop(root, "sequential", true);
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(await executed(root), 1, "only the first research call executed");
+    const summary = JSON.parse(run.stdout.trim().split("\n").at(-1) ?? "{}");
+    assert.equal(summary.streamCalls, 2, "no model turn after the blocked call");
+    const verdict = bindAttempt({ traceText: run.stdout, workspace: join(root, "ws"), cacheRoot: ".search", tool: "intelli_research", sinceMs: 0 });
+    assert.equal(verdict.status, "oracle-fail");
+    assert.equal(verdict.callsObserved, 2);
+    assert.equal(verdict.budgetBlocked, 1);
+    assert.match(verdict.reason, /research-call budget blocked 1 and stopped the attempt/);
+    const trace = (await readFile(join(root, "extension.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+    assert.ok(trace.some((r) => r.type === "research_call_budget" && r.action === "blocked" && r.call === 2));
+  });
+
+  it("agent loop: a second call in the same batch is blocked; only the allowed call runs", async (t) => {
+    const root = await setup(t);
+    const run = agentLoop(root, "batch", true);
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(await executed(root), 1, "only the first, allowed call executed");
+    const summary = JSON.parse(run.stdout.trim().split("\n").at(-1) ?? "{}");
+    // The batch mixes an allowed and a blocked result, so terminate does not
+    // apply to it; the scripted model's next turn ends the run.
+    assert.equal(summary.streamCalls, 2);
+    const verdict = bindAttempt({ traceText: run.stdout, workspace: join(root, "ws"), cacheRoot: ".search", tool: "intelli_research", sinceMs: 0 });
+    assert.equal(verdict.status, "oracle-fail");
+    assert.equal(verdict.budgetBlocked, 1);
+  });
+
+  it("agent loop without the budget runs every call, so the budget is what stops them", async (t) => {
+    const root = await setup(t);
+    const run = agentLoop(root, "sequential", false);
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(await executed(root), 3);
+  });
+
+  it("direct path: a nested second research call is blocked and the driver records it", async (t) => {
+    const root = await setup(t);
+    const run = spawnSync(process.execPath, [DRIVER, "--sdk", SDK, "--agent-dir", join(root, "agent"), "--cwd", join(root, "ws"),
+      "--tool", "intelli_research", "--args", JSON.stringify({ query: "nested" }), "--extension", join(root, "fixture.mjs"),
+      "--extension", TRACER, "--no-extensions"], { cwd: join(root, "ws"), encoding: "utf8", env: env(root, true), timeout: 60_000 });
+    assert.equal(run.status, 0, run.stderr);
+    const records = run.stdout.trim().split("\n").map((l) => JSON.parse(l) as Json);
+    assert.equal(records[0].researchCallBudget, 1);
+    assert.ok(records.some((r) => r.type === "e2e_direct_budget_exceeded" && r.calls === 2));
+    assert.equal(await executed(root), 1, "the nested call never executed");
+    const verdict = bindAttempt({ traceText: run.stdout, workspace: join(root, "ws"), cacheRoot: ".search", tool: "intelli_research", sinceMs: 0 });
+    assert.equal(verdict.status, "oracle-fail");
+    assert.equal(verdict.budgetBlocked, 1);
+  });
+});
+
+describe("direct driver host fidelity", () => {
+  it("resolves project trust through defaultProjectTrust and records the unemitted trust event", async () => {
+    const fake = (decision: boolean | null, requiring: boolean) => ({
+      ProjectTrustStore: class { get() { return decision; } },
+      hasTrustRequiringProjectResources: () => requiring,
+    });
+    const r = (sdk: Record<string, unknown>, setting?: string) => resolveProjectTrust(sdk, "/w", "/a", setting);
+    assert.deepEqual(r(fake(null, false)), { projectTrusted: true, basis: "no-trust-requiring-resources", projectTrustExtensionEvent: "not-applicable" });
+    assert.equal(r(fake(false, false)).projectTrusted, false);
+    assert.equal(r(fake(true, true)).basis, "trust-store");
+    assert.equal(r(fake(false, true), "always").projectTrusted, false, "a stored decision wins over the setting");
+    assert.deepEqual([r(fake(null, true), "always").projectTrusted, r(fake(null, true), "always").basis], [true, "defaultProjectTrust: always"]);
+    assert.equal(r(fake(null, true), "never").projectTrusted, false);
+    assert.equal(r(fake(null, true), "ask").projectTrusted, false);
+    assert.equal(r(fake(null, true)).projectTrusted, false, "ask is the default");
+    assert.match(r(fake(null, true), "ask").projectTrustExtensionEvent, /^not-emitted/);
+    assert.equal(r({}).basis, "host-default");
+  });
+
+  it("is unavailable, not unguarded, when the host agent exposes no known stream property", async () => {
+    const source = await readFile(resolve("test/e2e/direct-tool.mjs"), "utf8");
+    assert.match(source, /\["streamFunction", "streamFn"\]\.find\(\(key\) => key in agent\)/);
+    assert.match(source, /if \(!streamKey\) return unavailable\("host agent exposes no known stream property/);
+    assert.doesNotMatch(source, /"streamFunction" in agent \? "streamFunction" : "streamFn"/, "no unread fallback assignment");
   });
 });

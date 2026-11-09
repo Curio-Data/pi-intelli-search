@@ -113,6 +113,11 @@ export function isolatedEnvironment(paths, base = process.env) {
     JITI_FS_CACHE: "false", PI_OFFLINE: "1", NO_COLOR: "1" };
 }
 
+/** The log the supervisor captures for a unit; scenarios write to it through E2E_LOG_FILE. */
+export function scenarioLogPath(paths) {
+  return join(paths.root, "scenario.log");
+}
+
 export function workerEnvironment(unit, paths, allPaths, artifacts, base = process.env) {
   const frozen = artifacts.paths;
   const env = { ...isolatedEnvironment(paths, base), ...unit.env,
@@ -123,7 +128,7 @@ export function workerEnvironment(unit, paths, allPaths, artifacts, base = proce
     E2E_EXTENSION_PATH: unit.id === "15_pi_floor" ? frozen.floorExtension : frozen.extension,
     E2E_MCP_CLI: frozen.mcpCli, E2E_MCP_TARBALL: frozen.mcpTarball, E2E_FLOOR_BIN: frozen.floorBin,
     E2E_SKIP_BUILD: "1", E2E_COMPACT_JSON_OUTPUT: "1", E2E_KEEP_ARTIFACTS: "1",
-    E2E_SUPERVISED: "1",
+    E2E_SUPERVISED: "1", E2E_LOG_FILE: scenarioLogPath(paths),
     TEST_MODEL: LOOP_MODEL, E2E_LOOP_MODEL_ID: LOOP_MODEL,
     PI_INTELLI_E2E_SCENARIO: unit.id, PI_INTELLI_E2E_LOOP_MODEL: LOOP_MODEL,
     PI_INTELLI_E2E_HTTP_TRACE: join(paths.root, "http.jsonl"),
@@ -151,6 +156,10 @@ export function workerEnvironment(unit, paths, allPaths, artifacts, base = proce
     // loop) and fail rather than fall back when the host cannot; 01 and 15
     // keep natural-language routing as a separate evidence class.
     if (/^(0[2-9]|1[01])_/.test(unit.script)) env.E2E_INVOCATION = "direct";
+    // Harness-only research-call budget (trace-extension.mjs, direct-tool.mjs):
+    // a second research call in one attempt is blocked and stops the attempt.
+    env.E2E_RESEARCH_CALL_BUDGET = "1";
+    env.E2E_RESEARCH_BUDGET_TOOLS = env.E2E_TOOL_ALLOWLIST;
     env.E2E_TIMEOUT_SECONDS = String(unit.budget.attemptSeconds);
     env.E2E_RETRY_SLEEP_SECONDS = String(unit.budget.retrySeconds);
     env.E2E_KILL_AFTER_SECONDS = String(unit.budget.killSeconds);
@@ -275,7 +284,7 @@ Prepare-only installs and validates the snapshots without workers or account API
       const event = (data) => appendFileSync(join(paths.root, "supervision.jsonl"), `${JSON.stringify({ unit: unit.id, ...data })}\n`);
       const result = await supervise({ command: "bash", args: [join(artifacts.paths.harness, "test/e2e", unit.script)],
         cwd: paths.workspace, env: workerEnvironment(unit, paths, allPaths, artifacts, base),
-        logPath: join(paths.root, "scenario.log"), timeoutMs: unit.timeoutMs, signal: controller.signal, event });
+        logPath: scenarioLogPath(paths), timeoutMs: unit.timeoutMs, signal: controller.signal, event });
       let evidence = { binding: "unsettled", providerSignals: null };
       if (result.settled) {
         try { evidence = readUnitEvidence(paths.root); }

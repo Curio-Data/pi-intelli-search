@@ -3,19 +3,18 @@
 # test/run-e2e-all.sh — Sequential E2E runner
 #
 # Runs every live E2E script ONE AT A TIME with a spacing gap between them.
-# Running the scripts concurrently (or back-to-back with no gap) bursts dozens
-# of LLM calls at a single OpenRouter key and trips provider rate limits, which
-# surfaces as degraded/failed runs. This runner serialises them and paces the
-# bucket so the suite is a reliable signal.
+# This is the sequential alternative for credentialed scenarios 13 and 14 and
+# for deliberately paced runs. The gap is operational pacing, not a measured
+# provider-bucket refill. Use run-e2e-parallel.sh for the isolated 25-unit lane.
 #
 # Usage:
 #   ./test/run-e2e-all.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required (auto-detected from ~/.pi/agent/auth.json).
-#   E2E_GAP_SECONDS      Gap between scripts (default: 20). OpenRouter's free
-#                        bucket refills at ~0.33 req/s, so a ~20s gap lets it
-#                        recover between scripts. Set 0 on paid/high-limit keys.
+#   E2E_GAP_SECONDS      Gap between scripts (default: 20). Set 0 when pacing
+#                        is not required; upstream 429/402 evidence is handled
+#                        from recorded responses, not assumed from concurrency.
 #   E2E_SCRIPT_TIMEOUT_SECONDS  Per-script deadline (default: 1200).
 #   E2E_SCRIPT_KILL_AFTER_SECONDS  Grace before KILL after the deadline
 #                        (default: 30).

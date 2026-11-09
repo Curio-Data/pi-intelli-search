@@ -4,10 +4,23 @@
 // Harness-only Pi extension. Load after the extension under test with -e.
 // It distinguishes extension registry calls from Pi agent-loop responses and
 // records no prompts, completions, credentials, or request headers.
+//
+// It also enforces the harness research-call budget when
+// E2E_RESEARCH_CALL_BUDGET is a positive integer (the parallel runner sets 1;
+// it is off otherwise). The verdict never chooses between several research
+// calls in one attempt, so every call beyond the first would be paid for and
+// then discarded. The budget blocks each call over the limit before it runs
+// and sets the host's `terminate` hint, which ends the agent run after a batch
+// whose results all carry it. The run is deliberately not aborted: an abort
+// replaces the blocked result's text (losing the marker the verdict counts)
+// and, on the hosts tested, still lets the loop request one more model turn.
 
 import { appendFileSync } from "node:fs";
 
 const tracePath = process.env.PI_INTELLI_E2E_EXTENSION_TRACE;
+/** Text the blocked tool result carries; scenario-verdict.mjs counts it. */
+export const RESEARCH_BUDGET_MARKER = "E2E research-call budget";
+const DEFAULT_BUDGET_TOOLS = "intelli_research,mcp__intelli_search__intelli_research";
 const scenario = process.env.PI_INTELLI_E2E_SCENARIO ?? "unknown";
 let nextCallId = 1;
 
@@ -158,7 +171,35 @@ function instrumentRegistry(registry) {
   write({ type: "trace_registry_installed" });
 }
 
+/**
+ * Install the research-call budget. Only validated calls reach `tool_call`, so
+ * a call the host rejects for its arguments costs nothing and is not counted.
+ */
+export function installResearchBudget(pi, env = process.env) {
+  const limit = Number(env.E2E_RESEARCH_CALL_BUDGET);
+  if (!Number.isInteger(limit) || limit < 1) return false;
+  const tools = new Set((env.E2E_RESEARCH_BUDGET_TOOLS || DEFAULT_BUDGET_TOOLS).split(",").map((t) => t.trim()).filter(Boolean));
+  let calls = 0;
+  pi.on("tool_call", (event) => {
+    if (!tools.has(event.toolName)) return undefined;
+    calls += 1;
+    if (calls <= limit) {
+      write({ type: "research_call_budget", action: "allowed", tool: event.toolName, call: calls, limit });
+      return undefined;
+    }
+    write({ type: "research_call_budget", action: "blocked", tool: event.toolName, call: calls, limit, toolCallId: event.toolCallId });
+    return {
+      block: true,
+      terminate: true,
+      reason: `${RESEARCH_BUDGET_MARKER}: research call ${calls} exceeds the harness limit of ${limit} per attempt; the attempt is stopped and its verdict is an oracle failure`,
+    };
+  });
+  write({ type: "research_call_budget_installed", limit, tools: [...tools] });
+  return true;
+}
+
 export default function traceExtension(pi) {
+  installResearchBudget(pi);
   if (!tracePath) return;
   pi.on("session_start", (_event, ctx) => {
     instrumentRegistry(ctx.modelRegistry);

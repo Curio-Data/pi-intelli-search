@@ -40,23 +40,47 @@ E2E_VERDICT_HELPER="${E2E_LIB_DIR}/scenario-verdict.mjs"
 E2E_DIRECT_DRIVER="${E2E_LIB_DIR}/direct-tool.mjs"
 E2E_CLEANUP_PATHS=()
 
-# e2e_init_log <name> — open this scenario's log with exclusive creation and
-# choose the attempt directory. Sets LOG_DIR, LOG_FILE and E2E_ATTEMPT_DIR.
-# Call before `exec > >(tee -a "$LOG_FILE") 2>&1`.
+# e2e_init_log <name> — choose this scenario's log and attempt directory. Sets
+# LOG_DIR, LOG_FILE and E2E_ATTEMPT_DIR; call e2e_attach_log next.
+#
+# E2E_LOG_FILE names the log outright: the parallel runner sets it to the
+# `scenario.log` its supervisor already captures. Otherwise a new log is
+# created exclusively under E2E_LOG_ROOT (default .e2e-logs).
 e2e_init_log() {
   local name=$1
-  LOG_DIR="${E2E_LOG_ROOT:-${PROJECT_DIR}/.e2e-logs}"
-  mkdir -p "$LOG_DIR"
-  # Exclusive creation; --suffix keeps the X run at the end of the template.
-  LOG_FILE="$(mktemp --suffix=.log "${LOG_DIR}/${name}-$(date +%Y%m%d-%H%M%S)-XXXXXX")"
+  if [[ -n "${E2E_LOG_FILE:-}" ]]; then
+    LOG_FILE="$E2E_LOG_FILE"
+    LOG_DIR="$(dirname "$LOG_FILE")"
+    mkdir -p "$LOG_DIR"
+    [[ -e "$LOG_FILE" ]] || : >>"$LOG_FILE"
+  else
+    LOG_DIR="${E2E_LOG_ROOT:-${PROJECT_DIR}/.e2e-logs}"
+    mkdir -p "$LOG_DIR"
+    # Exclusive creation; --suffix keeps the X run at the end of the template.
+    LOG_FILE="$(mktemp --suffix=.log "${LOG_DIR}/${name}-$(date +%Y%m%d-%H%M%S)-XXXXXX")"
+  fi
   E2E_ATTEMPT_DIR="${E2E_TRACE_DIR:-${LOG_FILE%.log}-attempts}"
 }
 
-# Attach the scenario log without creating a process-substitution descendant
-# under the supervisor. Standalone callers keep console and file output.
+# e2e_stdout_is_log — true when this shell's stdout already writes LOG_FILE
+# (the supervisor's capture), compared by device and inode.
+e2e_stdout_is_log() {
+  local out
+  out="$(stat -L -c '%d:%i' /dev/stdout 2>/dev/null)" || return 1
+  [[ -n "$out" && "$out" == "$(stat -L -c '%d:%i' "$LOG_FILE" 2>/dev/null)" ]]
+}
+
+# e2e_attach_log — send this scenario's output to LOG_FILE.
+#   Supervised (E2E_SUPERVISED=1): no process-substitution descendant may
+#   outlive the script. When stdout already is the log (the supervisor's
+#   captured scenario.log) nothing changes, so the supervisor's file stays the
+#   one complete record; otherwise output is appended to the log.
+#   Standalone: output is tee'd, so it reaches both the console and the log.
 e2e_attach_log() {
   if [[ "${E2E_SUPERVISED:-0}" == "1" ]]; then
-    exec > "$LOG_FILE" 2>&1
+    if ! e2e_stdout_is_log; then
+      exec >>"$LOG_FILE" 2>&1
+    fi
   else
     exec > >(tee -a "$LOG_FILE") 2>&1
   fi

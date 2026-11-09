@@ -196,14 +196,21 @@ export function bindAttempt({ traceText, workspace, cacheRoot, tool, sinceMs, ex
     returned: ends.has(s.toolCallId),
     isError: ends.get(s.toolCallId)?.isError === true,
   }));
-  const withCalls = { ...base, malformedLines: malformed, calls };
+  // Calls the harness research-call budget blocked (trace-extension.mjs). The
+  // marker text is defined there; matching the text keeps this file free of
+  // host imports.
+  const budgetBlocked = [...ends.values()].filter((e) =>
+    (e.result?.content ?? []).some((part) => typeof part?.text === "string" && part.text.includes("E2E research-call budget")),
+  ).length;
+  const withCalls = { ...base, malformedLines: malformed, calls, callsObserved: starts.length, budgetBlocked };
 
   if (starts.length === 0) return { ...withCalls, status: "retry", reason: `no ${tool} call in this attempt` };
   if (starts.length > 1) {
     return {
       ...withCalls,
       status: "oracle-fail",
-      reason: `${starts.length} ${tool} calls in one attempt; the verdict does not choose between them`,
+      reason: `${starts.length} ${tool} calls in one attempt; the verdict does not choose between them` +
+        (budgetBlocked > 0 ? `; the harness research-call budget blocked ${budgetBlocked} and stopped the attempt` : ""),
       argumentMismatches: calls.map((c) => argumentMismatches(c.args, expect)),
     };
   }

@@ -47,9 +47,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=test/e2e/lib.sh
 source "$SCRIPT_DIR/lib.sh"
 
-LOG_DIR="${E2E_LOG_ROOT:-$PROJECT_DIR/.e2e-logs}"
-mkdir -p "$LOG_DIR"
-LOG_FILE="$(mktemp --suffix=.log "$LOG_DIR/e2e-plugin-bundles-$(date +%Y%m%d-%H%M%S)-XXXXXX")"
+e2e_init_log e2e-plugin-bundles
 e2e_attach_log
 echo "📝 Log: $LOG_FILE"
 

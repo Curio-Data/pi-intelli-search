@@ -28,11 +28,15 @@
 #                                      page exceeds it; collationMaxTokens is not
 #                                      recorded in telemetry)
 #
-# Up to three attempts per recipe guard the known transient pi agent-loop
-# failure mode (the post-tool model hop has no application retry wrapper).
-# Every assertion reads the sidecar bound to the recipe's own research call
-# (lib.sh): exactly one call, with the arguments the prompt names. An attempt
-# that completed research is never repeated.
+# Each recipe makes its research call by direct invocation by default (lib.sh,
+# direct-tool.mjs), so no agent-loop model is involved; the prompt is used only
+# when the host lacks direct invocation and the run falls back to the agent
+# loop, with a fallback report. Up to three attempts per recipe retry a
+# research call that completed no useful work (a transient provider or
+# transport failure, or a degraded search). Every assertion reads the sidecar
+# bound to the recipe's own research call (lib.sh): exactly one call, with the
+# arguments the oracle names. An attempt that completed research is never
+# repeated, and wrong arguments or several calls are never retried.
 #
 # Evidence classes differ by recipe: R9's input budget and R10's collation
 # token cap are not recorded in telemetry, and R10's input cap binds only when

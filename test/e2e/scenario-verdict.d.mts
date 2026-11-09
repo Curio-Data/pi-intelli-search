@@ -18,6 +18,8 @@ export interface Verdict {
   argumentMismatches?: unknown;
   candidates?: string[];
   malformedLines?: number;
+  callsObserved?: number;
+  budgetBlocked?: number;
   meta?: Record<string, unknown>;
   invocation?: "direct" | "agent-loop";
   invocationFallback?: string;
