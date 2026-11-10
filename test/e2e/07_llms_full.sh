@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# test/07_llms_full.sh — E2E test for automatic llms-full.txt discovery
+# test/e2e/07_llms_full.sh: E2E test for automatic llms-full.txt discovery
 #
 # Proves the HEAD-probe auto-discovery works by targeting a site known
 # to publish llms-full.txt at the standard /llms-full.txt root path.
 # Verifies the file lands in sources/llms-full-*.md in the cache.
 #
 # Usage:
-#   ./test/07_llms_full.sh
+#   ./test/e2e/07_llms_full.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai

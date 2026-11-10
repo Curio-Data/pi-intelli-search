@@ -44,6 +44,8 @@
 #
 # Environment:
 #   OPENROUTER_API_KEY            Required. Get one from https://openrouter.ai
+#   TEST_MODEL                    Override the headless agent-loop model
+#                                 (default: see test/e2e/lib.sh)
 #   E2E_RECIPE_TIMEOUT_SECONDS    Per pi attempt, up to three per recipe (default: 600)
 
 # Each recipe counts its own ERRORS inside its subshell by design.

@@ -12,7 +12,7 @@ The extract and collate stages dominate per-run cost and determine report qualit
 
 ### Harness
 
-Before running, set `BENCH_BASE_DIR` to a directory on encrypted storage: the harness writes an `auth.json` containing provider credentials into each run's agent directory. Its default base is `/tmp/intelli-bench-<stamp>`, which is not suitable for confidential scratch.
+The harness writes an owner-only `auth.json` holding provider credentials into each run's agent directory, under a base directory it creates owner-only: `.tmp/bench-<stamp>` in the repository by default, or `BENCH_BASE_DIR`. Keep that base on encrypted storage.
 
 Run [`scripts/benchmark-models.sh`](../scripts/benchmark-models.sh) from the repo root:
 
@@ -28,7 +28,7 @@ Per model, the harness:
 3. Starts headless `pi` with `PI_CODING_AGENT_DIR` pointed at the isolated directory, loading `dist/index.js`, with the tool-call parameters pinned verbatim in the prompt.
 4. Prints the run's telemetry row from the `meta.json` sidecar (duration, links, fetch outcomes, extraction chars in/out, collation chars).
 
-The agent-loop model is pinned per benchmark series; only the pipeline's extract/collate models vary. The default loop model is `qwen-token-plan/qwen3.8-max` when its API key exists, else `openrouter/google/gemini-3.8-flash`; only `BENCH_LOOP_MODEL` overrides it, and it must name an API-key login. The 2026-09-07 baseline series ran with `google/gemini-3.8-flash` as the loop model.
+Only the extract and collate models vary within a series; each recorded series names its loop model. The default loop model is `qwen-token-plan/qwen3.8-max` when an API key for it exists, else `openrouter/google/gemini-3.8-flash`; `BENCH_LOOP_MODEL` overrides it and must name an API-key login. The baseline series ran on `google/gemini-3.8-flash`; the four later 2026-09-07 series ran on `kimi-coding/k3`. Rerunning on that loop needs `BENCH_LOOP_MODEL=kimi-coding/k3` and an API-key `kimi-coding` login, because the harness refuses an OAuth login.
 
 ### Fixed Stimulus
 
@@ -170,4 +170,4 @@ Protocol:
 4. Append rows and findings to this file. Record the extension version and date; keep historical rows untouched.
 5. Match full source URLs across runs (for example the dev.to roundups and adminlte.io appear in most baseline runs). Verify identical captured input content before treating extraction differences as pure model effects; file numbers and hostnames alone do not establish a match.
 
-Artefacts land under `<base>/<label>/cwd/.search/<slug>/` with the full `report.md`, `meta.json`, per-page `extractions/`, and raw `sources/`. Use the encrypted `BENCH_BASE_DIR` selected before running. Copy anything worth keeping out of the base directory before it is reaped.
+Artefacts land under `<base>/<label>/cwd/.search/<slug>/` with the full `report.md`, `meta.json`, per-page `extractions/`, and raw `sources/`. The base directory is scratch: promote anything worth keeping to `evidence/` before deleting it.

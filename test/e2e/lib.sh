@@ -12,7 +12,7 @@
 # that uses an API key; without that key the loop runs on
 # openrouter/google/gemini-3.8-flash.
 # Pipeline stages stay on OpenRouter in every scenario; the loop model
-# only composes the tool call. See docs/BENCHMARKS.md, Confounds And
+# only composes the tool call. See docs/BENCHMARKS.md, Confounds and
 # Limitations, for the full diagnosis.
 #
 # Only API-key credentials are copied into test profiles. An OAuth

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# test/06_extract_limits.sh — E2E test for extractMaxChars and extractionMaxTokens
+# test/e2e/06_extract_limits.sh: E2E test for extractMaxChars and extractionMaxTokens
 #
 # Proves both settings are enforced by running the same single-URL
 # research query twice (back-to-back): first with default limits,
@@ -11,7 +11,7 @@
 # out-of-band inspection of failures.
 #
 # Usage:
-#   ./test/06_extract_limits.sh
+#   ./test/e2e/06_extract_limits.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
