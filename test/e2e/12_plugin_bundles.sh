@@ -94,10 +94,16 @@ check() { # check <label> <command...>
 
 echo
 echo "── Step 1: build and pack @curio-data/mcp-intelli-search"
-(cd "$PROJECT_DIR" && npm run build:mcp >/dev/null 2>&1)
+if [[ "${E2E_SKIP_BUILD:-0}" == "1" ]]; then
+  ok "using prebuilt standalone artifact"
+else
+  (cd "$PROJECT_DIR" && npm run build:mcp >/dev/null 2>&1)
+fi
 TARBALL_DIR="$E2E_ROOT/pack"
 mkdir -p "$TARBALL_DIR"
-TARBALL="$(cd "$PROJECT_DIR" && npm pack --workspace @curio-data/mcp-intelli-search --pack-destination "$TARBALL_DIR" 2>/dev/null | tail -1)"
+PACK_ARGS=()
+if [[ "${E2E_SKIP_BUILD:-0}" == "1" ]]; then PACK_ARGS=(--ignore-scripts); fi
+TARBALL="$(cd "$PROJECT_DIR" && npm pack --workspace @curio-data/mcp-intelli-search --pack-destination "$TARBALL_DIR" "${PACK_ARGS[@]}" 2>/dev/null | tail -1)"
 TARBALL="$TARBALL_DIR/$(basename "$TARBALL")"
 if [[ -f "$TARBALL" ]]; then ok "packed $(basename "$TARBALL")"; else bad "npm pack produced no tarball"; exit 1; fi
 

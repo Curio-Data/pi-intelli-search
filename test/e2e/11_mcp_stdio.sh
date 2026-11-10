@@ -69,11 +69,15 @@ export OPENROUTER_API_KEY
 e2e_setup_loop_model || exit 1
 
 # ── Build the standalone artifact ──────────────────────────────────
-echo "🔨 Building @curio-data/mcp-intelli-search"
-npm run build:mcp --prefix "$PROJECT_DIR" >/dev/null 2>&1 || {
-  echo "❌ npm run build:mcp failed"
-  exit 1
-}
+if [[ "${E2E_SKIP_BUILD:-0}" == "1" ]]; then
+  echo "🔨 Using the prebuilt @curio-data/mcp-intelli-search artifact"
+else
+  echo "🔨 Building @curio-data/mcp-intelli-search"
+  npm run build:mcp --prefix "$PROJECT_DIR" >/dev/null 2>&1 || {
+    echo "❌ npm run build:mcp failed"
+    exit 1
+  }
+fi
 MCP_CLI="$PROJECT_DIR/packages/mcp/dist/cli.js"
 if [ ! -f "$MCP_CLI" ]; then
   echo "❌ Missing built server: $MCP_CLI"
@@ -179,15 +183,23 @@ echo ""
 PROMPT='Call the tool mcp__intelli_search__intelli_research with query "the current TypeScript release", maxUrls 1, domains ["typescriptlang.org"] and focusPrompt "the official release announcement, version number and release date". Then answer with the version and the source URL.'
 
 run_pi() {
+  local mode_args=()
+  local trace_extension_args=()
+  if [[ -n "${E2E_TRACE_DIR:-}" ]]; then mode_args=(--mode json); fi
+  if [[ -n "${E2E_TRACE_EXTENSION_PATH:-}" ]]; then
+    trace_extension_args=(-e "${E2E_TRACE_EXTENSION_PATH}")
+  fi
   (
     cd "$E2E_CWD"
     # MCP support lives in pi's built-in extensions; --no-extensions would
     # disconnect the servers. The isolated profile installs no other
-    # extensions, so the session still loads nothing but the MCP client.
+    # extensions, so the session still loads nothing but the MCP client and
+    # the explicitly requested harness tracer.
     PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" \
       timeout --foreground "${E2E_TIMEOUT_SECONDS}s" pi \
         --no-skills --no-prompt-templates \
         --no-context-files --no-session \
+        "${trace_extension_args[@]}" "${mode_args[@]}" \
         -p "$PROMPT" 2>&1
   )
 }
@@ -204,17 +216,34 @@ for ATTEMPT in 1 2 3; do
   # completed outcome with successful fetch and collation, so a degraded
   # attempt still retries.
   OUTPUT="$(run_pi)" && ATTEMPT_EC=0 || ATTEMPT_EC=$?
+  if [[ -n "${E2E_TRACE_DIR:-}" ]]; then
+    mkdir -p "${E2E_TRACE_DIR}"
+    printf '%s\n' "$OUTPUT" > "${E2E_TRACE_DIR}/mcp-attempt-${ATTEMPT}.jsonl"
+    if [[ "${E2E_COMPACT_JSON_OUTPUT:-0}" == "1" ]]; then
+      COMPACT="$(printf '%s\n' "$OUTPUT" | e2e_compact_json_output)"
+      if [[ -n "${COMPACT}" ]]; then OUTPUT="${COMPACT}"; fi
+    fi
+  fi
   if find "$WORKSPACE" -maxdepth 4 -name meta.json -newer "$REF" \
     -exec jq -e 'select(.outcome == "completed" and .stages.fetch.succeeded > 0 and .stages.collate.summaryChars > 0)' {} \; \
     -print -quit 2>/dev/null | grep -q '^/'; then
     RAN=1
-    if [[ "${ATTEMPT_EC}" -ne 0 ]]; then
-      echo "   ℹ️  pi attempt ${ATTEMPT} exited ${ATTEMPT_EC} but wrote a fresh completed sidecar; accepted" >&2
+    if [[ "${ATTEMPT_EC}" -eq 124 ]]; then
+      echo "   ⚠️  pi attempt ${ATTEMPT} TIMED OUT after ${E2E_TIMEOUT_SECONDS}s but wrote a fresh completed sidecar; research accepted, agent-loop timeout recorded" >&2
+    elif [[ "${ATTEMPT_EC}" -ne 0 ]]; then
+      echo "   ℹ️  pi attempt ${ATTEMPT} exited ${ATTEMPT_EC} but wrote a fresh completed sidecar; research accepted, nonzero agent-loop exit recorded" >&2
     fi
     break
   fi
-  echo "   ⚠️  pi attempt ${ATTEMPT}/3 did not produce a fresh completed sidecar; retrying after 30s" >&2
-  sleep 30
+  if [[ "${ATTEMPT_EC}" -eq 124 ]]; then
+    echo "   ⚠️  pi attempt ${ATTEMPT}/3 TIMED OUT after ${E2E_TIMEOUT_SECONDS}s without a fresh completed sidecar" >&2
+  else
+    echo "   ⚠️  pi attempt ${ATTEMPT}/3 exited ${ATTEMPT_EC} without a fresh completed sidecar" >&2
+  fi
+  if [[ "${ATTEMPT}" -lt 3 ]]; then
+    echo "   ⏳ retrying after 30s" >&2
+    sleep 30
+  fi
 done
 rm -f "$REF"
 

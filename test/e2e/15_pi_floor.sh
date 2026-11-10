@@ -157,6 +157,10 @@ PROMPT='Use intelli_research with maxUrls=1 and domains=["typescriptlang.org"] t
 
 run_floor_pi() {
   local attempt out ec ran ref
+  local trace_extension_args=()
+  if [[ -n "${E2E_TRACE_EXTENSION_PATH:-}" ]]; then
+    trace_extension_args=(-e "${E2E_TRACE_EXTENSION_PATH}")
+  fi
   ref="$(mktemp)"
   for attempt in 1 2 3; do
     out="$(
@@ -165,9 +169,13 @@ run_floor_pi() {
       PI_CODING_AGENT_DIR="$ISOLATED_AGENT_DIR" \
         timeout --foreground "${E2E_TIMEOUT_SECONDS}s" pi \
           "${FLOOR_FLAGS[@]}" \
-          -e "${E2E_EXTENSION_PATH}" \
+          -e "${E2E_EXTENSION_PATH}" "${trace_extension_args[@]}" \
           -p "${PROMPT}" 2>&1
     )" && ec=0 || ec=$?
+    if [[ -n "${E2E_TRACE_DIR:-}" ]]; then
+      mkdir -p "${E2E_TRACE_DIR}"
+      printf '%s\n' "$out" > "${E2E_TRACE_DIR}/floor-attempt-${attempt}.log"
+    fi
     ran=0
     if [ "${ec}" -eq 0 ]; then
       if find "${E2E_CWD}" -maxdepth 4 -name meta.json -newer "${ref}" \
@@ -181,8 +189,15 @@ run_floor_pi() {
       E2E_LAST_OUTPUT="${out}"
       return 0
     fi
-    echo "   ⚠️  floor-pi attempt ${attempt}/3 failed (exit ${ec}, cache written: ${ran}); retrying after 30s" >&2
-    sleep 30
+    if [[ "${ec}" -eq 124 ]]; then
+      echo "   ⚠️  floor-pi attempt ${attempt}/3 TIMED OUT after ${E2E_TIMEOUT_SECONDS}s without a completed sidecar" >&2
+    else
+      echo "   ⚠️  floor-pi attempt ${attempt}/3 failed (exit ${ec}, cache written: ${ran})" >&2
+    fi
+    if [[ "${attempt}" -lt 3 ]]; then
+      echo "   ⏳ retrying after 30s" >&2
+      sleep 30
+    fi
   done
   rm -f "${ref}"
   E2E_LAST_OUTPUT="${out}"
