@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Harness for the parallel live-run investigation. It deliberately leaves the
-# sequential runner and its pacing defaults unchanged. Scenarios 13 and 14 are
-# excluded because this investigation must not use maintainer login profiles.
+# Traced evidence runner for live-run investigations. Scenarios 13 and 14 are
+# excluded because traced runs must not use maintainer login profiles.
 
 set -euo pipefail
 
@@ -104,8 +103,8 @@ run_scenario() {
   if [[ -z "$loop_model" ]]; then
     loop_model="openrouter/google/gemini-3.8-flash"
     if [[ -f "$ORIGINAL_HOME/.pi/agent/auth.json" ]] \
-      && jq -e 'has("kimi-coding")' "$ORIGINAL_HOME/.pi/agent/auth.json" >/dev/null 2>&1; then
-      loop_model="kimi-coding/k3"
+      && jq -e '."qwen-token-plan".type == "api_key"' "$ORIGINAL_HOME/.pi/agent/auth.json" >/dev/null 2>&1; then
+      loop_model="qwen-token-plan/qwen3.8-max"
     fi
   fi
   if [[ "$script" == "15_pi_floor.sh" ]]; then loop_model="openrouter/minimax/minimax-m3"; fi

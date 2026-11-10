@@ -1,43 +1,50 @@
 #!/usr/bin/env bash
 #
-# test/e2e/10_config_recipes.sh — E2E test for the README Configuration Recipes
+# test/e2e/10_config_recipes.sh: live E2E test for the highest-risk README
+# Configuration Recipes
 #
-# Runs each recipe's settings block (as documented) in its own isolated
-# agent dir + working dir, and asserts the effective behaviour from the
-# telemetry sidecar. Maximum isolation per scenario: fresh PI_CODING_AGENT_DIR
-# (own auth.json, settings.json, models.json, trust.json) and fresh cwd, so
-# no cross-contamination between configurations is possible.
+# Every recipe's settings resolution, and the page-count and extract-input
+# caps, are proven deterministically in test/config-recipes.test.ts, which
+# reads each block from README.md. This scenario keeps the recipes whose risk
+# only a real provider or a real Pi host can expose, and runs them
+# concurrently, each in its own isolated agent dir + cwd:
 #
-# Coverage map (README Configuration Recipes):
-#   Recipe 1 (zero config)        -> scenario R1  (true zero: NO pi-intelli-search key)
-#   Recipe 2 (web tool + nano)    -> covered by e2e/08_websearch_tool.sh
-#   Recipe 3 (sonar-pro-search)   -> covered by e2e/09_sonar_pro_search.sh
-#   Recipe 4 (pin eight pages)    -> scenario R4
-#   Recipe 5 (economy extract)    -> scenario R5
-#   Recipe 6 (stronger collation) -> scenario R6
-#   Recipe 7 (free-tier resilience) -> scenario R7
-#   Recipe 8 (per-project override) -> scenario R8 (first E2E coverage of
-#                                      project-level settings via pre-seeded trust.json)
-#   Recipe 9 (large-context collation) -> scenario R9 (collate-model override
-#                                      and a completed run; telemetry records
-#                                      the input budget only when it trims, so
-#                                      the 600,000 value is covered by unit tests)
-#   Recipe 10 (bounded time and spend) -> scenario R10 (completed run with no
-#                                      budget retries and extract input within
-#                                      the 150,000-character cap when a fetched
-#                                      page exceeds it; collationMaxTokens is not
-#                                      recorded in telemetry)
+#   R1  (zero configuration)       -> with no pi-intelli-search settings at all,
+#                                     the real host runs the default Sonar
+#                                     search, MiniMax M3 extract and collate,
+#                                     the 10-page default and the .search/ cache
+#   R5  (economy extract/collate)  -> non-default models (Gemini 3.7 Flash)
+#                                     complete extraction and collation
+#   R6  (stronger collation)       -> a second provider family (GPT-5 mini)
+#                                     completes collation; extract stays default
+#   R8  (per-project override)     -> the real Pi host honours pre-seeded
+#                                     trust.json, applying the project search
+#                                     model and cacheDir
+#   R10 (bounded time and spend)   -> real pages and real model output under
+#                                     the 0.21.0 caps: no budget retries, and
+#                                     the 150,000-character cap binds when a
+#                                     fetched page exceeds it
 #
-# Up to three attempts per scenario guard the known transient pi agent-loop
-# failure mode (the post-tool model hop has no application retry wrapper);
-# a scenario fails only when every attempt leaves no completed sidecar.
+# Recipe 1 has no settings block, so R1 writes none; 01_main.sh, by contrast,
+# runs the default models through an explicit block. Recipes 2 and 3 run in
+# 08_websearch_tool.sh and 09_sonar_pro_search.sh. Recipes 4, 7 and 9 change
+# only page counts, pacing and the collation budget, which the deterministic
+# test covers; R9's collate model is R5's.
+#
+# Settings blocks are read from README.md at run time, so this scenario
+# exercises the documented text. Up to three attempts per recipe guard the
+# known transient pi agent-loop failure mode; a recipe fails only when every
+# attempt leaves no completed sidecar.
 #
 # Usage:
 #   ./test/e2e/10_config_recipes.sh
 #
 # Environment:
-#   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
+#   OPENROUTER_API_KEY            Required. Get one from https://openrouter.ai
+#   E2E_RECIPE_TIMEOUT_SECONDS    Per pi attempt, up to three per recipe (default: 600)
 
+# Each recipe counts its own ERRORS inside its subshell by design.
+# shellcheck disable=SC2030,SC2031
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -55,7 +62,8 @@ echo "📝 Log: $LOG_FILE"
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
-  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS \
+  E2E_RECIPE_TIMEOUT_SECONDS
 
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
   if [ -f "$HOME/.pi/agent/auth.json" ]; then
@@ -82,8 +90,6 @@ e2e_setup_loop_model || exit 1
 
 # shellcheck disable=SC2034  # consumed by e2e_run_pi in lib.sh
 E2E_EXTENSION_PATH="$PROJECT_DIR/dist/index.js"
-ERRORS=0
-
 # ── Helpers ─────────────────────────────────────────────────────────
 
 # make_env <name> — create isolated agent dir + cwd; echoes "AGENT CWD".
@@ -99,10 +105,11 @@ make_env() {
 
 # run_pi <agent> <cwd> <prompt> — thin wrapper over lib.sh's e2e_run_pi
 # (retry on non-zero exit AND on exit-0 runs with no fresh cache
-# sidecar: the print-mode tool-call leak; see docs/BENCHMARKS.md).
+# sidecar: the print-mode tool-call leak; see docs/BENCHMARKS.md), with the
+# per-recipe timeout.
 # Sets LAST_OUTPUT for compatibility with the scenario error paths.
 run_pi() {
-  if e2e_run_pi "$1" "$2" "$3"; then
+  if e2e_run_pi "$1" "$2" "$3" "$RECIPE_TIMEOUT"; then
     LAST_OUTPUT="$E2E_LAST_OUTPUT"
     return 0
   fi
@@ -149,248 +156,175 @@ assert_ge() {
   fi
 }
 
-GAP="${E2E_RUN_GAP_SECONDS:-20}"
+RECIPE_TIMEOUT="${E2E_RECIPE_TIMEOUT_SECONDS:-600}"
+TRACE_ROOT="${E2E_TRACE_DIR:-}"
+RESULTS="$(mktemp -d -t recipe-results-XXXXXX)"
+PROMPT_SQLITE='Use intelli_research with maxUrls=2 and domains=["sqlite.org"] to research: SQLite WAL mode trade-offs.'
 
-# ── R1: Zero configuration ─────────────────────────────────────────
-echo ""
-echo "═══ R1: zero configuration (no pi-intelli-search key at all) ═══"
-read -r AGENT CWD <<<"$(make_env r1)"
-cat > "$AGENT/settings.json" <<EOF
-{"defaultProvider": "$E2E_LOOP_PROVIDER", "defaultModel": "$E2E_LOOP_MODEL"}
-EOF
-sleep "$GAP"
-if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"nodejs.org\"] to research: the current Node.js LTS schedule."; then
-  assert_eq "search model defaulted" "$(meta_value "$CWD/.search" '.stages.search.model')" "openrouter/perplexity/sonar"
-  assert_eq "extract model defaulted" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
-  assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
-  assert_ge "sources fetched" "$(meta_value "$CWD/.search" '.stages.fetch.succeeded // 0')" 1
-else
-  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
-fi
-rm -rf "$AGENT" "$CWD"
-
-# ── R4: Pin eight pages ────────────────────────────────────────────
-echo ""
-echo "═══ R4: pin eight pages (partial block: defaultUrls/maxUrls only) ═══"
-read -r AGENT CWD <<<"$(make_env r4)"
-cat > "$AGENT/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "defaultUrls": 8,
-    "maxUrls": 16
-  }
+# recipe_settings <n>: the recipe's settings block from README.md.
+recipe_settings() {
+  # The single-quoted argument is JavaScript source, not shell expansion.
+  # shellcheck disable=SC2016
+  node -e '
+    const text = require("node:fs").readFileSync(process.argv[1], "utf8");
+    const sections = text.split(/^### Recipe (\d+): .*$/m);
+    const index = sections.indexOf(process.argv[2]);
+    const block = index > 0 && sections[index + 1].split(/^##? /m)[0].match(/^```jsonc\n([\s\S]*?)^```$/m);
+    if (!block) { console.error(`README recipe ${process.argv[2]} has no settings block`); process.exit(1); }
+    process.stdout.write(JSON.stringify(JSON.parse(block[1])));
+  ' "$PROJECT_DIR/README.md" "$1"
 }
-EOF
-sleep "$GAP"
-# No maxUrls in the prompt: the agent fallback (defaultUrls=8) must apply,
-# and the models must still default (partial block does not reset them).
-if run_pi "$AGENT" "$CWD" "Use intelli_research and domains=[\"nodejs.org\"] to research: the current Node.js LTS schedule. Do not pass maxUrls; let the default apply."; then
-  assert_eq "search model still defaulted" "$(meta_value "$CWD/.search" '.stages.search.model')" "openrouter/perplexity/sonar"
-  assert_le "pages requested (defaultUrls cap)" "$(meta_value "$CWD/.search" '.stages.fetch.requested // 999')" 8
-  assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
-else
-  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
-fi
-rm -rf "$AGENT" "$CWD"
 
-# ── R5: Economy extract and collate ────────────────────────────────
-echo ""
-echo "═══ R5: economy extract/collate (google/gemini-3.7-flash) ═══"
-read -r AGENT CWD <<<"$(make_env r5)"
-cat > "$AGENT/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "google/gemini-3.7-flash"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "google/gemini-3.7-flash"
-    }
-  }
+# write_global <agent> [recipe json]: the loop model plus an optional recipe.
+write_global() {
+  jq -n --arg p "$E2E_LOOP_PROVIDER" --arg m "$E2E_LOOP_MODEL" --argjson r "${2:-{\}}" \
+    '{defaultProvider: $p, defaultModel: $m} + $r' > "$1/settings.json"
 }
-EOF
-sleep "$GAP"
-if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
-  assert_eq "extract model overridden" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/google/gemini-3.7-flash"
-  assert_eq "collate model overridden" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/google/gemini-3.7-flash"
-  assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
-else
-  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
-fi
-rm -rf "$AGENT" "$CWD"
 
-# ── R6: Stronger collation (collate-only override) ─────────────────
-echo ""
-echo "═══ R6: stronger collation (collateModel only; extract stays default) ═══"
-read -r AGENT CWD <<<"$(make_env r6)"
-cat > "$AGENT/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "openai/gpt-5-mini"
-    }
-  }
+# Each recipe runs in a background subshell: its own ERRORS count, exit
+# status and output file. Per-recipe trace directories keep attempt files
+# from colliding when tracing is enabled.
+run_recipe() { # run_recipe <name> <function>
+  (
+    if [[ -n "$TRACE_ROOT" ]]; then E2E_TRACE_DIR="$TRACE_ROOT/$1"; fi
+    ERRORS=0
+    "$2"
+    exit "$ERRORS"
+  ) > "$RESULTS/$1.log" 2>&1 &
+  echo "$!" > "$RESULTS/$1.pid"
 }
-EOF
-sleep "$GAP"
-if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
-  assert_eq "collate model overridden" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/openai/gpt-5-mini"
-  assert_eq "extract model still default" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
-  assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
-else
-  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
-fi
-rm -rf "$AGENT" "$CWD"
 
-# ── R7: Free-tier resilience ───────────────────────────────────────
-echo ""
-echo "═══ R7: free-tier resilience keys ═══"
-read -r AGENT CWD <<<"$(make_env r7)"
-cat > "$AGENT/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "defaultUrls": 5,
-    "minRequestIntervalMs": 3000,
-    "extractionConcurrency": 2,
-    "llmRetryAttempts": 4,
-    "llmTimeoutMs": 120000
-  }
-}
-EOF
-sleep "$GAP"
-if run_pi "$AGENT" "$CWD" "Use intelli_research and domains=[\"nodejs.org\"] to research: the Node.js release schedule. Do not pass maxUrls; let the default apply."; then
-  assert_le "pages requested (defaultUrls=5)" "$(meta_value "$CWD/.search" '.stages.fetch.requested // 999')" 5
-  assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
-  assert_ge "sources fetched" "$(meta_value "$CWD/.search" '.stages.fetch.succeeded // 0')" 1
-else
-  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
-fi
-rm -rf "$AGENT" "$CWD"
-
-# ── R8: Per-project override ───────────────────────────────────────
-echo ""
-echo "═══ R8: per-project override (project .pi/settings.json via trust) ═══"
-read -r AGENT CWD <<<"$(make_env r8)"
-# Global settings carry NO pi-intelli-search block: the project file is the
-# only configuration source. Trust is pre-seeded the way /trust persists it.
-printf '{"defaultProvider": "%s", "defaultModel": "%s"}\n' "$E2E_LOOP_PROVIDER" "$E2E_LOOP_MODEL" > "$AGENT/settings.json"
-printf '{ "%s": true }\n' "$CWD" > "$AGENT/trust.json"
-mkdir -p "$CWD/.pi"
-cat > "$CWD/.pi/settings.json" <<'EOF'
-{
-  "pi-intelli-search": {
-    "searchModel": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar-pro-search"
-    },
-    "cacheDir": ".search-client-x"
-  }
-}
-EOF
-sleep "$GAP"
-if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
-  assert_eq "project search model applied" "$(meta_value "$CWD/.search-client-x" '.stages.search.model')" "openrouter/perplexity/sonar-pro-search"
-  assert_eq "project cacheDir applied" "$(meta_value "$CWD/.search-client-x" '.outcome')" "completed"
-  if [ -d "$CWD/.search" ]; then
-    echo "   ❌ default .search/ used alongside project cacheDir (override ignored)"
-    ERRORS=$((ERRORS + 1))
+recipe_r1() {
+  echo "═══ R1: zero configuration (no pi-intelli-search settings anywhere) ═══"
+  read -r AGENT CWD <<<"$(make_env r1)"
+  write_global "$AGENT"
+  # No maxUrls in the prompt: the page count must come from the default.
+  if run_pi "$AGENT" "$CWD" 'Use intelli_research, leaving maxUrls unset, with domains=["sqlite.org"] to research: SQLite WAL mode trade-offs.'; then
+    assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
+    assert_eq "default search model" "$(meta_value "$CWD/.search" '.stages.search.model')" "openrouter/perplexity/sonar"
+    assert_eq "default extract model" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
+    assert_eq "default collate model" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/minimax/minimax-m3"
+    local links requested
+    links="$(meta_value "$CWD/.search" '.stages.search.linksReturned // 0')"
+    requested="$(meta_value "$CWD/.search" '.stages.fetch.requested // 0')"
+    assert_ge "pages requested" "$requested" 1
+    assert_le "pages requested within the 10-page default" "$requested" 10
+    if [ "$links" -gt 10 ]; then
+      assert_eq "default page count applied ($links links returned)" "$requested" "10"
+    else
+      echo "   ℹ️  10-page default not binding: search returned $links links"
+    fi
   else
-    echo "   ✅ default .search/ untouched (cacheDir override won)"
+    echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
   fi
-else
-  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
-fi
-rm -rf "$AGENT" "$CWD"
-
-# ── R9: Large-context collation ────────────────────────────────────
-echo ""
-echo "═══ R9: large-context collation (collateModel + collationInputBudgetTokens) ═══"
-read -r AGENT CWD <<<"$(make_env r9)"
-cat > "$AGENT/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "google/gemini-3.7-flash"
-    },
-    "collationInputBudgetTokens": 600000
-  }
+  rm -rf "$AGENT" "$CWD"
 }
-EOF
-sleep "$GAP"
-if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"sqlite.org\"] to research: SQLite WAL mode trade-offs."; then
-  assert_eq "collate model overridden" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/google/gemini-3.7-flash"
-  assert_eq "extract model still default" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
-  assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
-else
-  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
-fi
-rm -rf "$AGENT" "$CWD"
 
-# ── R10: Bounded time and spend (0.21.0 values) ────────────────────
-echo ""
-echo "═══ R10: bounded time and spend (0.21.0 values: outputBudgetRetries=0, extractMaxChars=150000, collationMaxTokens=4000) ═══"
-read -r AGENT CWD <<<"$(make_env r10)"
-cat > "$AGENT/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "outputBudgetRetries": 0,
-    "extractMaxChars": 150000,
-    "collationMaxTokens": 4000
-  }
-}
-EOF
-sleep "$GAP"
-# The Node.js fs API reference exceeds 150,000 characters after cleaning
-# when it is fetched; the check below reports whether the cap bound.
-if run_pi "$AGENT" "$CWD" "Use intelli_research with maxUrls=2 and domains=[\"nodejs.org\"] to research: the Node.js fs promises API methods and their options."; then
-  assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
-  assert_eq "no extraction budget retries" "$(meta_value "$CWD/.search" '.stages.extract.budgetRetries // 0')" "0"
-  assert_eq "no collation budget retry" "$(meta_value "$CWD/.search" '.stages.collate.budgetRetried // "false" | tostring')" "false"
-  assert_ge "extractions succeeded" "$(meta_value "$CWD/.search" '.stages.extract.succeeded // 0')" 1
-  # totalInputCharsApprox sums min(page chars, extractMaxChars) over fetched
-  # pages. Saved sources hold each full page plus a short header, so at the
-  # recipe's cap the sum cannot exceed the sum of min(source chars, 150000);
-  # at the 400,000 default any page above ≈150,000 characters breaks it.
-  LATEST="$(e2e_completed_cache_entry "$CWD/.search")"
-  LONGEST=0
-  BOUND=0
-  for f in "$LATEST"/sources/[0-9]*; do
-    [ -f "$f" ] || continue
-    n="$(LC_ALL=C.UTF-8 wc -m <"$f")"
-    [ "$n" -gt "$LONGEST" ] && LONGEST="$n"
-    BOUND=$((BOUND + (n < 150000 ? n : 150000)))
-  done
-  if [ "$LONGEST" -gt 150000 ]; then
-    assert_le "extract input within the 150,000-character cap per page" \
-      "$(meta_value "$CWD/.search" '.stages.extract.totalInputCharsApprox // 999999999')" "$BOUND"
+recipe_r5() {
+  echo "═══ R5: economy extract/collate (google/gemini-3.7-flash) ═══"
+  read -r AGENT CWD <<<"$(make_env r5)"
+  write_global "$AGENT" "$(recipe_settings 5)"
+  if run_pi "$AGENT" "$CWD" "$PROMPT_SQLITE"; then
+    assert_eq "extract model overridden" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/google/gemini-3.7-flash"
+    assert_eq "collate model overridden" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/google/gemini-3.7-flash"
+    assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
   else
-    echo "   ℹ️  cap not proven: longest saved source is $LONGEST characters"
+    echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
   fi
-else
-  echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
-fi
-rm -rf "$AGENT" "$CWD"
+  rm -rf "$AGENT" "$CWD"
+}
+
+recipe_r6() {
+  echo "═══ R6: stronger collation (collateModel only; extract stays default) ═══"
+  read -r AGENT CWD <<<"$(make_env r6)"
+  write_global "$AGENT" "$(recipe_settings 6)"
+  if run_pi "$AGENT" "$CWD" "$PROMPT_SQLITE"; then
+    assert_eq "collate model overridden" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/openai/gpt-5-mini"
+    assert_eq "extract model still default" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
+    assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
+  else
+    echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+  fi
+  rm -rf "$AGENT" "$CWD"
+}
+
+recipe_r8() {
+  echo "═══ R8: per-project override (project .pi/settings.json via trust) ═══"
+  read -r AGENT CWD <<<"$(make_env r8)"
+  # Global settings carry NO pi-intelli-search block: the project file is the
+  # only configuration source. Trust is pre-seeded the way /trust persists it.
+  write_global "$AGENT"
+  printf '{ "%s": true }\n' "$CWD" > "$AGENT/trust.json"
+  mkdir -p "$CWD/.pi"
+  recipe_settings 8 > "$CWD/.pi/settings.json"
+  if run_pi "$AGENT" "$CWD" "$PROMPT_SQLITE"; then
+    assert_eq "project search model applied" "$(meta_value "$CWD/.search-client-x" '.stages.search.model')" "openrouter/perplexity/sonar-pro-search"
+    assert_eq "project cacheDir applied" "$(meta_value "$CWD/.search-client-x" '.outcome')" "completed"
+    if [ -d "$CWD/.search" ]; then
+      echo "   ❌ default .search/ used alongside project cacheDir (override ignored)"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "   ✅ default .search/ untouched (cacheDir override won)"
+    fi
+  else
+    echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+  fi
+  rm -rf "$AGENT" "$CWD"
+}
+
+recipe_r10() {
+  echo "═══ R10: bounded time and spend (0.21.0 values: outputBudgetRetries=0, extractMaxChars=150000, collationMaxTokens=4000) ═══"
+  read -r AGENT CWD <<<"$(make_env r10)"
+  write_global "$AGENT" "$(recipe_settings 10)"
+  # The Node.js fs API reference exceeds 150,000 characters after cleaning
+  # when it is fetched; the check below reports whether the cap bound.
+  if run_pi "$AGENT" "$CWD" 'Use intelli_research with maxUrls=2 and domains=["nodejs.org"] to research: the Node.js fs promises API methods and their options.'; then
+    assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
+    assert_eq "no extraction budget retries" "$(meta_value "$CWD/.search" '.stages.extract.budgetRetries // 0')" "0"
+    assert_eq "no collation budget retry" "$(meta_value "$CWD/.search" '.stages.collate.budgetRetried // "false" | tostring')" "false"
+    assert_ge "extractions succeeded" "$(meta_value "$CWD/.search" '.stages.extract.succeeded // 0')" 1
+    # totalInputCharsApprox sums min(page chars, extractMaxChars) over fetched
+    # pages. Saved sources hold each full page plus a short header, so at the
+    # recipe's cap the sum cannot exceed the sum of min(source chars, 150000);
+    # at the 400,000 default any page above ≈150,000 characters breaks it.
+    local latest longest=0 bound=0 f n
+    latest="$(e2e_completed_cache_entry "$CWD/.search")"
+    for f in "$latest"/sources/[0-9]*; do
+      [ -f "$f" ] || continue
+      n="$(LC_ALL=C.UTF-8 wc -m <"$f")"
+      [ "$n" -gt "$longest" ] && longest="$n"
+      bound=$((bound + (n < 150000 ? n : 150000)))
+    done
+    if [ "$longest" -gt 150000 ]; then
+      assert_le "extract input within the 150,000-character cap per page" \
+        "$(meta_value "$CWD/.search" '.stages.extract.totalInputCharsApprox // 999999999')" "$bound"
+    else
+      echo "   ℹ️  cap not proven: longest saved source is $longest characters"
+    fi
+  else
+    echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+  fi
+  rm -rf "$AGENT" "$CWD"
+}
+
+RECIPES=(r1 r5 r6 r8 r10)
+echo ""
+echo "🚀 Running ${#RECIPES[@]} recipes concurrently (per-invocation timeout ${RECIPE_TIMEOUT}s)"
+for name in "${RECIPES[@]}"; do run_recipe "$name" "recipe_$name"; done
+
+FAILED=0
+for name in "${RECIPES[@]}"; do
+  wait "$(cat "$RESULTS/$name.pid")" && status=0 || status=$?
+  echo ""
+  cat "$RESULTS/$name.log"
+  if [ "$status" -ne 0 ]; then FAILED=$((FAILED + 1)); fi
+done
+rm -rf "$RESULTS"
 
 # ── Result ─────────────────────────────────────────────────────────
 echo ""
-if [ "$ERRORS" -gt 0 ]; then
-  echo "❌ E2E config-recipes test failed ($ERRORS error(s))"
+if [ "$FAILED" -gt 0 ]; then
+  echo "❌ E2E config-recipes test failed ($FAILED of ${#RECIPES[@]} recipes)"
   exit 1
 fi
-echo "✅ E2E config-recipes test passed — every README recipe is proven live in isolation"
+echo "✅ E2E config-recipes test passed: recipes 1, 5, 6, 8 and 10 proven live in isolation"

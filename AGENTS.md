@@ -334,6 +334,7 @@ test/
 ├── claude-routing.test.ts
 ├── collation-budget.test.ts  # Collation input budget, trim notice and delivered-text provenance
 ├── compat-guard.test.ts
+├── config-recipes.test.ts   # README Configuration Recipes: settings resolution read from README.md, page caps and extract input cap
 ├── core-boundary.test.ts     # Source/declaration audit and isolated runtime
 ├── core-cache.test.ts        # Independent-process cache writes and metadata
 ├── core-console.test.ts      # Concurrent diagnostic scopes and restoration
@@ -377,15 +378,19 @@ test/
 │   ├── 07_llms_full.sh
 │   ├── 08_websearch_tool.sh
 │   ├── 09_sonar_pro_search.sh
-│   ├── 10_config_recipes.sh
+│   ├── 10_config_recipes.sh   # Zero configuration and the highest-risk recipes (R1, R5, R6, R8, R10), run concurrently
 │   ├── 11_mcp_stdio.sh
 │   ├── 12_plugin_bundles.sh
 │   ├── 13_claude_code_plugin.sh
 │   ├── 14_codex_plugin.sh
 │   ├── 15_pi_floor.sh
 │   ├── env.sh
-│   └── lib.sh
-├── run-e2e-all.sh
+│   ├── lib.sh
+│   ├── trace-extension.mjs   # Harness-only Pi extension: extension and agent-loop call tracing
+│   ├── trace-fetch.mjs       # Harness-only global fetch tracer (standalone MCP transport)
+│   └── analyze-evidence.mjs  # Summarises a traced run without prompts, completions or credentials
+├── run-e2e-all.sh            # Suite runner: one build, then all scripts in parallel (or sequential)
+├── run-e2e-parallel.sh       # Traced evidence runner for scenarios 01 to 12 and 15
 ├── run-e2e-publish.sh
 ├── run-e2e-publish-local.sh
 ├── settings.test.ts
@@ -425,7 +430,7 @@ The pipeline is self-contained in `src/core/operations/research.ts`. Former shar
 - **Optional extract throttle.** `minRequestIntervalMs` (default 0, off) spaces concurrent extract calls via a per-run rate limiter for keys with tight rate limits.
 - Provider-response monitoring via `after_provider_response` event surfaces a rate-limit status in the `Pi` footer even outside tool calls.
 - **Caveat:** `pi -p` (used by the E2E scripts) drives `Pi`'s own agent-loop LLM calls (tool selection and final summary). Those go through `Pi`'s provider path and are **not** wrapped by `callLlm()`'s retry/timeout. A hung `pi` with no open network connection is agent-loop behaviour, not this extension.
-- **Print-Mode Exit Codes Are Not Pipeline Verdicts.** Since `Pi` 1.2.0, `pi -p` exits `1` when the agent-loop summary is truncated at the output token limit, even after a completed research. The exit code never decides a scenario: the verdict is a fresh cache sidecar recording a completed outcome with successful fetch and nonempty collation (the shared predicate in `test/e2e/lib.sh`, mirrored in `11_mcp_stdio.sh`). The pinned floor host (`15_pi_floor.sh`) predates the truncation exit code and keeps its exit-`0` gate. Do not reintroduce an exit-`0` precondition in the other loops.
+- **Print-Mode Exit Codes Are Not Pipeline Verdicts.** Since `Pi` 1.2.0, `pi -p` exits `1` when the agent-loop summary is truncated at the output token limit, even after a completed research. The exit code never decides a scenario: the verdict is a fresh cache sidecar recording a completed outcome with successful fetch and nonempty collation (the shared predicate in `test/e2e/lib.sh`, mirrored in `11_mcp_stdio.sh`). The pinned floor host (`15_pi_floor.sh`) predates the truncation exit code and keeps its exit-`0` gate. Do not reintroduce an exit-`0` precondition in the other loops. Exit `124` is the harness's own `timeout`, not truncation: `e2e_run_pi` and the suite runner report it as `TIMED OUT`, and an attempt that times out after writing a completed sidecar is accepted with a timeout warning in the log.
 
 ### Model Registration
 
@@ -521,8 +526,8 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | **Structural/smoke** | Extension loads, tools register, events bind | `smoke.ts` | No |
 | **Shared Engine** | Host boundary, injected operations, policy, concurrent cache writes and console scopes | `core-*.test.ts`, `native-model-client.test.ts`, `workspace-paths.test.ts` | No |
 | **Unit (pure logic)** | Functions without filesystem or network deps | `annotations.test.ts`, `cache.test.ts`, `telemetry.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
-| **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts`, `native-changelog.test.ts` (also reads git refs) | No |
-| **E2E** | Full pipeline with real LLM calls in isolated Pi env | `e2e/01_main.sh`, `e2e/02_cap.sh`, `e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`, `e2e/07_llms_full.sh`, `e2e/04_migration.sh`, `e2e/03_model_override.sh`, `e2e/08_websearch_tool.sh`, `e2e/09_sonar_pro_search.sh`, `e2e/10_config_recipes.sh`, `e2e/11_mcp_stdio.sh` (and `run-e2e-all.sh` to run them sequentially) | Yes |
+| **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts`, `config-recipes.test.ts` (reads `README.md`), `native-changelog.test.ts` (also reads git refs) | No |
+| **E2E** | Full pipeline with real LLM calls in isolated `Pi` env | `e2e/01_main.sh`, `e2e/02_cap.sh`, `e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`, `e2e/07_llms_full.sh`, `e2e/04_migration.sh`, `e2e/03_model_override.sh`, `e2e/08_websearch_tool.sh`, `e2e/09_sonar_pro_search.sh`, `e2e/10_config_recipes.sh`, `e2e/11_mcp_stdio.sh` (scenarios 01 to 15 are listed in Principle 4; `run-e2e-all.sh` runs them together) | Yes |
 | **Publish** | Validates the published npm package structure | `run-e2e-publish.sh` (registry install), `run-e2e-publish-local.sh` (local tarball install; CI gate for peer-dep drift) | Yes (npm only) |
 
 ### Principle 1: Tests Must Be Deterministic
@@ -581,7 +586,7 @@ Configuration errors (model typos, missing keys) must be caught before LLM calls
 
 ### Principle 4: E2E Tests Exercise Real Config Paths
 
-E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. The scenario scripts below run through the sequential runner:
+E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the settings formats users actually write. The scenario scripts below run through the suite runner:
 
 | Test | What it proves |
 |---|---|
@@ -594,17 +599,18 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `e2e/07_llms_full.sh` | Automatic llms-full.txt discovery works; probes candidate sites, verifies file lands in cache |
 | `e2e/08_websearch_tool.sh` | Exercises the configured server-tool path with a chat model: verifies the selected model, non-empty links, completed pipeline, and cached sources. Annotation count is diagnostic, not a pass condition |
 | `e2e/09_sonar_pro_search.sh` | Verifies registration and settings-based selection of `perplexity/sonar-pro-search` in a vanilla agent dir, then checks non-empty links, completed pipeline, and cached sources. Reports the annotation count |
-| `e2e/10_config_recipes.sh` | Runs each README Configuration Recipe's settings block in a fresh isolated agent dir + cwd and asserts the effective behaviour from telemetry: zero-config defaults, partial blocks preserving unspecified defaults, extract/collate overrides, free-tier pacing keys, and per-project settings via pre-seeded trust.json (the only project-level-settings coverage) |
+| `e2e/10_config_recipes.sh` | Runs five README Configuration Recipes concurrently, each in a fresh isolated agent dir + cwd with its settings block read from `README.md`, and asserts the effective behaviour from telemetry: the default models, 10-page default and `.search/` cache with no `pi-intelli-search` settings at all (R1), non-default extract and collate models (R5, R6), per-project settings honoured by the real `Pi` host through pre-seeded trust.json (R8, the only live project-level-settings coverage) and the 0.21.0 caps on real pages (R10). Settings resolution for all ten recipes, and the page-count and extract-input caps, are covered deterministically by `test/config-recipes.test.ts` |
 | `e2e/11_mcp_stdio.sh` | Builds the standalone package, registers it in an isolated profile's `mcp.json` (direct exposure, no native extension) and drives a real research through `Pi`'s native MCP client, asserting connection, workspace cache, `mcp` telemetry identity and completed outcome. Establishes that `--no-extensions` disconnects MCP servers and that `codemode` exposure hides direct tool calls |
 | `e2e/12_plugin_bundles.sh` | Packs the standalone artefact, generates local-tarball plugin bundles (pre-publication evidence class), vendors the tarball, then exercises real host installation credential-free: Claude Code strict validation, marketplace add, install, `claude mcp list` connection and skill discovery; Codex marketplace add, catalogue-path assertion, install, installed-cache layout and prompt-input skill discovery. Skips with a notice when a host CLI is absent. Also asserts Claude Code key delivery with dummy values: the required sensitive key option withholds the server while unset and reaches the server process once set. Credentialed sessions live in `13_claude_code_plugin.sh` and `14_codex_plugin.sh` |
 | `e2e/13_claude_code_plugin.sh` | Installs the local-tarball Claude Code plugin into an isolated `CLAUDE_CONFIG_DIR` and sets the key through the plugin option only. Fresh sessions evaluate factual lookup with skills disabled, automatic skill loading, explicit skill loading, and a detailed comparison. Prompts name the installed web research plugin, not either operation; only the explicit-loading case names the skill. Both search and research remain available. Checks distinguish skill discovery from successful invocation, verify operation choice and model-visible results, and require completed `mcp` research artefacts. Requires a maintainer-owned Claude Code credential held outside the repository, and asserts the operator's credentials are untouched. `E2E_KEEP_ARTIFACTS=1` retains traces; see `scripts/README.md` |
 | `e2e/14_codex_plugin.sh` | Installs the local-tarball Codex plugin into a dedicated gitignored test profile (reset on every run because Codex caches plugins by version), pre-approves the plugin's tools and first calls search with no path or credential exports, asserting tool discovery and actionable missing-key guidance. It then stores the key through standard-input setup, unsets all formerly required variables and drives one real research through `codex exec --json`, asserting a completed `intelli_research` `mcp_tool_call` and a completed `mcp` cache sidecar in the selected working root. Requires a dedicated maintainer-owned Codex login, and asserts the recorded modification time of the operator's `auth.json` is unchanged |
 | `e2e/15_pi_floor.sh` | Installs a host-isolated pinned `Pi` 0.86.0 host under `.tmp/pi-floor/` and runs real native research through the required registry facade (the extension's peer value imports still resolve from the repository tree; the only such import, `CONFIG_DIR_NAME`, is identical across the supported range). Requires a completed cache sidecar, non-empty search links and synthesis, and a positive `search.annotationsHarvested` count to guard fetch-tee citation recovery on the pre-0.99 host. Probes supported flags and omits unavailable flags such as `--no-session`; the agent loop uses `openrouter/minimax/minimax-m3` |
-| `run-e2e-all.sh` | Runs every scenario script one at a time with a spacing gap (`E2E_GAP_SECONDS`, default 20). Use this instead of launching scripts in parallel or back-to-back: bursting many calls at one key depletes the rate-limit bucket and produces degraded or hung runs. |
+| `run-e2e-all.sh` | Builds both packages once, then starts every scenario script at once, each with its own `TMPDIR` and log, and prints each outcome with the tail of every failing log. `E2E_RUN_MODE=sequential` runs them one at a time with a gap (`E2E_GAP_SECONDS`, default 20) instead. The single build and `E2E_SKIP_BUILD=1` keep scenarios from rebuilding a bundle another is loading |
+| `run-e2e-parallel.sh` | Traced evidence runner for scenarios 01 to 12 and 15. Gives each scenario an isolated `HOME`, records every extension and agent-loop model call, status, stop reason and retry, and snapshots the key's account state; `test/e2e/analyze-evidence.mjs <run-dir>` summarises a run. Requires `npm run build:all` first |
 
 The scenarios write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
 
-**Rate-limit caution:** the scenario scripts consume live provider quota. Run them through `run-e2e-all.sh` (or singly with gaps) on free or shared keys. The paired limit comparisons (`e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`) use one official documentation source and an internal cooldown (`E2E_RUN_GAP_SECONDS`, default 30) between runs.
+**Concurrency and spend:** the scenario scripts consume live provider quota. On 2026-11-09 a traced run of scenarios 01 to 12 and 15 (`test/run-e2e-parallel.sh`; scenarios 13 and 14 excluded) made three all-at-once passes and one paced sequential pass. No extension or agent-loop call ended in an error stop reason, and no `Retry-After` header or provider stream error was recorded (`evidence/agents/2026-11-09-post-release/`). The pipeline calls used OpenRouter; most agent-loop calls used `kimi-coding/k3`, so the run does not measure an agent loop sharing the OpenRouter key. The failures and slow runs came from agent argument errors, repeated research, slow successful calls, timeouts, semantic collation rejection and harness defects. On that evidence the owner made parallel the default on 2026-11-10. Paid OpenRouter models have no documented plan-based request cap, but upstream providers can return 429 and an account can meet OpenRouter's 402 in-flight spending limit; where that happens, use `E2E_RUN_MODE=sequential`. The paired limit comparisons (`e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`) use one official documentation source and a gap (`E2E_RUN_GAP_SECONDS`, default 30) between their two runs.
 
 ### Principle 5: E2E Scripts Must Be Proven Runnable
 
@@ -623,7 +629,7 @@ CI does not run E2E scripts (they require API keys and a live `pi` binary). The 
 3. **End-to-end test:** `./test/e2e/01_main.sh` (set `TMPDIR` under the repository's `.tmp/` on encrypted hosts)
 4. **Dependency security:** `npm audit --audit-level=low`; inspect distributed dependency code as well as lockfile entries when a dependency embeds another package
 
-Do not consider a change complete until all required checks pass. Run all E2E scripts before any release via the sequential runner `./test/run-e2e-all.sh` (it paces calls so the rate-limit bucket does not deplete). Running them in parallel or back-to-back is the documented cause of degraded or hung runs.
+Do not consider a change complete until all required checks pass. Run all E2E scripts before any release via `./test/run-e2e-all.sh`, which builds once and runs them in parallel. To run scenarios by hand alongside one another, see `scripts/README.md` § Live E2E Runs.
 
 ### E2E Test Requirements
 
@@ -634,6 +640,8 @@ OPENROUTER_API_KEY=sk-or-v1-... ./test/e2e/01_main.sh
 ```
 
 `13_claude_code_plugin.sh` and `14_codex_plugin.sh` additionally require maintainer-owned Claude Code and Codex credentials held outside the repository; they cannot run without them. Never copy an operator's credential files (for example `~/.claude/.credentials.json` or `~/.codex/auth.json`) into a test profile: a copied refresh-token chain invalidates the operator's login.
+
+The headless agent loop runs on `qwen-token-plan/qwen3.8-max` when the operator's `auth.json` holds that API key, and on OpenRouter otherwise; `TEST_MODEL` (or `E2E_LOOP_MODEL_ID` in scripts that do not set it from `TEST_MODEL`) overrides it. `test/e2e/lib.sh` copies only API-key logins into a test profile and refuses an OAuth loop model such as `kimi-coding` or `openai-codex`: its refresh token rotates, so a copy that refreshes signs the operator out, as happened on 2026-11-10.
 
 ### E2E Publish Test
 

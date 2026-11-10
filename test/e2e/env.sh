@@ -15,7 +15,7 @@
 e2e_require_private() {
   local file=$1 mode
   [[ -e "$file" ]] || return 0
-  mode="$(stat -c %a "$file")"
+  mode="$(stat -L -c %a "$file")"  # the target's mode; a symlink always reads 777
   if [[ "${mode: -2}" != "00" ]]; then
     echo "❌ $file is mode $mode; credentials must be owner-only: chmod 600 $file" >&2
     return 1

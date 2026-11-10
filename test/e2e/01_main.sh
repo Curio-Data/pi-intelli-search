@@ -9,7 +9,7 @@
 # MiniMax M3 via OpenRouter for extract and collate. All three stages
 # route through OpenRouter, requiring only a single API key. The
 # headless agent loop runs on the shared E2E loop model (lib.sh;
-# kimi-coding/k3 when its key exists).
+# qwen-token-plan/qwen3.8-max when its API key exists).
 #
 # Usage:
 #   ./test/01_main.sh

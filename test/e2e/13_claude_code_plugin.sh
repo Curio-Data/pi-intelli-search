@@ -45,7 +45,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 echo "Log: $LOG_FILE"
 
 # Deep analysis can need multiple operations; give it a longer deadline.
-# The paced runner also enforces its own overall per-script timeout.
+# The suite runner also enforces its own overall per-script timeout.
 E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-180}"
 E2E_RESEARCH_TIMEOUT_SECONDS="${E2E_RESEARCH_TIMEOUT_SECONDS:-540}"
 E2E_RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-20}"
@@ -107,9 +107,17 @@ if ! jq -e '.authMethod == "oauth_token"' <<<"$AUTH_STATUS" >/dev/null; then
 fi
 ok "isolated profile authenticates with CLAUDE_CODE_OAUTH_TOKEN"
 
-(cd "$PROJECT_DIR" && npm run build:mcp >/dev/null 2>&1)
+# E2E_SKIP_BUILD=1 (set by the suite runner after its single build) uses the
+# prebuilt bundle and packs without lifecycle scripts, so prepack cannot
+# rebuild the bundle while a concurrent scenario loads it.
+PACK_ARGS=()
+if [[ "${E2E_SKIP_BUILD:-0}" == "1" ]]; then
+  PACK_ARGS=(--ignore-scripts)
+else
+  (cd "$PROJECT_DIR" && npm run build:mcp >/dev/null 2>&1)
+fi
 mkdir -p "$E2E_ROOT/pack"
-TARBALL="$(cd "$PROJECT_DIR" && npm pack --workspace @curio-data/mcp-intelli-search --pack-destination "$E2E_ROOT/pack" 2>/dev/null | tail -1)"
+TARBALL="$(cd "$PROJECT_DIR" && npm pack --workspace @curio-data/mcp-intelli-search --pack-destination "$E2E_ROOT/pack" "${PACK_ARGS[@]}" 2>/dev/null | tail -1)"
 TARBALL="$E2E_ROOT/pack/$(basename "$TARBALL")"
 WORK="$E2E_ROOT/bundles"
 node "$PROJECT_DIR/scripts/generate-plugin-bundles.mjs" \
