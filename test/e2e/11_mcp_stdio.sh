@@ -43,8 +43,6 @@ E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
 
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/lib.sh"
-# shellcheck disable=SC2034  # consumed by e2e_setup_loop_model in lib.sh
-E2E_LOOP_MODEL_ID="${TEST_MODEL:-}"
 
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
   if [ -f "$HOME/.pi/agent/auth.json" ]; then

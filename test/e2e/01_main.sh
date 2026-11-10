@@ -56,8 +56,6 @@ E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
 
 # shellcheck source=/dev/null
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
-# shellcheck disable=SC2034  # consumed by e2e_setup_loop_model in lib.sh
-E2E_LOOP_MODEL_ID="${TEST_MODEL:-}"
 
 # ── Check prerequisites ────────────────────────────────────────────
 # Auto-detect OPENROUTER_API_KEY from ~/.pi/agent/auth.json if not

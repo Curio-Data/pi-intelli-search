@@ -122,11 +122,12 @@ E2E_RUN_MODE=sequential ./test/run-e2e-all.sh  # one at a time, E2E_GAP_SECONDS 
 |---|---|---|
 | `E2E_RUN_MODE` | `parallel` | `sequential` runs the scripts one at a time and streams their output |
 | `E2E_GAP_SECONDS` | `20` | Gap between scripts in sequential mode |
-| `E2E_SCRIPT_TIMEOUT_SECONDS` | `1200` | Limit for each script; exit `124` is reported as a timeout. In parallel mode the timeout also stops the script's `pi`, `claude` and `codex` processes |
+| `E2E_SCRIPT_TIMEOUT_SECONDS` | `1200` | Limit for each script except `10_config_recipes.sh`; exit `124` is reported as a timeout. In parallel mode the timeout also stops the script's `pi`, `claude` and `codex` processes |
+| `E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS` | `2400` | Limit for `10_config_recipes.sh`, with the same timeout handling as `E2E_SCRIPT_TIMEOUT_SECONDS` |
 | `E2E_SKIP_BUILD` | unset | `1` uses existing builds; the runner sets it for every scenario after its own build |
 | `E2E_RECIPE_TIMEOUT_SECONDS` | `600` | Limit for each `pi` attempt in `10_config_recipes.sh`; a recipe makes up to three attempts |
 
-A recipe that needs all three attempts runs for up to ≈1,860 seconds, beyond the 1,200-second script default; raise `E2E_SCRIPT_TIMEOUT_SECONDS` (the 2026-11-09 evidence recommends 2,400) or lower `E2E_RECIPE_TIMEOUT_SECONDS` when scenario 10 reports `TIMED OUT`.
+Scenario 10 has its own limit because its five recipes run concurrently and a recipe that needs all three attempts takes ≈1,860 seconds at the defaults; 2,400 seconds is the limit recommended by the 2026-11-09 evidence (`evidence/agents/2026-11-09-post-release/`). The other scripts use 1,200 seconds, so a hung scenario fails promptly. When scenario 10 reports `TIMED OUT`, raise `E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS` or lower `E2E_RECIPE_TIMEOUT_SECONDS`. The traced runner below applies the same two limits.
 
 Use sequential mode where an account meets OpenRouter's 402 in-flight spending limit, or to watch one scenario's output as it runs. A scenario run by hand alongside others needs `E2E_SKIP_BUILD=1` after a single `npm run build:all`, or scenarios 11 to 14 rebuild the standalone bundle while another loads it.
 

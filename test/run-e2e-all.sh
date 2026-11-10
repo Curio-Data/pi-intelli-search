@@ -18,6 +18,10 @@
 # providers can still return 429, and an account can meet OpenRouter's 402
 # in-flight spending limit; the extension's own retry policy honours
 # Retry-After. Parallel is the default by owner decision (2026-11-10).
+# That evidence predates the current agent-loop default: neither the
+# qwen-token-plan loop nor an OpenRouter loop sharing the pipeline key has
+# been measured under parallel load; use E2E_RUN_MODE=sequential if either
+# meets rate limits.
 #
 # Usage:
 #   ./test/run-e2e-all.sh
@@ -26,7 +30,11 @@
 #   OPENROUTER_API_KEY          Required (auto-detected from ~/.pi/agent/auth.json).
 #   E2E_RUN_MODE                parallel (default) or sequential.
 #   E2E_GAP_SECONDS             Sequential mode only: gap between scripts (default: 20).
-#   E2E_SCRIPT_TIMEOUT_SECONDS  Per-script limit (default: 1200).
+#   E2E_SCRIPT_TIMEOUT_SECONDS  Limit for each script except 10_config_recipes.sh (default: 1200).
+#   E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS
+#                               Limit for 10_config_recipes.sh, whose recipes can
+#                               each take three attempts (default: 2400).
+#   E2E_RECIPE_TIMEOUT_SECONDS  Scenario 10 only: limit per pi attempt (default: 600).
 #   E2E_SKIP_BUILD              1 to use existing builds instead of building first.
 #
 # Excludes run-e2e-publish.sh (release-only; validates the npm package).
@@ -42,14 +50,15 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/e2e/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
   E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS \
-  E2E_RECIPE_TIMEOUT_SECONDS E2E_RUN_MODE
+  E2E_RECIPE_TIMEOUT_SECONDS E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS E2E_RUN_MODE
 MODE="${E2E_RUN_MODE:-parallel}"
 GAP="${E2E_GAP_SECONDS:-20}"
 SCRIPT_TIMEOUT="${E2E_SCRIPT_TIMEOUT_SECONDS:-1200}"
+RECIPES_TIMEOUT="${E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS:-2400}"
 export TMPDIR="${TMPDIR:-$PROJECT_DIR/.tmp/e2e}"
 mkdir -p "$TMPDIR"
-[[ "$GAP" =~ ^[0-9]+$ && "$SCRIPT_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
-  echo "Invalid E2E gap or timeout" >&2
+[[ "$GAP" =~ ^[0-9]+$ && "$SCRIPT_TIMEOUT" =~ ^[1-9][0-9]*$ && "$RECIPES_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
+  echo "Invalid E2E_GAP_SECONDS, E2E_SCRIPT_TIMEOUT_SECONDS or E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS" >&2
   exit 1
 }
 [[ "$MODE" == "parallel" || "$MODE" == "sequential" ]] || {
@@ -102,6 +111,13 @@ PASSED=()
 FAILED=()
 SKIPPED=()
 
+# timeout_for <script>: scenario 10 runs five recipes concurrently, each
+# making up to three E2E_RECIPE_TIMEOUT_SECONDS attempts (≈1,860 s at the defaults);
+# every other script keeps the shorter limit, so a hang still fails fast.
+timeout_for() {
+  if [[ "$1" == e2e/10_config_recipes.sh ]]; then echo "$RECIPES_TIMEOUT"; else echo "$SCRIPT_TIMEOUT"; fi
+}
+
 # record <script> <status> [log]: classify one finished script.
 record() {
   local script="$1" status="$2" log="${3:-}"
@@ -114,7 +130,7 @@ record() {
     echo "⚠️ $script SKIPPED (required release evidence is missing)"
     SKIPPED+=("$script")
   elif [ "$status" -eq 124 ]; then
-    echo "❌ $script TIMED OUT after ${SCRIPT_TIMEOUT}s"
+    echo "❌ $script TIMED OUT after $(timeout_for "$script")s"
   else
     echo "❌ $script FAILED (exit $status)"
   fi
@@ -128,7 +144,7 @@ record() {
 if [[ "$MODE" == "parallel" ]]; then
   RUN_DIR="$TMPDIR/run-$(date -u +%Y%m%dT%H%M%SZ)-$$"
   mkdir -p "$RUN_DIR"
-  echo "🧪 Parallel E2E run: ${#SCRIPTS[@]} scripts at once, ${SCRIPT_TIMEOUT}s timeout per script"
+  echo "🧪 Parallel E2E run: ${#SCRIPTS[@]} scripts at once, ${SCRIPT_TIMEOUT}s timeout per script (${RECIPES_TIMEOUT}s for scenario 10)"
   echo "   Logs: $RUN_DIR"
   echo ""
   PIDS=()
@@ -139,7 +155,7 @@ if [[ "$MODE" == "parallel" ]]; then
     # signals the scenario's whole process group and a timed-out scenario
     # leaves no pi, claude or codex child running.
     TMPDIR="$RUN_DIR/$name.tmp" \
-      timeout "${SCRIPT_TIMEOUT}s" "$SCRIPT_DIR/$script" \
+      timeout "$(timeout_for "$script")s" "$SCRIPT_DIR/$script" \
       > "$RUN_DIR/$name.log" 2>&1 < /dev/null &
     PIDS+=("$!")
   done
@@ -148,7 +164,7 @@ if [[ "$MODE" == "parallel" ]]; then
     record "${SCRIPTS[$i]}" "$status" "$RUN_DIR/$(basename "${SCRIPTS[$i]}" .sh).log"
   done
 else
-  echo "🧪 Sequential E2E run: ${#SCRIPTS[@]} scripts, ${GAP}s gap, ${SCRIPT_TIMEOUT}s timeout per script"
+  echo "🧪 Sequential E2E run: ${#SCRIPTS[@]} scripts, ${GAP}s gap, ${SCRIPT_TIMEOUT}s timeout per script (${RECIPES_TIMEOUT}s for scenario 10)"
   echo ""
   for i in "${!SCRIPTS[@]}"; do
     script="${SCRIPTS[$i]}"
@@ -156,7 +172,7 @@ else
     echo "▶  [$((i + 1))/${#SCRIPTS[@]}] $script"
     echo "════════════════════════════════════════════════════════════════"
     # Don't let one failure abort the suite; collect results and report at the end.
-    timeout --foreground "${SCRIPT_TIMEOUT}s" "$SCRIPT_DIR/$script" && status=0 || status=$?
+    timeout --foreground "$(timeout_for "$script")s" "$SCRIPT_DIR/$script" && status=0 || status=$?
     record "$script" "$status"
     if [ "$i" -lt "$((${#SCRIPTS[@]} - 1))" ] && [ "$GAP" -gt 0 ]; then
       echo "⏳ Sleeping ${GAP}s before next script..."
