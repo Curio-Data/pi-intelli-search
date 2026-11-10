@@ -13,7 +13,7 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1064%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1070%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -577,7 +577,7 @@ Two loader rules to keep in mind:
 | Wide runs with a large-context collate model | [Large-Context Collation](#recipe-9-large-context-collation) |
 | A short host deadline or predictable spend | [Bounded Time and Spend](#recipe-10-bounded-time-and-spend) |
 
-Recipes 2 and 3 run end-to-end in `08_websearch_tool.sh` and `09_sonar_pro_search.sh`; every other recipe runs in its own isolated environment in [`test/e2e/10_config_recipes.sh`](test/e2e/10_config_recipes.sh). Each script's header states what it proves.
+[`test/config-recipes.test.ts`](test/config-recipes.test.ts) reads every recipe's block from this README and checks that the loader applies each key and leaves the rest at their defaults; it also runs the page-count and extract-input caps through the pipeline. Live runs cover the recipes that depend on a real provider or host: recipes 2 and 3 in `08_websearch_tool.sh` and `09_sonar_pro_search.sh`, and recipes 5, 6, 8 and 10 concurrently in [`test/e2e/10_config_recipes.sh`](test/e2e/10_config_recipes.sh). Each script's header states what it proves.
 
 ### Recipe 1: Zero Configuration
 

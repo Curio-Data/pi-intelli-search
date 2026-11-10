@@ -137,7 +137,7 @@ OUTPUT1="$E2E_LAST_OUTPUT"
 
 echo "$OUTPUT1"
 rm -rf "$ISO1"
-echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run to refill the provider bucket..."
+echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run (E2E_RUN_GAP_SECONDS)..."
 sleep "$RUN_GAP_SECONDS"
 
 # ═══════════════════════════════════════════════════════════════════

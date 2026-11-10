@@ -74,7 +74,7 @@ echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 # ── Shared prompt: small-but-redundant research against content-heavy pages ─
 # The official Python documentation provides stable, content-rich input.
-# Restrict to one source to reduce rate-limit pressure between the paired runs.
+# Restrict to one source so both paired runs extract the same page with fewer calls.
 RESEARCH_PROMPT='Use intelli_research with maxUrls=1 and domains=["docs.python.org"] to research: Python data model reference. Use focusPrompt="Extract the data-model details and canonical API terminology."'
 
 # ═══════════════════════════════════════════════════════════════════
@@ -139,7 +139,7 @@ OUTPUT1="$E2E_LAST_OUTPUT"
 
 echo "$OUTPUT1"
 rm -rf "$ISO1"
-echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run to refill the provider bucket..."
+echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run (E2E_RUN_GAP_SECONDS)..."
 sleep "$RUN_GAP_SECONDS"
 
 # ═══════════════════════════════════════════════════════════════════

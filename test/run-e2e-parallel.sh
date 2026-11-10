@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Harness for the parallel live-run investigation. It deliberately leaves the
-# sequential runner and its pacing defaults unchanged. Scenarios 13 and 14 are
-# excluded because this investigation must not use maintainer login profiles.
+# Traced evidence runner for live-run investigations. Scenarios 13 and 14 are
+# excluded because traced runs must not use maintainer login profiles.
 
 set -euo pipefail
 

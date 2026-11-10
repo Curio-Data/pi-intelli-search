@@ -21,8 +21,8 @@
 #                        with the recorded results)
 #   BENCH_FOCUS          Override the pinned focusPrompt (same caveat)
 #   BENCH_MAX_URLS       Page budget per run (default: 8)
-#   BENCH_GAP_SECONDS    Pause between runs (default: 20; keeps the
-#                        rate-limit bucket from degrading later runs)
+#   BENCH_GAP_SECONDS    Pause between runs (default: 20; operational
+#                        pacing, not a measured provider limit)
 #   BENCH_BASE_DIR       Artifact root (default: /tmp/intelli-bench-<stamp>).
 #                        Set to encrypted storage: each run writes an auth.json
 #                        containing provider credentials into its agent dir.

@@ -109,6 +109,42 @@ node scripts/generate-tlds.mjs --check .tmp/tlds.txt  # exit 1 on drift
 
 It rewrites only the version line and the delegated-TLD literal. The `FILE_EXTENSION_TLDS` policy in the same file is maintained by hand and must stay a subset of the delegated set, which `test/util.test.ts` checks. Run the check before a release.
 
+## Live E2E Runs
+
+[`test/run-e2e-all.sh`](../test/run-e2e-all.sh) runs the live suite. It builds both packages once, then starts every scenario at once, each with its own `TMPDIR` and log under `$TMPDIR/run-<timestamp>-<pid>/`. `TMPDIR` defaults to `.tmp/e2e/` only when unset; on an encrypted host, unset it or point it under the repository's `.tmp/`. The summary prints each scenario's outcome and the last lines of every failing log.
+
+```bash
+./test/run-e2e-all.sh                          # parallel (default)
+E2E_RUN_MODE=sequential ./test/run-e2e-all.sh  # one at a time, E2E_GAP_SECONDS apart
+```
+
+| Variable | Default | Effect |
+|---|---|---|
+| `E2E_RUN_MODE` | `parallel` | `sequential` runs the scripts one at a time and streams their output |
+| `E2E_GAP_SECONDS` | `20` | Gap between scripts in sequential mode |
+| `E2E_SCRIPT_TIMEOUT_SECONDS` | `1200` | Limit for each script; exit `124` is reported as a timeout. In parallel mode the timeout also stops the script's `pi`, `claude` and `codex` processes |
+| `E2E_SKIP_BUILD` | unset | `1` uses existing builds; the runner sets it for every scenario after its own build |
+| `E2E_RECIPE_TIMEOUT_SECONDS` | `600` | Limit for each `pi` attempt in `10_config_recipes.sh`; a recipe makes up to three attempts |
+
+A recipe that needs all three attempts runs for up to ≈1,860 seconds, beyond the 1,200-second script default; raise `E2E_SCRIPT_TIMEOUT_SECONDS` (the 2026-11-09 evidence recommends 2,400) or lower `E2E_RECIPE_TIMEOUT_SECONDS` when scenario 10 reports `TIMED OUT`.
+
+Use sequential mode where an account meets OpenRouter's 402 in-flight spending limit, or to watch one scenario's output as it runs. A scenario run by hand alongside others needs `E2E_SKIP_BUILD=1` after a single `npm run build:all`, or scenarios 11 to 14 rebuild the standalone bundle while another loads it.
+
+### Traced Evidence Runs
+
+[`test/run-e2e-parallel.sh`](../test/run-e2e-parallel.sh) runs scenarios 01 to 12 and 15 with tracing, for investigating what limits or breaks live runs. Run `npm run build:all` first. Each scenario gets an isolated `HOME`, XDG directories, npm cache and trace directory under `.tmp/e2e-evidence/<run>/`, and the run records the key's account state (limit, usage, free-tier flag) at start and end without the key itself.
+
+```bash
+npm run build:all
+./test/run-e2e-parallel.sh
+E2E_RUN_MODE=sequential ./test/run-e2e-parallel.sh
+node test/e2e/analyze-evidence.mjs .tmp/e2e-evidence/<run>
+```
+
+A harness-only `Pi` extension (`test/e2e/trace-extension.mjs`) records each extension model call by stage, with its HTTP status, selected rate-limit headers, stop reason and latency, and each agent-loop response separately. A global fetch tracer (`test/e2e/trace-fetch.mjs`) covers the standalone MCP transport; native `pi-ai` calls do not pass through global `fetch`. The analyser writes `analysis.json` into the run directory with status counts, stop reasons, retry notices and research arguments, and copies no prompts, completions or credentials.
+
+On native paths `pi-ai` reports a response status only after a request succeeds, so a 429 or 402 appears as an error stop reason, not in the status counts. Read both before concluding that no rate limit occurred. Promote any run cited as evidence from `.tmp/` into `evidence/` first.
+
 ## Claude Tool Routing
 
 [`test/e2e/13_claude_code_plugin.sh`](../test/e2e/13_claude_code_plugin.sh) evaluates tool selection in four fresh Claude Code sessions against the generated local-tarball plugin. It distinguishes installation and skill discovery from successful skill invocation before an operation. Both search and research remain available. Prompts refer to the installed web research plugin without naming either operation; only the explicit-loading case names the skill.
@@ -130,7 +166,7 @@ E2E_KEEP_ARTIFACTS=1 \
   ./test/e2e/13_claude_code_plugin.sh
 ```
 
-This consumes live provider quota and spaces the sessions by `E2E_RUN_GAP_SECONDS` (default `20`). Factual sessions have an `E2E_TIMEOUT_SECONDS` deadline (default `180`); deep analysis has a separate `E2E_RESEARCH_TIMEOUT_SECONDS` deadline (default `540`) to allow follow-up research. Pass the research deadline through the caller's environment; the scripts do not load it from `.env`. The default session deadlines and gaps total `1140` seconds before build and installation, close to the paced runner's `1200`-second per-script limit. Increase `E2E_SCRIPT_TIMEOUT_SECONDS` when increasing session deadlines or allowing more installation time. Retained runs live under `.tmp/intelli-claude-e2e-*`; the plugin credential file is removed even on failure. The launcher uses an absolute vendored entrypoint, avoiding local workspace binary resolution through `npx`. Do not treat an interactive session opened in this development repository as evidence of the published package without checking its running entrypoint.
+This consumes live provider quota and spaces the sessions by `E2E_RUN_GAP_SECONDS` (default `20`). Factual sessions have an `E2E_TIMEOUT_SECONDS` deadline (default `180`); deep analysis has a separate `E2E_RESEARCH_TIMEOUT_SECONDS` deadline (default `540`) to allow follow-up research. Pass the research deadline through the caller's environment; the scripts do not load it from `.env`. The default session deadlines and gaps total `1140` seconds before build and installation, close to the suite runner's `1200`-second per-script limit. Increase `E2E_SCRIPT_TIMEOUT_SECONDS` when increasing session deadlines or allowing more installation time. Retained runs live under `.tmp/intelli-claude-e2e-*`; the plugin credential file is removed even on failure. The launcher uses an absolute vendored entrypoint, avoiding local workspace binary resolution through `npx`. Do not treat an interactive session opened in this development repository as evidence of the published package without checking its running entrypoint.
 
 The server sends routing and skill-loading guidance in its MCP `instructions` field as well as its tool descriptions. Claude Code [documents server instructions as context used for tool discovery](https://code.claude.com/docs/en/mcp#scale-with-mcp-tool-search). With tool search enabled, names and server instructions load at session start; full definitions, including descriptions, load on demand. The `descriptions-only` case disables skills, not tool search, and does not isolate the influence of descriptions from server instructions. These instructions guide the model; they do not enforce skill loading. Deterministic protocol tests check that the server transmits them, while the live scenario checks the model's actions. The routing change leaves native `Pi` tool descriptions unchanged. The subsequent shared provenance correction changes the collation prompt, report prose and `searchSummary` description; callable parameters remain unchanged. A routing review recorded reviewer dispositions, the failed permission check, the corrected live run and a deferred source-provenance finding.
 

@@ -58,7 +58,7 @@ mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "📝 Log: $LOG_FILE"
 
-# Two attempts plus build and pacing must fit the paced runner's per-script
+# Two attempts plus build and pacing must fit the suite runner's per-script
 # timeout (E2E_SCRIPT_TIMEOUT_SECONDS, default 1200).
 E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-540}"
 E2E_CODEX_HOME="${E2E_CODEX_HOME:-$PROJECT_DIR/.e2e-auth/codex}"
@@ -143,9 +143,17 @@ fi
 # ── Build, pack and vendor the plugin (as scenario 12) ─────────────
 echo
 echo "── Build and install the local-tarball plugin"
-(cd "$PROJECT_DIR" && npm run build:mcp >/dev/null 2>&1)
+# E2E_SKIP_BUILD=1 (set by the suite runner after its single build) uses the
+# prebuilt bundle and packs without lifecycle scripts, so prepack cannot
+# rebuild the bundle while a concurrent scenario loads it.
+PACK_ARGS=()
+if [[ "${E2E_SKIP_BUILD:-0}" == "1" ]]; then
+  PACK_ARGS=(--ignore-scripts)
+else
+  (cd "$PROJECT_DIR" && npm run build:mcp >/dev/null 2>&1)
+fi
 mkdir -p "$E2E_ROOT/pack"
-TARBALL="$(cd "$PROJECT_DIR" && npm pack --workspace @curio-data/mcp-intelli-search --pack-destination "$E2E_ROOT/pack" 2>/dev/null | tail -1)"
+TARBALL="$(cd "$PROJECT_DIR" && npm pack --workspace @curio-data/mcp-intelli-search --pack-destination "$E2E_ROOT/pack" "${PACK_ARGS[@]}" 2>/dev/null | tail -1)"
 TARBALL="$E2E_ROOT/pack/$(basename "$TARBALL")"
 WORK="$E2E_ROOT/bundles"
 node "$PROJECT_DIR/scripts/generate-plugin-bundles.mjs" \
