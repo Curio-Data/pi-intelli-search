@@ -378,7 +378,7 @@ test/
 │   ├── 07_llms_full.sh
 │   ├── 08_websearch_tool.sh
 │   ├── 09_sonar_pro_search.sh
-│   ├── 10_config_recipes.sh   # Highest-risk recipes (R5, R6, R8, R10), run concurrently
+│   ├── 10_config_recipes.sh   # Zero configuration and the highest-risk recipes (R1, R5, R6, R8, R10), run concurrently
 │   ├── 11_mcp_stdio.sh
 │   ├── 12_plugin_bundles.sh
 │   ├── 13_claude_code_plugin.sh
@@ -599,7 +599,7 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `e2e/07_llms_full.sh` | Automatic llms-full.txt discovery works; probes candidate sites, verifies file lands in cache |
 | `e2e/08_websearch_tool.sh` | Exercises the configured server-tool path with a chat model: verifies the selected model, non-empty links, completed pipeline, and cached sources. Annotation count is diagnostic, not a pass condition |
 | `e2e/09_sonar_pro_search.sh` | Verifies registration and settings-based selection of `perplexity/sonar-pro-search` in a vanilla agent dir, then checks non-empty links, completed pipeline, and cached sources. Reports the annotation count |
-| `e2e/10_config_recipes.sh` | Runs the four highest-risk README Configuration Recipes concurrently, each in a fresh isolated agent dir + cwd with its settings block read from `README.md`, and asserts the effective behaviour from telemetry: non-default extract and collate models (R5, R6), per-project settings honoured by the real `Pi` host through pre-seeded trust.json (R8, the only live project-level-settings coverage) and the 0.21.0 caps on real pages (R10). Settings resolution for all ten recipes, and the page-count and extract-input caps, are covered deterministically by `test/config-recipes.test.ts` |
+| `e2e/10_config_recipes.sh` | Runs five README Configuration Recipes concurrently, each in a fresh isolated agent dir + cwd with its settings block read from `README.md`, and asserts the effective behaviour from telemetry: the default models, 10-page default and `.search/` cache with no `pi-intelli-search` settings at all (R1), non-default extract and collate models (R5, R6), per-project settings honoured by the real `Pi` host through pre-seeded trust.json (R8, the only live project-level-settings coverage) and the 0.21.0 caps on real pages (R10). Settings resolution for all ten recipes, and the page-count and extract-input caps, are covered deterministically by `test/config-recipes.test.ts` |
 | `e2e/11_mcp_stdio.sh` | Builds the standalone package, registers it in an isolated profile's `mcp.json` (direct exposure, no native extension) and drives a real research through `Pi`'s native MCP client, asserting connection, workspace cache, `mcp` telemetry identity and completed outcome. Establishes that `--no-extensions` disconnects MCP servers and that `codemode` exposure hides direct tool calls |
 | `e2e/12_plugin_bundles.sh` | Packs the standalone artefact, generates local-tarball plugin bundles (pre-publication evidence class), vendors the tarball, then exercises real host installation credential-free: Claude Code strict validation, marketplace add, install, `claude mcp list` connection and skill discovery; Codex marketplace add, catalogue-path assertion, install, installed-cache layout and prompt-input skill discovery. Skips with a notice when a host CLI is absent. Also asserts Claude Code key delivery with dummy values: the required sensitive key option withholds the server while unset and reaches the server process once set. Credentialed sessions live in `13_claude_code_plugin.sh` and `14_codex_plugin.sh` |
 | `e2e/13_claude_code_plugin.sh` | Installs the local-tarball Claude Code plugin into an isolated `CLAUDE_CONFIG_DIR` and sets the key through the plugin option only. Fresh sessions evaluate factual lookup with skills disabled, automatic skill loading, explicit skill loading, and a detailed comparison. Prompts name the installed web research plugin, not either operation; only the explicit-loading case names the skill. Both search and research remain available. Checks distinguish skill discovery from successful invocation, verify operation choice and model-visible results, and require completed `mcp` research artefacts. Requires a maintainer-owned Claude Code credential held outside the repository, and asserts the operator's credentials are untouched. `E2E_KEEP_ARTIFACTS=1` retains traces; see `scripts/README.md` |
@@ -640,6 +640,8 @@ OPENROUTER_API_KEY=sk-or-v1-... ./test/e2e/01_main.sh
 ```
 
 `13_claude_code_plugin.sh` and `14_codex_plugin.sh` additionally require maintainer-owned Claude Code and Codex credentials held outside the repository; they cannot run without them. Never copy an operator's credential files (for example `~/.claude/.credentials.json` or `~/.codex/auth.json`) into a test profile: a copied refresh-token chain invalidates the operator's login.
+
+The headless agent loop runs on `qwen-token-plan/qwen3.8-max` when the operator's `auth.json` holds that API key, and on OpenRouter otherwise; `TEST_MODEL` (or `E2E_LOOP_MODEL_ID` in scripts that do not set it from `TEST_MODEL`) overrides it. `test/e2e/lib.sh` copies only API-key logins into a test profile and refuses an OAuth loop model such as `kimi-coding` or `openai-codex`: its refresh token rotates, so a copy that refreshes signs the operator out, as happened on 2026-11-10.
 
 ### E2E Publish Test
 

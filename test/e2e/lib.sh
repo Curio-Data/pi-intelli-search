@@ -7,11 +7,17 @@
 # needs special compat flags that the catalog/models.json round-trip
 # drops (zai glm models emit tool calls as text and pi exits 0
 # without executing them; a models.json providers block also breaks
-# slash-form defaultModel resolution at startup). kimi-coding/k3
-# needs no special flags and is immune, so it is the preferred loop
-# model. Pipeline stages stay on OpenRouter in every scenario; the
-# loop model only composes the tool call. See docs/BENCHMARKS.md,
-# Confounds And Limitations, for the full diagnosis.
+# slash-form defaultModel resolution at startup). The preferred loop
+# model is qwen-token-plan/qwen3.8-max, a built-in provider reached
+# with an API key; without that key the loop runs on OpenRouter.
+# Pipeline stages stay on OpenRouter in every scenario; the loop model
+# only composes the tool call. See docs/BENCHMARKS.md, Confounds And
+# Limitations, for the full diagnosis.
+#
+# Only API-key credentials are copied into test profiles. An OAuth
+# login (kimi-coding, openai-codex) carries a refresh token that
+# rotates: a copy that refreshes retires the token the operator's own
+# auth.json still holds and signs the operator out (2026-11-10).
 #
 # Retry: exit 0 is not proof the pipeline ran (the print-mode
 # tool-call leak), so e2e_run_pi retries any attempt that did not
@@ -80,8 +86,8 @@ e2e_setup_loop_model() {
   if [[ -z "${loop_model_id}" ]]; then
     loop_model_id="openrouter/google/gemini-3.8-flash"
     if [[ -f "${operator_auth}" ]] \
-       && jq -e 'has("kimi-coding")' "${operator_auth}" >/dev/null 2>&1; then
-      loop_model_id="kimi-coding/k3"
+       && jq -e '."qwen-token-plan".type == "api_key"' "${operator_auth}" >/dev/null 2>&1; then
+      loop_model_id="qwen-token-plan/qwen3.8-max"
     fi
   fi
   E2E_LOOP_PROVIDER="${loop_model_id%%/*}"
@@ -93,6 +99,10 @@ e2e_setup_loop_model() {
        || ! loop_entry="$(jq --arg p "${E2E_LOOP_PROVIDER}" '.[$p] // empty' "${operator_auth}" 2>/dev/null)" \
        || [[ -z "${loop_entry}" || "${loop_entry}" == "null" ]]; then
       echo "e2e_setup_loop_model: E2E_LOOP_MODEL_ID=${loop_model_id} but no ${E2E_LOOP_PROVIDER} key in ~/.pi/agent/auth.json" >&2
+      return 1
+    fi
+    if [[ "$(jq -r '.type // empty' <<<"${loop_entry}")" != "api_key" ]]; then
+      echo "e2e_setup_loop_model: ${E2E_LOOP_PROVIDER} is not an API-key login; copying it would sign the operator out. Choose an API-key loop model." >&2
       return 1
     fi
     E2E_AUTH_JSON="$(printf '%s\n%s\n' "${E2E_AUTH_JSON}" "${loop_entry}" | jq -sc --arg p "${E2E_LOOP_PROVIDER}" '.[0] + {($p): .[1]}')"

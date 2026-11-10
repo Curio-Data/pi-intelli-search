@@ -9,6 +9,10 @@
 # only a real provider or a real Pi host can expose, and runs them
 # concurrently, each in its own isolated agent dir + cwd:
 #
+#   R1  (zero configuration)       -> with no pi-intelli-search settings at all,
+#                                     the real host runs the default Sonar
+#                                     search, MiniMax M3 extract and collate,
+#                                     the 10-page default and the .search/ cache
 #   R5  (economy extract/collate)  -> non-default models (Gemini 3.7 Flash)
 #                                     complete extraction and collation
 #   R6  (stronger collation)       -> a second provider family (GPT-5 mini)
@@ -21,12 +25,11 @@
 #                                     the 150,000-character cap binds when a
 #                                     fetched page exceeds it
 #
-# Recipe 1 has no settings block; test/config-recipes.test.ts proves that the
-# loader then applies every default, and 01_main.sh runs the default models
-# live through an explicit block. Recipes 2 and 3 run in 08_websearch_tool.sh
-# and 09_sonar_pro_search.sh. Recipes 4, 7 and 9 change only page counts,
-# pacing and the collation budget, which the deterministic test covers; R9's
-# collate model is R5's.
+# Recipe 1 has no settings block, so R1 writes none; 01_main.sh, by contrast,
+# runs the default models through an explicit block. Recipes 2 and 3 run in
+# 08_websearch_tool.sh and 09_sonar_pro_search.sh. Recipes 4, 7 and 9 change
+# only page counts, pacing and the collation budget, which the deterministic
+# test covers; R9's collate model is R5's.
 #
 # Settings blocks are read from README.md at run time, so this scenario
 # exercises the documented text. Up to three attempts per recipe guard the
@@ -191,6 +194,32 @@ run_recipe() { # run_recipe <name> <function>
   echo "$!" > "$RESULTS/$1.pid"
 }
 
+recipe_r1() {
+  echo "═══ R1: zero configuration (no pi-intelli-search settings anywhere) ═══"
+  read -r AGENT CWD <<<"$(make_env r1)"
+  write_global "$AGENT"
+  # No maxUrls in the prompt: the page count must come from the default.
+  if run_pi "$AGENT" "$CWD" 'Use intelli_research, leaving maxUrls unset, with domains=["sqlite.org"] to research: SQLite WAL mode trade-offs.'; then
+    assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
+    assert_eq "default search model" "$(meta_value "$CWD/.search" '.stages.search.model')" "openrouter/perplexity/sonar"
+    assert_eq "default extract model" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
+    assert_eq "default collate model" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/minimax/minimax-m3"
+    local links requested
+    links="$(meta_value "$CWD/.search" '.stages.search.linksReturned // 0')"
+    requested="$(meta_value "$CWD/.search" '.stages.fetch.requested // 0')"
+    assert_ge "pages requested" "$requested" 1
+    assert_le "pages requested within the 10-page default" "$requested" 10
+    if [ "$links" -gt 10 ]; then
+      assert_eq "default page count applied ($links links returned)" "$requested" "10"
+    else
+      echo "   ℹ️  10-page default not binding: search returned $links links"
+    fi
+  else
+    echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
+  fi
+  rm -rf "$AGENT" "$CWD"
+}
+
 recipe_r5() {
   echo "═══ R5: economy extract/collate (google/gemini-3.7-flash) ═══"
   read -r AGENT CWD <<<"$(make_env r5)"
@@ -278,7 +307,7 @@ recipe_r10() {
   rm -rf "$AGENT" "$CWD"
 }
 
-RECIPES=(r5 r6 r8 r10)
+RECIPES=(r1 r5 r6 r8 r10)
 echo ""
 echo "🚀 Running ${#RECIPES[@]} recipes concurrently (per-invocation timeout ${RECIPE_TIMEOUT}s)"
 for name in "${RECIPES[@]}"; do run_recipe "$name" "recipe_$name"; done
@@ -298,4 +327,4 @@ if [ "$FAILED" -gt 0 ]; then
   echo "❌ E2E config-recipes test failed ($FAILED of ${#RECIPES[@]} recipes)"
   exit 1
 fi
-echo "✅ E2E config-recipes test passed: recipes 5, 6, 8 and 10 proven live in isolation"
+echo "✅ E2E config-recipes test passed: recipes 1, 5, 6, 8 and 10 proven live in isolation"

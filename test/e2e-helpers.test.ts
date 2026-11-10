@@ -104,3 +104,28 @@ it("E2E auth assembly sends credentials over stdin, not jq arguments", () => {
   assert.equal(run.status, 0, run.stderr);
   assert.deepEqual(JSON.parse(run.stdout), { openrouter: { type: "api_key", key: "fixture-secret" } });
 });
+
+it("E2E loop selection copies API-key logins only, never a rotating OAuth login", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "e2e-loop-auth-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const operator = join(dir, "auth.json");
+  await writeFile(operator, JSON.stringify({
+    "kimi-coding": { type: "oauth", access: "a", refresh: "r", expires: 1 },
+    "qwen-token-plan": { type: "api_key", key: "qwen-fixture" },
+  }));
+  const setup = (model: string) => spawnSync("bash", ["-c",
+    'set -euo pipefail; source "$1"; E2E_LOOP_MODEL_ID="$2"; OPENROUTER_API_KEY=or-fixture; e2e_setup_loop_model >/dev/null; printf "%s" "$E2E_AUTH_JSON"',
+    "fixture", resolve("test/e2e/lib.sh"), model], { encoding: "utf8", env: { ...process.env, E2E_OPERATOR_AUTH_JSON: operator } });
+
+  const oauth = setup("kimi-coding/k3");
+  assert.notEqual(oauth.status, 0);
+  assert.match(oauth.stderr, /not an API-key login/);
+  assert.equal(oauth.stdout, "", "no credential assembled for an OAuth loop model");
+
+  const byDefault = setup("");
+  assert.equal(byDefault.status, 0, byDefault.stderr);
+  assert.deepEqual(JSON.parse(byDefault.stdout), {
+    openrouter: { type: "api_key", key: "or-fixture" },
+    "qwen-token-plan": { type: "api_key", key: "qwen-fixture" },
+  });
+});
