@@ -8,10 +8,11 @@
 # drops (zai glm models emit tool calls as text and pi exits 0
 # without executing them; a models.json providers block also breaks
 # slash-form defaultModel resolution at startup). The preferred loop
-# model is qwen-token-plan/qwen3.8-max, a built-in provider reached
-# with an API key; without that key the loop runs on OpenRouter.
+# model is qwen-token-plan/qwen3.8-max, from a built-in Pi provider
+# that uses an API key; without that key the loop runs on
+# openrouter/google/gemini-3.8-flash.
 # Pipeline stages stay on OpenRouter in every scenario; the loop model
-# only composes the tool call. See docs/BENCHMARKS.md, Confounds And
+# only composes the tool call. See docs/BENCHMARKS.md, Confounds and
 # Limitations, for the full diagnosis.
 #
 # Only API-key credentials are copied into test profiles. An OAuth
@@ -73,15 +74,16 @@ e2e_verify_page_budget() {
 
 # e2e_setup_loop_model — sets E2E_LOOP_PROVIDER, E2E_LOOP_MODEL, and
 # E2E_AUTH_JSON (the OpenRouter key plus the loop provider's auth
-# entry). Set E2E_LOOP_MODEL_ID (form provider/model) before calling
-# to override the loop model; settings.json should then use the split
-# "defaultProvider"/"defaultModel" form with these variables.
+# entry). E2E_LOOP_MODEL_ID, else TEST_MODEL (form provider/model),
+# overrides the loop model; settings.json should then use the split
+# "defaultProvider"/"defaultModel" form with these variables. The
+# selection is exported as PI_INTELLI_E2E_LOOP_MODEL for HTTP traces.
 e2e_setup_loop_model() {
   if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
     echo "e2e_setup_loop_model: OPENROUTER_API_KEY is not set" >&2
     return 1
   fi
-  local loop_model_id="${E2E_LOOP_MODEL_ID:-}"
+  local loop_model_id="${E2E_LOOP_MODEL_ID:-${TEST_MODEL:-}}"
   local operator_auth="${E2E_OPERATOR_AUTH_JSON:-${HOME}/.pi/agent/auth.json}"
   if [[ -z "${loop_model_id}" ]]; then
     loop_model_id="openrouter/google/gemini-3.8-flash"
@@ -98,7 +100,7 @@ e2e_setup_loop_model() {
     if [[ ! -f "${operator_auth}" ]] \
        || ! loop_entry="$(jq --arg p "${E2E_LOOP_PROVIDER}" '.[$p] // empty' "${operator_auth}" 2>/dev/null)" \
        || [[ -z "${loop_entry}" || "${loop_entry}" == "null" ]]; then
-      echo "e2e_setup_loop_model: E2E_LOOP_MODEL_ID=${loop_model_id} but no ${E2E_LOOP_PROVIDER} key in ~/.pi/agent/auth.json" >&2
+      echo "e2e_setup_loop_model: loop model ${loop_model_id} needs a ${E2E_LOOP_PROVIDER} login in ${operator_auth}; none found" >&2
       return 1
     fi
     if [[ "$(jq -r '.type // empty' <<<"${loop_entry}")" != "api_key" ]]; then
@@ -107,6 +109,7 @@ e2e_setup_loop_model() {
     fi
     E2E_AUTH_JSON="$(printf '%s\n%s\n' "${E2E_AUTH_JSON}" "${loop_entry}" | jq -sc --arg p "${E2E_LOOP_PROVIDER}" '.[0] + {($p): .[1]}')"
   fi
+  export PI_INTELLI_E2E_LOOP_MODEL="${E2E_LOOP_PROVIDER}/${E2E_LOOP_MODEL}"
   echo "▶ Agent-loop model: ${E2E_LOOP_PROVIDER}/${E2E_LOOP_MODEL} (pipeline stages: OpenRouter)"
 }
 

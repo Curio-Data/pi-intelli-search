@@ -11,8 +11,11 @@
 #
 #   R1  (zero configuration)       -> with no pi-intelli-search settings at all,
 #                                     the real host runs the default Sonar
-#                                     search, MiniMax M3 extract and collate,
-#                                     the 10-page default and the .search/ cache
+#                                     search with citation harvesting, MiniMax
+#                                     M3 extract and collate, at most 10 pages
+#                                     with maxUrls omitted, and the .search/
+#                                     cache (test/config-recipes.test.ts
+#                                     asserts the value 10 itself)
 #   R5  (economy extract/collate)  -> non-default models (Gemini 3.7 Flash)
 #                                     complete extraction and collation
 #   R6  (stronger collation)       -> a second provider family (GPT-5 mini)
@@ -25,7 +28,7 @@
 #                                     the 150,000-character cap binds when a
 #                                     fetched page exceeds it
 #
-# Recipe 1 has no settings block, so R1 writes none; 01_main.sh, by contrast,
+# Recipe 1 has no settings block, so R1 writes only the loop model; 01_main.sh
 # runs the default models through an explicit block. Recipes 2 and 3 run in
 # 08_websearch_tool.sh and 09_sonar_pro_search.sh. Recipes 4, 7 and 9 change
 # only page counts, pacing and the collation budget, which the deterministic
@@ -41,6 +44,8 @@
 #
 # Environment:
 #   OPENROUTER_API_KEY            Required. Get one from https://openrouter.ai
+#   TEST_MODEL                    Override the headless agent-loop model
+#                                 (default: see test/e2e/lib.sh)
 #   E2E_RECIPE_TIMEOUT_SECONDS    Per pi attempt, up to three per recipe (default: 600)
 
 # Each recipe counts its own ERRORS inside its subshell by design.
@@ -198,22 +203,28 @@ recipe_r1() {
   echo "═══ R1: zero configuration (no pi-intelli-search settings anywhere) ═══"
   read -r AGENT CWD <<<"$(make_env r1)"
   write_global "$AGENT"
-  # No maxUrls in the prompt: the page count must come from the default.
-  if run_pi "$AGENT" "$CWD" 'Use intelli_research, leaving maxUrls unset, with domains=["sqlite.org"] to research: SQLite WAL mode trade-offs.'; then
+  # The trace records the raw tool arguments, so the check below can prove
+  # the agent left maxUrls unset and the page budget came from the default.
+  # No domain restriction: search may return more links than the default.
+  E2E_TRACE_FILE="$AGENT/trace.jsonl"
+  if run_pi "$AGENT" "$CWD" 'Use intelli_research, leaving maxUrls unset, to research: SQLite WAL mode trade-offs.'; then
+    if [[ -n "${E2E_TRACE_DIR:-}" ]]; then mkdir -p "$E2E_TRACE_DIR"; cp "$E2E_TRACE_FILE" "$E2E_TRACE_DIR/r1.jsonl"; fi
+    if jq -Rne '[inputs | fromjson? | select(.type? == "tool_execution_start" and .toolName == "intelli_research") | .args]
+        | length >= 1 and all(.maxUrls == null)' "$E2E_TRACE_FILE" >/dev/null; then
+      echo "   ✅ intelli_research called without maxUrls"
+    else
+      echo "   ❌ intelli_research was not called, or was called with maxUrls"
+      ERRORS=$((ERRORS + 1))
+    fi
     assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
     assert_eq "default search model" "$(meta_value "$CWD/.search" '.stages.search.model')" "openrouter/perplexity/sonar"
     assert_eq "default extract model" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
     assert_eq "default collate model" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/minimax/minimax-m3"
-    local links requested
-    links="$(meta_value "$CWD/.search" '.stages.search.linksReturned // 0')"
+    assert_ge "citations harvested" "$(meta_value "$CWD/.search" '.stages.search.annotationsHarvested // 0')" 1
+    local requested
     requested="$(meta_value "$CWD/.search" '.stages.fetch.requested // 0')"
     assert_ge "pages requested" "$requested" 1
     assert_le "pages requested within the 10-page default" "$requested" 10
-    if [ "$links" -gt 10 ]; then
-      assert_eq "default page count applied ($links links returned)" "$requested" "10"
-    else
-      echo "   ℹ️  10-page default not binding: search returned $links links"
-    fi
   else
     echo "   ❌ pi failed all attempts"; ERRORS=$((ERRORS + 1)); printf '%s\n' "$LAST_OUTPUT" | tail -5
   fi
@@ -327,4 +338,4 @@ if [ "$FAILED" -gt 0 ]; then
   echo "❌ E2E config-recipes test failed ($FAILED of ${#RECIPES[@]} recipes)"
   exit 1
 fi
-echo "✅ E2E config-recipes test passed: recipes 1, 5, 6, 8 and 10 proven live in isolation"
+echo "✅ E2E config-recipes test passed: recipes 1, 5, 6, 8 and 10 passed live in isolation"

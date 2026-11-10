@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# test/05_collation_limits.sh — E2E test for collationMaxTokens
+# test/e2e/05_collation_limits.sh: E2E test for collationMaxTokens
 #
 # Proves collationMaxTokens is enforced by running the same single-URL
 # research query twice (back-to-back): first with the default 4000
@@ -8,7 +8,7 @@
 # confirm the output was clamped.
 #
 # Usage:
-#   ./test/05_collation_limits.sh
+#   ./test/e2e/05_collation_limits.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai

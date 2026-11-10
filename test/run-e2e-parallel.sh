@@ -9,7 +9,8 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/e2e/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
-  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS \
+  E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS
 
 ORIGINAL_HOME="$HOME"
 if [[ -z "${OPENROUTER_API_KEY:-}" && -f "$ORIGINAL_HOME/.pi/agent/auth.json" ]]; then
@@ -39,15 +40,23 @@ fi
 mkdir -p "$RUN_DIR"
 chmod 700 "$RUN_DIR"
 SCRIPT_TIMEOUT="${E2E_SCRIPT_TIMEOUT_SECONDS:-1200}"
+RECIPES_TIMEOUT="${E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS:-2400}"
 RUN_MODE="${E2E_RUN_MODE:-parallel}"
 GAP="${E2E_GAP_SECONDS:-20}"
-[[ "$SCRIPT_TIMEOUT" =~ ^[1-9][0-9]*$ && "$GAP" =~ ^[0-9]+$ ]] || {
-  echo "Invalid E2E_SCRIPT_TIMEOUT_SECONDS or E2E_GAP_SECONDS" >&2
+[[ "$SCRIPT_TIMEOUT" =~ ^[1-9][0-9]*$ && "$RECIPES_TIMEOUT" =~ ^[1-9][0-9]*$ && "$GAP" =~ ^[0-9]+$ ]] || {
+  echo "Invalid E2E_SCRIPT_TIMEOUT_SECONDS, E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS or E2E_GAP_SECONDS" >&2
   exit 1
 }
 [[ "$RUN_MODE" == "parallel" || "$RUN_MODE" == "sequential" ]] || {
   echo "E2E_RUN_MODE must be parallel or sequential" >&2
   exit 1
+}
+
+# timeout_for <script>: as in run-e2e-all.sh, scenario 10 runs five recipes
+# concurrently, each making up to three attempts (≈1,860 s at the defaults);
+# every other scenario keeps the shorter limit.
+timeout_for() {
+  if [[ "$1" == 10_config_recipes.sh ]]; then echo "$RECIPES_TIMEOUT"; else echo "$SCRIPT_TIMEOUT"; fi
 }
 
 capture_key_state() {
@@ -93,21 +102,11 @@ run_scenario() {
   local name="${script%.sh}"
   local dir="$RUN_DIR/$name"
   local started ended status duration outcome
-  local loop_model="${TEST_MODEL:-}"
   mkdir -p "$dir/tmp" "$dir/home" "$dir/npm-cache" "$dir/xdg-cache" "$dir/xdg-config" "$dir/pi-traces"
   chmod 700 "$dir" "$dir/home"
   : > "$dir/http.jsonl"
   : > "$dir/extension.jsonl"
   chmod 600 "$dir/http.jsonl" "$dir/extension.jsonl"
-
-  if [[ -z "$loop_model" ]]; then
-    loop_model="openrouter/google/gemini-3.8-flash"
-    if [[ -f "$ORIGINAL_HOME/.pi/agent/auth.json" ]] \
-      && jq -e '."qwen-token-plan".type == "api_key"' "$ORIGINAL_HOME/.pi/agent/auth.json" >/dev/null 2>&1; then
-      loop_model="qwen-token-plan/qwen3.8-max"
-    fi
-  fi
-  if [[ "$script" == "15_pi_floor.sh" ]]; then loop_model="openrouter/minimax/minimax-m3"; fi
 
   started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   SECONDS=0
@@ -123,11 +122,10 @@ run_scenario() {
     export E2E_COMPACT_JSON_OUTPUT=1
     export E2E_SKIP_BUILD=1
     export PI_INTELLI_E2E_SCENARIO="$name"
-    export PI_INTELLI_E2E_LOOP_MODEL="$loop_model"
     export PI_INTELLI_E2E_HTTP_TRACE="$dir/http.jsonl"
     export PI_INTELLI_E2E_EXTENSION_TRACE="$dir/extension.jsonl"
     export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--import=$SCRIPT_DIR/e2e/trace-fetch.mjs"
-    timeout --foreground "${SCRIPT_TIMEOUT}s" "$SCRIPT_DIR/e2e/$script"
+    timeout --foreground "$(timeout_for "$script")s" "$SCRIPT_DIR/e2e/$script"
   ) > "$dir/scenario.log" 2>&1 && status=0 || status=$?
   duration="$SECONDS"
   ended="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -149,7 +147,7 @@ date -u +'%Y-%m-%dT%H:%M:%SZ'
 
 suite_failed=0
 if [[ "$RUN_MODE" == "parallel" ]]; then
-  printf 'Starting %d scenarios at once; per-script timeout: %ss\n' "${#SCRIPTS[@]}" "$SCRIPT_TIMEOUT"
+  printf 'Starting %d scenarios at once; per-script timeout: %ss (%ss for scenario 10)\n' "${#SCRIPTS[@]}" "$SCRIPT_TIMEOUT" "$RECIPES_TIMEOUT"
   pids=()
   for script in "${SCRIPTS[@]}"; do
     run_scenario "$script" &
@@ -159,8 +157,8 @@ if [[ "$RUN_MODE" == "parallel" ]]; then
     wait "$pid" || suite_failed=1
   done
 else
-  printf 'Running %d scenarios sequentially; gap: %ss; per-script timeout: %ss\n' \
-    "${#SCRIPTS[@]}" "$GAP" "$SCRIPT_TIMEOUT"
+  printf 'Running %d scenarios sequentially; gap: %ss; per-script timeout: %ss (%ss for scenario 10)\n' \
+    "${#SCRIPTS[@]}" "$GAP" "$SCRIPT_TIMEOUT" "$RECIPES_TIMEOUT"
   for index in "${!SCRIPTS[@]}"; do
     run_scenario "${SCRIPTS[$index]}" || suite_failed=1
     if [[ "$index" -lt "$(( ${#SCRIPTS[@]} - 1 ))" && "$GAP" -gt 0 ]]; then

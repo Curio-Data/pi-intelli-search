@@ -2,7 +2,7 @@
 // Copyright 2026 Ashraf Miah, Curio Data Pro Ltd
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { mkdtemp, mkdir, writeFile, rm, readFile, utimes } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, writeFile, rm, readFile, symlink, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -108,24 +108,66 @@ it("E2E auth assembly sends credentials over stdin, not jq arguments", () => {
 it("E2E loop selection copies API-key logins only, never a rotating OAuth login", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "e2e-loop-auth-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
-  const operator = join(dir, "auth.json");
-  await writeFile(operator, JSON.stringify({
-    "kimi-coding": { type: "oauth", access: "a", refresh: "r", expires: 1 },
-    "qwen-token-plan": { type: "api_key", key: "qwen-fixture" },
-  }));
-  const setup = (model: string) => spawnSync("bash", ["-c",
-    'set -euo pipefail; source "$1"; E2E_LOOP_MODEL_ID="$2"; OPENROUTER_API_KEY=or-fixture; e2e_setup_loop_model >/dev/null; printf "%s" "$E2E_AUTH_JSON"',
-    "fixture", resolve("test/e2e/lib.sh"), model], { encoding: "utf8", env: { ...process.env, E2E_OPERATOR_AUTH_JSON: operator } });
+  const secrets = /fixture-access-7c1f|fixture-refresh-7c1f|fixture-untyped-7c1f/;
+  const setup = async (auth: unknown, env: Record<string, string> = {}) => {
+    const operator = join(dir, `auth-${Math.random().toString(36).slice(2)}.json`);
+    await writeFile(operator, JSON.stringify(auth));
+    return spawnSync("bash", ["-c",
+      'set -euo pipefail; source "$1"; OPENROUTER_API_KEY=or-fixture; e2e_setup_loop_model >/dev/null; printf "%s\\n%s" "$PI_INTELLI_E2E_LOOP_MODEL" "$E2E_AUTH_JSON"',
+      "fixture", resolve("test/e2e/lib.sh")],
+      { encoding: "utf8", env: { ...process.env, E2E_LOOP_MODEL_ID: "", TEST_MODEL: "", E2E_OPERATOR_AUTH_JSON: operator, ...env } });
+  };
+  const parsed = (run: ReturnType<typeof spawnSync>) => {
+    const out = String(run.stdout);
+    const split = out.indexOf("\n");
+    return { label: out.slice(0, split), auth: JSON.parse(out.slice(split + 1)) };
+  };
+  const oauth = { type: "oauth", access: "fixture-access-7c1f", refresh: "fixture-refresh-7c1f", expires: 1 };
+  const qwen = { type: "api_key", key: "qwen-fixture" };
 
-  const oauth = setup("kimi-coding/k3");
-  assert.notEqual(oauth.status, 0);
-  assert.match(oauth.stderr, /not an API-key login/);
-  assert.equal(oauth.stdout, "", "no credential assembled for an OAuth loop model");
+  // An explicitly chosen loop provider is refused unless its type is exactly api_key.
+  for (const entry of [oauth, { key: "fixture-untyped-7c1f" }, { type: null, key: "fixture-untyped-7c1f" }, "fixture-untyped-7c1f"]) {
+    for (const env of [{ E2E_LOOP_MODEL_ID: "kimi-coding/k3" }, { TEST_MODEL: "kimi-coding/k3" }] as Record<string, string>[]) {
+      const run = await setup({ "kimi-coding": entry }, env);
+      assert.notEqual(run.status, 0, JSON.stringify({ entry, env }));
+      assert.match(String(run.stderr), /not an API-key login/);
+      assert.equal(run.stdout, "", "no credential assembled for a refused loop login");
+      assert.doesNotMatch(String(run.stderr), secrets, "a refusal never prints the credential");
+    }
+  }
 
-  const byDefault = setup("");
-  assert.equal(byDefault.status, 0, byDefault.stderr);
-  assert.deepEqual(JSON.parse(byDefault.stdout), {
-    openrouter: { type: "api_key", key: "or-fixture" },
-    "qwen-token-plan": { type: "api_key", key: "qwen-fixture" },
+  // The default prefers the qwen-token-plan API key and exports the selection for traces.
+  const byDefault = await setup({ "kimi-coding": oauth, "qwen-token-plan": qwen });
+  assert.equal(byDefault.status, 0, String(byDefault.stderr));
+  assert.deepEqual(parsed(byDefault), {
+    label: "qwen-token-plan/qwen3.8-max",
+    auth: { openrouter: { type: "api_key", key: "or-fixture" }, "qwen-token-plan": qwen },
   });
+
+  // A qwen-token-plan login that is not an API key falls back to OpenRouter alone.
+  for (const entry of [oauth, { key: "fixture-untyped-7c1f" }]) {
+    const fallback = await setup({ "qwen-token-plan": entry });
+    assert.equal(fallback.status, 0, String(fallback.stderr));
+    assert.deepEqual(parsed(fallback), {
+      label: "openrouter/google/gemini-3.8-flash",
+      auth: { openrouter: { type: "api_key", key: "or-fixture" } },
+    });
+  }
+});
+
+it("E2E private-file check judges a symlinked .env by its target's mode", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "e2e-private-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const check = (path: string) => spawnSync("bash", ["-c", 'set -euo pipefail; source "$1"; e2e_require_private "$2"', "fixture", resolve("test/e2e/env.sh"), path], { encoding: "utf8" });
+  for (const [mode, ok] of [[0o600, true], [0o640, false], [0o604, false]] as const) {
+    const target = join(dir, `target-${mode.toString(8)}`);
+    const link = join(dir, `link-${mode.toString(8)}`);
+    await writeFile(target, "KEY=value\n");
+    await chmod(target, mode);
+    await symlink(target, link);
+    const run = check(link);
+    assert.equal(run.status === 0, ok, `${mode.toString(8)} target: ${run.stderr}`);
+    if (!ok) assert.match(run.stderr, new RegExp(`mode ${mode.toString(8)}`), "the message reports the target's mode");
+  }
+  assert.equal(check(join(dir, "missing")).status, 0, "an absent file is not an error");
 });

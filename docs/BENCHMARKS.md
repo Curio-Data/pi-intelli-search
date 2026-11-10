@@ -12,7 +12,7 @@ The extract and collate stages dominate per-run cost and determine report qualit
 
 ### Harness
 
-Before running, set `BENCH_BASE_DIR` to a directory on encrypted storage: the harness writes an `auth.json` containing provider credentials into each run's agent directory. Its default base is `/tmp/intelli-bench-<stamp>`, which is not suitable for confidential scratch.
+The harness writes an owner-only `auth.json` holding provider credentials into each run's agent directory, under a base directory it creates owner-only: `.tmp/bench-<stamp>` in the repository by default, or `BENCH_BASE_DIR`. Keep that base on encrypted storage.
 
 Run [`scripts/benchmark-models.sh`](../scripts/benchmark-models.sh) from the repo root:
 
@@ -28,7 +28,7 @@ Per model, the harness:
 3. Starts headless `pi` with `PI_CODING_AGENT_DIR` pointed at the isolated directory, loading `dist/index.js`, with the tool-call parameters pinned verbatim in the prompt.
 4. Prints the run's telemetry row from the `meta.json` sidecar (duration, links, fetch outcomes, extraction chars in/out, collation chars).
 
-The agent-loop model is pinned per benchmark series (default: `kimi-coding/k3` when its key exists, overridable via `BENCH_LOOP_MODEL`); only the pipeline's extract/collate models vary. The 2026-09-07 baseline series ran with `google/gemini-3.8-flash` as the loop model.
+Only the extract and collate models vary within a series; each recorded series names its loop model. The default loop model is `qwen-token-plan/qwen3.8-max` when an API key for it exists, else `openrouter/google/gemini-3.8-flash`; `BENCH_LOOP_MODEL` overrides it and must name an API-key login. The baseline series ran on `google/gemini-3.8-flash`; the four later 2026-09-07 series ran on `kimi-coding/k3`. Rerunning on that loop needs `BENCH_LOOP_MODEL=kimi-coding/k3` and an API-key `kimi-coding` login, because the harness refuses an OAuth login.
 
 ### Fixed Stimulus
 
@@ -46,7 +46,7 @@ The headless agent, not the harness, composes the tool call. Two checks verify f
 - **Search Nondeterminism:** The search stage is a live Sonar call; identical queries return different link sets run to run. Corpus quality differences are entangled with model differences. Match the full source URL (uniform resource locator) in the captured headers before comparing extractions, then verify identical captured input content before attributing differences solely to the model. Numbered files encode position and hostname, not the full URL (`src/core/cache.ts`). A shared URL alone supports a same-source comparison with remaining content confounds.
 - **Agent-Loop Fidelity:** Verify query fidelity through the cache slug and `query.txt`, not the loop's self-report or exit status. During the 2026-09-07 series (extension builds 0.13.0 and 0.14.0), print-mode runs emitted `functions.intelli_research:0{...}` as prose instead of a native tool-call block, exited 0 and never ran the pipeline. The exact `Pi` version for that incident is not recorded here; this is a historical diagnosis, not a claim about current hosts.
   - **Recorded Streaming Diagnosis:** The incident record attributes the leak to loss of the `zaiToolStream` compatibility flag for zai glm models on catalogue restore and `models.json` round-trip paths. It records a 4-hour remote-catalogue refresh interval and extension-triggered refreshes, and a reproduction with a catalogue-cache restore (257K bytes) without the extension loaded. `kimi-coding/k3` avoided that observed flag-loss failure; this does not establish immunity to other loop failures.
-  - **Recorded Startup Diagnosis:** A `models.json` providers block caused slash-form `defaultModel` resolution to select an OpenRouter fallback. The harness uses split `defaultProvider` and `defaultModel` settings, prefers `kimi-coding/k3` when its key exists, and retries exit-0 runs without a cache entry. The configuration-recipes runner also applies the retry guard.
+  - **Recorded Startup Diagnosis:** A `models.json` providers block caused slash-form `defaultModel` resolution to select an OpenRouter fallback. The harness uses split `defaultProvider` and `defaultModel` settings and retries exit-0 runs without a cache entry; the loop-model default is given under Harness. The configuration-recipes runner also applies the retry guard.
 - **Run Adjacency:** Back-to-back runs share more links than runs hours apart; Sonar's index drifts on an hours scale. Interleave models (A, B, A, B) rather than blocking them when comparing more than two.
 - **Task Scope:** Results are for the Svelte user interface (UI) libraries query; other domains may rank differently.
 - **Cache Suggest:** The judge runs only with a populated cache index. Fresh benchmark working directories have no prior entries, so the stage makes no judge call in these runs.
@@ -170,4 +170,4 @@ Protocol:
 4. Append rows and findings to this file. Record the extension version and date; keep historical rows untouched.
 5. Match full source URLs across runs (for example the dev.to roundups and adminlte.io appear in most baseline runs). Verify identical captured input content before treating extraction differences as pure model effects; file numbers and hostnames alone do not establish a match.
 
-Artefacts land under `<base>/<label>/cwd/.search/<slug>/` with the full `report.md`, `meta.json`, per-page `extractions/`, and raw `sources/`. Use the encrypted `BENCH_BASE_DIR` selected before running. Copy anything worth keeping out of the base directory before it is reaped.
+Artefacts land under `<base>/<label>/cwd/.search/<slug>/` with the full `report.md`, `meta.json`, per-page `extractions/`, and raw `sources/`. The base directory is scratch: promote anything worth keeping to `evidence/` before deleting it.

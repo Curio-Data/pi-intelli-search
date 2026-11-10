@@ -23,12 +23,15 @@
 #   BENCH_MAX_URLS       Page budget per run (default: 8)
 #   BENCH_GAP_SECONDS    Pause between runs (default: 20; operational
 #                        pacing, not a measured provider limit)
-#   BENCH_BASE_DIR       Artifact root (default: /tmp/intelli-bench-<stamp>).
-#                        Set to encrypted storage: each run writes an auth.json
-#                        containing provider credentials into its agent dir.
-#   BENCH_LOOP_MODEL     Agent-loop model override (default: qwen-token-plan/
-#                        qwen3.8-max when its key exists, else openrouter/google/
-#                        gemini-3.8-flash; see the loop-model note below)
+#   BENCH_BASE_DIR       Artifact root (default: .tmp/bench-<stamp> in the
+#                        repository, created owner-only). Keep it on encrypted
+#                        storage: each run writes an owner-only auth.json with
+#                        provider credentials into its agent dir.
+#   BENCH_LOOP_MODEL     The only agent-loop model override (TEST_MODEL is
+#                        ignored); must name an API-key login. Default:
+#                        test/e2e/lib.sh's choice, qwen-token-plan/qwen3.8-max
+#                        when its API key exists, else
+#                        openrouter/google/gemini-3.8-flash
 #
 # The query, focusPrompt, and maxUrls defaults are pinned to the
 # 2026-09-07 baseline so new model runs land in the same cache-slug
@@ -85,36 +88,21 @@ fi
 #     an OpenRouter fallback), so settings use the split
 #     defaultProvider + defaultModel form.
 #
-# qwen-token-plan/qwen3.8-max is the preferred loop model when its API
-# key exists. Only API-key logins are copied into run profiles: a copied
-# OAuth login (kimi-coding, openai-codex) refreshes and signs the
-# operator out. Pipeline stages (search, extract, collate) stay on
-# OpenRouter in every run.
-AUTH_JSON="$(jq -cn --arg k "${OPENROUTER_API_KEY}" '{openrouter:{type:"api_key",key:$k}}')"
-BENCH_LOOP_MODEL="${BENCH_LOOP_MODEL:-}"
-if [[ -z "${BENCH_LOOP_MODEL}" ]]; then
-  BENCH_LOOP_MODEL="openrouter/google/gemini-3.8-flash"
-  if [[ -f "${HOME}/.pi/agent/auth.json" ]] \
-     && jq -e '."qwen-token-plan".type == "api_key"' "${HOME}/.pi/agent/auth.json" >/dev/null 2>&1; then
-    BENCH_LOOP_MODEL="qwen-token-plan/qwen3.8-max"
-  fi
-fi
-loop_provider="${BENCH_LOOP_MODEL%%/*}"
-loop_model="${BENCH_LOOP_MODEL#*/}"
-if [[ "${loop_provider}" != "openrouter" ]]; then
-  if [[ ! -f "${HOME}/.pi/agent/auth.json" ]] \
-     || ! loop_entry="$(jq --arg p "${loop_provider}" '.[$p] // empty' "${HOME}/.pi/agent/auth.json" 2>/dev/null)" \
-     || [[ -z "${loop_entry}" || "${loop_entry}" == "null" ]]; then
-    echo "❌ BENCH_LOOP_MODEL=${BENCH_LOOP_MODEL} but no ${loop_provider} key in ~/.pi/agent/auth.json" >&2
-    exit 1
-  fi
-  if [[ "$(jq -r '.type // empty' <<<"${loop_entry}")" != "api_key" ]]; then
-    echo "❌ ${loop_provider} is not an API-key login; copying it would sign the operator out" >&2
-    exit 1
-  fi
-  AUTH_JSON="$(jq -cn --argjson a "${AUTH_JSON}" --argjson b "${loop_entry}" --arg p "${loop_provider}" '$a + {($p): $b}')"
-fi
-echo "▶ Agent-loop model: ${BENCH_LOOP_MODEL} (pipeline stages: OpenRouter)"
+# Selection, the API-key-only refusal and the credential assembly are the
+# E2E harness's own (test/e2e/lib.sh): a copied OAuth login (kimi-coding,
+# openai-codex) refreshes and signs the operator out, and credentials go
+# to jq on stdin, never on its command line. Pipeline stages (search,
+# extract, collate) stay on OpenRouter in every run.
+# shellcheck source=test/e2e/lib.sh
+source "$PROJECT_DIR/test/e2e/lib.sh"
+export OPENROUTER_API_KEY
+# Only BENCH_LOOP_MODEL selects the loop: an exported TEST_MODEL must not
+# change a pinned benchmark series.
+unset TEST_MODEL
+E2E_LOOP_MODEL_ID="${BENCH_LOOP_MODEL:-}"
+e2e_setup_loop_model || exit 1
+loop_provider="${E2E_LOOP_PROVIDER}"
+loop_model="${E2E_LOOP_MODEL}"
 
 if [[ ! -f "$EXT" ]]; then
   echo "❌ $EXT missing; run: npm run build" >&2
@@ -124,8 +112,8 @@ fi
 command -v pi &>/dev/null || { echo "❌ pi is not installed" >&2; exit 1; }
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
-BASE_DIR="${BENCH_BASE_DIR:-/tmp/intelli-bench-${STAMP}}"
-mkdir -p "$BASE_DIR"
+BASE_DIR="${BENCH_BASE_DIR:-$PROJECT_DIR/.tmp/bench-${STAMP}}"
+(umask 077; mkdir -p "$BASE_DIR")
 
 run_one() {
   local model_id="$1"
@@ -134,7 +122,7 @@ run_one() {
   local cwd_dir="${BASE_DIR}/${label}/cwd"
   mkdir -p "${agent_dir}/sessions" "${cwd_dir}"
 
-  printf '%s' "${AUTH_JSON}" > "${agent_dir}/auth.json"
+  e2e_write_auth "${agent_dir}"
 
   # Search pinned to Sonar in every run: only extract/collate vary.
   # defaultUrls/maxUrls pinned so a missing maxUrls in the tool call
@@ -182,7 +170,7 @@ EOF
           -p "$prompt" \
           2>&1
     )" || true
-    cache_dir="$(find "${cwd_dir}/.search" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -1 || true)"
+    cache_dir="$(find "${cwd_dir}/.search" -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | head -1 || true)"  # skip .staging
     if [[ -n "${cache_dir}" ]]; then
       break
     fi

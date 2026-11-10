@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# test/01_main.sh — End-to-end test for pi-intelli-search
+# test/e2e/01_main.sh: End-to-end test for pi-intelli-search
 #
 # Runs the extension inside an isolated pi agent environment to verify
 # the install experience works in a fresh session with real LLM calls.
@@ -12,7 +12,7 @@
 # qwen-token-plan/qwen3.8-max when its API key exists).
 #
 # Usage:
-#   ./test/01_main.sh
+#   ./test/e2e/01_main.sh
 #
 # Environment:
 #   OPENROUTER_API_KEY   Required. Get one from https://openrouter.ai
@@ -56,8 +56,6 @@ E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
 
 # shellcheck source=/dev/null
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
-# shellcheck disable=SC2034  # consumed by e2e_setup_loop_model in lib.sh
-E2E_LOOP_MODEL_ID="${TEST_MODEL:-}"
 
 # ── Check prerequisites ────────────────────────────────────────────
 # Auto-detect OPENROUTER_API_KEY from ~/.pi/agent/auth.json if not
