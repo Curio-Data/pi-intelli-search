@@ -1,11 +1,12 @@
 # Branch Handover: `rcca/mcp-research-failures` Before Release
 
-This note records the branch state before release. The provenance defect below is fixed
-(`086283f`) and its documentation impact was agreed with the owner on 2026-11-09; what remains
-is the prose review and the release gates. Read this file first, then [RCCA.md](RCCA.md) for the root cause and
+This note records the branch state before the 0.22.0 release, with current state added under
+§ State. The provenance defect below is fixed (`086283f`) and its documentation impact was agreed
+with the owner on 2026-11-09. Read this file first, then [RCCA.md](RCCA.md) for the root cause and
 [FOLLOW-UP.md](FOLLOW-UP.md) for how the follow-up items were built.
 
-Written 2026-11-08 by the orchestrating session (Claude Code, Opus 5.5). It replaces the handover
+Written 2026-11-08 by the orchestrating session (Claude Code, Opus 5.5); § State updated 2026-11-09
+and 2026-11-10. It replaces the handover
 written at `997c926`.
 
 ## State
@@ -15,11 +16,14 @@ written at `997c926`.
 Verification. The two paragraphs that follow are current. The bullets after the open-limits list are
 the pre-release record, kept for history.
 
-**Worktree retained (owner's decision, 2026-11-09).** The branch is merged, but the worktree at
-`/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/rcca-mcp-research-failures` and the remote
-branch are kept until the owner decides to retire them. Its gitignored `.tmp/` (≈1.1 GiB) is
-inventoried in the `CLEANUP.md` files under `evidence/agents/` in the main checkout; it holds no
-real key copies. Retiring it deletes those files, so it needs the owner's approval of that scope.
+**Worktree retired (owner's approval, 2026-11-10).** The worktree at
+`/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/rcca-mcp-research-failures` and the local
+branch are removed; the remote branch remains. Removal deleted all the worktree's gitignored files,
+including `.env` and `.tmp/`. Before removal, its `evidence/agents/2026-11-08-provenance-bold-url-review/`
+was copied to the same path in the main checkout, and its `.search/` and `.e2e-logs/` to
+`evidence/worktree-retirement-2026-11-10/rcca-mcp-research-failures/`. Material promoted from its
+`.tmp/` earlier is inventoried in the two `CLEANUP.md` files under `evidence/agents/`; the retirement
+is the last row of the Log in `evidence/agents/2026-11-06-rcca-mcp-research/CLEANUP.md`.
 
 **Post-release minors (2026-11-09).** Branch `fix/post-0220-minors` fixes the seven minors listed
 under § 4 other than the ≈14-minute worst case per degraded page. It accepts that item with
