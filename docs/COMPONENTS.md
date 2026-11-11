@@ -73,7 +73,7 @@ These packages are provided by the hosting `Pi` runtime and are not bundled with
 - **Repository:** https://github.com/earendil-works/pi
 - **Author:** Mario Zechner
 - **Licence:** MIT
-- **Usage:** Native LLM calls through `Pi`'s authentication system. Dispatch feature-detects the model-registry facade; the older supported path calls the provider directly. See [Native Models and Authentication](ARCHITECTURE.md#native-models-and-authentication) for the version boundary.
+- **Usage:** Native LLM calls use `Pi`'s authentication system through the required `ctx.modelRegistry.streamSimple()` facade; a host without that facade receives a version error. See [Native Models and Authentication](ARCHITECTURE.md#native-models-and-authentication) for the supported host boundary.
 - **Request Hooks:** `ProviderRequestOptions.fetch` supplies a response-body tee for citation harvesting; `onPayload` injects the web search server tool. Re-check both on peer-dependency changes because upstream hook changes can fail silently. See [Native Citation Harvesting](ARCHITECTURE.md#native-citation-harvesting).
 - **Historical Verification:** The 2026-09-22 integration update recorded verification against 0.87.0. The [compatibility matrix](COMPATIBILITY.md#native-pi-extension-curio-datapi-intelli-search) is canonical for subsequent verification, including the 1.0.0 record.
 
@@ -100,7 +100,7 @@ The `@curio-data/mcp-intelli-search` artefact shares the fetch dependencies abov
 - **Repository:** https://github.com/modelcontextprotocol/typescript-sdk
 - **Author:** Anthropic, PBC and contributors
 - **Licence:** Apache-2.0 (the MCP project is transitioning from MIT to Apache-2.0; the shipped `LICENSE` is the transition notice followed by the Apache-2.0 text, and the registry metadata declares Apache-2.0)
-- **Usage:** Model Context Protocol serving over standard input/output (stdio): tool registration, input-schema validation, progress notifications, cancellation and transport framing. The software development kit (SDK) is declared only by the standalone package and never enters the native extension's runtime. The companion `@modelcontextprotocol/client` package (also Apache-2.0) is a development dependency used by the protocol test suite. Both are lockfile-pinned at 2.3.0.
+- **Usage:** Model Context Protocol serving over standard input/output (stdio): tool registration, input-schema validation, progress notifications, cancellation and transport framing. The software development kit (SDK) is declared only by the standalone package and never enters the native extension's runtime. The companion `@modelcontextprotocol/client` package (also Apache-2.0) is a development dependency used by the protocol test suite. Both are lockfile-pinned at 2.3.1.
 
 [_esbuild_](https://esbuild.github.io/) bundles the internal engine and adapter source during development. Its [source repository](https://github.com/evanw/esbuild) is MIT-licensed. It is a root development dependency, not a standalone runtime dependency. The standalone inference adapter uses the built-in fetch transport against the [_OpenRouter_](https://openrouter.ai) API; no provider SDK is bundled.
 

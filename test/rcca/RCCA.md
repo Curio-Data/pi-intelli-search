@@ -80,6 +80,9 @@ Not changed: `isError` stays `false` for degraded results, which carry their
 
 ## Retained Scratch
 
+This section records the pre-merge retention plan. For the current state, see
+[HANDOVER.md § State](HANDOVER.md#state).
+
 The reference worktree `ref-mcp-v0.19.0` (detached at `mcp-v0.19.0`, with its own
 `node_modules` and untracked 0.19.0 probe copies) is kept until the corrective
 actions are merged. Its removal, and disposal of the run's scratch, needs the

@@ -824,7 +824,7 @@ The example below shows the default models and common tuning settings. The [Sett
 | `disableLlmsFullDiscovery` | Supplementary Fetch | `false` | Set `true` to skip automatic `llms-full.txt` probes and downloads. This does not disable page fetching or extraction. See [Automatic llms-full.txt Discovery](#automatic-llms-fulltxt-discovery). |
 | `disableTelemetry` | All | `false` | When `false`, completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`, `collate-failed`) attempt to write a local `meta.json` sidecar into the configured cache. It contains the full query and per-stage outcomes, which can include confidential information. The sidecar adds no network transmission or credential fields; ordinary research still sends requests to configured services. Set `true` to suppress it. |
 
-Every integer tuning key is range-checked against the shared table in [`src/core/defaults.ts`](https://github.com/Curio-Data/pi-intelli-search/blob/main/src/core/defaults.ts), the same ranges the MCP server enforces. A value outside its range, or one that is not an integer, is ignored with a warning at session start, and the default applies: `[pi-intelli-search] Ignoring settings.json <key>=<value>: expected an integer from <min> to <max>. Using the default (<default>).` The deprecated flat aliases `intelliOutputBudgetRetries`, `intelliCollationInputBudgetTokens` and `intelliCollationSourceMaxTokens` are read as a fallback.
+Every integer tuning key is range-checked against the shared table in [`src/core/defaults.ts`](https://github.com/Curio-Data/pi-intelli-search/blob/main/src/core/defaults.ts), the same ranges the MCP server enforces. A value outside its range, or one that is not an integer, is ignored with a warning at session start. A valid value for that key in the other settings file still applies; otherwise the built-in default applies: `[pi-intelli-search] Ignoring settings.json <key>=<value>: expected an integer from <min> to <max>. Valid settings from other files still apply; otherwise the built-in default applies.` The deprecated flat aliases `intelliOutputBudgetRetries`, `intelliCollationInputBudgetTokens` and `intelliCollationSourceMaxTokens` are read as a fallback.
 
 `httpProxy` is a separate top-level `Pi` setting, not a `pi-intelli-search` namespace key; page fetching honours it too. Its default is unset.
 
@@ -856,6 +856,9 @@ Both packages write this format. The native extension resolves the cache against
 │   ├── report.md               # Synthesis + authoritative source inventory
 │   ├── query.txt               # Original search query
 │   ├── meta.json               # Local-only telemetry sidecar (v0.11.0+)
+│   ├── rejected-synthesis.json # Rejected synthesis, when saved; diagnostic only
+│   ├── attempts/               # Failed repeats beside a preserved report
+│   │   └── attempt-<id>/       # The attempt's meta.json and rejected synthesis
 │   ├── extractions/            # Per-page LLM extractions (≈3-5K each)
 │   │   ├── 01-developers-cloudflare-com.md
 │   │   └── 02-developers-cloudflare-com.md
@@ -870,7 +873,7 @@ Each research run writes a cache entry named `<date>-<slug>-<hash>`. The `<hash>
 
 Refresh behaviour:
 
-- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and diagnostics to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set. Rotation also attempts to update the archived report's cache references to that sibling. An unclosed code fence in an extraction-failure report's search summary can still leave saved-asset references pointing to the live folder.
+- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources, telemetry sidecar and diagnostics (`rejected-synthesis.json` and `attempts/`) to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set. Rotation also attempts to update the archived report's cache references to that sibling. An unclosed code fence in an extraction-failure report's search summary can still leave saved-asset references pointing to the live folder.
 - Archive failure is logged and the completed run can replace canonical files in place; interrupted rotation can leave a partial archive.
 - Supplementary `llms-full-*` documentation downloads stay with the live folder and are not archived.
 - A `no-links` or `fetch-failed` repeat preserves the earlier report, successful or failed, with its metadata, extractions, sources and any index entry. When telemetry is enabled, the failed attempt is recorded separately in `attempts/attempt-*/meta.json` beneath that cache folder.

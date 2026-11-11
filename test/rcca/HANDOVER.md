@@ -13,8 +13,10 @@ written at `997c926`.
 
 **Released 2026-11-09.** Both packages are published at 0.22.0 from merge commit `71cce34` (tags
 `pi-v0.22.0` and `mcp-v0.22.0`); the verification is in `docs/COMPATIBILITY.md` § 0.22.0 Candidate
-Verification. The two paragraphs that follow are current. The bullets after the open-limits list are
-the pre-release record, kept for history.
+Verification. The three paragraphs that follow, with the open-limits list, are current. Everything
+from `Pre-release record:` onwards, including the later sections on scratch and rules for the next
+session, is the pre-release handover kept for history; for current test and credential rules, follow
+`AGENTS.md` and `scripts/README.md`.
 
 **Worktree retired (owner's approval, 2026-11-10).** The worktree at
 `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/rcca-mcp-research-failures` and the local
@@ -28,8 +30,8 @@ is the last row of the Log in `evidence/agents/2026-11-06-rcca-mcp-research/CLEA
 **Post-release minors (2026-11-09).** Branch `fix/post-0220-minors` fixes the seven minors listed
 under § 4 other than the ≈14-minute worst case per degraded page. It accepts that item with
 reasons, together with two notes from the earlier handover (`997c926`): the blank first line on a
-hand-edited failure report and the top-level-domain list's version-only drift. The fixes are
-unreleased, under `CHANGELOG.md` `Unreleased`. The builder's report is
+hand-edited failure report and the top-level-domain list's version-only drift. The branch merged to
+`main` as `b643d16` on 2026-11-09; the fixes are unreleased, under `CHANGELOG.md` `Unreleased`. The builder's report is
 `evidence/agents/2026-11-09-post-release/reports/post-0220-minors.md`. Round three, final
 acceptance at `c752509` and the promoted receipts are under
 `evidence/agents/2026-11-09-post-0220-adversarial-r3/`; rounds one and two are in
@@ -210,6 +212,8 @@ checkout (gitignored, preserved):
 
 ## Scratch Awaiting a Cleanup Decision
 
+Superseded on 2026-11-10: this scratch was deleted with the worktree (see § State).
+
 The worktree's scratch area holds about 1.1 GiB. This session's additions (reviewer scratch, and
 build, test and e2e logs whose retained copies are listed above) are uncited and disposable. They
 are inventoried in `2026-11-08-feature-framing/CLEANUP.md` under the evidence path above. Earlier
@@ -217,6 +221,9 @@ sessions' scratch is inventoried in `2026-11-06-rcca-mcp-research/CLEANUP.md`. N
 approval of a stated scope.
 
 ## Rules for the Next Session
+
+Pre-release rules. Since 2026-11-10 the live suite runs in parallel by default; see `AGENTS.md`
+§ Principle 4 and `scripts/README.md` § Live E2E Runs.
 
 - Do not merge, tag, publish or delete anything without the owner's explicit instruction at the
   time. Push only to `origin` of this repository.

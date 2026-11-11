@@ -67,7 +67,7 @@ PI_SESSIONS_DIR=/path scripts/analyze-sessions.sh
 
 Section 9 adds `truncatedExtractions`, `budgetExhaustedFailures` and `otherFailures` by summing the corresponding extraction fields across parsed sidecars. These count extractions, not runs. `runsRecordingProvider` counts sidecars with `stages.extract.provider`; `providers` groups those sidecars by their recorded extraction route, not by individual model call. Cache-judge degradation counts sidecars whose `stages.cacheSuggest.degraded` is `true`. Synthesis truncation and synthesis routes are not aggregated.
 
-The script substitutes zero for absent numeric diagnostic fields. Older records, unreached stages and unavailable usage therefore contribute no recorded events, not proof that no failure or truncation occurred. Route labels are optional and cannot attribute every failed page to a provider. Interpret these totals over the selected sidecars, including any archived copies found, rather than as an incidence rate for all research calls. See [Telemetry Sidecar](../docs/ARCHITECTURE.md#telemetry-sidecar) for field definitions.
+The script substitutes zero for absent numeric diagnostic fields. Older records, unreached stages and unavailable usage therefore contribute no recorded events, not proof that no failure or truncation occurred. Route labels are optional and cannot attribute every failed page to a provider. Interpret these totals over the selected sidecars, including numbered archives and failed-attempt sidecars under `attempts/`, rather than as an incidence rate for all research calls. Up to 0.22.0 a failed repeat overwrote the preserved report's sidecar; later versions keep both, so totals that span that change count different sets of records. See [Telemetry Sidecar](../docs/ARCHITECTURE.md#telemetry-sidecar) for field definitions.
 
 ### Environment
 
@@ -111,7 +111,7 @@ It rewrites only the version line and the delegated-TLD literal. The `FILE_EXTEN
 
 ## Live E2E Runs
 
-[`test/run-e2e-all.sh`](../test/run-e2e-all.sh) runs the live suite. It builds both packages once, then starts every scenario at once, each with its own `TMPDIR` and log under `$TMPDIR/run-<timestamp>-<pid>/`. `TMPDIR` defaults to `.tmp/e2e/` only when unset; on an encrypted host, unset it or point it under the repository's `.tmp/`. The summary prints each scenario's outcome and the last lines of every failing log.
+[`test/run-e2e-all.sh`](../test/run-e2e-all.sh) runs the live suite. Unless `E2E_SKIP_BUILD=1`, it builds both packages once. In the default parallel mode it starts every scenario at once, each with its own `TMPDIR` and log under `$TMPDIR/run-<timestamp>-<pid>/`, and the summary prints each scenario's outcome and the last lines of every failing log. Sequential mode runs one scenario at a time in the shared `TMPDIR` and streams its output to the terminal, writing no suite log. `TMPDIR` defaults to the repository's `.tmp/e2e/` when unset or empty; on an encrypted host, leave it unset or point it under the repository's `.tmp/`.
 
 ```bash
 ./test/run-e2e-all.sh                          # parallel (default)
@@ -129,7 +129,7 @@ E2E_RUN_MODE=sequential ./test/run-e2e-all.sh  # one at a time, E2E_GAP_SECONDS 
 
 Scenario 10 has its own limit because one recipe that needs all three 600-second attempts, with a 30-second pause between attempts, runs for ≈1,860 seconds; the recipes run concurrently, so that is also the scenario's longest expected run. The 2026-11-09 evidence (`evidence/agents/2026-11-09-post-release/`) recommends 2,400 seconds. The other scripts keep 1,200 seconds so that a hung scenario fails promptly. When scenario 10 reports `TIMED OUT`, raise `E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS` or lower `E2E_RECIPE_TIMEOUT_SECONDS`. The traced runner below applies the same two limits.
 
-Use sequential mode where an account meets OpenRouter's 402 in-flight spending limit, or to watch one scenario's output as it runs. A scenario run by hand alongside others needs `E2E_SKIP_BUILD=1` after a single `npm run build:all`, or scenarios 11 to 14 rebuild the standalone bundle while another loads it.
+Use sequential mode where an account meets OpenRouter's 402 in-flight spending limit, or to watch one scenario's output as it runs. It serialises scenario scripts only: scenario 10 still runs its five recipes concurrently. A scenario run by hand alongside others needs `E2E_SKIP_BUILD=1` after a single `npm run build:all`, or scenarios 11 to 14 rebuild the standalone bundle while another loads it.
 
 ### Traced Evidence Runs
 
@@ -142,9 +142,9 @@ E2E_RUN_MODE=sequential ./test/run-e2e-parallel.sh
 node test/e2e/analyze-evidence.mjs .tmp/e2e-evidence/<run>
 ```
 
-A harness-only `Pi` extension (`test/e2e/trace-extension.mjs`) records each extension model call by stage, with its HTTP status, selected rate-limit headers, stop reason and latency, and each agent-loop response separately. A global fetch tracer (`test/e2e/trace-fetch.mjs`) covers the standalone MCP transport; native `pi-ai` calls do not pass through global `fetch`. The analyser writes `analysis.json` into the run directory with status counts, stop reasons, retry notices and research arguments, and copies no prompts, completions or credentials.
+A harness-only `Pi` extension (`test/e2e/trace-extension.mjs`) records each extension model call by stage, with its HTTP status, selected rate-limit headers, stop reason and latency, and each agent-loop response separately. A global fetch tracer (`test/e2e/trace-fetch.mjs`) covers the standalone MCP transport; native `pi-ai` calls do not pass through global `fetch`. The analyser writes `analysis.json` into the run directory with status counts, stop reasons, retry notices and research arguments, and copies no prompts, completions or credentials. It reads only the `.jsonl` files directly inside each scenario's `pi-traces/` directory. Scenario 10 writes its traces to one subdirectory per recipe, so that scenario's research arguments, tool results and retry notices are missing from the analysis, not zero; read its per-recipe traces directly.
 
-On native paths `pi-ai` reports a response status only after a request succeeds, so a 429 or 402 appears as an error stop reason, not in the status counts. Read both before concluding that no rate limit occurred. Promote any run cited as evidence from `.tmp/` into `evidence/` first.
+On native paths `pi-ai` reports a response status only after a request succeeds, so a 429 or 402 appears as an error stop reason, not in the status counts. Read both before concluding that no rate limit occurred. Promote any run cited as evidence from `.tmp/` into `evidence/` first. Inspect the files before copying them: raw `pi-traces/` files hold conversation and tool-result content, and an interrupted scenario can leave a test profile holding an API key under its temporary directory. Exclude credential files from the copy, and record which files were retained so that a citation does not imply the whole run directory was kept.
 
 ## Claude Tool Routing
 

@@ -594,6 +594,9 @@ Both packages write this format. The native extension resolves the cache against
 │   ├── report.md               # Synthesis + authoritative source inventory
 │   ├── query.txt               # Original search query
 │   ├── meta.json               # Local-only telemetry sidecar (v0.11.0+)
+│   ├── rejected-synthesis.json # Rejected synthesis, when saved; diagnostic only
+│   ├── attempts/               # Failed repeats beside a preserved report
+│   │   └── attempt-<id>/       # The attempt's meta.json and rejected synthesis
 │   ├── extractions/            # Per-page LLM extractions (≈3-5K each)
 │   │   ├── 01-developers-cloudflare-com.md
 │   │   └── 02-developers-cloudflare-com.md
@@ -608,7 +611,7 @@ Each research run writes a cache entry named `<date>-<slug>-<hash>`. The `<hash>
 
 Refresh behaviour:
 
-- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources and diagnostics to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set. Rotation also attempts to update the archived report's cache references to that sibling. An unclosed code fence in an extraction-failure report's search summary can still leave saved-asset references pointing to the live folder.
+- A completed same-day refresh attempts to archive the previous report, extractions, numbered sources, telemetry sidecar and diagnostics (`rejected-synthesis.json` and `attempts/`) to a numbered sibling folder (`<slug>.1`, then `.2` and so on) before writing the new set. Rotation also attempts to update the archived report's cache references to that sibling. An unclosed code fence in an extraction-failure report's search summary can still leave saved-asset references pointing to the live folder.
 - Archive failure is logged and the completed run can replace canonical files in place; interrupted rotation can leave a partial archive.
 - Supplementary `llms-full-*` documentation downloads stay with the live folder and are not archived.
 - A `no-links` or `fetch-failed` repeat preserves the earlier report, successful or failed, with its metadata, extractions, sources and any index entry. When telemetry is enabled, the failed attempt is recorded separately in `attempts/attempt-*/meta.json` beneath that cache folder.

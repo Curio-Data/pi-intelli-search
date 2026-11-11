@@ -93,6 +93,6 @@ Out of scope:
 
 ## Dependencies and Open Decisions
 
-- **Sequencing:** the unmerged 0.22.0 work on `rcca/mcp-research-failures` changes collation and provenance code, including the pending fix for URLs inside bold Markdown, on which the super-collation's validation also depends. This feature starts from `main` after that merge and targets the next minor version of both packages.
+- **Sequencing:** recorded on 8 November 2026, this feature depended on the 0.22.0 collation and provenance work on `rcca/mcp-research-failures`, including the fix for URLs inside bold Markdown, on which the super-collation's validation also depends. That work merged and was published as 0.22.0 on 9 November 2026, and later provenance and cache fixes are on `main` under `CHANGELOG.md` `Unreleased`. The feature starts from `main` and targets the next minor version of both packages.
 - **Owner Decisions:** the per-batch entry cap, the default batch concurrency, whether `minRequestIntervalMs` applies across a whole batch, and the extraction-request bound for super-collation.
 - **Implementer Decisions:** parameter names, the batch result format, the batch folder naming and the index entry shape.

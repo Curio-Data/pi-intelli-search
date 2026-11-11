@@ -456,6 +456,6 @@ Write new briefs and reports there under new names (for example
 `rcca-review-kimi-r4.md`).
 
 Every scratch folder, worktree, herdr workspace and branch this RCCA created is
-listed in `CLEANUP.md` in that evidence folder. **Add each new artefact to it as
-you create it.** Nothing in it is deleted without the owner's approval of a stated
+listed in `CLEANUP.md` in that evidence folder. **Add each new artefact to it when it
+is created.** Nothing in it is deleted without the owner's approval of a stated
 scope, after the branch merges.
