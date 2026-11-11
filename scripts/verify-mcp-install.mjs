@@ -130,10 +130,24 @@ try {
   await writeFile(
     join(dir, "isolation.mjs"),
     `
-    import Module, { register } from 'node:module';
+    import Module, * as moduleApi from 'node:module';
     import { realpathSync } from 'node:fs';
     import { isAbsolute } from 'node:path';
-    register('./isolation-loader.mjs', import.meta.url);
+    import { fileURLToPath } from 'node:url';
+    const root = ${JSON.stringify(dir + sep)};
+    // registerHooks() is synchronous and replaces register(), which Node 26
+    // deprecates with a stderr warning; older supported Node versions fall back.
+    if (typeof moduleApi.registerHooks === 'function') {
+      moduleApi.registerHooks({
+        resolve(specifier, context, nextResolve) {
+          const result = nextResolve(specifier, context);
+          if (result.url.startsWith('file:') && !realpathSync(fileURLToPath(result.url)).startsWith(root)) throw new Error('Outside independent installation: ' + specifier);
+          return result;
+        },
+      });
+    } else {
+      moduleApi.register('./isolation-loader.mjs', import.meta.url);
+    }
     const original = Module._resolveFilename;
     Module._resolveFilename = function(...args) {
       const result = original.apply(this, args);
