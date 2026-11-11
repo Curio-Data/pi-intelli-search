@@ -12,6 +12,8 @@ import { finalizeCollation, isCollationFailureReport } from "../src/core/provena
 import { invalidateSettingsCache, loadSettings, takeSettingsWarnings } from "../src/settings.js";
 import { coreContext } from "./helpers/core-context.js";
 import { formatCacheAppendix } from "../src/core/messages.js";
+import { extract } from "../src/core/operations/extract.js";
+import { nativeResult } from "../src/native-operation-context.js";
 
 async function workspace(t: { after(fn: () => Promise<void>): void }) {
   const root = await mkdtemp(join(tmpdir(), "post-0220-"));
@@ -268,6 +270,78 @@ it("native skill recovery uses model-visible cache text rather than hidden detai
   assert.doesNotMatch(skill, /details\.(?:preservedCachePath|cachePath)/);
   assert.ok(skill.includes("**Cache** line"));
   assert.ok(formatCacheAppendix(".search/run", 1, 0).includes("**Cache**: `.search/run/`"));
+});
+
+it("native skill builds collation items from model-visible extraction text alone", async (t) => {
+  const skill = await readFile(
+    new URL("../skills/intelli-search/SKILL.md", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(skill, /details/, "native agents never see result details");
+
+  // The rule the skill states, applied in its stated order.
+  const skillRule: Array<[string[], string]> = [
+    [["official doc"], "official docs"],
+    [["api reference"], "API reference"],
+    [["tutorial"], "tutorial"],
+    [["blog"], "blog post"],
+    [["forum", "stackoverflow"], "forum"],
+  ];
+  for (const [needles, value] of skillRule) {
+    for (const needle of needles) assert.ok(skill.includes(`\`${needle}\``), needle);
+    assert.ok(skill.includes(`\`${value}\``), value);
+  }
+  const sourceTypeFromSkill = (line: string) =>
+    skillRule.find(([needles]) => needles.some((n) => line.toLowerCase().includes(n)))?.[1] ??
+    "unknown";
+
+  const root = await mkdtemp(join(tmpdir(), "pi-intelli-skill-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const firstLines = [
+    "Official documentation, current",
+    "API Reference for the client",
+    "A tutorial from 2024",
+    "Engineering blog, possibly outdated",
+    "StackOverflow answer",
+    "Vendor product page",
+  ];
+  for (const firstLine of firstLines) {
+    for (const truncated of [false, true]) {
+      const base = coreContext(root);
+      const body = `${firstLine}\nKey facts.\n- One point.`;
+      const context = {
+        ...base.context,
+        models: {
+          ...base.context.models,
+          complete: async () => ({
+            text: body,
+            citations: [],
+            usage: { output: truncated ? 100 : 10 },
+            ...(truncated ? { finishReason: "length" } : {}),
+          }),
+        },
+      };
+      const result = await extract(
+        { url: "https://one.example", title: "One", content: "page", query: "q" },
+        context,
+      );
+      const visible = nativeResult(result).content[0].text;
+      const heading = "### Extraction: One\n\n";
+      assert.ok(visible.startsWith(heading));
+      const warning = visible.match(/\n\n> ⚠ Extraction output reached extractionMaxTokens[^\n]*$/);
+      assert.equal(Boolean(warning), truncated, "the warning marks truncation");
+      const item = {
+        extraction: visible.slice(heading.length, warning ? warning.index : undefined),
+        sourceType: sourceTypeFromSkill(visible.slice(heading.length).split("\n")[0]),
+        ...(warning ? { truncated: true } : {}),
+      };
+      assert.deepEqual(item, {
+        extraction: result.details.extraction,
+        sourceType: result.details.sourceType,
+        ...(result.details.truncated ? { truncated: true } : {}),
+      }, `${firstLine}, truncated=${truncated}`);
+    }
+  }
 });
 
 it("keeps the line-one failure marker policy for hand-edited reports", () => {

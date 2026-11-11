@@ -372,7 +372,7 @@ test/
 ├── core-llm.test.ts          # Shared retry/timeout/cancellation policy
 ├── core-operations.test.ts   # Injected engine outcomes, staging and cancellation
 ├── dependency-security.test.ts # Executable extraction-path and conversion checks for advisories
-├── e2e-helpers.test.ts       # E2E helper and acceptance-check regressions
+├── e2e-helpers.test.ts       # E2E helper, acceptance-check and evidence-analyser regressions
 ├── native-model-client.test.ts # Native adapter state and policy delegation
 ├── workspace-paths.test.ts   # Workspace/display path separation
 ├── telemetry.test.ts
@@ -390,7 +390,7 @@ test/
 ├── tsconfig.native-contract.json # Type check for contract tests and generator
 ├── prompts.test.ts
 ├── provenance.test.ts        # Collation provenance validation and failure reports
-├── post-0220-minors.test.ts  # Degraded-repeat attempts, rejected synthesis, archive rebasing, multiline emphasis, settings warning, skill cache text, line-one marker
+├── post-0220-minors.test.ts  # Degraded-repeat attempts, rejected synthesis, archive rebasing, multiline emphasis, settings warning, skill cache and collation text, line-one marker
 ├── post-0220-review.test.ts  # List and quote emphasis, list-container fences, generated-inventory boundaries, trimmed-failure guidance
 ├── plugin-bundles.test.ts    # Generated plugin/marketplace shape, pins and drift gate
 ├── package-readmes.test.ts   # README block selection, link rewriting, drift gate and publish swap

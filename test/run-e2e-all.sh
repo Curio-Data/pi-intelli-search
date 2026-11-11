@@ -18,10 +18,10 @@
 # providers can still return 429, and an account can meet OpenRouter's 402
 # in-flight spending limit; the extension's own retry policy honours
 # Retry-After. Parallel is the default by owner decision (2026-11-10).
-# That evidence predates the current agent-loop default: neither the
-# qwen-token-plan loop nor an OpenRouter loop sharing the pipeline key has
-# been measured under parallel load; use E2E_RUN_MODE=sequential if either
-# meets rate limits.
+# That traced evidence predates the current agent-loop default. Untraced
+# parallel suites on the qwen-token-plan loop passed on 2026-11-10, recording
+# pass or fail only; an OpenRouter loop sharing the pipeline key has not run
+# under parallel load. Use E2E_RUN_MODE=sequential if either meets rate limits.
 #
 # Usage:
 #   ./test/run-e2e-all.sh

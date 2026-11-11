@@ -13,7 +13,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Shared core: a `collate-failed` report says whether synthesis was produced and then rejected by source validation, or never produced. After input trimming, its recovery guidance separates reading the omitted input in the saved extraction files from retrying synthesis after a transient failure.
 - Shared core: degraded repeats keep the preserved report's metadata and write failed-attempt telemetry separately under `attempts/attempt-*/meta.json`. Rejected nonempty synthesis candidates are retained best-effort as diagnostics in `rejected-synthesis.json`, never as accepted evidence.
 - Shared core: archive rotation rebases cache references to the numbered sibling, including completed reports' generated inventories after an unclosed synthesis code fence. New synthesis output keeps generated inventories outside unfinished top-level or list code fences. An unclosed search-summary fence in an extraction-failure report remains a limitation: its archived saved-asset references can still point to the live folder.
-- Native `Pi`: settings warnings no longer claim the built-in default is active when a valid setting from another file survives. Cache-recovery skill guidance uses model-visible result text instead of hidden `details` fields.
+- Native `Pi`: settings warnings no longer claim the built-in default is active when a valid setting from another file survives. Skill guidance for cache recovery, manual extraction-to-collation and inferred assets uses model-visible result text instead of hidden `details` fields, which the agent never receives.
+- Plugin skills (MCP): cache recovery and manual collation name the visible result text first, with the matching `details` field as an alternative for hosts that show structured content.
 
 ## [pi-0.22.0] - 2026-11-09
 

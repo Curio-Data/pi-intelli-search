@@ -60,9 +60,10 @@ for (const name of scenarioDirs) {
   const dir = join(runDir, name);
   const extension = jsonl(join(dir, "extension.jsonl"));
   const http = jsonl(join(dir, "http.jsonl"));
+  // Recursive: scenario 10 writes one trace subdirectory per recipe.
   const traceDir = join(dir, "pi-traces");
   const traceFiles = existsSync(traceDir)
-    ? readdirSync(traceDir).filter((file) => file.endsWith(".jsonl")).sort()
+    ? readdirSync(traceDir, { recursive: true }).filter((file) => file.endsWith(".jsonl")).sort()
     : [];
   const trace = traceFiles.flatMap((file) => jsonl(join(traceDir, file)));
   const resultPath = join(dir, "result.json");

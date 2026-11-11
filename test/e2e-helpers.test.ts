@@ -171,3 +171,30 @@ it("E2E private-file check judges a symlinked .env by its target's mode", async 
   }
   assert.equal(check(join(dir, "missing")).status, 0, "an absent file is not an error");
 });
+
+it("evidence analyser reads per-recipe trace subdirectories", async (t) => {
+  const run = await mkdtemp(join(tmpdir(), "e2e-analyse-"));
+  t.after(() => rm(run, { recursive: true, force: true }));
+  const scenario = join(run, "10_config_recipes");
+  await mkdir(join(scenario, "pi-traces", "r1"), { recursive: true });
+  await mkdir(join(scenario, "pi-traces", "r5"), { recursive: true });
+  await writeFile(join(scenario, "extension.jsonl"), "");
+  const events = (n: number) =>
+    [
+      { type: "tool_execution_start", toolName: "intelli_research", args: { query: `q${n}` } },
+      { type: "tool_execution_update", partialResult: { content: [{ type: "text", text: "Stage 3: retrying after rate limit" }] } },
+      { type: "tool_execution_end", toolName: "intelli_research", isError: false, durationMs: 10 },
+    ].map((event) => JSON.stringify(event)).join("\n") + "\n";
+  await writeFile(join(scenario, "pi-traces", "r1", "attempt-1.jsonl"), events(1));
+  await writeFile(join(scenario, "pi-traces", "r5", "attempt-1.jsonl"), events(5));
+  await writeFile(join(scenario, "pi-traces", "top.jsonl"), events(0));
+
+  const result = spawnSync(process.execPath, [resolve("test/e2e/analyze-evidence.mjs"), run], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const analysis = JSON.parse(await readFile(join(run, "analysis.json"), "utf8"));
+  const [summary] = analysis.scenarios;
+  assert.equal(summary.traceFileCount, 3);
+  assert.deepEqual(summary.researchCalls.map((call: { args: { query: string } }) => call.args.query).sort(), ["q0", "q1", "q5"]);
+  assert.equal(summary.toolEnds.length, 3);
+  assert.equal(summary.retryNotices.length, 3);
+});

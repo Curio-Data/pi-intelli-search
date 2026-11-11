@@ -48,8 +48,9 @@ that branch, not fixed by it:
 4. A delayed completed run can overwrite the canonical `meta.json` after a newer completed run
    owns the report (reviewer-observed with an injected interleaving, not re-run by the
    coordinator).
-5. The native skill still names hidden `details` fields for manual extraction, truncation and
-   inferred assets; only the cache-path instruction was fixed.
+5. Fixed on 2026-11-11: the native skill names no hidden `details` field; manual extraction,
+   truncation and inferred assets use the visible result text (regression in
+   `test/post-0220-minors.test.ts`).
 6. Emphasis inside HTML comments or tables, hand-edited CRLF headers, rotation I/O failures after
    the move and stale diagnostics after a failed rotation remain follow-ups. Attempt folders are
    never pruned.
