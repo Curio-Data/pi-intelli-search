@@ -544,7 +544,7 @@ describe("isRetryableMessage", () => {
     "ETIMEDOUT",
     "ECONNRESET while reading",
     // Parity with the audited host's own retry classifier (pi-ai
-    // utils/retry.js, captured for 1.5.0): the host applies this list to its
+    // utils/retry.js, captured for 1.5.2): the host applies this list to its
     // agent-loop calls; the extension's pipeline calls own their retry and
     // keep the same coverage.
     "server_busy",
@@ -553,6 +553,7 @@ describe("isRetryableMessage", () => {
     "The service is temporarily unavailable",
     "currently experiencing high demand",
     "model is at capacity",
+    "Claude Code's stream from Anthropic was cut short after the reply had begun",
     "internal error",
     "HTTP 520",
     "524 gateway timeout",
@@ -666,15 +667,15 @@ describe("isRetryableMessage", () => {
   }
 });
 
-describe("retry classifier parity with the captured pi-ai 1.5.0 fixture", () => {
+describe("retry classifier parity with the captured pi-ai 1.5.2 fixture", () => {
   // The fixture is a machine capture of the upstream classifier lists from the
-  // installed pi-ai 1.5.0 dist/utils/retry.js (scripts/capture-retry-fixture.mjs).
+  // installed pi-ai 1.5.2 dist/utils/retry.js (scripts/capture-retry-fixture.mjs).
   // This gate holds the extension lists to that capture; it does not read the
   // installed host, so a host bump cannot fail here by itself. Run
   // scripts/capture-retry-fixture.mjs --check <retry.js> during every host-bump
   // audit, and recapture the fixture deliberately when upstream drifts.
   const fixture = JSON.parse(
-    readFileSync(new URL("./fixtures/pi-ai-retry-1.5.0.json", import.meta.url), "utf8"),
+    readFileSync(new URL("./fixtures/pi-ai-retry-1.5.2.json", import.meta.url), "utf8"),
   ) as { nonRetryable: string[]; retryable: string[] };
 
   // Deliberate divergences, documented inline in src/core/util.ts: retained

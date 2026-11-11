@@ -309,7 +309,7 @@ export async function withRetry<T>(
 // OpenRouter path surfaces 429/5xx only as an errorMessage string (no status or
 // headers post-hoc), so classification is necessarily text-based. The lists
 // below mirror the audited host's retry classifier (pi-ai utils/retry.js,
-// captured for 1.5.0), which the host applies to its agent-loop calls; this
+// captured for 1.5.2), which the host applies to its agent-loop calls; this
 // policy owns the extension's pipeline calls and keeps the same coverage,
 // including the quota/billing exclusions that must fail fast instead of
 // consuming the retry budget.
@@ -321,7 +321,7 @@ export async function withRetry<T>(
 // Node transport codes, the standalone adapter's transient 402 wording, and
 // separator-tolerant busy phrasings.
 // Exported for the parity gate in test/util.test.ts, which holds these lists
-// to the captured fixture (test/fixtures/pi-ai-retry-1.5.0.json). The gate
+// to the captured fixture (test/fixtures/pi-ai-retry-1.5.2.json). The gate
 // does not read the installed host: run
 // scripts/capture-retry-fixture.mjs --check <retry.js> at each host bump to
 // detect upstream drift.
@@ -432,6 +432,10 @@ export const RETRYABLE_PATTERNS = [
   // CLI, e.g. "stream disconnected before completion: stream closed before
   // response.completed" (pi #11057).
   "stream disconnected before completion",
+  // Gateway relaying a dropped upstream stream after output began, e.g.
+  // "Claude Code's stream from Anthropic was cut short after the reply had
+  // begun" (pi #11879; upstream since pi-ai 1.5.2).
+  "cut short after the reply had begun",
   // Node ERR_HTTP2_STREAM_CANCEL: the HTTP/2 session died before the request
   // was sent, for example after the Bedrock SDK's session timeout (pi #10379).
   "pending stream has been canceled",

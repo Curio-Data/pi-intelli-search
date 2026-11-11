@@ -1,6 +1,6 @@
 {
-  "source": "@earendil-works/pi-ai 1.5.0 dist/utils/retry.js",
-  "captured": "2026-11-03",
+  "source": "@earendil-works/pi-ai 1.5.2 dist/utils/retry.js",
+  "captured": "2026-11-11",
   "note": "Captured upstream retry classifier lists. test/util.test.ts holds the extension lists to this capture; it does not read the installed host. Run scripts/capture-retry-fixture.mjs --check <retry.js> at each host bump to detect upstream drift.",
   "nonRetryable": [
     "GoUsageLimitError",
@@ -58,6 +58,7 @@
     "stream ended before a terminal response event",
     "http2 request did not get a response",
     "stream disconnected before completion",
+    "cut short after the reply had begun",
     "pending stream has been canceled",
     "retry delay",
     "you can retry your request",
