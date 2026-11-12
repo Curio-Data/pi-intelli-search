@@ -123,6 +123,12 @@ Following maintainer approval, the registry records MCP publication at 10:12:33 
 
 These checks establish registry installation, skill discovery, connection and tool listing, not a full research call through the registry-installed package. The logs and checksums are in `evidence/2026-11-11-0230-release-verification/registry/`.
 
+### Published `0.23.0` Native Package Verification (2026-11-12)
+
+Following maintainer approval, the registry records native publication at 10:47:06 UTC from tag `pi-v0.23.0` on `db706ad`; `latest` resolves to `0.23.0`, and registry metadata exposes a signed provenance attestation. `test/run-e2e-publish.sh 0.23.0` passes with `HOME`, `PI_CODING_AGENT_DIR`, npm cache and scratch isolated under repository `.tmp/`. The installed extension loads under plain _Node.js_, registers all four tools and its session-start subscription, and `ensureCustomModels()` is idempotent.
+
+The downloaded tarball's SHA-1 matches registry metadata (`6f5731757b8bbcf8acc057bf974a2b81adb942c4`), and its README matches `pi.README.md` at `pi-v0.23.0` byte-for-byte. The tarball ships `PI_CHANGELOG.md` with its newest heading `## [0.23.0] - 2026-11-11`, and the manifest's `pi` object is intact: `extensions`, `skills`, `image` and `changelogPath` are all present. These checks establish published-package installation, runtime loading, README derivation and changelog packaging, not a live model call through the registry-installed native package. The logs and checksums are in `evidence/2026-11-11-0230-release-verification/native-registry/`.
+
 ## 0.22.0 Candidate Verification (2026-11-09)
 
 Merge commit `71cce34`, which both release tags identify, passes both builds, all native and standalone deterministic tests, native-contract types, generated-file checks, [_ShellCheck_](https://www.shellcheck.net/), the dependency audit (0 vulnerabilities) and both independent fresh-tarball installations. Exact-commit [release-branch CI](https://github.com/Curio-Data/pi-intelli-search/actions/runs/42606775156) passes. The first attempt of the `main` run stopped only at the unpublished-catalogue-pin guard, as designed before publication, and its re-run passed after publication.
