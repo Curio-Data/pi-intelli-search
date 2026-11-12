@@ -4,6 +4,20 @@
 
 Native `Pi` extension release notes, generated from the repository `CHANGELOG.md`. Standalone Model Context Protocol (MCP) server release notes remain in that canonical changelog.
 
+## [0.23.0] - 2026-11-11
+
+Post-0.22.0 corrections to provenance validation, failure reports and cache recovery, and alignment with the `Pi` 1.5.2 retry classifier.
+
+### Fixed
+
+- Shared core: provenance matching accepts Markdown emphasis spanning soft line breaks in paragraphs, list items and blockquotes, while keeping literal URL suffixes distinct across paragraph, list-item, heading and code-block boundaries.
+- Shared core: provenance validation ends a fenced code block inside a list item where the list item ends, as Markdown renders it. Prose after such a list is now validated rather than skipped as code, so a synthesis that relied on that gap can fail source validation.
+- Shared core: a `collate-failed` report says whether synthesis was produced and then rejected by source validation, or never produced. After input trimming, its recovery guidance separates reading the omitted input in the saved extraction files from retrying synthesis after a transient failure.
+- Shared core: degraded repeats keep the preserved report's metadata and write failed-attempt telemetry separately under `attempts/attempt-*/meta.json`. Rejected nonempty synthesis candidates are retained best-effort as diagnostics in `rejected-synthesis.json`, never as accepted evidence.
+- Shared core: archive rotation rebases cache references to the numbered sibling, including completed reports' generated inventories after an unclosed synthesis code fence. New synthesis output keeps generated inventories outside unfinished top-level or list code fences. An unclosed search-summary fence in an extraction-failure report remains a limitation: its archived saved-asset references can still point to the live folder.
+- Shared core: the retry classifier treats a provider stream that was cut short after the reply had begun as transient, matching the host retry list in `pi-ai` 1.5.2.
+- Native `Pi`: settings warnings no longer claim the built-in default is active when a valid setting from another file survives. Skill guidance for cache recovery, manual extraction-to-collation and inferred assets uses model-visible result text instead of hidden `details` fields, which the agent never receives.
+
 ## [0.22.0] - 2026-11-09
 
 Research-failure corrective actions. A root cause and corrective action analysis of intermittent research failures found that the default extract and collate model, [_MiniMax_](https://minimax.io) M3, spends the whole output cap on hidden reasoning on some [_OpenRouter_](https://openrouter.ai) serving routes and returns no text or cut-off text. Per-call routing made the failures intermittent. A failed synthesis, or a run in which every extraction failed, then discarded the fetched and extracted work.

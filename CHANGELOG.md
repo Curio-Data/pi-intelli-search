@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [pi-0.23.0] - 2026-11-11
+
+Post-0.22.0 corrections to provenance validation, failure reports and cache recovery, and alignment with the `Pi` 1.5.2 retry classifier.
+
 ### Fixed
 
 - Shared core: provenance matching accepts Markdown emphasis spanning soft line breaks in paragraphs, list items and blockquotes, while keeping literal URL suffixes distinct across paragraph, list-item, heading and code-block boundaries.
@@ -15,7 +19,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Shared core: archive rotation rebases cache references to the numbered sibling, including completed reports' generated inventories after an unclosed synthesis code fence. New synthesis output keeps generated inventories outside unfinished top-level or list code fences. An unclosed search-summary fence in an extraction-failure report remains a limitation: its archived saved-asset references can still point to the live folder.
 - Shared core: the retry classifier treats a provider stream that was cut short after the reply had begun as transient, matching the host retry list in `pi-ai` 1.5.2.
 - Native `Pi`: settings warnings no longer claim the built-in default is active when a valid setting from another file survives. Skill guidance for cache recovery, manual extraction-to-collation and inferred assets uses model-visible result text instead of hidden `details` fields, which the agent never receives.
-- Plugin skills (MCP): cache recovery and manual collation name the visible result text first, with the matching `details` field as an alternative for hosts that show structured content.
+
+## [mcp-0.23.0] - 2026-11-11
+
+Core behaviour is shared with [pi-0.23.0] and recorded there.
+
+### Fixed
+
+- Plugin skills: cache recovery and manual collation name the visible result text first, with the matching `details` field as an alternative for hosts that show structured content.
 
 ## [pi-0.22.0] - 2026-11-09
 
@@ -644,6 +655,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[mcp-0.23.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.23.0
+[pi-0.23.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.23.0
 [mcp-0.22.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.22.0
 [pi-0.22.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.22.0
 [mcp-0.21.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.21.0
