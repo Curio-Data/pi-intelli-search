@@ -52,10 +52,10 @@ The software development kit (SDK) and native fetch assets are verified separate
 
 | Host | Tested Version | Evidence |
 |---|---|---|
-| Claude Code | 2.1.289, 2.1.292, 2.1.293, 2.1.294, 2.1.296, 2.1.301, 2.1.302, 2.1.311, 2.1.316, 2.1.317, 2.1.319 | Credential-free installation and key-delivery checks; credentialed local-tarball research. Latest registry-pin installation, connection and skill discovery pass on 2.1.319; historical checks and evidence limits are recorded below |
+| Claude Code | 2.1.289, 2.1.292, 2.1.293, 2.1.294, 2.1.296, 2.1.301, 2.1.302, 2.1.311, 2.1.316, 2.1.317, 2.1.319, 2.1.322 | Credential-free installation and key-delivery checks; credentialed local-tarball research. Latest registry-pin installation, connection and skill discovery pass on 2.1.322; historical checks and evidence limits are recorded below |
 | Codex CLI | 0.144.5, 0.160.1 | Credential-free installation and credentialed local-tarball research. Current-candidate zero-configuration startup, missing-key recovery and research pass on 0.160.1. Latest registry-pin installation, enabled-server listing and skill discovery pass on 0.160.1; the independent registry protocol probe is separate from the host's enabled listing |
 
-The latest [registry-pin verification](#published-0220-registry-pin-verification-2026-11-09) covers both hosts. It does not establish full registry-pin research; earlier checks remain evidence for their recorded package and host versions.
+The latest [registry-pin verification](#published-0230-registry-pin-verification-2026-11-12) covers both hosts. It does not establish full registry-pin research; earlier checks remain evidence for their recorded package and host versions.
 
 ### Claude Code Evidence and Limits
 
@@ -110,6 +110,18 @@ Release-branch commit `71fdbbe` passes both builds, all native and standalone de
 The full live suite ran in parallel on `Pi` 1.5.2 against `71fdbbe` and passed all 15 scenarios with none skipped, including both credentialed plugin sessions (_Claude Code_ 2.1.322, _Codex_ 0.160.1) and research on the pinned `Pi` 0.86.0 floor host with the fetch-tee citation channel live (`search.annotationsHarvested=13`). The agent loop used `qwen-token-plan/qwen3.8-max`; the pipeline stages used _OpenRouter_. The suite records pass or fail, not rate-limit signals.
 
 The native local-tarball install smoke test passes with `pi-ai` 1.5.2. The independent MCP tarball install gate first failed on Node.js 26 because its own isolation harness called the deprecated `module.register()`, which writes a warning to standard error; after the harness moved to `module.registerHooks()` the gate passes, and a separate check confirmed the new hook still rejects a module outside the installation. That change touches only the verification script, not either package. The suite logs and checksums are in `evidence/2026-11-11-0230-release-verification/live/`.
+
+Exact-commit [release-branch CI](https://github.com/Curio-Data/pi-intelli-search/actions/runs/43195922189) passes on `2f42cfd`, an empty commit over `fe7e283` (this verification record and the install-gate fix) that restarted CI after the runs for `fe7e283` stayed queued without jobs for over 13 hours.
+
+### Published `0.23.0` Registry-Pin Verification (2026-11-12)
+
+Following maintainer approval, the registry records MCP publication at 10:12:33 UTC; `latest` resolves to `0.23.0`, and registry metadata exposes a signed provenance attestation. After merge commit `521c7c3` moved the committed catalogues on `main` to the `0.23.0` pin, both plugins install from the repository marketplaces into fresh profiles without copied login credentials, using a dummy inference key. Every check ran from an isolated consumer project with a fresh npm cache, so `npx` resolved the registry package rather than the repository workspace.
+
+- **Claude Code 2.1.322:** the exact committed `npx` pin connects, the fresh cache holds the published `0.23.0` package, and the installed plugin exposes its skill.
+- **Codex CLI 0.160.1:** the installed cache has the expected version, the pinned server is enabled with `--host codex`, and prompt-input inspection discovers the skill at the versioned plugin-cache path.
+- **Independent Registry Launcher:** the executable resolves under the fresh cache's `_npx/`, and `--version` reports `0.23.0`. A direct stdio probe verifies server identity, returns instructions naming `intelli_search`, and lists all four tools through `initialize` and `tools/list`. Standard output contains protocol frames only, standard error contains the startup banner, and the process exits cleanly.
+
+These checks establish registry installation, skill discovery, connection and tool listing, not a full research call through the registry-installed package. The logs and checksums are in `evidence/2026-11-11-0230-release-verification/registry/`.
 
 ## 0.22.0 Candidate Verification (2026-11-09)
 
