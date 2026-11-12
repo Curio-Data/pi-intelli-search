@@ -129,6 +129,8 @@ Following maintainer approval, the registry records native publication at 10:47:
 
 The downloaded tarball's SHA-1 matches registry metadata (`6f5731757b8bbcf8acc057bf974a2b81adb942c4`), and its README matches `pi.README.md` at `pi-v0.23.0` byte-for-byte. The tarball ships `PI_CHANGELOG.md` with its newest heading `## [0.23.0] - 2026-11-11`, and the manifest's `pi` object is intact: `extensions`, `skills`, `image` and `changelogPath` are all present. These checks establish published-package installation, runtime loading, README derivation and changelog packaging, not a live model call through the registry-installed native package. The logs and checksums are in `evidence/2026-11-11-0230-release-verification/native-registry/`.
 
+Both 0.23.0 changelog sections are dated 2026-11-11, the day the release branch was prepared; CI stayed queued overnight, and both packages were published on 2026-11-12. The date is left as shipped so that the repository matches the published packages.
+
 ## 0.22.0 Candidate Verification (2026-11-09)
 
 Merge commit `71cce34`, which both release tags identify, passes both builds, all native and standalone deterministic tests, native-contract types, generated-file checks, [_ShellCheck_](https://www.shellcheck.net/), the dependency audit (0 vulnerabilities) and both independent fresh-tarball installations. Exact-commit [release-branch CI](https://github.com/Curio-Data/pi-intelli-search/actions/runs/42606775156) passes. The first attempt of the `main` run stopped only at the unpublished-catalogue-pin guard, as designed before publication, and its re-run passed after publication.
