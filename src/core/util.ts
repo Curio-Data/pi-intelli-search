@@ -162,6 +162,75 @@ export async function mapWithConcurrency<T, R>(
   return results;
 }
 
+/** A counting semaphore shared by several worker pools. */
+export interface Semaphore {
+  /** Run `fn` while holding one permit; the permit is released however `fn` settles. */
+  run<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T>;
+  /** Permits currently held. */
+  readonly active: number;
+  /** Callers waiting for a permit. */
+  readonly waiting: number;
+}
+
+/**
+ * Create a counting semaphore with `limit` permits (at least one).
+ *
+ * Several bounded pools can draw from one semaphore, so their combined
+ * concurrency stays at `limit` however many pools run: the batch research
+ * path shares one extraction pool across its entries this way. Waiters are
+ * served first in, first out. A waiter whose `signal` aborts leaves the queue
+ * and rejects with an AbortError without taking a permit.
+ */
+export function createSemaphore(limit: number): Semaphore {
+  const permits = Math.max(1, Math.floor(limit));
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  const acquire = (signal?: AbortSignal): Promise<void> => {
+    if (signal?.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
+    if (active < permits) {
+      active++;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve, reject) => {
+      const grant = () => {
+        signal?.removeEventListener("abort", onAbort);
+        active++;
+        resolve();
+      };
+      const onAbort = () => {
+        const at = queue.indexOf(grant);
+        if (at >= 0) queue.splice(at, 1);
+        reject(new DOMException("Aborted", "AbortError"));
+      };
+      queue.push(grant);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+  };
+
+  const release = () => {
+    active--;
+    queue.shift()?.();
+  };
+
+  return {
+    async run<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+      await acquire(signal);
+      try {
+        return await fn();
+      } finally {
+        release();
+      }
+    },
+    get active() {
+      return active;
+    },
+    get waiting() {
+      return queue.length;
+    },
+  };
+}
+
 /**
  * Sleep for `ms`, rejecting with an AbortError if `signal` aborts first.
  * Clears the timer on abort so it never leaks.

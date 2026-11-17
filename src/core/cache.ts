@@ -687,25 +687,31 @@ export async function removeIndexEntry(cacheDir: string, slug: string): Promise<
   await atomicWriteFile(indexPath, JSON.stringify(index, null, 2) + "\n");
 }
 
+/** Slugs the judge must not offer: the current run's, or a batch's members. */
+export type JudgeExclusion = string | Iterable<string>;
+
 /**
  * The candidate window shared by the judge prompt and its response parser:
- * the most recent `MAX_JUDGE_ENTRIES` entries, excluding `excludeSlug`.
+ * the most recent `MAX_JUDGE_ENTRIES` entries, excluding `exclude` (one slug,
+ * or a set such as a batch's member folders). Exclusion applies before the
+ * window is cut, so excluded entries never take a candidate's place.
  * Both consumers MUST resolve numbered items against this same window;
  * otherwise a judge answer about item N resolves to a different entry once
  * the eligible history exceeds the window.
  */
-export function judgeCandidates(index: CacheIndex, excludeSlug?: string): IndexEntry[] {
-  return index.searches.filter((e) => e.slug !== excludeSlug).slice(-MAX_JUDGE_ENTRIES);
+export function judgeCandidates(index: CacheIndex, exclude?: JudgeExclusion): IndexEntry[] {
+  const excluded = new Set(typeof exclude === "string" ? [exclude] : (exclude ?? []));
+  return index.searches.filter((e) => !excluded.has(e.slug)).slice(-MAX_JUDGE_ENTRIES);
 }
 
 /**
  * Format the cache index for the LLM judge.
  * Returns the `judgeCandidates` window as a numbered list.
  */
-export function formatIndexForJudge(index: CacheIndex, excludeSlug?: string): string {
+export function formatIndexForJudge(index: CacheIndex, exclude?: JudgeExclusion): string {
   // Take the shared candidate window (most recent entries, excluding the
-  // current search).
-  const entries = judgeCandidates(index, excludeSlug);
+  // current search or a batch's members).
+  const entries = judgeCandidates(index, exclude);
 
   if (entries.length === 0) return "No previous searches.";
 
@@ -738,9 +744,9 @@ export function isWellFormedJudgeResponse(response: string): boolean {
 export function parseJudgeResponse(
   response: string,
   index: CacheIndex,
-  excludeSlug?: string,
+  exclude?: JudgeExclusion,
 ): Array<{ entry: IndexEntry; relevance: string }> {
-  const candidates = judgeCandidates(index, excludeSlug);
+  const candidates = judgeCandidates(index, exclude);
 
   // Extract JSON array from the response — the LLM may wrap it in markdown
   const jsonMatch = response.match(/\[[\s\S]*\]/);

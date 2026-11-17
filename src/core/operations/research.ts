@@ -46,6 +46,7 @@ import {
   mapWithConcurrency,
   sleep,
   createRateLimiter,
+  type Semaphore,
   errMsg,
   failureDetail,
   redirectedToDifferentHost,
@@ -128,10 +129,61 @@ export async function research(
 ): Promise<OperationResult> {
   throwIfAborted(context.signal);
   await preflightResearch(context);
+  return (await runResearchEntry(params, context, dependencies)).result;
+}
+
+/**
+ * Resources a batch shares across its entries. A single query supplies none
+ * and the pipeline creates its own, exactly as `research()` always has.
+ */
+export interface ResearchRunOptions {
+  /**
+   * Batch-wide extraction pool. Every extraction call, including an output-cap
+   * retry, holds one permit, so the batch's peak number of extraction calls is
+   * the pool size however many entries run. Without a pool the entry's own
+   * `extractionConcurrency` bounds its calls.
+   */
+  extractionPool?: Semaphore;
+  /** Shared `minRequestIntervalMs` limiter; without one the entry creates its own. */
+  gate?: (signal?: AbortSignal) => Promise<void>;
+  /** Skip Stage 5: a batch runs cache suggestion once over all its entries. */
+  skipCacheSuggest?: boolean;
+}
+
+/** What a completed, committed entry hands an internal caller besides its result text. */
+export interface ResearchSynthesis {
+  /** Accepted collation text, before the inferred-assets section and the appendices. */
+  collation: string;
+  /** The successful extractions the collation cites, in source-number order. */
+  extractions: ExtractResult[];
+  /** File identity allocated for this entry's cache folder. */
+  identity: SourceIdentity;
+  /** Display and physical paths of the entry's cache folder. */
+  cachePath: string;
+  physicalCachePath: string;
+}
+
+export interface ResearchRunResult {
+  result: OperationResult;
+  /** Present only when the entry completed and its artefacts were committed. */
+  synthesis?: ResearchSynthesis;
+}
+
+/**
+ * Run the pipeline for one query without model preflight. `research()` calls
+ * it after preflight; the batch path preflights once and calls it per entry
+ * with shared resources, so it never parses the rendered result text.
+ */
+export async function runResearchEntry(
+  params: ResearchParams,
+  context: OperationContext,
+  dependencies: ResearchDependencies = { fetchPages, downloadLlmsFullToCache },
+  options: ResearchRunOptions = {},
+): Promise<ResearchRunResult> {
   throwIfAborted(context.signal);
   const { settings, paths } = context;
   const physicalCachePath = makeCachePath(params.query, paths.workspaceRoot, paths.cacheRoot);
-  return executePipeline({
+  const p: PipelineCtx = {
     ...context,
     signal: context.signal,
     dependencies,
@@ -144,7 +196,9 @@ export async function research(
       baseDelayMs: settings.retryBaseDelayMs,
       maxDelayMs: settings.retryMaxDelayMs,
     },
-    gate: createRateLimiter(settings.minRequestIntervalMs),
+    gate: options.gate ?? createRateLimiter(settings.minRequestIntervalMs),
+    ...(options.extractionPool ? { extractionPool: options.extractionPool } : {}),
+    skipCacheSuggest: options.skipCacheSuggest ?? false,
     tel: settings.disableTelemetry
       ? null
       : await TelemetryBuilder.create(params.query, context.identity, context.now),
@@ -152,7 +206,9 @@ export async function research(
     extractConfig: settings.extractModel,
     collateConfig: settings.collateModel,
     budgetRetries: { extract: 0, collate: 0 },
-  });
+  };
+  const result = await executePipeline(p);
+  return { result, ...(p.synthesis ? { synthesis: p.synthesis } : {}) };
 }
 
 // ── Pipeline context: everything a stage needs, assembled once in execute() ──
@@ -167,6 +223,11 @@ interface PipelineCtx extends OperationContext {
   maxUrls: number;
   retry: LlmRetryConfig;
   gate: (signal?: AbortSignal) => Promise<void>;
+  /** Batch-wide extraction pool; absent for a single query. */
+  extractionPool?: Semaphore;
+  skipCacheSuggest: boolean;
+  /** Set by executePipeline when the entry completes and commits. */
+  synthesis?: ResearchSynthesis;
   tel: TelemetryBuilder | null;
   searchConfig: ModelConfig;
   extractConfig: ModelConfig;
@@ -258,6 +319,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   let collation: string;
   let outcome: "completed" | "collate-failed" | "extraction-failed" = "completed";
   let failureMessage = "";
+  let acceptedCollation: string | undefined;
   if (succeededExtractions.length === 0) {
     const fetchFailed = extracted.blockedExtractions.length;
     const extractFailed = extracted.extractions.filter((e) => e.status === "failed").length;
@@ -299,6 +361,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
     // attempt's sidecar is recorded.
     try {
       collation = await runCollateStage(p, search.searchResult, succeededExtractions, identity);
+      acceptedCollation = collation;
     } catch (error) {
       throwIfAborted(p.signal);
       const reason = failureDetail(errMsg(error)) || "collation failed";
@@ -397,7 +460,9 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   // ═══════════════════════════════════════════
   // Skipped without a synthesis: the run is not indexed, and the judge would
   // spend another model call on a run that already failed.
-  const suggestionsAppendix = outcome === "completed" ? await runCacheSuggestStage(p) : "";
+  // A batch entry skips it: the batch runs one judge over all its entries.
+  const suggestionsAppendix =
+    outcome === "completed" && !p.skipCacheSuggest ? await runCacheSuggestStage(p) : "";
 
   // ── Telemetry sidecar refresh ──
   // The sidecar was already written under the cache lock with all core
@@ -443,6 +508,16 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
       truncatedCount,
     ) +
     suggestionsAppendix;
+
+  if (outcome === "completed" && acceptedCollation !== undefined) {
+    p.synthesis = {
+      collation: acceptedCollation,
+      extractions: succeededExtractions,
+      identity,
+      cachePath: p.cachePath,
+      physicalCachePath: p.physicalCachePath,
+    };
+  }
 
   return {
     text: result,
@@ -677,14 +752,22 @@ async function runExtractStage(
   // would fire that many simultaneous LLM calls and trip provider rate limits.
   // Progress is emitted on each page's completion (via onSettled), so the
   // sub-progress bar reflects real work done instead of jumping to N/N at launch.
+  // In a batch, every page may queue at once: the shared pool, not the
+  // entry, bounds the calls, so an entry can use permits others leave idle.
+  // The permit is taken before the throttle so the gate's spacing applies to
+  // calls that actually start.
   let extractDone = 0;
+  const pool = p.extractionPool;
   const rawExtractions = await mapWithConcurrency(
     successPages,
-    p.settings.extractionConcurrency,
+    pool ? successPages.length : p.settings.extractionConcurrency,
     async (page) => {
-      // Space out concurrent extract calls when a throttle is configured.
-      await p.gate(p.signal);
-      return extractPage(p, page);
+      const run = async () => {
+        // Space out concurrent extract calls when a throttle is configured.
+        await p.gate(p.signal);
+        return extractPage(p, page);
+      };
+      return pool ? pool.run(run, p.signal) : run();
     },
     {
       signal: p.signal,

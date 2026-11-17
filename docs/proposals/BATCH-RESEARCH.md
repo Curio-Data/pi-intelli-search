@@ -163,9 +163,17 @@ The estimate has three limits. The four reports were issued at 08:30, 08:51, 08:
 No behaviour change for a single query.
 
 - Add a counting semaphore to `src/core/util.ts`, next to `mapWithConcurrency` and `createRateLimiter`, with unit tests.
-- Split `research()` in `src/core/operations/research.ts` so a caller can supply a shared extraction semaphore, a shared `minRequestIntervalMs` limiter, batch identity for telemetry, and a flag that skips Stage 5. A single query creates its own, exactly as today.
+- Split `research()` in `src/core/operations/research.ts` so a caller can supply a shared extraction semaphore, a shared `minRequestIntervalMs` limiter and a flag that skips Stage 5. A single query creates its own, exactly as today.
 - Return the accepted collation text, the extractions and the `SourceIdentity` to an internal caller alongside the existing `OperationResult`, so the batch code does not parse the rendered result.
 - Extend `judgeCandidates()` and `formatIndexForJudge()` in `src/core/cache.ts` to exclude a set of slugs.
+
+**Result (17 November 2026).** Done as listed, with one change: batch identity for telemetry moved to Phase 2, which adds the telemetry fields that carry it, so Phase 1 adds no unused parameter.
+
+- `createSemaphore()` serves waiters first in, first out, releases its permit however the task settles, and drops a waiter whose signal aborts.
+- `runResearchEntry()` runs the pipeline without model preflight and takes the shared pool, the shared limiter and the Stage 5 flag. `research()` preflights and then calls it with none of them. With a pool, an entry queues all its pages and the pool alone bounds the calls; each call takes its permit before the throttle, and an output-cap retry runs under the same permit.
+- The synthesis (collation text, extractions, `SourceIdentity` and cache paths) is returned only for an entry that completed and committed its artefacts.
+- `judgeCandidates()`, `formatIndexForJudge()` and `parseJudgeResponse()` take one slug or a set, and exclude before cutting the 20-entry window.
+- `npm run build:all`, `npm run test:all` (935 native and 157 standalone tests) and `./test/e2e/01_main.sh` passed. New tests cover the semaphore, a set exclusion, and two entries sharing a pool of two with no preflight and no Stage 5.
 
 ### Phase 2: Independent Mode
 
@@ -173,7 +181,7 @@ No behaviour change for a single query.
 - **Settings.** Add `maxBatchEntries` (10), `batchConcurrency` (4) and `batchExtractionConcurrency` (8) to `TUNING_RANGES` and `tuningDefaults()` in `src/core/defaults.ts` and the native loader in `src/settings.ts`; the standalone configuration in `packages/mcp/src/config.ts` reads both from `src/core/defaults.ts`.
 - **Orchestrator.** A new `src/core/operations/batch-research.ts` runs model preflight once, then the entries through `mapWithConcurrency(batchConcurrency)` with the shared semaphore and limiter. A failed entry becomes a failure section; cancellation aborts every entry.
 - **Cache.** Write the batch folder and manifest after all entries settle, recording each member's folder as it stands after same-day rotation; rotate the batch folder with `rotateCacheArtefacts()`. Run cache suggestion once over the joined queries, excluding the members, and add one index entry for the batch.
-- **Telemetry.** Add the per-entry `batch` fields and the fetched URL list in `src/core/telemetry.ts`, and a batch record type with its own `kind` and `schemaVersion`. Extend `scripts/analyze-sessions.sh`.
+- **Telemetry.** Pass batch identity into `runResearchEntry()` and add the per-entry `batch` fields and the fetched URL list in `src/core/telemetry.ts`, and a batch record type with its own `kind` and `schemaVersion`. Extend `scripts/analyze-sessions.sh`.
 - **Adapters.** Dispatch on `queries` in `src/tools/intelli-research.ts` and `packages/mcp/src/server.ts`; map per-entry progress into the native renderer and MCP progress notifications. Update the native contract fixtures for the changed schema and result.
 
 ### Phase 3: Expansion Mode

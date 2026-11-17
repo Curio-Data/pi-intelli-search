@@ -507,6 +507,21 @@ describe("judge candidate window", () => {
     assert.strictEqual(candidates[19].slug, "entry-25");
     assert.deepStrictEqual(judgeCandidates(bigIndex, "entry-25").at(-1), bigIndex.searches[23]);
   });
+
+  it("excludes a set of slugs before cutting the window", () => {
+    // A batch excludes all its member folders. Five excluded slugs leave 20
+    // eligible entries, so the window keeps entry-1 instead of dropping it.
+    const members = ["entry-21", "entry-22", "entry-23", "entry-24", "entry-25"];
+    const candidates = judgeCandidates(bigIndex, members);
+    assert.strictEqual(candidates.length, 20);
+    assert.strictEqual(candidates[0].slug, "entry-1");
+    assert.strictEqual(candidates[19].slug, "entry-20");
+    assert.ok(candidates.every((c) => !members.includes(c.slug)));
+    // Prompt and parser share the window under a set exclusion too.
+    assert.match(formatIndexForJudge(bigIndex, new Set(members)).split("\n")[19], /entry-20/);
+    const [last] = parseJudgeResponse('[{"index":20}]', bigIndex, members);
+    assert.strictEqual(last.entry.slug, "entry-20");
+  });
 });
 
 // ═══════════════════════════════════════════
