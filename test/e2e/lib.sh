@@ -198,8 +198,8 @@ e2e_run_direct() {
 # attempts, E2E_RETRY_GAP_SECONDS apart, default 5) while no fresh
 # .search meta.json sidecar appears. Freshness is judged against a
 # reference file created before the first attempt, but any fresh completed
-# sidecar beneath <cwd> counts, so concurrent runs need separate cwds. Sets E2E_LAST_OUTPUT to the last attempt's
-# output. Returns 0 only when a fresh completed sidecar records useful work.
+# sidecar beneath <cwd> counts, so concurrent runs need separate cwds.
+# Sets E2E_LAST_OUTPUT to the last attempt's output. Returns 0 only when a fresh completed sidecar records useful work.
 e2e_run_pi() {
   local agent="$1" cwd="$2" prompt="$3" tmo="${4:-${E2E_TIMEOUT_SECONDS:-360}}"
   local attempt out ec ran ref trace_file compact

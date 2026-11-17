@@ -31,7 +31,7 @@ echo "📝 Log: $LOG_FILE"
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
-  E2E_TIMEOUT_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+  E2E_TIMEOUT_SECONDS E2E_RETRY_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
 # A non-reasoning collation model makes the 200-token comparison measure
 # visible output rather than a reasoning budget. Empty summaries remain failures.
 COLLATE_MODEL="openai/gpt-4.1-mini"

@@ -5,7 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
-e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL E2E_TIMEOUT_SECONDS
+e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL E2E_TIMEOUT_SECONDS \
+  E2E_RETRY_GAP_SECONDS
 export TMPDIR="${TMPDIR:-$PROJECT_DIR/.tmp/e2e}"
 mkdir -p "$TMPDIR" "$PROJECT_DIR/.e2e-logs"
 LOG_FILE="$PROJECT_DIR/.e2e-logs/e2e-cap-$(date +%Y%m%d-%H%M%S).log"

@@ -47,7 +47,7 @@ echo "📝 Log: $LOG_FILE"
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
-  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+  E2E_TIMEOUT_SECONDS E2E_RETRY_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
 
 # Agent-loop model for the headless run; the pipeline models are pinned
 # in settings.json below. The loop model is incidental to what this test

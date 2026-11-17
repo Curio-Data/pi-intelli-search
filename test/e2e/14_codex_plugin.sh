@@ -48,7 +48,7 @@ fi
 # scenario needs: other credentials kept there never reach the Codex agent.
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
-e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY
+e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY E2E_RETRY_GAP_SECONDS
 unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"

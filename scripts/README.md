@@ -130,7 +130,7 @@ E2E_RUN_MODE=sequential ./test/run-e2e-all.sh  # one at a time, E2E_GAP_SECONDS 
 
 Scenario 10 has its own limit because one recipe that needs all three 600-second attempts, with the 5-second `E2E_RETRY_GAP_SECONDS` pause between attempts, runs for ≈1,810 seconds; the recipes run concurrently, so that is also the scenario's longest expected run. The 2026-11-09 evidence (`evidence/agents/2026-11-09-post-release/`) recommends 2,400 seconds. The other scripts keep 1,200 seconds so that a hung scenario fails promptly. When scenario 10 reports `TIMED OUT`, raise `E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS` or lower `E2E_RECIPE_TIMEOUT_SECONDS`. The traced runner below applies the same two limits.
 
-Use sequential mode where an account meets OpenRouter's 402 in-flight spending limit, or to watch one scenario's output as it runs. It serialises scenario scripts only: scenario 10 still runs its five recipes concurrently. A scenario run by hand alongside others needs `E2E_SKIP_BUILD=1` after a single `npm run build:all`, or scenarios 11 to 14 rebuild the standalone bundle while another loads it.
+Use sequential mode where an account meets OpenRouter's 402 in-flight spending limit, or to watch one scenario's output as it runs. It serialises scenario scripts only. Within a script, scenario 10 still runs its five recipes concurrently, scenarios 02, 05 and 06 run their two cases or arms concurrently, and scenario 13 runs its four sessions concurrently. A scenario run by hand alongside others needs `E2E_SKIP_BUILD=1` after a single `npm run build:all`, or scenarios 11 to 14 rebuild the standalone bundle while another loads it.
 
 ### Traced Evidence Runs
 

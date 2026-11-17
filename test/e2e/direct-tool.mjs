@@ -14,8 +14,8 @@
 // session.extensionRunner.createToolContext(...).executeTool(name, args). That
 // path is the host's tool pipeline: argument validation, tool_call and
 // tool_result hooks, MCP server waits, progress updates. Its
-// tool_execution_start/update/end events are written as JSON lines, the format
-// scenario-verdict.mjs already binds.
+// tool_execution_start/update/end events are written as JSON lines in the
+// format `pi --mode json` emits.
 //
 // The agent's own model stream is replaced by one that refuses and records any
 // call, so a direct run cannot spend agent-loop quota; the extension's model
