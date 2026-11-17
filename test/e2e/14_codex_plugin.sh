@@ -236,8 +236,8 @@ for ATTEMPT in 1 2; do
     break
   fi
   if completed_sidecar || [[ "$ATTEMPT" -eq 2 ]]; then break; fi
-  echo "   ⚠️  attempt ${ATTEMPT}/2 did not complete a turn; retrying after 30s"
-  sleep 30
+  echo "   ⚠️  attempt ${ATTEMPT}/2 did not complete a turn; retrying after ${E2E_RETRY_GAP_SECONDS:-5}s"
+  sleep "${E2E_RETRY_GAP_SECONDS:-5}"
 done
 if [[ "$RAN" -ne 1 ]]; then
   echo "❌ codex exec did not complete a turn"

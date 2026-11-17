@@ -239,8 +239,8 @@ for ATTEMPT in 1 2 3; do
     echo "   ⚠️  pi attempt ${ATTEMPT}/3 exited ${ATTEMPT_EC} without a fresh completed sidecar" >&2
   fi
   if [[ "${ATTEMPT}" -lt 3 ]]; then
-    echo "   ⏳ retrying after 30s" >&2
-    sleep 30
+    echo "   ⏳ retrying after ${E2E_RETRY_GAP_SECONDS:-5}s" >&2
+    sleep "${E2E_RETRY_GAP_SECONDS:-5}"
   fi
 done
 rm -f "$REF"

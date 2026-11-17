@@ -195,8 +195,8 @@ run_floor_pi() {
       echo "   ⚠️  floor-pi attempt ${attempt}/3 failed (exit ${ec}, cache written: ${ran})" >&2
     fi
     if [[ "${attempt}" -lt 3 ]]; then
-      echo "   ⏳ retrying after 30s" >&2
-      sleep 30
+      echo "   ⏳ retrying after ${E2E_RETRY_GAP_SECONDS:-5}s" >&2
+      sleep "${E2E_RETRY_GAP_SECONDS:-5}"
     fi
   done
   rm -f "${ref}"

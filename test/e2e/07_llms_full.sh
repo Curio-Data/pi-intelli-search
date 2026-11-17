@@ -16,7 +16,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CACHE_DIR="$PROJECT_DIR/.e2e-llmsfull"
+# A private working directory, so no concurrent scenario can count this
+# run's sidecar.
+E2E_CWD="$(mktemp -d -t pi-e2e-llmsfull-cwd-XXXXXX)"
+CACHE_DIR="$E2E_CWD/.e2e-llmsfull"
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
@@ -113,7 +116,7 @@ echo "╚═══════════════════════�
 echo ""
 
 ISO="$(mktemp -d -t pi-e2e-llmsfull-XXXXXX)"
-trap 'rm -rf "$ISO" "$CACHE_DIR"' EXIT
+trap 'rm -rf "$ISO" "$E2E_CWD"' EXIT
 
 mkdir -p "$ISO/sessions"
 
@@ -154,7 +157,7 @@ MEOF
 # discovered hostname. The domains filter is applied at the Sonar search stage
 # and keeps the result set small (maxUrls=1), so the first returned page is
 # almost certainly from the target domain.
-if ! e2e_run_pi "$ISO" "$PROJECT_DIR" "Use intelli_research with maxUrls=1 and domains=[\"$FOUND_HOSTNAME\"] to research: getting started guide"; then
+if ! e2e_run_pi "$ISO" "$E2E_CWD" "Use intelli_research with maxUrls=1 and domains=[\"$FOUND_HOSTNAME\"] to research: getting started guide"; then
   echo ""
   echo "❌ pi failed (no cache sidecar after retries)"
   echo "$E2E_LAST_OUTPUT"

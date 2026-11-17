@@ -139,10 +139,10 @@ e2e_compact_json_output() {
 
 # e2e_run_pi <agent_dir> <cwd> <prompt> [timeout_s]
 # Runs headless pi with the standard E2E flags, retrying (up to 3
-# attempts, 30s apart) while no fresh .search meta.json sidecar
-# appears. Freshness is judged against a reference file created before
-# the first attempt, so back-to-back scenarios sharing a cwd only
-# count their own run. Sets E2E_LAST_OUTPUT to the last attempt's
+# attempts, E2E_RETRY_GAP_SECONDS apart, default 5) while no fresh
+# .search meta.json sidecar appears. Freshness is judged against a
+# reference file created before the first attempt, but any fresh completed
+# sidecar beneath <cwd> counts, so concurrent runs need separate cwds. Sets E2E_LAST_OUTPUT to the last attempt's
 # output. Returns 0 only when a fresh completed sidecar records useful work.
 e2e_run_pi() {
   local agent="$1" cwd="$2" prompt="$3" tmo="${4:-${E2E_TIMEOUT_SECONDS:-360}}"
@@ -213,11 +213,36 @@ e2e_run_pi() {
       echo "   ⚠️  pi attempt ${attempt}/3 failed (exit ${ec}; no completed sidecar)" >&2
     fi
     if [[ "${attempt}" -lt 3 ]]; then
-      echo "   ⏳ retrying after 30s" >&2
-      sleep 30
+      echo "   ⏳ retrying after ${E2E_RETRY_GAP_SECONDS:-5}s" >&2
+      sleep "${E2E_RETRY_GAP_SECONDS:-5}"
     fi
   done
   rm -f "${ref}"
   E2E_LAST_OUTPUT="${out}"
   return 1
+}
+
+# e2e_run_pi_bg <out_file> <agent_dir> <cwd> <prompt> [timeout_s]
+# Starts e2e_run_pi in the background so a scenario can run independent arms
+# at once. Writes the last attempt's output to <out_file> and the exit status
+# to <out_file>.status; sets E2E_BG_PID. Each concurrent arm needs its own
+# <cwd>: e2e_run_pi accepts any fresh completed sidecar beneath its cwd, so
+# arms sharing one would count each other's research.
+e2e_run_pi_bg() {
+  local out_file="$1"
+  shift
+  (
+    if e2e_run_pi "$@"; then st=0; else st=$?; fi
+    printf '%s\n' "${E2E_LAST_OUTPUT:-}" > "${out_file}"
+    echo "${st}" > "${out_file}.status"
+  ) &
+  E2E_BG_PID=$!
+}
+
+# e2e_wait_bg <pid> <out_file>: waits for an e2e_run_pi_bg arm and returns its
+# e2e_run_pi status; sets E2E_LAST_OUTPUT from <out_file>.
+e2e_wait_bg() {
+  wait "$1" || true
+  E2E_LAST_OUTPUT="$(cat "$2" 2>/dev/null || true)"
+  return "$(cat "$2.status" 2>/dev/null || echo 1)"
 }

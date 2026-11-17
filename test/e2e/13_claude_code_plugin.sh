@@ -4,8 +4,8 @@
 #
 # Credentialed Claude Code plugin and unforced routing evaluation.
 # Installs the local-tarball plugin into an isolated profile, supplies its
-# sensitive key option, and runs four fresh sessions. Scenario 12 separately
-# covers credential-free installation. No prompt names the desired operation;
+# sensitive key option, and runs four fresh sessions at once. Scenario 12
+# separately covers credential-free installation. No prompt names the desired operation;
 # both search and research remain available in every session. Bash is removed
 # from the model's tool set; local cache reads use Read, Glob and Grep.
 #
@@ -16,7 +16,6 @@
 #   E2E_CLAUDE_MODEL         Session model (default: sonnet).
 #   E2E_TIMEOUT_SECONDS      Factual-session timeout (default: 180).
 #   E2E_RESEARCH_TIMEOUT_SECONDS  Deep-analysis timeout (default: 540).
-#   E2E_RUN_GAP_SECONDS      Gap between sessions (default: 20).
 #   E2E_KEEP_ARTIFACTS       Set to 1 to retain successful traces; plugin
 #                            credential file is always removed.
 #
@@ -48,11 +47,10 @@ echo "Log: $LOG_FILE"
 # The suite runner also enforces its own overall per-script timeout.
 E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-180}"
 E2E_RESEARCH_TIMEOUT_SECONDS="${E2E_RESEARCH_TIMEOUT_SECONDS:-540}"
-E2E_RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-20}"
 E2E_KEEP_ARTIFACTS="${E2E_KEEP_ARTIFACTS:-0}"
 E2E_CLAUDE_MODEL="${E2E_CLAUDE_MODEL:-sonnet}"
-[[ "$E2E_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ && "$E2E_RESEARCH_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ && "$E2E_RUN_GAP_SECONDS" =~ ^[0-9]+$ ]] || {
-  echo "Invalid session timeout or gap" >&2
+[[ "$E2E_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ && "$E2E_RESEARCH_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || {
+  echo "Invalid session timeout" >&2
   exit 1
 }
 if [[ -z "${OPENROUTER_API_KEY:-}" && -f "$HOME/.pi/agent/auth.json" ]]; then
@@ -179,12 +177,14 @@ ok "key option and bounded research configuration set"
 # the expected winner. Remove Bash to avoid shell permissions and shell-based
 # web substitution; do not relax the zero-denial transcript assertion.
 PREFIX="mcp__plugin_intelli-search_intelli_search__"
-for CASE in descriptions-only factual-auto factual-explicit comparison-auto; do
+CASES=(descriptions-only factual-auto factual-explicit comparison-auto)
+# case_settings <case>: sets PROMPT, EXPECTED, SKILL_MODE, CASE_TIMEOUT, FLAGS.
+case_settings() {
   EXPECTED=intelli_search
   SKILL_MODE=required
   CASE_TIMEOUT="$E2E_TIMEOUT_SECONDS"
   FLAGS=()
-  case "$CASE" in
+  case "$1" in
     descriptions-only)
       PROMPT='Using the installed web research plugin, what is the latest Nano Banana model release?'
       SKILL_MODE=disabled
@@ -202,17 +202,34 @@ for CASE in descriptions-only factual-auto factual-explicit comparison-auto; do
       CASE_TIMEOUT="$E2E_RESEARCH_TIMEOUT_SECONDS"
       ;;
   esac
+}
+
+# The four sessions are independent: each has its own workspace, stream and
+# --no-session-persistence, sharing only the installed plugin profile. They
+# start together and are verified afterwards in a fixed order, so the
+# scenario takes about as long as its slowest session.
+# No automatic retries: a failed routing decision must remain a failure.
+declare -A CASE_PIDS=()
+for CASE in "${CASES[@]}"; do
+  case_settings "$CASE"
   CASE_WORKSPACE="$WORKSPACE/$CASE"
   mkdir -p "$CASE_WORKSPACE"
-  STREAM="$E2E_ROOT/$CASE.jsonl"
-  echo "Case: $CASE"
-  # No automatic retries: a failed routing decision must remain a failure.
-  if ! (cd "$CASE_WORKSPACE" && timeout --foreground "${CASE_TIMEOUT}s" \
+  echo "Case started: $CASE"
+  (cd "$CASE_WORKSPACE" && timeout --foreground "${CASE_TIMEOUT}s" \
       claude -p "$PROMPT" --model "$E2E_CLAUDE_MODEL" \
       --output-format stream-json --verbose --no-session-persistence \
       --allowedTools "Skill,Read,Glob,Grep,${PREFIX}intelli_search,${PREFIX}intelli_research,${PREFIX}intelli_extract,${PREFIX}intelli_collate" \
       --disallowedTools Bash \
-      "${FLAGS[@]}" > "$STREAM" 2> "$E2E_ROOT/$CASE.stderr"); then
+      "${FLAGS[@]}" > "$E2E_ROOT/$CASE.jsonl" 2> "$E2E_ROOT/$CASE.stderr") &
+  CASE_PIDS[$CASE]=$!
+done
+
+for CASE in "${CASES[@]}"; do
+  case_settings "$CASE"
+  CASE_WORKSPACE="$WORKSPACE/$CASE"
+  STREAM="$E2E_ROOT/$CASE.jsonl"
+  echo "Case: $CASE"
+  if ! wait "${CASE_PIDS[$CASE]}"; then
     bad "$CASE: session process failed or timed out"
   fi
   if node "$PROJECT_DIR/test/helpers/claude-routing.mjs" "$STREAM" "$EXPECTED" "$SKILL_MODE"; then
@@ -240,7 +257,6 @@ for CASE in descriptions-only factual-auto factual-explicit comparison-auto; do
   elif [[ -d "$CASE_WORKSPACE/.search" ]]; then
     bad "$CASE: quick lookup unexpectedly created a research cache"
   fi
-  if [[ "$CASE" != comparison-auto ]]; then sleep "$E2E_RUN_GAP_SECONDS"; fi
 done
 
 # The credential file exists because key configuration was asserted above.

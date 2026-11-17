@@ -116,7 +116,7 @@ DURATIONS=()
 SUITE_START=$(date +%s)
 
 # timeout_for <script>: scenario 10 runs five recipes concurrently, each
-# making up to three E2E_RECIPE_TIMEOUT_SECONDS attempts (≈1,860 s at the defaults);
+# making up to three E2E_RECIPE_TIMEOUT_SECONDS attempts (≈1,810 s at the defaults);
 # every other script keeps the shorter limit, so a hang still fails fast.
 timeout_for() {
   if [[ "$1" == e2e/10_config_recipes.sh ]]; then echo "$RECIPES_TIMEOUT"; else echo "$SCRIPT_TIMEOUT"; fi

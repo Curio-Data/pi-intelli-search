@@ -193,7 +193,9 @@ run_recipe() { # run_recipe <name> <function>
   (
     if [[ -n "$TRACE_ROOT" ]]; then E2E_TRACE_DIR="$TRACE_ROOT/$1"; fi
     ERRORS=0
+    started=$(date +%s)
     "$2"
+    echo "   ⏱️  $1 took $(($(date +%s) - started))s"
     exit "$ERRORS"
   ) > "$RESULTS/$1.log" 2>&1 &
   echo "$!" > "$RESULTS/$1.pid"
