@@ -4,7 +4,9 @@
 #
 # Builds both packages once, then runs every live E2E script. By default all
 # scripts start at once, each with its own TMPDIR and log; the summary prints
-# each script's outcome and the tail of every failing log. Set
+# each script's outcome and elapsed time, the tail of every failing log, the
+# scripts ranked slowest first (in parallel mode the slowest sets the suite's
+# wall time) and the suite's wall time after the build. Set
 # E2E_RUN_MODE=sequential to run them one at a time with a gap instead, for
 # example to read one scenario's output as it happens.
 #
@@ -110,6 +112,8 @@ SCRIPTS=(
 PASSED=()
 FAILED=()
 SKIPPED=()
+DURATIONS=()
+SUITE_START=$(date +%s)
 
 # timeout_for <script>: scenario 10 runs five recipes concurrently, each
 # making up to three E2E_RECIPE_TIMEOUT_SECONDS attempts (≈1,860 s at the defaults);
@@ -118,21 +122,27 @@ timeout_for() {
   if [[ "$1" == e2e/10_config_recipes.sh ]]; then echo "$RECIPES_TIMEOUT"; else echo "$SCRIPT_TIMEOUT"; fi
 }
 
-# record <script> <status> [log]: classify one finished script.
+# fmt_secs <seconds>: "Ns" below a minute, otherwise "MmSSs".
+fmt_secs() {
+  if [ "$1" -lt 60 ]; then echo "${1}s"; else printf '%dm%02ds\n' $(($1 / 60)) $(($1 % 60)); fi
+}
+
+# record <script> <status> <elapsed> [log]: classify one finished script.
 record() {
-  local script="$1" status="$2" log="${3:-}"
+  local script="$1" status="$2" elapsed="$3" log="${4:-}"
+  DURATIONS+=("$elapsed $script")
   if [ "$status" -eq 0 ]; then
-    echo "✅ $script PASSED"
+    echo "✅ $script PASSED in $(fmt_secs "$elapsed")"
     PASSED+=("$script")
     return
   fi
   if [ "$status" -eq 77 ]; then
-    echo "⚠️ $script SKIPPED (required release evidence is missing)"
+    echo "⚠️ $script SKIPPED after $(fmt_secs "$elapsed") (required release evidence is missing)"
     SKIPPED+=("$script")
   elif [ "$status" -eq 124 ]; then
     echo "❌ $script TIMED OUT after $(timeout_for "$script")s"
   else
-    echo "❌ $script FAILED (exit $status)"
+    echo "❌ $script FAILED (exit $status) after $(fmt_secs "$elapsed")"
   fi
   if [ "$status" -ne 77 ]; then FAILED+=("$script"); fi
   if [[ -n "$log" ]]; then
@@ -153,15 +163,23 @@ if [[ "$MODE" == "parallel" ]]; then
     mkdir -p "$RUN_DIR/$name.tmp"
     # No --foreground: no scenario here shares the terminal, so timeout
     # signals the scenario's whole process group and a timed-out scenario
-    # leaves no pi, claude or codex child running.
-    TMPDIR="$RUN_DIR/$name.tmp" \
-      timeout "$(timeout_for "$script")s" "$SCRIPT_DIR/$script" \
-      > "$RUN_DIR/$name.log" 2>&1 < /dev/null &
+    # leaves no pi, claude or codex child running. The subshell records the
+    # script's own elapsed time, because results are collected in list order,
+    # not completion order.
+    (
+      start=$(date +%s)
+      TMPDIR="$RUN_DIR/$name.tmp" \
+        timeout "$(timeout_for "$script")s" "$SCRIPT_DIR/$script" \
+        > "$RUN_DIR/$name.log" 2>&1 < /dev/null && st=0 || st=$?
+      echo $(($(date +%s) - start)) > "$RUN_DIR/$name.elapsed"
+      exit "$st"
+    ) &
     PIDS+=("$!")
   done
   for i in "${!SCRIPTS[@]}"; do
     wait "${PIDS[$i]}" && status=0 || status=$?
-    record "${SCRIPTS[$i]}" "$status" "$RUN_DIR/$(basename "${SCRIPTS[$i]}" .sh).log"
+    name="$(basename "${SCRIPTS[$i]}" .sh)"
+    record "${SCRIPTS[$i]}" "$status" "$(cat "$RUN_DIR/$name.elapsed" 2>/dev/null || echo 0)" "$RUN_DIR/$name.log"
   done
 else
   echo "🧪 Sequential E2E run: ${#SCRIPTS[@]} scripts, ${GAP}s gap, ${SCRIPT_TIMEOUT}s timeout per script (${RECIPES_TIMEOUT}s for scenario 10)"
@@ -172,8 +190,9 @@ else
     echo "▶  [$((i + 1))/${#SCRIPTS[@]}] $script"
     echo "════════════════════════════════════════════════════════════════"
     # Don't let one failure abort the suite; collect results and report at the end.
+    start=$(date +%s)
     timeout --foreground "$(timeout_for "$script")s" "$SCRIPT_DIR/$script" && status=0 || status=$?
-    record "$script" "$status"
+    record "$script" "$status" "$(($(date +%s) - start))"
     if [ "$i" -lt "$((${#SCRIPTS[@]} - 1))" ] && [ "$GAP" -gt 0 ]; then
       echo "⏳ Sleeping ${GAP}s before next script..."
       sleep "$GAP"
@@ -183,6 +202,12 @@ else
 fi
 
 echo "════════════════════════════════════════════════════════════════"
+# Slowest first: in parallel mode the first row is the critical path.
+echo "Elapsed per script, slowest first:"
+printf '%s\n' "${DURATIONS[@]}" | sort -rn | while read -r secs script; do
+  printf '   %8s  %s\n' "$(fmt_secs "$secs")" "$script"
+done
+echo "Suite wall time: $(fmt_secs $(($(date +%s) - SUITE_START))) (after the build)"
 echo "Summary: ${#PASSED[@]} passed, ${#FAILED[@]} failed, ${#SKIPPED[@]} skipped"
 if [ "${#SKIPPED[@]}" -gt 0 ]; then
   printf '   ⚠️ %s\n' "${SKIPPED[@]}"
