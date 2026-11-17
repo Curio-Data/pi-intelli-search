@@ -27,6 +27,10 @@ The completed [_Codemode_ research handoff study](https://github.com/Curio-Data/
 
 The survey's labels come from one rater on a sample of 30 batches. Its report and data are kept as gitignored evidence in the main checkout (`evidence/agents/20261108T204300Z-research-batch-survey/`), because the data contains client query text.
 
+**Why Agents Follow Up.** On 17 November 2026 a labelling of 30 of the 163 fast follow-ups (seeded sample, one rater, from the agent's reasoning between the two calls) recorded why the agent called again. In 15 the next call was the next step of a plan the agent already held, such as the next of a list of questions. In 11 the previous result fell short: 9 were thin, failed, stale or ambiguous, or left out part of a multi-part query, and in 2 the agent doubted or corrected a claim. One followed a new question that a finding opened, and 3 were prompted by the user or the agent's own code work. Evidence: `evidence/agents/2026-11-17-followup-reasons/`.
+
+Batch mode bears on both main groups. Planned steps are foreseeable at launch, so an agent could submit them as one batch. A shortfall costs a further round of search, read and judge in the main conversation; an expansion batch can reduce that only if the combined report covers each part of the need and names its gaps, so that one targeted follow-up replaces several. Neither effect is measured; the effectiveness comparison in Phase 4 measures them.
+
 ## Interface
 
 Extend the existing research operation rather than registering a new tool. A registered tool's declaration accompanies the model requests of every conversation, so a new tool would add a standing cost to conversations that never batch. Extending `researchSchema` adds only the new parameters' descriptions to the existing declaration.
@@ -58,7 +62,7 @@ The super-collation works from the summaries alone. On 17 November 2026 the owne
 
 The super-collation's evidence set is the union of the per-entry evidence: every source URL, and every URL inside those extractions, deduplicated by URL. Its output is validated against that set with the ordinary collation rules: every cited URL must be in the set, source identifiers refer to one batch-wide inventory renumbered across entries, and the output must not name cache files. The combined report ends with the batch-wide source inventory. If the super-collation fails or is rejected, the tool returns the per-entry sections as in independent mode, with the failure stated.
 
-**Agent Guidance.** Update the native `promptGuidelines`, the Model Context Protocol (MCP) tool description in `packages/mcp/src/server.ts`, the native skill `skills/intelli-search/SKILL.md` and the shared source `guidance/research-guide.md`, then regenerate the plugin bundles, so that agents plan related queries at launch and submit them as an expansion batch. The guidance aims to bring foreseeable follow-ups into the batch. The survey did not measure how many of the 163 fast follow-ups were foreseeable. Follow-ups prompted by what a report revealed remain separate calls.
+**Agent Guidance.** Update the native `promptGuidelines`, the Model Context Protocol (MCP) tool description in `packages/mcp/src/server.ts`, the native skill `skills/intelli-search/SKILL.md` and the shared source `guidance/research-guide.md`, then regenerate the plugin bundles, so that agents plan related queries at launch and submit them as an expansion batch. The guidance aims to bring foreseeable follow-ups into the batch. The follow-up labelling found half of the sampled fast follow-ups were planned steps (see Why Agents Follow Up). Follow-ups prompted by what a report revealed remain separate calls.
 
 ## Cache
 
@@ -124,6 +128,7 @@ The branch answers these before the design is fixed:
 - Whether the provider returns HTTP 429 (rate limited) or 402 (payment required, which [_OpenRouter_](https://openrouter.ai) returns at its in-flight spending limit) responses as the extraction pool grows, measured with the traced runner `test/run-e2e-parallel.sh`.
 - How large the super-collation's input is for a batch of each size, against the collation input budget.
 - Whether the per-entry summaries carry enough detail for the super-collation to reconcile contradictions, or whether access to the extraction files is needed.
+- Whether batch mode reduces the research calls, turns and main-model tokens an agent spends to reach an answer of the same or better quality.
 
 ## Implementation Plan
 
@@ -184,4 +189,5 @@ No behaviour change for a single query.
 - Document the settings, the batch folder and the telemetry fields (including the URL list) in `README.md` and `docs/ARCHITECTURE.md`; run `npm run generate:toc` and `npm run generate:readmes`.
 - Add live scenarios `test/e2e/16_batch_independent.sh` and `17_batch_expansion.sh`, and a batch case in `11_mcp_stdio.sh`; prove each runnable and pass `shellcheck`.
 - Answer the Exploration Questions with traced runs through `test/run-e2e-parallel.sh`: batches of 2, 5 and 10 entries against the same queries run separately, and extraction pools of 4, 8 and 16. Record the results under `evidence/` and revise the Starting Values.
+- Measure effectiveness: run a fixed set of research tasks through the headless agent loop with batch mode available and unavailable, several times each. For each run record research calls, agent turns, main-model input tokens and wall time, and grade the final answer against a rubric written before the runs. Choose tasks that resemble the sampled follow-ups: multi-question plans and multi-part queries.
 - Add `CHANGELOG.md` entries for both packages and run `npm run generate:changelog`. Release is outside this branch.
