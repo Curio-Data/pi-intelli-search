@@ -342,6 +342,7 @@ docs/
 scripts/
 ├── analyze-sessions.sh       # Aggregate meta.json telemetry sidecars across sessions
 ├── benchmark-models.sh       # A/B benchmark harness for extract/collate models (live quota)
+├── spike-super-collation.mjs # Batch proposal Phase 0: one super-collation call over cached reports (live quota)
 ├── plot-downloads.mts       # Download chart generation (npm run chart)
 ├── README.md                # Script usage guide
 ├── run-tests.mjs            # Isolated unit-test runner for npm test and test:all

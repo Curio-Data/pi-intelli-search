@@ -109,6 +109,17 @@ node scripts/generate-tlds.mjs --check .tmp/tlds.txt  # exit 1 on drift
 
 It rewrites only the version line and the delegated-TLD literal. The `FILE_EXTENSION_TLDS` policy in the same file is maintained by hand and must stay a subset of the delegated set, which `test/util.test.ts` checks. Run the check before a release.
 
+## `spike-super-collation.mjs`
+
+Phase 0 spike for the batch research proposal (`docs/proposals/BATCH-RESEARCH.md`). It reads two or more cached research folders, renumbers each report's `[S<n>]` source identifiers into one series deduplicated by URL, and sends the summaries to the collation model in one call. It writes `input.json`, `output.md` and `metrics.json` (size, usage, duration, route and a citation audit) to the output directory. It makes one live OpenRouter call per run and is never run by the test suite.
+
+```bash
+node scripts/spike-super-collation.mjs --out evidence/agents/<run>/run-1 \
+  .search/<folder-a> .search/<folder-b> .search/<folder-c>
+```
+
+`--model` (default `minimax/minimax-m3`) and `--max-tokens` (default 16000) override the call. The key comes from `OPENROUTER_API_KEY` or the `openrouter` entry of `auth.json` in `PI_CODING_AGENT_DIR` (default `~/.pi/agent/`), and is never printed. Reports written before source identifiers were introduced have no source table and are rejected.
+
 ## Live E2E Runs
 
 [`test/run-e2e-all.sh`](../test/run-e2e-all.sh) runs the live suite. Unless `E2E_SKIP_BUILD=1`, it builds both packages once. In the default parallel mode it starts every scenario at once, each with its own `TMPDIR` and log under `$TMPDIR/run-<timestamp>-<pid>/`, and the summary prints each scenario's outcome and the last lines of every failing log. Sequential mode runs one scenario at a time in the shared `TMPDIR` and streams its output to the terminal, writing no suite log. `TMPDIR` defaults to the repository's `.tmp/e2e/` when unset or empty; on an encrypted host, leave it unset or point it under the repository's `.tmp/`.

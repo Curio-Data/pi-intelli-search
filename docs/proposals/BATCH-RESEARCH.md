@@ -135,6 +135,16 @@ Recorded on 17 November 2026 for the `explore/batch-research` branch. Each phase
 
 Before any pipeline change, a maintainer script under `scripts/` runs the proposed super-collation prompt over two to five existing `report.md` files that answer related queries, with the default collation model. It renumbers each report's `[S<n>]` identifiers into one batch-wide series, records input and output size against `collationInputBudgetTokens`, and saves the combined output for reading. The spike answers the third and fourth Exploration Questions early and fixes the prompt before it is wired in. It spends live quota and is run by hand, not by the test suite.
 
+**Result (17 November 2026).** Three runs of `scripts/spike-super-collation.mjs` over four related reports of 3 November 2026, with MiniMax M3 (evidence: `evidence/agents/2026-11-17-batch-spike/`):
+
+- **Provenance holds.** Every cited identifier was valid after renumbering (20 source rows became 14), and every URL in the prose came from the summaries supplied, so the existing `finalizeCollation()` rules would accept each output.
+- **The input budget does not limit batch size.** Four summaries made ≈6,000 prompt tokens; ten would make ≈15,000 against the 221,000-token default `collationInputBudgetTokens`. This answers the third Exploration Question for the default settings.
+- **Latency is the main cost.** One call took 80 to 160 s, as long as or longer than any of the four whole research runs (43 to 93 s). It runs after the slowest entry, so it adds directly to an expansion batch's wall time and may cancel the time saved by running entries concurrently.
+- **The output is long.** It was 49% to 70% of the combined summaries' length, so the main conversation saves less text than a merged report suggests.
+- **The prompt needs two fixes.** One run listed complementary detail as contradictions, and one referred to entries as "run 3" and "run 4", names the reader never sees. Phase 3 asks for contradictions only where sources disagree, and names entries by query.
+
+Phase 3 therefore also tests a shorter output target and lower reasoning effort against latency, and the traced runs compare an expansion batch's wall time with the same queries run separately.
+
 ### Phase 1: Shared Run Resources
 
 No behaviour change for a single query.
