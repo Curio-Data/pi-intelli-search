@@ -139,11 +139,19 @@ Before any pipeline change, a maintainer script under `scripts/` runs the propos
 
 - **Provenance holds.** Every cited identifier was valid after renumbering (20 source rows became 14), and every URL in the prose came from the summaries supplied, so the existing `finalizeCollation()` rules would accept each output.
 - **The input budget does not limit batch size.** Four summaries made ≈6,000 prompt tokens; ten would make ≈15,000 against the 221,000-token default `collationInputBudgetTokens`. This answers the third Exploration Question for the default settings.
-- **Latency is the main cost.** One call took 80 to 160 s, as long as or longer than any of the four whole research runs (43 to 93 s). It runs after the slowest entry, so it adds directly to an expansion batch's wall time and may cancel the time saved by running entries concurrently.
+- **Each call took 80 to 160 s.** The super-collation starts after the slowest entry finishes, so this time adds directly to an expansion batch's wall time.
 - **The output is long.** It was 49% to 70% of the combined summaries' length, so the main conversation saves less text than a merged report suggests.
 - **The prompt needs two fixes.** One run listed complementary detail as contradictions, and one referred to entries as "run 3" and "run 4", names the reader never sees. Phase 3 asks for contradictions only where sources disagree, and names entries by query.
 
-Phase 3 therefore also tests a shorter output target and lower reasoning effort against latency, and the traced runs compare an expansion batch's wall time with the same queries run separately.
+**Timing Basis.** The comparison that matters is a batch of N queries against the same N queries as an agent issues them today, not against one query. On `Pi` the native tool declares `executionMode: "sequential"`, so the calls an agent issues together run one after another, and the baseline is the sum of their run times. The spike did not measure a batch. An estimate from the four original run times (42.7, 46.5, 57.4 and 93.1 s) gives:
+
+| Path | Estimated Wall Time |
+|---|---|
+| Four separate calls, run one after another | ≈240 s, the sum |
+| Independent batch, four entries at once | ≈93 s, the slowest entry |
+| Expansion batch, the same plus one super-collation call | ≈173 to 253 s |
+
+The estimate has three limits. The four reports were issued at 08:30, 08:51, 08:58 and 10:27 on 3 November 2026 as follow-ups, not as one batch, so their run times stand in for a batch's entries. It assumes entries run no slower when they share the batch-wide extraction pool. It omits the main model's time reading N results instead of one. Hosts that run an agent's parallel tool calls concurrently, as MCP clients may, have a baseline near the slowest entry rather than the sum; on those hosts the super-collation is added time, and its case rests on the main conversation rather than on wall time. The traced runs in Phase 4 measure the comparison directly.
 
 ### Phase 1: Shared Run Resources
 
