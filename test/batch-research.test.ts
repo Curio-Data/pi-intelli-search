@@ -12,7 +12,17 @@ import {
   ResearchArgumentError,
   validateResearchParams,
 } from "../src/core/operations/batch-research.js";
-import type { ResearchDependencies } from "../src/core/operations/research.js";
+import type { ResearchDependencies, ResearchSynthesis } from "../src/core/operations/research.js";
+import {
+  buildBatchEvidence,
+  countSectionItems,
+  memberSummary,
+  renumberCitations,
+} from "../src/core/operations/batch-merge.js";
+import { SUPER_COLLATION_SYSTEM_PROMPT } from "../src/core/prompts.js";
+import { SOURCE_ASSESSMENT_PREAMBLE } from "../src/core/provenance.js";
+import { allocateSourceIdentity } from "../src/core/cache.js";
+import type { ExtractResult } from "../src/core/types.js";
 import { makeBatchCachePath, makeCachePath } from "../src/core/cache.js";
 import type {
   ModelRequest,
@@ -65,8 +75,9 @@ describe("validateResearchParams", () => {
     );
   });
 
-  it("rejects expansion until the merged report exists", () => {
-    invalid({ queries: [{ query: "a" }, { query: "b" }], batchMode: "expansion" }, /not available yet/);
+  it("accepts both batch modes", () => {
+    for (const batchMode of ["expansion", "independent"] as const)
+      assert.equal(validateResearchParams({ queries: [{ query: "a" }, { query: "b" }], batchMode }, settings).kind, "batch");
   });
 
   it("bounds the entry count by settings", () => {
@@ -403,5 +414,168 @@ describe("independent batch research", () => {
     assert.match(section, /^ {2}2: 1$/m);
     assert.match(section, /completed: 2/);
     assert.match(section, /1 URL\(s\) fetched by two or more entries; 4 page fetches in all/);
+  });
+});
+
+describe("batch merge evidence", () => {
+  it("rewrites only citation groups, expanding ranges", () => {
+    const map = new Map([[1, 4], [2, 2], [3, 9]]);
+    assert.equal(
+      renumberCitations("A [S1] B [S1, S2] C [S1–S3] D [S3](https://x.example) Amazon S3 [note] [S7]", map),
+      "A [S4] B [S2, S4] C [S2, S4, S9] D [S9](https://x.example) Amazon S3 [note] [S7]",
+    );
+  });
+
+  it("takes the summary between its heading and the generated inventory", () => {
+    assert.equal(memberSummary(`## Summary\n\nBody [S1].\n\n${SOURCE_ASSESSMENT_PREAMBLE}| ID |`), "Body [S1].");
+  });
+
+  it("numbers sources across members once per URL and rewrites each summary", () => {
+    const ext = (url: string, extraction = "text"): ExtractResult => ({
+      url, title: "", extraction, sourceType: "docs", currentness: "", status: "success",
+    });
+    const synthesis = (cachePath: string, extractions: ExtractResult[], summary: string): ResearchSynthesis => ({
+      collation: `## Summary\n\n${summary}\n\n${SOURCE_ASSESSMENT_PREAMBLE}| ID |`,
+      extractions,
+      identity: allocateSourceIdentity(extractions, extractions.map((e) => ({ url: e.url, title: "", content: "x", status: "success" }))),
+      cachePath,
+      physicalCachePath: cachePath,
+    });
+    const evidence = buildBatchEvidence([
+      { position: 1, query: "q1", synthesis: synthesis(".search/a", [ext("https://a.example"), ext("https://shared.example")], "A [S1][S2].") },
+      // An empty extraction takes no identifier, as in finalizeCollation().
+      { position: 2, query: "q2", synthesis: synthesis(".search/b", [ext("https://empty.example", " "), ext("https://shared.example"), ext("https://b.example")], "B [S1, S2].") },
+    ]);
+    assert.deepEqual(evidence.sources.map((s) => [s.id, s.url, s.extractions.map((e) => e.position)]), [
+      [1, "https://a.example", [1]],
+      [2, "https://shared.example", [1, 2]],
+      [3, "https://b.example", [2]],
+    ]);
+    assert.equal(evidence.sourcesBeforeDedup, 4);
+    assert.deepEqual(evidence.runs.map((r) => r.summary), ["A [S1][S2].", "B [S2, S3]."]);
+    assert.match(evidence.sources[1].extractions[1].extractionPath ?? "", /^\.search\/b\/extractions\//);
+  });
+
+  it("counts list items under a heading, ignoring None found", () => {
+    const text = "## Findings\n- a\n## Contradictions\n- S1 says X; S2 says Y.\n- two\n\n## Gaps\n- None found.\n";
+    assert.equal(countSectionItems(text, /contradiction/i), 2);
+    assert.equal(countSectionItems(text, /\bgaps?\b/i), 0);
+    assert.equal(countSectionItems(text, /absent/i), 0);
+  });
+});
+
+describe("expansion batch research", () => {
+  /** Members cite [S1][S2]; both share one page, so the merge dedupes it. */
+  function expansionFixture(root: string, mergeText: (userMessage: string) => string) {
+    const f = batchFixture(root);
+    const merges: ModelRequest[] = [];
+    const models: OperationContext["models"] = {
+      ...f.context.models,
+      complete: async (request) => {
+        if (request.systemPrompt === SUPER_COLLATION_SYSTEM_PROMPT) {
+          merges.push(request);
+          return { text: mergeText(request.userMessage), citations: [] };
+        }
+        if (request.model.model === "search") {
+          const own = request.userMessage.includes("alpha") ? "a" : request.userMessage.includes("beta") ? "b" : "c";
+          if (/nolinks/.test(request.userMessage)) return { text: "No links.", citations: [] };
+          return { text: `[Own](https://${own}.example/page) [Shared](https://shared.example/page)`, citations: [] };
+        }
+        if (request.model.model === "collate") return { text: "Finding [S1][S2].", citations: [] };
+        return f.context.models.complete(request);
+      },
+    };
+    return { ...f, context: { ...f.context, models }, merges };
+  }
+  const params = (queries: string[]): ResearchParams => ({
+    queries: queries.map((query) => ({ query })),
+    batchMode: "expansion",
+  });
+
+  it("merges the summaries into one report with a batch-wide inventory", async (t) => {
+    const root = await workspace(t);
+    const f = expansionFixture(
+      root,
+      () => "Merged finding [S1, S2] and [S3].\n\n## Contradictions\n\n- S1 says X; S3 says Y.\n\n## Gaps\n\nNone found.",
+    );
+    const result = await research(params(["alpha topic", "beta topic"]), f.context, f.dependencies);
+
+    // One merge call, with the members' citations renumbered and deduplicated.
+    assert.equal(f.merges.length, 1);
+    const input = JSON.parse(f.merges[0].userMessage);
+    assert.deepEqual(input.sources, [
+      { id: "S1", url: "https://a.example/page" },
+      { id: "S2", url: "https://shared.example/page" },
+      { id: "S3", url: "https://b.example/page" },
+    ]);
+    assert.deepEqual(input.queries.map((q: { query: string; summary: string }) => [q.query, q.summary]), [
+      ["alpha topic", "Finding [S1][S2]."],
+      ["beta topic", "Finding [S3][S2]."],
+    ]);
+
+    assert.equal(result.outcome, "completed");
+    assert.match(result.text, /^Batch research, expansion mode: 2 queries, 2 completed\. The merged report covers 2 of them\./);
+    assert.match(result.text, /## Summary\n\nMerged finding \[S1, S2\] and \[S3\]\./);
+    assert.match(result.text, /\| S2 \| https:\/\/shared\.example\/page \| official docs \| 1, 2 \| .+\/extractions\/02-shared-example\.md/);
+    assert.match(result.text, /## Per-Query Reports\n\n1\. alpha topic: `.+\/report\.md`\n2\. beta topic: `.+\/report\.md`/);
+    assert.doesNotMatch(result.text, /# Query 1 of 2/, "the per-query sections are replaced by the merged report");
+
+    const batch = result.details.batch as { cachePath: string; merge: { outcome: string; reportPath: string } };
+    assert.equal(batch.merge.outcome, "completed");
+    const path = join(root, batch.cachePath);
+    const report = await readFile(join(path, "report.md"), "utf8");
+    assert.match(report, /^# Merged research: 2 queries\n/);
+    assert.match(report, /Merged finding/);
+    const index = JSON.parse(await readFile(join(f.context.paths.cacheRoot, ".index.json"), "utf8"));
+    assert.ok(index.searches.some((e: { slug: string; query: string }) =>
+      e.slug === basename(path) && e.query === "Batch: alpha topic; beta topic"));
+    const record = JSON.parse(await readFile(join(path, "batch-meta.json"), "utf8"));
+    assert.equal(record.merge.outcome, "completed");
+    assert.equal(record.merge.entries, 2);
+    assert.equal(record.merge.sources, 3);
+    assert.equal(record.merge.sourcesBeforeDedup, 4);
+    assert.equal(record.merge.contradictions, 1);
+    assert.equal(record.merge.gaps, 0);
+    assert.ok(record.merge.inputChars > SUPER_COLLATION_SYSTEM_PROMPT.length);
+  });
+
+  it("falls back to per-query sections when every merge candidate is rejected", async (t) => {
+    const root = await workspace(t);
+    const f = expansionFixture(root, () => "Merged [S9].");
+    const result = await research(params(["alpha topic", "beta topic"]), f.context, f.dependencies);
+    assert.equal(result.outcome, "completed");
+    assert.match(result.text, /> ⚠ No merged report: the merge failed \(Collation provenance validation failed: unknown or omitted source ID/);
+    assert.match(result.text, /rejected-synthesis\.json/);
+    assert.match(result.text, /# Query 1 of 2: alpha topic/);
+    const batch = result.details.batch as { cachePath: string; merge: { outcome: string } };
+    assert.equal(batch.merge.outcome, "rejected");
+    const path = join(root, batch.cachePath);
+    assert.equal(await exists(join(path, "report.md")), false);
+    const rejected = JSON.parse(await readFile(join(path, "rejected-synthesis.json"), "utf8"));
+    assert.equal(rejected.accepted, false);
+    assert.equal(rejected.candidates[0].text, "Merged [S9].");
+    const record = JSON.parse(await readFile(join(path, "batch-meta.json"), "utf8"));
+    assert.equal(record.merge.outcome, "rejected");
+    const index = JSON.parse(await readFile(join(f.context.paths.cacheRoot, ".index.json"), "utf8"));
+    assert.ok(!index.searches.some((e: { slug: string }) => e.slug === basename(path)));
+  });
+
+  it("rejects a merged prose URL that no extraction supplied", async (t) => {
+    const root = await workspace(t);
+    const f = expansionFixture(root, () => "See https://invented.example/page [S1].");
+    const result = await research(params(["alpha topic", "beta topic"]), f.context, f.dependencies);
+    assert.match(result.text, /a prose URL is absent from the supplied evidence/);
+  });
+
+  it("skips the merge when fewer than two queries complete", async (t) => {
+    const root = await workspace(t);
+    const f = expansionFixture(root, () => "unused");
+    const result = await research(params(["alpha topic", "gamma nolinks topic"]), f.context, f.dependencies);
+    assert.equal(f.merges.length, 0);
+    assert.match(result.text, /No merged report: the merged report needs at least two completed queries, and 1 completed/);
+    const batch = result.details.batch as { cachePath: string; merge: { outcome: string } };
+    assert.equal(batch.merge.outcome, "skipped");
+    const record = JSON.parse(await readFile(join(root, batch.cachePath, "batch-meta.json"), "utf8"));
+    assert.equal(record.merge.outcome, "skipped");
   });
 });

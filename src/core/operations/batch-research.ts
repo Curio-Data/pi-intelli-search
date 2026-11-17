@@ -22,6 +22,10 @@ import type { ResearchSettings } from "../types.js";
 import { displayCachePath } from "../paths.js";
 import {
   cacheLockDir,
+  indexLockDir,
+  removeIndexEntry,
+  updateIndex,
+  writeBatchFile,
   makeBatchCachePath,
   makeCachePath,
   rotateCacheArtefacts,
@@ -53,6 +57,7 @@ import {
   type ResearchDependencies,
   type ResearchRunResult,
 } from "./research.js";
+import { mergeBatch, type MergeMember } from "./batch-merge.js";
 
 /** A research argument that breaks a rule the schema cannot express. */
 export class ResearchArgumentError extends Error {
@@ -94,9 +99,6 @@ export function validateResearchParams(
     throw new ResearchArgumentError('batchMode is required with queries: "independent" or "expansion".');
   if (!BATCH_MODES.includes(batchMode))
     throw new ResearchArgumentError('batchMode must be "independent" or "expansion".');
-  if (batchMode === "expansion")
-    // Phase 3 of the batch proposal adds the merged report.
-    throw new ResearchArgumentError('batchMode "expansion" is not available yet; use "independent".');
   if (!Array.isArray(queries) || queries.length < 2)
     throw new ResearchArgumentError("queries needs at least two entries; use query for one.");
   if (queries.length > settings.maxBatchEntries)
@@ -213,31 +215,60 @@ export async function researchBatch(
   const batchOutcome: BatchOutcome =
     completed === size ? "completed" : completed > 0 ? "partial" : "failed";
 
-  // Cache suggestion once, over the joined queries, leaving out every member
-  // folder: otherwise each member would surface its siblings.
   const batchPath = makeBatchCachePath(
     batch.mode,
     batch.entries.map((e) => e.query),
     paths.workspaceRoot,
     paths.cacheRoot,
   );
+  const batchDisplay = displayCachePath(paths, batchPath);
+  const batchSlug = basename(batchPath);
   const memberSlugs = batch.entries.map((e) =>
     basename(makeCachePath(e.query, paths.workspaceRoot, paths.cacheRoot)),
   );
-  let suggestions: CacheSuggestOutcome = { appendix: "", telemetry: { ran: false, surfaced: 0, slugs: [] } };
-  if (completed > 0) {
-    context.onProgress?.(progress("cache", "Checking related cached research..."));
-    suggestions = await suggestRelatedSearches(
-      context,
-      batch.entries.map((e) => e.query).join("; "),
-      [...memberSlugs, basename(batchPath)],
-    );
-  }
 
-  // Batch folder: manifest always, batch record unless telemetry is off.
-  // A write failure is logged and never discards the entries' results.
-  const batchDisplay = displayCachePath(paths, batchPath);
+  // Expansion merges the completed entries' summaries; it needs two or more.
+  const members: MergeMember[] = outcomes.flatMap((o) =>
+    o.run?.synthesis
+      ? [{
+          position: o.position,
+          query: o.entry.query,
+          ...(o.entry.focusPrompt ? { focusPrompt: o.entry.focusPrompt } : {}),
+          synthesis: o.run.synthesis,
+        }]
+      : [],
+  );
+  const mergeRuns = batch.mode === "expansion" && members.length >= 2;
+  if (mergeRuns)
+    context.onProgress?.(progress("collate", `Merging ${members.length} summaries into one report...`));
+
+  // Cache suggestion once, over the joined queries, leaving out every member
+  // folder and the batch's own: otherwise each member would surface its
+  // siblings. It runs beside the merge, which it does not depend on.
+  const noSuggestions: CacheSuggestOutcome = { appendix: "", telemetry: { ran: false, surfaced: 0, slugs: [] } };
+  const [merge, suggestions] = await Promise.all([
+    mergeRuns ? mergeBatch(context, members, batchDisplay) : Promise.resolve(undefined),
+    completed > 0
+      ? suggestRelatedSearches(context, batch.entries.map((e) => e.query).join("; "), [...memberSlugs, batchSlug])
+      : Promise.resolve(noSuggestions),
+  ]);
+  throwIfAborted(context.signal);
+  const mergeSkipReason =
+    batch.mode === "expansion" && !mergeRuns
+      ? `the merged report needs at least two completed queries, and ${members.length} completed`
+      : undefined;
+
+  // Batch folder: manifest always, merged report when the merge succeeded,
+  // batch record unless telemetry is off. A write failure is logged and never
+  // discards the entries' results.
   const timestamp = new Date(started).toISOString();
+  const queryList = batch.entries.map((e) => e.query);
+  const report =
+    merge?.ok
+      ? `# Merged research: ${size} queries\n\n` +
+        `> Searched: ${timestamp}\n> Cache: ${batchDisplay}/\n> Queries: ${size}, ${completed} completed, ${members.length} merged\n\n` +
+        `${merge.body}\n\n${perQueryList(outcomes)}\n`
+      : undefined;
   const manifest: BatchManifest = {
     schemaVersion: 1,
     id,
@@ -252,6 +283,7 @@ export async function researchBatch(
     })),
   };
   let batchWritten = false;
+  let reportWritten = false;
   try {
     await withLock(
       cacheLockDir(batchPath),
@@ -262,6 +294,31 @@ export async function researchBatch(
           context.logger.error(`Batch folder archive failed; replacing in place: ${errMsg(error)}`);
         }
         await writeBatchManifest(batchPath, manifest);
+        if (merge?.rejected.length) {
+          try {
+            await writeBatchFile(
+              batchPath,
+              "rejected-synthesis.json",
+              JSON.stringify({ schemaVersion: 1, accepted: !!merge.ok, candidates: merge.rejected }, null, 2) + "\n",
+            );
+          } catch (error) {
+            context.logger.error(`Rejected merge diagnostic write failed: ${errMsg(error)}`);
+          }
+        }
+        if (report !== undefined) {
+          await writeBatchFile(batchPath, "report.md", report);
+          reportWritten = true;
+        }
+        // Only a batch with a merged report is indexed. Lock order: the index
+        // lock nests inside the cache-path lock, as in the single pipeline.
+        await withLock(
+          indexLockDir(paths.cacheRoot),
+          () =>
+            reportWritten
+              ? updateIndex(paths.cacheRoot, batchSlug, `Batch: ${queryList.join("; ")}`)
+              : removeIndexEntry(paths.cacheRoot, batchSlug),
+          context.signal,
+        );
         if (!settings.disableTelemetry) {
           const record: BatchTelemetry = {
             kind: "batch",
@@ -285,6 +342,23 @@ export async function researchBatch(
               };
             }),
             cacheSuggest: suggestions.telemetry,
+            ...(batch.mode === "expansion"
+              ? {
+                  merge: merge?.telemetry ?? {
+                    model: `${settings.collateModel.provider}/${settings.collateModel.model}`,
+                    outcome: "skipped" as const,
+                    entries: members.length,
+                    sources: 0,
+                    sourcesBeforeDedup: 0,
+                    inputChars: 0,
+                    outputChars: 0,
+                    contradictions: 0,
+                    gaps: 0,
+                    durationMs: 0,
+                    error: mergeSkipReason,
+                  },
+                }
+              : {}),
           };
           try {
             await writeBatchTelemetry(batchPath, record);
@@ -307,16 +381,38 @@ export async function researchBatch(
     );
   }
 
+  const folder = batchWritten ? batchDisplay : "";
+  let text: string;
+  if (merge?.ok) {
+    text =
+      `${batchHeadline(batch.mode, outcomes, completed)} The merged report covers ${members.length} of them.\n\n` +
+      `${merge.body}\n\n${perQueryList(outcomes)}` +
+      (folder ? `\n\nBatch folder: \`${folder}/\` (${reportWritten ? "report.md is this merged report; " : ""}manifest.json lists each query's cache folder).` : "");
+  } else {
+    const notice =
+      batch.mode === "expansion"
+        ? `> ⚠ No merged report: ${merge ? `the merge failed (${merge.reason})` : mergeSkipReason}. ` +
+          `Each query's result follows.${merge?.rejected.length && folder ? ` Rejected merge candidates: \`${folder}/rejected-synthesis.json\`.` : ""}`
+        : "";
+    text = formatBatchText(batch.mode, outcomes, completed, folder, notice);
+  }
+
   return {
-    text: formatBatchText(batch.mode, outcomes, completed, batchWritten ? batchDisplay : "") +
-      suggestions.appendix,
+    text: text + suggestions.appendix,
     outcome: batchResultOutcome(outcomes),
     details: {
       batch: {
         id,
         mode: batch.mode,
         outcome: batchOutcome,
-        cachePath: batchWritten ? batchDisplay : "",
+        cachePath: folder,
+        ...(batch.mode === "expansion"
+          ? {
+              merge: merge?.ok
+                ? { outcome: "completed", reportPath: reportWritten ? `${folder}/report.md` : "" }
+                : { outcome: merge ? merge.telemetry.outcome : "skipped", reason: merge ? merge.reason : mergeSkipReason },
+            }
+          : {}),
         entries: outcomes.map((o) => ({
           position: o.position,
           query: o.entry.query,
@@ -327,6 +423,19 @@ export async function researchBatch(
       },
     },
   };
+}
+
+/** Where each query's own report is, for the merged report's reader. */
+function perQueryList(outcomes: EntryOutcome[]): string {
+  const lines = outcomes.map((o) => {
+    const query = o.entry.query.replace(/\s+/g, " ").trim();
+    const { cachePath, preservedCachePath } = committedPaths(o);
+    const outcome = o.run?.result.outcome ?? "error";
+    if (outcome === "completed" && cachePath) return `${o.position}. ${query}: \`${cachePath}/report.md\``;
+    const kept = preservedCachePath ? ` (earlier report kept: \`${preservedCachePath}/report.md\`)` : "";
+    return `${o.position}. ${query}: not merged, ${outcome === "error" ? `failed (${o.error})` : outcome}${kept}`;
+  });
+  return `## Per-Query Reports\n\n${lines.join("\n")}`;
 }
 
 /** The entry's committed folder, or the earlier report its degraded run kept. */
@@ -350,17 +459,26 @@ function batchResultOutcome(outcomes: EntryOutcome[]): OperationOutcome {
   return outcomes.find((o) => o.run)?.run?.result.outcome ?? "collate-failed";
 }
 
+function batchHeadline(mode: BatchMode, outcomes: EntryOutcome[], completed: number): string {
+  const size = outcomes.length;
+  return (
+    `Batch research, ${mode} mode: ${size} queries, ${completed} completed` +
+    (completed < size ? `, ${size - completed} did not` : "") +
+    "."
+  );
+}
+
 function formatBatchText(
   mode: BatchMode,
   outcomes: EntryOutcome[],
   completed: number,
   batchDisplay: string,
+  notice = "",
 ): string {
   const size = outcomes.length;
   const head =
-    `Batch research, ${mode} mode: ${size} queries, ${completed} completed` +
-    (completed < size ? `, ${size - completed} did not (see each section)` : "") +
-    ".";
+    batchHeadline(mode, outcomes, completed).replace(/ did not\.$/, " did not (see each section).") +
+    (notice ? `\n\n${notice}` : "");
   const sections = outcomes.map((o) => {
     const title = `# Query ${o.position} of ${size}: ${o.entry.query.replace(/\s+/g, " ").trim()}`;
     const body = o.run ? o.run.result.text : `Research failed for this query: ${o.error}`;

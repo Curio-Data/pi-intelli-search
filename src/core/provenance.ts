@@ -18,7 +18,7 @@ export function evidenceExtractions(extractions: readonly ExtractResult[]): Extr
   return evidence;
 }
 
-function cell(value: string): string {
+export function cell(value: string): string {
   return value.replaceAll("|", "\\|").replace(/[\r\n]+/g, " ");
 }
 
@@ -36,7 +36,7 @@ export const SOURCE_ASSESSMENT_PREAMBLE =
   "Source inventory is generated from this run's successful, non-empty extractions, not from search citations. Cross-links in synthesis are not additional fetched sources. Types are extraction metadata, not independent quality ratings.\n\n";
 
 /** Close only a still-open model fence before appending generated report sections. */
-function closeOpenFence(text: string): string {
+export function closeOpenFence(text: string): string {
   const { fence } = codeBlockView(text);
   return fence ? `${text}\n${fence.prefix}${fence.char.repeat(fence.length)}` : text;
 }
@@ -308,6 +308,35 @@ export function finalizeCollation(
    */
   delivered?: readonly ExtractResult[],
 ): string {
+  const { summary, sources } = validateSynthesis(text, cachePath, extractions, allowedSourceNumbers, delivered);
+  for (const source of sources) {
+    if (!identity.extractionFileFor(source.url))
+      throw new Error(
+        "Collation provenance validation failed: an evidence source has no extraction file. The synthesis was not accepted.",
+      );
+  }
+  return (
+    `## Summary\n\n${closeOpenFence(summary)}\n\n` +
+    SOURCE_ASSESSMENT_PREAMBLE +
+    sourceTable(sources, cachePath, identity, evidence)
+  );
+}
+
+/**
+ * The provenance rules of `finalizeCollation()` without its rendering: the
+ * synthesis must cite only the allowed `S<n>` identifiers (numbered by the
+ * order of `extractions`' evidence), name only URLs found in the evidence,
+ * carry no source inventory and name no cache file. Returns the cleaned
+ * summary and the evidence list the identifiers index. The batch merge uses it
+ * directly because its inventory spans several cache folders.
+ */
+export function validateSynthesis(
+  text: string,
+  cachePath: string,
+  extractions: readonly ExtractResult[],
+  allowedSourceNumbers?: ReadonlySet<number>,
+  delivered?: readonly ExtractResult[],
+): { summary: string; sources: ExtractResult[] } {
   if (!text.trim()) {
     throw new Error(
       "Collation returned no visible text; increase collationMaxTokens or choose a model with a smaller reasoning budget",
@@ -395,15 +424,7 @@ export function finalizeCollation(
   ) {
     invalid("the model generated a cache-file reference");
   }
-
-  for (const source of sources) {
-    if (!identity.extractionFileFor(source.url)) invalid("an evidence source has no extraction file");
-  }
-  return (
-    `## Summary\n\n${closeOpenFence(summary)}\n\n` +
-    SOURCE_ASSESSMENT_PREAMBLE +
-    sourceTable(sources, cachePath, identity, evidence)
-  );
+  return { summary, sources };
 }
 
 function sourceTable(

@@ -1618,8 +1618,99 @@ function asSentence(reason: string): string {
  * chosen per call, so the same cap is never retried: the shared policy leaves
  * this outcome to the operation.
  */
+/** The pipeline fields the output-cap retry reads; the batch merge supplies them too. */
+type BudgetCtx = Pick<
+  PipelineCtx,
+  "models" | "identity" | "settings" | "signal" | "budgetRetries" | "onProgress" | "gate" | "logger"
+>;
+
+/** A synthesis whose every candidate failed validation; `rejected` keeps the paid text. */
+export class SynthesisRejectedError extends Error {
+  constructor(
+    message: string,
+    readonly rejected: Array<{ text: string; reason: string; maxTokens: number }>,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+  }
+}
+
+export interface AcceptedSynthesis {
+  /** What `accept` returned for the chosen candidate. */
+  accepted: string;
+  /** The candidate's raw text. */
+  text: string;
+  maxTokens: number;
+  truncated: boolean;
+  budgetRetries: number;
+  provider?: string;
+  /** Candidates tried before the accepted one and rejected by `accept`. */
+  rejected: Array<{ text: string; reason: string; maxTokens: number }>;
+}
+
+/**
+ * One synthesis call on the collate model under the pipeline's retry,
+ * timeout and output-cap policy, outside a single-query pipeline. Candidates
+ * are tried in the same ranked order the collation stage uses; `accept`
+ * validates one and returns its accepted form, or throws to reject it. When
+ * every candidate is rejected, throws `SynthesisRejectedError` carrying them.
+ */
+export async function completeSynthesis(
+  context: OperationContext,
+  request: { systemPrompt: string; userMessage: string },
+  accept: (text: string) => string,
+): Promise<AcceptedSynthesis> {
+  const { settings } = context;
+  const ctx: BudgetCtx = {
+    ...context,
+    signal: context.signal,
+    budgetRetries: { extract: 0, collate: 0 },
+    gate: async () => {},
+  };
+  const chosen = await completeWithBudgetRetry(
+    ctx,
+    "collate",
+    {
+      model: settings.collateModel,
+      systemPrompt: request.systemPrompt,
+      userMessage: request.userMessage,
+      maxTokens: settings.collationMaxTokens,
+      signal: context.signal,
+      retry: {
+        attempts: settings.llmRetryAttempts,
+        baseDelayMs: settings.retryBaseDelayMs,
+        maxDelayMs: settings.retryMaxDelayMs,
+      },
+      timeoutMs: settings.llmTimeoutMs,
+      onRetryNotice: (msg) => context.onProgress?.(progress("collate", msg)),
+    },
+    true,
+  );
+  const rejected: AcceptedSynthesis["rejected"] = [];
+  let firstError: unknown;
+  for (const candidate of [chosen, ...chosen.alternatives]) {
+    try {
+      const accepted = accept(candidate.completion.text);
+      return {
+        accepted,
+        text: candidate.completion.text,
+        maxTokens: candidate.maxTokens,
+        truncated: completionTruncated(candidate.completion, candidate.maxTokens),
+        budgetRetries: ctx.budgetRetries.collate,
+        ...(candidate.completion.routeProvider ? { provider: candidate.completion.routeProvider } : {}),
+        rejected,
+      };
+    } catch (error) {
+      firstError ??= error;
+      if (candidate.completion.text.trim())
+        rejected.push({ text: candidate.completion.text, reason: errMsg(error), maxTokens: candidate.maxTokens });
+    }
+  }
+  throw new SynthesisRejectedError(errMsg(firstError), rejected, { cause: firstError });
+}
+
 async function completeWithBudgetRetry(
-  p: PipelineCtx,
+  p: BudgetCtx,
   stage: "extract" | "collate",
   request: ModelRequest & { maxTokens: number },
   retryTruncated: boolean,

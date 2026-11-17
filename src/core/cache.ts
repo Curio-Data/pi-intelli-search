@@ -257,6 +257,15 @@ export async function writeBatchManifest(batchPath: string, manifest: BatchManif
   await atomicWriteFile(join(batchPath, BATCH_MANIFEST_FILE), JSON.stringify(manifest, null, 2) + "\n");
 }
 
+/**
+ * Write a batch folder's merged `report.md` (or another named artefact)
+ * atomically. The caller MUST hold the batch folder's cache lock.
+ */
+export async function writeBatchFile(batchPath: string, name: string, content: string): Promise<void> {
+  await mkdir(batchPath, { recursive: true });
+  await atomicWriteFile(join(batchPath, name), content);
+}
+
 export function domainSlug(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "").replace(/\./g, "-");

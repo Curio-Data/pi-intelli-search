@@ -362,6 +362,26 @@ export interface BatchTelemetry {
     cachePath?: string;
   }>;
   cacheSuggest: { ran: boolean; surfaced: number; slugs: string[]; degraded?: boolean };
+  /** Expansion batches only: the merge call over the entries' summaries. */
+  merge?: {
+    model: string;
+    /** `rejected`: every candidate failed provenance validation; `skipped`: fewer than two entries completed. */
+    outcome: "completed" | "rejected" | "failed" | "skipped";
+    entries: number;
+    /** Inventory rows after and before deduplication by URL. */
+    sources: number;
+    sourcesBeforeDedup: number;
+    inputChars: number;
+    outputChars: number;
+    /** List items under the merged report's Contradictions and Gaps headings. */
+    contradictions: number;
+    gaps: number;
+    durationMs: number;
+    truncated?: boolean;
+    budgetRetries?: number;
+    provider?: string;
+    error?: string;
+  };
 }
 
 /** Identity fields of a record, following the per-run sidecar's rule. */
