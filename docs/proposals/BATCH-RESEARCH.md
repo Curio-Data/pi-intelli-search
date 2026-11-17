@@ -1,6 +1,6 @@
 # Batch Research Feature Brief
 
-Status: proposed feature, recorded 8 November 2026. The owner has decided to build it and judge its value from use rather than from a prior controlled study. On 17 November 2026 the owner opened the `explore/batch-research` branch to develop the design, and set nominal starting values for three of the four open limits; the size of the batch-wide extraction pool is to be set on the branch (see Starting Values). The owner reduced the super-collation to a single collation call over the per-entry summaries; exploration of the cache folders by the collation model is deferred (see Scope). Release is not yet assigned.
+Status: proposed feature, recorded 8 November 2026. The owner has decided to build it and judge its value from use rather than from a prior controlled study. On 17 November 2026 the owner opened the `explore/batch-research` branch to develop the design, and set nominal starting values for the open limits (see Starting Values). The owner reduced the super-collation to a single collation call over the per-entry summaries; exploration of the cache folders by the collation model is deferred (see Scope). Release is not yet assigned.
 
 ## Summary
 
@@ -102,7 +102,7 @@ Out of scope:
 ## Dependencies and Open Decisions
 
 - **Sequencing:** recorded on 8 November 2026, this feature depended on the 0.22.0 collation and provenance work on `rcca/mcp-research-failures`, including the fix for URLs inside bold Markdown, on which the super-collation's validation also depends. That work merged and was published as 0.22.0 on 9 November 2026, and later provenance and cache fixes are on `main` under `CHANGELOG.md` `Unreleased`. The feature starts from `main` and targets the next minor version of both packages.
-- **Open on the Branch:** the size of the batch-wide extraction pool (see Starting Values), and the answers to the Exploration Questions, which fix the design.
+- **Open on the Branch:** the answers to the Exploration Questions, which fix the design and may revise the Starting Values.
 - **Implementer Decisions:** parameter names, the batch result format, the batch folder naming, the location of an independent batch's batch record and the index entry shape.
 
 ## Starting Values
@@ -113,7 +113,7 @@ The owner set these nominal values on 17 November 2026. Each is a starting point
 |---|---|---|
 | Entries per batch | 10 | Surveyed messages held at most five research calls, and none of the 30 sampled batches held five. Twice the observed maximum, so that a practical limit such as the collation input budget is likely to be found on the branch before the cap constrains agents |
 | Entries running at once | 4 | Matches the existing `fetchConcurrency` and `extractionConcurrency` defaults |
-| Batch-wide extraction pool | To be set on the branch | Replaces the per-entry multiplication described under Concurrency. A value near today's per-run `extractionConcurrency` keeps a batch's peak load close to one research run; a larger value shortens the batch |
+| Batch-wide extraction pool | 8 | Twice today's per-run `extractionConcurrency`, so a batch is faster than one research run without the per-entry multiplication described under Concurrency; adjusted from the traced runs |
 | `minRequestIntervalMs` | One limiter across the batch | A per-entry limiter would multiply the request rate for the keys the setting protects |
 
 ## Exploration Questions
@@ -124,3 +124,46 @@ The branch answers these before the design is fixed:
 - Whether the provider returns HTTP 429 (rate limited) or 402 (payment required, which [_OpenRouter_](https://openrouter.ai) returns at its in-flight spending limit) responses as the extraction pool grows, measured with the traced runner `test/run-e2e-parallel.sh`.
 - How large the super-collation's input is for a batch of each size, against the collation input budget.
 - Whether the per-entry summaries carry enough detail for the super-collation to reconcile contradictions, or whether access to the extraction files is needed.
+
+## Implementation Plan
+
+Recorded on 17 November 2026 for the `explore/batch-research` branch. Each phase ends with `npm run build:all`, `npm run test:all` and a commit; phases 2 to 4 also run `./test/e2e/01_main.sh`, because they change the single-query path.
+
+**Implementer decision recorded here.** Both modes write a batch folder, `.search/<date>-batch-<slug>-<hash>/`, holding the manifest and the batch record; only an expansion batch adds the combined `report.md`. This settles where an independent batch's record lives and keeps one layout for both modes.
+
+### Phase 0: Super-Collation Spike
+
+Before any pipeline change, a maintainer script under `scripts/` runs the proposed super-collation prompt over two to five existing `report.md` files that answer related queries, with the default collation model. It renumbers each report's `[S<n>]` identifiers into one batch-wide series, records input and output size against `collationInputBudgetTokens`, and saves the combined output for reading. The spike answers the third and fourth Exploration Questions early and fixes the prompt before it is wired in. It spends live quota and is run by hand, not by the test suite.
+
+### Phase 1: Shared Run Resources
+
+No behaviour change for a single query.
+
+- Add a counting semaphore to `src/core/util.ts`, next to `mapWithConcurrency` and `createRateLimiter`, with unit tests.
+- Split `research()` in `src/core/operations/research.ts` so a caller can supply a shared extraction semaphore, a shared `minRequestIntervalMs` limiter, batch identity for telemetry, and a flag that skips Stage 5. A single query creates its own, exactly as today.
+- Return the accepted collation text, the extractions and the `SourceIdentity` to an internal caller alongside the existing `OperationResult`, so the batch code does not parse the rendered result.
+- Extend `judgeCandidates()` and `formatIndexForJudge()` in `src/core/cache.ts` to exclude a set of slugs.
+
+### Phase 2: Independent Mode
+
+- **Schema and validation.** Add `queries` and `batchMode` to `researchSchema` and make `query` optional. Validate exactly one of `query` and `queries`, `batchMode` with `queries`, two to `maxBatchEntries` entries, and top-level defaults before any model call, in the shared core; mirror the `maxUrls` check in `packages/mcp/src/runtime.ts`.
+- **Settings.** Add `maxBatchEntries` (10), `batchConcurrency` (4) and `batchExtractionConcurrency` (8) to `TUNING_RANGES` and `tuningDefaults()` in `src/core/defaults.ts` and the native loader in `src/settings.ts`; the standalone configuration in `packages/mcp/src/config.ts` reads both from `src/core/defaults.ts`.
+- **Orchestrator.** A new `src/core/operations/batch-research.ts` runs model preflight once, then the entries through `mapWithConcurrency(batchConcurrency)` with the shared semaphore and limiter. A failed entry becomes a failure section; cancellation aborts every entry.
+- **Cache.** Write the batch folder and manifest after all entries settle, recording each member's folder as it stands after same-day rotation; rotate the batch folder with `rotateCacheArtefacts()`. Run cache suggestion once over the joined queries, excluding the members, and add one index entry for the batch.
+- **Telemetry.** Add the per-entry `batch` fields and the fetched URL list in `src/core/telemetry.ts`, and a batch record type with its own `kind` and `schemaVersion`. Extend `scripts/analyze-sessions.sh`.
+- **Adapters.** Dispatch on `queries` in `src/tools/intelli-research.ts` and `packages/mcp/src/server.ts`; map per-entry progress into the native renderer and MCP progress notifications. Update the native contract fixtures for the changed schema and result.
+
+### Phase 3: Expansion Mode
+
+- Build the super-collation prompt from the Phase 0 spike in `src/core/prompts.ts`.
+- Build one batch-wide `SourceIdentity` over the union of member extractions, deduplicated by URL, and rewrite each member summary's `[S<n>]` identifiers into it before the call.
+- Call the collation model once under the shared retry, timeout and output-budget policy, then validate with `finalizeCollation()` against the batch identity. On failure or rejection, return the independent-mode sections with the failure stated, and save a rejected candidate as the single-query path does.
+- Write the combined report and its batch-wide source inventory into the batch folder, and record the super-collation stage in the batch record.
+
+### Phase 4: Guidance, Documentation and Live Evidence
+
+- Update `promptGuidelines`, the MCP tool description, `skills/intelli-search/SKILL.md` and `guidance/research-guide.md`; run `npm run generate:plugins`.
+- Document the settings, the batch folder and the telemetry fields (including the URL list) in `README.md` and `docs/ARCHITECTURE.md`; run `npm run generate:toc` and `npm run generate:readmes`.
+- Add live scenarios `test/e2e/16_batch_independent.sh` and `17_batch_expansion.sh`, and a batch case in `11_mcp_stdio.sh`; prove each runnable and pass `shellcheck`.
+- Answer the Exploration Questions with traced runs through `test/run-e2e-parallel.sh`: batches of 2, 5 and 10 entries against the same queries run separately, and extraction pools of 4, 8 and 16. Record the results under `evidence/` and revise the Starting Values.
+- Add `CHANGELOG.md` entries for both packages and run `npm run generate:changelog`. Release is outside this branch.
