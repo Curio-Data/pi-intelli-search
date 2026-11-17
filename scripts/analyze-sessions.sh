@@ -9,6 +9,7 @@
 #   ~/.pi/agent/sessions/**/*.jsonl   (Pi session transcripts)
 #   <cwd>/.search/.index.json         (intelli-search cache index, per project)
 #   <cwd>/.search/*/meta.json         (v0.11.0+ telemetry sidecars, optional)
+#   <cwd>/.search/*/batch-meta.json   (batch research records, optional)
 #
 # No API keys required. No network access. Deterministic.
 #
@@ -312,6 +313,74 @@ else
   echo ""
   echo "cache-suggest entries surfaced (total):"
   jq -rs '[.[] | .stages.cacheSuggest.surfaced // 0] | add' "$tmp_meta" 2>/dev/null
+fi
+
+# ---------------------------------------------------------------- 10
+echo ""
+echo "## 10. Batch research (batch-meta.json records)"
+hr
+echo "One record per batch call; entries also mark their own meta.json with .batch."
+batch_files=""
+for root in "${SEARCH_ROOTS[@]}"; do
+  [ -d "$root" ] || continue
+  if command -v fd >/dev/null 2>&1; then
+    found=$(fd -t f -H --no-ignore 'batch-meta.json' "$root" 2>/dev/null \
+            | grep -E '/\.search/.+/batch-meta\.json$' || true)
+  else
+    found=$(find "$root" -type f -name 'batch-meta.json' -path '*/.search/*' 2>/dev/null || true)
+  fi
+  if [ -n "$found" ]; then
+    batch_files="${batch_files}${found}"$'\n'
+  fi
+done
+
+if [ -z "$batch_files" ]; then
+  echo "(no batch records found)"
+else
+  tmp_batch=$(mktemp)
+  trap 'rm -f "$SESSION_FILES" "$TOOLCALLS_CACHE" "$FOLLOW_TMP" "$IDX_TMP" "$PROJ_TMP" "${tmp_meta:-}" "$tmp_batch"' EXIT
+  while IFS= read -r b; do
+    [ -z "$b" ] && continue
+    if ! jq -e 'select(.kind == "batch")' "$b" >/dev/null 2>&1; then
+      echo "  (skip malformed batch record: $b)"
+      continue
+    fi
+    jq -c '.' "$b" >> "$tmp_batch"
+  done <<< "$batch_files"
+
+  echo "batch records: $(wc -l < "$tmp_batch" | tr -d ' ')"
+  echo ""
+  echo "by mode:"
+  jq -rs 'group_by(.mode) | map("  \(.[0].mode): \(length)") | .[]' "$tmp_batch"
+  echo ""
+  echo "by batch outcome:"
+  jq -rs 'group_by(.outcome) | map("  \(.[0].outcome): \(length)") | .[]' "$tmp_batch"
+  echo ""
+  echo "entries per batch (size: batches):"
+  jq -rs 'group_by(.size) | map("  \(.[0].size): \(length)") | .[]' "$tmp_batch"
+  echo ""
+  echo "batch duration and the slowest entry (seconds; the gap is time spent beyond the slowest entry):"
+  jq -rs 'map({d: (.durationMs / 1000), s: ((.entries | map(.durationMs) | max) / 1000),
+               c: .concurrency, p: .extractionPool})
+          | map("  \(.d | floor)s total, slowest entry \(.s | floor)s, \(.c) at once, pool \(.p)")
+          | .[]' "$tmp_batch"
+  echo ""
+  echo "entry outcomes across batches:"
+  jq -rs '[.[].entries[].outcome] | group_by(.) | map("  \(.[0]): \(length)") | .[]' "$tmp_batch"
+  if [ -n "${tmp_meta:-}" ] && [ -s "$tmp_meta" ]; then
+    echo ""
+    echo "page overlap between entries of one batch (from the entries' fetch.urls):"
+    # For each batch, a URL counts as shared when two or more entries fetched it.
+    jq -rs 'map(select(.batch != null and .stages.fetch.urls != null))
+            | group_by(.batch.id)
+            | map({id: .[0].batch.id,
+                   urls: (map(.stages.fetch.urls | unique) | add // [])})
+            | map({id, total: (.urls | length),
+                   shared: (.urls | group_by(.) | map(select(length > 1)) | length)})
+            | if length == 0 then ["  (no entry sidecars with fetch.urls)"]
+              else map("  batch \(.id): \(.shared) URL(s) fetched by two or more entries; \(.total) page fetches in all") end
+            | .[]' "$tmp_meta" 2>/dev/null
+  fi
 fi
 
 echo ""

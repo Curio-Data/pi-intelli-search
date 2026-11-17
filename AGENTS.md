@@ -372,6 +372,7 @@ test/
 ├── core-console.test.ts      # Concurrent diagnostic scopes and restoration
 ├── core-llm.test.ts          # Shared retry/timeout/cancellation policy
 ├── core-operations.test.ts   # Injected engine outcomes, staging and cancellation
+├── batch-research.test.ts    # Batch argument rules, independent batches, batch folder, telemetry and analysis
 ├── dependency-security.test.ts # Executable extraction-path and conversion checks for advisories
 ├── direct-tool.test.ts       # Direct tool driver: exact arguments, agent-loop refusal, trust, MCP, abort, SDK resolution
 ├── e2e-helpers.test.ts       # E2E helper, acceptance-check and evidence-analyser regressions

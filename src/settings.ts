@@ -381,6 +381,9 @@ const NESTED_KEYS = [
   "retryMaxDelayMs",
   "searchRetryAttempts",
   "minRequestIntervalMs",
+  "maxBatchEntries",
+  "batchConcurrency",
+  "batchExtractionConcurrency",
 ] as const;
 
 /**

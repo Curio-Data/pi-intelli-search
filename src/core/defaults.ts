@@ -42,6 +42,9 @@ export const TUNING_RANGES = {
   retryMaxDelayMs: [0, 120_000],
   searchRetryAttempts: [1, 10],
   minRequestIntervalMs: [0, 120_000],
+  maxBatchEntries: [2, 100],
+  batchConcurrency: [1, 32],
+  batchExtractionConcurrency: [1, 32],
 } as const satisfies Record<string, readonly [number, number]>;
 
 /** Shared tuning only. Adapters own model selection and credential discovery. */
@@ -108,6 +111,13 @@ export function tuningDefaults(): Omit<
     retryMaxDelayMs: 20_000,
     searchRetryAttempts: 2,
     minRequestIntervalMs: 0,
+    // Batch research starting values, set by the owner on 2026-11-17 to be
+    // revised from the branch's traced runs (docs/proposals/BATCH-RESEARCH.md
+    // § Starting Values): twice the largest observed batch, the existing
+    // per-run concurrency, and twice the per-run extraction pool.
+    maxBatchEntries: 10,
+    batchConcurrency: 4,
+    batchExtractionConcurrency: 8,
     httpProxy: undefined,
   };
 }

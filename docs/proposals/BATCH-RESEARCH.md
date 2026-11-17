@@ -184,6 +184,19 @@ No behaviour change for a single query.
 - **Telemetry.** Pass batch identity into `runResearchEntry()` and add the per-entry `batch` fields and the fetched URL list in `src/core/telemetry.ts`, and a batch record type with its own `kind` and `schemaVersion`. Extend `scripts/analyze-sessions.sh`.
 - **Adapters.** Dispatch on `queries` in `src/tools/intelli-research.ts` and `packages/mcp/src/server.ts`; map per-entry progress into the native renderer and MCP progress notifications. Update the native contract fixtures for the changed schema and result.
 
+**Result (17 November 2026).** Independent mode works end to end in both adapters. `research()` validates its arguments and routes a batch to `researchBatch()` in `src/core/operations/batch-research.ts`, so neither adapter needed a dispatch of its own; the MCP runtime runs the same validation before any provider call and checks each entry's `domains`.
+
+Implementer decisions taken in this phase:
+
+- **Argument errors.** `ResearchArgumentError` carries every rule the schema cannot express: exactly one of `query` and `queries`, `batchMode` with `queries` only, two to `maxBatchEntries` entries, a nonempty query per entry, and a positive integer `maxUrls`. Repeated queries are also rejected, because two identical queries would share one cache folder. Until Phase 3, `batchMode: "expansion"` is rejected with an error naming `"independent"`.
+- **Result format.** One line stating the counts, then one `# Query <n> of <N>: <query>` section per entry holding that entry's ordinary result text, separated by rules, then the batch folder path and the batch's related-searches appendix. The tool outcome is `completed` when any entry completed; `details.batch.outcome` is `completed`, `partial` or `failed`. An entry that throws becomes a failure section; the call throws only when every entry throws.
+- **Batch folder.** `.search/<date>-batch-<words>-<hash>/`, with the words from the first query and the hash over the mode and every query in order, so a repeated batch rotates by the single-query rule. It holds `manifest.json` (each entry as run, its outcome and committed folder) and, unless `disableTelemetry` is set, `batch-meta.json` with `kind: "batch"` and its own `schemaVersion`. The record is not named `meta.json`, so existing readers never mistake it for a research run.
+- **No index entry for an independent batch.** Its members are indexed as single queries already, and the batch folder has no report for a suggestion to point at. Phase 3 adds the index entry with the combined report.
+- **URL list on batch entries only.** `stages.fetch.urls` is recorded for batch entries, where it measures overlap; single-query sidecars are unchanged.
+- **Progress.** Each entry's progress message is prefixed `[<n>/<N>]`, and a `cache` event counts finished entries. Phase 4 may refine the native rendering.
+
+`scripts/analyze-sessions.sh` gains section 10: batch counts by mode, outcome and size, batch time beside the slowest entry, entry outcomes, and page overlap from the entries' URL lists. `npm run build:all`, `npm run test:all` (953 native and 158 standalone tests) and `./test/e2e/01_main.sh` passed, and only `tools.json` changed among the native contract fixtures. One live two-entry batch through the standalone runtime completed both entries in 70 s, as long as its slower entry (evidence: `evidence/agents/2026-11-17-batch-phase2-live/`); it was not compared with separate calls.
+
 ### Phase 3: Expansion Mode
 
 - Build the super-collation prompt from the Phase 0 spike in `src/core/prompts.ts`.

@@ -15,6 +15,7 @@ import type {
   OperationContext,
   OperationResult,
   ResearchParams,
+  ResearchQuery,
   ModelRetryConfig as LlmRetryConfig,
 } from "../contracts.js";
 import { displayCachePath, type WorkspacePaths } from "../paths.js";
@@ -36,6 +37,7 @@ import {
   allocateSourceIdentity,
   clearCacheArtefacts,
   rotateCacheArtefacts,
+  type JudgeExclusion,
   type SourceIdentity,
 } from "../cache.js";
 import {
@@ -56,7 +58,13 @@ import {
   OutputBudgetExhaustedError,
   reasoningOnlyCompletion,
 } from "../util.js";
-import { TelemetryBuilder, writeTelemetry, type TelemetryOutcome } from "../telemetry.js";
+import {
+  TelemetryBuilder,
+  writeTelemetry,
+  type BatchEntryTelemetry,
+  type TelemetryOutcome,
+} from "../telemetry.js";
+import { researchBatch, validateResearchParams } from "./batch-research.js";
 import { mkdir, writeFile, rm, readdir, readFile, mkdtemp, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { FetchedPage, ExtractResult, ModelConfig } from "../types.js";
@@ -128,8 +136,11 @@ export async function research(
   dependencies: ResearchDependencies = { fetchPages, downloadLlmsFullToCache },
 ): Promise<OperationResult> {
   throwIfAborted(context.signal);
+  // Argument rules the schema cannot express are checked before any model call.
+  const validated = validateResearchParams(params, context.settings);
+  if (validated.kind === "batch") return researchBatch(validated, context, dependencies);
   await preflightResearch(context);
-  return (await runResearchEntry(params, context, dependencies)).result;
+  return (await runResearchEntry(validated.query, context, dependencies)).result;
 }
 
 /**
@@ -148,6 +159,8 @@ export interface ResearchRunOptions {
   gate?: (signal?: AbortSignal) => Promise<void>;
   /** Skip Stage 5: a batch runs cache suggestion once over all its entries. */
   skipCacheSuggest?: boolean;
+  /** Batch identity recorded in the entry's sidecar, with its fetched URLs. */
+  batch?: BatchEntryTelemetry;
 }
 
 /** What a completed, committed entry hands an internal caller besides its result text. */
@@ -175,7 +188,7 @@ export interface ResearchRunResult {
  * with shared resources, so it never parses the rendered result text.
  */
 export async function runResearchEntry(
-  params: ResearchParams,
+  params: ResearchQuery,
   context: OperationContext,
   dependencies: ResearchDependencies = { fetchPages, downloadLlmsFullToCache },
   options: ResearchRunOptions = {},
@@ -199,6 +212,7 @@ export async function runResearchEntry(
     gate: options.gate ?? createRateLimiter(settings.minRequestIntervalMs),
     ...(options.extractionPool ? { extractionPool: options.extractionPool } : {}),
     skipCacheSuggest: options.skipCacheSuggest ?? false,
+    ...(options.batch ? { batch: options.batch } : {}),
     tel: settings.disableTelemetry
       ? null
       : await TelemetryBuilder.create(params.query, context.identity, context.now),
@@ -207,6 +221,7 @@ export async function runResearchEntry(
     collateConfig: settings.collateModel,
     budgetRetries: { extract: 0, collate: 0 },
   };
+  if (options.batch) p.tel?.setBatch(options.batch);
   const result = await executePipeline(p);
   return { result, ...(p.synthesis ? { synthesis: p.synthesis } : {}) };
 }
@@ -218,7 +233,7 @@ interface PipelineCtx extends OperationContext {
   models: ModelClient;
   paths: WorkspacePaths;
   physicalCachePath: string;
-  params: ResearchParams;
+  params: ResearchQuery;
   settings: OperationContext["settings"];
   maxUrls: number;
   retry: LlmRetryConfig;
@@ -226,6 +241,7 @@ interface PipelineCtx extends OperationContext {
   /** Batch-wide extraction pool; absent for a single query. */
   extractionPool?: Semaphore;
   skipCacheSuggest: boolean;
+  batch?: BatchEntryTelemetry;
   /** Set by executePipeline when the entry completes and commits. */
   synthesis?: ResearchSynthesis;
   tel: TelemetryBuilder | null;
@@ -723,6 +739,7 @@ async function runFetchStage(
     succeeded: successPages.length,
     failed: pages.length - successPages.length,
     winners: fetchWinners,
+    ...(p.batch ? { urls: successPages.map((pg) => pg.url) } : {}),
   });
 
   return { pages, successPages };
@@ -1234,68 +1251,88 @@ async function writeCacheArtifacts(
 async function runCacheSuggestStage(p: PipelineCtx): Promise<string> {
   p.onProgress?.(progress("cache", "Checking related cached research..."));
   throwIfAborted(p.signal);
-
   const currentSlug = p.cachePath.split("/").pop() ?? "";
-  let suggestionsAppendix = "";
+  const { appendix, telemetry } = await suggestRelatedSearches(p, p.params.query, currentSlug);
+  p.tel?.recordCacheSuggest(telemetry);
+  return appendix;
+}
+
+export interface CacheSuggestOutcome {
+  /** Formatted related-searches appendix; empty when none were found. */
+  appendix: string;
+  telemetry: { ran: boolean; surfaced: number; slugs: string[]; degraded?: boolean };
+}
+
+/**
+ * Ask the extract model which cached searches relate to `query`, leaving out
+ * `exclude` (the current run's folder, or every member of a batch). Purely
+ * additive: a failure is logged and returns no suggestions, but user
+ * cancellation propagates. No lock is needed: reading .index.json is safe
+ * (atomic rename on write).
+ */
+export async function suggestRelatedSearches(
+  context: OperationContext,
+  query: string,
+  exclude: JudgeExclusion,
+): Promise<CacheSuggestOutcome> {
+  const { settings, signal } = context;
+  const excluded = new Set(typeof exclude === "string" ? [exclude] : exclude);
+  let appendix = "";
   // Tracked for telemetry regardless of whether the judge runs.
-  let cacheSuggestRan = false;
-  let cacheSuggestSurfaced = 0;
-  let cacheSuggestSlugs: string[] = [];
+  let ran = false;
+  let surfaced = 0;
+  let slugs: string[] = [];
   // True when the judge response was empty or unparseable, distinguishing a
   // failed judge from a valid zero-match answer (both surface zero entries).
-  let cacheSuggestDegraded: boolean | undefined;
+  let degraded: boolean | undefined;
   // True once the judge call is actually issued; a throw after that point is
   // a failed judge (adapter exhaustion, timeout, transport), not "no previous
   // searches to compare against".
   let judgeAttempted = false;
   try {
-    const index = await readIndex(p.paths.cacheRoot);
+    const index = await readIndex(context.paths.cacheRoot);
     // Only run judge if there are other searches to compare against
-    if (index.searches.some((e) => e.slug !== currentSlug)) {
+    if (index.searches.some((e) => !excluded.has(e.slug))) {
       judgeAttempted = true;
-      const indexText = formatIndexForJudge(index, currentSlug);
-      const judgeUserMsg = `Current query: "${p.params.query}"\n\nPrevious searches:\n${indexText}`;
+      const indexText = formatIndexForJudge(index, excluded);
+      const judgeUserMsg = `Current query: "${query}"\n\nPrevious searches:\n${indexText}`;
       // 2,000 since 0.20.0: the extract model's hidden reasoning counts
       // against the cap, and 500 let reasoning-only answers masquerade as a
       // valid "no related searches" verdict.
-      const { text: judgeResponse } = await p.models.complete({
-        model: p.extractConfig,
+      const { text: judgeResponse } = await context.models.complete({
+        model: settings.extractModel,
         systemPrompt: CACHE_SUGGEST_PROMPT,
         userMessage: judgeUserMsg,
         maxTokens: 2000,
-        signal: p.signal,
-        retry: p.retry,
-        timeoutMs: p.settings.llmTimeoutMs,
-        onRetryNotice: (msg) => p.onProgress?.(progress("cache", msg)),
+        signal,
+        retry: {
+          attempts: settings.llmRetryAttempts,
+          baseDelayMs: settings.retryBaseDelayMs,
+          maxDelayMs: settings.retryMaxDelayMs,
+        },
+        timeoutMs: settings.llmTimeoutMs,
+        onRetryNotice: (msg) => context.onProgress?.(progress("cache", msg)),
       });
       if (!judgeResponse.trim() || !isWellFormedJudgeResponse(judgeResponse)) {
-        cacheSuggestDegraded = true;
-        p.logger.error(
+        degraded = true;
+        context.logger.error(
           `Cache suggest judge returned ${judgeResponse.trim() ? "an unparseable" : "an empty"} response; treating as zero matches`,
         );
       }
-      const matches = parseJudgeResponse(judgeResponse, index, currentSlug);
-      cacheSuggestRan = true;
-      cacheSuggestSurfaced = matches.length;
-      cacheSuggestSlugs = matches.map((m) => m.entry.slug);
-      suggestionsAppendix = formatCacheSuggestions(matches, p.paths.cacheDisplayRoot);
+      const matches = parseJudgeResponse(judgeResponse, index, excluded);
+      ran = true;
+      surfaced = matches.length;
+      slugs = matches.map((m) => m.entry.slug);
+      appendix = formatCacheSuggestions(matches, context.paths.cacheDisplayRoot);
     }
   } catch (err: unknown) {
-    throwIfAborted(p.signal);
+    throwIfAborted(signal);
     // Cache suggest is purely additive; user cancellation still propagates.
     // A judge that was issued and threw is degraded, never a valid zero-match.
-    if (judgeAttempted) cacheSuggestDegraded = true;
-    p.logger.error(`Cache suggest failed: ${errMsg(err)}`);
+    if (judgeAttempted) degraded = true;
+    context.logger.error(`Cache suggest failed: ${errMsg(err)}`);
   }
-
-  p.tel?.recordCacheSuggest({
-    ran: cacheSuggestRan,
-    surfaced: cacheSuggestSurfaced,
-    slugs: cacheSuggestSlugs,
-    ...(cacheSuggestDegraded ? { degraded: true } : {}),
-  });
-
-  return suggestionsAppendix;
+  return { appendix, telemetry: { ran, surfaced, slugs, ...(degraded ? { degraded: true } : {}) } };
 }
 
 /**

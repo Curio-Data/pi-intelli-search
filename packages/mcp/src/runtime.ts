@@ -22,6 +22,7 @@ import type {
   OperationResult,
 } from "../../../src/core/contracts.js";
 import type { ResearchDependencies } from "../../../src/core/operations/research.js";
+import { validateResearchParams } from "../../../src/core/operations/batch-research.js";
 import type { FetchFunction } from "../../../src/core/annotations.js";
 import {
   ConfigurationError,
@@ -71,7 +72,10 @@ function validate(
   if (!Object.hasOwn(inputSchemas, name)) throw new Error("Unknown operation");
   if (!Check(inputSchemas[name], params)) throw new Error("Invalid operation arguments");
   const input = params as OperationInputs[keyof OperationInputs];
-  if (!input.query.trim()) throw new Error("query must not be empty");
+  // A research batch carries its queries in `queries`; the shared core checks
+  // the one-of rule and each entry (validateResearchParams).
+  if ("query" in input && input.query !== undefined && !input.query.trim())
+    throw new Error("query must not be empty");
   if (
     "maxUrls" in input &&
     input.maxUrls !== undefined &&
@@ -129,14 +133,24 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
       let category: StandaloneErrorCode = "INVALID_ARGUMENTS";
       try {
         validate(name, params);
-        if ("domains" in params && params.domains !== undefined) {
-          validateDomains(params.domains, "domains");
+        if (name === "intelli_research")
+          validateResearchParams(params as OperationInputs["intelli_research"], config.settings);
+        const domainLists =
+          name === "intelli_research"
+            ? [
+                (params as OperationInputs["intelli_research"]).domains,
+                ...((params as OperationInputs["intelli_research"]).queries ?? []).map((e) => e.domains),
+              ]
+            : ["domains" in params ? params.domains : undefined];
+        for (const domains of domainLists) {
+          if (domains === undefined) continue;
+          validateDomains(domains, "domains");
           const search = config.settings.searchWebSearch;
           if (
             search.enabled &&
             ["perplexity", "firecrawl"].includes(search.engine ?? "") &&
             search.excludedDomains?.length &&
-            params.domains.length
+            domains.length
           )
             throw new Error(
               "This search engine cannot combine per-call domains and excludedDomains",

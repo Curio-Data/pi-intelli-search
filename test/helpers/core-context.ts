@@ -36,6 +36,9 @@ export function coreContext(workspace: string, overrides: Partial<ResearchSettin
       retryMaxDelayMs: 0,
       searchRetryAttempts: 2,
       minRequestIntervalMs: 0,
+      maxBatchEntries: 10,
+      batchConcurrency: 4,
+      batchExtractionConcurrency: 8,
       ...overrides,
     },
     models: {
