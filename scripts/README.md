@@ -125,7 +125,7 @@ E2E_RUN_MODE=sequential ./test/run-e2e-all.sh  # one at a time, E2E_GAP_SECONDS 
 | `E2E_SCRIPT_TIMEOUT_SECONDS` | `1200` | Limit for each script except `10_config_recipes.sh`; exit `124` is reported as a timeout. In parallel mode the timeout also stops the script's `pi`, `claude` and `codex` processes |
 | `E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS` | `2400` | Limit for `10_config_recipes.sh`, with the same timeout handling as `E2E_SCRIPT_TIMEOUT_SECONDS` |
 | `E2E_SKIP_BUILD` | unset | `1` uses existing builds; the runner sets it for every scenario after its own build |
-| `E2E_RECIPE_TIMEOUT_SECONDS` | `600` | Limit for each `pi` attempt in `10_config_recipes.sh`; a recipe makes up to three attempts |
+| `E2E_RECIPE_TIMEOUT_SECONDS` | `600` | Limit for each attempt in `10_config_recipes.sh`, through `pi` or the direct tool driver; a recipe makes up to three attempts |
 | `E2E_RETRY_GAP_SECONDS` | `5` | Pause before a scenario retries an attempt that left no completed sidecar (scenarios 01 to 11 and 15) or no completed turn (scenario 14) |
 
 Scenario 10 has its own limit because one recipe that needs all three 600-second attempts, with the 5-second `E2E_RETRY_GAP_SECONDS` pause between attempts, runs for ≈1,810 seconds; the recipes run concurrently, so that is also the scenario's longest expected run. The 2026-11-09 evidence (`evidence/agents/2026-11-09-post-release/`) recommends 2,400 seconds. The other scripts keep 1,200 seconds so that a hung scenario fails promptly. When scenario 10 reports `TIMED OUT`, raise `E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS` or lower `E2E_RECIPE_TIMEOUT_SECONDS`. The traced runner below applies the same two limits.

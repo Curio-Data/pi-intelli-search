@@ -158,7 +158,11 @@ describe("README Configuration Recipes: pipeline effect", () => {
     return { ...base, fetched };
   }
 
+  // Recipe 1 (zero configuration) carries no settings block: its row proves
+  // the built-in 10-page default and 20-page cap against a 30-link search
+  // answer, which the live scenario's single-domain query does not exercise.
   for (const [n, defaultUrls, maxUrls] of [
+    [1, 10, 20],
     [4, 8, 16],
     [7, 5, 20],
   ] as const) {

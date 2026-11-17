@@ -122,6 +122,20 @@ run_pi() {
   return 1
 }
 
+# run_direct <agent> <cwd> <args_json>: one intelli_research call with exact
+# arguments through the real host and no agent loop. Recipes that test what a
+# setting does to the pipeline use it; R1 (an omitted argument) and R8 (the
+# host loading project settings) keep the agent loop.
+run_direct() {
+  if e2e_run_direct "$1" "$2" intelli_research "$3" "$RECIPE_TIMEOUT"; then
+    LAST_OUTPUT="$E2E_LAST_OUTPUT"
+    return 0
+  fi
+  LAST_OUTPUT="$E2E_LAST_OUTPUT"
+  return 1
+}
+ARGS_SQLITE='{"query":"SQLite WAL mode trade-offs","maxUrls":2,"domains":["sqlite.org"]}'
+
 # meta_value <cache_dir> <jq_path>
 meta_value() {
   local latest
@@ -207,9 +221,12 @@ recipe_r1() {
   write_global "$AGENT"
   # The trace records the raw tool arguments, so the check below can prove
   # the agent left maxUrls unset and the page budget came from the default.
-  # No domain restriction: search may return more links than the default.
+  # One domain keeps the pages to official documentation. Whether search
+  # returns more than ten links varies from run to run, so the live check is
+  # an upper bound only; the 10-page default and 20-page cap are proven
+  # deterministically in test/config-recipes.test.ts.
   E2E_TRACE_FILE="$AGENT/trace.jsonl"
-  if run_pi "$AGENT" "$CWD" 'Use intelli_research, leaving maxUrls unset, to research: SQLite WAL mode trade-offs.'; then
+  if run_pi "$AGENT" "$CWD" 'Use intelli_research with domains=["sqlite.org"], leaving maxUrls unset, to research: SQLite WAL mode trade-offs.'; then
     if [[ -n "${E2E_TRACE_DIR:-}" ]]; then mkdir -p "$E2E_TRACE_DIR"; cp "$E2E_TRACE_FILE" "$E2E_TRACE_DIR/r1.jsonl"; fi
     if jq -Rne '[inputs | fromjson? | select(.type? == "tool_execution_start" and .toolName == "intelli_research") | .args]
         | length >= 1 and all(.maxUrls == null)' "$E2E_TRACE_FILE" >/dev/null; then
@@ -237,7 +254,7 @@ recipe_r5() {
   echo "═══ R5: economy extract/collate (google/gemini-3.7-flash) ═══"
   read -r AGENT CWD <<<"$(make_env r5)"
   write_global "$AGENT" "$(recipe_settings 5)"
-  if run_pi "$AGENT" "$CWD" "$PROMPT_SQLITE"; then
+  if run_direct "$AGENT" "$CWD" "$ARGS_SQLITE"; then
     assert_eq "extract model overridden" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/google/gemini-3.7-flash"
     assert_eq "collate model overridden" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/google/gemini-3.7-flash"
     assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
@@ -251,7 +268,7 @@ recipe_r6() {
   echo "═══ R6: stronger collation (collateModel only; extract stays default) ═══"
   read -r AGENT CWD <<<"$(make_env r6)"
   write_global "$AGENT" "$(recipe_settings 6)"
-  if run_pi "$AGENT" "$CWD" "$PROMPT_SQLITE"; then
+  if run_direct "$AGENT" "$CWD" "$ARGS_SQLITE"; then
     assert_eq "collate model overridden" "$(meta_value "$CWD/.search" '.stages.collate.model')" "openrouter/openai/gpt-5-mini"
     assert_eq "extract model still default" "$(meta_value "$CWD/.search" '.stages.extract.model')" "openrouter/minimax/minimax-m3"
     assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
@@ -291,7 +308,7 @@ recipe_r10() {
   write_global "$AGENT" "$(recipe_settings 10)"
   # The Node.js fs API reference exceeds 150,000 characters after cleaning
   # when it is fetched; the check below reports whether the cap bound.
-  if run_pi "$AGENT" "$CWD" 'Use intelli_research with maxUrls=2 and domains=["nodejs.org"] to research: the Node.js fs promises API methods and their options.'; then
+  if run_direct "$AGENT" "$CWD" '{"query":"the Node.js fs promises API methods and their options","maxUrls":2,"domains":["nodejs.org"]}'; then
     assert_eq "outcome" "$(meta_value "$CWD/.search" '.outcome')" "completed"
     assert_eq "no extraction budget retries" "$(meta_value "$CWD/.search" '.stages.extract.budgetRetries // 0')" "0"
     assert_eq "no collation budget retry" "$(meta_value "$CWD/.search" '.stages.collate.budgetRetried // "false" | tostring')" "false"
