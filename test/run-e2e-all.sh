@@ -109,6 +109,8 @@ SCRIPTS=(
   e2e/13_claude_code_plugin.sh
   e2e/14_codex_plugin.sh
   e2e/15_pi_floor.sh
+  e2e/16_batch_independent.sh
+  e2e/17_batch_expansion.sh
 )
 
 PASSED=()

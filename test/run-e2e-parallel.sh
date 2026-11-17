@@ -95,6 +95,8 @@ SCRIPTS=(
   11_mcp_stdio.sh
   12_plugin_bundles.sh
   15_pi_floor.sh
+  16_batch_independent.sh
+  17_batch_expansion.sh
 )
 
 run_scenario() {

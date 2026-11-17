@@ -482,6 +482,9 @@ Unspecified tuning comes from the canonical [shared defaults](https://github.com
 | `fetchTimeoutMs` | `20000`: page-fetch timeout in milliseconds | Integer from 1 to 600,000 |
 | `llmTimeoutMs` | `120000`: application timeout per model call in milliseconds | Integer from 1 to 600,000 |
 | `fetchConcurrency` | `4`: simultaneous page fetches | Integer from 1 to 32 |
+| `maxBatchEntries` | `10`: maximum queries per batch | Integer from 2 to 100 |
+| `batchConcurrency` | `4`: maximum entries running at once | Integer from 1 to 32 |
+| `batchExtractionConcurrency` | `8`: shared extraction slots across all entries, in place of `extractionConcurrency` | Integer from 1 to 32 |
 | `extractionConcurrency` | `4`: simultaneous per-page extractions | Integer from 1 to 32 |
 | `extractionMaxTokens` | `8000`: per-page output-token limit (includes hidden reasoning tokens) | Integer from 16 to 128,000 |
 | `collationMaxTokens` | `8000`: synthesis output-token limit | Integer from 16 to 128,000 |
@@ -495,7 +498,7 @@ Unspecified tuning comes from the canonical [shared defaults](https://github.com
 | `minRequestIntervalMs` | `0`: extraction-call spacing in milliseconds; zero disables pacing | Integer from 0 to 120,000 |
 | `cacheDir` | `.search`: workspace-relative cache directory | Nonempty relative directory, without absolute paths, backslashes or traversal components |
 | `browserFingerprint` | `chrome_145`: browser signature for fetching | `chrome_145`, the verified shared profile |
-| `disableTelemetry` | `false`: write the local `meta.json` sidecar; `true` suppresses it | Boolean |
+| `disableTelemetry` | `false`: write local telemetry, including batch entries' browsing history in `stages.fetch.urls`; `true` suppresses `meta.json` and `batch-meta.json`, not the cache or manifest | Boolean |
 | `disableLlmsFullDiscovery` | `false`: probe for supplementary documentation; `true` skips probes and downloads | Boolean |
 | `searchWebSearch` | Disabled; engine `auto`, `maxResults: 8`, reasoning `minimal`. Enables the search server tool when configured | Validated block described below; replaces the entire shared default block |
 
@@ -618,9 +621,13 @@ Refresh behaviour:
 - An `extraction-failed` or `collate-failed` repeat preserves a successful report in the same way, but archives and replaces an earlier `extraction-failed` or `collate-failed` report. A later run recognises a failure report only by its first line, the marker `<!-- intelli-search:extraction-failed -->` or `<!-- intelli-search:collate-failed -->`; the tool result omits the marker. Committing a failure report also removes any index entry for that folder, so the cache index lists only successful reports.
 - The numbered siblings are a same-day safety net, not a versioned archive: copy a report elsewhere if it must be retained long-term.
 
-**Local Telemetry (`meta.json`):** Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+**Batch Folders.** Both modes keep each entry's ordinary cache folder and write a separate `<date>-batch-<slug>-<hash>/` folder. `manifest.json` lists the queries in order, their outcomes and their folder paths at completion. Later repeats can rotate a member without updating that path. `batch-meta.json` is written unless telemetry is disabled. Only a successful expansion merge writes `report.md` and indexes the batch. A repeated batch attempts to archive the earlier batch folder even if the new merge fails. `rejected-synthesis.json` is a diagnostic written only for nonempty merge candidates that failed validation, not for a transport failure with no candidate. It can accompany a report if a later candidate passed.
 
-To suppress the sidecar in the MCP server, set `"disableTelemetry": true` inside the configuration's [`tuning` object](#tuning).
+**Local Telemetry (`meta.json`):** Batch entries add `batch.id`, `batch.mode`, `batch.size` and `batch.position`. Their `stages.fetch.urls` list records browsing history (successfully fetched URLs). `batch-meta.json` records the batch duration, concurrency limits, entry outcomes and, in expansion mode, merge size, duration and outcome. For the fields and their units see [Telemetry Sidecar](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md#telemetry-sidecar).
+
+Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+
+To suppress both telemetry files in the MCP server, set `"disableTelemetry": true` inside the configuration's [`tuning` object](#tuning).
 
 ## Compatibility
 

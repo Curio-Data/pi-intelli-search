@@ -30,6 +30,22 @@ intelli_research(
 )
 ```
 
+### Planned Queries
+
+When several questions are known before research starts, pass `queries` instead of `query`. Use `batchMode="expansion"` for related questions that need one answer, or `batchMode="independent"` for separate answers. A question that arises from a finding belongs in a later call. Give each entry a distinct query and an extraction focus. Top-level `focusPrompt`, `maxUrls` and `domains` apply to entries that do not override them.
+
+```
+intelli_research(
+  batchMode="expansion", maxUrls=3,
+  queries=[
+    {query:"SQLite WAL read transactions", focusPrompt:"Identify when a reader's snapshot starts and ends."},
+    {query:"SQLite WAL checkpoints", focusPrompt:"Explain how a long-running reader affects checkpoint progress."}
+  ]
+)
+```
+
+If fewer than two entries complete or the merge fails, use the returned per-query sections and the stated reason rather than assuming the answers were reconciled.
+
 ### Other Parameters
 
 - `maxUrls`: `3` for quick targeted research, `10` (default) for broad research, `16` for exhaustive research. Pass at least `1`; the tool schema declares `minimum: 1`. The setting caps this at `maxUrls` (default 20). Requests above the cap are silently clamped; the runtime default and configured cap are unchanged.

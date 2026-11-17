@@ -17,7 +17,8 @@
 #                        when the loop model is OpenRouter, the agent loop.
 #   TEST_MODEL           Override the headless agent-loop model.
 #
-# Live provider quota is consumed (one maxUrls=1 research). Keep pacing
+# Live provider quota is consumed (one single query and one two-entry batch,
+# each query capped at one page). Keep pacing
 # with other live scenarios; do not run it in a parallel burst.
 
 set -euo pipefail
@@ -289,6 +290,9 @@ fi
 
 if [ "$ERRORS" -eq 0 ]; then
   echo ""
+  # shellcheck source=test/e2e/batch.sh
+  source "$SCRIPT_DIR/batch.sh"
+  e2e_batch independent mcp "$ISOLATED_AGENT_DIR" "$WORKSPACE" "$PROJECT_DIR"
   echo "🎉 MCP STDIO HOST SMOKE PASSED"
 else
   echo ""

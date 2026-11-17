@@ -238,7 +238,8 @@ test("lists the four canonical tools with truthful annotations", { timeout: 60_0
     assert.equal(byName.intelli_research.annotations?.readOnlyHint, false);
     assert.equal(byName.intelli_collate.annotations?.destructiveHint, true);
     assert.equal(byName.intelli_research.annotations?.destructiveHint, true);
-    assert.match(byName.intelli_research.description ?? "", /degraded repeat preserves/);
+    assert.match(byName.intelli_research.description ?? "", /degraded single-query repeat preserves/);
+    assert.match(byName.intelli_research.description ?? "", /batchMode 'expansion' for one merged report or 'independent' for separate answers/);
     assert.match(byName.intelli_search.description ?? "", /Start here for quick factual questions/);
     assert.match(byName.intelli_research.description ?? "", /call intelli_search first, not this tool/);
     assert.doesNotMatch(byName.intelli_research.description ?? "", /primary research tool/);

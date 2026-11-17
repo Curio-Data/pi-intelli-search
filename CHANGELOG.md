@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Native Extension
+
+- Shared core: `intelli_research` accepts several queries in one call. Independent batches return a section per query; expansion batches merge related answers into one source-checked report and return the per-query results if the merge fails. Each entry keeps its own cache. The batch adds a manifest and optional local telemetry, including fetched URLs on its entries.
+
+### MCP Server
+
+Core batch behaviour is shared with the native extension and recorded above.
+
 ## [pi-0.23.0] - 2026-11-11
 
 Post-0.22.0 corrections to provenance validation, failure reports and cache recovery, and alignment with the `Pi` 1.5.2 retry classifier.
