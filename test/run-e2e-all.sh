@@ -36,7 +36,9 @@
 #   E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS
 #                               Limit for 10_config_recipes.sh, whose recipes can
 #                               each take three attempts (default: 2400).
-#   E2E_RECIPE_TIMEOUT_SECONDS  Scenario 10 only: limit per pi attempt (default: 600).
+#   E2E_RECIPE_TIMEOUT_SECONDS  Scenario 10 only: limit per attempt, through pi or
+#                               the direct tool driver (default: 600).
+#   E2E_RETRY_GAP_SECONDS       Pause before a scenario retries an attempt (default: 5).
 #   E2E_SKIP_BUILD              1 to use existing builds instead of building first.
 #
 # Excludes run-e2e-publish.sh (release-only; validates the npm package).
@@ -51,7 +53,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/e2e/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
-  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS \
+  E2E_TIMEOUT_SECONDS E2E_RETRY_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS \
   E2E_RECIPE_TIMEOUT_SECONDS E2E_RECIPES_SCRIPT_TIMEOUT_SECONDS E2E_RUN_MODE
 MODE="${E2E_RUN_MODE:-parallel}"
 GAP="${E2E_GAP_SECONDS:-20}"
@@ -116,7 +118,7 @@ DURATIONS=()
 SUITE_START=$(date +%s)
 
 # timeout_for <script>: scenario 10 runs five recipes concurrently, each
-# making up to three E2E_RECIPE_TIMEOUT_SECONDS attempts (≈1,860 s at the defaults);
+# making up to three E2E_RECIPE_TIMEOUT_SECONDS attempts (≈1,810 s at the defaults);
 # every other script keeps the shorter limit, so a hang still fails fast.
 timeout_for() {
   if [[ "$1" == e2e/10_config_recipes.sh ]]; then echo "$RECIPES_TIMEOUT"; else echo "$SCRIPT_TIMEOUT"; fi

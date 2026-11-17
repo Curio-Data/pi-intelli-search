@@ -37,7 +37,7 @@ echo "📝 Log: $LOG_FILE"
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
-  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+  E2E_TIMEOUT_SECONDS E2E_RETRY_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
 
 # ── Check prerequisites ────────────────────────────────────────────
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
@@ -69,7 +69,10 @@ e2e_setup_loop_model || exit 1
 
 # ── Create isolated agent directory ────────────────────────────────
 ISOLATED_AGENT_DIR="$(mktemp -d -t pi-e2e-migration-XXXXXX)"
-trap 'rm -rf "$ISOLATED_AGENT_DIR"' EXIT
+# A private working directory: the cache lands there, not in the repository's
+# own .search/, and no concurrent scenario can count this run's sidecar.
+E2E_CWD="$(mktemp -d -t pi-e2e-migration-cwd-XXXXXX)"
+trap 'rm -rf "$ISOLATED_AGENT_DIR" "$E2E_CWD"' EXIT
 
 echo "🔒 Isolated agent dir: $ISOLATED_AGENT_DIR"
 
@@ -134,7 +137,7 @@ echo "🧪 Extension: $E2E_EXTENSION_PATH"
 
 PROMPT="Use intelli_research with maxUrls=3 to research: what is the latest Bun version"
 
-if ! e2e_run_pi "$ISOLATED_AGENT_DIR" "$PROJECT_DIR" "$PROMPT"; then
+if ! e2e_run_pi "$ISOLATED_AGENT_DIR" "$E2E_CWD" "$PROMPT"; then
   echo ""
   echo "❌ pi failed (no cache sidecar after retries)"
   echo ""
@@ -181,7 +184,7 @@ else
 fi
 
 # 3. Cache artifacts must exist — proves pipeline ran end-to-end
-CACHE_DIR="$PROJECT_DIR/.search"
+CACHE_DIR="$E2E_CWD/.search"
 
 if [ -d "$CACHE_DIR" ]; then
   echo "✅ .search/ cache directory exists"

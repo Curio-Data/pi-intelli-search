@@ -48,7 +48,7 @@ echo "📝 Log: $LOG_FILE"
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY \
-  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+  E2E_TIMEOUT_SECONDS E2E_RETRY_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
 
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/lib.sh"
@@ -195,8 +195,8 @@ run_floor_pi() {
       echo "   ⚠️  floor-pi attempt ${attempt}/3 failed (exit ${ec}, cache written: ${ran})" >&2
     fi
     if [[ "${attempt}" -lt 3 ]]; then
-      echo "   ⏳ retrying after 30s" >&2
-      sleep 30
+      echo "   ⏳ retrying after ${E2E_RETRY_GAP_SECONDS:-5}s" >&2
+      sleep "${E2E_RETRY_GAP_SECONDS:-5}"
     fi
   done
   rm -f "${ref}"

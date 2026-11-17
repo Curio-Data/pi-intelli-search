@@ -137,13 +137,69 @@ e2e_compact_json_output() {
   ' 2>/dev/null
 }
 
+# e2e_fresh_completed_sidecar <cwd> <ref_file>: true when a meta.json newer
+# than <ref_file> lies within four levels of <cwd> and records a completed
+# research with a fetched page and visible synthesis.
+e2e_fresh_completed_sidecar() {
+  find "$1" -maxdepth 4 -name meta.json -newer "$2" \
+    -exec jq -e 'select(.outcome == "completed" and .stages.fetch.succeeded > 0 and .stages.collate.summaryChars > 0)' {} \; \
+    -print -quit 2>/dev/null | grep -q '^/'
+}
+
+E2E_DIRECT_DRIVER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/direct-tool.mjs"
+
+# e2e_run_direct <agent_dir> <cwd> <tool> <args_json> [timeout_s]
+# Calls one registered tool through the real host (test/e2e/direct-tool.mjs)
+# with exactly <args_json> and no agent-loop model call, for scenarios that
+# test what settings do rather than how a model fills in arguments. Loads the
+# extension under test as `pi -p` does with --no-extensions and -e. Retries,
+# verdict and outputs match e2e_run_pi: up to three attempts while no fresh
+# completed sidecar appears beneath <cwd>; E2E_LAST_OUTPUT holds the last
+# attempt's event stream. A host without the driver's API (exit 69) or an
+# attempted agent-loop call (exit 71) fails at once, never falling back.
+e2e_run_direct() {
+  local agent="$1" cwd="$2" tool="$3" args="$4" tmo="${5:-${E2E_TIMEOUT_SECONDS:-360}}"
+  local attempt out ec ref host_bin
+  local trace_args=()
+  host_bin="$(command -v pi)" || { echo "e2e_run_direct: pi is not on PATH" >&2; return 1; }
+  if [[ -n "${E2E_TRACE_EXTENSION_PATH:-}" ]]; then trace_args=(--extension "${E2E_TRACE_EXTENSION_PATH}"); fi
+  ref="$(mktemp)"
+  for attempt in 1 2 3; do
+    out="$(
+      cd "$cwd"
+      PI_CODING_AGENT_DIR="$agent" \
+        timeout "${tmo}s" node "$E2E_DIRECT_DRIVER" --host-bin "$host_bin" \
+          --agent-dir "$agent" --cwd "$cwd" --tool "$tool" --args "$args" \
+          --no-extensions --extension "${E2E_EXTENSION_PATH}" "${trace_args[@]}" 2>&1 </dev/null
+    )" && ec=0 || ec=$?
+    E2E_LAST_OUTPUT="${out}"
+    E2E_LAST_EXIT_CODE="${ec}"
+    if [[ "${ec}" -eq 69 || "${ec}" -eq 71 ]]; then
+      echo "   ❌ direct invocation unusable (exit ${ec}): $(printf '%s\n' "$out" | grep -E 'e2e_direct_(unavailable|settled)' | tail -1)" >&2
+      rm -f "${ref}"
+      return 1
+    fi
+    if e2e_fresh_completed_sidecar "${cwd}" "${ref}"; then
+      rm -f "${ref}"
+      return 0
+    fi
+    echo "   ⚠️  direct attempt ${attempt}/3 left no completed sidecar (exit ${ec})" >&2
+    if [[ "${attempt}" -lt 3 ]]; then
+      echo "   ⏳ retrying after ${E2E_RETRY_GAP_SECONDS:-5}s" >&2
+      sleep "${E2E_RETRY_GAP_SECONDS:-5}"
+    fi
+  done
+  rm -f "${ref}"
+  return 1
+}
+
 # e2e_run_pi <agent_dir> <cwd> <prompt> [timeout_s]
 # Runs headless pi with the standard E2E flags, retrying (up to 3
-# attempts, 30s apart) while no fresh .search meta.json sidecar
-# appears. Freshness is judged against a reference file created before
-# the first attempt, so back-to-back scenarios sharing a cwd only
-# count their own run. Sets E2E_LAST_OUTPUT to the last attempt's
-# output. Returns 0 only when a fresh completed sidecar records useful work.
+# attempts, E2E_RETRY_GAP_SECONDS apart, default 5) while no fresh
+# .search meta.json sidecar appears. Freshness is judged against a
+# reference file created before the first attempt, but any fresh completed
+# sidecar beneath <cwd> counts, so concurrent runs need separate cwds.
+# Sets E2E_LAST_OUTPUT to the last attempt's output. Returns 0 only when a fresh completed sidecar records useful work.
 e2e_run_pi() {
   local agent="$1" cwd="$2" prompt="$3" tmo="${4:-${E2E_TIMEOUT_SECONDS:-360}}"
   local attempt out ec ran ref trace_file compact
@@ -183,11 +239,7 @@ e2e_run_pi() {
     # The fresh completed sidecar decides the research verdict, not the exit
     # code. Keep the process outcome visible: a completed research can still
     # be followed by an agent-loop timeout or print-mode truncation.
-    if find "${cwd}" -maxdepth 4 -name meta.json -newer "${ref}" \
-      -exec jq -e 'select(.outcome == "completed" and .stages.fetch.succeeded > 0 and .stages.collate.summaryChars > 0)' {} \; \
-      -print -quit 2>/dev/null | grep -q '^/'; then
-      ran=1
-    fi
+    if e2e_fresh_completed_sidecar "${cwd}" "${ref}"; then ran=1; fi
     E2E_LAST_EXIT_CODE="${ec}"
     E2E_LAST_TIMED_OUT=0
     if [[ "${ec}" -eq 124 ]]; then E2E_LAST_TIMED_OUT=1; fi
@@ -213,11 +265,36 @@ e2e_run_pi() {
       echo "   ⚠️  pi attempt ${attempt}/3 failed (exit ${ec}; no completed sidecar)" >&2
     fi
     if [[ "${attempt}" -lt 3 ]]; then
-      echo "   ⏳ retrying after 30s" >&2
-      sleep 30
+      echo "   ⏳ retrying after ${E2E_RETRY_GAP_SECONDS:-5}s" >&2
+      sleep "${E2E_RETRY_GAP_SECONDS:-5}"
     fi
   done
   rm -f "${ref}"
   E2E_LAST_OUTPUT="${out}"
   return 1
+}
+
+# e2e_run_pi_bg <out_file> <agent_dir> <cwd> <prompt> [timeout_s]
+# Starts e2e_run_pi in the background so a scenario can run independent arms
+# at once. Writes the last attempt's output to <out_file> and the exit status
+# to <out_file>.status; sets E2E_BG_PID. Each concurrent arm needs its own
+# <cwd>: e2e_run_pi accepts any fresh completed sidecar beneath its cwd, so
+# arms sharing one would count each other's research.
+e2e_run_pi_bg() {
+  local out_file="$1"
+  shift
+  (
+    if e2e_run_pi "$@"; then st=0; else st=$?; fi
+    printf '%s\n' "${E2E_LAST_OUTPUT:-}" > "${out_file}"
+    echo "${st}" > "${out_file}.status"
+  ) &
+  E2E_BG_PID=$!
+}
+
+# e2e_wait_bg <pid> <out_file>: waits for an e2e_run_pi_bg arm and returns its
+# e2e_run_pi status; sets E2E_LAST_OUTPUT from <out_file>.
+e2e_wait_bg() {
+  wait "$1" || true
+  E2E_LAST_OUTPUT="$(cat "$2" 2>/dev/null || true)"
+  return "$(cat "$2.status" 2>/dev/null || echo 1)"
 }

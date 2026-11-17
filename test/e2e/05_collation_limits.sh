@@ -3,9 +3,9 @@
 # test/e2e/05_collation_limits.sh: E2E test for collationMaxTokens
 #
 # Proves collationMaxTokens is enforced by running the same single-URL
-# research query twice (back-to-back): first with the default 4000
-# tokens, then with a tight 200-token limit. Compares report sizes to
-# confirm the output was clamped.
+# research query twice at once, each in its own agent directory and working
+# directory: one with the default 4000 tokens, one with a tight 200-token
+# limit. Compares report sizes to confirm the output was clamped.
 #
 # Usage:
 #   ./test/e2e/05_collation_limits.sh
@@ -17,8 +17,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CACHE_DEFAULT="$PROJECT_DIR/.e2e-collate-default"
-CACHE_TIGHT="$PROJECT_DIR/.e2e-collate-tight"
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
@@ -33,8 +31,7 @@ echo "📝 Log: $LOG_FILE"
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
-  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
-RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-30}"
+  E2E_TIMEOUT_SECONDS E2E_RETRY_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
 # A non-reasoning collation model makes the 200-token comparison measure
 # visible output rather than a reasoning budget. Empty summaries remain failures.
 COLLATE_MODEL="openai/gpt-4.1-mini"
@@ -77,129 +74,79 @@ echo "🧪 Extension: $E2E_EXTENSION_PATH"
 # unrelated, low-quality search results.
 RESEARCH_PROMPT='Use intelli_research with maxUrls=1 and domains=["docs.python.org"] to research: Python data model reference. Use focusPrompt="Extract the data-model details and canonical API terminology."'
 
-# ═══════════════════════════════════════════════════════════════════
-# Run 1: Default collation limit (4000 tokens)
-# ═══════════════════════════════════════════════════════════════════
+# Both arms run at once. Each has its own agent directory and working
+# directory, so neither can count the other's sidecar or cache entry.
+# extractMaxChars stays well below the page length in both arms: this scenario
+# tests collation, and a shorter extraction input only shortens the wait.
+ISO1="$(mktemp -d -t pi-e2e-collim1-XXXXXX)"
+ISO2="$(mktemp -d -t pi-e2e-collim2-XXXXXX)"
+CWD1="$(mktemp -d -t pi-e2e-collim1-cwd-XXXXXX)"
+CWD2="$(mktemp -d -t pi-e2e-collim2-cwd-XXXXXX)"
+CACHE_DEFAULT="$CWD1/.e2e-collate-default"
+CACHE_TIGHT="$CWD2/.e2e-collate-tight"
+# shellcheck disable=SC2064
+trap "rm -rf $ISO1 $ISO2 $CWD1 $CWD2" EXIT
+
+# write_arm <agent_dir> <collationMaxTokens> <cacheDir>
+write_arm() {
+  mkdir -p "$1/sessions"
+  e2e_write_auth "$1"
+  cat > "$1/settings.json" <<SEOF
+{
+  "defaultProvider": "$E2E_LOOP_PROVIDER",
+  "defaultModel": "$E2E_LOOP_MODEL",
+  "pi-intelli-search": {
+    "searchModel": {
+      "provider": "openrouter",
+      "model": "perplexity/sonar"
+    },
+    "extractModel": {
+      "provider": "openrouter",
+      "model": "minimax/minimax-m2.7"
+    },
+    "collateModel": {
+      "provider": "openrouter",
+      "model": "$COLLATE_MODEL"
+    },
+    "defaultUrls": 1,
+    "maxUrls": 1,
+    "searchRetryAttempts": 4,
+    "extractMaxChars": 40000,
+    "extractionMaxTokens": 3000,
+    "collationMaxTokens": $2,
+    "cacheDir": "$3"
+  }
+}
+SEOF
+  echo '{}' > "$1/models.json"
+}
+write_arm "$ISO1" 4000 .e2e-collate-default
+write_arm "$ISO2" 200 .e2e-collate-tight
+
+echo ""
+echo "▶ RUN 1 (collationMaxTokens=4000) and RUN 2 (collationMaxTokens=200) start together"
+e2e_run_pi_bg "$CWD1/output.txt" "$ISO1" "$CWD1" "$RESEARCH_PROMPT"; PID1=$E2E_BG_PID
+e2e_run_pi_bg "$CWD2/output.txt" "$ISO2" "$CWD2" "$RESEARCH_PROMPT"; PID2=$E2E_BG_PID
+e2e_wait_bg "$PID1" "$CWD1/output.txt" && ST1=0 || ST1=$?
+OUTPUT1="$E2E_LAST_OUTPUT"
+e2e_wait_bg "$PID2" "$CWD2/output.txt" && ST2=0 || ST2=$?
+OUTPUT2="$E2E_LAST_OUTPUT"
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  RUN 1: Default collation (4000 tokens)               ║"
 echo "╚══════════════════════════════════════════════════════╝"
-echo ""
-
-ISO1="$(mktemp -d -t pi-e2e-collim1-XXXXXX)"
-# shellcheck disable=SC2064
-trap "rm -rf $ISO1 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
-
-mkdir -p "$ISO1/sessions"
-
-e2e_write_auth "$ISO1"
-
-cat > "$ISO1/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "searchModel": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "$COLLATE_MODEL"
-    },
-    "defaultUrls": 1,
-    "maxUrls": 1,
-    "searchRetryAttempts": 4,
-    "extractMaxChars": 150000,
-    "extractionMaxTokens": 3000,
-    "collationMaxTokens": 4000,
-    "cacheDir": ".e2e-collate-default"
-  }
-}
-EOF
-
-cat > "$ISO1/models.json" <<'MEOF'
-{}
-MEOF
-
-if ! e2e_run_pi "$ISO1" "$PROJECT_DIR" "$RESEARCH_PROMPT"; then
-  echo ""
-  echo "❌ Run 1 (default) failed (no cache sidecar after retries)"
-  echo "$E2E_LAST_OUTPUT"
-  exit 1
-fi
-OUTPUT1="$E2E_LAST_OUTPUT"
-
 echo "$OUTPUT1"
-rm -rf "$ISO1"
-echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run (E2E_RUN_GAP_SECONDS)..."
-sleep "$RUN_GAP_SECONDS"
-
-# ═══════════════════════════════════════════════════════════════════
-# Run 2: Tight collation limit (200 tokens)
-# ═══════════════════════════════════════════════════════════════════
-
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  RUN 2: Tight collation (200 tokens)                  ║"
 echo "╚══════════════════════════════════════════════════════╝"
-echo ""
-
-ISO2="$(mktemp -d -t pi-e2e-collim2-XXXXXX)"
-# shellcheck disable=SC2064
-trap "rm -rf $ISO2 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
-
-mkdir -p "$ISO2/sessions"
-
-e2e_write_auth "$ISO2"
-
-cat > "$ISO2/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "searchModel": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "$COLLATE_MODEL"
-    },
-    "defaultUrls": 1,
-    "maxUrls": 1,
-    "searchRetryAttempts": 4,
-    "extractMaxChars": 150000,
-    "extractionMaxTokens": 3000,
-    "collationMaxTokens": 200,
-    "cacheDir": ".e2e-collate-tight"
-  }
-}
-EOF
-
-cat > "$ISO2/models.json" <<'MEOF'
-{}
-MEOF
-
-if ! e2e_run_pi "$ISO2" "$PROJECT_DIR" "$RESEARCH_PROMPT"; then
-  echo ""
-  echo "❌ Run 2 (tight) failed (no cache sidecar after retries)"
-  echo "$E2E_LAST_OUTPUT"
+echo "$OUTPUT2"
+if [ "$ST1" -ne 0 ] || [ "$ST2" -ne 0 ]; then
+  [ "$ST1" -ne 0 ] && echo "❌ Run 1 (default) failed (no cache sidecar after retries)"
+  [ "$ST2" -ne 0 ] && echo "❌ Run 2 (tight) failed (no cache sidecar after retries)"
   exit 1
 fi
-OUTPUT2="$E2E_LAST_OUTPUT"
-
-echo "$OUTPUT2"
-rm -rf "$ISO2"
 
 # ═══════════════════════════════════════════════════════════════════
 # Compare report sizes

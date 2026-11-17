@@ -37,7 +37,7 @@ echo "📝 Log: $LOG_FILE"
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
-  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+  E2E_TIMEOUT_SECONDS E2E_RETRY_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
 
 E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
 
@@ -239,8 +239,8 @@ for ATTEMPT in 1 2 3; do
     echo "   ⚠️  pi attempt ${ATTEMPT}/3 exited ${ATTEMPT_EC} without a fresh completed sidecar" >&2
   fi
   if [[ "${ATTEMPT}" -lt 3 ]]; then
-    echo "   ⏳ retrying after 30s" >&2
-    sleep 30
+    echo "   ⏳ retrying after ${E2E_RETRY_GAP_SECONDS:-5}s" >&2
+    sleep "${E2E_RETRY_GAP_SECONDS:-5}"
   fi
 done
 rm -f "$REF"

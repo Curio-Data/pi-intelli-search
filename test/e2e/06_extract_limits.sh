@@ -3,9 +3,10 @@
 # test/e2e/06_extract_limits.sh: E2E test for extractMaxChars and extractionMaxTokens
 #
 # Proves both settings are enforced by running the same single-URL
-# research query twice (back-to-back): first with default limits,
-# then with aggressively low limits. Compares extraction file sizes
-# to confirm truncation and token limiting took effect.
+# research query twice at once, in separate agent and working directories:
+# one with a pinned extraction cap, one with aggressively low limits.
+# Compares extraction file sizes to confirm truncation and token limiting
+# took effect.
 #
 # Output is tee'd to .e2e-logs/extract-limits-<timestamp>.log for
 # out-of-band inspection of failures.
@@ -20,9 +21,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CACHE_DEFAULT="$PROJECT_DIR/.e2e-extract-default"
-CACHE_TIGHT="$PROJECT_DIR/.e2e-extract-tight"
-RUN_GAP_SECONDS="${E2E_RUN_GAP_SECONDS:-30}"
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 LOG_FILE="$LOG_DIR/extract-limits-${TIMESTAMP}.log"
@@ -39,7 +37,7 @@ echo "📝 Log: $LOG_FILE"
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
 e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY TEST_MODEL \
-  E2E_TIMEOUT_SECONDS E2E_RUN_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
+  E2E_TIMEOUT_SECONDS E2E_RETRY_GAP_SECONDS E2E_GAP_SECONDS E2E_SCRIPT_TIMEOUT_SECONDS
 
 # ── Check prerequisites ────────────────────────────────────────────
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
@@ -78,26 +76,28 @@ echo "🧪 Extension: $E2E_EXTENSION_PATH"
 RESEARCH_PROMPT='Use intelli_research with maxUrls=1 and domains=["docs.python.org"] to research: Python data model reference. Use focusPrompt="Extract the data-model details and canonical API terminology."'
 
 # ═══════════════════════════════════════════════════════════════════
-# Run 1: Pinned legacy cap 3,000 (the 0.20.0+ default is 8,000; both runs
-# pin their caps explicitly so the truncation comparison stays deterministic)
+# Both arms run at once, each with its own agent directory and working
+# directory, so neither can count the other's sidecar or cache entry.
+# Cap3000 arm: pinned legacy extraction cap 3,000 (the 0.20.0+ default is
+# 8,000; both arms pin their caps so the comparison stays deterministic).
+# Its 40,000-character input keeps the page well above the tight arm's
+# 500 characters while shortening the extraction wait.
+# Tight arm: extractMaxChars=500, extractionMaxTokens=1000.
 # ═══════════════════════════════════════════════════════════════════
-
-echo ""
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║  RUN 1: Pinned legacy cap 3,000                      ║"
-echo "║  extractMaxChars=150000  extractionMaxTokens=3000    ║"
-echo "╚══════════════════════════════════════════════════════╝"
-echo ""
-
 ISO1="$(mktemp -d -t pi-e2e-extlim1-XXXXXX)"
+ISO2="$(mktemp -d -t pi-e2e-extlim2-XXXXXX)"
+CWD1="$(mktemp -d -t pi-e2e-extlim1-cwd-XXXXXX)"
+CWD2="$(mktemp -d -t pi-e2e-extlim2-cwd-XXXXXX)"
+CACHE_DEFAULT="$CWD1/.e2e-extract-default"
+CACHE_TIGHT="$CWD2/.e2e-extract-tight"
 # shellcheck disable=SC2064
-trap "rm -rf $ISO1 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
+trap "rm -rf $ISO1 $ISO2 $CWD1 $CWD2" EXIT
 
-mkdir -p "$ISO1/sessions"
-
-e2e_write_auth "$ISO1"
-
-cat > "$ISO1/settings.json" <<EOF
+# write_arm <agent_dir> <extractMaxChars> <extractionMaxTokens> <cacheDir>
+write_arm() {
+  mkdir -p "$1/sessions"
+  e2e_write_auth "$1"
+  cat > "$1/settings.json" <<SEOF
 {
   "defaultProvider": "$E2E_LOOP_PROVIDER",
   "defaultModel": "$E2E_LOOP_MODEL",
@@ -117,92 +117,44 @@ cat > "$ISO1/settings.json" <<EOF
     "defaultUrls": 1,
     "maxUrls": 1,
     "searchRetryAttempts": 4,
-    "extractMaxChars": 150000,
-    "extractionMaxTokens": 3000,
+    "extractMaxChars": $2,
+    "extractionMaxTokens": $3,
     "collationMaxTokens": 4000,
-    "cacheDir": ".e2e-extract-default"
+    "cacheDir": "$4"
   }
 }
-EOF
+SEOF
+  echo '{}' > "$1/models.json"
+}
+write_arm "$ISO1" 40000 3000 .e2e-extract-default
+write_arm "$ISO2" 500 1000 .e2e-extract-tight
 
-cat > "$ISO1/models.json" <<'MEOF'
-{}
-MEOF
-
-if ! e2e_run_pi "$ISO1" "$PROJECT_DIR" "$RESEARCH_PROMPT"; then
-  echo ""
-  echo "❌ Run 1 (pinned legacy cap) failed (no cache sidecar after retries)"
-  echo "$E2E_LAST_OUTPUT"
-  exit 1
-fi
+echo ""
+echo "▶ RUN 1 (cap 3,000) and RUN 2 (tight limits) start together"
+e2e_run_pi_bg "$CWD1/output.txt" "$ISO1" "$CWD1" "$RESEARCH_PROMPT"; PID1=$E2E_BG_PID
+e2e_run_pi_bg "$CWD2/output.txt" "$ISO2" "$CWD2" "$RESEARCH_PROMPT"; PID2=$E2E_BG_PID
+e2e_wait_bg "$PID1" "$CWD1/output.txt" && ST1=0 || ST1=$?
 OUTPUT1="$E2E_LAST_OUTPUT"
+e2e_wait_bg "$PID2" "$CWD2/output.txt" && ST2=0 || ST2=$?
+OUTPUT2="$E2E_LAST_OUTPUT"
 
+echo ""
+echo "╔══════════════════════════════════════════════════════╗"
+echo "║  RUN 1: Pinned legacy cap 3,000                      ║"
+echo "║  extractMaxChars=40000   extractionMaxTokens=3000    ║"
+echo "╚══════════════════════════════════════════════════════╝"
 echo "$OUTPUT1"
-rm -rf "$ISO1"
-echo "⏳ Sleeping ${RUN_GAP_SECONDS}s before the tight run (E2E_RUN_GAP_SECONDS)..."
-sleep "$RUN_GAP_SECONDS"
-
-# ═══════════════════════════════════════════════════════════════════
-# Run 2: Tight limits (extractMaxChars=500, extractionMaxTokens=1000)
-# ═══════════════════════════════════════════════════════════════════
-
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  RUN 2: Tight limits                                 ║"
 echo "║  extractMaxChars=500    extractionMaxTokens=1000     ║"
 echo "╚══════════════════════════════════════════════════════╝"
-echo ""
-
-ISO2="$(mktemp -d -t pi-e2e-extlim2-XXXXXX)"
-# shellcheck disable=SC2064
-trap "rm -rf $ISO2 $CACHE_DEFAULT $CACHE_TIGHT" EXIT
-
-mkdir -p "$ISO2/sessions"
-
-e2e_write_auth "$ISO2"
-
-cat > "$ISO2/settings.json" <<EOF
-{
-  "defaultProvider": "$E2E_LOOP_PROVIDER",
-  "defaultModel": "$E2E_LOOP_MODEL",
-  "pi-intelli-search": {
-    "searchModel": {
-      "provider": "openrouter",
-      "model": "perplexity/sonar"
-    },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "defaultUrls": 1,
-    "maxUrls": 1,
-    "searchRetryAttempts": 4,
-    "extractMaxChars": 500,
-    "extractionMaxTokens": 1000,
-    "collationMaxTokens": 4000,
-    "cacheDir": ".e2e-extract-tight"
-  }
-}
-EOF
-
-cat > "$ISO2/models.json" <<'MEOF'
-{}
-MEOF
-
-if ! e2e_run_pi "$ISO2" "$PROJECT_DIR" "$RESEARCH_PROMPT"; then
-  echo ""
-  echo "❌ Run 2 (tight) failed (no cache sidecar after retries)"
-  echo "$E2E_LAST_OUTPUT"
+echo "$OUTPUT2"
+if [ "$ST1" -ne 0 ] || [ "$ST2" -ne 0 ]; then
+  [ "$ST1" -ne 0 ] && echo "❌ Run 1 (pinned legacy cap) failed (no cache sidecar after retries)"
+  [ "$ST2" -ne 0 ] && echo "❌ Run 2 (tight) failed (no cache sidecar after retries)"
   exit 1
 fi
-OUTPUT2="$E2E_LAST_OUTPUT"
-
-echo "$OUTPUT2"
-rm -rf "$ISO2"
 
 # ═══════════════════════════════════════════════════════════════════
 # Compare extraction sizes

@@ -48,7 +48,7 @@ fi
 # scenario needs: other credentials kept there never reach the Codex agent.
 # shellcheck source=test/e2e/env.sh
 source "$SCRIPT_DIR/env.sh"
-e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY
+e2e_load_env "$PROJECT_DIR/.env" OPENROUTER_API_KEY E2E_RETRY_GAP_SECONDS
 unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
 
 LOG_DIR="$PROJECT_DIR/.e2e-logs"
@@ -236,8 +236,8 @@ for ATTEMPT in 1 2; do
     break
   fi
   if completed_sidecar || [[ "$ATTEMPT" -eq 2 ]]; then break; fi
-  echo "   ⚠️  attempt ${ATTEMPT}/2 did not complete a turn; retrying after 30s"
-  sleep 30
+  echo "   ⚠️  attempt ${ATTEMPT}/2 did not complete a turn; retrying after ${E2E_RETRY_GAP_SECONDS:-5}s"
+  sleep "${E2E_RETRY_GAP_SECONDS:-5}"
 done
 if [[ "$RAN" -ne 1 ]]; then
   echo "❌ codex exec did not complete a turn"
