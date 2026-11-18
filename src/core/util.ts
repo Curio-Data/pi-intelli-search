@@ -839,3 +839,42 @@ export function titleFromUrl(url: string): string {
     return url;
   }
 }
+
+function hostOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A candidate link label is unsafe when it contains a bracket, newline or
+ *  tab: embedded as `[label](url)` text it could close the link early or
+ *  open another one (`](https://phish)` inside a provider-supplied title). */
+function labelCandidateOk(label: string): boolean {
+  return label.length > 0 && !/[\][\r\n\t]/.test(label);
+}
+
+/**
+ * A citation or link title safe to embed as Markdown link text: an unsafe or
+ * empty candidate falls back to the URL-derived title, then the hostname,
+ * then "source". Numeric labels pass through unchanged; the caller decides
+ * whether a number is acceptable there.
+ */
+export function safeLinkLabel(title: string | undefined, url: string): string {
+  if (title !== undefined && labelCandidateOk(title)) return title;
+  const derived = titleFromUrl(url);
+  if (labelCandidateOk(derived)) return derived;
+  return hostOf(url) ?? "source";
+}
+
+/**
+ * As safeLinkLabel, but the result is never purely numeric (including
+ * dotted numbers such as an IP host): a number as link text reads as a
+ * citation index, which is exactly what re-titling removes.
+ */
+export function safeNonNumericLinkLabel(title: string | undefined, url: string): string {
+  const label = safeLinkLabel(title, url);
+  if (/^\d+(\.\d+)*$/.test(label)) return hostOf(url) ?? "source";
+  return label;
+}

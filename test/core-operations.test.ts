@@ -237,7 +237,7 @@ it("removes clamped intelli_search markers and notes the removal", async (t) => 
   // Displayed list is capped at 2: [1] stays, [3] and [9] lose their
   // referents and are removed rather than pointing at wrong entries.
   assert.match(result.text, /Supported \[1\] and tracked; details\./);
-  assert.match(result.text, /> Note: 2 citation markers in the answer referred to sources outside the list above and were removed\./);
+  assert.match(result.text, /> Note: 2 citation markers in the answer could not be matched to the Sources list and were removed\./);
   const sources = result.details.sources as Array<{ url: string }>;
   assert.deepEqual(sources.map((s) => s.url), ["https://a.example/1", "https://b.example/2"]);
 });
@@ -257,6 +257,61 @@ it("retitles number-labelled prose links in the Sources list", async (t) => {
   // The link's numeric markdown label must not survive as the entry title.
   assert.match(result.text, /1\. \[Official guide\]\(https:\/\/docs\.example\.com\/guide\)/);
   assert.match(result.text, /Details in \[1\]\(https:\/\/docs\.example\.com\/guide\)\./);
+});
+
+it("sanitises untrusted citation titles in the Sources list", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root);
+  const complete = base.context.models.complete;
+  base.context.models.complete = async (request) =>
+    request.model.model === "search"
+      ? {
+          text: "Answer with a prose [guide](https://docs.example.com/guide) link.",
+          citations: [
+            {
+              url: "https://evil.example/page",
+              title: "Click](https://evil.example/phish) here\nLine2",
+            },
+          ],
+        }
+      : complete(request);
+  const result = await search({ query: "evil title" }, base.context);
+  // The provider title must not be able to close the entry's link and open
+  // another, nor leak a newline into the rendered list.
+  assert.match(result.text, /2\. \[page\]\(https:\/\/evil\.example\/page\)/);
+  assert.doesNotMatch(result.text, /phish/);
+});
+
+it("numbers intelli_search markers by provider occurrence order across duplicate citations", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 3, maxUrls: 3 });
+  const complete = base.context.models.complete;
+  // Provider ids 1..4 with the same URL at ids 1 and 2; the deduplicated
+  // display list holds three entries but the markers number by occurrence.
+  const occurrences = [
+    { url: "https://a.example/1", title: "A" },
+    { url: "https://a.example/1", title: "A" },
+    { url: "https://b.example/2", title: "B" },
+    { url: "https://c.example/3", title: "C" },
+  ];
+  base.context.models.complete = async (request) =>
+    request.model.model === "search"
+      ? {
+          text: "First [1]. Third [3]. Fourth [4].",
+          citations: [
+            { url: "https://a.example/1", title: "A" },
+            { url: "https://b.example/2", title: "B" },
+            { url: "https://c.example/3", title: "C" },
+          ],
+          citationOrder: occurrences,
+        }
+      : complete(request);
+  const result = await search({ query: "duplicates" }, base.context);
+  // Displayed: [A, B, C]. Marker [3] is provider id 3 = B (entry 2) and
+  // [4] is id 4 = C (entry 3). Without the occurrence order the fallback
+  // would map [3] to citations[2] = C: the wrong source.
+  assert.match(result.text, /First \[1\]\. Third \[2\]\. Fourth \[3\]\.\n/);
+  assert.equal(result.outcome, "completed");
 });
 
 it("labels inferred guesses in intelli_search text and structured sources", async (t) => {

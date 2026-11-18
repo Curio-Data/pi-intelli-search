@@ -16,6 +16,7 @@ import type { ModelConfig } from "./types.js";
 import type { ModelRetryConfig, ModelUsage } from "./core/contracts.js";
 import type { AnnotationSink } from "./annotations.js";
 import {
+  annotationSinkOrder,
   createAnnotationSink,
   harvestChunkAnnotations,
   settleAnnotationSink,
@@ -254,6 +255,9 @@ export async function callLlm(
       if (annotations) {
         await settleAnnotationSink(annotations);
         options!.annotations!.citations.push(...annotations.citations);
+        // Position-faithful order for bare [n] markers: one channel only, so
+        // dual-channel delivery does not double-count ids.
+        options!.annotations!.citationOrder = annotationSinkOrder(annotations);
       }
       return { value };
     },

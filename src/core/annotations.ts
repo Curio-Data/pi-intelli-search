@@ -22,8 +22,6 @@
 // SSE/JSON. Failures are swallowed everywhere — the main pipeline must never
 // depend on this side channel.
 
-import { titleFromUrl } from "./util.js";
-
 /** Standard fetch surface, structurally compatible with the native provider hook. */
 export type FetchFunction = typeof globalThis.fetch;
 
@@ -38,6 +36,17 @@ export interface AnnotationSink {
   citations: HarvestedCitation[];
   /** In-flight background body reads started by the fetch wrapper. */
   reads?: Promise<void>[];
+  /** Provider-occurrence order (duplicates kept) from the winning citation
+   *  channel of the last attempt, set by callLlm on success. The deduped
+   *  `citations` array is the display/merge list; `citationOrder` is the
+   *  numbering base for bare `[n]` markers, which the provider indexes by
+   *  search-result id, not by deduplicated position (annotations.ts header
+   *  and citation-markers.ts). */
+  citationOrder?: HarvestedCitation[];
+  /** Occurrences from the stream-event channel, duplicates kept (internal). */
+  streamOrder?: HarvestedCitation[];
+  /** Occurrences from the fetch-tee channel, duplicates kept (internal). */
+  teeOrder?: HarvestedCitation[];
 }
 
 /**
@@ -68,11 +77,47 @@ export function createAnnotationSink(): AnnotationSink {
   return { citations: [] };
 }
 
-/** Append a citation unless an identical URL is already present. */
-function pushCitation(sink: AnnotationSink, citation: HarvestedCitation): void {
+/** Append a citation unless an identical URL is already present in the
+ *  deduplicated display list. Occurrence order per channel is recorded
+ *  separately, duplicates included: the provider numbers citation markers
+ *  by search-result id, and a repeated URL still occupies an id, so the
+ *  position-faithful order must not collapse it. */
+function pushCitation(
+  sink: AnnotationSink,
+  citation: HarvestedCitation,
+  channel: "stream" | "tee" = "tee",
+): void {
   if (!/^https?:\/\//.test(citation.url)) return; // tolerate provider quirks
+  (channel === "stream"
+    ? (sink.streamOrder ??= [])
+    : (sink.teeOrder ??= [])
+  ).push(citation);
   if (sink.citations.some((c) => c.url === citation.url)) return;
   sink.citations.push(citation);
+}
+
+/** Drop duplicate URLs, keeping each first occurrence. The inverse of the
+ *  occurrence order parseCitations now returns: callers that want the
+ *  historical deduplicated view of one body apply this to the occurrences. */
+export function dedupeCitations(list: readonly HarvestedCitation[]): HarvestedCitation[] {
+  const seen = new Set<string>();
+  const out: HarvestedCitation[] = [];
+  for (const citation of list) {
+    if (!/^https?:\/\//.test(citation.url)) continue;
+    if (seen.has(citation.url)) continue;
+    seen.add(citation.url);
+    out.push(citation);
+  }
+  return out;
+}
+
+/** The position-faithful citation order of a sink: the stream channel when it
+ *  delivered anything (the primary supported channel on pi-ai >= 0.99),
+ *  otherwise the fetch-tee channel. Both channels observe the same provider
+ *  stream, so counting only one avoids double-counting every id. */
+export function annotationSinkOrder(sink: AnnotationSink): HarvestedCitation[] {
+  if (sink.streamOrder && sink.streamOrder.length > 0) return sink.streamOrder;
+  return sink.teeOrder ?? [];
 }
 
 interface UrlCitationAnnotation {
@@ -127,7 +172,7 @@ function citationsFromChunk(parsed: unknown): HarvestedCitation[] {
  * per-attempt sink and `pushCitation` dedupes by URL, so overlap is harmless.
  */
 export function harvestChunkAnnotations(parsed: unknown, sink: AnnotationSink): void {
-  for (const citation of citationsFromChunk(parsed)) pushCitation(sink, citation);
+  for (const citation of citationsFromChunk(parsed)) pushCitation(sink, citation, "stream");
 }
 
 /**
@@ -135,17 +180,16 @@ export function harvestChunkAnnotations(parsed: unknown, sink: AnnotationSink): 
  * (`data: {json}` lines, `data: [DONE]` terminator, `:`-prefixed comments)
  * and plain JSON (non-streaming responses). Junk lines are ignored; a body
  * that is not valid SSE or JSON yields zero citations rather than an error.
+ *
+ * Returns every occurrence in provider order, duplicates included: the
+ *  provider's citation ids are positional over its own list, so a repeated
+ * URL still occupies an id and must not collapse the later positions.
+ * Callers that want one entry per URL apply dedupeCitations().
  */
 export function parseCitations(bodyText: string): HarvestedCitation[] {
   const out: HarvestedCitation[] = [];
-  const seen = new Set<string>();
   const add = (list: HarvestedCitation[]) => {
-    for (const c of list) {
-      if (!seen.has(c.url)) {
-        seen.add(c.url);
-        out.push(c);
-      }
-    }
+    out.push(...list);
   };
 
   const trimmed = bodyText.trim();
@@ -197,7 +241,7 @@ export function wrapFetchForAnnotations(
         const read = tee
           .text()
           .then((bodyText) => {
-            for (const citation of parseCitations(bodyText)) pushCitation(sink, citation);
+            for (const citation of parseCitations(bodyText)) pushCitation(sink, citation, "tee");
           })
           .catch(() => {
             /* aborted or failed stream: the main path owns the error */
@@ -254,10 +298,11 @@ export function mergeCitations(
   // guesses from prose, so a guess never displaces a real citation from the
   // maxUrls slice. The inferred flag survives for fetch and result rendering.
   // A link whose markdown label is only a number (search models write
-  // `[3](url)` inline citations) is retitled from the matching citation or,
-  // failing that, from the URL itself: after marker alignment the label's
-  // number no longer matches any list, and a reader must not see an entry
-  // titled "3" whose position is different.
+  // `[3](url)` inline citations) adopts the matching citation's title, so the
+  // rendered entry is not titled by a position-like number — but only when
+  // the provider actually supplied a title: a label the model chose (a
+  // version, "42") that no annotation corroborates is kept verbatim, because
+  // nothing shows it is a citation marker.
   const citationTitle = new Map<string, string>();
   for (const c of sink.citations) {
     if (c.title && c.title.length > 0 && !citationTitle.has(c.url)) citationTitle.set(c.url, c.title);
@@ -265,7 +310,7 @@ export function mergeCitations(
   for (const { url, title, inferred } of textUrls) {
     if (inferred) continue;
     if (/^\d{1,3}$/.test(title.trim())) {
-      add(url, citationTitle.get(url) ?? titleFromUrl(url));
+      add(url, citationTitle.get(url) ?? title);
     } else {
       add(url, title);
     }

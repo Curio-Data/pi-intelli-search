@@ -6,7 +6,12 @@ import { SEARCH_SYSTEM_PROMPT } from "../prompts.js";
 import type { SearchParams } from "../contracts.js";
 import { mergeCitations } from "../annotations.js";
 import { alignCitationMarkers } from "../citation-markers.js";
-import { extractSourceUrls, stripTrailingSourcesSection, throwIfAborted } from "../util.js";
+import {
+  extractSourceUrls,
+  safeLinkLabel,
+  stripTrailingSourcesSection,
+  throwIfAborted,
+} from "../util.js";
 import { appendDomainFilter, buildSearchPayloadPatch } from "../messages.js";
 import type { OperationContext, OperationResult } from "../contracts.js";
 
@@ -27,7 +32,7 @@ export async function search(
   const payloadPatch = buildSearchPayloadPatch(settings, searchConfig.provider, params.domains);
 
   try {
-    const { text: responseText, citations } = await models.complete({
+    const { text: responseText, citations, citationOrder } = await models.complete({
       model: searchConfig,
       systemPrompt: SEARCH_SYSTEM_PROMPT,
       userMessage: searchQuery,
@@ -55,7 +60,7 @@ export async function search(
     // order differs whenever prose links precede annotation-only URLs. Align
     // every marker to the entry it will actually sit beside, and neutralise
     // markers whose referent the cap removed (citation-markers.ts).
-    const aligned = alignCitationMarkers(responseText, citations, sources);
+    const aligned = alignCitationMarkers(responseText, { citations, citationOrder }, sources);
     // Alignment runs on the full text (the trailing section can be the
     // numbering base for models without annotations); the section itself is
     // then dropped exactly as before.
@@ -69,7 +74,7 @@ export async function search(
     };
 
     return {
-      text: formatSearchResult(result, aligned),
+      text: formatSearchResult(result, aligned.removed),
       outcome: "completed",
       details: { sources, query: params.query },
     };
@@ -79,10 +84,7 @@ export async function search(
   }
 }
 
-function formatSearchResult(
-  result: SearchResult,
-  aligned?: { removed: number; retitled: number },
-): string {
+function formatSearchResult(result: SearchResult, removedCount = 0): string {
   let output = `## Search results for: "${result.query}"\n\n`;
   output += result.summary + "\n\n";
   output += `### Sources (${result.sources.length})\n\n`;
@@ -90,13 +92,16 @@ function formatSearchResult(
     const inferred = source.inferred
       ? ` (inferred from text, not a citation${source.originalReference ? `; original token: ${source.originalReference}` : ""})`
       : "";
-    output += `${i + 1}. [${source.title || source.url}](${source.url})${inferred}\n`;
+    // Provider titles are untrusted page text: sanitise anything embedded as
+    // link text so a title cannot close the entry's link and open another.
+    const label = source.title ? safeLinkLabel(source.title, source.url) : source.url;
+    output += `${i + 1}. [${label}](${source.url})${inferred}\n`;
   }
-  if (aligned && aligned.removed > 0) {
+  if (removedCount > 0) {
     output +=
-      `\n> Note: ${aligned.removed} citation marker${aligned.removed === 1 ? "" : "s"} in the answer ` +
-      `referred to source${aligned.removed === 1 ? "" : "s"} outside the list above and ` +
-      `${aligned.removed === 1 ? "was" : "were"} removed.\n`;
+      `\n> Note: ${removedCount} citation marker${removedCount === 1 ? "" : "s"} in the answer ` +
+      `could not be matched to the Sources list and ` +
+      `${removedCount === 1 ? "was" : "were"} removed.\n`;
   }
   return output;
 }
