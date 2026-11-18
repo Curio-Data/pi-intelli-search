@@ -121,6 +121,65 @@ test("runtime errors have safe stable categories, including cancellation", async
   }
 });
 
+test("research batches are validated before any provider call and run through the runtime", async () => {
+  const f = await fixture();
+  try {
+    let network = 0;
+    const runtime = await createRuntime(f.config, {
+      env: { FIXTURE_KEY: "fixture-secret" },
+      logger,
+      fetch: fakeTransport((body) => {
+        network++;
+        const model = String(body.model);
+        if ((body.messages as Array<{ content: string }>)[0].content === CACHE_SUGGEST_PROMPT)
+          return json(completion("[]"));
+        const user = (body.messages as Array<{ content: string }>).at(-1)?.content ?? "";
+        const tag = user.includes("second") ? "two" : "one";
+        return json(
+          completion(
+            model === "perplexity/sonar"
+              ? `[Docs](https://${tag}.example/page)`
+              : model === "fixture/extract"
+                ? "Official documentation, current.\nFacts"
+                : "Synthesised facts",
+          ),
+        );
+      }),
+      researchDependencies: {
+        fetchPages: async (urls) =>
+          urls.map((url) => ({ url, title: "Docs", content: "Body", status: "success" as const, source: "markdown" })),
+        downloadLlmsFullToCache: async () => null,
+      },
+    });
+    const invalid = (error: unknown) => error instanceof StandaloneError && error.code === "INVALID_ARGUMENTS";
+    const bad: Array<OperationInputs["intelli_research"]> = [
+      { queries: [{ query: "first" }, { query: "second" }] },
+      { query: "first", queries: [{ query: "first" }, { query: "second" }], batchMode: "independent" },
+      { queries: [{ query: "first" }, { query: "" }], batchMode: "independent" },
+      { queries: [{ query: "first" }, { query: "second", maxUrls: 0 }], batchMode: "independent" },
+      { queries: [{ query: "first" }, { query: "second", domains: ["https://not-a-host"] }], batchMode: "independent" },
+    ];
+    for (const params of bad) await assert.rejects(runtime.execute("intelli_research", params), invalid);
+    assert.equal(network, 0, "no provider call for invalid arguments");
+
+    const result = await runtime.execute("intelli_research", {
+      queries: [{ query: "first topic" }, { query: "second topic" }],
+      batchMode: "independent",
+      maxUrls: 1,
+    });
+    assert.equal(result.outcome, "completed");
+    assert.match(result.text, /# Query 2 of 2: second topic/);
+    assert(!result.text.includes("`read "));
+    const batch = result.details.batch as { cachePath: string; outcome: string };
+    assert.equal(batch.outcome, "completed");
+    const record = JSON.parse(await readFile(join(batch.cachePath, "batch-meta.json"), "utf8"));
+    assert.equal(record.adapter, "mcp");
+    assert.equal(record.packageName, identity.name);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("missing later-stage models fail before any paid inference", async () => {
   const f = await fixture();
   let paid = 0;
@@ -386,6 +445,55 @@ test("the collation input budget trims the prompt and the MCP result says what w
       "utf8",
     );
     assert.ok(saved.length > 21_000, "the saved extraction keeps the whole text");
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("research checks search-engine domain compatibility only for the lists entries use", async () => {
+  const f = await fixture();
+  try {
+    let network = 0;
+    const config = {
+      ...f.config,
+      settings: {
+        ...f.config.settings,
+        searchWebSearch: {
+          ...f.config.settings.searchWebSearch,
+          enabled: true,
+          engine: "perplexity",
+          excludedDomains: ["blocked.example"],
+        },
+      },
+    } as typeof f.config;
+    const runtime = await createRuntime(config, {
+      env: { FIXTURE_KEY: "fixture-secret" },
+      logger,
+      fetch: fakeTransport(() => {
+        network++;
+        return json({ error: { code: 500, message: "stop" } }, 500);
+      }),
+    });
+    const invalid = (error: unknown) => error instanceof StandaloneError && error.code === "INVALID_ARGUMENTS";
+    // One entry inherits the top-level list, so the engine conflict applies.
+    await assert.rejects(
+      runtime.execute("intelli_research", {
+        queries: [{ query: "first" }, { query: "second", domains: [] }],
+        batchMode: "independent",
+        domains: ["docs.example"],
+      }),
+      invalid,
+    );
+    assert.equal(network, 0);
+    // Every entry overrides the top-level list with none, so it is never used.
+    const outcome = await runtime
+      .execute("intelli_research", {
+        queries: [{ query: "first", domains: [] }, { query: "second", domains: [] }],
+        batchMode: "independent",
+        domains: ["docs.example"],
+      })
+      .then(() => undefined, (error: unknown) => error);
+    assert.ok(!invalid(outcome), "an unused top-level list is not rejected");
   } finally {
     await f.cleanup();
   }

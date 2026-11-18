@@ -13,7 +13,7 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1083%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1128%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -98,6 +98,7 @@ The native extension uses `Pi` settings and authentication. Generic MCP registra
   - [Collation Input Budget](#collation-input-budget)
 - [Usage Examples](#usage-examples)
   - [Quick Search](#quick-search)
+  - [Planned Research Questions](#planned-research-questions)
   - [Deep Research](#deep-research)
   - [Targeted Research With Domain Guidance](#targeted-research-with-domain-guidance)
   - [Comparing Options](#comparing-options)
@@ -420,6 +421,8 @@ Both packages expose these four operations. Start with `intelli_search` for fact
 | `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
 | `intelli_research` | Search, fetch, extract, collate and cache multi-page research in one call.                        |
 
+Use `query` for a single question. For two or more distinct questions known at launch, pass `queries` instead, with `batchMode: "independent"` for a separate answer per question or `batchMode: "expansion"` for one report on a common topic. Each entry supplies a `query`; its `focusPrompt`, `domains` and `maxUrls` override the corresponding top-level defaults. The page cap applies per entry. An expansion needs at least two completed entries to merge, and the merge request must fit `collationInputBudgetTokens`. If the merge is skipped or fails, the result states why and gives the per-query sections instead. If no entry completes, the result gives each entry's section and outcome; the call returns an error, listing each entry's reason and the batch manifest path when it was written, only when every entry raised an error rather than ending in a degraded outcome such as `no-links`. Ask questions prompted by a finding in a later call. A merged report refers to its members' evidence by cache folder path, and a completed repeat of one of its queries on the same UTC date replaces what those paths hold; see [Same-Day Repeats of Batch Members](#same-day-repeats-of-batch-members). The [native batch benchmark](docs/BENCHMARKS.md#batch-research-on-the-native-host) compares five separate calls with one batch and shows how much main-model input went into issuing the next query.
+
 <!-- packages:pi -->
 The native `intelli_research` schema declares `minimum: 1` for `maxUrls`. `Pi` 1.2.0 codemode displays this as an `@minimum` constraint. The runtime default page budget and configured upper cap remain controlled by [Settings](#settings).
 <!-- /packages -->
@@ -476,6 +479,8 @@ A synthesis that cites a URL found only in the omitted text fails provenance val
 
 When anything was trimmed, the result and `report.md` carry a **Collation input trimmed** notice. It names the limit that bound: the per-source limit (`collationSourceMaxTokens`), the total input budget (`collationInputBudgetTokens`), or both. It lists each affected source under "Trimmed to the per-source limit", "Trimmed by both limits", "Trimmed to a fair share of the input budget", "Left out with empty retained text" or "Left out to fit the input budget", with the extraction characters sent and the path of its untrimmed extraction file, including the cache folder, ready to open from the workspace. The notice states that the omitted text is in those files and that re-running research does not recover it; read them for the missing detail. Its **Configuration** line names the setting to raise next time. Raising `collationSourceMaxTokens` sends more of one long page; raising `collationInputBudgetTokens`, within the collation model's context, or requesting fewer URLs sends more overall. Raising only the total budget does not recover text removed by the per-source cap. When a limit is already at its maximum, the notice says so instead of advising a raise.
 
+An expansion batch's merge sends whole member summaries, which this budget cannot trim. The merge measures its request at the same ≈4 characters per token and, when it exceeds `collationInputBudgetTokens`, is skipped before the model call; the result states the measured size and returns the per-query sections.
+
 If the limits leave no extraction text at all, the synthesis model is not called. Research returns `collate-failed` with the extractions and pages saved, and manual `intelli_collate` returns an error; both name `collationInputBudgetTokens` and `collationSourceMaxTokens` as the settings to raise.
 
 <a id="quick-start"></a>
@@ -488,6 +493,49 @@ These examples describe tool calls for the agent, not shell commands. MCP hosts 
 ```text
 intelli_search(query="TypeScript 5.8 release date")
 ```
+
+### Planned Research Questions
+
+For a request such as “Explain how a long-running reader affects a database checkpoint”, use one query if it covers both parts. When separate searches are needed to inform the same decision, pass expansion arguments to `intelli_research`:
+
+```json
+{
+  "batchMode": "expansion",
+  "domains": ["sqlite.org"],
+  "maxUrls": 3,
+  "queries": [
+    {
+      "query": "SQLite WAL reader snapshots",
+      "focusPrompt": "Identify when a snapshot ends."
+    },
+    {
+      "query": "SQLite WAL checkpoint progress",
+      "focusPrompt": "Explain how readers limit progress."
+    }
+  ]
+}
+```
+
+For a request such as “Prepare separate notes on backup consistency and path handling”, use independent mode to keep the answers separate:
+
+```json
+{
+  "batchMode": "independent",
+  "maxUrls": 2,
+  "queries": [
+    {
+      "query": "SQLite online backup API",
+      "focusPrompt": "Identify when a backup is consistent."
+    },
+    {
+      "query": "Python pathlib pure paths",
+      "focusPrompt": "List operations that require no I/O."
+    }
+  ]
+}
+```
+
+For a partial batch, read the entry outcomes before relying on coverage. A successful merge lists the member reports, including a saved failure report when available. Source identifiers such as `[S1]` belong to the inventory in the report that cites them; the merged report has its own numbering.
 
 ### Deep Research
 
@@ -689,7 +737,7 @@ Keep extraction cheap and spend on the final synthesis, where cross-source reaso
 
 ### Recipe 7: Free-Tier Resilience
 
-For an observed account limit of approximately 0.33 requests per second, the default fan-out of up to 4 concurrent extractions can exceed the limit. Space the calls, lengthen the retries, and shrink the page count. This recipe is a response to observed limits, not a provider-wide quota claim about free-tier keys.
+For an observed account limit of approximately 0.33 requests per second, the default fan-out of up to 4 concurrent extractions can exceed the limit. Space the extraction calls, lengthen the retries, shrink the page count and limit batches to five entries, two at a time. The throttle spaces extraction calls only; concurrent batch entries can still issue search and collation calls together. This recipe is a response to observed limits, not a provider-wide quota claim about free-tier keys.
 
 ```jsonc
 {
@@ -697,6 +745,9 @@ For an observed account limit of approximately 0.33 requests per second, the def
     "defaultUrls": 5,
     "minRequestIntervalMs": 3000,
     "extractionConcurrency": 2,
+    "batchExtractionConcurrency": 2,
+    "batchConcurrency": 2,
+    "maxBatchEntries": 5,
     "llmRetryAttempts": 4,
     "llmTimeoutMs": 120000
   }
@@ -969,6 +1020,8 @@ Per research run with the default 10 pages: ≈$0.09
 | Collate (M3 via OpenRouter)         | 1                     | ≈$0.01    |
 | Cache Suggest (M3 via OpenRouter)   | 1                     | ≈$0.0002  |
 
+In a batch, each entry has its own search, page budget and collation. Five entries at `maxUrls: 3` can select up to fifteen pages, not three. The extraction pool limits simultaneous extractions, not search or collation calls. Expansion adds one merge call after the entries settle. The whole batch is one tool call, so its entries and, in expansion mode, the merge all count towards a host's tool-call deadline. Use a smaller batch or fewer pages per entry on a constrained account.
+
 Since v0.13.0 the search stage adds recovered provider citation URLs to prose links, increasing the candidate source set; `maxUrls` still caps page selection. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 and M2.7 had equal per-token prices in the recorded benchmark; M3 wrote ≈2× the extraction characters, with the cost estimate separately projecting greater token usage); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](#choosing-an-alternative-search-configuration) or [MCP configuration](#configuration). The extract and collate rows scale with the selected models.
 
 The estimate assumes pages of ≈50K characters. `extractMaxChars` (default 400,000) caps the text sent to extraction at ≈100,000 input tokens per page, so a ten-page run over long pages can send ≈1M input tokens to the extract model before collation, at a correspondingly higher cost. Budget retries add output: with the default `outputBudgetRetries`, one affected call's budget attempts can bill up to seven times its configured output cap, before transport retries. Lower `extractMaxChars` or `outputBudgetRetries` to bound that spend.
@@ -1013,6 +1066,9 @@ The example below shows the default models and common tuning settings. The [Sett
     "cacheDir": ".search",
     "extractMaxChars": 400000,
     "extractionConcurrency": 4,
+    "maxBatchEntries": 10,
+    "batchConcurrency": 4,
+    "batchExtractionConcurrency": 8,
     "extractionMaxTokens": 8000,
     "collationMaxTokens": 8000,
 
@@ -1041,11 +1097,14 @@ The example below shows the default models and common tuning settings. The [Sett
 | `maxUrls` | 1 → 2 | `20` | Hard cap on URLs fetched. Lower caps mean faster responses and lower cost; higher caps allow more thorough research. Each extra successfully extracted page adds ≈$0.007 under the M3 output-volume estimate in [Cost](#cost). Requests above the cap are silently clamped. Raised from 16 in v0.13.0. |
 | `cacheDir` | 4, 5 | `.search` | Directory where research runs are cached. Change this to keep project-specific research separate. Example: `".my-research-cache"`. |
 | `extractMaxChars` | 3. Extract | `400000` | Maximum characters of page content fed to the extract LLM per page (1 to 2,000,000). At ≈4 characters per token the default allows ≈100,000 input tokens per page, so a ten-page run over long pages can send ≈1M input tokens to the extract model; see [Cost](#cost). The model's tokenizer determines the actual count. Add prompt tokens and reserved output (`extractionMaxTokens`) before comparing with the token window. Lower this limit if that budget does not fit the extract model, or to bound input spend. Raised from 150,000 in 0.22.0 because long documentation pages were cut before the sections that answered the query. |
+| `maxBatchEntries` | Batch | `10` | Maximum number of queries accepted in one batch (2 to 100). |
+| `batchConcurrency` | Batch | `4` | Maximum entries running at once (1 to 32). Fetch concurrency applies separately to each running entry. |
+| `batchExtractionConcurrency` | Batch | `8` | Maximum per-page extractions running across all entries (1 to 32), in place of `extractionConcurrency`. |
 | `extractionConcurrency` | 3. Extract | `4` | Number of per-page extractions sent to the extract model simultaneously. Bounded so a wide result set does not fire many concurrent LLM calls and trigger rate limiting. Raise it (6-8) on generous rate limits for faster extraction; lower it (1-2) on tight limits. |
 | `extractionMaxTokens` | 3. Extract | `8000` | Per-page output-token cap. For reasoning models on OpenRouter, the budget includes reasoning as well as visible text. Exhaustion can leave an empty or incomplete extraction; the larger default reduced empty-output failures in recorded probes but does not guarantee completion on every route or page. Within research, an empty extraction that stopped at the cap is retried with the cap doubled, up to `outputBudgetRetries` times; an empty extraction that remains fails with a reason and reported token counts when available. Nonempty extractions that stop at the cap, by finish reason or reported usage, are retained with a truncation warning. Reserve this output budget alongside input and prompt tokens within the model's limits. A higher cap can increase OpenRouter's in-flight credit reservation. See [Extraction Diagnostics](#extraction-diagnostics). |
 | `collationMaxTokens` | 4. Collate | `8000` | Maximum output tokens for the final synthesis. Lower values force tighter deduplication. Lower this when using a collation model with a small context window (the output must fit alongside all extraction inputs); for such a model, also lower `collationInputBudgetTokens`. This bounds synthesis output, not the source and cache appendices added afterwards. Within research, a synthesis that stops at this cap is retried with the cap doubled, up to `outputBudgetRetries` times. Raised from 4,000 in 0.22.0 because reasoning models spend part of the cap on hidden reasoning. |
 | `outputBudgetRetries` | 3, 4 | `2` | Research retries for an extraction that stops at its output cap without visible text, or a synthesis that stops at its cap (0 to 5; `0` disables). Each retry doubles the cap, so the default runs 8,000, then 16,000, then 32,000 tokens, never above 128,000 or the model's output limit. Each attempt's timeout scales with its cap, up to four times `llmTimeoutMs`: 14 minutes across one page's three budget attempts with the defaults, before transport retries under `llmRetryAttempts`. See [Extraction Diagnostics](#extraction-diagnostics). |
-| `collationInputBudgetTokens` | 4. Collate | `221000` | Tokens available to the extractions and their headers in the collation request (10,000 to 1,000,000). The default leaves room for prompts and a 32,000-token synthesis within ≈256,000 tokens of request and response, the range in which the default collation model was observed to work well; its context window is larger. When the extractions exceed it, the longest are trimmed and the result names each untrimmed file. Raise it only within the collation model's context. See [Collation Input Budget](#collation-input-budget). |
+| `collationInputBudgetTokens` | 4. Collate | `221000` | Tokens available to the extractions and their headers in the collation request (10,000 to 1,000,000). The default leaves room for prompts and a 32,000-token synthesis within ≈256,000 tokens of request and response, the range in which the default collation model was observed to work well; its context window is larger. When the extractions exceed it, the longest are trimmed and the result names each untrimmed file. In an expansion batch it also bounds the merge request: a merge whose summaries exceed it is skipped before the model call and the per-query sections are returned. Raise it only within the collation model's context. See [Collation Input Budget](#collation-input-budget). |
 | `collationSourceMaxTokens` | 4. Collate | `32000` | Ceiling on one extraction's text sent to collation (256 to 128,000). The default equals the largest extraction output after two budget retries; it binds in research when `extractionMaxTokens` or `outputBudgetRetries` is raised, and in manual collation whenever a supplied extraction is longer. Raise it to send more of one long page. See [Collation Input Budget](#collation-input-budget). |
 | `fetchTimeoutMs` | 2. Fetch | `20000` | Per-page fetch timeout in milliseconds. Increase for sites known to be slow. Fetches run in parallel so this does not multiply by page count. |
 | `fetchConcurrency` | 2. Fetch | `4` | Number of pages fetched simultaneously. Higher values (6-8) complete the fetch stage faster but may trigger rate limiting. Lower values (2) are gentler on target servers. |
@@ -1057,7 +1116,7 @@ The example below shows the default models and common tuning settings. The [Sett
 | `searchRetryAttempts` | 1. Search | `2` | Total attempts for the search stage when it returns a valid response with zero usable links (a degraded result), including the first. Independent of `llmRetryAttempts`, which covers transport errors. |
 | `minRequestIntervalMs` | 3. Extract | `0` | Minimum gap in milliseconds between concurrent extract LLM calls, including budget retries. `0` disables the throttle. For an observed account limit of approximately 0.33 requests per second, use approximately `3000`. Adjust to observed limits rather than payment status. |
 | `disableLlmsFullDiscovery` | Supplementary Fetch | `false` | Set `true` to skip automatic `llms-full.txt` probes and downloads. This does not disable page fetching or extraction. See [Automatic llms-full.txt Discovery](#automatic-llms-fulltxt-discovery). |
-| `disableTelemetry` | All | `false` | When `false`, completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`, `collate-failed`) attempt to write a local `meta.json` sidecar into the configured cache. It contains the full query and per-stage outcomes, which can include confidential information. The sidecar adds no network transmission or credential fields; ordinary research still sends requests to configured services. Set `true` to suppress it. |
+| `disableTelemetry` | All | `false` | When `false`, completed runs and the degraded exits recorded in `outcome` (`no-links`, `fetch-failed`, `extraction-failed`, `collate-failed`) attempt to write a local `meta.json` sidecar into the configured cache. It contains the full query and per-stage outcomes. The query, and on batch entries the fetched URLs in `stages.fetch.urls` (local browsing history), can contain confidential information; `batch-meta.json` holds cache paths whose names include the first words of each query. The sidecar adds no network transmission or credential fields; ordinary research still sends requests to configured services. Set `true` to suppress both `meta.json` and `batch-meta.json`, not the cache or manifest. |
 
 Every integer tuning key is range-checked against the shared table in [`src/core/defaults.ts`](src/core/defaults.ts), the same ranges the MCP server enforces. A value outside its range, or one that is not an integer, is ignored with a warning at session start. A valid value for that key in the other settings file still applies; otherwise the built-in default applies: `[pi-intelli-search] Ignoring settings.json <key>=<value>: expected an integer from <min> to <max>. Valid settings from other files still apply; otherwise the built-in default applies.` The deprecated flat aliases `intelliOutputBudgetRetries`, `intelliCollationInputBudgetTokens` and `intelliCollationSourceMaxTokens` are read as a fallback.
 
@@ -1146,11 +1205,14 @@ Unspecified tuning comes from the canonical [shared defaults](src/core/defaults.
 | `fetchTimeoutMs` | `20000`: page-fetch timeout in milliseconds | Integer from 1 to 600,000 |
 | `llmTimeoutMs` | `120000`: application timeout per model call in milliseconds | Integer from 1 to 600,000 |
 | `fetchConcurrency` | `4`: simultaneous page fetches | Integer from 1 to 32 |
+| `maxBatchEntries` | `10`: maximum queries per batch | Integer from 2 to 100 |
+| `batchConcurrency` | `4`: maximum entries running at once | Integer from 1 to 32 |
+| `batchExtractionConcurrency` | `8`: shared extraction slots across all entries, in place of `extractionConcurrency` | Integer from 1 to 32 |
 | `extractionConcurrency` | `4`: simultaneous per-page extractions | Integer from 1 to 32 |
 | `extractionMaxTokens` | `8000`: per-page output-token limit (includes hidden reasoning tokens) | Integer from 16 to 128,000 |
 | `collationMaxTokens` | `8000`: synthesis output-token limit | Integer from 16 to 128,000 |
 | `outputBudgetRetries` | `2`: research retries at a doubled output cap for an empty capped extraction or any capped synthesis; `0` disables | Integer from 0 to 5 |
-| `collationInputBudgetTokens` | `221000`: tokens available to extractions and their headers in the collation request | Integer from 10,000 to 1,000,000 |
+| `collationInputBudgetTokens` | `221000`: tokens available to extractions and their headers in the collation request; in an expansion batch, a merge request above it is skipped before the model call | Integer from 10,000 to 1,000,000 |
 | `collationSourceMaxTokens` | `32000`: ceiling on one extraction's text sent to collation | Integer from 256 to 128,000 |
 | `llmRetryAttempts` | `3`: model-call attempts, including the first | Integer from 1 to 10 |
 | `searchRetryAttempts` | `2`: search attempts after a valid response with no usable links, including the first | Integer from 1 to 10 |
@@ -1159,9 +1221,24 @@ Unspecified tuning comes from the canonical [shared defaults](src/core/defaults.
 | `minRequestIntervalMs` | `0`: extraction-call spacing in milliseconds; zero disables pacing | Integer from 0 to 120,000 |
 | `cacheDir` | `.search`: workspace-relative cache directory | Nonempty relative directory, without absolute paths, backslashes or traversal components |
 | `browserFingerprint` | `chrome_145`: browser signature for fetching | `chrome_145`, the verified shared profile |
-| `disableTelemetry` | `false`: write the local `meta.json` sidecar; `true` suppresses it | Boolean |
+| `disableTelemetry` | `false`: write local telemetry, including batch entries' browsing history in `stages.fetch.urls`; `true` suppresses `meta.json` and `batch-meta.json`, not the cache or manifest | Boolean |
 | `disableLlmsFullDiscovery` | `false`: probe for supplementary documentation; `true` skips probes and downloads | Boolean |
 | `searchWebSearch` | Disabled; engine `auto`, `maxResults: 8`, reasoning `minimal`. Enables the search server tool when configured | Validated block described below; replaces the entire shared default block |
+
+For a constrained account, merge this fragment into the server configuration. It limits a batch to five entries, runs at most two entries at once and shares two extraction slots across them. `maxUrls` applies per entry in both modes.
+
+```json
+{
+  "tuning": {
+    "maxBatchEntries": 5,
+    "batchConcurrency": 2,
+    "batchExtractionConcurrency": 2,
+    "extractionConcurrency": 2,
+    "defaultUrls": 3,
+    "maxUrls": 3
+  }
+}
+```
 
 `searchWebSearch` requires a boolean `enabled`. Optional fields are `engine` (`auto`, `native`, `exa`, `parallel`, `perplexity`, `firecrawl`), `maxResults` (1 to 25, capped at 20 for `perplexity`), `searchContextSize` (`low`, `medium`, `high`), `allowedDomains`, `excludedDomains`, and `reasoning` (`minimal`, `low`, `medium`, `high`). Domain lists contain hostnames, not URLs (uniform resource locators), and have at most 100 entries. The `perplexity` and `firecrawl` engines cannot combine nonempty allowed and excluded lists. Per-call domains also guide search; they are not a network allowlist for fetched pages.
 
@@ -1269,6 +1346,10 @@ Both packages write this format. The native extension resolves the cache against
 │       ├── 01-developers-cloudflare-com.md
 │       ├── 02-developers-cloudflare-com.md
 │       └── llms-full-developers-cloudflare-com.md
+├── 2026-04-19-batch-d1-worker-api-9c1e04/  # Batch folder
+│   ├── manifest.json           # Queries, outcomes and member folders
+│   ├── batch-meta.json         # Batch telemetry record
+│   └── report.md               # Merged report, after a successful merge
 └── .index.json                 # Index of all cached searches
 ```
 
@@ -1283,13 +1364,19 @@ Refresh behaviour:
 - An `extraction-failed` or `collate-failed` repeat preserves a successful report in the same way, but archives and replaces an earlier `extraction-failed` or `collate-failed` report. A later run recognises a failure report only by its first line, the marker `<!-- intelli-search:extraction-failed -->` or `<!-- intelli-search:collate-failed -->`; the tool result omits the marker. Committing a failure report also removes any index entry for that folder, so the cache index lists only successful reports.
 - The numbered siblings are a same-day safety net, not a versioned archive: copy a report elsewhere if it must be retained long-term.
 
+**Batch Folders.** Both modes keep each entry's ordinary cache folder and write a separate `<date>-batch-<slug>-<hash>/` folder. `manifest.json` lists the queries in order, their outcomes and their folder paths at completion. A merged `report.md` points to the same member folders, in its Per-Query Reports list and in its inventory, which names each query's extraction and source file for every page, one per query where queries share a page. `batch-meta.json` is written unless telemetry is disabled. Only a successful expansion merge writes `report.md` and indexes the batch. A repeated batch attempts to archive the earlier batch folder even if the new merge fails. `rejected-synthesis.json` is a diagnostic written only for nonempty merge candidates that failed validation, not for a transport failure with no candidate. It can accompany a report if a later candidate passed.
+
+<a id="same-day-repeats-of-batch-members"></a>**Limitation: Same-Day Repeats of Batch Members.** A cache folder name combines the UTC date and the query, so a query run twice on one date maps to one folder. A completed repeat archives the earlier run to the next numbered sibling (`.1`, then `.2`) and writes its own files in the folder; a degraded repeat leaves the earlier completed report in place, as the list above describes. The manifest and a merged report record member folders by name and are not updated when a member is archived. After a completed same-day repeat of a member query, alone or in any batch, including the same batch run again, those paths lead to the newer run's report, extractions and sources: a file the merged report's inventory names can hold a different page or be missing. The evidence the merge used is normally still in the numbered sibling. Benchmarking and evaluation, which repeat queries on one day, are the main cases. To keep a merged report beside the evidence it cites, copy the batch folder and its member folders before repeating any of its queries on the same UTC date.
+
 **Local Telemetry (`meta.json`):** Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](scripts/README.md) can aggregate these sidecars to report per-stage success rates.
 
+In a batch, entries add `batch.id`, `batch.mode`, `batch.size` and `batch.position`. Their `stages.fetch.urls` list records browsing history (successfully fetched URLs). `batch-meta.json` records the batch duration, concurrency limits, entry outcomes and, in expansion mode, merge size, duration and outcome. For the fields and their units see [Telemetry Sidecar](docs/ARCHITECTURE.md#telemetry-sidecar).
+
 <!-- packages:pi -->
-To suppress the sidecar in the native extension, set `disableTelemetry: true` inside the `pi-intelli-search` namespace in [Settings](#settings).
+To suppress both telemetry files in the native extension, set `disableTelemetry: true` inside the `pi-intelli-search` namespace in [Settings](#settings).
 <!-- /packages -->
 <!-- packages:mcp -->
-To suppress the sidecar in the MCP server, set `"disableTelemetry": true` inside the configuration's [`tuning` object](#tuning).
+To suppress both telemetry files in the MCP server, set `"disableTelemetry": true` inside the configuration's [`tuning` object](#tuning).
 <!-- /packages -->
 
 ## Compatibility

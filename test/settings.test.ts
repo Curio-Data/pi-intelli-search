@@ -902,6 +902,9 @@ describe("shared tuning ranges drive native validation", () => {
       retryMaxDelayMs: [0, 120_000],
       searchRetryAttempts: [1, 10],
       minRequestIntervalMs: [0, 120_000],
+      maxBatchEntries: [2, 100],
+      batchConcurrency: [1, 32],
+      batchExtractionConcurrency: [1, 32],
     });
   });
 

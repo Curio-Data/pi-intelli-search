@@ -138,6 +138,14 @@ After the main pipeline completes, a lightweight LLM judge (using the extract mo
 
 This stage is supplementary and never replaces the live search. The pipeline awaits the judge under the configured timeout and retry policy, so it can add latency. Its output cap is 2,000 tokens; this is a completion budget, not an input-token estimate. Empty or unparseable output and thrown attempted calls set `stages.cacheSuggest.degraded` when telemetry is enabled. A parsed empty match list is a valid zero-match verdict. Judge failure is logged without discarding completed research; cancellation still propagates. See [Telemetry Sidecar](#telemetry-sidecar) for `ran` and `degraded` semantics and the README [Cost](../README.md#cost) section for the planning estimate.
 
+### Batch Research
+
+Both adapters call the same research operation. It validates exactly one of `query` and `queries`, requires `batchMode` with `queries` only, and rejects repeated or empty batch queries and sizes outside 2 to `maxBatchEntries` before calling a model. The batch runner preflights the models once for all entries, rather than once per entry; the standalone adapter keeps its own catalogue check before the operation. It runs up to `batchConcurrency` entries at a time, sharing a semaphore of `batchExtractionConcurrency` slots and one `minRequestIntervalMs` extraction throttle. Search, fetch and collation remain per entry. An entry failure does not cancel its siblings; cancellation of the call applies to the whole batch.
+
+Independent mode returns each entry's result in caller order. Expansion mode passes the summaries of at least two completed entries to the collation model. `collationInputBudgetTokens` trims each member's evidence but cannot trim whole summaries, so the merge measures its request first and skips the call when it exceeds that budget. The merge renumbers citations into one inventory, with one row per distinct source URL; a page several entries fetched lists each entry's extraction, because each used its own focus. Renumbering leaves fenced, indented and inline code, including code inside block quotes, unchanged, and keeps a link label's own page first. It validates the merged text against the combined evidence and appends paths to the per-query reports. The member paths are those at batch completion and do not follow a later rotation of a member. A skipped, failed or rejected merge returns its reason and the independent-mode sections instead. Cache suggestion runs once over the joined queries when any entry completed, excluding the batch and its members.
+
+Both modes write `<date>-batch-<slug>-<hash>/manifest.json` alongside the members' folders. The hash covers the mode and ordered query texts. The manifest records arguments after defaults, entry outcomes and available paths at batch completion; it does not follow a member's later rotation. Only a successful merge writes and indexes a batch `report.md`. A same-day batch repeat attempts to archive the previous batch folder; if no new report is written the batch leaves the index. `rejected-synthesis.json` retains nonempty rejected merge candidates, including candidates rejected before another was accepted. A transport failure without candidates writes no such file.
+
 ## Dependency Boundary
 
 Native tools construct an explicit operation context through `src/native-operation-context.ts`, then invoke `src/core/operations/`. The core receives resolved settings, model client, workspace paths, package identity, cancellation, progress and diagnostics. It returns text, details and an explicit completed or degraded outcome. Native wrappers preserve existing result payloads, registry diagnostics and rendering.
@@ -168,7 +176,9 @@ Thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins)
 src/
 ├── index.ts              # Extension entry: registers tools, events, model setup
 ├── core/
-│   ├── operations/         # Search, extract, collate and five-stage research
+│   ├── operations/         # Search, extract, collate and research
+│   │   ├── batch-research.ts # Batch scheduling, member outcomes and manifest
+│   │   └── batch-merge.ts    # Expansion summary and batch-wide source inventory
 │   ├── contracts.ts        # Context, model, progress, result and identity contracts
 │   ├── schemas.ts          # Canonical tool parameters
 │   ├── defaults.ts         # Tuning shared by native and standalone adapters
@@ -327,6 +337,12 @@ These fields are additive. Records from versions before their introduction do no
 The file is written atomically (temp file then `rename`) so a crash never leaves a partial `meta.json`, and a best-effort sweep cleans up any `.tmp` orphan left by a prior crashed write. The write is fail-safe: failures are caught and logged, never surfacing to the pipeline result or the agent.
 
 The adapter supplies package identity; the core never discovers a manifest relative to its own module. `extensionVersion` retains the emitting adapter version. Native records keep their existing shape, while non-native records add optional `packageName` and `adapter` fields. This is local telemetry: the sidecar adds no network transmission or credential/account-identifier fields. It stores the full query and local result metadata, which can include personal or confidential information. Ordinary research still sends requests to configured external services. Set `disableTelemetry: true` to suppress the sidecar entirely. The bundled `scripts/analyze-sessions.sh` aggregates sidecars across projects to report per-stage success rates.
+
+Batch member sidecars carry `batch.id`, `batch.mode`, `batch.size` and one-based `batch.position`. On those entries `stages.fetch.urls` records the successfully fetched URLs: this is local browsing history. Single queries do not record that list. `disableTelemetry` suppresses both the member sidecars and the separate `batch-meta.json`, not the manifest or reports.
+
+`batch-meta.json` has `kind: "batch"` and its own `schemaVersion`. It records package identity, `id`, `mode`, start `timestamp`, `durationMs`, `size`, `concurrency` (entry limit capped at batch size), `extractionPool` (shared slot limit), and `cacheSuggest`. `entries` gives position, outcome, duration in milliseconds and committed path when present. The batch `outcome` describes entry completion, independently of the merge: `completed` for all, `partial` for some and `failed` for none.
+
+Expansion records also include `merge`: model, `outcome` (`completed`, `rejected`, `failed` or `skipped`), `entries`, `sourcesBeforeDedup` and `sources`, `inputChars`, `outputChars` and `durationMs`. `contradictions` and `gaps` count list items reported under those headings, not independently verified disagreements or omissions. The record includes `truncated`, `budgetRetries`, serving `provider` and `error` where available. `outputChars` is the accepted summary's length, so it is `0` for a rejected or failed merge whatever its candidates contained; a merge skipped for its input size records its measured `inputChars`.
 
 ## Cost Estimate
 

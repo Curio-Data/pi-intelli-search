@@ -10,6 +10,7 @@
     "native-contract.test.ts",
     "core-boundary.test.ts",
     "core-operations.test.ts",
+    "batch-research.test.ts",
     "core-llm.test.ts",
     "core-cache.test.ts",
     "core-console.test.ts",

@@ -152,6 +152,14 @@ export interface ResearchSettings {
   // Minimum gap (ms) between concurrent LLM calls in the extract fan-out.
   // 0 disables the throttle (default; paid providers have no hard rate limit).
   minRequestIntervalMs: number;
+  // ── Batch research ──
+  // Most entries one research call may carry in `queries`.
+  maxBatchEntries: number;
+  // Entries of one batch that run at once.
+  batchConcurrency: number;
+  // Extraction calls in flight across a whole batch: one pool shared by every
+  // entry, replacing each entry's extractionConcurrency inside a batch.
+  batchExtractionConcurrency: number;
   // ── Network ──
   // Mirrors Pi's top-level global `httpProxy` setting. The LLM stages already
   // route through Pi's managed HTTP clients (which apply it automatically), but

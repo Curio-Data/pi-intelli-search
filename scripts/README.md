@@ -64,6 +64,9 @@ PI_SESSIONS_DIR=/path scripts/analyze-sessions.sh
 | 7 | Cache re-reads: tool calls referencing a `.search/` path |
 | 8 | Research-cache sizes per project (from `.index.json`) |
 | 9 | Telemetry sidecars (`meta.json`): run outcomes, fetch and extraction totals, extraction-budget diagnostics, available extraction routes, degraded cache judges, fetch-variant winners, search retries and cache-suggest hits |
+| 10 | Batch records (`batch-meta.json`): mode, size, outcomes, durations, page overlap and expansion merge statistics |
+
+Section 10 groups expansion records by merge outcome. For attempted merges it gives the number of recorded observations and mean duration (milliseconds) and input size (characters); output size (characters of the accepted summary) is given for completed merges only, because a rejected or failed merge records `0` there whatever its candidates contained. Skipped merges have their own outcome count; they and records with no merge data do not contribute timing or size observations. A recorded zero counts; a missing field does not. Page overlap counts one record per entry position, and a file found under two overlapping search roots is read once.
 
 Section 9 adds `truncatedExtractions`, `budgetExhaustedFailures` and `otherFailures` by summing the corresponding extraction fields across parsed sidecars. These count extractions, not runs. `runsRecordingProvider` counts sidecars with `stages.extract.provider`; `providers` groups those sidecars by their recorded extraction route, not by individual model call. Cache-judge degradation counts sidecars whose `stages.cacheSuggest.degraded` is `true`. Synthesis truncation and synthesis routes are not aggregated.
 
@@ -109,6 +112,17 @@ node scripts/generate-tlds.mjs --check .tmp/tlds.txt  # exit 1 on drift
 
 It rewrites only the version line and the delegated-TLD literal. The `FILE_EXTENSION_TLDS` policy in the same file is maintained by hand and must stay a subset of the delegated set, which `test/util.test.ts` checks. Run the check before a release.
 
+## `spike-super-collation.mjs`
+
+Phase 0 spike for the batch research proposal (`docs/proposals/BATCH-RESEARCH.md`). It reads two or more cached research folders, renumbers each report's `[S<n>]` source identifiers into one series deduplicated by URL, and sends the summaries to the collation model in one call. It writes `input.json`, `output.md` and `metrics.json` (size, usage, duration, route and a citation audit) to the output directory. It makes one live OpenRouter call per run and is never run by the test suite.
+
+```bash
+node scripts/spike-super-collation.mjs --out evidence/agents/<run>/run-1 \
+  .search/<folder-a> .search/<folder-b> .search/<folder-c>
+```
+
+`--model` (default `minimax/minimax-m3`) and `--max-tokens` (default 16000) override the call. The key comes from `OPENROUTER_API_KEY` or the `openrouter` entry of `auth.json` in `PI_CODING_AGENT_DIR` (default `~/.pi/agent/`), and is never printed. Reports written before source identifiers were introduced have no source table and are rejected. The citation audit is a historical heuristic: it counts standalone `[S<n>]` groups only, and the renumbering also rewrites a bare `S<n>` such as "Amazon S3" when that identifier exists. The shipped merge uses the stricter rules in `src/core/operations/batch-merge.ts`.
+
 ## Live E2E Runs
 
 [`test/run-e2e-all.sh`](../test/run-e2e-all.sh) runs the live suite. Unless `E2E_SKIP_BUILD=1`, it builds both packages once. In the default parallel mode it starts every scenario at once, each with its own `TMPDIR` and log under `$TMPDIR/run-<timestamp>-<pid>/`, and the summary prints each scenario's outcome and the last lines of every failing log. Sequential mode runs one scenario at a time in the shared `TMPDIR` and streams its output to the terminal, writing no suite log. `TMPDIR` defaults to the repository's `.tmp/e2e/` when unset or empty; on an encrypted host, leave it unset or point it under the repository's `.tmp/`.
@@ -134,7 +148,7 @@ Use sequential mode where an account meets OpenRouter's 402 in-flight spending l
 
 ### Traced Evidence Runs
 
-[`test/run-e2e-parallel.sh`](../test/run-e2e-parallel.sh) runs scenarios 01 to 12 and 15 with tracing, for investigating what limits or breaks live runs. Run `npm run build:all` first. Each scenario gets an isolated `HOME`, XDG directories, npm cache and trace directory under `.tmp/e2e-evidence/<run>/`, and the run records the key's account state (limit, usage, free-tier flag) at start and end without the key itself.
+[`test/run-e2e-parallel.sh`](../test/run-e2e-parallel.sh) runs scenarios 01 to 12 and 15 to 17 with tracing, for investigating what limits or breaks live runs. Run `npm run build:all` first. Each scenario gets an isolated `HOME`, XDG directories, npm cache and trace directory under `.tmp/e2e-evidence/<run>/`, and the run records the key's account state (limit, usage, free-tier flag) at start and end without the key itself.
 
 ```bash
 npm run build:all

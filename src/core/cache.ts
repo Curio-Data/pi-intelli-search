@@ -195,6 +195,77 @@ export function makeCachePath(query: string, cwd: string, cacheDir: string): str
   return join(resolveWorkspacePaths(cwd, cacheDir).cacheRoot, `${date}-${stem}`);
 }
 
+/**
+ * Folder of one batch research call: `<date>-batch-<words>-<hash>`. The words
+ * come from the first query, for a reader scanning `.search/`; the hash covers
+ * the mode and every query in order, so the same batch repeated on one date
+ * lands in the same folder (and rotates like a single query) while any change
+ * to its queries or mode gets a new one.
+ */
+export function makeBatchCachePath(
+  mode: string,
+  queries: readonly string[],
+  cwd: string,
+  cacheDir: string,
+): string {
+  const date = new Date().toISOString().slice(0, 10);
+  const words = (queries[0] ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 4)
+    .join("-");
+  const hash = createHash("sha1").update(JSON.stringify([mode, ...queries])).digest("hex").slice(0, 6);
+  const stem = words ? `batch-${words}-${hash}` : `batch-${hash}`;
+  return join(resolveWorkspacePaths(cwd, cacheDir).cacheRoot, `${date}-${stem}`);
+}
+
+/** File name of the batch manifest in the batch folder. */
+export const BATCH_MANIFEST_FILE = "manifest.json";
+
+/** Version of the manifest's shape; bump only on a breaking change. */
+export const BATCH_MANIFEST_VERSION = 1 as const;
+
+export interface BatchManifest {
+  schemaVersion: typeof BATCH_MANIFEST_VERSION;
+  id: string;
+  mode: string;
+  timestamp: string;
+  /** Each entry as it ran, after top-level defaults applied, in caller order. */
+  entries: Array<{
+    position: number;
+    query: string;
+    focusPrompt?: string;
+    maxUrls?: number;
+    domains?: string[];
+    outcome: string;
+    /** Display path of the folder this entry committed, as it stood when the batch finished. */
+    cachePath?: string;
+    /** Earlier report kept in place because this entry's run was degraded. */
+    preservedCachePath?: string;
+    error?: string;
+  }>;
+}
+
+/**
+ * Write the manifest atomically. The caller MUST hold the batch folder's
+ * cache lock, as for any artefact in a cache folder.
+ */
+export async function writeBatchManifest(batchPath: string, manifest: BatchManifest): Promise<void> {
+  await mkdir(batchPath, { recursive: true });
+  await atomicWriteFile(join(batchPath, BATCH_MANIFEST_FILE), JSON.stringify(manifest, null, 2) + "\n");
+}
+
+/**
+ * Write a batch folder's merged `report.md` (or another named artefact)
+ * atomically. The caller MUST hold the batch folder's cache lock.
+ */
+export async function writeBatchFile(batchPath: string, name: string, content: string): Promise<void> {
+  await mkdir(batchPath, { recursive: true });
+  await atomicWriteFile(join(batchPath, name), content);
+}
+
 export function domainSlug(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "").replace(/\./g, "-");
@@ -687,25 +758,31 @@ export async function removeIndexEntry(cacheDir: string, slug: string): Promise<
   await atomicWriteFile(indexPath, JSON.stringify(index, null, 2) + "\n");
 }
 
+/** Slugs the judge must not offer: the current run's, or a batch's members. */
+export type JudgeExclusion = string | Iterable<string>;
+
 /**
  * The candidate window shared by the judge prompt and its response parser:
- * the most recent `MAX_JUDGE_ENTRIES` entries, excluding `excludeSlug`.
+ * the most recent `MAX_JUDGE_ENTRIES` entries, excluding `exclude` (one slug,
+ * or a set such as a batch's member folders). Exclusion applies before the
+ * window is cut, so excluded entries never take a candidate's place.
  * Both consumers MUST resolve numbered items against this same window;
  * otherwise a judge answer about item N resolves to a different entry once
  * the eligible history exceeds the window.
  */
-export function judgeCandidates(index: CacheIndex, excludeSlug?: string): IndexEntry[] {
-  return index.searches.filter((e) => e.slug !== excludeSlug).slice(-MAX_JUDGE_ENTRIES);
+export function judgeCandidates(index: CacheIndex, exclude?: JudgeExclusion): IndexEntry[] {
+  const excluded = new Set(typeof exclude === "string" ? [exclude] : (exclude ?? []));
+  return index.searches.filter((e) => !excluded.has(e.slug)).slice(-MAX_JUDGE_ENTRIES);
 }
 
 /**
  * Format the cache index for the LLM judge.
  * Returns the `judgeCandidates` window as a numbered list.
  */
-export function formatIndexForJudge(index: CacheIndex, excludeSlug?: string): string {
+export function formatIndexForJudge(index: CacheIndex, exclude?: JudgeExclusion): string {
   // Take the shared candidate window (most recent entries, excluding the
-  // current search).
-  const entries = judgeCandidates(index, excludeSlug);
+  // current search or a batch's members).
+  const entries = judgeCandidates(index, exclude);
 
   if (entries.length === 0) return "No previous searches.";
 
@@ -738,9 +815,9 @@ export function isWellFormedJudgeResponse(response: string): boolean {
 export function parseJudgeResponse(
   response: string,
   index: CacheIndex,
-  excludeSlug?: string,
+  exclude?: JudgeExclusion,
 ): Array<{ entry: IndexEntry; relevance: string }> {
-  const candidates = judgeCandidates(index, excludeSlug);
+  const candidates = judgeCandidates(index, exclude);
 
   // Extract JSON array from the response — the LLM may wrap it in markdown
   const jsonMatch = response.match(/\[[\s\S]*\]/);

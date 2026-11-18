@@ -1,11 +1,13 @@
 ---
 name: intelli-search
-description: "Research the web for current information. Use for docs, APIs, best practices, library updates, or questions requiring up-to-date web sources. Provides search, per-page extraction, collation, and a persistent .search/ cache for follow-up."
+description: "Research the web for current information. Use for docs, APIs, best practices, library updates, or questions requiring up-to-date web sources. Supports single questions, planned research batches and a persistent .search/ cache for follow-up."
 ---
 
 # Intelli Search
 
 ## When to Use Which Tool
+
+Use one query if it covers the task. For distinct research questions known at launch, use an expansion batch when the questions feed one merged report (for example one decision) and an independent batch for separate deliverables. Wait to ask a question that depends on a finding.
 
 ### Quick Factual Question: Use `intelli_search`
 
@@ -29,6 +31,26 @@ intelli_research(
   focusPrompt="Extract the core rune concepts ($state, $derived, $effect), their syntax, and how they replace the old reactive declarations. Include migration patterns from Svelte 4."
 )
 ```
+
+### Planned Queries
+
+When several questions are known before research starts, pass `queries` instead of `query`. Use `batchMode="expansion"` for related questions that need one answer, or `batchMode="independent"` for separate answers. A question that arises from a finding belongs in a later call. Give each entry a distinct query and an extraction focus. Top-level `focusPrompt`, `maxUrls` and `domains` apply to entries that do not override them.
+
+```
+intelli_research(
+  batchMode="expansion", maxUrls=3,
+  queries=[
+    {query:"SQLite WAL read transactions", focusPrompt:"Identify when a reader's snapshot starts and ends."},
+    {query:"SQLite WAL checkpoints", focusPrompt:"Explain how a long-running reader affects checkpoint progress."}
+  ]
+)
+```
+
+For separate deliverables, for example a backup note and a path-handling note, use `batchMode="independent"` with `queries=[{query:"SQLite online backup", focusPrompt:"Identify consistency guarantees."}, {query:"Python pure paths", focusPrompt:"List operations that do not touch the filesystem."}]`.
+
+Read the completion count in the first line, and in a merged report the Per-Query Reports list, before assuming full coverage. Open a saved failure report or a capped member's report, then follow up on the missing question only. `[S1]` refers to the inventory of the report that cites it, not to the first source of every member.
+
+If fewer than two entries complete, or the merge is skipped or fails, use the returned per-query sections and the stated reason rather than assuming the answers were reconciled. If no entry completes, read each section's outcome before retrying; the call returns an error, with each entry's reason, only when every entry raised an error.
 
 ### Other Parameters
 

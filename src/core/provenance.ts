@@ -18,7 +18,7 @@ export function evidenceExtractions(extractions: readonly ExtractResult[]): Extr
   return evidence;
 }
 
-function cell(value: string): string {
+export function cell(value: string): string {
   return value.replaceAll("|", "\\|").replace(/[\r\n]+/g, " ");
 }
 
@@ -36,7 +36,7 @@ export const SOURCE_ASSESSMENT_PREAMBLE =
   "Source inventory is generated from this run's successful, non-empty extractions, not from search citations. Cross-links in synthesis are not additional fetched sources. Types are extraction metadata, not independent quality ratings.\n\n";
 
 /** Close only a still-open model fence before appending generated report sections. */
-function closeOpenFence(text: string): string {
+export function closeOpenFence(text: string): string {
   const { fence } = codeBlockView(text);
   return fence ? `${text}\n${fence.prefix}${fence.char.repeat(fence.length)}` : text;
 }
@@ -46,16 +46,40 @@ function withoutCodeBlocks(text: string): string {
 }
 
 /** Share fence/container state between validation and final report rendering. */
-function codeBlockView(text: string): {
+function codeBlockView(text: string, keepOffsets = false): {
   prose: string;
-  fence?: { char: string; length: number; indent: number; prefix: string };
+  fence?: { char: string; length: number; indent: number; prefix: string; quote?: boolean };
 } {
-  let fence: { char: string; length: number; indent: number; prefix: string } | undefined;
+  let fence: { char: string; length: number; indent: number; prefix: string; quote?: boolean } | undefined;
   let listIndent = 0;
   let afterBlank = false;
   const prose = text
     .split("\n")
     .map((line) => {
+      // A fence inside a block quote belongs to the quote: it ends with the
+      // quote, and its markers sit after the `>` prefix.
+      const quote = !fence || fence.quote ? line.match(/^(?: {0,3}>[ \t]?)+/) : null;
+      if (fence?.quote && !quote) fence = undefined;
+      if (quote) {
+        listIndent = 0;
+        afterBlank = false;
+        const content = line.slice(quote[0].length);
+        const match = content.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+        const hidden = keepOffsets ? " ".repeat(line.length) : "";
+        if (fence) {
+          if (match && match[1][0] === fence.char && match[1].length >= fence.length && !match[2].trim())
+            fence = undefined;
+          return hidden;
+        }
+        if (match) {
+          fence = {
+            char: match[1][0], length: match[1].length, indent: 0, quote: true,
+            prefix: quote[0] + (content.match(/^ */)?.[0] ?? ""),
+          };
+          return hidden;
+        }
+        return /^(?: {4}|\t)/.test(content) ? hidden : line;
+      }
       // A list's fenced block ends with its container, unlike a top-level
       // fence. Dedented prose must return to provenance validation.
       if (fence?.indent && line.trim() && !line.startsWith(" ".repeat(fence.indent))) {
@@ -72,6 +96,7 @@ function codeBlockView(text: string): {
         : listIndent && line.startsWith(" ".repeat(listIndent)) ? line.slice(listIndent) : line;
       afterBlank = !line.trim();
       const match = content.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      const hidden = keepOffsets ? " ".repeat(line.length) : "";
       if (fence) {
         if (
           match &&
@@ -80,19 +105,49 @@ function codeBlockView(text: string): {
           !match[2].trim()
         )
           fence = undefined;
-        return "";
+        return hidden;
       }
       if (match) {
         fence = {
           char: match[1][0], length: match[1].length, indent: listIndent,
           prefix: " ".repeat(listIndent) + (content.match(/^ */)?.[0] ?? ""),
         };
-        return "";
+        return hidden;
       }
-      return /^(?: {4}|\t)/.test(content) ? "" : line;
+      return /^(?: {4}|\t)/.test(content) ? hidden : line;
     })
     .join("\n");
   return { prose, fence };
+}
+
+/** Blank fenced and indented code blocks line for line, keeping inline code. */
+export function codeBlockProse(text: string): string {
+  return codeBlockView(text, true).prose;
+}
+
+/** Mask code without moving the offsets used to replace citations in the original Markdown. */
+export function citationProseMask(text: string): string {
+  return codeBlockView(text, true).prose.split(/(\n[ \t\r]*\n)/).map((paragraph) => {
+    const ticks = [...paragraph.matchAll(/`+/g)];
+    const next = new Map<number, number>();
+    const closes = ticks.map(() => -1);
+    for (let i = ticks.length - 1; i >= 0; i--) {
+      const width = ticks[i][0].length;
+      closes[i] = next.get(width) ?? -1;
+      next.set(width, i);
+    }
+    let end = 0;
+    const parts: string[] = [];
+    for (let i = 0; i < ticks.length; i++) {
+      if (closes[i] < 0) continue;
+      const from = ticks[i].index!;
+      i = closes[i];
+      const to = ticks[i].index! + ticks[i][0].length;
+      parts.push(paragraph.slice(end, from), " ".repeat(to - from));
+      end = to;
+    }
+    return parts.join("") + paragraph.slice(end);
+  }).join("");
 }
 
 function withoutInlineCode(text: string): string {
@@ -263,7 +318,7 @@ function proseUrls(text: string): string[] {
   });
 }
 
-function pageUrl(value: string): string {
+export function pageUrl(value: string): string {
   try {
     const url = new URL(value);
     url.hash = "";
@@ -308,6 +363,35 @@ export function finalizeCollation(
    */
   delivered?: readonly ExtractResult[],
 ): string {
+  const { summary, sources } = validateSynthesis(text, cachePath, extractions, allowedSourceNumbers, delivered);
+  for (const source of sources) {
+    if (!identity.extractionFileFor(source.url))
+      throw new Error(
+        "Collation provenance validation failed: an evidence source has no extraction file. The synthesis was not accepted.",
+      );
+  }
+  return (
+    `## Summary\n\n${closeOpenFence(summary)}\n\n` +
+    SOURCE_ASSESSMENT_PREAMBLE +
+    sourceTable(sources, cachePath, identity, evidence)
+  );
+}
+
+/**
+ * The provenance rules of `finalizeCollation()` without its rendering: the
+ * synthesis must cite only the allowed `S<n>` identifiers (numbered by the
+ * order of `extractions`' evidence), name only URLs found in the evidence,
+ * carry no source inventory and name no cache file. Returns the cleaned
+ * summary and the evidence list the identifiers index. The batch merge uses it
+ * directly because its inventory spans several cache folders.
+ */
+export function validateSynthesis(
+  text: string,
+  cachePath: string,
+  extractions: readonly ExtractResult[],
+  allowedSourceNumbers?: ReadonlySet<number>,
+  delivered?: readonly ExtractResult[],
+): { summary: string; sources: ExtractResult[] } {
   if (!text.trim()) {
     throw new Error(
       "Collation returned no visible text; increase collationMaxTokens or choose a model with a smaller reasoning budget",
@@ -395,15 +479,7 @@ export function finalizeCollation(
   ) {
     invalid("the model generated a cache-file reference");
   }
-
-  for (const source of sources) {
-    if (!identity.extractionFileFor(source.url)) invalid("an evidence source has no extraction file");
-  }
-  return (
-    `## Summary\n\n${closeOpenFence(summary)}\n\n` +
-    SOURCE_ASSESSMENT_PREAMBLE +
-    sourceTable(sources, cachePath, identity, evidence)
-  );
+  return { summary, sources };
 }
 
 function sourceTable(

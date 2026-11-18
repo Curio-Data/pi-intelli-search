@@ -17,7 +17,7 @@
 // product `extensionVersion`.
 import { writeFile, rename, readdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import type { PackageIdentity } from "./contracts.js";
+import type { BatchMode, PackageIdentity } from "./contracts.js";
 import { randomBytes } from "node:crypto";
 
 /** Payload shape version. Bump only on a breaking schema change. */
@@ -49,6 +49,9 @@ export interface TelemetryMeta {
   timestamp: string; // ISO 8601, mirrors query.txt / report.md
   durationMs: number;
   outcome: TelemetryOutcome; // which exit path produced this sidecar
+  // Present only on a batch entry's sidecar: groups the entries of one call.
+  // `position` is 1-based in the order the caller listed the queries.
+  batch?: BatchEntryTelemetry;
   stages: {
     search: {
       model: string; // "provider/model"
@@ -67,6 +70,10 @@ export interface TelemetryMeta {
       // "defuddle-fallback", "markdown", or "text". The orchestrator falls
       // back to "unknown" for any page lacking the field.
       winners: Record<string, number>;
+      // Batch entries only: URLs of the pages fetched successfully, so page
+      // overlap between entries can be measured from the sidecars. Single
+      // queries do not record it.
+      urls?: string[];
     };
     extract: {
       model: string;
@@ -199,6 +206,7 @@ export class TelemetryBuilder {
     succeeded: number;
     failed: number;
     winners: Record<string, number>;
+    urls?: string[];
   }): void {
     this.meta.stages.fetch = { ...input };
   }
@@ -243,6 +251,11 @@ export class TelemetryBuilder {
     this.meta.stages.cacheSuggest = { ...input };
   }
 
+  /** Mark this sidecar as one entry of a batch. */
+  setBatch(batch: BatchEntryTelemetry): void {
+    this.meta.batch = { ...batch };
+  }
+
   /** Record which exit path produced this sidecar. Call at every return
    * point so the analysis script can bucket degraded runs. */
   setOutcome(outcome: TelemetryOutcome): void {
@@ -270,25 +283,115 @@ export class TelemetryBuilder {
  * the pipeline result.
  */
 export async function writeTelemetry(cachePath: string, meta: TelemetryMeta): Promise<void> {
-  await sweepStaleTempFiles(cachePath);
-  const target = join(cachePath, "meta.json");
-  const tmp = join(cachePath, `.meta.json.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
-  await writeFile(tmp, JSON.stringify(meta, null, 2) + "\n", "utf-8");
+  await atomicJson(cachePath, "meta.json", meta);
+}
+
+/** Write `value` as `<dir>/<name>` through a temp file and rename. */
+async function atomicJson(dir: string, name: string, value: unknown): Promise<void> {
+  await sweepStaleTempFiles(dir, name);
+  const target = join(dir, name);
+  const tmp = join(dir, `.${name}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
+  await writeFile(tmp, JSON.stringify(value, null, 2) + "\n", "utf-8");
   await rename(tmp, target);
 }
 
-/** Best-effort cleanup of orphaned `.meta.json.*.tmp` files from a prior
+/** Best-effort cleanup of orphaned `.<name>.*.tmp` files from a prior
  * crashed write. Errors are ignored: a sweep failure must not block the write. */
-async function sweepStaleTempFiles(cachePath: string): Promise<void> {
+async function sweepStaleTempFiles(dir: string, name: string): Promise<void> {
   let entries: string[];
   try {
-    entries = await readdir(cachePath);
+    entries = await readdir(dir);
   } catch {
     return; // directory may not exist yet on a degraded path; caller mkdirs
   }
+  const prefix = `.${name}.`;
   await Promise.all(
     entries
-      .filter((e) => /^\.meta\.json\..*\.tmp$/.test(e))
-      .map((e) => unlink(join(cachePath, e)).catch(() => {})),
+      .filter((e) => e.startsWith(prefix) && e.endsWith(".tmp"))
+      .map((e) => unlink(join(dir, e)).catch(() => {})),
   );
+}
+
+// ── Batch telemetry ──
+
+/** Batch fields on each entry's `meta.json`. */
+export interface BatchEntryTelemetry {
+  id: string;
+  mode: BatchMode;
+  size: number;
+  position: number;
+}
+
+/** Payload shape version of the batch record, independent of `SCHEMA_VERSION`. */
+export const BATCH_SCHEMA_VERSION = 1 as const;
+
+/** File name of the batch record in the batch folder. Not `meta.json`, so
+ *  readers that treat every `meta.json` as one research run never see it. */
+export const BATCH_TELEMETRY_FILE = "batch-meta.json";
+
+/** `partial` when some entries completed and some did not; `failed` when none did. */
+export type BatchOutcome = "completed" | "partial" | "failed";
+
+/**
+ * One batch research call, written to the batch folder beside the manifest.
+ * Same rules as the per-run sidecar: local only, additive, suppressed by
+ * `disableTelemetry`, and never fatal to the result.
+ */
+export interface BatchTelemetry {
+  kind: "batch";
+  schemaVersion: typeof BATCH_SCHEMA_VERSION;
+  extensionVersion: string;
+  packageName?: string;
+  adapter?: PackageIdentity["adapter"];
+  id: string;
+  mode: BatchMode;
+  timestamp: string;
+  durationMs: number;
+  outcome: BatchOutcome;
+  size: number;
+  /** Entries allowed to run at once (`batchConcurrency`, at most the size). */
+  concurrency: number;
+  /** Batch-wide extraction pool size (`batchExtractionConcurrency`). */
+  extractionPool: number;
+  entries: Array<{
+    position: number;
+    /** `error` when the entry threw instead of returning a result. */
+    outcome: TelemetryOutcome | "error";
+    durationMs: number;
+    /** Display path of the folder this entry committed; absent when nothing was committed. */
+    cachePath?: string;
+  }>;
+  cacheSuggest: { ran: boolean; surfaced: number; slugs: string[]; degraded?: boolean };
+  /** Expansion batches only: the merge call over the entries' summaries. */
+  merge?: {
+    model: string;
+    /** `rejected`: every candidate failed provenance validation; `skipped`: fewer than two entries completed. */
+    outcome: "completed" | "rejected" | "failed" | "skipped";
+    entries: number;
+    /** Inventory rows after and before deduplication by URL. */
+    sources: number;
+    sourcesBeforeDedup: number;
+    inputChars: number;
+    outputChars: number;
+    /** List items under the merged report's Contradictions and Gaps headings. */
+    contradictions: number;
+    gaps: number;
+    durationMs: number;
+    truncated?: boolean;
+    budgetRetries?: number;
+    provider?: string;
+    error?: string;
+  };
+}
+
+/** Identity fields of a record, following the per-run sidecar's rule. */
+export function telemetryIdentity(identity: PackageIdentity): Pick<BatchTelemetry, "extensionVersion" | "packageName" | "adapter"> {
+  return {
+    extensionVersion: identity.version,
+    ...(identity.adapter === "pi" ? {} : { packageName: identity.name, adapter: identity.adapter }),
+  };
+}
+
+export async function writeBatchTelemetry(dir: string, record: BatchTelemetry): Promise<void> {
+  await atomicJson(dir, BATCH_TELEMETRY_FILE, record);
 }

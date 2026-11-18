@@ -10,6 +10,7 @@ import {
   inferSourceType,
   inferCurrentness,
   mapWithConcurrency,
+  createSemaphore,
   withRetry,
   isRetryableMessage,
   NON_RETRYABLE_LIMIT_PATTERNS,
@@ -495,6 +496,91 @@ describe("mapWithConcurrency", () => {
       return n;
     });
     assert.strictEqual(peak, 1, "non-positive concurrency should run one at a time");
+  });
+});
+
+describe("createSemaphore", () => {
+  it("caps combined concurrency across several pools", async () => {
+    const sem = createSemaphore(3);
+    let active = 0;
+    let peak = 0;
+    const task = async (n: number) =>
+      sem.run(async () => {
+        active++;
+        peak = Math.max(peak, active);
+        await tick();
+        active--;
+        return n;
+      });
+    // Three pools of four workers each would reach 12 without the semaphore.
+    const pools = [0, 1, 2].map((p) =>
+      mapWithConcurrency([1, 2, 3, 4, 5, 6], 4, async (n) => task(p * 10 + n)),
+    );
+    const results = await Promise.all(pools);
+    assert.strictEqual(peak, 3);
+    assert.deepStrictEqual(results[2], [21, 22, 23, 24, 25, 26]);
+    assert.strictEqual(sem.active, 0);
+    assert.strictEqual(sem.waiting, 0);
+  });
+
+  it("serves waiters first in, first out", async () => {
+    const sem = createSemaphore(1);
+    const order: number[] = [];
+    let open!: () => void;
+    const first = sem.run(() => new Promise<void>((r) => (open = r)));
+    const rest = [1, 2, 3].map((n) => sem.run(async () => void order.push(n)));
+    assert.strictEqual(sem.waiting, 3);
+    await tick(); // the holder's task starts a microtask after its permit
+    open();
+    await Promise.all([first, ...rest]);
+    assert.deepStrictEqual(order, [1, 2, 3]);
+  });
+
+  it("releases the permit when the task throws", async () => {
+    const sem = createSemaphore(1);
+    await assert.rejects(sem.run(async () => { throw new Error("boom"); }), /boom/);
+    assert.strictEqual(sem.active, 0);
+    assert.strictEqual(await sem.run(async () => "next"), "next");
+  });
+
+  it("removes an aborted waiter without taking a permit", async () => {
+    const sem = createSemaphore(1);
+    let open!: () => void;
+    const holder = sem.run(() => new Promise<void>((r) => (open = r)));
+    const controller = new AbortController();
+    let ran = false;
+    const waiter = sem.run(async () => { ran = true; }, controller.signal);
+    const after = sem.run(async () => "after");
+    controller.abort();
+    await assert.rejects(waiter, { name: "AbortError" });
+    assert.strictEqual(sem.waiting, 1);
+    await tick();
+    open();
+    assert.strictEqual(await after, "after");
+    await holder;
+    assert.strictEqual(ran, false);
+    assert.strictEqual(sem.active, 0);
+  });
+
+  it("rejects at once when the signal is already aborted", async () => {
+    const sem = createSemaphore(2);
+    const controller = new AbortController();
+    controller.abort();
+    await assert.rejects(sem.run(async () => 1, controller.signal), { name: "AbortError" });
+    assert.strictEqual(sem.active, 0);
+  });
+
+  it("treats a non-positive limit as one permit", async () => {
+    const sem = createSemaphore(0);
+    let active = 0;
+    let peak = 0;
+    await Promise.all([1, 2, 3].map(() => sem.run(async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await tick();
+      active--;
+    })));
+    assert.strictEqual(peak, 1);
   });
 });
 

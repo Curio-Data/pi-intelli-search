@@ -6,7 +6,8 @@ import { it } from "node:test";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { search, extract, collate, research, MissingModelsError } from "../src/core/index.js";
-import type { ResearchDependencies } from "../src/core/operations/research.js";
+import { runResearchEntry, type ResearchDependencies } from "../src/core/operations/research.js";
+import { createSemaphore } from "../src/core/util.js";
 import { cacheLockDir, makeCachePath, readIndex, withLock } from "../src/core/cache.js";
 import { isCollationFailureReport } from "../src/core/provenance.js";
 import { coreContext } from "./helpers/core-context.js";
@@ -78,6 +79,96 @@ it("runs all four operations with per-instance dependencies and no host context"
   assert.equal(meta.packageName, context.identity.name);
   assert.equal(meta.adapter, "mcp");
   assert.equal((await readIndex(context.paths.cacheRoot)).searches.length, 2);
+});
+
+it("runs batch entries on a shared extraction pool and limiter without preflight or Stage 5", async (t) => {
+  const root = await workspace(t);
+  // Each entry alone may run three extractions at once; the shared pool of
+  // two must bound both entries together.
+  const base = coreContext(root, { defaultUrls: 3, maxUrls: 3, extractionConcurrency: 3 });
+  let active = 0;
+  let peak = 0;
+  let preflights = 0;
+  const judged: string[] = [];
+  const context = {
+    ...base.context,
+    models: {
+      preflight: async () => {
+        preflights++;
+        return [];
+      },
+      complete: async (request: Parameters<typeof base.context.models.complete>[0]) => {
+        if (request.userMessage.startsWith("Current query:")) judged.push(request.userMessage);
+        if (request.model.model === "search") {
+          const tag = request.userMessage.includes("alpha") ? "a" : "b";
+          return {
+            text: [1, 2, 3].map((n) => `[P${n}](https://${tag}${n}.example/page)`).join(" "),
+            citations: [],
+          };
+        }
+        if (request.model.model === "extract") {
+          active++;
+          peak = Math.max(peak, active);
+          await new Promise((r) => setTimeout(r, 10));
+          active--;
+          return { text: "official docs, current\nExtracted.", citations: [] };
+        }
+        return { text: "Summary.", citations: [] };
+      },
+    },
+  };
+  const pool = createSemaphore(2);
+  let gateCalls = 0;
+  const gate = async () => {
+    gateCalls++;
+  };
+  const options = { extractionPool: pool, gate, skipCacheSuggest: true };
+  // A cached search first, so Stage 5 would have a candidate to judge.
+  await research({ query: "earlier topic" }, base.context, base.dependencies);
+  judged.length = 0;
+  const [alpha, beta] = await Promise.all([
+    runResearchEntry({ query: "alpha topic" }, context, base.dependencies, options),
+    runResearchEntry({ query: "beta topic" }, context, base.dependencies, options),
+  ]);
+  assert.equal(alpha.result.outcome, "completed");
+  assert.equal(beta.result.outcome, "completed");
+  assert.equal(peak, 2, "the shared pool bounds both entries' extraction calls together");
+  assert.equal(gateCalls, 6, "every extraction passes the shared limiter");
+  assert.equal(pool.active, 0);
+  assert.equal(preflights, 0, "the batch caller preflights once, not each entry");
+  assert.deepEqual(judged, [], "Stage 5 is skipped");
+  assert.doesNotMatch(alpha.result.text, /Related cached searches/);
+  const meta = JSON.parse(
+    await readFile(join(root, alpha.result.details.cachePath as string, "meta.json"), "utf8"),
+  );
+  assert.equal(meta.stages.cacheSuggest.ran, false);
+  // The internal caller gets the synthesis without parsing the result text.
+  assert.ok(alpha.synthesis);
+  assert.match(alpha.synthesis.collation, /Summary\./);
+  assert.deepEqual(
+    alpha.synthesis.extractions.map((e) => e.url),
+    [1, 2, 3].map((n) => `https://a${n}.example/page`),
+  );
+  assert.equal(alpha.synthesis.identity.extractionFileFor("https://a1.example/page") !== null, true);
+  assert.equal(alpha.synthesis.cachePath, alpha.result.details.cachePath);
+});
+
+it("returns no synthesis for an entry that did not complete", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root);
+  const context = {
+    ...base.context,
+    models: {
+      ...base.context.models,
+      complete: async (request: Parameters<typeof base.context.models.complete>[0]) =>
+        request.model.model === "search"
+          ? { text: "No links here.", citations: [] }
+          : base.context.models.complete(request),
+    },
+  };
+  const entry = await runResearchEntry({ query: "no links" }, context, base.dependencies);
+  assert.equal(entry.result.outcome, "no-links");
+  assert.equal(entry.synthesis, undefined);
 });
 
 it("labels inferred guesses in intelli_search text and structured sources", async (t) => {

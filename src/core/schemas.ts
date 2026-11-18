@@ -58,20 +58,47 @@ export const collateSchema = Type.Object({
   ),
 });
 
+const maxUrlsSchema = (description: string) =>
+  Type.Number({
+    // Rendered by codemode as an @minimum tag since Pi 1.2.0. The MCP
+    // runtime already requires a positive integer independently
+    // (packages/mcp/src/runtime.ts). No "default": strict-mode schema
+    // samplers reject it and the runtime default lives in settings.
+    minimum: 1,
+    description,
+  });
+
+const researchEntrySchema = Type.Object({
+  query: Type.String({ description: "What this entry researches" }),
+  focusPrompt: Type.Optional(
+    Type.String({ description: "Focus guidance for this entry's extractions; overrides the top-level focusPrompt" }),
+  ),
+  maxUrls: Type.Optional(maxUrlsSchema("Max URLs for this entry; overrides the top-level maxUrls")),
+  domains: Type.Optional(
+    Type.Array(Type.String(), { description: "Restrict this entry's search to these domains; overrides the top-level domains" }),
+  ),
+});
+
 export const researchSchema = Type.Object({
-  query: Type.String({ description: "What to research" }),
-  maxUrls: Type.Optional(
-    Type.Number({
-      // Rendered by codemode as an @minimum tag since Pi 1.2.0. The MCP
-      // runtime already requires a positive integer independently
-      // (packages/mcp/src/runtime.ts), so the keyword formalises existing
-      // behaviour there rather than adding enforcement. No "default":
-      // strict-mode schema samplers reject it and the runtime default
-      // lives in settings, not the schema.
-      minimum: 1,
-      description: "Max URLs to fetch (default: 10, capped by settings.maxUrls)",
+  query: Type.Optional(
+    Type.String({ description: "What to research. Give query or queries, not both" }),
+  ),
+  queries: Type.Optional(
+    Type.Array(researchEntrySchema, {
+      minItems: 2,
+      description:
+        "Batch: two or more distinct queries researched in one call (capped by the maxBatchEntries setting). " +
+        "Requires batchMode. Top-level maxUrls, domains and focusPrompt apply to entries that do not set their own",
     }),
   ),
+  batchMode: Type.Optional(
+    Type.String({
+      enum: ["expansion", "independent"],
+      description:
+        "Required with queries. independent: one section per query. expansion: one merged report with per-query paths, or separate sections if the merge is unavailable",
+    }),
+  ),
+  maxUrls: Type.Optional(maxUrlsSchema("Max URLs to fetch (default: 10, capped by settings.maxUrls)")),
   domains: Type.Optional(
     Type.Array(Type.String(), { description: "Restrict search to these domains" }),
   ),

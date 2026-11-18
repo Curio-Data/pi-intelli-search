@@ -37,20 +37,21 @@ export const intelliResearchTool = {
   label: "Intelli Research",
   description:
     "Search the web, fetch top results, extract relevant content from each " +
-    "page, and deduplicate into a concise summary. Caches all results under " +
+    "page, and deduplicate into a concise summary. Pass query for one question, or queries with batchMode for separate (independent) or merged (expansion) reports. Caches all results under " +
     ".search/ for follow-up; a successful repeat on the same UTC date " +
     "attempts to archive the previous report, extractions, numbered sources " +
     "and sidecar to the lowest free numbered sibling folder (.1, then .2 and " +
     "so on). Archiving is best-effort: a failure lets the completed run " +
     "replace files in place, so copy a report elsewhere if it must be " +
-    "retained. A degraded repeat preserves the earlier successful report. " +
+    "retained. A degraded repeat of a query, alone or in a batch, preserves that query's earlier successful report; a repeated batch archives its earlier batch folder even when the new merge fails. " +
     "This is the primary research tool; for quick " +
     "factual lookups, use intelli_search instead.",
   promptSnippet:
-    "intelli_research(query): full search → fetch → extract → collate pipeline with caching",
+    "intelli_research(query or queries + batchMode): full search → fetch → extract → collate pipeline with caching",
   executionMode: "sequential" as const,
   promptGuidelines: [
     "Use intelli_research when the user needs current web information (docs, APIs, best practices, library updates). For quick factual questions, use intelli_search alone.",
+    "Use one query if it covers the task. For distinct queries known at launch, use batchMode 'expansion' for related questions needing one report or 'independent' for separate answers. Ask a follow-up separately when it depends on a finding.",
     "Use maxUrls to control breadth: 3 for targeted, 10 (default) for broad, 16 for exhaustive. The setting caps requests at maxUrls (default 20).",
     "Always provide focusPrompt to guide extraction. Without it the LLM extracts generically. Translate the user's intent into a specific extraction focus.",
     "The tool result contains a concise summary — use it directly. Only read .search/ cache files when the summary is insufficient.",
@@ -174,11 +175,13 @@ export function formatDuration(ms: number): string {
 export function renderProgressBar(details: ProgressDetails, theme: PiTheme): Text {
   const { stage, stageIdx, totalStages, message, subProgress } = details;
 
-  // Overall progress bar
+  // Overall progress bar. A batch supplies its own percentage, because its
+  // latest stage event belongs to one of several concurrent queries.
   const barWidth = 20;
-  const filled = Math.round(((stageIdx + 1) / totalStages) * barWidth);
+  const pct =
+    typeof details.pct === "number" ? details.pct : Math.round(((stageIdx + 1) / totalStages) * 100);
+  const filled = Math.round((pct / 100) * barWidth);
   const bar = "█".repeat(filled) + "░".repeat(barWidth - filled);
-  const pct = Math.round(((stageIdx + 1) / totalStages) * 100);
 
   // Stage pills: ✓ for done, ● for current, ○ for pending
   const pills = STAGES.map((s, i) => {

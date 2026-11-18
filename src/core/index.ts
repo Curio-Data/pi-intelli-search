@@ -11,6 +11,7 @@ export * from "./operations/search.js";
 export * from "./operations/extract.js";
 export * from "./operations/collate.js";
 export * from "./operations/research.js";
+export * from "./operations/batch-research.js";
 export * from "./schemas.js";
 export * from "./telemetry.js";
 export * from "./progress.js";

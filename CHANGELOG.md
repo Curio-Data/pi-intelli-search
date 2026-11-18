@@ -6,6 +6,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [pi-0.24.0] - 2026-11-18
+
+Batch research: several planned questions in one `intelli_research` call, returned as separate answers or merged into one source-checked report.
+
+### Added
+
+- Shared core: `intelli_research` accepts several queries in one call through new `queries` and `batchMode` parameters. Independent batches return a section per query; expansion batches merge related answers into one source-checked report. Each entry has its own cache folder and its own `maxUrls` page cap, so a batch of five entries at `maxUrls: 3` can fetch up to fifteen pages. New settings in both packages: `maxBatchEntries` (most queries per batch, default 10), `batchConcurrency` (entries running at once, 4) and `batchExtractionConcurrency` (extractions in flight across the whole batch, replacing `extractionConcurrency` inside a batch, 8). On a rate-limited key, see the constrained-account recipe in the README.
+- Shared core: each batch writes a `<date>-batch-<slug>-<hash>/` folder under the cache with `manifest.json` and, unless `disableTelemetry` is set, `batch-meta.json`. Each batch entry's `meta.json` also records the URLs it fetched (`stages.fetch.urls`), which is local browsing history. Cache suggestion runs once for the whole batch. A repeated batch archives its earlier batch folder, as a repeated query does.
+- Shared core: a merged report renumbers the members' source identifiers into one inventory (code examples are left unchanged), lists every query's extraction file for a page that several queries fetched, and ends with a Per-Query Reports list that marks a member summary that reached its output cap and links any saved failure report. A successful merge is indexed, so later research can suggest it. The merge returns the per-query results if it fails, or if it is skipped because its request exceeds `collationInputBudgetTokens`, in which case no merge call is made.
+- Shared core: a merged report and the manifest name member folders as they stood when the batch finished; a completed same-day repeat of a member query replaces what those paths hold. See [Same-Day Repeats of Batch Members](README.md#same-day-repeats-of-batch-members).
+- Native `Pi`: the `intelli-search` skill and the tool guidance tell agents when to use one query, an expansion batch or an independent batch, with examples, and how to read partial coverage before following up.
+
+### Fixed
+
+- Shared core: provenance validation treats a fenced or indented code block inside a block quote as code, as it already did outside quotes. A synthesis that quotes a code example containing a source-ID pattern such as `[S9]`, a URL or a cache path is no longer rejected for it.
+
+## [mcp-0.24.0] - 2026-11-18
+
+Core behaviour is shared with [pi-0.24.0] and recorded there.
+
+### Added
+
+- The server instructions, the `intelli_research` description and both plugin skills tell agents when to batch planned queries, with the same guidance as the native skill.
+- Batch requests are checked before any provider call: every supplied `domains` list must be well formed, and the search engine's `excludedDomains` conflict applies only to the domain lists entries actually use, so a top-level `domains` that every entry overrides is not rejected.
+
 ## [pi-0.23.0] - 2026-11-11
 
 Post-0.22.0 corrections to provenance validation, failure reports and cache recovery, and alignment with the `Pi` 1.5.2 retry classifier.
@@ -655,6 +680,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[mcp-0.24.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.24.0
+[pi-0.24.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.24.0
 [mcp-0.23.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.23.0
 [pi-0.23.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.23.0
 [mcp-0.22.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.22.0

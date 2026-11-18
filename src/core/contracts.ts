@@ -61,8 +61,34 @@ export interface CollateParams {
   fullPages?: Array<{ url: string; title: string; content: string }>;
 }
 
-export interface ResearchParams extends SearchParams {
+/** One research query: a single call, or one entry of a batch after defaults apply. */
+export interface ResearchQuery extends SearchParams {
   maxUrls?: number;
+  focusPrompt?: string;
+}
+
+/** `independent` returns one section per entry; `expansion` adds one merged report. */
+export type BatchMode = "expansion" | "independent";
+
+/** One batch entry as the caller supplies it; unset fields take the top-level value. */
+export interface ResearchEntryParams {
+  query: string;
+  focusPrompt?: string;
+  maxUrls?: number;
+  domains?: string[];
+}
+
+/**
+ * Research tool arguments: exactly one of `query` and `queries`. The schema
+ * cannot express that rule portably, so `validateResearchParams()` enforces
+ * it before any model call.
+ */
+export interface ResearchParams {
+  query?: string;
+  queries?: ResearchEntryParams[];
+  batchMode?: BatchMode;
+  maxUrls?: number;
+  domains?: string[];
   focusPrompt?: string;
 }
 

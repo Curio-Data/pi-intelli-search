@@ -41,6 +41,7 @@ const serverInstructions =
   "specific evidence gap requiring multiple pages. Do not expand a simple " +
   "lookup into unrequested research. For research, supply a focusPrompt and " +
   "set maxUrls to the smallest useful breadth (3 for targeted research). " +
+  "Use one query if it covers the task. Batch distinct questions known at launch: expansion for one report, independent for separate answers. " +
   "Use the returned summary; read cache files only when it is insufficient.";
 
 const toolDefinitions: Array<{
@@ -118,6 +119,7 @@ const toolDefinitions: Array<{
       "This longer-running pipeline searches, fetches pages, extracts each " +
       "page and collates the results; it can take minutes and incurs more " +
       "provider calls than intelli_search. " + skillGuidance + " " +
+      "Submit planned queries together with batchMode 'expansion' for one merged report or 'independent' for separate answers. Ask a follow-up separately when it depends on a finding. " +
       "Writes results to the workspace cache; use the returned summary " +
       "directly and read cached pages only when it is insufficient. " +
       "Use maxUrls to control breadth: 3 for targeted, 10 (default) " +
@@ -128,7 +130,9 @@ const toolDefinitions: Array<{
       "free numbered sibling folder (.1, then .2 and so on); archiving is " +
       "best-effort and a failure lets the completed run replace files in " +
       "place, so copy a report elsewhere if it must be retained. A degraded " +
-      "repeat preserves the earlier successful report.",
+      "repeat of a query, alone or in a batch, preserves that query's earlier " +
+      "successful report; a repeated batch archives its earlier batch folder " +
+      "even when the new merge fails.",
     schema: researchSchema,
     annotations: {
       title: "Intelli Research",
