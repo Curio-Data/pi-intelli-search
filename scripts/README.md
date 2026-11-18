@@ -66,7 +66,7 @@ PI_SESSIONS_DIR=/path scripts/analyze-sessions.sh
 | 9 | Telemetry sidecars (`meta.json`): run outcomes, fetch and extraction totals, extraction-budget diagnostics, available extraction routes, degraded cache judges, fetch-variant winners, search retries and cache-suggest hits |
 | 10 | Batch records (`batch-meta.json`): mode, size, outcomes, durations, page overlap and expansion merge statistics |
 
-Section 10 groups expansion records by merge outcome. For attempted merges it gives the number of recorded observations and mean duration (milliseconds), input size and output size (characters). Skipped merges have their own outcome count; they and records with no merge data do not contribute timing or size observations. A recorded zero counts; a missing field does not.
+Section 10 groups expansion records by merge outcome. For attempted merges it gives the number of recorded observations and mean duration (milliseconds) and input size (characters); output size (characters of the accepted summary) is given for completed merges only, because a rejected or failed merge records `0` there whatever its candidates contained. Skipped merges have their own outcome count; they and records with no merge data do not contribute timing or size observations. A recorded zero counts; a missing field does not. Page overlap counts one record per entry position, and a file found under two overlapping search roots is read once.
 
 Section 9 adds `truncatedExtractions`, `budgetExhaustedFailures` and `otherFailures` by summing the corresponding extraction fields across parsed sidecars. These count extractions, not runs. `runsRecordingProvider` counts sidecars with `stages.extract.provider`; `providers` groups those sidecars by their recorded extraction route, not by individual model call. Cache-judge degradation counts sidecars whose `stages.cacheSuggest.degraded` is `true`. Synthesis truncation and synthesis routes are not aggregated.
 
@@ -121,7 +121,7 @@ node scripts/spike-super-collation.mjs --out evidence/agents/<run>/run-1 \
   .search/<folder-a> .search/<folder-b> .search/<folder-c>
 ```
 
-`--model` (default `minimax/minimax-m3`) and `--max-tokens` (default 16000) override the call. The key comes from `OPENROUTER_API_KEY` or the `openrouter` entry of `auth.json` in `PI_CODING_AGENT_DIR` (default `~/.pi/agent/`), and is never printed. Reports written before source identifiers were introduced have no source table and are rejected.
+`--model` (default `minimax/minimax-m3`) and `--max-tokens` (default 16000) override the call. The key comes from `OPENROUTER_API_KEY` or the `openrouter` entry of `auth.json` in `PI_CODING_AGENT_DIR` (default `~/.pi/agent/`), and is never printed. Reports written before source identifiers were introduced have no source table and are rejected. The citation audit is a historical heuristic: it counts standalone `[S<n>]` groups only, and the renumbering also rewrites a bare `S<n>` such as "Amazon S3" when that identifier exists. The shipped merge uses the stricter rules in `src/core/operations/batch-merge.ts`.
 
 ## Live E2E Runs
 

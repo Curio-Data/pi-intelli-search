@@ -14,7 +14,7 @@ If a search answer looks stale or its sources disagree on the current version, t
 
 Use `{{TOOL_RESEARCH}}` for multi-page comparisons or detailed analysis, or when a search answer leaves a specific evidence gap requiring multiple pages. Search does not fetch and extract each cited page; research adds those stages, collation and cache suggestions. That pipeline makes more provider calls and can take minutes. A longer source list alone is not a reason to choose it.
 
-Use one query if it covers the task. For distinct research questions known at launch, use an expansion batch for one decision and an independent batch for separate deliverables. Wait to ask a question that depends on a finding.
+Use one query if it covers the task. For distinct research questions known at launch, use an expansion batch when the questions feed one merged report (for example one decision) and an independent batch for separate deliverables. Wait to ask a question that depends on a finding.
 
 ### Quick Factual Question
 
@@ -106,9 +106,9 @@ When several questions are known before research starts, pass `queries` instead 
 
 For separate deliverables, for example a backup note and a path-handling note, use `batchMode="independent"` with `queries=[{query:"SQLite online backup", focusPrompt:"Identify consistency guarantees."}, {query:"Python pure paths", focusPrompt:"List operations that do not touch the filesystem."}]`.
 
-Read the completion count and Per-Query Reports list before assuming full coverage. Open a saved failure report or a capped member's report, then follow up on the missing question only. `[S1]` refers to the inventory of the report that cites it, not to the first source of every member.
+Read the completion count in the first line, and in a merged report the Per-Query Reports list, before assuming full coverage. Open a saved failure report or a capped member's report, then follow up on the missing question only. `[S1]` refers to the inventory of the report that cites it, not to the first source of every member.
 
-If fewer than two entries complete or the merge fails, use the returned per-query sections and the stated reason rather than assuming the answers were reconciled.
+If fewer than two entries complete, or the merge is skipped or fails, use the returned per-query sections and the stated reason rather than assuming the answers were reconciled. If no entry completes, read each section's outcome before retrying; the call returns an error, with each entry's reason, only when every entry raised an error.
 
 ### Other Parameters
 

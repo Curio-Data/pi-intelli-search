@@ -133,18 +133,23 @@ export async function createRuntime(config: StandaloneConfig, options: RuntimeOp
       let category: StandaloneErrorCode = "INVALID_ARGUMENTS";
       try {
         validate(name, params);
-        if (name === "intelli_research")
-          validateResearchParams(params as OperationInputs["intelli_research"], config.settings);
-        const domainLists =
-          name === "intelli_research"
-            ? [
-                (params as OperationInputs["intelli_research"]).domains,
-                ...((params as OperationInputs["intelli_research"]).queries ?? []).map((e) => e.domains),
-              ]
-            : ["domains" in params ? params.domains : undefined];
-        for (const domains of domainLists) {
+        // Every supplied list must be well formed; only the lists a search
+        // will actually use (each entry's, after top-level defaults apply)
+        // must also suit the configured search engine.
+        let suppliedLists: Array<string[] | undefined>;
+        let effectiveLists: Array<string[] | undefined>;
+        if (name === "intelli_research") {
+          const research = params as OperationInputs["intelli_research"];
+          const validated = validateResearchParams(research, config.settings);
+          suppliedLists = [research.domains, ...(research.queries ?? []).map((e) => e.domains)];
+          effectiveLists =
+            validated.kind === "batch" ? validated.entries.map((e) => e.domains) : [validated.query.domains];
+        } else {
+          suppliedLists = effectiveLists = ["domains" in params ? params.domains : undefined];
+        }
+        for (const domains of suppliedLists) if (domains !== undefined) validateDomains(domains, "domains");
+        for (const domains of effectiveLists) {
           if (domains === undefined) continue;
-          validateDomains(domains, "domains");
           const search = config.settings.searchWebSearch;
           if (
             search.enabled &&

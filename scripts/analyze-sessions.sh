@@ -223,7 +223,9 @@ for root in "${SEARCH_ROOTS[@]}"; do
   done <<< "$idx_files"
 done > "$IDX_TMP"
 if [ -s "$IDX_TMP" ]; then
-  sort -rn "$IDX_TMP"
+  # Overlapping roots (the defaults include both $HOME and /home) find the
+  # same index more than once.
+  sort -rn "$IDX_TMP" | uniq
 else
   echo "(no .search/.index.json files found)"
 fi
@@ -247,6 +249,8 @@ for root in "${SEARCH_ROOTS[@]}"; do
     meta_files="${meta_files}${found}"$'\n'
   fi
 done
+# Overlapping roots find the same file more than once; count each once.
+meta_files=$(printf '%s' "$meta_files" | sed '/^$/d' | sort -u)
 
 if [ -z "$meta_files" ]; then
   echo "(no meta.json sidecars found; this section populates once v0.11.0+"
@@ -333,6 +337,7 @@ for root in "${SEARCH_ROOTS[@]}"; do
     batch_files="${batch_files}${found}"$'\n'
   fi
 done
+batch_files=$(printf '%s' "$batch_files" | sed '/^$/d' | sort -u)
 
 if [ -z "$batch_files" ]; then
   echo "(no batch records found)"
@@ -373,15 +378,19 @@ else
     map(select(.mode == "expansion") | .merge) | group_by(.outcome)[] |
     "  \(.[0].outcome // "unrecorded"): \(length)",
     (select(.[0].outcome as $o | ["completed","failed","rejected"] | index($o) != null) |
-      "    durationMs: \(observations("durationMs")); inputChars: \(observations("inputChars")); outputChars: \(observations("outputChars"))")' "$tmp_batch"
+      "    durationMs: \(observations("durationMs")); inputChars: \(observations("inputChars"))" +
+      (if .[0].outcome == "completed" then "; outputChars: \(observations("outputChars"))" else "" end))' "$tmp_batch"
   echo "entry outcomes across batches:"
   jq -rs '[.[].entries[].outcome] | group_by(.) | map("  \(.[0]): \(length)") | .[]' "$tmp_batch"
   if [ -n "${tmp_meta:-}" ] && [ -s "$tmp_meta" ]; then
     echo ""
     echo "page overlap between entries of one batch (from the entries' fetch.urls):"
-    # For each batch, a URL counts as shared when two or more entries fetched it.
+    # For each batch, a URL counts as shared when two or more entries fetched
+    # it. One record per entry position, so a duplicate sidecar cannot count
+    # an entry's own pages as shared.
     jq -rs 'map(select(.batch != null and .stages.fetch.urls != null))
             | group_by(.batch.id)
+            | map(unique_by(.batch.position))
             | map({id: .[0].batch.id,
                    urls: (map(.stages.fetch.urls | unique) | add // [])})
             | map({id, total: (.urls | length),

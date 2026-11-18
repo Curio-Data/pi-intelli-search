@@ -9,11 +9,13 @@
 // docs/proposals/BATCH-RESEARCH.md.
 
 import { randomBytes } from "node:crypto";
-import { basename } from "node:path";
+import { rm } from "node:fs/promises";
+import { basename, join } from "node:path";
 import type {
   BatchMode,
   OperationContext,
   OperationOutcome,
+  OperationProgress,
   OperationResult,
   ResearchParams,
   ResearchQuery,
@@ -161,13 +163,20 @@ export async function researchBatch(
   // request rate that minRequestIntervalMs exists to cap.
   const gate = createRateLimiter(settings.minRequestIntervalMs);
 
-  context.onProgress?.(
-    progress("search", `Researching ${size} queries, up to ${concurrency} at once...`, {
-      current: 0,
-      total: size,
-    }),
-  );
   let finished = 0;
+  // Entries run at once and each reports its own stages, so a member's stage
+  // percentage would move the batch's bar back and forth (and MCP progress
+  // must not decrease). The batch reports its own non-decreasing percentage:
+  // settled entries up to 90, the merge after that.
+  let batchPct = 0;
+  const report = (event: OperationProgress, pct: number) => {
+    batchPct = Math.max(batchPct, pct);
+    context.onProgress?.({ ...event, pct: batchPct });
+  };
+  report(
+    progress("search", `Researching ${size} queries, up to ${concurrency} at once...`, { current: 0, total: size }),
+    0,
+  );
   const settled = await mapWithConcurrency(
     batch.entries,
     concurrency,
@@ -180,7 +189,7 @@ export async function researchBatch(
           entry,
           {
             ...context,
-            onProgress: (event) => context.onProgress?.({ ...event, message: tag + event.message }),
+            onProgress: (event) => report({ ...event, message: tag + event.message }, 0),
           },
           dependencies,
           {
@@ -202,8 +211,9 @@ export async function researchBatch(
       signal: context.signal,
       onSettled: () => {
         finished++;
-        context.onProgress?.(
-          progress("cache", `${finished} of ${size} queries finished`, { current: finished, total: size }),
+        report(
+          progress("extract", `${finished} of ${size} queries finished`, { current: finished, total: size }),
+          Math.floor((90 * finished) / size),
         );
       },
     },
@@ -223,9 +233,13 @@ export async function researchBatch(
   );
   const batchDisplay = displayCachePath(paths, batchPath);
   const batchSlug = basename(batchPath);
-  const memberSlugs = batch.entries.map((e) =>
-    basename(makeCachePath(e.query, paths.workspaceRoot, paths.cacheRoot)),
-  );
+  // The folders the entries actually wrote: recomputing a slug now would use
+  // today's date, which differs from the entry's after UTC midnight.
+  const memberSlugs = outcomes.map((o) => {
+    const { cachePath, preservedCachePath } = committedPaths(o);
+    const committed = cachePath ?? preservedCachePath;
+    return basename(committed ?? makeCachePath(o.entry.query, paths.workspaceRoot, paths.cacheRoot));
+  });
 
   // Expansion merges the completed entries' summaries; it needs two or more.
   const members: MergeMember[] = outcomes.flatMap((o) =>
@@ -240,7 +254,7 @@ export async function researchBatch(
   );
   const mergeRuns = batch.mode === "expansion" && members.length >= 2;
   if (mergeRuns)
-    context.onProgress?.(progress("collate", `Merging ${members.length} summaries into one report...`));
+    report(progress("collate", `Merging ${members.length} summaries into one report...`), 95);
 
   // Cache suggestion once, over the joined queries, leaving out every member
   // folder and the batch's own: otherwise each member would surface its
@@ -263,7 +277,7 @@ export async function researchBatch(
   // discards the entries' results.
   const timestamp = new Date(started).toISOString();
   const queryList = batch.entries.map((e) => e.query);
-  const report =
+  const mergedReport =
     merge?.ok
       ? `# Merged research: ${size} queries\n\n` +
         `> Searched: ${timestamp}\n> Cache: ${batchDisplay}/\n> Queries: ${size}, ${completed} completed, ${members.length} merged\n\n` +
@@ -282,7 +296,8 @@ export async function researchBatch(
       ...(o.error ? { error: o.error } : {}),
     })),
   };
-  let batchWritten = false;
+  let manifestWritten = false;
+  let diagnosticWritten = false;
   let reportWritten = false;
   try {
     await withLock(
@@ -292,8 +307,15 @@ export async function researchBatch(
           await rotateCacheArtefacts(batchPath, batchDisplay);
         } catch (error) {
           context.logger.error(`Batch folder archive failed; replacing in place: ${errMsg(error)}`);
+          // Files this run may not rewrite must not survive from the earlier
+          // batch beside the new manifest, or a stale report would read as current.
+          for (const name of ["report.md", "rejected-synthesis.json", "batch-meta.json"])
+            await rm(join(batchPath, name), { force: true }).catch((e: unknown) =>
+              context.logger.error(`Could not remove stale ${name}: ${errMsg(e)}`),
+            );
         }
         await writeBatchManifest(batchPath, manifest);
+        manifestWritten = true;
         if (merge?.rejected.length) {
           try {
             await writeBatchFile(
@@ -301,12 +323,13 @@ export async function researchBatch(
               "rejected-synthesis.json",
               JSON.stringify({ schemaVersion: 1, accepted: !!merge.ok, candidates: merge.rejected }, null, 2) + "\n",
             );
+            diagnosticWritten = true;
           } catch (error) {
             context.logger.error(`Rejected merge diagnostic write failed: ${errMsg(error)}`);
           }
         }
-        if (report !== undefined) {
-          await writeBatchFile(batchPath, "report.md", report);
+        if (mergedReport !== undefined) {
+          await writeBatchFile(batchPath, "report.md", mergedReport);
           reportWritten = true;
         }
         // Only a batch with a merged report is indexed. Lock order: the index
@@ -366,7 +389,6 @@ export async function researchBatch(
             context.logger.error(`Batch telemetry write failed: ${errMsg(error)}`);
           }
         }
-        batchWritten = true;
       },
       context.signal,
     );
@@ -377,11 +399,14 @@ export async function researchBatch(
 
   if (completed === 0 && outcomes.every((o) => o.error)) {
     throw new Error(
-      `Every batch entry failed. ${outcomes.map((o) => `[${o.position}] ${o.error}`).join(" ")}`,
+      `Every batch entry failed. ${outcomes.map((o) => `[${o.position}] ${o.error}`).join(" ")}` +
+        (manifestWritten ? ` Batch manifest: ${batchDisplay}/manifest.json.` : ""),
     );
   }
 
-  const folder = batchWritten ? batchDisplay : "";
+  // A later step can fail after the manifest is written; the folder still
+  // exists and its files are listed only when each was written.
+  const folder = manifestWritten ? batchDisplay : "";
   let text: string;
   if (merge?.ok) {
     text =
@@ -391,8 +416,8 @@ export async function researchBatch(
   } else {
     const notice =
       batch.mode === "expansion"
-        ? `> ⚠ No merged report: ${merge ? `the merge failed (${merge.reason})` : mergeSkipReason}. ` +
-          `Each query's result follows.${merge?.rejected.length && folder ? ` Rejected merge candidates: \`${folder}/rejected-synthesis.json\`.` : ""}`
+        ? `> ⚠ No merged report: ${merge ? `the merge ${merge.telemetry.outcome === "skipped" ? "was skipped" : "failed"} (${merge.reason})` : mergeSkipReason}. ` +
+          `Each query's result follows.${diagnosticWritten && folder ? ` Rejected merge candidates: \`${folder}/rejected-synthesis.json\`.` : ""}`
         : "";
     text = formatBatchText(batch.mode, outcomes, completed, folder, notice);
   }
@@ -409,7 +434,7 @@ export async function researchBatch(
         ...(batch.mode === "expansion"
           ? {
               merge: merge?.ok
-                ? { outcome: "completed", reportPath: reportWritten ? `${folder}/report.md` : "" }
+                ? { outcome: "completed", reportPath: reportWritten && folder ? `${folder}/report.md` : "" }
                 : { outcome: merge ? merge.telemetry.outcome : "skipped", reason: merge ? merge.reason : mergeSkipReason },
             }
           : {}),

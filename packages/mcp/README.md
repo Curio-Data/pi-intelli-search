@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/mcp-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/mcp-intelli-search)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-blue)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1122%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1128%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -290,7 +290,7 @@ Both packages expose these four operations. Start with `intelli_search` for fact
 | `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
 | `intelli_research` | Search, fetch, extract, collate and cache multi-page research in one call.                        |
 
-Use `query` for a single question. For two or more distinct questions known at launch, pass `queries` instead, with `batchMode: "independent"` for a separate answer per question or `batchMode: "expansion"` for one report on a common topic. Each entry supplies a `query`; its `focusPrompt`, `domains` and `maxUrls` override the corresponding top-level defaults. The page cap applies per entry. An expansion needs at least two completed entries to merge. If it cannot return a merged answer, the result states why and gives the per-query sections instead. Ask questions prompted by a finding in a later call. The [native batch benchmark](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/BENCHMARKS.md#batch-research-on-the-native-host) compares five separate calls with one batch and shows how much main-model input went into issuing the next query.
+Use `query` for a single question. For two or more distinct questions known at launch, pass `queries` instead, with `batchMode: "independent"` for a separate answer per question or `batchMode: "expansion"` for one report on a common topic. Each entry supplies a `query`; its `focusPrompt`, `domains` and `maxUrls` override the corresponding top-level defaults. The page cap applies per entry. An expansion needs at least two completed entries to merge, and the merge request must fit `collationInputBudgetTokens`. If the merge is skipped or fails, the result states why and gives the per-query sections instead. If no entry completes, the result gives each entry's section and outcome; the call returns an error, listing each entry's reason and the batch manifest path when it was written, only when every entry raised an error rather than ending in a degraded outcome such as `no-links`. Ask questions prompted by a finding in a later call. A merged report refers to its members' evidence by cache folder path, and a completed repeat of one of its queries on the same UTC date replaces what those paths hold; see [Same-Day Repeats of Batch Members](#same-day-repeats-of-batch-members). The [native batch benchmark](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/BENCHMARKS.md#batch-research-on-the-native-host) compares five separate calls with one batch and shows how much main-model input went into issuing the next query.
 
 ### Evidence and Provenance
 
@@ -343,6 +343,8 @@ Every cut ends at a paragraph, line, sentence or word boundary where one is near
 A synthesis that cites a URL found only in the omitted text fails provenance validation, because that URL is not in the evidence the model received. Research then uses another synthesis already received from an output-cap retry when there is one, and otherwise ends as `collate-failed`; manual collation returns the error. The error names the first rejected URL; in research, a reason longer than 300 characters is shortened, so a very long URL can appear cut off. A saved `collate-failed` report also carries the **Collation input trimmed** notice described below: search the listed extraction files for the URL to see whether it was in the omitted text or in none of the sources.
 
 When anything was trimmed, the result and `report.md` carry a **Collation input trimmed** notice. It names the limit that bound: the per-source limit (`collationSourceMaxTokens`), the total input budget (`collationInputBudgetTokens`), or both. It lists each affected source under "Trimmed to the per-source limit", "Trimmed by both limits", "Trimmed to a fair share of the input budget", "Left out with empty retained text" or "Left out to fit the input budget", with the extraction characters sent and the path of its untrimmed extraction file, including the cache folder, ready to open from the workspace. The notice states that the omitted text is in those files and that re-running research does not recover it; read them for the missing detail. Its **Configuration** line names the setting to raise next time. Raising `collationSourceMaxTokens` sends more of one long page; raising `collationInputBudgetTokens`, within the collation model's context, or requesting fewer URLs sends more overall. Raising only the total budget does not recover text removed by the per-source cap. When a limit is already at its maximum, the notice says so instead of advising a raise.
+
+An expansion batch's merge sends whole member summaries, which this budget cannot trim. The merge measures its request at the same ≈4 characters per token and, when it exceeds `collationInputBudgetTokens`, is skipped before the model call; the result states the measured size and returns the per-query sections.
 
 If the limits leave no extraction text at all, the synthesis model is not called. Research returns `collate-failed` with the extractions and pages saved, and manual `intelli_collate` returns an error; both name `collationInputBudgetTokens` and `collationSourceMaxTokens` as the settings to raise.
 
@@ -451,8 +453,6 @@ See [docs/ARCHITECTURE.md](https://github.com/Curio-Data/pi-intelli-search/blob/
 
 The estimate below uses the native default models and tuning, also selected in the minimal MCP configuration example. It is a planning estimate based on the recorded September 2026 price basis, not a live tariff check. Both packages incur inference charges on the configured provider account; MCP does not use host subscriptions or credentials.
 
-In a batch, each entry has its own search, page budget and collation. Five entries at `maxUrls: 3` can select up to fifteen pages, not three. The extraction pool limits simultaneous extractions, not search or collation calls. Expansion adds a merge after the entries settle, which also counts towards a host's tool-call deadline. Use a smaller batch or fewer pages per entry on a constrained account.
-
 Per research run with the default 10 pages: ≈$0.09
 
 | Step                                | Calls                 | Cost      |
@@ -462,6 +462,8 @@ Per research run with the default 10 pages: ≈$0.09
 | Extract (M3 via OpenRouter)         | 10 (≤4 concurrent)    | ≈$0.07    |
 | Collate (M3 via OpenRouter)         | 1                     | ≈$0.01    |
 | Cache Suggest (M3 via OpenRouter)   | 1                     | ≈$0.0002  |
+
+In a batch, each entry has its own search, page budget and collation. Five entries at `maxUrls: 3` can select up to fifteen pages, not three. The extraction pool limits simultaneous extractions, not search or collation calls. Expansion adds one merge call after the entries settle. The whole batch is one tool call, so its entries and, in expansion mode, the merge all count towards a host's tool-call deadline. Use a smaller batch or fewer pages per entry on a constrained account.
 
 Since v0.13.0 the search stage adds recovered provider citation URLs to prose links, increasing the candidate source set; `maxUrls` still caps page selection. The ≈$0.09 figure is the planning estimate for a full 10-page research run with the v0.14.0 default models (M3 and M2.7 had equal per-token prices in the recorded benchmark; M3 wrote ≈2× the extraction characters, with the cost estimate separately projecting greater token usage); lower `defaultUrls` to hold earlier spend. Changing the search model or engine also changes the search step's cost; configure it through [native model settings](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#choosing-an-alternative-search-configuration) or [MCP configuration](#configuration). The extract and collate rows scale with the selected models.
 
@@ -520,21 +522,6 @@ Search requires either `perplexity/sonar`, `perplexity/sonar-pro`, `perplexity/s
 
 #### Tuning
 
-For a constrained account, merge this fragment into the server configuration. It limits a batch to five entries, runs at most two entries at once and shares two extraction slots across them. `maxUrls` applies per entry in both modes.
-
-```json
-{
-  "tuning": {
-    "maxBatchEntries": 5,
-    "batchConcurrency": 2,
-    "batchExtractionConcurrency": 2,
-    "extractionConcurrency": 2,
-    "defaultUrls": 3,
-    "maxUrls": 3
-  }
-}
-```
-
 Unspecified tuning comes from the canonical [shared defaults](https://github.com/Curio-Data/pi-intelli-search/blob/main/src/core/defaults.ts), also used by the native adapter. The table gives each default and its effect alongside standalone validation ranges. No provider or model selection is inherited from that module. Unknown keys, invalid types and out-of-range values are rejected rather than silently clamped.
 
 | Setting | Default and Effect | Accepted Values |
@@ -552,7 +539,7 @@ Unspecified tuning comes from the canonical [shared defaults](https://github.com
 | `extractionMaxTokens` | `8000`: per-page output-token limit (includes hidden reasoning tokens) | Integer from 16 to 128,000 |
 | `collationMaxTokens` | `8000`: synthesis output-token limit | Integer from 16 to 128,000 |
 | `outputBudgetRetries` | `2`: research retries at a doubled output cap for an empty capped extraction or any capped synthesis; `0` disables | Integer from 0 to 5 |
-| `collationInputBudgetTokens` | `221000`: tokens available to extractions and their headers in the collation request | Integer from 10,000 to 1,000,000 |
+| `collationInputBudgetTokens` | `221000`: tokens available to extractions and their headers in the collation request; in an expansion batch, a merge request above it is skipped before the model call | Integer from 10,000 to 1,000,000 |
 | `collationSourceMaxTokens` | `32000`: ceiling on one extraction's text sent to collation | Integer from 256 to 128,000 |
 | `llmRetryAttempts` | `3`: model-call attempts, including the first | Integer from 1 to 10 |
 | `searchRetryAttempts` | `2`: search attempts after a valid response with no usable links, including the first | Integer from 1 to 10 |
@@ -564,6 +551,21 @@ Unspecified tuning comes from the canonical [shared defaults](https://github.com
 | `disableTelemetry` | `false`: write local telemetry, including batch entries' browsing history in `stages.fetch.urls`; `true` suppresses `meta.json` and `batch-meta.json`, not the cache or manifest | Boolean |
 | `disableLlmsFullDiscovery` | `false`: probe for supplementary documentation; `true` skips probes and downloads | Boolean |
 | `searchWebSearch` | Disabled; engine `auto`, `maxResults: 8`, reasoning `minimal`. Enables the search server tool when configured | Validated block described below; replaces the entire shared default block |
+
+For a constrained account, merge this fragment into the server configuration. It limits a batch to five entries, runs at most two entries at once and shares two extraction slots across them. `maxUrls` applies per entry in both modes.
+
+```json
+{
+  "tuning": {
+    "maxBatchEntries": 5,
+    "batchConcurrency": 2,
+    "batchExtractionConcurrency": 2,
+    "extractionConcurrency": 2,
+    "defaultUrls": 3,
+    "maxUrls": 3
+  }
+}
+```
 
 `searchWebSearch` requires a boolean `enabled`. Optional fields are `engine` (`auto`, `native`, `exa`, `parallel`, `perplexity`, `firecrawl`), `maxResults` (1 to 25, capped at 20 for `perplexity`), `searchContextSize` (`low`, `medium`, `high`), `allowedDomains`, `excludedDomains`, and `reasoning` (`minimal`, `low`, `medium`, `high`). Domain lists contain hostnames, not URLs (uniform resource locators), and have at most 100 entries. The `perplexity` and `firecrawl` engines cannot combine nonempty allowed and excluded lists. Per-call domains also guide search; they are not a network allowlist for fetched pages.
 
@@ -670,6 +672,10 @@ Both packages write this format. The native extension resolves the cache against
 │       ├── 01-developers-cloudflare-com.md
 │       ├── 02-developers-cloudflare-com.md
 │       └── llms-full-developers-cloudflare-com.md
+├── 2026-04-19-batch-d1-worker-api-9c1e04/  # Batch folder
+│   ├── manifest.json           # Queries, outcomes and member folders
+│   ├── batch-meta.json         # Batch telemetry record
+│   └── report.md               # Merged report, after a successful merge
 └── .index.json                 # Index of all cached searches
 ```
 
@@ -684,11 +690,13 @@ Refresh behaviour:
 - An `extraction-failed` or `collate-failed` repeat preserves a successful report in the same way, but archives and replaces an earlier `extraction-failed` or `collate-failed` report. A later run recognises a failure report only by its first line, the marker `<!-- intelli-search:extraction-failed -->` or `<!-- intelli-search:collate-failed -->`; the tool result omits the marker. Committing a failure report also removes any index entry for that folder, so the cache index lists only successful reports.
 - The numbered siblings are a same-day safety net, not a versioned archive: copy a report elsewhere if it must be retained long-term.
 
-**Batch Folders.** Both modes keep each entry's ordinary cache folder and write a separate `<date>-batch-<slug>-<hash>/` folder. `manifest.json` lists the queries in order, their outcomes and their folder paths at completion. Later repeats can rotate a member without updating that path. `batch-meta.json` is written unless telemetry is disabled. Only a successful expansion merge writes `report.md` and indexes the batch. A repeated batch attempts to archive the earlier batch folder even if the new merge fails. `rejected-synthesis.json` is a diagnostic written only for nonempty merge candidates that failed validation, not for a transport failure with no candidate. It can accompany a report if a later candidate passed.
+**Batch Folders.** Both modes keep each entry's ordinary cache folder and write a separate `<date>-batch-<slug>-<hash>/` folder. `manifest.json` lists the queries in order, their outcomes and their folder paths at completion. A merged `report.md` points to the same member folders, in its Per-Query Reports list and in its inventory, which names each query's extraction and source file for every page, one per query where queries share a page. `batch-meta.json` is written unless telemetry is disabled. Only a successful expansion merge writes `report.md` and indexes the batch. A repeated batch attempts to archive the earlier batch folder even if the new merge fails. `rejected-synthesis.json` is a diagnostic written only for nonempty merge candidates that failed validation, not for a transport failure with no candidate. It can accompany a report if a later candidate passed.
 
-**Local Telemetry (`meta.json`):** Batch entries add `batch.id`, `batch.mode`, `batch.size` and `batch.position`. Their `stages.fetch.urls` list records browsing history (successfully fetched URLs). `batch-meta.json` records the batch duration, concurrency limits, entry outcomes and, in expansion mode, merge size, duration and outcome. For the fields and their units see [Telemetry Sidecar](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md#telemetry-sidecar).
+<a id="same-day-repeats-of-batch-members"></a>**Limitation: Same-Day Repeats of Batch Members.** A cache folder name combines the UTC date and the query, so a query run twice on one date maps to one folder. A completed repeat archives the earlier run to the next numbered sibling (`.1`, then `.2`) and writes its own files in the folder; a degraded repeat leaves the earlier completed report in place, as the list above describes. The manifest and a merged report record member folders by name and are not updated when a member is archived. After a completed same-day repeat of a member query, alone or in any batch, including the same batch run again, those paths lead to the newer run's report, extractions and sources: a file the merged report's inventory names can hold a different page or be missing. The evidence the merge used is normally still in the numbered sibling. Benchmarking and evaluation, which repeat queries on one day, are the main cases. To keep a merged report beside the evidence it cites, copy the batch folder and its member folders before repeating any of its queries on the same UTC date.
 
-Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+**Local Telemetry (`meta.json`):** Unless disabled, completed runs and the degraded exits recorded in `outcome` attempt a best-effort sidecar write. Cancellation and thrown failures do not all produce a sidecar. It records the full research query and per-stage outcomes: pages fetched and failed, fetch-variant winners (Defuddle versus Markdown), search retries, cache-suggest hits and latency. `stages.search.annotationsHarvested` counts recovered `url_citation` entries and can be `0` when none are recovered. Historical records or an unreached stage can omit it. It is not a subset of `linksReturned`: harvested citations are merged with prose links before the `maxUrls` clamp, so a run can harvest twenty and report ten links. The sidecar adds no network transmission or credential/account-identifier fields, but the query and metadata can contain personal or confidential information. Ordinary research requests still go to configured external services. The bundled [`scripts/analyze-sessions.sh`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/README.md) can aggregate these sidecars to report per-stage success rates.
+
+In a batch, entries add `batch.id`, `batch.mode`, `batch.size` and `batch.position`. Their `stages.fetch.urls` list records browsing history (successfully fetched URLs). `batch-meta.json` records the batch duration, concurrency limits, entry outcomes and, in expansion mode, merge size, duration and outcome. For the fields and their units see [Telemetry Sidecar](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md#telemetry-sidecar).
 
 To suppress both telemetry files in the MCP server, set `"disableTelemetry": true` inside the configuration's [`tuning` object](#tuning).
 

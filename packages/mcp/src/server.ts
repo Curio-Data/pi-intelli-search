@@ -130,7 +130,9 @@ const toolDefinitions: Array<{
       "free numbered sibling folder (.1, then .2 and so on); archiving is " +
       "best-effort and a failure lets the completed run replace files in " +
       "place, so copy a report elsewhere if it must be retained. A degraded " +
-      "single-query repeat preserves the earlier successful report.",
+      "repeat of a query, alone or in a batch, preserves that query's earlier " +
+      "successful report; a repeated batch archives its earlier batch folder " +
+      "even when the new merge fails.",
     schema: researchSchema,
     annotations: {
       title: "Intelli Research",

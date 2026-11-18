@@ -442,6 +442,21 @@ describe("batch merge evidence", () => {
     assert.equal(renumberCitations("[S1-S500] [S2-S1]", map), "[S1-S500] [S4, S8]");
   });
 
+  it("keeps a link label's own page first so the label still names its target", () => {
+    const map = new Map([[1, 4], [2, 2]]);
+    assert.equal(
+      renumberCitations("[S1, S2](https://one.example)", map, ["https://one.example", "https://two.example"]),
+      "[S4, S2](https://one.example)",
+    );
+  });
+
+  it("preserves code inside a block quote, renumbering the prose after it", () => {
+    const map = new Map([[1, 4]]);
+    const quoted = "> ~~~\n> [S1]\n> ~~~";
+    assert.equal(renumberCitations(`${quoted}\n\nActual [S1]`, map), `${quoted}\n\nActual [S4]`);
+    assert.equal(renumberCitations("> ```\n> [S1]\n\nOutside [S1]", map), "> ```\n> [S1]\n\nOutside [S4]");
+  });
+
   it("takes the summary between its heading and the generated inventory", () => {
     assert.equal(memberSummary(`## Summary\n\nBody [S1].\n\n${SOURCE_ASSESSMENT_PREAMBLE}| ID |`), "Body [S1].");
   });
@@ -477,6 +492,8 @@ describe("batch merge evidence", () => {
     assert.equal(countSectionItems(text, /contradiction/i), 2);
     assert.equal(countSectionItems(text, /\bgaps?\b/i), 0);
     assert.equal(countSectionItems(text, /absent/i), 0);
+    const sample = "```md\n## Gaps\n- sample one\n- sample two\n```\n\n## Gaps\n\n- real gap\n";
+    assert.equal(countSectionItems(sample, /\bgaps?\b/i), 1);
   });
 });
 
@@ -533,6 +550,8 @@ describe("expansion batch research", () => {
     assert.match(result.text, /^Batch research, expansion mode: 2 queries, 2 completed\. The merged report covers 2 of them\./);
     assert.match(result.text, /## Summary\n\nMerged finding \[S1, S2\] and \[S3\]\./);
     assert.match(result.text, /\| S2 \| https:\/\/shared\.example\/page \| official docs \| 1, 2 \| .+\/extractions\/02-shared-example\.md/);
+    // A shared page lists each query's own extraction, which used that query's focus.
+    assert.match(result.text, /\| S2 \|[^\n]*\| Query 1: [^|;]+\/extractions\/[^|;]+; Query 2: [^|;]+\/extractions\/[^|;]+ \|/);
     assert.match(result.text, /## Per-Query Reports\n\n1\. alpha topic: `.+\/report\.md`\n2\. beta topic: `.+\/report\.md`/);
     assert.doesNotMatch(result.text, /# Query 1 of 2/, "the per-query sections are replaced by the merged report");
 
@@ -600,6 +619,32 @@ describe("expansion batch research", () => {
     const f = expansionFixture(root, () => "See https://invented.example/page [S1].");
     const result = await research(params(["alpha topic", "beta topic"]), f.context, f.dependencies);
     assert.match(result.text, /a prose URL is absent from the supplied evidence/);
+  });
+
+  it("skips the merge, before any call, when its input exceeds the collation input budget", async (t) => {
+    const root = await workspace(t);
+    const f = expansionFixture(root, () => "unused");
+    // Large enough for each member's own collation, too small for the merge prompt.
+    const budget = 400;
+    assert.ok(SUPER_COLLATION_SYSTEM_PROMPT.length / 4 > budget);
+    const context = { ...f.context, settings: { ...f.context.settings, collationInputBudgetTokens: budget } };
+    const result = await research(params(["alpha topic", "beta topic"]), context, f.dependencies);
+    assert.equal(f.merges.length, 0);
+    assert.match(result.text, /No merged report: the merge was skipped \(the merge input \(≈\d+ tokens\) exceeds collationInputBudgetTokens \(400\)/);
+    assert.match(result.text, /# Query 2 of 2: beta topic/);
+    const batch = result.details.batch as { merge: { outcome: string } };
+    assert.equal(batch.merge.outcome, "skipped");
+  });
+
+  it("reports a non-decreasing batch percentage while entries interleave", async (t) => {
+    const root = await workspace(t);
+    const f = expansionFixture(root, () => "Merged finding [S1].");
+    const seen: number[] = [];
+    const context = { ...f.context, onProgress: (event: OperationProgress) => seen.push(event.pct) };
+    await research(params(["alpha topic", "beta topic", "gamma topic"]), context, f.dependencies);
+    assert.ok(seen.length > 3);
+    assert.ok(seen.every((pct, i) => i === 0 || pct >= seen[i - 1]), `percentages went back: ${seen.join(",")}`);
+    assert.ok(seen.at(-1)! >= 90);
   });
 
   it("skips the merge when fewer than two queries complete", async (t) => {

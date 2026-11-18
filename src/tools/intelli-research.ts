@@ -43,7 +43,7 @@ export const intelliResearchTool = {
     "and sidecar to the lowest free numbered sibling folder (.1, then .2 and " +
     "so on). Archiving is best-effort: a failure lets the completed run " +
     "replace files in place, so copy a report elsewhere if it must be " +
-    "retained. A degraded single-query repeat preserves the earlier successful report. " +
+    "retained. A degraded repeat of a query, alone or in a batch, preserves that query's earlier successful report; a repeated batch archives its earlier batch folder even when the new merge fails. " +
     "This is the primary research tool; for quick " +
     "factual lookups, use intelli_search instead.",
   promptSnippet:
@@ -175,11 +175,13 @@ export function formatDuration(ms: number): string {
 export function renderProgressBar(details: ProgressDetails, theme: PiTheme): Text {
   const { stage, stageIdx, totalStages, message, subProgress } = details;
 
-  // Overall progress bar
+  // Overall progress bar. A batch supplies its own percentage, because its
+  // latest stage event belongs to one of several concurrent queries.
   const barWidth = 20;
-  const filled = Math.round(((stageIdx + 1) / totalStages) * barWidth);
+  const pct =
+    typeof details.pct === "number" ? details.pct : Math.round(((stageIdx + 1) / totalStages) * 100);
+  const filled = Math.round((pct / 100) * barWidth);
   const bar = "█".repeat(filled) + "░".repeat(barWidth - filled);
-  const pct = Math.round(((stageIdx + 1) / totalStages) * 100);
 
   // Stage pills: ✓ for done, ● for current, ○ for pending
   const pills = STAGES.map((s, i) => {

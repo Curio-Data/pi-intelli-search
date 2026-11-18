@@ -398,3 +398,12 @@ it("requires a real extraction identity and excludes empty successful entries", 
     /no extraction file/,
   );
 });
+
+it("treats a fenced block inside a block quote as code, and closes it with its quote prefix", () => {
+  const text = finish("Useful facts. [S1]\n\n> ~~~\n> Example [S9] and https://quoted.example/x\n> ~~~\n\nMore [S2].");
+  assert.match(text, /> Example \[S9\]/);
+  assert.throws(() => finish("Facts [S1].\n\n> Quoted prose [S9]."), /unknown or omitted source ID/);
+  // An unclosed quoted fence is closed inside the quote before the inventory.
+  const open = finish("Facts [S1].\n\n> ```\n> code");
+  assert.match(open, /> code\n> ```\n/);
+});

@@ -449,3 +449,52 @@ test("the collation input budget trims the prompt and the MCP result says what w
     await f.cleanup();
   }
 });
+
+test("research checks search-engine domain compatibility only for the lists entries use", async () => {
+  const f = await fixture();
+  try {
+    let network = 0;
+    const config = {
+      ...f.config,
+      settings: {
+        ...f.config.settings,
+        searchWebSearch: {
+          ...f.config.settings.searchWebSearch,
+          enabled: true,
+          engine: "perplexity",
+          excludedDomains: ["blocked.example"],
+        },
+      },
+    } as typeof f.config;
+    const runtime = await createRuntime(config, {
+      env: { FIXTURE_KEY: "fixture-secret" },
+      logger,
+      fetch: fakeTransport(() => {
+        network++;
+        return json({ error: { code: 500, message: "stop" } }, 500);
+      }),
+    });
+    const invalid = (error: unknown) => error instanceof StandaloneError && error.code === "INVALID_ARGUMENTS";
+    // One entry inherits the top-level list, so the engine conflict applies.
+    await assert.rejects(
+      runtime.execute("intelli_research", {
+        queries: [{ query: "first" }, { query: "second", domains: [] }],
+        batchMode: "independent",
+        domains: ["docs.example"],
+      }),
+      invalid,
+    );
+    assert.equal(network, 0);
+    // Every entry overrides the top-level list with none, so it is never used.
+    const outcome = await runtime
+      .execute("intelli_research", {
+        queries: [{ query: "first", domains: [] }, { query: "second", domains: [] }],
+        batchMode: "independent",
+        domains: ["docs.example"],
+      })
+      .then(() => undefined, (error: unknown) => error);
+    assert.ok(!invalid(outcome), "an unused top-level list is not rejected");
+  } finally {
+    await f.cleanup();
+  }
+});

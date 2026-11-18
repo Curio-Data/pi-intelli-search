@@ -87,7 +87,7 @@ export const researchSchema = Type.Object({
     Type.Array(researchEntrySchema, {
       minItems: 2,
       description:
-        "Batch: two or more distinct queries researched in one call (capped by settings.maxBatchEntries). " +
+        "Batch: two or more distinct queries researched in one call (capped by the maxBatchEntries setting). " +
         "Requires batchMode. Top-level maxUrls, domains and focusPrompt apply to entries that do not set their own",
     }),
   ),

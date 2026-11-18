@@ -164,7 +164,7 @@ Generalise `defaultCodexConfig(workspace, paths)` to `defaultHostConfig(host, wo
 | Unit, `cliOptions` | `--host dsh` is accepted, leaves `config` and `workspace` unset, and still yields to explicit `--config` and `--workspace` |
 | Unit, `cliOptions` | An unknown host is still rejected |
 | Unit, `defaultHostConfig` | The _Codex_ output is unchanged by the generalisation (a golden comparison) |
-| E2E, new `test/e2e/16_dsh_plugin.sh` | Generated bundle installs into a scratch profile, the four tools appear, `--check-config` passes, a credentialed `intelli_search` returns sources |
+| E2E, new `test/e2e/18_dsh_plugin.sh` | Generated bundle installs into a scratch profile, the four tools appear, `--check-config` passes, a credentialed `intelli_search` returns sources |
 | E2E, registration | Disabling the bundle removes both the tools and the skill from the catalogue; re-enabling restores them |
 
 The end-to-end script needs a `dsh` discovery guard like the existing host scripts: skip with a recorded note when the binary is absent, rather than failing.
@@ -370,7 +370,7 @@ The section should note that the host is a developer preview, so the version col
 - [ ] `plugins/dsh` generated, including the registrar, patch, skill, locale and icon
 - [ ] `npm run check:plugins` passes on a clean tree
 - [ ] `npm run check:readmes` passes after regenerating from the edited root README
-- [ ] `test/e2e/16_dsh_plugin.sh` installs the bundle, calls a tool and removes the bundle
+- [ ] `test/e2e/18_dsh_plugin.sh` installs the bundle, calls a tool and removes the bundle
 - [ ] Compatibility matrix row and section added with the recorded date
 - [ ] Bundle published and installable by name from the registry
 - [ ] Community catalogue pull request opened, `dsh-plugin` topic applied

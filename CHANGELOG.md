@@ -8,11 +8,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Native Extension
 
-- Shared core: `intelli_research` accepts several queries in one call. Independent batches return a section per query; expansion batches merge related answers into one source-checked report and return the per-query results if the merge fails. The merge preserves literal code examples when renumbering citations, flags capped member summaries and links available failure reports. Each entry keeps its own cache. The batch adds a manifest and optional local telemetry, including fetched URLs on its entries.
+- Shared core: `intelli_research` accepts several queries in one call through new `queries` and `batchMode` parameters. Independent batches return a section per query; expansion batches merge related answers into one source-checked report. Each entry keeps its own cache and page budget, so a batch can select up to `maxUrls` pages per entry. The batch adds a manifest and optional local telemetry, including fetched URLs on its entries. New settings in both packages: `maxBatchEntries` (default 10), `batchConcurrency` (4) and `batchExtractionConcurrency` (8).
+- Shared core: an expansion merge returns the per-query results if it is skipped or fails, and is skipped before any model call when its input exceeds `collationInputBudgetTokens`. It preserves literal code examples, including quoted ones, when renumbering citations, lists each query's own extraction of a shared page, flags capped member summaries and links available failure reports.
+- Shared core: provenance validation treats a fenced code block inside a block quote as code, as it already treated unquoted fences, so an identifier shown in a quoted example is no longer checked as a citation.
 
 ### MCP Server
 
 Core batch behaviour is shared with the native extension and recorded above.
+
+- The server instructions and the `intelli_research` description tell agents when to batch planned queries. Per-entry `domains` are validated before any provider call, and the search engine's `excludedDomains` conflict applies only to the domain lists entries actually use.
 
 ## [pi-0.23.0] - 2026-11-11
 

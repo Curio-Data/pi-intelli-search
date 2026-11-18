@@ -186,7 +186,7 @@
     {
       "name": "intelli_research",
       "label": "Intelli Research",
-      "description": "Search the web, fetch top results, extract relevant content from each page, and deduplicate into a concise summary. Pass query for one question, or queries with batchMode for separate (independent) or merged (expansion) reports. Caches all results under .search/ for follow-up; a successful repeat on the same UTC date attempts to archive the previous report, extractions, numbered sources and sidecar to the lowest free numbered sibling folder (.1, then .2 and so on). Archiving is best-effort: a failure lets the completed run replace files in place, so copy a report elsewhere if it must be retained. A degraded single-query repeat preserves the earlier successful report. This is the primary research tool; for quick factual lookups, use intelli_search instead.",
+      "description": "Search the web, fetch top results, extract relevant content from each page, and deduplicate into a concise summary. Pass query for one question, or queries with batchMode for separate (independent) or merged (expansion) reports. Caches all results under .search/ for follow-up; a successful repeat on the same UTC date attempts to archive the previous report, extractions, numbered sources and sidecar to the lowest free numbered sibling folder (.1, then .2 and so on). Archiving is best-effort: a failure lets the completed run replace files in place, so copy a report elsewhere if it must be retained. A degraded repeat of a query, alone or in a batch, preserves that query's earlier successful report; a repeated batch archives its earlier batch folder even when the new merge fails. This is the primary research tool; for quick factual lookups, use intelli_search instead.",
       "promptSnippet": "intelli_research(query or queries + batchMode): full search → fetch → extract → collate pipeline with caching",
       "executionMode": "sequential",
       "promptGuidelines": [
@@ -235,7 +235,7 @@
               }
             },
             "minItems": 2,
-            "description": "Batch: two or more distinct queries researched in one call (capped by settings.maxBatchEntries). Requires batchMode. Top-level maxUrls, domains and focusPrompt apply to entries that do not set their own"
+            "description": "Batch: two or more distinct queries researched in one call (capped by the maxBatchEntries setting). Requires batchMode. Top-level maxUrls, domains and focusPrompt apply to entries that do not set their own"
           },
           "batchMode": {
             "type": "string",

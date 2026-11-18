@@ -13,11 +13,13 @@ import {
   SOURCE_ASSESSMENT_PREAMBLE,
   cell,
   citationProseMask,
+  codeBlockProse,
   pageUrl,
   closeOpenFence,
   evidenceExtractions,
   validateSynthesis,
 } from "../provenance.js";
+import { CHARS_PER_TOKEN } from "../collation-budget.js";
 import { errMsg, failureDetail } from "../util.js";
 import { completeSynthesis, SynthesisRejectedError, type ResearchSynthesis } from "./research.js";
 
@@ -97,6 +99,12 @@ export function renumberCitations(text: string, map: ReadonlyMap<number, number>
     for (const single of inner.matchAll(/S(\d+)/gi)) local.add(Number(single[1]));
     if ([...local].some((n) => !map.has(n))) return whole;
     const ids = [...new Set([...local].map((n) => map.get(n)!))].sort((a, b) => a - b);
+    if (text[after] === "(") {
+      // Keep the linked page first, so the label still names its target.
+      const linked = map.get(Number(inner.match(/S(\d+)/i)?.[1]))!;
+      ids.splice(ids.indexOf(linked), 1);
+      ids.unshift(linked);
+    }
     return `[${ids.map((n) => `S${n}`).join(", ")}]`;
   });
 }
@@ -170,21 +178,32 @@ export const BATCH_SOURCE_PREAMBLE =
   "## Source assessment\n\n" +
   "Source inventory is generated from the queries' successful, non-empty extractions, one row per URL across all queries, not from search citations. Cross-links in synthesis are not additional fetched sources. Types are extraction metadata, not independent quality ratings.\n\n";
 
+/**
+ * One cell listing a file per entry: each entry extracted the page with its
+ * own focus, so a claim from query 2 must be checked against query 2's file.
+ */
+function pathsCell(source: BatchSource, key: "extractionPath" | "sourcePath"): string {
+  const paths = source.extractions.map((e) => ({ position: e.position, path: e[key] }));
+  if (paths.length === 1) return paths[0].path ? cell(paths[0].path) : "Not cached";
+  return paths.map((p) => `Query ${p.position}: ${p.path ? cell(p.path) : "Not cached"}`).join("; ");
+}
+
 function batchSourceTable(sources: readonly BatchSource[]): string {
   let table = "| ID | Source | Type | Queries | Extraction | Full page |\n|---|---|---|---|---|---|\n";
   for (const source of sources) {
-    const first = source.extractions[0];
     const type = `${cell(source.sourceType)}${source.truncated ? " ⚠ truncated" : ""}${source.inferred ? " (inferred from text, not a citation)" : ""}`;
     table +=
       `| S${source.id} | ${cell(source.url)} | ${type} | ${source.extractions.map((e) => e.position).join(", ")} | ` +
-      `${first?.extractionPath ? cell(first.extractionPath) : "Not cached"} | ${first?.sourcePath ? cell(first.sourcePath) : "Not cached"} |\n`;
+      `${pathsCell(source, "extractionPath")} | ${pathsCell(source, "sourcePath")} |\n`;
   }
   return table.trimEnd();
 }
 
 /** Bulleted or numbered items in the first section whose heading matches `heading`. */
 export function countSectionItems(text: string, heading: RegExp): number {
-  const lines = text.split("\n");
+  // Code examples are masked line for line, so a sample heading or list in a
+  // fence is not counted as the synthesis's own section.
+  const lines = codeBlockProse(text).split("\n");
   const start = lines.findIndex((line) => /^#{1,6}\s/.test(line) && heading.test(line));
   if (start < 0) return 0;
   let count = 0;
@@ -267,6 +286,17 @@ export async function mergeBatch(
     gaps: 0,
     durationMs: 0,
   };
+  // The merge sends whole member summaries; collationInputBudgetTokens trims
+  // each member's evidence but not this request, so check it before paying.
+  const budgetTokens = context.settings.collationInputBudgetTokens;
+  const inputTokens = Math.ceil(base.inputChars / CHARS_PER_TOKEN);
+  if (inputTokens > budgetTokens) {
+    const reason =
+      `the merge input (≈${inputTokens} tokens) exceeds collationInputBudgetTokens (${budgetTokens}); ` +
+      "raise it if the collation model's context allows, or batch fewer queries";
+    context.logger.error(`Batch merge skipped: ${reason}`);
+    return { ok: false, reason, rejected: [], telemetry: { ...base, outcome: "skipped", error: reason } };
+  }
   const list = evidenceList(evidence.sources);
   try {
     const result = await completeSynthesis(

@@ -48,14 +48,38 @@ function withoutCodeBlocks(text: string): string {
 /** Share fence/container state between validation and final report rendering. */
 function codeBlockView(text: string, keepOffsets = false): {
   prose: string;
-  fence?: { char: string; length: number; indent: number; prefix: string };
+  fence?: { char: string; length: number; indent: number; prefix: string; quote?: boolean };
 } {
-  let fence: { char: string; length: number; indent: number; prefix: string } | undefined;
+  let fence: { char: string; length: number; indent: number; prefix: string; quote?: boolean } | undefined;
   let listIndent = 0;
   let afterBlank = false;
   const prose = text
     .split("\n")
     .map((line) => {
+      // A fence inside a block quote belongs to the quote: it ends with the
+      // quote, and its markers sit after the `>` prefix.
+      const quote = !fence || fence.quote ? line.match(/^(?: {0,3}>[ \t]?)+/) : null;
+      if (fence?.quote && !quote) fence = undefined;
+      if (quote) {
+        listIndent = 0;
+        afterBlank = false;
+        const content = line.slice(quote[0].length);
+        const match = content.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+        const hidden = keepOffsets ? " ".repeat(line.length) : "";
+        if (fence) {
+          if (match && match[1][0] === fence.char && match[1].length >= fence.length && !match[2].trim())
+            fence = undefined;
+          return hidden;
+        }
+        if (match) {
+          fence = {
+            char: match[1][0], length: match[1].length, indent: 0, quote: true,
+            prefix: quote[0] + (content.match(/^ */)?.[0] ?? ""),
+          };
+          return hidden;
+        }
+        return /^(?: {4}|\t)/.test(content) ? hidden : line;
+      }
       // A list's fenced block ends with its container, unlike a top-level
       // fence. Dedented prose must return to provenance validation.
       if (fence?.indent && line.trim() && !line.startsWith(" ".repeat(fence.indent))) {
@@ -94,6 +118,11 @@ function codeBlockView(text: string, keepOffsets = false): {
     })
     .join("\n");
   return { prose, fence };
+}
+
+/** Blank fenced and indented code blocks line for line, keeping inline code. */
+export function codeBlockProse(text: string): string {
+  return codeBlockView(text, true).prose;
 }
 
 /** Mask code without moving the offsets used to replace citations in the original Markdown. */
