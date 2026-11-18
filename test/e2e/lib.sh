@@ -47,6 +47,22 @@ e2e_completed_cache_entry() {
   done < <(jq -r '.searches[]?.slug' "$cache/.index.json" 2>/dev/null)
 }
 
+# e2e_describe_research_calls <trace>: print the shape of every
+# intelli_research call the agent made, so a failed argument check explains
+# itself after the scenario deletes its working directory. Shape only: the
+# call count, page cap, batch mode and number of queries, not prompt text.
+e2e_describe_research_calls() {
+  jq -sr '
+    [.[] | select(.type == "tool_execution_start" and .toolName == "intelli_research") | .args] as $calls |
+    "   recorded intelli_research calls: \($calls | length)",
+    ($calls | to_entries[] |
+      "   call \(.key + 1): " +
+      (if .value.queries then "batch \(.value.batchMode // "no batchMode"), \(.value.queries | length) queries" else "single query" end) +
+      ", maxUrls=\(.value.maxUrls // "omitted")" +
+      (if .value.queries then ", entry maxUrls=\([.value.queries[] | .maxUrls // "inherit"] | join("/"))" else "" end))
+  ' "$1" 2>/dev/null || echo "   (no readable tool trace)"
+}
+
 # Fail closed: the cap scenario must actually request 12; the default scenario
 # must supply no page override. Pi normalises optional nulls to omission, but
 # tool_execution_start records the raw arguments. Extractions alone cannot
@@ -57,8 +73,16 @@ e2e_verify_page_budget() {
     [.[] | select(.type == "tool_execution_start" and .toolName == "intelli_research") | .args] as $calls |
     ($calls | length) == 1 and
     (if $mode == "cap" then $calls[0].maxUrls == 12 else $calls[0].maxUrls == null end)
-  ' "$trace" >/dev/null || { echo "❌ incorrect/missing research arguments"; return 1; }
-  slug="$(jq -er '.searches | if length == 1 then .[0].slug else error("expected one cache entry") end' "$cache/.index.json")" || return 1
+  ' "$trace" >/dev/null || {
+    echo "❌ incorrect/missing research arguments"
+    e2e_describe_research_calls "$trace"
+    return 1
+  }
+  slug="$(jq -er '.searches | if length == 1 then .[0].slug else error("expected one cache entry") end' "$cache/.index.json")" || {
+    echo "❌ expected one cache entry, found: $(jq -r '[.searches[]?.slug] | join(", ")' "$cache/.index.json" 2>/dev/null)"
+    e2e_describe_research_calls "$trace"
+    return 1
+  }
   entry="$cache/$slug"
   [[ -s "$entry/report.md" && -d "$entry/extractions" && -d "$entry/sources" ]] || {
     echo "❌ missing research artefacts"; return 1;
