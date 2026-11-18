@@ -21,14 +21,20 @@
 // citation grammar:
 //
 // - `[0]` is never a marker (provider ids are 1-based).
-// - A bare `[n]` glued to an identifier (`arr[3]`, `list[0]`) is left
-//   verbatim: no syntax distinguishes it from an index. A digit immediately
-//   before a marker is allowed (`2025[1]`), because that shape is an
-//   observed citation form while a bare digit is not an identifier.
-// - Reference-style link uses (`[label][n]`, `[n][ref]`, `[n][]`) and
-//   definitions (`[n]: url`) are left verbatim.
+// - A bare `[n]` glued to an underscore or dollar sign (`snake_case[2]`,
+//   `$var[3]`) is left verbatim: those characters belong to identifiers and
+//   no observed citation form ends in them. Letters ARE allowed before a
+//   marker: the marker survey of 843 past results found 302 letter-adjacent
+//   markers, all 25 sampled were citations the model glued to a word
+//   (`... the context error[1][2]`), and no code index outside code
+//   formatting. The accepted cost is recorded by a named test: an
+//   unformatted prose index such as `arr[3]` is treated as a citation.
+// - Reference-style link uses (`[label][n]`, `[n][ref]`, `[n][]`, and the
+//   all-digit pair `[12][3]`) and definitions (`[n]: url`) are left
+//   verbatim.
 // - Code fences, indented code blocks and inline code spans (including
-//   spans crossing a newline) are masked and never touched.
+//   spans crossing a newline, or whose closer starts a line) are masked and
+//   never touched.
 // - When neither the provider order nor the model's own numbered Sources
 //   section can resolve a bare marker, it is removed only if other bare
 //   markers in the same response did resolve: with no such evidence the
@@ -97,15 +103,21 @@ function numberedSectionEntries(section: string): Map<number, string> {
   return out;
 }
 
-/** Compare two URLs as the same source, tolerating trailing punctuation a
- *  provider or the model appended to one of them. */
+/** Trailing punctuation tolerated when comparing or looking up a URL: a
+ *  provider or the model may append it to one form of the same source. One
+ *  shared class for both uses, so a trailing `?` cannot make two forms of
+ *  the same source look like a numbering conflict. */
+function stripTrailingPunct(url: string): string {
+  return url.replace(/[.,;:!?]+$/, "");
+}
+
+/** Compare two URLs as the same source, tolerating trailing punctuation. */
 function sameSource(a: string, b: string): boolean {
-  const strip = (u: string) => u.replace(/[.,;:!]+$/, "");
-  return strip(a) === strip(b);
+  return stripTrailingPunct(a) === stripTrailingPunct(b);
 }
 
 function strippedForLookup(url: string): string {
-  return url.replace(/[.,;:!?]+$/, "");
+  return stripTrailingPunct(url);
 }
 
 /** Expand leading whitespace to columns (tab = 4) to measure indentation. */
@@ -138,11 +150,25 @@ function applyIntervals(
  *  fenced blocks (``` / ~~~ with the closer at least as long), indented code
  *  blocks (4 columns, outside list-item continuation, per CommonMark's
  *  content-indent rule), and inline code spans, including spans that cross a
- *  newline. Everything else keeps its offsets, so matches found on the
- *  masked text map one-to-one onto the original. */
+ *  newline. The inline-span pass runs FIRST, over the raw text: a span whose
+ *  closer starts a line (opener mid-line, ``` at line start) must be found
+ *  before fence detection masks that closer, which would under-mask the
+ *  span's content. Over-masking a real fence as a span has the same effect
+ *  as masking it as a fence, the safe direction. Everything else keeps its
+ *  offsets, so matches found on the masked text map one-to-one onto the
+ *  original. */
 function maskCodeSpans(text: string): string {
   const intervals: Array<{ start: number; end: number }> = [];
-  const lines = text.split("\n");
+  // Pass 1: inline code spans (any backtick run, may cross newlines) over
+  // the raw text. Spans cannot start or end inside an interval added here,
+  // and over-masking only leaves text verbatim, which is the safe direction.
+  for (const m of text.matchAll(/(`+)(?!`)[\s\S]*?\1(?!`)/g)) {
+    intervals.push({ start: m.index, end: m.index + m[0].length });
+  }
+  const maskedSpans = applyIntervals(text, intervals);
+  // Pass 2: fence and indented-code line-walk over the span-masked text, so
+  // backticks already consumed by a span cannot open a fence.
+  const lines = maskedSpans.split("\n");
   let offset = 0;
   let fence: { char: string; length: number } | undefined;
   let listContentIndent: number | undefined;
@@ -178,14 +204,6 @@ function maskCodeSpans(text: string): string {
       }
     }
     offset += line.length + 1;
-  }
-  const maskedLines = applyIntervals(text, intervals);
-  // Inline code spans over the whole text so a span crossing a newline is
-  // caught; spans cannot start or end inside an already-masked region
-  // (backticks there are NULs), and over-masking only leaves text verbatim,
-  // which is the safe direction.
-  for (const m of maskedLines.matchAll(/(`+)(?!`)[\s\S]*?\1(?!`)/g)) {
-    intervals.push({ start: m.index, end: m.index + m[0].length });
   }
   return applyIntervals(text, intervals);
 }
@@ -234,19 +252,22 @@ export function alignCitationMarkers(
   }
 
   // Inline form `[n](url)` first (balanced-paren URLs, per extractSourceUrls
-  // pass 1). Bare form second, with three refusals built in:
+  // pass 1). Bare form second, with four refusals built in:
   // - `[0]`-style: handled in code, ids are 1-based;
-  // - identifier-adjacent `[n]` (`arr[3]`): the lookbehind refuses a letter
-  //   or underscore before the bracket, but allows a digit (`2025[1]`);
+  // - underscore/dollar-adjacent `[n]` (`snake_case[2]`, `$var[3]`): the
+  //   lookbehind refuses those identifier characters (letters are allowed:
+  //   observed citation form `error[1][2]`);
   // - reference links: a preceding text-labelled bracket group
   //   (`[the docs][1]`), a following `[ref]` or `[]` (`[1][docs]`, `[1][]`),
-  //   or a following `:` (definition `[1]: url`).
+  //   or a following `:` (definition `[1]: url`). The optional capturing
+  //   lookbehind records an immediately-preceding all-digit bracket group
+  //   (`[1][2]` chains, `[12][3]` pairs) so code can decide chain vs pair.
   // The bare form also swallows one preceding space or tab so a removed
   // marker does not leave "word ." behind; adjacent markers `[1][2]` have
   // no space to eat.
   const pattern = new RegExp(
     `\\[(\\d{1,3})\\]\\((https?://${URL_CHARS})\\)` +
-      `|([\\t ]?)(?<![\\p{L}_])(?<!\\[[^\\]\\n]*[^\\]\\d\\n][^\\]\\n]*\\])\\[(\\d{1,3})\\](?![:(]|\\[\\D|\\[\\])`,
+      `|([\\t ]?)(?<![_$])(?<!\\[[^\\]\\n]*[^\\]\\d\\n][^\\]\\n]*\\])(?:(?<=\\[(\\d{1,3})\\]))?\\[(\\d{1,3})\\](?![:(]|\\[\\D|\\[\\])`,
     "gu",
   );
 
@@ -270,7 +291,7 @@ export function alignCitationMarkers(
     if (whole.includes("\u0000")) continue;
     const start = m.index;
     const inlineUrl = m[2];
-    const n = inlineUrl !== undefined ? Number(m[1]) : Number(m[4]);
+    const n = inlineUrl !== undefined ? Number(m[1]) : Number(m[5]);
 
     if (inlineUrl !== undefined) {
       const k = indexOfUrl.get(strippedForLookup(inlineUrl));
@@ -284,7 +305,20 @@ export function alignCitationMarkers(
 
     if (n === 0) {
       // Never a 1-based citation marker.
-      plans.push({ start, whole, n, outcome: "verbatim" });
+      plans.push({ start, whole, space: m[3], n, outcome: "verbatim" });
+      continue;
+    }
+    // R2-F2: an all-digit pair `[12][3]` is more likely a full reference
+    // link than two adjacent citations when the leading number resolves as
+    // no citation (out of range, no section entry): leave the whole pair
+    // verbatim instead of deleting a bracketed number and a space. When the
+    // predecessor does resolve, this is a genuine adjacent chain (`[1][2]`)
+    // and the marker is processed normally.
+    const predecessor = m[4] !== undefined ? Number(m[4]) : undefined;
+    const resolvesAsCitation = (num: number): boolean =>
+      (num >= 1 && num <= order.length) || sectionEntries.has(num);
+    if (predecessor !== undefined && !resolvesAsCitation(predecessor)) {
+      plans.push({ start, whole, space: m[3], n, outcome: "verbatim" });
       continue;
     }
     const fromOrder = n <= order.length ? order[n - 1].url : undefined;
@@ -297,6 +331,14 @@ export function alignCitationMarkers(
     } else {
       referent = fromOrder ?? fromSection;
       if (referent === undefined) {
+        // R2-F2 mirror rule: an unresolvable marker immediately followed by
+        // another all-digit bracket group may be that group's reference
+        // label; removing it would delete a bracketed number and eat the
+        // space before it. Leave it verbatim.
+        if (/^\[\d{1,3}\]/.test(text.slice(start + whole.length))) {
+          plans.push({ start, whole, space: m[3], n, outcome: "verbatim" });
+          continue;
+        }
         outcome = "unresolvable";
       } else {
         const k = indexOfUrl.get(strippedForLookup(referent));
@@ -321,7 +363,7 @@ export function alignCitationMarkers(
     out += text.slice(cursor, plan.start);
     cursor = plan.start + plan.whole.length;
     if (plan.outcome === "verbatim") {
-      // Identifier-adjacent, [0], or unproven: the original token stays.
+      // [0], a reference-link pair, or unproven: the original token stays.
       out += plan.whole;
       continue;
     }

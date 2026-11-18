@@ -24,6 +24,8 @@ import {
   budgetExhausted,
   reasoningOnlyCompletion,
   redirectedToDifferentHost,
+  safeLinkLabel,
+  safeNonNumericLinkLabel,
 } from "../src/util.js";
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 5));
@@ -1281,5 +1283,32 @@ describe("extractSourceUrls link labels", () => {
       urls.map((u) => u.url),
       ["https://example.com/guide", "https://install.sh"],
     );
+  });
+});
+
+describe("safeLinkLabel / safeNonNumericLinkLabel", () => {
+  it("keeps a safe title and derives from the URL when the title is unsafe", () => {
+    assert.equal(safeLinkLabel("Docs", "https://a.example/x"), "Docs");
+    assert.equal(
+      safeLinkLabel("Click](https://evil.example/phish) here", "https://a.example/x"),
+      "x",
+    );
+    assert.equal(safeLinkLabel("Line1\nLine2", "https://a.example/page"), "page");
+  });
+
+  it("treats a whitespace-only title as empty and never returns an IPv6 bracket host", () => {
+    // R2-F6: a spaces-only title rendered as a blank link; an IPv6 host
+    // literal carries brackets, which a link label must never contain. The
+    // bracketed host only surfaces when the URL has no path to derive from.
+    assert.equal(safeLinkLabel("   ", "https://a.example/x"), "x");
+    assert.equal(safeLinkLabel(undefined, "https://[::1]/"), "source");
+    assert.equal(safeLinkLabel("bad]title", "https://[::1]/x"), "x");
+  });
+
+  it("never returns a purely numeric label from safeNonNumericLinkLabel", () => {
+    assert.equal(safeNonNumericLinkLabel(undefined, "https://d.example/4"), "d.example");
+    assert.equal(safeNonNumericLinkLabel(undefined, "https://1.2.3.4/4"), "source");
+    assert.equal(safeNonNumericLinkLabel("4", "https://d.example/4"), "d.example");
+    assert.equal(safeNonNumericLinkLabel("Docs", "https://d.example/4"), "Docs");
   });
 });

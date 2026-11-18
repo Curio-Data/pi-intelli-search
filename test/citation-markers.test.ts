@@ -72,10 +72,11 @@ describe("alignCitationMarkers", () => {
     assert.equal(out.touched, true);
   });
 
-  it("keeps aligned markers unchanged and rewrites digit-adjacent citations", () => {
-    // 2025[1] is an observed citation form (markers glued to a year or
-    // version with no space); a bare digit is not an identifier, so the
-    // identifier-adjacency refusal must not reject it.
+  it("aligns markers glued to words and years (survey decision), keeping aligned ones unchanged", () => {
+    // Owner decision on the 843-result survey: letter-adjacent markers are
+    // citations in practice (302 observed, 25 of 25 sampled were citations
+    // such as `the context error[1][2]`), so they align like any other
+    // marker. `2025[1]` was already an observed form.
     const text = "Released May 6, 2025[1][2][4]. The status page lists it[1].";
     const citations = [
       cite("https://a.example/1", "A"),
@@ -85,10 +86,10 @@ describe("alignCitationMarkers", () => {
     ];
     const displayed = displayedFrom(text, citations, 10);
     const out = align(text, citations, displayed);
-    // "it[1]" is letter-adjacent, so it stays verbatim (it is already [1]
-    // here by coincidence; the point is it is never rewritten).
+    // Every marker (including it[1]) is processed; all happen to already
+    // carry the right number here.
     assert.equal(out.text, text);
-    assert.equal(out.resolved, 3);
+    assert.equal(out.resolved, 4);
     assert.equal(out.removed, 0);
   });
 
@@ -279,8 +280,7 @@ describe("alignCitationMarkers", () => {
   });
 
   it("keeps adjacent markers tidy when a middle one is dropped", () => {
-    // "Fact[1]" is letter-adjacent and stays verbatim (conservative);
-    // "[2]" after the numeric bracket group [1] is an adjacent marker.
+    // The whole chain is aligned: [1] and [2] resolve, [4] is removed.
     const text = "Fact[1][2][4].";
     const citations = [
       cite("https://a.example/1", "A"),
@@ -290,12 +290,16 @@ describe("alignCitationMarkers", () => {
     const out = align(text, citations, displayed);
     assert.equal(out.text, "Fact[1][2].");
     assert.equal(out.removed, 1);
-    assert.equal(out.resolved, 1);
+    assert.equal(out.resolved, 2);
   });
 });
 
 describe("alignCitationMarkers — review findings F1 to F7, F11", () => {
-  it("F1: preserves non-citation bracketed numbers in annotation mode (arr[3], arr[0], list[0])", () => {
+  it("accepted cost of the survey decision: an unformatted prose index such as arr[3] is renumbered", () => {
+    // The owner decision aligns letter-adjacent markers because they are
+    // citations in every observed sample. The cost: a bare prose index a
+    // model failed to wrap in code formatting is treated as a citation and
+    // renumbered. [0] stays (ids are 1-based) and list[0] with it.
     const text =
       "Read [API](https://api.example/ref). The third element arr[3] is key, " +
       "the first is arr[0], and list[0] starts it. Cite [1].";
@@ -306,15 +310,12 @@ describe("alignCitationMarkers — review findings F1 to F7, F11", () => {
     ];
     const displayed = displayedFrom(text, citations, 10);
     const out = align(text, citations, displayed);
-    // Only the space-delimited genuine citation is rewritten (to the index
-    // of citation 1 after the prose link). The identifier-adjacent tokens
-    // keep their exact text; [0] is never a marker (ids are 1-based).
     assert.equal(
       out.text,
-      "Read [API](https://api.example/ref). The third element arr[3] is key, " +
+      "Read [API](https://api.example/ref). The third element arr[4] is key, " +
         "the first is arr[0], and list[0] starts it. Cite [2].",
     );
-    assert.equal(out.resolved, 1);
+    assert.equal(out.resolved, 2);
     assert.equal(out.removed, 0);
   });
 
@@ -473,6 +474,110 @@ describe("alignCitationMarkers — review findings F1 to F7, F11", () => {
     const text = "See [1](https://a.example/guide). Access the third [3] item.";
     const out = align(text, [], displayedFrom(text, [], 10));
     assert.equal(out.text, text);
+    assert.equal(out.removed, 0);
+  });
+});
+
+describe("alignCitationMarkers — round 3 (survey decision, R2 findings)", () => {
+  it("survey decision: aligns a marker glued to a word under displacement", () => {
+    // The dominant real shape from the survey: `the context error[1][2]`.
+    const text = "This explains the context error[1][2].";
+    const citations = [cite("https://a.example/1"), cite("https://b.example/2")];
+    const displayed = displayedFrom(text, citations, 10);
+    // No prose links here, so displayed = [a, b] and the numbers already
+    // match; displacement comes from the prose link below. Sanity only.
+    const out = align(text, citations, displayed);
+    assert.equal(out.text, text);
+    assert.equal(out.resolved, 2);
+  });
+
+  it("survey decision: renumbers a word-glued chain under displacement", () => {
+    const text = "See [P](https://p.example/ref). This explains the error[1][2] and the fix[4].";
+    const citations = [
+      cite("https://a.example/1"),
+      cite("https://b.example/2"),
+      cite("https://c.example/3"),
+      cite("https://d.example/4"),
+    ];
+    const displayed = displayedFrom(text, citations, 10);
+    assert.deepEqual(
+      displayed.map((s) => s.url),
+      ["https://p.example/ref", "https://a.example/1", "https://b.example/2", "https://c.example/3", "https://d.example/4"],
+    );
+    const out = align(text, citations, displayed);
+    // Whole chain shifts by one: the prose link occupies entry 1.
+    assert.equal(
+      out.text,
+      "See [P](https://p.example/ref). This explains the error[2][3] and the fix[5].",
+    );
+    assert.equal(out.resolved, 3);
+  });
+
+  it("refuses underscore and dollar adjacency (identifier characters)", () => {
+    // The refused shapes are a marker glued directly to `_` or `$`; a word
+    // ending in a letter is aligned (survey decision).
+    const text = "Values foo_[2] and obj$[3] differ. Cite [1].";
+    const citations = [
+      cite("https://a.example/1"),
+      cite("https://b.example/2"),
+      cite("https://c.example/3"),
+    ];
+    const displayed = displayedFrom(text, citations, 10);
+    const out = align(text, citations, displayed);
+    assert.equal(out.text, "Values foo_[2] and obj$[3] differ. Cite [1].");
+    assert.equal(out.resolved, 1);
+  });
+
+  it("R2-F2: leaves an out-of-range all-digit pair [12][3] verbatim, never deleting a number and a space", () => {
+    const text = "See [12][3] ref.";
+    const citations = [
+      cite("https://a.example/1"),
+      cite("https://b.example/2"),
+      cite("https://c.example/3"),
+    ];
+    const displayed = displayedFrom(text, citations, 10);
+    const out = align(text, citations, displayed);
+    // [12] resolves as no citation, so the pair reads as a full reference
+    // link: both tokens stay, and the space before [12] is kept.
+    assert.equal(out.text, "See [12][3] ref.");
+    assert.equal(out.removed, 0);
+  });
+
+  it("R2-F2: an in-range all-digit pair is an adjacent chain and aligns", () => {
+    const text = "See [1][3] ref.";
+    const citations = [
+      cite("https://a.example/1"),
+      cite("https://b.example/2"),
+      cite("https://c.example/3"),
+    ];
+    const displayed = displayedFrom(text, citations, 10);
+    const out = align(text, citations, displayed);
+    assert.equal(out.text, "See [1][3] ref.");
+    assert.equal(out.resolved, 2);
+  });
+
+  it("R2-F3: masks a multi-line code span whose closer starts a line", () => {
+    // The reviewer's exact input: the span opener sits mid-line, the closer
+    // at line start; fence detection used to eat the closer and expose the
+    // span's content to rewrites.
+    const text = "Read [P](https://p.example/ref) ```\ncode [2]\n``` end. Cite [1].";
+    const citations = [cite("https://a.example/1"), cite("https://b.example/2")];
+    const displayed = displayedFrom(text, citations, 10);
+    // Displayed: [P, a, b]. The span content stays verbatim; the prose
+    // marker after the closer aligns.
+    const out = align(text, citations, displayed);
+    assert.equal(out.text, "Read [P](https://p.example/ref) ```\ncode [2]\n``` end. Cite [2].");
+    assert.equal(out.resolved, 1);
+  });
+
+  it("R2-F4: a trailing-? annotation and section pair resolve instead of false-conflicting", () => {
+    const text = "Claim [1].\n\nSources\n1. [A](https://a.example/x)";
+    const citations = [cite("https://a.example/x?")];
+    const displayed = displayedFrom(text, citations, 10);
+    const out = align(text, citations, displayed);
+    // Same source modulo trailing punctuation: not a conflict.
+    assert.equal(out.text.split("\n")[0], "Claim [1].");
+    assert.equal(out.resolved, 1);
     assert.equal(out.removed, 0);
   });
 });

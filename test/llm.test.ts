@@ -439,6 +439,9 @@ describe("callLlm registry-facade dispatch (single transport, Pi >= 0.86)", () =
         retry: { attempts: 2, baseDelayMs: 0, maxDelayMs: 0 },
       });
       assert.deepEqual(sink.citations, [{ url: "https://successful.example" }]);
+      // R2 test gap 1: the occurrence order inherits the same per-attempt
+      // isolation (it is set only from the successful attempt's sink).
+      assert.deepEqual(sink.citationOrder, [{ url: "https://successful.example" }]);
       assert.equal(attempts, 2);
     } finally {
       releaseOld?.();

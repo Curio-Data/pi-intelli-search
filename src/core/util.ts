@@ -850,22 +850,27 @@ function hostOf(url: string): string | undefined {
 
 /** A candidate link label is unsafe when it contains a bracket, newline or
  *  tab: embedded as `[label](url)` text it could close the link early or
- *  open another one (`](https://phish)` inside a provider-supplied title). */
+ *  open another one (`](https://phish)` inside a provider-supplied title).
+ *  A whitespace-only label is as good as empty: it renders as a blank
+ *  link. */
 function labelCandidateOk(label: string): boolean {
-  return label.length > 0 && !/[\][\r\n\t]/.test(label);
+  return label.length > 0 && !/[\][\r\n\t]/.test(label) && label.trim().length > 0;
 }
 
 /**
  * A citation or link title safe to embed as Markdown link text: an unsafe or
  * empty candidate falls back to the URL-derived title, then the hostname,
- * then "source". Numeric labels pass through unchanged; the caller decides
- * whether a number is acceptable there.
+ * then "source". The hostname itself is re-checked (an IPv6 literal carries
+ * brackets), so the returned label always satisfies labelCandidateOk.
+ * Numeric labels pass through unchanged; the caller decides whether a
+ * number is acceptable there.
  */
 export function safeLinkLabel(title: string | undefined, url: string): string {
   if (title !== undefined && labelCandidateOk(title)) return title;
   const derived = titleFromUrl(url);
   if (labelCandidateOk(derived)) return derived;
-  return hostOf(url) ?? "source";
+  const host = hostOf(url);
+  return host !== undefined && labelCandidateOk(host) ? host : "source";
 }
 
 /**
@@ -875,6 +880,11 @@ export function safeLinkLabel(title: string | undefined, url: string): string {
  */
 export function safeNonNumericLinkLabel(title: string | undefined, url: string): string {
   const label = safeLinkLabel(title, url);
-  if (/^\d+(\.\d+)*$/.test(label)) return hostOf(url) ?? "source";
-  return label;
+  if (!/^\d+(\.\d+)*$/.test(label)) return label;
+  // The host must itself pass the same checks: an IPv4 literal is dotted
+  // numeric and would read as an index again.
+  const host = hostOf(url);
+  return host !== undefined && labelCandidateOk(host) && !/^\d+(\.\d+)*$/.test(host)
+    ? host
+    : "source";
 }
