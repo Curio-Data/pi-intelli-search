@@ -171,6 +171,94 @@ it("returns no synthesis for an entry that did not complete", async (t) => {
   assert.equal(entry.synthesis, undefined);
 });
 
+it("aligns intelli_search citation markers with the rendered Sources list", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 5, maxUrls: 5 });
+  const complete = base.context.models.complete;
+  // Sonar-shaped response: bare [n] markers indexed to the provider's
+  // citation order, one prose markdown link, and the trailing Sources
+  // section the system prompt requests.
+  const sonarText = [
+    "The tool shipped on 12 March [3]. Installation is documented [1],",
+    "and the API reference lives at [API ref](https://docs.example.com/api).",
+    "",
+    "Sources",
+    "- [Release notes](https://blog.example.com/release-notes)",
+    "- [Installation](https://docs.example.com/install)",
+  ].join("\n");
+  const citations = [
+    { url: "https://docs.example.com/release", title: "Release" },
+    { url: "https://docs.example.com/install", title: "Installation" },
+    { url: "https://blog.example.com/release-notes", title: "Release notes" },
+  ];
+  base.context.models.complete = async (request) =>
+    request.model.model === "search"
+      ? { text: sonarText, citations }
+      : complete(request);
+  const result = await search({ query: "alignment" }, base.context);
+  // Displayed order: prose API ref link, then the trailing-section links,
+  // then the annotation-only release page. Every marker must carry the
+  // index of the source the model meant: [3] -> release notes (entry 2),
+  // [1] -> release page (entry 4).
+  assert.match(result.text, /shipped on 12 March \[2\]\./);
+  assert.match(result.text, /documented \[4\],/);
+  assert.match(result.text, /lives at \[API ref\]\(https:\/\/docs\.example\.com\/api\)\./);
+  const lines = result.text.split("\n");
+  const sourceLines = lines.filter((line) => /^\d+\. /.test(line));
+  assert.deepEqual(
+    sourceLines.map((line) => line.replace(/^\d+\. /, "")),
+    [
+      "[API ref](https://docs.example.com/api)",
+      "[Release notes](https://blog.example.com/release-notes)",
+      "[Installation](https://docs.example.com/install)",
+      "[Release](https://docs.example.com/release)",
+    ],
+  );
+  // The model's own trailing Sources section never reaches the answer.
+  assert.doesNotMatch(result.text, /- \[Release notes\]/);
+  assert.equal(result.outcome, "completed");
+});
+
+it("removes clamped intelli_search markers and notes the removal", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 2, maxUrls: 2 });
+  const complete = base.context.models.complete;
+  const sonarText = "Supported [1] and tracked [3]; details [9].";
+  const citations = [
+    { url: "https://a.example/1", title: "A" },
+    { url: "https://b.example/2", title: "B" },
+    { url: "https://c.example/3", title: "C" },
+  ];
+  base.context.models.complete = async (request) =>
+    request.model.model === "search"
+      ? { text: sonarText, citations }
+      : complete(request);
+  const result = await search({ query: "clamped" }, base.context);
+  // Displayed list is capped at 2: [1] stays, [3] and [9] lose their
+  // referents and are removed rather than pointing at wrong entries.
+  assert.match(result.text, /Supported \[1\] and tracked; details\./);
+  assert.match(result.text, /> Note: 2 citation markers in the answer referred to sources outside the list above and were removed\./);
+  const sources = result.details.sources as Array<{ url: string }>;
+  assert.deepEqual(sources.map((s) => s.url), ["https://a.example/1", "https://b.example/2"]);
+});
+
+it("retitles number-labelled prose links in the Sources list", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root);
+  const complete = base.context.models.complete;
+  base.context.models.complete = async (request) =>
+    request.model.model === "search"
+      ? {
+          text: "Details in [2](https://docs.example.com/guide).",
+          citations: [{ url: "https://docs.example.com/guide", title: "Official guide" }],
+        }
+      : complete(request);
+  const result = await search({ query: "labels" }, base.context);
+  // The link's numeric markdown label must not survive as the entry title.
+  assert.match(result.text, /1\. \[Official guide\]\(https:\/\/docs\.example\.com\/guide\)/);
+  assert.match(result.text, /Details in \[1\]\(https:\/\/docs\.example\.com\/guide\)\./);
+});
+
 it("labels inferred guesses in intelli_search text and structured sources", async (t) => {
   const root = await workspace(t);
   const base = coreContext(root, { defaultUrls: 3, maxUrls: 3 });

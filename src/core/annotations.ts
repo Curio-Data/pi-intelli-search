@@ -22,6 +22,8 @@
 // SSE/JSON. Failures are swallowed everywhere — the main pipeline must never
 // depend on this side channel.
 
+import { titleFromUrl } from "./util.js";
+
 /** Standard fetch surface, structurally compatible with the native provider hook. */
 export type FetchFunction = typeof globalThis.fetch;
 
@@ -251,7 +253,23 @@ export function mergeCitations(
   // Explicit links first, then harvested citations, then protocol-less domain
   // guesses from prose, so a guess never displaces a real citation from the
   // maxUrls slice. The inferred flag survives for fetch and result rendering.
-  for (const { url, title, inferred } of textUrls) if (!inferred) add(url, title);
+  // A link whose markdown label is only a number (search models write
+  // `[3](url)` inline citations) is retitled from the matching citation or,
+  // failing that, from the URL itself: after marker alignment the label's
+  // number no longer matches any list, and a reader must not see an entry
+  // titled "3" whose position is different.
+  const citationTitle = new Map<string, string>();
+  for (const c of sink.citations) {
+    if (c.title && c.title.length > 0 && !citationTitle.has(c.url)) citationTitle.set(c.url, c.title);
+  }
+  for (const { url, title, inferred } of textUrls) {
+    if (inferred) continue;
+    if (/^\d{1,3}$/.test(title.trim())) {
+      add(url, citationTitle.get(url) ?? titleFromUrl(url));
+    } else {
+      add(url, title);
+    }
+  }
   for (const { url, title } of sink.citations) add(url, title && title.length > 0 ? title : url);
   for (const { url, title, inferred, originalReference } of textUrls) {
     if (inferred) add(url, title, inferred, originalReference);

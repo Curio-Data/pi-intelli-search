@@ -782,6 +782,25 @@ export function inferCurrentness(line: string): string {
 }
 
 /**
+ * Match a trailing "Sources" section: returns its start offset and text when
+ * the heading is anchored at the end of `text` and its body contains a URL.
+ * `stripTrailingSourcesSection()` cuts on this match; citation-marker
+ * alignment reads the same section for the model's own numbered entries, so
+ * both share one recognition rule.
+ */
+export function matchTrailingSourcesSection(
+  text: string,
+): { start: number; section: string } | undefined {
+  const trimmedEnd = text.replace(/[ \t]+$/g, "");
+  const match = trimmedEnd.match(
+    /\n[ \t]*(?:#{1,6}[ \t]*)?\*{0,2}Sources\*{0,2}[ \t]*:?[ \t]*\n[\s\S]*$/i,
+  );
+  if (!match) return undefined;
+  if (!/https?:\/\/|\bwww\./.test(match[0])) return undefined;
+  return { start: match.index ?? 0, section: match[0] };
+}
+
+/**
  * Strip a trailing "Sources" section from a search model's response.
  *
  * The search prompt asks for one so the links land in the text where
@@ -799,12 +818,24 @@ export function inferCurrentness(line: string): string {
  * returns unchanged.
  */
 export function stripTrailingSourcesSection(text: string): string {
-  const trimmedEnd = text.replace(/[ \t]+$/g, "");
-  const match = trimmedEnd.match(
-    /\n[ \t]*(?:#{1,6}[ \t]*)?\*{0,2}Sources\*{0,2}[ \t]*:?[ \t]*\n[\s\S]*$/i,
-  );
+  const match = matchTrailingSourcesSection(text);
   if (!match) return text;
-  if (!/https?:\/\/|\bwww\./.test(match[0])) return text;
-  const cut = trimmedEnd.slice(0, match.index).replace(/\s+$/g, "");
+  const cut = text.slice(0, match.start).replace(/\s+$/g, "");
   return cut + "\n";
+}
+
+/**
+ * Derive a display title from a URL: the path's last segment minus its
+ * extension, or the hostname when the path is empty. Shared by bare-URL
+ * extraction (extractSourceUrls pass 2) and citation-marker alignment, so a
+ * number-labelled link never reaches a reader titled only "3".
+ */
+export function titleFromUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    return parts.length > 0 ? parts[parts.length - 1].replace(/\.[^.]+$/, "") : u.hostname;
+  } catch {
+    return url;
+  }
 }

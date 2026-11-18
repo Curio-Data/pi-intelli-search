@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Fixed
+
+- Shared core: `intelli_search` aligns the search model's numbered citation markers with the rendered Sources list. Search-grounded models number markers such as `[3]` against their own citation order, while the displayed list merged prose links first and annotation-only URLs second, capped by `defaultUrls`: the marker could sit beside an unrelated entry, and a capped or never-supplied referent kept a number that pointed at the wrong source. Each resolvable marker is rewritten to the displayed index of its referent; a marker whose referent the cap removed is dropped (with a note under the Sources list) and an inline number-labelled link outside the list is retitled from its citation or URL instead of keeping a misleading index. Code fences, inline code and markdown reference definitions are never touched, and prose links whose markdown label is only a number are retitled so no Sources entry is titled `3`. `intelli_research` is unaffected: its search summary never reaches the extraction or collation prompts, and in failure reports it quotes the model verbatim beside no numbered list.
+
 ## [pi-0.24.0] - 2026-11-18
 
 Batch research: several planned questions in one `intelli_research` call, returned as separate answers or merged into one source-checked report.
