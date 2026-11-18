@@ -2,6 +2,8 @@
 
 This document records the extract/collate model benchmark for `intelli-search`: the methodology, the harness, the measured results, and the decisions taken from them. It exists so that future model comparisons are reproducible and comparable with the numbers already recorded here. The harness measures the native `Pi` adapter through a live agent loop, not Model Context Protocol (MCP) transport latency. Baseline run 1A was a direct native tool call rather than a headless loop run.
 
+A separate [batch research study](#batch-research-on-the-native-host) measured the cost of returning to the main model between planned queries and the elapsed time of running the queries inside one tool call.
+
 Benchmark numbers are canonical to this file. When a new model is benchmarked, append its runs here rather than editing historical rows.
 
 ## Purpose
@@ -171,3 +173,40 @@ Protocol:
 5. Match full source URLs across runs (for example the dev.to roundups and adminlte.io appear in most baseline runs). Verify identical captured input content before treating extraction differences as pure model effects; file numbers and hostnames alone do not establish a match.
 
 Artefacts land under `<base>/<label>/cwd/.search/<slug>/` with the full `report.md`, `meta.json`, per-page `extractions/`, and raw `sources/`. The base directory is scratch: promote anything worth keeping to `evidence/` before deleting it.
+
+## Batch Research on the Native Host
+
+On 18 November 2026, two fresh `Pi` 1.5.2 sessions wrote an operations note from the same five questions about [_SQLite_](https://sqlite.org/): reader snapshots, checkpoints, durability, writer contention and live backups. One agent had to wait for each answer before issuing the next query. The other submitted the five questions as one expansion batch and received one merged report. Both used `openrouter/openai/gpt-6.2-sol`, the same extraction instructions and two pages per question. Both completed all ten page extractions. The queries and page caps matched; the live pages and model output were not held fixed.
+
+### Main-Model Input and Elapsed Time
+
+| Measure | Five Separate Calls | One Expansion Batch |
+|---|---:|---:|
+| Main-model requests, including the final answer | 6 | 2 |
+| Input tokens on successive requests | 1,398; 2,409; 4,424; 5,653; 6,868; 9,295 | 1,424; 6,319 |
+| Total main-model input tokens | 30,047 | 7,743 |
+| Elapsed time for the whole session | 8 min 6 s | 2 min 59 s |
+| Main-model charge (USD, rounded) | $0.0307 | $0.0231 |
+
+The four intermediate requests consumed 19,354 input tokens. Each time the model issued the next query, its input included the conversation so far. Batching removed those four requests and gave the final request one merged result (18,699 characters) in place of five results (30,865 characters in total). Across the whole session, input fell by 22,304 tokens (≈74%) and elapsed time by 5 min 7 s (≈63%). The input total counts cached context each time the model receives it. It measures input exposure, not tokens billed at the full input price: 21,932 tokens in the five-call session were cache reads. The main-model charge fell by ≈25%, not ≈74%. The charges cover the main model only; the study did not capture the search, extraction or synthesis charges for this pair.
+
+The coordinating agent scored the two final notes under random labels before revealing their assignments. Both scored 10/10 against the same five criteria, one per question. One note gave a more precise backup-completion check; the other offered an additional way to handle writer contention. Neither contained materially unsafe advice. This was one pair on one topic, not evidence that the methods give equal answers in general.
+
+### Research Tool Timings
+
+A separate study on 17 and 18 November measured the tool calls without an agent loop. Each query requested up to five pages, with `sqlite.org` as the preferred domain. The baseline was the sum of the times for the same queries run one after another on `Pi`. An independent batch returned separate answers; an expansion batch also ran a final merge. Both used the default limits of four entries running at once and eight shared extraction slots. A single query used four extraction slots. The comparison therefore includes the difference in extraction capacity.
+
+| Queries | Repetition | Sequential Calls (s) | Independent Batch (s) | Expansion Batch (s) |
+|---:|---:|---:|---:|---:|
+| 2 | 1 | 100.5 | 84.6 | 138.0 |
+| 2 | 2 | 48.4 | 24.1 | 44.1 |
+| 5 | 1 | 472.9 | 222.3 | 404.5 |
+| 5 | 2 | 161.5 | 58.8 | 83.1 |
+| 10 | 1 | 474.4 | 157.6 | 270.5 |
+| 10 | 2 | 265.2 (9 completed) | 158.6 (9 completed) | 158.1 (10 completed) |
+
+For five questions, the independent batch took ≈53% and ≈64% less time than sequential calls in the two repetitions. The expansion batch took ≈14% and ≈49% less time. Each method extracted 25 pages per repetition, but not always the same pages. A merge was not always faster than separate calls: the two-query expansion took longer in the first repetition. The second ten-query repetition did not complete equal work, so it supplies no like-for-like speed comparison. With four slots for both the independent batch and sequential calls, the five-query batch took 285.5 s and 56.1 s, reductions of ≈40% and ≈65%. Increasing the batch pool from eight to sixteen slots shortened one five-query batch and lengthened the other. The results do not justify changing the default.
+
+### Agent Choice
+
+The [study protocol](proposals/BATCH-STUDIES.md) also gave the model two tasks without prescribing how to search. Across six sessions with batching available, one used expansion, four used a single query and one used no research tool. Skills were disabled in both conditions; the batch-enabled tool still advertised both modes. This measured tool choice, not the effect of loading a skill. Use one query when it covers the question. When several distinct queries are already planned and one answer is needed, the five-query comparison shows what batching can save. A question that depends on a finding still requires a later call.

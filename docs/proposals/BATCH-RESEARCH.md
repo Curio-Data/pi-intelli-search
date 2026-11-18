@@ -1,6 +1,6 @@
 # Batch Research Feature Brief
 
-Status: proposed feature, recorded 8 November 2026. The owner has decided to build it and judge its value from use rather than from a prior controlled study. On 17 November 2026 the owner opened the `explore/batch-research` branch to develop the design, and set nominal starting values for the open limits (see Starting Values). The owner reduced the super-collation to a single collation call over the per-entry summaries; exploration of the cache folders by the collation model is deferred (see Scope). Release is not yet assigned.
+Status (18 November 2026): Phases 0 to 4 complete on `explore/batch-research`, not released. For the handover start at [Phase 4](#phase-4-guidance-documentation-and-live-evidence). The original brief follows, recorded 8 November 2026. The owner has decided to build it and judge its value from use rather than from a prior controlled study. On 17 November 2026 the owner opened the `explore/batch-research` branch to develop the design, and set nominal starting values for the open limits (see Starting Values). The owner reduced the super-collation to a single collation call over the per-entry summaries; exploration of the cache folders by the collation model is deferred (see Scope). Release is not yet assigned.
 
 ## Summary
 
@@ -106,18 +106,18 @@ Out of scope:
 ## Dependencies and Open Decisions
 
 - **Sequencing:** recorded on 8 November 2026, this feature depended on the 0.22.0 collation and provenance work on `rcca/mcp-research-failures`, including the fix for URLs inside bold Markdown, on which the super-collation's validation also depends. That work merged and was published as 0.22.0 on 9 November 2026, and later provenance and cache fixes are on `main` under `CHANGELOG.md` `Unreleased`. The feature starts from `main` and targets the next minor version of both packages.
-- **Open on the Branch:** the answers to the Exploration Questions, which fix the design and may revise the Starting Values.
+- **Study decisions:** the Phase 4 results below settle the Starting Values for this branch.
 - **Implementer Decisions:** parameter names, the batch result format, the batch folder naming, the location of an independent batch's batch record and the index entry shape.
 
 ## Starting Values
 
-The owner set these nominal values on 17 November 2026. Each is a starting point to be tested on the branch and revised from the batch telemetry and the traced runs, not a measured optimum.
+The owner set these nominal values on 17 November 2026. Phase 4 retained them after the traced runs. They are defaults, not measured optima.
 
 | Limit | Starting Value | Basis |
 |---|---|---|
-| Entries per batch | 10 | Surveyed messages held at most five research calls, and none of the 30 sampled batches held five. Twice the observed maximum, so that a practical limit such as the collation input budget is likely to be found on the branch before the cap constrains agents |
+| Entries per batch | 10 | Surveyed messages held at most five research calls, and none of the 30 sampled batches held five. Twice the observed maximum. The ten-entry merge prompts in Phase 4 were below the default collation input budget |
 | Entries running at once | 4 | Matches the existing `fetchConcurrency` and `extractionConcurrency` defaults |
-| Batch-wide extraction pool | 8 | Twice today's per-run `extractionConcurrency`, so a batch is faster than one research run without the per-entry multiplication described under Concurrency; adjusted from the traced runs |
+| Batch-wide extraction pool | 8 | Twice the per-run `extractionConcurrency`, shared across entries. The traced runs did not establish a consistently faster pool size |
 | `minRequestIntervalMs` | One limiter across the batch | A per-entry limiter would multiply the request rate for the keys the setting protects |
 
 ## Exploration Questions
@@ -226,4 +226,8 @@ Implementer decisions taken in this phase:
 
 **Interim Result (17 November 2026).** Both tool descriptions and the native and plugin skills now distinguish planned batches from follow-ups that depend on a finding. The settings, folder layout, telemetry and unreleased change are documented. Scenarios 16 and 17 passed on the native host, and scenario 11 passed through its MCP client. Each batch used exact arguments and two entries capped at one page each. All six entries completed, the expansion returned a merged report, and both independent calls returned per-query sections. The batch records and MCP verdict are retained under `evidence/agents/2026-11-17-batch-phase4-smokes/`. The builds, deterministic tests, contract type-check, single-query scenario 01 and shell checks passed.
 
-These runs establish that the calls work, not that batching saves time or that an agent chooses it. Neither the matched timing and pool study nor the batch-available versus batch-unavailable agent study has run. Starting Values remain provisional. The [study protocols](BATCH-STUDIES.md) specify the proposed queries, tasks, repetitions, grading and spend reporting. The owner authorised execution with the existing provider credential and no spending cap; the workloads and scientific controls are unchanged.
+These smoke tests established that the calls worked. The comparative studies followed under the [study protocols](BATCH-STUDIES.md).
+
+**Final Result and Handover (18 November 2026).** The [public benchmark](../BENCHMARKS.md#batch-research-on-the-native-host) records the input cost of dispatching five planned queries, the separate direct-tool timing comparison and unprompted batch use. The [study closeout](BATCH-STUDIES.md#recorded-outcomes) records the remaining exploration results, grading method and limits of cost attribution. The implementation retains the Starting Values and merges summaries without reading extraction files. The studies do not justify changing those defaults.
+
+The branch is ready for owner discussion, not publication to the package registry. Do not repeat the studies, change defaults, merge, release or begin the separate host-support proposal without a new decision. For an offline check run `npm run build:all`, `npm run test:all`, `npm run check:readmes` and `node_modules/.bin/tsc -p test/tsconfig.native-contract.json`. The public results and protocols travel with the branch. Raw tool runs and sessions remain gitignored on the original checkout in `evidence/agents/2026-11-17-batch-study-execution/`, `2026-11-18-five-query-interruptions/` and `2026-11-18-batch-closeout/` under the same parent. Preserve them; a clean clone does not include them.
