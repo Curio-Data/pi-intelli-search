@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, rm, symlink, writeFile, link, readdir } from "node:fs/promises";
+import { mkdir, rm, symlink, writeFile, link, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseConfig, loadConfig, ConfigurationError } from "../src/config.js";
 import { TUNING_RANGES } from "../../../src/core/defaults.js";
@@ -26,6 +26,18 @@ test("configuration is explicit, canonical, deeply frozen and credential-free", 
   } finally {
     await f.cleanup();
   }
+});
+
+test("applies the constrained-account tuning fragment from the package guide", async () => {
+  const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+  const block = readme.match(/#### Tuning\n[\s\S]*?```json\n([\s\S]+?)\n```/)?.[1];
+  assert.ok(block);
+  const f = await fixture();
+  try {
+    const cfg = await parseConfig({ ...document(), ...JSON.parse(block) }, f.dir);
+    assert.deepEqual([cfg.settings.maxBatchEntries, cfg.settings.batchConcurrency, cfg.settings.batchExtractionConcurrency], [5, 2, 2]);
+    assert.equal(cfg.settings.maxUrls, 3);
+  } finally { await f.cleanup(); }
 });
 
 test("rejects missing selections, unknown fields and unsafe tuning without echoing values", async () => {

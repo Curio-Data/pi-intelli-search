@@ -176,7 +176,9 @@ Thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins)
 src/
 ├── index.ts              # Extension entry: registers tools, events, model setup
 ├── core/
-│   ├── operations/         # Search, extract, collate and five-stage research
+│   ├── operations/         # Search, extract, collate and research
+│   │   ├── batch-research.ts # Batch scheduling, member outcomes and manifest
+│   │   └── batch-merge.ts    # Expansion summary and batch-wide source inventory
 │   ├── contracts.ts        # Context, model, progress, result and identity contracts
 │   ├── schemas.ts          # Canonical tool parameters
 │   ├── defaults.ts         # Tuning shared by native and standalone adapters

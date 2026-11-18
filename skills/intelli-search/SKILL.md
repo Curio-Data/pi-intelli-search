@@ -1,11 +1,13 @@
 ---
 name: intelli-search
-description: "Research the web for current information. Use for docs, APIs, best practices, library updates, or questions requiring up-to-date web sources. Provides search, per-page extraction, collation, and a persistent .search/ cache for follow-up."
+description: "Research the web for current information. Use for docs, APIs, best practices, library updates, or questions requiring up-to-date web sources. Supports single questions, planned research batches and a persistent .search/ cache for follow-up."
 ---
 
 # Intelli Search
 
 ## When to Use Which Tool
+
+Use one query if it covers the task. For distinct research questions known at launch, use an expansion batch for one decision and an independent batch for separate deliverables. Wait to ask a question that depends on a finding.
 
 ### Quick Factual Question: Use `intelli_search`
 
@@ -43,6 +45,10 @@ intelli_research(
   ]
 )
 ```
+
+For separate deliverables, for example a backup note and a path-handling note, use `batchMode="independent"` with `queries=[{query:"SQLite online backup", focusPrompt:"Identify consistency guarantees."}, {query:"Python pure paths", focusPrompt:"List operations that do not touch the filesystem."}]`.
+
+Read the completion count and Per-Query Reports list before assuming full coverage. Open a saved failure report or a capped member's report, then follow up on the missing question only. `[S1]` refers to the inventory of the report that cites it, not to the first source of every member.
 
 If fewer than two entries complete or the merge fails, use the returned per-query sections and the stated reason rather than assuming the answers were reconciled.
 

@@ -78,7 +78,7 @@ const SKILL_DESCRIPTION =
   "Use for current web information, documentation and API verification. " +
   "Start with intelli_search for quick facts, latest versions and release " +
   "dates; reserve intelli_research for multi-page analysis and comparisons. " +
-  "Includes tool selection, focused extraction, cache use and setup. " +
+  "Covers planned research batches, focused extraction, cache use and setup. " +
   "Report unavailable tools explicitly; never claim another search used this server.";
 
 export function readMcpPackage(root = REPO_ROOT) {

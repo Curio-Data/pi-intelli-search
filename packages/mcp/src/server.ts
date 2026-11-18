@@ -41,6 +41,7 @@ const serverInstructions =
   "specific evidence gap requiring multiple pages. Do not expand a simple " +
   "lookup into unrequested research. For research, supply a focusPrompt and " +
   "set maxUrls to the smallest useful breadth (3 for targeted research). " +
+  "Use one query if it covers the task. Batch distinct questions known at launch: expansion for one report, independent for separate answers. " +
   "Use the returned summary; read cache files only when it is insufficient.";
 
 const toolDefinitions: Array<{

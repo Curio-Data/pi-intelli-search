@@ -4,7 +4,7 @@
 // Batch research, independent mode (docs/proposals/BATCH-RESEARCH.md Phase 2).
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { basename, join, resolve } from "node:path";
 import { research } from "../src/core/index.js";
@@ -398,6 +398,12 @@ describe("independent batch research", () => {
       { ...f.context, models },
       f.dependencies,
     );
+    const merges = [{ outcome: "completed", durationMs: 20, inputChars: 50, outputChars: 10 }, { outcome: "completed", durationMs: 0, inputChars: 30 }, { outcome: "skipped", durationMs: 0 }, undefined];
+    for (const [i, merge] of merges.entries()) {
+      const dir = join(f.context.paths.cacheRoot, `merge-${i}`);
+      await mkdir(dir);
+      await writeFile(join(dir, "batch-meta.json"), JSON.stringify({ kind: "batch", mode: "expansion", outcome: "completed", size: 2, durationMs: 20, entries: [{ durationMs: 10, outcome: "completed" }], merge }));
+    }
     const sessions = join(root, "sessions");
     await mkdir(sessions, { recursive: true });
     const run = spawnSync("bash", [resolve("scripts/analyze-sessions.sh"), sessions], {
@@ -408,10 +414,13 @@ describe("independent batch research", () => {
     });
     assert.equal(run.status, 0, run.stderr + run.stdout);
     const section = run.stdout.slice(run.stdout.indexOf("## 10. Batch research"));
-    assert.match(section, /batch records: 1/);
+    assert.match(section, /batch records: 5/);
+    assert.match(section, /durationMs: n=2, mean=10; inputChars: n=2, mean=40; outputChars: n=1, mean=10/);
+    assert.match(section, /skipped: 1/);
+    assert.match(section, /unrecorded: 1/);
     assert.match(section, /independent: 1/);
-    assert.match(section, /completed: 1/);
-    assert.match(section, /^ {2}2: 1$/m);
+    assert.match(section, /completed: 5/);
+    assert.match(section, /^ {2}2: 5$/m);
     assert.match(section, /completed: 2/);
     assert.match(section, /1 URL\(s\) fetched by two or more entries; 4 page fetches in all/);
   });
@@ -421,9 +430,16 @@ describe("batch merge evidence", () => {
   it("rewrites only citation groups, expanding ranges", () => {
     const map = new Map([[1, 4], [2, 2], [3, 9]]);
     assert.equal(
-      renumberCitations("A [S1] B [S1, S2] C [S1–S3] D [S3](https://x.example) Amazon S3 [note] [S7]", map),
+      renumberCitations("A [S1] B [S1, S2] C [S1–S3] D [S3](https://x.example) Amazon S3 [note] [S7]", map, ["", "", "https://x.example"]),
       "A [S4] B [S2, S4] C [S2, S4, S9] D [S9](https://x.example) Amazon S3 [note] [S7]",
     );
+  });
+
+  it("preserves code, escaped brackets and non-citation link labels", () => {
+    const map = new Map([[1, 4], [2, 8]]);
+    const literal = "`[S1]` and ``a ` tick [S2]``\n\n~~~\n[S1]\n~~~\n\n    [S1]\n\n\\[S1] [S1](https://other.example) ![S2](img)";
+    assert.equal(renumberCitations(`${literal} [S1–S2]`, map), `${literal} [S4, S8]`);
+    assert.equal(renumberCitations("[S1-S500] [S2-S1]", map), "[S1-S500] [S4, S8]");
   });
 
   it("takes the summary between its heading and the generated inventory", () => {
@@ -537,6 +553,25 @@ describe("expansion batch research", () => {
     assert.equal(record.merge.contradictions, 1);
     assert.equal(record.merge.gaps, 0);
     assert.ok(record.merge.inputChars > SUPER_COLLATION_SYSTEM_PROMPT.length);
+  });
+
+  it("shows capped summaries and saved failure reports in a partial merge", async (t) => {
+    const root = await workspace(t);
+    const f = expansionFixture(root, () => "Merged finding [S1].");
+    const complete = f.context.models.complete;
+    const context = { ...f.context, settings: { ...f.context.settings, outputBudgetRetries: 0 } };
+    f.context.models.complete = async (request) => {
+      if (request.model.model === "collate" && request.userMessage.includes("gamma topic") && request.systemPrompt !== SUPER_COLLATION_SYSTEM_PROMPT) throw new Error("collation unavailable");
+      const result = await complete(request);
+      return request.model.model === "collate" ? { ...result, finishReason: "length" } : result;
+    };
+    const result = await research(params(["alpha topic", "beta topic", "gamma topic"]), context, f.dependencies);
+    assert.match(result.text, /merged report reached its output cap/i);
+    assert.match(result.text, /alpha topic: `[^`]+` \(summary reached its output cap\)/);
+    assert.ok(JSON.parse(f.merges[0].userMessage).queries.every((q: { summaryTruncated?: boolean }) => q.summaryTruncated === true));
+    const path = result.text.match(/gamma topic: not merged, collate-failed \(failure report: `([^`]+)`\)/)?.[1];
+    assert.ok(path && await exists(join(root, path)));
+    assert.doesNotMatch(result.text, /each query's own report is complete/);
   });
 
   it("falls back to per-query sections when every merge candidate is rejected", async (t) => {

@@ -365,6 +365,15 @@ else
           | map("  \(.d | floor)s total, slowest entry \(.s | floor)s, \(.c) at once, pool \(.p)")
           | .[]' "$tmp_batch"
   echo ""
+  echo "expansion merge outcomes and measured sizes:"
+  jq -rs '
+    def observations($key):
+      [ .[] | .[$key] | numbers ] as $v |
+      if ($v|length) == 0 then "n=0" else "n=\($v|length), mean=\(($v|add)/($v|length))" end;
+    map(select(.mode == "expansion") | .merge) | group_by(.outcome)[] |
+    "  \(.[0].outcome // "unrecorded"): \(length)",
+    (select(.[0].outcome as $o | ["completed","failed","rejected"] | index($o) != null) |
+      "    durationMs: \(observations("durationMs")); inputChars: \(observations("inputChars")); outputChars: \(observations("outputChars"))")' "$tmp_batch"
   echo "entry outcomes across batches:"
   jq -rs '[.[].entries[].outcome] | group_by(.) | map("  \(.[0]): \(length)") | .[]' "$tmp_batch"
   if [ -n "${tmp_meta:-}" ] && [ -s "$tmp_meta" ]; then

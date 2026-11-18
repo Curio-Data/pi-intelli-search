@@ -218,6 +218,10 @@ describe("repository package READMEs", () => {
       assert.match(text, /^## Licence$/m);
       assert.ok((anchorsOf(text) as Set<string>).has("license"), "preserve the old licence anchor");
       assert.match(text, /^## Usage Examples$/m);
+      assert.match(text, /"batchMode": "expansion"/);
+      assert.match(text, /"batchMode": "independent"/);
+      assert.match(text, /"queries": \[/);
+      assert.ok(text.includes(`${BLOB}docs/BENCHMARKS.md#batch-research-on-the-native-host`));
       assert.doesNotMatch(text, /publication is pending|post-publication|pre-publication|is unpublished/i);
       // Preserve existing inbound usage links after renaming the heading.
       assert.ok((anchorsOf(text) as Set<string>).has("quick-start"));

@@ -64,6 +64,9 @@ PI_SESSIONS_DIR=/path scripts/analyze-sessions.sh
 | 7 | Cache re-reads: tool calls referencing a `.search/` path |
 | 8 | Research-cache sizes per project (from `.index.json`) |
 | 9 | Telemetry sidecars (`meta.json`): run outcomes, fetch and extraction totals, extraction-budget diagnostics, available extraction routes, degraded cache judges, fetch-variant winners, search retries and cache-suggest hits |
+| 10 | Batch records (`batch-meta.json`): mode, size, outcomes, durations, page overlap and expansion merge statistics |
+
+Section 10 groups expansion records by merge outcome. For attempted merges it gives the number of recorded observations and mean duration (milliseconds), input size and output size (characters). Skipped merges have their own outcome count; they and records with no merge data do not contribute timing or size observations. A recorded zero counts; a missing field does not.
 
 Section 9 adds `truncatedExtractions`, `budgetExhaustedFailures` and `otherFailures` by summing the corresponding extraction fields across parsed sidecars. These count extractions, not runs. `runsRecordingProvider` counts sidecars with `stages.extract.provider`; `providers` groups those sidecars by their recorded extraction route, not by individual model call. Cache-judge degradation counts sidecars whose `stages.cacheSuggest.degraded` is `true`. Synthesis truncation and synthesis routes are not aggregated.
 

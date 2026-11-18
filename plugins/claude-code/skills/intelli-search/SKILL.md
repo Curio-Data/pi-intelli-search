@@ -1,6 +1,6 @@
 ---
 name: intelli-search
-description: "Load before calling any intelli_search, intelli_research, intelli_extract or intelli_collate tool, including requests to use intelli search. Use for current web information, documentation and API verification. Start with intelli_search for quick facts, latest versions and release dates; reserve intelli_research for multi-page analysis and comparisons. Includes tool selection, focused extraction, cache use and setup. Report unavailable tools explicitly; never claim another search used this server."
+description: "Load before calling any intelli_search, intelli_research, intelli_extract or intelli_collate tool, including requests to use intelli search. Use for current web information, documentation and API verification. Start with intelli_search for quick facts, latest versions and release dates; reserve intelli_research for multi-page analysis and comparisons. Covers planned research batches, focused extraction, cache use and setup. Report unavailable tools explicitly; never claim another search used this server."
 ---
 
 # Intelli Search
@@ -18,6 +18,8 @@ Start with `mcp__plugin_intelli-search_intelli_search__intelli_search` for a fac
 If a search answer looks stale or its sources disagree on the current version, try one narrower `mcp__plugin_intelli-search_intelli_search__intelli_search` targeting official sources before escalating to research. Report unresolved uncertainty rather than treating an older release as current.
 
 Use `mcp__plugin_intelli-search_intelli_search__intelli_research` for multi-page comparisons or detailed analysis, or when a search answer leaves a specific evidence gap requiring multiple pages. Search does not fetch and extract each cited page; research adds those stages, collation and cache suggestions. That pipeline makes more provider calls and can take minutes. A longer source list alone is not a reason to choose it.
+
+Use one query if it covers the task. For distinct research questions known at launch, use an expansion batch for one decision and an independent batch for separate deliverables. Wait to ask a question that depends on a finding.
 
 ### Quick Factual Question
 
@@ -106,6 +108,10 @@ mcp__plugin_intelli-search_intelli_search__intelli_research(
   ]
 )
 ```
+
+For separate deliverables, for example a backup note and a path-handling note, use `batchMode="independent"` with `queries=[{query:"SQLite online backup", focusPrompt:"Identify consistency guarantees."}, {query:"Python pure paths", focusPrompt:"List operations that do not touch the filesystem."}]`.
+
+Read the completion count and Per-Query Reports list before assuming full coverage. Open a saved failure report or a capped member's report, then follow up on the missing question only. `[S1]` refers to the inventory of the report that cites it, not to the first source of every member.
 
 If fewer than two entries complete or the merge fails, use the returned per-query sections and the stated reason rather than assuming the answers were reconciled.
 

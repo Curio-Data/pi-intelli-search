@@ -431,9 +431,12 @@ function perQueryList(outcomes: EntryOutcome[]): string {
     const query = o.entry.query.replace(/\s+/g, " ").trim();
     const { cachePath, preservedCachePath } = committedPaths(o);
     const outcome = o.run?.result.outcome ?? "error";
-    if (outcome === "completed" && cachePath) return `${o.position}. ${query}: \`${cachePath}/report.md\``;
+    const warning = o.run?.synthesis?.truncated ? " (summary reached its output cap)" : "";
+    if (outcome === "completed" && cachePath) return `${o.position}. ${query}: \`${cachePath}/report.md\`${warning}`;
+    const saved = cachePath && (outcome === "collate-failed" || outcome === "extraction-failed")
+      ? ` (failure report: \`${cachePath}/report.md\`)` : "";
     const kept = preservedCachePath ? ` (earlier report kept: \`${preservedCachePath}/report.md\`)` : "";
-    return `${o.position}. ${query}: not merged, ${outcome === "error" ? `failed (${o.error})` : outcome}${kept}`;
+    return `${o.position}. ${query}: not merged, ${outcome === "error" ? `failed (${o.error})` : outcome}${saved}${kept}`;
   });
   return `## Per-Query Reports\n\n${lines.join("\n")}`;
 }

@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Native Extension
 
-- Shared core: `intelli_research` accepts several queries in one call. Independent batches return a section per query; expansion batches merge related answers into one source-checked report and return the per-query results if the merge fails. Each entry keeps its own cache. The batch adds a manifest and optional local telemetry, including fetched URLs on its entries.
+- Shared core: `intelli_research` accepts several queries in one call. Independent batches return a section per query; expansion batches merge related answers into one source-checked report and return the per-query results if the merge fails. The merge preserves literal code examples when renumbering citations, flags capped member summaries and links available failure reports. Each entry keeps its own cache. The batch adds a manifest and optional local telemetry, including fetched URLs on its entries.
 
 ### MCP Server
 

@@ -13,7 +13,7 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1083%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1122%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -98,6 +98,7 @@ The native extension uses `Pi` settings and authentication. Generic MCP registra
   - [Collation Input Budget](#collation-input-budget)
 - [Usage Examples](#usage-examples)
   - [Quick Search](#quick-search)
+  - [Planned Research Questions](#planned-research-questions)
   - [Deep Research](#deep-research)
   - [Targeted Research With Domain Guidance](#targeted-research-with-domain-guidance)
   - [Comparing Options](#comparing-options)
@@ -420,9 +421,9 @@ Both packages expose these four operations. Start with `intelli_search` for fact
 | `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
 | `intelli_research` | Search, fetch, extract, collate and cache multi-page research in one call.                        |
 
-<!-- packages:pi -->
 Use `query` for a single question. For two or more distinct questions known at launch, pass `queries` instead, with `batchMode: "independent"` for a separate answer per question or `batchMode: "expansion"` for one report on a common topic. Each entry supplies a `query`; its `focusPrompt`, `domains` and `maxUrls` override the corresponding top-level defaults. The page cap applies per entry. An expansion needs at least two completed entries to merge. If it cannot return a merged answer, the result states why and gives the per-query sections instead. Ask questions prompted by a finding in a later call. The [native batch benchmark](docs/BENCHMARKS.md#batch-research-on-the-native-host) compares five separate calls with one batch and shows how much main-model input went into issuing the next query.
 
+<!-- packages:pi -->
 The native `intelli_research` schema declares `minimum: 1` for `maxUrls`. `Pi` 1.2.0 codemode displays this as an `@minimum` constraint. The runtime default page budget and configured upper cap remain controlled by [Settings](#settings).
 <!-- /packages -->
 
@@ -490,6 +491,49 @@ These examples describe tool calls for the agent, not shell commands. MCP hosts 
 ```text
 intelli_search(query="TypeScript 5.8 release date")
 ```
+
+### Planned Research Questions
+
+For a request such as “Explain how a long-running reader affects a database checkpoint”, use one query if it covers both parts. When separate searches are needed to inform the same decision, pass expansion arguments to `intelli_research`:
+
+```json
+{
+  "batchMode": "expansion",
+  "domains": ["sqlite.org"],
+  "maxUrls": 3,
+  "queries": [
+    {
+      "query": "SQLite WAL reader snapshots",
+      "focusPrompt": "Identify when a snapshot ends."
+    },
+    {
+      "query": "SQLite WAL checkpoint progress",
+      "focusPrompt": "Explain how readers limit progress."
+    }
+  ]
+}
+```
+
+For a request such as “Prepare separate notes on backup consistency and path handling”, use independent mode to keep the answers separate:
+
+```json
+{
+  "batchMode": "independent",
+  "maxUrls": 2,
+  "queries": [
+    {
+      "query": "SQLite online backup API",
+      "focusPrompt": "Identify when a backup is consistent."
+    },
+    {
+      "query": "Python pathlib pure paths",
+      "focusPrompt": "List operations that require no I/O."
+    }
+  ]
+}
+```
+
+For a partial batch, read the entry outcomes before relying on coverage. A successful merge lists the member reports, including a saved failure report when available. Source identifiers such as `[S1]` belong to the inventory in the report that cites them; the merged report has its own numbering.
 
 ### Deep Research
 
@@ -699,6 +743,9 @@ For an observed account limit of approximately 0.33 requests per second, the def
     "defaultUrls": 5,
     "minRequestIntervalMs": 3000,
     "extractionConcurrency": 2,
+    "batchExtractionConcurrency": 2,
+    "batchConcurrency": 2,
+    "maxBatchEntries": 5,
     "llmRetryAttempts": 4,
     "llmTimeoutMs": 120000
   }
@@ -961,6 +1008,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 The estimate below uses the native default models and tuning, also selected in the minimal MCP configuration example. It is a planning estimate based on the recorded September 2026 price basis, not a live tariff check. Both packages incur inference charges on the configured provider account; MCP does not use host subscriptions or credentials.
 
+In a batch, each entry has its own search, page budget and collation. Five entries at `maxUrls: 3` can select up to fifteen pages, not three. The extraction pool limits simultaneous extractions, not search or collation calls. Expansion adds a merge after the entries settle, which also counts towards a host's tool-call deadline. Use a smaller batch or fewer pages per entry on a constrained account.
+
 Per research run with the default 10 pages: ≈$0.09
 
 | Step                                | Calls                 | Cost      |
@@ -1015,6 +1064,9 @@ The example below shows the default models and common tuning settings. The [Sett
     "cacheDir": ".search",
     "extractMaxChars": 400000,
     "extractionConcurrency": 4,
+    "maxBatchEntries": 10,
+    "batchConcurrency": 4,
+    "batchExtractionConcurrency": 8,
     "extractionMaxTokens": 8000,
     "collationMaxTokens": 8000,
 
@@ -1140,6 +1192,21 @@ Configuration loading does not require working credentials. Each operation valid
 Search requires either `perplexity/sonar`, `perplexity/sonar-pro`, `perplexity/sonar-pro-search`, or an explicitly enabled `searchWebSearch` block with a chat model. Enabling `searchWebSearch` also requires the selected model to advertise `tools` support. Combining that block with a Sonar model that does not advertise tool support fails preflight; the adapter does not silently drop the configured tool. Search tools are model-decided; a valid response can still contain no usable links.
 
 #### Tuning
+
+For a constrained account, merge this fragment into the server configuration. It limits a batch to five entries, runs at most two entries at once and shares two extraction slots across them. `maxUrls` applies per entry in both modes.
+
+```json
+{
+  "tuning": {
+    "maxBatchEntries": 5,
+    "batchConcurrency": 2,
+    "batchExtractionConcurrency": 2,
+    "extractionConcurrency": 2,
+    "defaultUrls": 3,
+    "maxUrls": 3
+  }
+}
+```
 
 Unspecified tuning comes from the canonical [shared defaults](src/core/defaults.ts), also used by the native adapter. The table gives each default and its effect alongside standalone validation ranges. No provider or model selection is inherited from that module. Unknown keys, invalid types and out-of-range values are rejected rather than silently clamped.
 

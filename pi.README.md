@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1083%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1122%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -69,6 +69,7 @@ The native extension uses `Pi` settings and authentication. Generic MCP registra
   - [Collation Input Budget](#collation-input-budget)
 - [Usage Examples](#usage-examples)
   - [Quick Search](#quick-search)
+  - [Planned Research Questions](#planned-research-questions)
   - [Deep Research](#deep-research)
   - [Targeted Research With Domain Guidance](#targeted-research-with-domain-guidance)
   - [Comparing Options](#comparing-options)
@@ -259,6 +260,49 @@ These examples describe tool calls for the agent, not shell commands. MCP hosts 
 ```text
 intelli_search(query="TypeScript 5.8 release date")
 ```
+
+### Planned Research Questions
+
+For a request such as “Explain how a long-running reader affects a database checkpoint”, use one query if it covers both parts. When separate searches are needed to inform the same decision, pass expansion arguments to `intelli_research`:
+
+```json
+{
+  "batchMode": "expansion",
+  "domains": ["sqlite.org"],
+  "maxUrls": 3,
+  "queries": [
+    {
+      "query": "SQLite WAL reader snapshots",
+      "focusPrompt": "Identify when a snapshot ends."
+    },
+    {
+      "query": "SQLite WAL checkpoint progress",
+      "focusPrompt": "Explain how readers limit progress."
+    }
+  ]
+}
+```
+
+For a request such as “Prepare separate notes on backup consistency and path handling”, use independent mode to keep the answers separate:
+
+```json
+{
+  "batchMode": "independent",
+  "maxUrls": 2,
+  "queries": [
+    {
+      "query": "SQLite online backup API",
+      "focusPrompt": "Identify when a backup is consistent."
+    },
+    {
+      "query": "Python pathlib pure paths",
+      "focusPrompt": "List operations that require no I/O."
+    }
+  ]
+}
+```
+
+For a partial batch, read the entry outcomes before relying on coverage. A successful merge lists the member reports, including a saved failure report when available. Source identifiers such as `[S1]` belong to the inventory in the report that cites them; the merged report has its own numbering.
 
 ### Deep Research
 
@@ -466,6 +510,9 @@ For an observed account limit of approximately 0.33 requests per second, the def
     "defaultUrls": 5,
     "minRequestIntervalMs": 3000,
     "extractionConcurrency": 2,
+    "batchExtractionConcurrency": 2,
+    "batchConcurrency": 2,
+    "maxBatchEntries": 5,
     "llmRetryAttempts": 4,
     "llmTimeoutMs": 120000
   }
@@ -727,6 +774,8 @@ See [docs/ARCHITECTURE.md](https://github.com/Curio-Data/pi-intelli-search/blob/
 
 The estimate below uses the native default models and tuning, also selected in the minimal MCP configuration example. It is a planning estimate based on the recorded September 2026 price basis, not a live tariff check. Both packages incur inference charges on the configured provider account; MCP does not use host subscriptions or credentials.
 
+In a batch, each entry has its own search, page budget and collation. Five entries at `maxUrls: 3` can select up to fifteen pages, not three. The extraction pool limits simultaneous extractions, not search or collation calls. Expansion adds a merge after the entries settle, which also counts towards a host's tool-call deadline. Use a smaller batch or fewer pages per entry on a constrained account.
+
 Per research run with the default 10 pages: ≈$0.09
 
 | Step                                | Calls                 | Cost      |
@@ -780,6 +829,9 @@ The example below shows the default models and common tuning settings. The [Sett
     "cacheDir": ".search",
     "extractMaxChars": 400000,
     "extractionConcurrency": 4,
+    "maxBatchEntries": 10,
+    "batchConcurrency": 4,
+    "batchExtractionConcurrency": 8,
     "extractionMaxTokens": 8000,
     "collationMaxTokens": 8000,
 

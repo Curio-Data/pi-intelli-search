@@ -46,7 +46,7 @@ function withoutCodeBlocks(text: string): string {
 }
 
 /** Share fence/container state between validation and final report rendering. */
-function codeBlockView(text: string): {
+function codeBlockView(text: string, keepOffsets = false): {
   prose: string;
   fence?: { char: string; length: number; indent: number; prefix: string };
 } {
@@ -72,6 +72,7 @@ function codeBlockView(text: string): {
         : listIndent && line.startsWith(" ".repeat(listIndent)) ? line.slice(listIndent) : line;
       afterBlank = !line.trim();
       const match = content.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      const hidden = keepOffsets ? " ".repeat(line.length) : "";
       if (fence) {
         if (
           match &&
@@ -80,19 +81,44 @@ function codeBlockView(text: string): {
           !match[2].trim()
         )
           fence = undefined;
-        return "";
+        return hidden;
       }
       if (match) {
         fence = {
           char: match[1][0], length: match[1].length, indent: listIndent,
           prefix: " ".repeat(listIndent) + (content.match(/^ */)?.[0] ?? ""),
         };
-        return "";
+        return hidden;
       }
-      return /^(?: {4}|\t)/.test(content) ? "" : line;
+      return /^(?: {4}|\t)/.test(content) ? hidden : line;
     })
     .join("\n");
   return { prose, fence };
+}
+
+/** Mask code without moving the offsets used to replace citations in the original Markdown. */
+export function citationProseMask(text: string): string {
+  return codeBlockView(text, true).prose.split(/(\n[ \t\r]*\n)/).map((paragraph) => {
+    const ticks = [...paragraph.matchAll(/`+/g)];
+    const next = new Map<number, number>();
+    const closes = ticks.map(() => -1);
+    for (let i = ticks.length - 1; i >= 0; i--) {
+      const width = ticks[i][0].length;
+      closes[i] = next.get(width) ?? -1;
+      next.set(width, i);
+    }
+    let end = 0;
+    const parts: string[] = [];
+    for (let i = 0; i < ticks.length; i++) {
+      if (closes[i] < 0) continue;
+      const from = ticks[i].index!;
+      i = closes[i];
+      const to = ticks[i].index! + ticks[i][0].length;
+      parts.push(paragraph.slice(end, from), " ".repeat(to - from));
+      end = to;
+    }
+    return parts.join("") + paragraph.slice(end);
+  }).join("");
 }
 
 function withoutInlineCode(text: string): string {
@@ -263,7 +289,7 @@ function proseUrls(text: string): string[] {
   });
 }
 
-function pageUrl(value: string): string {
+export function pageUrl(value: string): string {
   try {
     const url = new URL(value);
     url.hash = "";

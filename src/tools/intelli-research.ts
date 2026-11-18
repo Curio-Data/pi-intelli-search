@@ -51,7 +51,7 @@ export const intelliResearchTool = {
   executionMode: "sequential" as const,
   promptGuidelines: [
     "Use intelli_research when the user needs current web information (docs, APIs, best practices, library updates). For quick factual questions, use intelli_search alone.",
-    "Submit queries known at launch together: use batchMode 'expansion' for related questions needing one report or 'independent' for separate answers. Ask a follow-up separately when it depends on a finding.",
+    "Use one query if it covers the task. For distinct queries known at launch, use batchMode 'expansion' for related questions needing one report or 'independent' for separate answers. Ask a follow-up separately when it depends on a finding.",
     "Use maxUrls to control breadth: 3 for targeted, 10 (default) for broad, 16 for exhaustive. The setting caps requests at maxUrls (default 20).",
     "Always provide focusPrompt to guide extraction. Without it the LLM extracts generically. Translate the user's intent into a specific extraction focus.",
     "The tool result contains a concise summary — use it directly. Only read .search/ cache files when the summary is insufficient.",

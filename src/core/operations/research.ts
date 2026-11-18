@@ -167,6 +167,8 @@ export interface ResearchRunOptions {
 export interface ResearchSynthesis {
   /** Accepted collation text, before the inferred-assets section and the appendices. */
   collation: string;
+  /** The selected collation candidate reached its output cap. */
+  truncated?: boolean;
   /** The successful extractions the collation cites, in source-number order. */
   extractions: ExtractResult[];
   /** File identity allocated for this entry's cache folder. */
@@ -244,6 +246,7 @@ interface PipelineCtx extends OperationContext {
   batch?: BatchEntryTelemetry;
   /** Set by executePipeline when the entry completes and commits. */
   synthesis?: ResearchSynthesis;
+  collationTruncated?: boolean;
   tel: TelemetryBuilder | null;
   searchConfig: ModelConfig;
   extractConfig: ModelConfig;
@@ -528,6 +531,7 @@ async function executePipeline(p: PipelineCtx): Promise<OperationResult> {
   if (outcome === "completed" && acceptedCollation !== undefined) {
     p.synthesis = {
       collation: acceptedCollation,
+      ...(p.collationTruncated ? { truncated: true } : {}),
       extractions: succeededExtractions,
       identity,
       cachePath: p.cachePath,
@@ -1024,6 +1028,7 @@ async function collateTrimmedEvidence(
   // know it is incomplete rather than assume a clean ending.
   const collateTruncated = completionTruncated(completion, maxTokens);
   if (collateTruncated) {
+    p.collationTruncated = true;
     // Advice past the ceiling would be impossible to follow: there is no
     // larger cap to raise.
     collation +=

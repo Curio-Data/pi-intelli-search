@@ -191,7 +191,7 @@
       "executionMode": "sequential",
       "promptGuidelines": [
         "Use intelli_research when the user needs current web information (docs, APIs, best practices, library updates). For quick factual questions, use intelli_search alone.",
-        "Submit queries known at launch together: use batchMode 'expansion' for related questions needing one report or 'independent' for separate answers. Ask a follow-up separately when it depends on a finding.",
+        "Use one query if it covers the task. For distinct queries known at launch, use batchMode 'expansion' for related questions needing one report or 'independent' for separate answers. Ask a follow-up separately when it depends on a finding.",
         "Use maxUrls to control breadth: 3 for targeted, 10 (default) for broad, 16 for exhaustive. The setting caps requests at maxUrls (default 20).",
         "Always provide focusPrompt to guide extraction. Without it the LLM extracts generically. Translate the user's intent into a specific extraction focus.",
         "The tool result contains a concise summary — use it directly. Only read .search/ cache files when the summary is insufficient.",
@@ -235,7 +235,7 @@
               }
             },
             "minItems": 2,
-            "description": "Batch: two or more related queries researched in one call (capped by settings.maxBatchEntries). Requires batchMode. Top-level maxUrls, domains and focusPrompt apply to entries that do not set their own"
+            "description": "Batch: two or more distinct queries researched in one call (capped by settings.maxBatchEntries). Requires batchMode. Top-level maxUrls, domains and focusPrompt apply to entries that do not set their own"
           },
           "batchMode": {
             "type": "string",
@@ -243,7 +243,7 @@
               "expansion",
               "independent"
             ],
-            "description": "Required with queries. independent: one section per query. expansion: also one merged report across the queries"
+            "description": "Required with queries. independent: one section per query. expansion: one merged report with per-query paths, or separate sections if the merge is unavailable"
           },
           "maxUrls": {
             "type": "number",

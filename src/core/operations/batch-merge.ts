@@ -12,6 +12,8 @@ import { SUPER_COLLATION_SYSTEM_PROMPT } from "../prompts.js";
 import {
   SOURCE_ASSESSMENT_PREAMBLE,
   cell,
+  citationProseMask,
+  pageUrl,
   closeOpenFence,
   evidenceExtractions,
   validateSynthesis,
@@ -45,10 +47,11 @@ export interface BatchEvidence {
   /** Inventory rows before deduplication by URL. */
   sourcesBeforeDedup: number;
   /** Each member's summary with its identifiers rewritten into the batch series. */
-  runs: Array<{ position: number; query: string; focusPrompt?: string; summary: string }>;
+  runs: Array<{ position: number; query: string; focusPrompt?: string; summary: string; summaryTruncated?: boolean }>;
 }
 
 /** The citation grammar `validateSynthesis()` treats as an identifier group. */
+const CITATION = /\[([^\[\]\n]+)\]/g;
 const ID_GROUP = /^S\d+(?:\s*(?:[,;–—-]|\band\b)\s*S\d+)*$/i;
 
 /** The summary part of an accepted collation: after its heading, before its inventory. */
@@ -67,12 +70,28 @@ export function memberSummary(collation: string): string {
  * group naming an identifier `map` lacks is left unchanged, so validation
  * rejects it rather than the merge silently citing another page.
  */
-export function renumberCitations(text: string, map: ReadonlyMap<number, number>): string {
-  return text.replace(/\[([^\]\n]+)\]/g, (whole, inner: string) => {
-    if (!ID_GROUP.test(inner.trim())) return whole;
+export function renumberCitations(text: string, map: ReadonlyMap<number, number>, urls: readonly string[] = []): string {
+  const prose = citationProseMask(text);
+  const linkLabels = new Set([...prose.matchAll(/^ {0,3}\[([^\]\n]+)\]:/gm)].map((m) => m[1].trim().toLowerCase()));
+  return text.replace(CITATION, (whole, inner: string, offset: number) => {
+    if (!ID_GROUP.test(inner.trim()) || !prose.startsWith(whole, offset)) return whole;
+    let start = offset;
+    while (start > 0 && text[start - 1] === "\\") start--;
+    if ((offset - start) % 2 || text[offset - 1] === "!") return whole;
+    const after = offset + whole.length;
+    if (text[after] !== "(" && linkLabels.has(inner.trim().toLowerCase())) return whole;
+    const ref = text[after] === "[" ? text.slice(after).match(/^\[([^\]\n]+)\]/)?.[1] : undefined;
+    if (ref && linkLabels.has(ref.trim().toLowerCase())) return whole;
+    if (text[after] === "(") {
+      // A link label is a citation only when its local ID identifies its target.
+      const target = text.slice(after + 1).match(/^([^\s)]+)/)?.[1];
+      const source = urls[Number(inner.match(/S(\d+)/i)?.[1]) - 1];
+      if (!source || !target || pageUrl(source) !== pageUrl(target)) return whole;
+    }
     const local = new Set<number>();
     for (const range of inner.matchAll(/S(\d+)\s*[-–—]\s*S(\d+)/gi)) {
       const [a, b] = [Number(range[1]), Number(range[2])];
+      if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b) || !map.has(a) || !map.has(b) || Math.abs(a - b) >= map.size) return whole;
       for (let n = Math.min(a, b); n <= Math.max(a, b); n++) local.add(n);
     }
     for (const single of inner.matchAll(/S(\d+)/gi)) local.add(Number(single[1]));
@@ -94,7 +113,8 @@ export function buildBatchEvidence(members: readonly MergeMember[]): BatchEviden
   const runs = members.map((member) => {
     const { synthesis } = member;
     const local = new Map<number, number>();
-    for (const [index, ext] of evidenceExtractions(synthesis.extractions).entries()) {
+    const memberSources = evidenceExtractions(synthesis.extractions);
+    for (const [index, ext] of memberSources.entries()) {
       sourcesBeforeDedup++;
       let source = byUrl.get(ext.url);
       if (!source) {
@@ -125,7 +145,8 @@ export function buildBatchEvidence(members: readonly MergeMember[]): BatchEviden
       position: member.position,
       query: member.query,
       ...(member.focusPrompt ? { focusPrompt: member.focusPrompt } : {}),
-      summary: renumberCitations(memberSummary(synthesis.collation), local),
+      summary: renumberCitations(memberSummary(synthesis.collation), local, memberSources.map((s) => s.url)),
+      ...(synthesis.truncated ? { summaryTruncated: true } : {}),
     };
   });
   return { sources: [...byUrl.values()], sourcesBeforeDedup, runs };
@@ -223,10 +244,11 @@ export async function mergeBatch(
   const evidence = buildBatchEvidence(members);
   const userMessage = JSON.stringify(
     {
-      queries: evidence.runs.map(({ query, focusPrompt, summary }) => ({
+      queries: evidence.runs.map(({ query, focusPrompt, summary, summaryTruncated }) => ({
         query,
         ...(focusPrompt ? { focusPrompt } : {}),
         summary,
+        ...(summaryTruncated ? { summaryTruncated } : {}),
       })),
       sources: evidence.sources.map((s) => ({ id: `S${s.id}`, url: s.url })),
     },
@@ -254,7 +276,7 @@ export async function mergeBatch(
     );
     const summary = result.accepted;
     const truncation = result.truncated
-      ? `\n\n> ⚠ The merged report reached its output cap (${result.maxTokens} tokens) and may be cut off; each query's own report is complete.`
+      ? `\n\n> ⚠ The merged report reached its output cap (${result.maxTokens} tokens) and may be cut off. See Per-Query Reports for member outcomes and available evidence.`
       : "";
     return {
       ok: true,

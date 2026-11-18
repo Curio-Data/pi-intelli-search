@@ -87,7 +87,7 @@ export const researchSchema = Type.Object({
     Type.Array(researchEntrySchema, {
       minItems: 2,
       description:
-        "Batch: two or more related queries researched in one call (capped by settings.maxBatchEntries). " +
+        "Batch: two or more distinct queries researched in one call (capped by settings.maxBatchEntries). " +
         "Requires batchMode. Top-level maxUrls, domains and focusPrompt apply to entries that do not set their own",
     }),
   ),
@@ -95,7 +95,7 @@ export const researchSchema = Type.Object({
     Type.String({
       enum: ["expansion", "independent"],
       description:
-        "Required with queries. independent: one section per query. expansion: also one merged report across the queries",
+        "Required with queries. independent: one section per query. expansion: one merged report with per-query paths, or separate sections if the merge is unavailable",
     }),
   ),
   maxUrls: Type.Optional(maxUrlsSchema("Max URLs to fetch (default: 10, capped by settings.maxUrls)")),

@@ -450,7 +450,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline descripti
 4. **Collate:** Configurable model (default: MiniMax M3) deduplicates across extractions, produces summary and cache.
 5. **Cache suggest:** LLM judge (extract model) compares current query against `.search/.index.json` and appends related previous searches to the output. The judge is awaited under the configured timeout and retry policy, so it can add latency; it never replaces the live search.
 
-The pipeline is self-contained in `src/core/operations/research.ts`. Former shared module paths (`fetch.ts`, `cache.ts`, `annotations.ts`, `prompts.ts`, `types.ts`, `util.ts`) forward to implementations under `src/core/`. Current `Pi` hosts expose `ctx.executeTool()` for nested tool calls, but this pipeline does not depend on that newer capability. Direct stage execution preserves the supported native baseline and the planned host-independent engine boundary.
+`src/core/operations/research.ts` runs the single-entry pipeline. `batch-research.ts` validates and schedules the entries, and `batch-merge.ts` renumbers sources and merges expansion summaries. Former shared module paths (`fetch.ts`, `cache.ts`, `annotations.ts`, `prompts.ts`, `types.ts`, `util.ts`) forward to implementations under `src/core/`. Current `Pi` hosts expose `ctx.executeTool()` for nested tool calls, but this pipeline does not depend on that newer capability. Direct stage execution preserves the supported native baseline and the planned host-independent engine boundary.
 
 ### LLM Integration
 
