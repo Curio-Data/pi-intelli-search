@@ -97,7 +97,7 @@ jobs:
       - name: Audit installed dependencies
         run: npm audit --audit-level=low
 
-      - name: Require the matching MCP registry pin before native staging
+      - name: Require matching package minor versions before native staging
         if: steps.select.outputs.package == '@curio-data/pi-intelli-search'
         run: |
           set -euo pipefail
@@ -106,10 +106,11 @@ jobs:
           native_core="${native%%-*}"
           mcp_core="${mcp%%-*}"
           test "${native_core%.*}" = "${mcp_core%.*}"
-          published=$(npm view "@curio-data/mcp-intelli-search@$mcp" version)
-          test "$published" = "$mcp"
-          # Registry existence is only a machine gate. The owner must also
-          # approve the separately recorded clean-profile plugin verification.
+          # Both packages are tagged from one release-branch commit and staged
+          # together, so the MCP version need not be published yet: the native
+          # tarball never launches the MCP package. The registry-pin plugin
+          # check runs after both are published, and ci.yml's catalogue-pin
+          # guard keeps an unpublished pin off main.
 
       - name: Build both artifacts
         run: npm run build:all
