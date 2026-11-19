@@ -2,7 +2,7 @@
 
 # Changelog
 
-Native `Pi` extension release notes, generated from the repository `CHANGELOG.md`. Standalone Model Context Protocol (MCP) server release notes remain in that canonical changelog.
+Native `Pi` extension release notes, generated from the repository `CHANGELOG.md`. Standalone Model Context Protocol (MCP) server and DeepSeek Harness (dsh) release notes remain in that canonical changelog.
 
 ## [0.24.0] - 2026-11-18
 

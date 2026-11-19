@@ -41,6 +41,14 @@ jobs:
           set -euo pipefail
           version=$(node -p "require('./packages/mcp/package.json').version")
           test "$(npm view "@curio-data/mcp-intelli-search@$version" version)" = "$version"
+          # The dsh bundle mirrors the MCP version and its launcher pins that
+          # exact package, so the same-version dsh package must also resolve.
+          # This removes the early-merge allowance for any branch carrying a
+          # generated plugins/dsh tree until the first dsh version is public;
+          # see .plan/OPS.md § Releasing Both Packages Together.
+          dsh_version=$(node -p "require('./plugins/dsh/package.json').version")
+          test "$dsh_version" = "$version"
+          test "$(npm view "@curio-data/dsh-intelli-search@$version" version)" = "$version"
 
       - name: Check shell scripts
         run: git ls-files -z '*.sh' | xargs -0 shellcheck
@@ -70,6 +78,13 @@ jobs:
 
       - name: Verify generated plugin bundles match the generator
         run: npm run check:plugins
+
+      - name: Verify the dsh bundle pack inventory
+        run: |
+          set -euo pipefail
+          cd plugins/dsh
+          npm pack --dry-run --json --ignore-scripts > "${RUNNER_TEMP}/dsh-pack.json"
+          jq -e '.[0].files | map(.path) | (any(startswith("vendor")) | not) and (any(. == "cordis.patch.yml")) and (any(. == "LICENSE")) and (any(. == "skills/intelli-search/SKILL.md"))' "${RUNNER_TEMP}/dsh-pack.json" >/dev/null
 
       - name: Verify package READMEs match the root README
         run: npm run check:readmes
