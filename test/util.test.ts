@@ -1285,7 +1285,7 @@ describe("extractSourceUrls link labels", () => {
   });
 });
 
-describe("safeLinkLabel / safeNonNumericLinkLabel", () => {
+describe("safeLinkLabel", () => {
   it("keeps a safe title and derives from the URL when the title is unsafe", () => {
     assert.equal(safeLinkLabel("Docs", "https://a.example/x"), "Docs");
     assert.equal(
@@ -1302,6 +1302,11 @@ describe("safeLinkLabel / safeNonNumericLinkLabel", () => {
     assert.equal(safeLinkLabel("   ", "https://a.example/x"), "x");
     assert.equal(safeLinkLabel(undefined, "https://[::1]/"), "source");
     assert.equal(safeLinkLabel("bad]title", "https://[::1]/x"), "x");
+  });
+
+  it("rejects a title ending in a backslash, which would escape the closing bracket (F5)", () => {
+    assert.equal(safeLinkLabel("evil\\", "https://evil.example/page"), "page");
+    assert.equal(safeLinkLabel("ok", "https://a.example/x"), "ok");
   });
 
 });

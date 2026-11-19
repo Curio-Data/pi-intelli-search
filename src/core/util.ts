@@ -784,8 +784,8 @@ export function inferCurrentness(line: string): string {
 /**
  * Match a trailing "Sources" section: returns its start offset and text when
  * the heading is anchored at the end of `text` and its body contains a URL.
- * `stripTrailingSourcesSection()` cuts on this match; citation-marker
- * alignment reads the same section for the model's own numbered entries, so
+ * `stripTrailingSourcesSection()` cuts on this match; the Sources-list
+ * numbering reads the same section for the model's own numbered entries, so
  * both share one recognition rule.
  */
 export function matchTrailingSourcesSection(
@@ -827,8 +827,8 @@ export function stripTrailingSourcesSection(text: string): string {
 /**
  * Derive a display title from a URL: the path's last segment minus its
  * extension, or the hostname when the path is empty. Shared by bare-URL
- * extraction (extractSourceUrls pass 2) and citation-marker alignment, so a
- * number-labelled link never reaches a reader titled only "3".
+ * extraction (extractSourceUrls pass 2) and the Sources-list label
+ * sanitiser (safeLinkLabel).
  */
 export function titleFromUrl(url: string): string {
   try {
@@ -849,12 +849,19 @@ function hostOf(url: string): string | undefined {
 }
 
 /** A candidate link label is unsafe when it contains a bracket, newline or
- *  tab: embedded as `[label](url)` text it could close the link early or
- *  open another one (`](https://phish)` inside a provider-supplied title).
- *  A whitespace-only label is as good as empty: it renders as a blank
+ *  tab, or ends in a backslash (which would escape the closing bracket of
+ *  `[label](url)` and break the link apart): embedded as link text it could
+ *  close the link early, open another one (`](https://phish)` inside a
+ *  provider-supplied title) or degrade the entry to literal text. A
+ *  whitespace-only label is as good as empty: it renders as a blank
  *  link. */
 function labelCandidateOk(label: string): boolean {
-  return label.length > 0 && !/[\][\r\n\t]/.test(label) && label.trim().length > 0;
+  return (
+    label.length > 0 &&
+    !/[\][\r\n\t]/.test(label) &&
+    !label.endsWith("\\") &&
+    label.trim().length > 0
+  );
 }
 
 /**

@@ -8,11 +8,13 @@
 // numbers its markers against the provider's citation list (search-result
 // ids, delivered as url_citation annotations in occurrence order), so the
 // list is numbered in that order instead. Links that appear only in the
-// answer follow the numbered entries. Without provider citations, the list
-// keeps its historical order, unless the model numbered its own trailing
-// Sources section and wrote bare markers, in which case that section is the
-// numbering base. A marker whose number has no entry stays in the text; it
-// can never sit beside a wrong source, because nothing is renumbered.
+// answer follow the numbered entries, never taking a number the answer
+// already uses beyond the base. Without provider citations, the list keeps
+// its historical order, unless the model numbered its own trailing Sources
+// section and the answer has bare markers, in which case the model's own
+// section numbers are authoritative (kept, ordered by, and continued after).
+// A marker whose number has no entry stays in the text beside a short note;
+// it can never sit beside a wrong source, because nothing is renumbered.
 
 import type { HarvestedCitation } from "./annotations.js";
 import { matchTrailingSourcesSection } from "./util.js";
@@ -37,19 +39,32 @@ export interface NumberedSource extends MergedSource {
 
 export interface NumberingResult {
   entries: NumberedSource[];
-  /** Bare markers in the answer whose number has no entry (beyond the
-   *  numbering base). Rendered as one short note; the markers stay. */
+  /** Distinct bare markers in the answer whose number has no entry (beyond
+   *  the numbering base). Rendered as one short note; the markers stay. */
   unmatchedMarkers: number;
 }
 
 /**
- * Numbers the answer uses: bare `[k]` and inline `[k](url)` forms. The scan
- * is deliberately loose (code and array indices included): a false positive
- * only protects an extra entry from the cap, which is the safe direction.
+ * Numbers the answer uses, in any bracketed form. Deliberately loose (code
+ * and array indices included): this set only protects entries from the cap,
+ * where a false positive is the safe direction. The unmatched-marker note
+ * uses the narrower bare set (bareMarkerNumbers).
  */
 function usedNumbers(text: string): Set<number> {
   const used = new Set<number>();
   for (const m of text.matchAll(/\[(\d{1,3})\]/g)) used.add(Number(m[1]));
+  return used;
+}
+
+/**
+ * Bare marker shapes only: `[k]` not followed by `(` (an inline link carries
+ * its own URL and strands nothing) or `:` (a reference definition). This is
+ * the set the note counts; a code index in this shape remains
+ * indistinguishable without code detection, an accepted residue.
+ */
+function bareMarkerNumbers(text: string): Set<number> {
+  const used = new Set<number>();
+  for (const m of text.matchAll(/\[(\d{1,3})\](?![:(])/g)) used.add(Number(m[1]));
   return used;
 }
 
@@ -58,34 +73,42 @@ function hasBareMarkers(text: string): boolean {
   return /\[(\d{1,3})\](?![:(])/.test(text);
 }
 
+/** One entry of a numbering base: a number, a URL, and a title if the
+ *  provider or the model's section supplied one. */
+interface BaseEntry {
+  number: number;
+  url: string;
+  title?: string;
+}
+
 /**
- * The model's own numbered trailing Sources section, in number order, with
- * each entry's Markdown title when it wrote one. Only meaningful when the
- * provider supplied no citations: it is then the only record of what the
- * model's markers number.
+ * The model's own numbered trailing Sources section, in document order,
+ * keeping each entry's own number whatever link form it was written in (a
+ * marked link and a bare URL in one section keep their relative order).
+ * Only meaningful when the provider supplied no citations: it is then the
+ * only record of what the model's markers number. Returns undefined when
+ * the section is absent or its numbers are unusable (a duplicate number, or
+ * a zero): the caller falls back to the historical display rather than
+ * guessing which entry a duplicated number means.
  */
-function numberedSectionEntries(
-  text: string,
-): Array<{ number: number; url: string; title?: string }> {
+function numberedSectionBase(text: string): BaseEntry[] | undefined {
   const match = matchTrailingSourcesSection(text);
-  if (!match) return [];
-  const out: Array<{ number: number; url: string; title?: string }> = [];
+  if (!match) return undefined;
+  const out: BaseEntry[] = [];
   const seen = new Set<number>();
-  const marked = /^\s*(\d{1,3})[.)]\s*\[([^\]]*)\]\((https?:\/\/(?:[^()\s]|\([^()\s]*\))+)\)/gm;
-  for (const m of match.section.matchAll(marked)) {
+  // One alternation, matched over the whole section: matchAll yields
+  // matches in document order, so mixed formats keep the order the model
+  // wrote them in.
+  const pattern =
+    /^\s*(\d{1,3})[.)][ \t]*(?:\[([^\]]*)\]\((https?:\/\/(?:[^()\s]|\([^()\s]*\))+)\)|(https?:\/\/(?:[^()\s]|\([^()\s]*\))+))/gm;
+  for (const m of match.section.matchAll(pattern)) {
     const number = Number(m[1]);
-    if (seen.has(number)) continue;
+    const url = (m[3] ?? m[4]).replace(/[.,;:!]+$/, "");
+    if (number < 1 || seen.has(number)) return undefined;
     seen.add(number);
-    out.push({ number, url: m[3], ...(m[2] ? { title: m[2] } : {}) });
+    out.push({ number, url, ...(m[2] ? { title: m[2] } : {}) });
   }
-  const bare = /^\s*(\d{1,3})[.)][ \t]+(https?:\/\/(?:[^()\s]|\([^()\s]*\))+)/gm;
-  for (const m of match.section.matchAll(bare)) {
-    const number = Number(m[1]);
-    if (seen.has(number)) continue;
-    seen.add(number);
-    out.push({ number, url: m[2].replace(/[.,;:!]+$/, "") });
-  }
-  return out;
+  return out.length > 0 ? out : undefined;
 }
 
 /**
@@ -98,10 +121,12 @@ function numberedSectionEntries(
  * Rules:
  * - Provider citations present: entries 1..N are the provider's citations in
  *   occurrence order (a repeated URL repeats its entry with a note). Links
- *   only in the answer follow, numbered from N+1.
+ *   only in the answer follow, numbered past N, skipping every number the
+ *   answer already uses so a stranded marker keeps its number and its note.
  * - No provider citations, but the answer has bare markers and the model
- *   numbered its trailing Sources section: that section numbers the entries
- *   the same way.
+ *   numbered its trailing Sources section: the model's numbers are
+ *   authoritative; entries keep them, are ordered by them, and answer-only
+ *   links continue after the largest section number.
  * - Otherwise: today's order, numbered by position, sliced to the cap.
  * - The cap never drops an entry whose number the answer uses, and never
  *   renumbers anything: numbers come from the base, not from position.
@@ -117,14 +142,16 @@ export function numberSources(
 
   // Base: provider occurrence order, else the model's numbered section.
   const order = citationOrder && citationOrder.length > 0 ? citationOrder : citations;
-  let base: ReadonlyArray<{ url: string; title?: string }> | undefined;
+  let base: BaseEntry[] | undefined;
   if (order.length > 0) {
-    base = order.map((c) => ({ url: c.url, ...(c.title ? { title: c.title } : {}) }));
+    base = order.map((c, i) => ({
+      number: i + 1,
+      url: c.url,
+      ...(c.title ? { title: c.title } : {}),
+    }));
   } else if (hasBareMarkers(text)) {
-    const section = numberedSectionEntries(text);
-    if (section.length > 0) {
-      base = section.map((e) => ({ url: e.url, ...(e.title ? { title: e.title } : {}) }));
-    }
+    const section = numberedSectionBase(text);
+    if (section) base = [...section].sort((a, b) => a.number - b.number);
   }
 
   if (!base) {
@@ -132,10 +159,10 @@ export function numberSources(
     return { entries: numberPositional(merged.slice(0, cap)), unmatchedMarkers: 0 };
   }
 
-  // Titles: the provider's title first, else the model's prose-link title,
-  // else the URL itself (the render layer sanitises).
+  // Titles: the provider's (or section's) title first, else the model's
+  // prose-link title, else the URL itself (the render layer sanitises).
   const proseTitle = new Map<string, string>();
-  for (const m of merged) if (!m.inferred && !proseTitle.has(m.url)) proseTitle.set(m.url, m.title);
+  for (const m of merged) if (!proseTitle.has(m.url)) proseTitle.set(m.url, m.title);
   const titleFor = (url: string, baseTitle?: string): string => {
     if (baseTitle && baseTitle.length > 0) return baseTitle;
     return proseTitle.get(url) ?? url;
@@ -144,38 +171,44 @@ export function numberSources(
   const baseUrls = new Set(base.map((e) => e.url));
   const firstNumberForUrl = new Map<string, number>();
   const entries: NumberedSource[] = [];
-  for (const [i, e] of base.entries()) {
-    const number = i + 1;
+  for (const e of base) {
     // The cap bounds the display, but an entry whose number the answer uses
     // is always kept: dropping it would strand a real marker.
-    if (number > cap && !used.has(number)) continue;
+    if (e.number > cap && !used.has(e.number)) continue;
     const repeats = firstNumberForUrl.get(e.url);
-    if (repeats === undefined) firstNumberForUrl.set(e.url, number);
+    if (repeats === undefined) firstNumberForUrl.set(e.url, e.number);
     entries.push({
-      number,
+      number: e.number,
       url: e.url,
       title: titleFor(e.url, e.title),
       ...(repeats !== undefined ? { repeats } : {}),
     });
   }
 
-  // Links only in the answer follow the numbered entries, continuing past
-  // the base's last number so no entry number can collide with a marker.
-  let next = base.length + 1;
+  // Links only in the answer follow the numbered entries. Numbers continue
+  // past the base's largest number and skip every number the answer already
+  // uses, so a stranded marker keeps its number and its note instead of
+  // being silently paired with an answer-only link.
+  const baseSize = base[base.length - 1].number;
+  let next = baseSize + 1;
   for (const m of merged) {
     if (entries.length >= cap) break;
     if (baseUrls.has(m.url)) continue;
+    while (used.has(next)) next++;
     entries.push({
       number: next++,
       url: m.url,
-      title: titleFor(m.url),
+      // The merged label (including inferred-from-text derivations) is what
+      // the historical display showed; keep it before falling back to the URL.
+      title: m.title || titleFor(m.url),
       ...(m.inferred ? { inferred: true, originalReference: m.originalReference } : {}),
     });
     baseUrls.add(m.url);
   }
 
-  const baseSize = base.length;
-  const unmatchedMarkers = [...used].filter((n) => n >= 1 && n > baseSize).length;
+  // Answer-only links never take a used number, so every bare marker beyond
+  // the base genuinely has no entry.
+  const unmatchedMarkers = [...bareMarkerNumbers(text)].filter((n) => n > baseSize).length;
   return { entries, unmatchedMarkers };
 }
 

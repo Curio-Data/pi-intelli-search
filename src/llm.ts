@@ -255,9 +255,11 @@ export async function callLlm(
       if (annotations) {
         await settleAnnotationSink(annotations);
         options!.annotations!.citations.push(...annotations.citations);
-        // Position-faithful order for bare [n] markers: one channel only, so
-        // dual-channel delivery does not double-count ids.
-        options!.annotations!.citationOrder = annotationSinkOrder(annotations);
+        // Position-faithful order for the Sources-list numbering: one channel
+        // only, so dual-channel delivery does not double-count ids; copied,
+        // so a later push into the per-attempt sink cannot mutate the base
+        // the caller numbers its list by.
+        options!.annotations!.citationOrder = [...annotationSinkOrder(annotations)];
       }
       return { value };
     },

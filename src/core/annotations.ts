@@ -295,10 +295,7 @@ export function mergeCitations(
   };
   // Explicit links first, then harvested citations, then protocol-less domain
   // guesses from prose, so a guess never displaces a real citation from the
-  // maxUrls slice. The inferred flag survives for fetch and result rendering.
-  // Explicit links first, then harvested citations, then protocol-less domain
-  // guesses from prose, so a guess never displaces a real citation from the
-  // display list. The inferred flag survives for result rendering.
+  // display list. The inferred flag survives for fetch and result rendering.
   for (const { url, title, inferred } of textUrls) if (!inferred) add(url, title);
   for (const { url, title } of sink.citations) add(url, title && title.length > 0 ? title : url);
   for (const { url, title, inferred, originalReference } of textUrls) {
