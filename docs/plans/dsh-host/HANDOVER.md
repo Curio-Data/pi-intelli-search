@@ -9,7 +9,7 @@
 
 ## Current State
 
-**Observed on 2026-11-19:** the implementation worktree is `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/explore-dsh-host`, branch `explore/dsh-host`. Its HEAD is the commit that added this plan under `docs/plans/dsh-host/` (check with `git log -1 -- docs/plans/dsh-host`), pushed to `origin/explore/dsh-host`; that does not approve another push. Commit `0529c95` already implements and tests `--host dsh`. Commits `5f2160c` and `56d8392` record Phase 1 and all six owner decisions. No generated `plugins/dsh`, scenario 18 or dsh compatibility row exists yet.
+**Observed on 2026-11-19:** the implementation worktree is `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/explore-dsh-host`, branch `explore/dsh-host`. Its HEAD is the newest commit that changed `docs/plans/dsh-host/` (check with `git log -1 --format=%h -- docs/plans/dsh-host`), pushed to `origin/explore/dsh-host`; that does not approve another push. Commit `0529c95` already implements and tests `--host dsh`. Commits `5f2160c` and `56d8392` record Phase 1 and all six owner decisions. No generated `plugins/dsh`, scenario 18 or dsh compatibility row exists yet.
 
 The tested host is dsh `0.2.2-rc.1`; `next` was `0.2.2-rc.5` in Phase 1. A pinned scratch host remains under the worktree's `.tmp/` at planning time, but scratch is disposable and is not evidence. Recreate it with the plan's recipe if needed. **Observed:** Node.js 24.19.0 is available through `fnm`; `pnpm` is currently absent and must be supplied before `dsh plugin` operations.
 
@@ -34,7 +34,7 @@ npm run test:all
 npm run check:plugins
 ```
 
-Expected: clean `explore/dsh-host` tree, HEAD `56d8392`, Node `v24.19.0`, successful builds/tests, and `plugin bundles match generator output`. If another agent has advanced the branch, read the new commits and reconcile the plan before changing files.
+Expected: clean `explore/dsh-host` tree; HEAD equal to `git log -1 --format=%h -- docs/plans/dsh-host` and to `origin/explore/dsh-host`; Node `v24.19.0`, successful builds/tests, and `plugin bundles match generator output`. If another agent has advanced the branch, read the new commits and reconcile the plan before changing files.
 
 Check or recreate the isolated host using the plan, then run:
 

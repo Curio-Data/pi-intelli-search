@@ -20,3 +20,7 @@ The test noted that `fnm use` needs `eval "$(fnm env)"` first in a non-interacti
 ## Evidence
 
 Briefs and reports are in the main checkout's gitignored `evidence/agents/2026-11-18-next-activities/`: `reports/dsh-plan.md`, `dsh-plan-review.md`, `dsh-plan-r2.md` and `dsh-handover-test.md`, with their briefs under `briefs/`.
+
+## Scope of the Test
+
+The test ran on 19 November 2026 while the plan and handover lived in the main checkout's gitignored `.plan/dsh-host/`, before they moved onto this branch (`af3bec0`). Moving them changed the handover's links and its HEAD expectation; a later session-level handover test found that expectation stale, and it now names the newest commit that changed `docs/plans/dsh-host/` rather than a fixed hash. The test's other results are unaffected by the move.
