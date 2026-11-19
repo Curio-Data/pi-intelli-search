@@ -82,7 +82,7 @@ An early version of this script produced the historical headline numbers. A new 
 
 ## `generate-plugin-bundles.mjs`
 
-Generates the [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) bundles (`plugins/`) and both repository marketplace catalogues (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) from `guidance/` and the version in `packages/mcp/package.json`. Run it after a Model Context Protocol (MCP) package version change or guidance edit; never hand-edit generated files.
+Generates the [_Claude Code_](https://code.claude.com/docs/en/plugins), [_Codex_](https://developers.openai.com/codex/plugins) and [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) bundles (`plugins/`) plus both repository marketplace catalogues (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) from `guidance/`, the templates in `scripts/templates/dsh/` and the version in `packages/mcp/package.json`. The dsh bundle is a publishable npm package (`plugins/dsh`, `@curio-data/dsh-intelli-search`) rather than a marketplace entry: dsh installs it directly by package name. Run the generator after a Model Context Protocol (MCP) package version change or guidance edit; never hand-edit generated files.
 
 ```bash
 npm run generate:plugins   # rewrite the committed tree (registry launchers)
@@ -96,9 +96,15 @@ node scripts/generate-plugin-bundles.mjs --mode tarball \
   --output /path/to/scratch --codex-vendor-dir /path/to/scratch/plugins/codex/vendor
 ```
 
-This command generates bundles only; it does not build, pack, vendor-install or install them into a host. Codex performs no path expansion in plugin MCP configuration, so tarball mode requires the absolute vendor directory at generation time. Claude Code resolves `${CLAUDE_PLUGIN_ROOT}` at launch.
+Codex and dsh perform no path expansion in plugin MCP configuration, so tarball mode embeds absolute vendor directories at generation time: Codex's from `--codex-vendor-dir`, and dsh's derived from `--output` as `/path/to/scratch/plugins/dsh/vendor` (install the packed tarball there before installing the bundle). Claude Code resolves `${CLAUDE_PLUGIN_ROOT}` at launch.
+
+The generated dsh payload is `package.json` (manifest version 1, exact MCP version pin, Node.js `>=24.9.0` floor, exact tested `engines.dsh`), `cordis.patch.yml` (bridge row with `serverName: intelli`, ten-minute call limit and the environment-layer key expression, plus the skill-registrar row), `index.js` (the registrar), `skills/intelli-search/SKILL.md`, `locale/en.json` and `locale/zh.json`, `icon.svg`, `README.md` and `LICENSE`. A tarball-mode manifest additionally lists `vendor/**` so a local installation retains the vendored server; the registry manifest omits it.
+
+This command generates bundles only; it does not build, pack, vendor-install or install them into a host.
 
 The tested full installation flow is [`test/e2e/12_plugin_bundles.sh`](../test/e2e/12_plugin_bundles.sh): build and pack the MCP workspace, generate local bundles, install the tarball into both vendor directories, then install the marketplaces into isolated host profiles and check connection and skill discovery. It uses dummy credentials, not a copied operator credential store. Set `TMPDIR` beneath the repository's gitignored `.tmp/` on encrypted hosts before running it. Credentialed research is a separate check in scenarios 13 and 14; see [Compatibility](../docs/COMPATIBILITY.md#host-plugins) for evidence classes and limits.
+
+The dsh host flow is [`test/e2e/18_dsh_plugin.sh`](../test/e2e/18_dsh_plugin.sh): it is credential-free, making no provider call, and verifies the local-tarball bundle on the real pinned host through installation, exact tool registration, skill loading, dummy credential delivery, both workspace guards, and removal plus reinstallation. It requires the pinned host and an isolated pnpm prepared per the plan's Environment and Isolation recipe, with `DSH_BIN` and the pnpm `PATH` exported before either suite runner starts; both runners fail the suite when it skips. The credentialed dsh research scenario 19 is planned but not yet created or proven; its description lands with the step that runs it.
 
 ## `generate-tlds.mjs`
 

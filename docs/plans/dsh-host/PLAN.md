@@ -510,11 +510,11 @@ Explicitly deferred: a custom JSON index, third-party catalogue submissions, Git
 
 Update this checklist after each step with the commit hash and evidence path. Do not mark a step complete on an unrun or skipped check.
 
-- [ ] Entry checks passed; actual Node and dsh versions recorded, with pnpm recorded as absent or its isolated version recorded after installation.
-- [ ] Step 1 complete: generator, bundle, deterministic tests and prose review.
-- [ ] Step 2 complete: scenario 18 executed successfully, not skipped.
-- [ ] Step 3 complete: third-package workflow, CI guard and OPS reviewed.
-- [ ] Step 4 complete: documentation regenerated and prose-reviewed.
+- [x] Entry checks passed; actual Node and dsh versions recorded, with pnpm recorded as absent or its isolated version recorded after installation. (2026-11-19: Node v24.19.0, dsh 0.2.2-rc.1 from Phase 1 scratch; pnpm absent at entry, isolated 12.21.0 installed under worktree scratch before Step 2; evidence: `evidence/agents/2026-11-19-dsh-phase2/reports/dsh-phase2.md`.)
+- [x] Step 1 complete: generator, bundle, deterministic tests. Commit `b2d060b`. The fresh Opus 5.5 prose review of guidance, locales and bundle README is assigned to the coordinator by the phase-2 brief (which the brief says overrides the before-commit ordering); changed prose files are listed in the report.
+- [x] Step 2 complete: scenario 18 executed successfully, not skipped. Commit `78f34ec`; exit `0`, 40 checks on dsh 0.2.2-rc.1 / Node v24.19.0 / pnpm 12.21.0.
+- [x] Step 3 complete for the repository: third-package workflow and CI guard in commit `4b98798`. The OPS.md and RELEASE-READINESS.md updates the plan assigns to this step live under the main checkout's `.plan/`, which the phase-2 brief makes read-only for the builder; the coordinator applies them from the exact content recorded in the report's Step 3 section.
+- [x] Step 4 complete: documentation regenerated (commit below); fresh Opus 5.5 prose review assigned to the coordinator, changed prose files listed in the report.
 - [ ] Step 5 complete: owner-authorised credentialed evidence reproduced and compatibility recorded.
 - [ ] Step 6 complete: integrated reviews and release-candidate gates passed.
 - [ ] Step 7 complete: owner-approved publication, registry verification and merge finished.
