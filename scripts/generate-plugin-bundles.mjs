@@ -4,9 +4,12 @@
 //
 // scripts/generate-plugin-bundles.mjs
 //
-// Generates the Claude Code and Codex plugin bundles plus the two
-// repository marketplace catalogs from the shared guidance source in
-// guidance/ and the version pinned in packages/mcp/package.json.
+// Generates the Claude Code, Codex and DeepSeek Harness (dsh) plugin
+// bundles, plus the two repository marketplace catalogs, from the shared
+// guidance source in guidance/, the version pinned in
+// packages/mcp/package.json and the templates in scripts/templates/dsh/.
+// The dsh bundle is a publishable npm package rather than a marketplace
+// entry: dsh installs it directly by package name.
 //
 // Modes:
 //   (default)          Write the registry-mode tree into the repository:
@@ -18,9 +21,12 @@
 //                      Pre-publication test mode: write a self-contained
 //                      tree into DIR whose launchers run a locally vendored
 //                      tarball install instead of the registry. Claude Code
-//                      resolves ${CLAUDE_PLUGIN_ROOT}; Codex performs no
-//                      expansion, so its launcher embeds the absolute vendor
-//                      directory passed here.
+//                      resolves ${CLAUDE_PLUGIN_ROOT}; Codex and dsh perform
+//                      no expansion, so their launchers embed the absolute
+//                      vendor directory: Codex's from --codex-vendor-dir and
+//                      dsh's derived from --output as
+//                      <output>/plugins/dsh/vendor (an internal option can
+//                      override it for direct tests).
 //
 // Host behavior verified empirically during the 0.15.0 host-plugin verification:
 //   Claude Code v2.1.289: full environment inheritance; ${CLAUDE_PLUGIN_ROOT},
@@ -57,12 +63,19 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 // Server key is intelli_search (underscore): Codex normalizes hyphens in
 // server names to underscores in its tool catalog, so an underscore key keeps
-// the declared and observed tool names identical on both hosts.
+// the declared and observed tool names identical on both hosts. dsh keeps the
+// configured namespace verbatim, so its bundle uses the shorter server name
+// "intelli" (owner decision D1): tools are mcp__intelli__<tool>.
 const SERVER_NAME = "intelli_search";
+const DSH_SERVER_NAME = "intelli";
 const PLUGIN_NAME = "intelli-search";
 const MARKETPLACE_NAME = "curio-data-plugins";
 const VENDOR_CLI_SUFFIX =
   "vendor/node_modules/@curio-data/mcp-intelli-search/dist/cli.js";
+
+// Exact tested dsh version for engines.dsh. Phase 1 evidence covers only
+// 0.2.2-rc.1 on Linux; widen only after a recorded check on more versions.
+const DSH_TESTED_VERSION = "0.2.2-rc.1";
 
 const DESCRIPTION =
   "Research the web with a five-stage pipeline (search, fetch, extract, " +
@@ -89,7 +102,7 @@ export function readMcpPackage(root = REPO_ROOT) {
 }
 
 /** Launcher argv per host and mode. */
-export function launcherFor(host, mode, mcpPkg, codexVendorDir) {
+export function launcherFor(host, mode, mcpPkg, vendorDir) {
   if (mode === "tarball") {
     if (host === "claude-code") {
       return {
@@ -97,15 +110,19 @@ export function launcherFor(host, mode, mcpPkg, codexVendorDir) {
         args: [`\${CLAUDE_PLUGIN_ROOT}/${VENDOR_CLI_SUFFIX}`],
       };
     }
-    if (!codexVendorDir) {
-      throw new Error("tarball mode for codex requires --codex-vendor-dir");
+    if (!vendorDir) {
+      throw new Error(
+        host === "codex"
+          ? "tarball mode for codex requires --codex-vendor-dir"
+          : "tarball mode for dsh requires --output to derive plugins/dsh/vendor, or an explicit vendor directory",
+      );
     }
     return {
       command: "node",
       args: [
-        `${codexVendorDir}/node_modules/@curio-data/mcp-intelli-search/dist/cli.js`,
+        `${vendorDir}/node_modules/@curio-data/mcp-intelli-search/dist/cli.js`,
         "--host",
-        "codex",
+        host,
       ],
     };
   }
@@ -116,7 +133,7 @@ export function launcherFor(host, mode, mcpPkg, codexVendorDir) {
       "--package",
       `${mcpPkg.name}@${mcpPkg.version}`,
       "mcp-intelli-search",
-      ...(host === "codex" ? ["--host", "codex"] : []),
+      ...(host === "codex" || host === "dsh" ? ["--host", host] : []),
     ],
   };
 }
@@ -125,12 +142,17 @@ function renderSkill(host, root = REPO_ROOT) {
   const toolPrefix =
     host === "claude-code"
       ? `mcp__plugin_${PLUGIN_NAME}_${SERVER_NAME}__`
-      : `mcp__${SERVER_NAME}__`;
-  const hostLabel = host === "claude-code" ? "Claude Code" : "Codex";
+      : host === "dsh"
+        ? `mcp__${DSH_SERVER_NAME}__`
+        : `mcp__${SERVER_NAME}__`;
+  const hostLabel =
+    host === "claude-code" ? "Claude Code" : host === "dsh" ? "DeepSeek Harness" : "Codex";
   const cacheReadHint =
     host === "claude-code"
       ? "Use the `Read` tool, this host's file-reading capability."
-      : "Read those files with available shell or file-reading tools.";
+      : host === "dsh"
+        ? "Use the `read` tool, this host's file-reading capability."
+        : "Read those files with available shell or file-reading tools.";
   const setup = readFileSync(
     join(root, "guidance", `setup-${host}.md`),
     "utf8",
@@ -156,6 +178,41 @@ function jsonBlock(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
+// Single-quote every emitted YAML string for deterministic output; doubling
+// an internal single quote is the only escaping this style needs.
+function yamlScalar(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function renderDshPatch(launcher) {
+  const args = launcher.args
+    .map((arg) => `          - ${yamlScalar(arg)}`)
+    .join("\n");
+  return `# Generated by scripts/generate-plugin-bundles.mjs; do not edit by hand.
+#
+# The environment expression forwards the key from the harness environment
+# layer (inherited environment, then the launch directory's .env, then
+# $DSH_HOME/.env) and stays valid when it is unset: an empty value is
+# absent to the server, so the row loads before setup.
+- insert:
+    - id: mcp-intelli-search
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: ${DSH_SERVER_NAME}
+        transport: stdio
+        command: ${launcher.command}
+        args:
+${args}
+        env:
+          OPENROUTER_API_KEY: !!js process.env.OPENROUTER_API_KEY || ''
+        toolCallTimeoutMs: 600000
+        failOnStartupError: false
+
+    - id: intelli-search-skill
+      name: '@curio-data/dsh-intelli-search'
+`;
+}
+
 /**
  * Computes every generated file as a map of repo-relative path to content.
  * Pure: performs no I/O beyond reading guidance/ and package metadata.
@@ -165,6 +222,15 @@ export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT)
   const codexVendorDir = options.codexVendorDir;
   const claudeLauncher = launcherFor("claude-code", mode, mcpPkg, codexVendorDir);
   const codexLauncher = launcherFor("codex", mode, mcpPkg, codexVendorDir);
+  // dsh performs no placeholder expansion, so tarball mode embeds an
+  // absolute vendor directory, derived from --output unless a direct test
+  // overrides it. Registry mode pins the published package through npx.
+  const dshVendorDir =
+    mode === "tarball"
+      ? (options.dshVendorDir ??
+        (options.output ? join(options.output, "plugins/dsh/vendor") : undefined))
+      : undefined;
+  const dshLauncher = launcherFor("dsh", mode, mcpPkg, dshVendorDir);
 
   const claudePluginManifest = {
     name: PLUGIN_NAME,
@@ -245,6 +311,52 @@ export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT)
     },
   };
 
+  const dshPluginManifest = {
+    name: "@curio-data/dsh-intelli-search",
+    version: mcpPkg.version,
+    description: DESCRIPTION,
+    type: "module",
+    license: "Apache-2.0",
+    author: {
+      name: "Curio Data Pro Ltd",
+      url: "https://github.com/Curio-Data",
+    },
+    homepage: "https://github.com/Curio-Data/pi-intelli-search",
+    repository: {
+      type: "git",
+      url: "git+https://github.com/Curio-Data/pi-intelli-search.git",
+      directory: "plugins/dsh",
+    },
+    keywords: ["research", "web-search", "documentation", "mcp"],
+    exports: {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg",
+    },
+    // Every generated payload plus LICENSE; vendor/** is tarball-test-mode
+    // only, so the published package never ships a vendored server.
+    files: [
+      "index.js",
+      "cordis.patch.yml",
+      "skills/**",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE",
+      ...(mode === "tarball" ? ["vendor/**"] : []),
+    ],
+    engines: {
+      node: ">=24.9.0",
+      dsh: DSH_TESTED_VERSION,
+    },
+    dsh: {
+      manifestVersion: 1,
+      bundle: {
+        patch: "./cordis.patch.yml",
+      },
+    },
+  };
+
   const claudeMarketplace = {
     name: MARKETPLACE_NAME,
     description:
@@ -277,6 +389,9 @@ export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT)
     ],
   };
 
+  // The dsh bundle ships no marketplace entry: dsh installs the npm package
+  // directly, unlike the two repository-catalogue hosts.
+
   return {
     "plugins/claude-code/.claude-plugin/plugin.json": jsonBlock(claudePluginManifest),
     "plugins/claude-code/.mcp.json": jsonBlock(claudeMcp),
@@ -286,6 +401,41 @@ export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT)
     "plugins/codex/skills/intelli-search/SKILL.md": renderSkill("codex", root),
     ".claude-plugin/marketplace.json": jsonBlock(claudeMarketplace),
     ".agents/plugins/marketplace.json": jsonBlock(codexMarketplace),
+    "plugins/dsh/package.json": jsonBlock(dshPluginManifest),
+    "plugins/dsh/cordis.patch.yml": renderDshPatch(dshLauncher),
+    "plugins/dsh/index.js": readFileSync(
+      join(root, "scripts/templates/dsh/index.js"),
+      "utf8",
+    ),
+    "plugins/dsh/skills/intelli-search/SKILL.md": renderSkill("dsh", root),
+    "plugins/dsh/locale/en.json": jsonBlock({
+      meta: {
+        title: "Intelli Search",
+        description:
+          "Web research through a five-stage MCP pipeline: search, fetch, " +
+          "extract, collate and cache suggestions, with cited answers and a " +
+          "local cache of every run.",
+      },
+    }),
+    "plugins/dsh/locale/zh.json": jsonBlock({
+      meta: {
+        title: "Intelli Search",
+        description:
+          "通过五阶段 MCP 流水线进行网络研究：搜索、抓取、逐页提取、整理与缓存建议，提供带引用的回答和本地运行缓存。",
+      },
+    }),
+    "plugins/dsh/icon.svg": readFileSync(
+      join(root, "scripts/templates/dsh/icon.svg"),
+      "utf8",
+    ),
+    "plugins/dsh/README.md": readFileSync(
+      join(root, "scripts/templates/dsh/README.md"),
+      "utf8",
+    ),
+    // Verbatim root licence. NOTICE is deliberately not copied: it lists
+    // runtime dependencies of the standalone server, which this bundle does
+    // not vendor in registry mode.
+    "plugins/dsh/LICENSE": readFileSync(join(root, "LICENSE"), "utf8"),
   };
 }
 
@@ -313,6 +463,7 @@ function listFiles(base) {
 const GENERATED_ROOTS = [
   "plugins/claude-code",
   "plugins/codex",
+  "plugins/dsh",
   ".claude-plugin",
   ".agents/plugins",
 ];
@@ -396,8 +547,10 @@ No arguments: regenerate the tracked registry launchers and marketplaces.
 --check: detect drift without changing tracked files.
 --mode tarball: generate test launchers (requires both directory arguments).
 
-Build and npm pack the MCP workspace first; install that tarball into both
-vendor directories before installing the generated marketplaces.
+Build and npm pack the MCP workspace first; install that tarball into the
+vendor directories of the generated plugins (Claude Code resolves
+\${CLAUDE_PLUGIN_ROOT}; Codex uses --codex-vendor-dir; dsh derives its
+vendor directory from --output) before installing the generated bundles.
 See scripts/README.md for the generator reference and the tested install flow.`);
     return;
   }
@@ -413,7 +566,13 @@ See scripts/README.md for the generator reference and the tested install flow.`)
     return;
   }
   const base = args.mode === "tarball" ? args.output : REPO_ROOT;
-  writeTree(generateFiles(args.mode, { codexVendorDir: args.codexVendorDir }), base);
+  writeTree(
+    generateFiles(args.mode, {
+      codexVendorDir: args.codexVendorDir,
+      output: args.output,
+    }),
+    base,
+  );
   console.log(`generated ${args.mode} plugin bundles in ${base}`);
 }
 

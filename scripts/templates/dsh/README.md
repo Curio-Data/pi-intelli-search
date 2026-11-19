@@ -1,0 +1,73 @@
+# Intelli Search for DeepSeek Harness
+
+[_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) host bundle for [`@curio-data/mcp-intelli-search`](https://www.npmjs.com/package/@curio-data/mcp-intelli-search): intelligent web research with a five-stage pipeline (search, fetch, per-page extraction, collation, cache suggestions), cited answers and a local `.search/` cache of every run.
+
+The bundle is pure configuration: one inserted bridge row starts the pinned standalone MCP server through `npx` with `--host dsh`, and one registrar registers the shared `intelli-search` skill with the harness. Neither carries pipeline code, so the bundle always mirrors the exact published MCP package version.
+
+This README is generated from [`scripts/templates/dsh/README.md`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/templates/dsh/README.md) by [`scripts/generate-plugin-bundles.mjs`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/generate-plugin-bundles.mjs); the generated copy is authoritative. Do not edit it directly.
+
+## Requirements
+
+- `dsh` (tested against `0.2.2-rc.1`; the pinned version in `engines.dsh` is a tested fact, not a support range)
+- [_Node.js_](https://nodejs.org/) 24.9 or later on `PATH` (the harness's own floor; the first start downloads the MCP package through `npx`)
+- An [_OpenRouter_](https://openrouter.ai) API key for the search, extract and collate stages
+
+## Installation
+
+```bash
+dsh plugin --profile <name> add @curio-data/dsh-intelli-search
+```
+
+Restart the harness after installation; bundle rows are composed at launch.
+
+## Credentials
+
+The server receives its key through the harness environment layer. Precedence: an `OPENROUTER_API_KEY` exported in the launching environment, then a `.env` file in the launch directory, then `$DSH_HOME/.env`. Accepted values are copied into the environment once at launch, so adding a key requires one harness restart:
+
+```bash
+printf 'OPENROUTER_API_KEY=%s\n' "$OPENROUTER_API_KEY" >> "${DSH_HOME:-$HOME/.dsh}/.env"
+chmod 600 "${DSH_HOME:-$HOME/.dsh}/.env"
+```
+
+The bridge row forwards `process.env.OPENROUTER_API_KEY` to the server; an unset value stays unset and does not block startup. A key stored through the harness model-settings page does not provision this server: that credential is resolved through a service a child process cannot read.
+
+Alternatively, `npx -y --package @curio-data/mcp-intelli-search mcp-intelli-search setup` reads a key from standard input and stores it in a user-only credential file beside the per-user configuration at `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search` (shared with the Codex host mode). A stored file is reread on each call; environment credentials are captured at startup.
+
+## Workspace and Cache
+
+The server uses the harness working directory as its workspace and writes the research cache (`.search/` by default) below it. Start the harness from the project directory: a directory change later in the session does not move the cache, and the bridge row's `cwd` field is available for a fixed project root. A home or filesystem-root working directory is rejected with an actionable `WORKSPACE` error instead of creating an accidental shared cache.
+
+## Tools and Timeouts
+
+The harness names the MCP server `intelli`, so the four tools appear as:
+
+- `mcp__intelli__intelli_search`
+- `mcp__intelli__intelli_extract`
+- `mcp__intelli__intelli_collate`
+- `mcp__intelli__intelli_research`
+
+Start with `intelli_search` for quick facts; `intelli_research` runs the full pipeline over multiple pages. Research calls can take minutes: the bundle raises the bridge call limit to ten minutes (`toolCallTimeoutMs: 600000`). Server startup and tool discovery keep the separate 60-second protocol default, so a slow first `npx` download can still lose the tools on a first start; a later start reuses the `npx` cache.
+
+A missing tool set means the bridge row did not start. The bundle sets `failOnStartupError: false`, so the harness keeps running and logs the failure rather than surfacing it: report the missing tools together with the startup log instead of substituting the harness's own web search.
+
+A project skill with the same name outranks the bundle's skill registration; a user-level skill does not.
+
+## Verification
+
+After restarting with a key in place, request a quick search with `mcp__intelli__intelli_search` and confirm an actual tool call and an answer with sources. A running harness and a registered tool list do not prove provider access. `dsh --profile <name> --dump-config` shows the composed bundle rows, with `!!js` expressions verbatim, and is the first check when tools are missing.
+
+## Removal
+
+```bash
+dsh plugin --profile <name> remove @curio-data/dsh-intelli-search
+```
+
+Restart the harness, then confirm with `dsh --profile <name> --dump-config` that the two bundle rows are gone.
+
+## Evidence and Limits
+
+Installation, exact tool registration, skill loading, workspace guards, credential-free startup and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` on Linux without provider calls. See the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins) for the current evidence classes. This package carries no `NOTICE` because the runtime dependencies it lists are not bundled here.
+
+## Licence
+
+Apache-2.0. Copyright 2026 Ashraf Miah, Curio Data Pro Ltd. See `LICENSE`.
