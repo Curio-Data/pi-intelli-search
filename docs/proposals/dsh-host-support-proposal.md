@@ -1,6 +1,6 @@
 # DeepSeek Harness Host Support
 
-Status (19 November 2026): Phase 1 (host verification without credentials, and an adapter spike) is complete on branch `explore/dsh-host`. Phase 2 (the bundle) waits for the six owner decisions in [Resume Here](#resume-here). The proposal below was recorded on 18 November 2026 by an external contributor; where Resume Here corrects it, Resume Here governs. This brief specifies the smallest change that makes `intelli-search` a first-class host plugin for _DeepSeek Harness_ (`dsh`), reusing the existing standalone MCP server and the existing generator.
+Status (19 November 2026): Phase 1 (host verification without credentials, and an adapter spike) is complete on branch `explore/dsh-host`. The owner adopted all six Phase 1 recommendations on 19 November 2026 ([Resume Here](#resume-here)); Phase 2 (the bundle) follows the implementation plan named there. The proposal below was recorded on 18 November 2026 by an external contributor; where Resume Here corrects it, Resume Here governs. This brief specifies the smallest change that makes `intelli-search` a first-class host plugin for _DeepSeek Harness_ (`dsh`), reusing the existing standalone MCP server and the existing generator.
 
 Read with `docs/COMPATIBILITY.md` (evidence classes), `scripts/README.md` (the bundle generator) and `docs/proposals/BATCH-RESEARCH.md` (the proposal format this document follows).
 
@@ -34,18 +34,18 @@ Phase 1 recommends the first option in each row. Record the decision and its dat
 
 | # | Decision | Options | Phase 1 Recommendation | Owner Decision |
 |---|---|---|---|---|
-| D1 | Server name (section 6.1) | `intelli`, giving `mcp__intelli__intelli_search`; or `intelli_search`, as on the other hosts | `intelli`: shorter in every call and skill example; the generator already sets a prefix per host | Open |
-| D2 | Per-user configuration (section 7.2) | One `$XDG_CONFIG_HOME/mcp-intelli-search` shared with _Codex_; or a directory for `dsh` alone | Shared: same engine and models; explicit `--config` still allows a different setup | Open |
-| D3 | Publication (section 10) | Publish `@curio-data/dsh-intelli-search` to npm with its own tag; or install from a pinned Git commit | Publish: a versioned install, and an exact source for any JSON index | Open |
-| D4 | Workspace (section 6.3) | The launch directory, with the home and root guard; or wait for a per-session workspace from the host | Launch directory: document that a later change of directory does not move the cache | Open |
-| D5 | Evidence (section 5) | Reproduce the contributor's credentialed runs before writing a compatibility row; or enter them as a lower evidence class | Reproduce first; needs a DeepSeek key for the host model and the OpenRouter key | Open |
-| D6 | Repository | Build `plugins/dsh` here with the existing generator; or a separate repository depending on the published MCP package | Here: one guidance source, one version pin and one drift gate. A separate repository pays off only if the bundle gains substantial `dsh` code or its own release cadence | Open |
+| D1 | Server name (section 6.1) | `intelli`, giving `mcp__intelli__intelli_search`; or `intelli_search`, as on the other hosts | `intelli`: shorter in every call and skill example; the generator already sets a prefix per host | Recommendation adopted (2026-11-19) |
+| D2 | Per-user configuration (section 7.2) | One `$XDG_CONFIG_HOME/mcp-intelli-search` shared with _Codex_; or a directory for `dsh` alone | Shared: same engine and models; explicit `--config` still allows a different setup | Recommendation adopted (2026-11-19) |
+| D3 | Publication (section 10) | Publish `@curio-data/dsh-intelli-search` to npm with its own tag; or install from a pinned Git commit | Publish: a versioned install, and an exact source for any JSON index | Recommendation adopted (2026-11-19) |
+| D4 | Workspace (section 6.3) | The launch directory, with the home and root guard; or wait for a per-session workspace from the host | Launch directory: document that a later change of directory does not move the cache | Recommendation adopted (2026-11-19) |
+| D5 | Evidence (section 5) | Reproduce the contributor's credentialed runs before writing a compatibility row; or enter them as a lower evidence class | Reproduce first; needs a DeepSeek key for the host model and the OpenRouter key | Recommendation adopted (2026-11-19) |
+| D6 | Repository | Build `plugins/dsh` here with the existing generator; or a separate repository depending on the published MCP package | Here: one guidance source, one version pin and one drift gate. A separate repository pays off only if the bundle gains substantial `dsh` code or its own release cadence | Recommendation adopted (2026-11-19) |
 
 The committed spike already implements the recommended options of D2 and D4. Choosing the other option for either means changing `packages/mcp/src/cli.ts` and `packages/mcp/src/host.ts`.
 
 ### Next Steps
 
-1. The owner records D1 to D6 in the table above, or states them to the session, which records them here and commits.
+1. Done: the owner adopted all six recommendations on 19 November 2026. The Phase 2 implementation plan and its handover note are kept in the main checkout under `.plan/dsh-host/` (gitignored, like the evidence above); start there.
 2. Phase 2 builds the bundle on this branch from sections 8 to 11 (section 7's adapter change is the committed spike), amended by the corrections above: generator branch and generated `plugins/dsh`, `guidance/setup-dsh.md`, the registrar, and the deterministic tests (generator contract, registrar contract with a mock host, `npm pack` contents).
 3. A credential-free `test/e2e/18_dsh_plugin.sh`, modelled on scenarios 12 and 14: an isolated `dsh` installation, the local-tarball bundle, polling for the four tool names, delivery of a dummy credential, the workspace guard, removal and reinstallation. It needs Node.js 24.9 or later, so it stays out of the existing Node.js 22 continuous integration (CI) job.
 4. If D5 is "reproduce", a separate opt-in credentialed run first. Then the compatibility row in section 12, at the evidence class D5 sets, the release change in section 10, and the README, changelog and other documentation changes in section 11.
