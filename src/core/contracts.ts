@@ -171,6 +171,12 @@ export interface ModelRequest {
 export interface ModelCompletion {
   text: string;
   citations: HarvestedCitation[];
+  /** Provider-occurrence order of the citations, duplicates kept: the base a
+   *  search model numbers its bare `[n]` markers by (search-result id), as
+   *  distinct from the deduplicated `citations` array. Optional: adapters
+   *  without positional visibility omit it and callers fall back to
+   *  `citations`. */
+  citationOrder?: HarvestedCitation[];
   usage?: ModelUsage;
   /** Serving route observed by the adapter (for example OpenRouter's
    *  `provider` stream-event or response field). Optional: adapters

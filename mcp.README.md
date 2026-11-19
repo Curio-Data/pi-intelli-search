@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/mcp-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/mcp-intelli-search)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-blue)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1128%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1156%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -286,7 +286,7 @@ Both packages expose these four operations. Start with `intelli_search` for fact
 
 | Tool               | Description                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
-| `intelli_search`   | Search the web and return a concise answer with a source list (top `defaultUrls`).                   |
+| `intelli_search`   | Search the web and return a concise answer with a source list numbered to the answer's citation markers where they can be matched (see [Source Harvesting from Citations](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#source-harvesting-from-citations)). |
 | `intelli_extract`  | Extract query-relevant content from a web page, preserving code and technical detail verbatim.      |
 | `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
 | `intelli_research` | Search, fetch, extract, collate and cache multi-page research in one call.                        |
@@ -527,7 +527,7 @@ Unspecified tuning comes from the canonical [shared defaults](https://github.com
 
 | Setting | Default and Effect | Accepted Values |
 |---|---|---|
-| `defaultUrls` | `10`: fallback page budget and one-shot search source-list cap | Integer from 1 to 100; must not exceed `maxUrls` |
+| `defaultUrls` | `10`: fallback page budget and one-shot search source-list size (a cited higher-numbered entry can exceed it) | Integer from 1 to 100; must not exceed `maxUrls` |
 | `maxUrls` | `20`: hard cap on research pages | Integer from 1 to 100 |
 | `extractMaxChars` | `400000`: per-page extraction input character limit (≈100,000 tokens) | Integer from 1 to 2,000,000 |
 | `fetchTimeoutMs` | `20000`: page-fetch timeout in milliseconds | Integer from 1 to 600,000 |

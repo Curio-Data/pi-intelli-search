@@ -9,7 +9,11 @@ import type {
   ModelUsage,
   OperationLogger,
 } from "../../../../src/core/contracts.js";
-import { parseCitations, type FetchFunction } from "../../../../src/core/annotations.js";
+import {
+  dedupeCitations,
+  parseCitations,
+  type FetchFunction,
+} from "../../../../src/core/annotations.js";
 import { runModelWithPolicy, type AttemptHints } from "../../../../src/core/llm.js";
 import {
   markOutputBudgetExhausted,
@@ -360,10 +364,17 @@ export function createOpenRouterClient(
           }
           if (typeof content !== "string")
             throw new Error("OpenRouter returned no text completion");
+          // One non-streaming body is the sole citation channel here, so the
+          // occurrence order doubles as the position-faithful citationOrder
+          // (search-result id order, duplicates kept) for marker alignment.
+          const citationOccurrences = request.collectCitations ? parseCitations(raw) : [];
           return {
             value: {
               text: content,
-              citations: request.collectCitations ? parseCitations(raw) : [],
+              citations: dedupeCitations(citationOccurrences),
+              ...(citationOccurrences.length > 0
+                ? { citationOrder: citationOccurrences }
+                : {}),
               usage: usage(data.usage),
               ...(typeof choice.finish_reason === "string"
                 ? {

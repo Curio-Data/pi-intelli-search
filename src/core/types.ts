@@ -7,6 +7,13 @@ export interface SearchResult {
   sources: Array<{
     url: string;
     title: string;
+    /** The entry's number in the rendered list: a bare marker [number] in
+     *  the answer names this source. Numbers can skip values when the
+     *  display cap omitted an entry no marker uses. */
+    number?: number;
+    /** Set when this entry repeats an earlier entry's URL (a duplicated
+     *  provider citation keeps its own number). */
+    repeats?: number;
     inferred?: true;
     originalReference?: string;
   }>;
