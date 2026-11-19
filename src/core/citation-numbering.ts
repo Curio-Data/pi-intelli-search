@@ -13,8 +13,12 @@
 // its historical order, unless the model numbered its own trailing Sources
 // section and the answer has bare markers, in which case the model's own
 // section numbers are authoritative (kept, ordered by, and continued after).
-// A marker whose number has no entry stays in the text beside a short note;
-// it can never sit beside a wrong source, because nothing is renumbered.
+// Wherever a numbering base exists, entry k is that base's k-th source; a
+// marker whose number has no entry stays in the text beside a short note.
+// Wherever the base is missing or incomplete (no citations, no section, or
+// a section number the model used more than once or as zero), nothing is
+// silently paired: a note says the markers could not be matched, so the
+// positional list may not match them.
 
 import type { HarvestedCitation } from "./annotations.js";
 import { matchTrailingSourcesSection } from "./util.js";
@@ -42,10 +46,12 @@ export interface NumberingResult {
   /** Distinct bare markers in the answer whose number has no entry in the
    *  final list. Rendered as one short note; the markers stay. */
   unmatchedMarkers: number;
-  /** True when the model's own numbered Sources section was rejected or
-   *  partly rejected (a repeated or zero number): the list may not match
-   *  the markers, and the caller says so instead of mispairing silently. */
-  ambiguousNumbering: boolean;
+  /** True when no numbering base could be used for the answer's bare
+   *  markers: no provider citations and no usable numbered section (absent,
+   * unnumbered, or every number rejected), or a section base where a
+   * repeated or zero number was blocked. The list may not match the
+   * markers, and the caller says so instead of pairing silently. */
+  numberingIncomplete: boolean;
 }
 
 /**
@@ -99,8 +105,10 @@ interface BaseEntry {
  * a note instead of silently mispairing markers. Trailing punctuation is
  * stripped from a bare URL only, matching extractSourceUrls pass 1 (marked
  * links keep their exact URL). Numbers above 999 do not match the parser
- * (\d{1,3}, the same boundary every marker scan uses); their entries drop
- * to the answer-only list and their markers raise the unmatched note.
+ * (\d{1,3}, the same boundary every marker scan uses, so a `[1000]` marker
+ * is invisible to the scans and raises no note); their entries drop to the
+ * answer-only list, and if every number exceeds the boundary the section
+ * yields no base at all.
  */
 interface SectionBase {
   usable: BaseEntry[];
@@ -174,7 +182,7 @@ export function numberSources(
   const order = citationOrder && citationOrder.length > 0 ? citationOrder : citations;
   let base: BaseEntry[] | undefined;
   let blocked = new Set<number>();
-  let ambiguousNumbering = false;
+  let numberingIncomplete = false;
   if (order.length > 0) {
     base = order.map((c, i) => ({
       number: i + 1,
@@ -193,16 +201,23 @@ export function numberSources(
         return {
           entries: numberPositional(merged.slice(0, cap)),
           unmatchedMarkers: 0,
-          ambiguousNumbering: true,
+          numberingIncomplete: true,
         };
       }
-      ambiguousNumbering = blocked.size > 0;
+      numberingIncomplete = blocked.size > 0;
     }
   }
 
   if (!base) {
-    // No numbering base: the historical display, numbered by position.
-    return { entries: numberPositional(merged.slice(0, cap)), unmatchedMarkers: 0, ambiguousNumbering: false };
+    // No numbering base at all. When the answer cites by number there is
+    // nothing to match against: keep the historical positional display, but
+    // say so (owner decision, round 7) instead of silently pairing markers
+    // with it. With no bare markers there is nothing to pair.
+    return {
+      entries: numberPositional(merged.slice(0, cap)),
+      unmatchedMarkers: 0,
+      numberingIncomplete: hasBareMarkers(answerText),
+    };
   }
 
   // Titles: the provider's (or section's) title first, else the model's
@@ -258,7 +273,7 @@ export function numberSources(
   // in an interior gap of the model's own numbering) is counted.
   const present = new Set(entries.map((e) => e.number));
   const unmatchedMarkers = [...bareMarkerNumbers(answerText)].filter((n) => !present.has(n)).length;
-  return { entries, unmatchedMarkers, ambiguousNumbering };
+  return { entries, unmatchedMarkers, numberingIncomplete };
 }
 
 function numberPositional(sources: ReadonlyArray<MergedSource>): NumberedSource[] {

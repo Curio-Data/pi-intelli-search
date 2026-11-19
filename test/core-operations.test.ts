@@ -240,7 +240,7 @@ it("leaves markers beyond the provider list in the text with a short note", asyn
   const result = await search({ query: "beyond" }, base.context);
   assert.match(result.text, /Supported \[1\]\. Also relevant \[7\]\.\n/);
   assert.match(result.text, /1\. \[A\]\(https:\/\/a\.example\/1\)\n/);
-  assert.match(result.text, /> Note: 1 citation marker in the answer cites a number with no entry in the list above\.\n/);
+  assert.match(result.text, /> Note: 1 cited number in the answer has no entry in the list above\.\n/);
 });
 
 it("keeps today's list order when there are no annotations and plain links", async (t) => {
@@ -261,6 +261,51 @@ it("keeps today's list order when there are no annotations and plain links", asy
     "2. [docs](https://two.example/page)",
   ]);
   assert.doesNotMatch(result.text, /> Note:/);
+});
+
+it("notes unmatched markers when no numbered section exists at all (N6b)", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 5, maxUrls: 5 });
+  const complete = base.context.models.complete;
+  // The reviewer's no-section shape: prose link order differs from the
+  // marker intent, so the positional display would silently mispair [1]
+  // and [2]. Round 7 notes it instead.
+  const text =
+    "A [1]. B [2]. See [B](https://b.example/2) then [A](https://a.example/1).";
+  base.context.models.complete = async (request) =>
+    request.model.model === "search" ? { text, citations: [] } : complete(request);
+  const result = await search({ query: "no section" }, base.context);
+  const sourceLines = result.text.split("\n").filter((line) => /^\d+\. /.test(line));
+  assert.deepEqual(sourceLines, [
+    "1. [B](https://b.example/2)",
+    "2. [A](https://a.example/1)",
+  ]);
+  assert.match(result.text, /> Note: the answer's citation markers could not be matched to numbered sources, so they may not match the list\.\n/);
+  assert.match(result.text, /A \[1\]\. B \[2\]\. See/);
+});
+
+it("notes unmatched markers for an unnumbered bulleted section (prose probe B)", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 5, maxUrls: 5 });
+  const complete = base.context.models.complete;
+  // The prompt asks for a Sources section without numbers: a compliant
+  // model yields no numbering, and the note says so.
+  const text = [
+    "Answer [1].",
+    "",
+    "Sources",
+    "- [T1](https://t1.example/1)",
+    "- [T2](https://t2.example/2)",
+  ].join("\n");
+  base.context.models.complete = async (request) =>
+    request.model.model === "search" ? { text, citations: [] } : complete(request);
+  const result = await search({ query: "bulleted section" }, base.context);
+  const sourceLines = result.text.split("\n").filter((line) => /^\d+\. /.test(line));
+  assert.deepEqual(sourceLines, [
+    "1. [T1](https://t1.example/1)",
+    "2. [T2](https://t2.example/2)",
+  ]);
+  assert.match(result.text, /> Note: the answer's citation markers could not be matched to numbered sources, so they may not match the list\.\n/);
 });
 
 it("numbers by the model's numbered Sources section without annotations", async (t) => {
@@ -395,14 +440,14 @@ it("notes the ambiguity when the section's numbers are all duplicated (F1)", asy
     request.model.model === "search" ? { text, citations: [] } : complete(request);
   const result = await search({ query: "duplicate section numbers" }, base.context);
   // No unambiguous number to honour: the positional display stands, but the
-  // reader is told the numbering was ambiguous instead of being silently
+  // reader is told the markers could not be matched instead of being silently
   // mispaired.
   const sourceLines = result.text.split("\n").filter((line) => /^\d+\. /.test(line));
   assert.deepEqual(sourceLines, [
     "1. [A](https://a.example/1)",
     "2. [B](https://b.example/2)",
   ]);
-  assert.match(result.text, /> Note: the model's own source numbering was ambiguous, so markers may not match the list\.\n/);
+  assert.match(result.text, /> Note: the answer's citation markers could not be matched to numbered sources, so they may not match the list\.\n/);
 });
 
 it("honours unambiguous section numbers and never guesses a duplicated one (F1, differing order)", async (t) => {
@@ -432,7 +477,7 @@ it("honours unambiguous section numbers and never guesses a duplicated one (F1, 
     "4. [C](https://c.example/3)",
   ]);
   assert.match(result.text, /then A \[1\]\./);
-  assert.match(result.text, /> Note: the model's own source numbering was ambiguous, so markers may not match the list\.\n/);
+  assert.match(result.text, /> Note: the answer's citation markers could not be matched to numbered sources, so they may not match the list\.\n/);
 });
 
 it("honours unambiguous numbers past a zero-numbered entry (F1)", async (t) => {
@@ -456,7 +501,7 @@ it("honours unambiguous numbers past a zero-numbered entry (F1)", async (t) => {
     "1. [B](https://b.example/1)",
     "2. [A](https://a.example/0)",
   ]);
-  assert.match(result.text, /> Note: the model's own source numbering was ambiguous/);
+  assert.match(result.text, /> Note: the answer's citation markers could not be matched/);
 });
 
 it("keeps a marked section URL's trailing punctuation, stripping only bare URLs (F2)", async (t) => {
@@ -504,7 +549,7 @@ it("notes a marker stranded in an interior gap of the model's numbering (F3)", a
     "1. [A](https://a.example/1)",
     "3. [C](https://c.example/3)",
   ]);
-  assert.match(result.text, /> Note: 1 citation marker in the answer cites a number with no entry in the list above\.\n/);
+  assert.match(result.text, /> Note: 1 cited number in the answer has no entry in the list above\.\n/);
 });
 
 it("ignores bracketed numbers written only inside the stripped Sources section (F4)", async (t) => {
@@ -553,7 +598,7 @@ it("never numbers an answer-only link with a stranded marker's number (F2)", asy
     "2. [B](https://b.example/2)",
     "4. [extra](https://c.example/extra)",
   ]);
-  assert.match(result.text, /> Note: 1 citation marker in the answer cites a number with no entry in the list above\.\n/);
+  assert.match(result.text, /> Note: 1 cited number in the answer has no entry in the list above\.\n/);
 });
 
 it("does not count inline numbered links as unmatched markers (F3)", async (t) => {

@@ -426,6 +426,9 @@ describe("callLlm registry-facade dispatch (single transport, Pi >= 0.86)", () =
       );
     };
     let attempts = 0;
+    const attemptSinks: AnnotationSink[] = [];
+    const savedCapture = __harness.captureAnnotationSink;
+    __harness.captureAnnotationSink = (attemptSink) => attemptSinks.push(attemptSink);
     __harness.registryStreamSimple = async (_registry, _model, _context, options) => {
       await options!.fetch!("https://fixture.invalid");
       if (++attempts === 1)
@@ -442,13 +445,17 @@ describe("callLlm registry-facade dispatch (single transport, Pi >= 0.86)", () =
       // R2 test gap 1: the occurrence order inherits the same per-attempt
       // isolation (it is set only from the successful attempt's sink).
       assert.deepEqual(sink.citationOrder, [{ url: "https://successful.example" }]);
-      // r5 review F6: the order must be a copy, not a live reference into
-      // the sink; a later push into the sink must not change it.
-      const orderAfterReturn = sink.citationOrder;
-      sink.streamOrder?.push({ url: "https://late.example" });
-      assert.deepEqual(orderAfterReturn, [{ url: "https://successful.example" }]);
+      assert.equal(attemptSinks.length, 2, "each attempt creates its own sink");
+      // r6 review F3: the caller-visible order must be a copy, not a live
+      // reference into the successful attempt's channel array. Pushing into
+      // that array after callLlm returns must not change it: without the
+      // spread copy in llm.ts this assertion fails (aliasing).
+      const successfulSink = attemptSinks[1];
+      (successfulSink.teeOrder ??= []).push({ url: "https://late.example" });
+      assert.deepEqual(sink.citationOrder, [{ url: "https://successful.example" }]);
       assert.equal(attempts, 2);
     } finally {
+      __harness.captureAnnotationSink = savedCapture;
       releaseOld?.();
       globalThis.fetch = savedFetch;
     }

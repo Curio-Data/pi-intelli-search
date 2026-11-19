@@ -63,7 +63,7 @@ export async function search(
     };
 
     return {
-      text: formatSearchResult(result, numbering.unmatchedMarkers, numbering.ambiguousNumbering),
+      text: formatSearchResult(result, numbering.unmatchedMarkers, numbering.numberingIncomplete),
       outcome: "completed",
       details: { sources, query: params.query },
     };
@@ -76,7 +76,7 @@ export async function search(
 function formatSearchResult(
   result: SearchResult,
   unmatchedMarkers = 0,
-  ambiguousNumbering = false,
+  numberingIncomplete = false,
 ): string {
   let output = `## Search results for: "${result.query}"\n\n`;
   output += result.summary + "\n\n";
@@ -92,13 +92,14 @@ function formatSearchResult(
     output += `${source.number}. [${label}](${source.url})${repeats}${inferred}\n`;
   }
   if (unmatchedMarkers > 0) {
+    // The count is of distinct cited numbers, not marker tokens.
     output +=
-      `\n> Note: ${unmatchedMarkers} citation marker${unmatchedMarkers === 1 ? "" : "s"} in the answer ` +
-      `${unmatchedMarkers === 1 ? "cites" : "cite"} a number with no entry in the list above.\n`;
+      `\n> Note: ${unmatchedMarkers} cited number${unmatchedMarkers === 1 ? "" : "s"} in the answer ` +
+      `${unmatchedMarkers === 1 ? "has" : "have"} no entry in the list above.\n`;
   }
-  if (ambiguousNumbering) {
+  if (numberingIncomplete) {
     output +=
-      "\n> Note: the model's own source numbering was ambiguous, so markers may not match the list.\n";
+      "\n> Note: the answer's citation markers could not be matched to numbered sources, so they may not match the list.\n";
   }
   return output;
 }
