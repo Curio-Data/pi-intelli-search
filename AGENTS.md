@@ -46,7 +46,7 @@ This subsection is the repository's local declaration under the house `professio
 | `skills/intelli-search/SKILL.md`, `guidance/` | A coding agent choosing and calling the tools | No | The tool schemas and behaviour in `src/core/`, and the result text each adapter shows the model (`src/tools/`, `packages/mcp/src/`) |
 | `AGENTS.md` | A maintainer or agent working on the repository | Only where a past decision still constrains current work | The code, scripts and the owner's recorded decisions |
 | `scripts/README.md`, `test/fixtures/native-contract/README.md`, `docs/images/README.md` | A maintainer running scripts, updating fixtures or regenerating artwork | Current procedures; dated observations stay identified as history | The scripts, fixtures and files each guide describes, and the run evidence it cites |
-| `docs/proposals/` | A maintainer deciding on or implementing a proposed change | Yes: decisions, open choices and their later disposition | The owner's recorded decisions; the code at HEAD for statements about existing behaviour |
+| `docs/proposals/`, `docs/plans/` | A maintainer deciding on or implementing a proposed change | Yes: decisions, open choices and their later disposition | The owner's recorded decisions; the code at HEAD for statements about existing behaviour |
 | Working notes in `evidence/`, `.plan/` and `test/rcca/` | The maintainer returning after months on other work | Yes | The run's own outputs and logs |
 
 Statements about the `Pi` host are checked against the installed host's source and type declarations at the stated version.

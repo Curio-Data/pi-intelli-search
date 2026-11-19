@@ -45,7 +45,7 @@ The committed spike already implements the recommended options of D2 and D4. Cho
 
 ### Next Steps
 
-1. Done: the owner adopted all six recommendations on 19 November 2026. The Phase 2 implementation plan and its handover note are kept in the main checkout under `.plan/dsh-host/` (gitignored, like the evidence above); start there.
+1. Done: the owner adopted all six recommendations on 19 November 2026. The Phase 2 implementation plan and its handover note are tracked on this branch under `docs/plans/dsh-host/`; start at `docs/plans/dsh-host/HANDOVER.md`.
 2. Phase 2 builds the bundle on this branch from sections 8 to 11 (section 7's adapter change is the committed spike), amended by the corrections above: generator branch and generated `plugins/dsh`, `guidance/setup-dsh.md`, the registrar, and the deterministic tests (generator contract, registrar contract with a mock host, `npm pack` contents).
 3. A credential-free `test/e2e/18_dsh_plugin.sh`, modelled on scenarios 12 and 14: an isolated `dsh` installation, the local-tarball bundle, polling for the four tool names, delivery of a dummy credential, the workspace guard, removal and reinstallation. It needs Node.js 24.9 or later, so it stays out of the existing Node.js 22 continuous integration (CI) job.
 4. If D5 is "reproduce", a separate opt-in credentialed run first. Then the compatibility row in section 12, at the evidence class D5 sets, the release change in section 10, and the README, changelog and other documentation changes in section 11.
