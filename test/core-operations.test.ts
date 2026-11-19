@@ -171,13 +171,11 @@ it("returns no synthesis for an entry that did not complete", async (t) => {
   assert.equal(entry.synthesis, undefined);
 });
 
-it("aligns intelli_search citation markers with the rendered Sources list", async (t) => {
+// Round-4 replacement block for test/core-operations.test.ts (scratch tool).
+it("numbers the Sources list in provider order so markers match (the reported bug)", async (t) => {
   const root = await workspace(t);
   const base = coreContext(root, { defaultUrls: 5, maxUrls: 5 });
   const complete = base.context.models.complete;
-  // Sonar-shaped response: bare [n] markers indexed to the provider's
-  // citation order, one prose markdown link, and the trailing Sources
-  // section the system prompt requests.
   const sonarText = [
     "The tool shipped on 12 March [3]. Installation is documented [1],",
     "and the API reference lives at [API ref](https://docs.example.com/api).",
@@ -192,71 +190,153 @@ it("aligns intelli_search citation markers with the rendered Sources list", asyn
     { url: "https://blog.example.com/release-notes", title: "Release notes" },
   ];
   base.context.models.complete = async (request) =>
-    request.model.model === "search"
-      ? { text: sonarText, citations }
-      : complete(request);
-  const result = await search({ query: "alignment" }, base.context);
-  // Displayed order: prose API ref link, then the trailing-section links,
-  // then the annotation-only release page. Every marker must carry the
-  // index of the source the model meant: [3] -> release notes (entry 2),
-  // [1] -> release page (entry 4).
-  assert.match(result.text, /shipped on 12 March \[2\]\./);
-  assert.match(result.text, /documented \[4\],/);
-  assert.match(result.text, /lives at \[API ref\]\(https:\/\/docs\.example\.com\/api\)\./);
+    request.model.model === "search" ? { text: sonarText, citations } : complete(request);
+  const result = await search({ query: "numbering" }, base.context);
+  assert.match(result.text, /shipped on 12 March \[3\]\. Installation is documented \[1\],/);
+  assert.doesNotMatch(result.text, /- \[Release notes\]/);
   const lines = result.text.split("\n");
   const sourceLines = lines.filter((line) => /^\d+\. /.test(line));
-  assert.deepEqual(
-    sourceLines.map((line) => line.replace(/^\d+\. /, "")),
-    [
-      "[API ref](https://docs.example.com/api)",
-      "[Release notes](https://blog.example.com/release-notes)",
-      "[Installation](https://docs.example.com/install)",
-      "[Release](https://docs.example.com/release)",
-    ],
-  );
-  // The model's own trailing Sources section never reaches the answer.
-  assert.doesNotMatch(result.text, /- \[Release notes\]/);
+  assert.deepEqual(sourceLines, [
+    "1. [Release](https://docs.example.com/release)",
+    "2. [Installation](https://docs.example.com/install)",
+    "3. [Release notes](https://blog.example.com/release-notes)",
+    "4. [API ref](https://docs.example.com/api)",
+  ]);
   assert.equal(result.outcome, "completed");
 });
 
-it("removes clamped intelli_search markers and notes the removal", async (t) => {
+it("keeps duplicate provider citations at their own numbers without shifting later entries", async (t) => {
   const root = await workspace(t);
-  const base = coreContext(root, { defaultUrls: 2, maxUrls: 2 });
+  const base = coreContext(root, { defaultUrls: 5, maxUrls: 5 });
   const complete = base.context.models.complete;
-  const sonarText = "Supported [1] and tracked [3]; details [9].";
-  const citations = [
+  const occurrences = [
     { url: "https://a.example/1", title: "A" },
+    { url: "https://b.example/2", title: "B" },
     { url: "https://b.example/2", title: "B" },
     { url: "https://c.example/3", title: "C" },
   ];
   base.context.models.complete = async (request) =>
     request.model.model === "search"
-      ? { text: sonarText, citations }
+      ? { text: "First [1]. Third [3]. Fourth [4].", citations: occurrences, citationOrder: occurrences }
       : complete(request);
-  const result = await search({ query: "clamped" }, base.context);
-  // Displayed list is capped at 2: [1] stays, [3] and [9] lose their
-  // referents and are removed rather than pointing at wrong entries.
-  assert.match(result.text, /Supported \[1\] and tracked; details\./);
-  assert.match(result.text, /> Note: 2 citation markers in the answer could not be matched to the Sources list and were removed\./);
-  const sources = result.details.sources as Array<{ url: string }>;
-  assert.deepEqual(sources.map((s) => s.url), ["https://a.example/1", "https://b.example/2"]);
+  const result = await search({ query: "duplicates" }, base.context);
+  assert.match(result.text, /First \[1\]\. Third \[3\]\. Fourth \[4\]\.\n/);
+  const sourceLines = result.text.split("\n").filter((line) => /^\d+\. /.test(line));
+  assert.deepEqual(sourceLines, [
+    "1. [A](https://a.example/1)",
+    "2. [B](https://b.example/2)",
+    "3. [B](https://b.example/2) (same source as entry 2)",
+    "4. [C](https://c.example/3)",
+  ]);
 });
 
-it("retitles number-labelled prose links in the Sources list", async (t) => {
+it("leaves markers beyond the provider list in the text with a short note", async (t) => {
   const root = await workspace(t);
   const base = coreContext(root);
   const complete = base.context.models.complete;
   base.context.models.complete = async (request) =>
     request.model.model === "search"
+      ? { text: "Supported [1]. Also relevant [7].", citations: [{ url: "https://a.example/1", title: "A" }] }
+      : complete(request);
+  const result = await search({ query: "beyond" }, base.context);
+  assert.match(result.text, /Supported \[1\]\. Also relevant \[7\]\.\n/);
+  assert.match(result.text, /1\. \[A\]\(https:\/\/a\.example\/1\)\n/);
+  assert.match(result.text, /> Note: 1 citation marker in the answer cites a number with no entry in the list above\.\n/);
+});
+
+it("keeps today's list order when there are no annotations and plain links", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 3, maxUrls: 3 });
+  const complete = base.context.models.complete;
+  base.context.models.complete = async (request) =>
+    request.model.model === "search"
       ? {
-          text: "Details in [2](https://docs.example.com/guide).",
-          citations: [{ url: "https://docs.example.com/guide", title: "Official guide" }],
+          text: "Read [the guide](https://one.example/page), then [docs](https://two.example/page).",
+          citations: [],
         }
       : complete(request);
-  const result = await search({ query: "labels" }, base.context);
-  // The link's numeric markdown label must not survive as the entry title.
-  assert.match(result.text, /1\. \[Official guide\]\(https:\/\/docs\.example\.com\/guide\)/);
-  assert.match(result.text, /Details in \[1\]\(https:\/\/docs\.example\.com\/guide\)\./);
+  const result = await search({ query: "plain links" }, base.context);
+  const sourceLines = result.text.split("\n").filter((line) => /^\d+\. /.test(line));
+  assert.deepEqual(sourceLines, [
+    "1. [the guide](https://one.example/page)",
+    "2. [docs](https://two.example/page)",
+  ]);
+  assert.doesNotMatch(result.text, /> Note:/);
+});
+
+it("numbers by the model's numbered Sources section without annotations", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 5, maxUrls: 5 });
+  const complete = base.context.models.complete;
+  const text = [
+    "Use the tool [2]; the guide [3] explains setup. See the [intro](https://x.example/intro).",
+    "",
+    "Sources",
+    "1. [First](https://a.example/1)",
+    "2. [Second](https://b.example/2)",
+    "3. [Third](https://c.example/3)",
+  ].join("\n");
+  base.context.models.complete = async (request) =>
+    request.model.model === "search" ? { text, citations: [] } : complete(request);
+  const result = await search({ query: "section" }, base.context);
+  assert.match(result.text, /Use the tool \[2\]; the guide \[3\] explains setup\./);
+  const sourceLines = result.text.split("\n").filter((line) => /^\d+\. /.test(line));
+  assert.deepEqual(sourceLines, [
+    "1. [First](https://a.example/1)",
+    "2. [Second](https://b.example/2)",
+    "3. [Third](https://c.example/3)",
+    "4. [intro](https://x.example/intro)",
+  ]);
+});
+
+it("numbers a server-tool-shaped answer (annotations plus links, no bare markers)", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 5, maxUrls: 5 });
+  const complete = base.context.models.complete;
+  base.context.models.complete = async (request) =>
+    request.model.model === "search"
+      ? {
+          text: "Details in [the guide](https://docs.example.com/guide) and [notes](https://notes.example/x).",
+          citations: [
+            { url: "https://docs.example.com/guide", title: "Official guide" },
+            { url: "https://other.example/2", title: "Other" },
+          ],
+        }
+      : complete(request);
+  const result = await search({ query: "server tool" }, base.context);
+  assert.match(result.text, /Details in \[the guide\]\(https:\/\/docs\.example\.com\/guide\) and \[notes\]\(https:\/\/notes\.example\/x\)\./);
+  const sourceLines = result.text.split("\n").filter((line) => /^\d+\. /.test(line));
+  assert.deepEqual(sourceLines, [
+    "1. [Official guide](https://docs.example.com/guide)",
+    "2. [Other](https://other.example/2)",
+    "3. [notes](https://notes.example/x)",
+  ]);
+  assert.doesNotMatch(result.text, /> Note:/);
+});
+
+it("never drops or shifts a capped entry whose number the answer uses", async (t) => {
+  const root = await workspace(t);
+  const base = coreContext(root, { defaultUrls: 2, maxUrls: 2 });
+  const complete = base.context.models.complete;
+  const citations = [
+    { url: "https://a.example/1", title: "A" },
+    { url: "https://b.example/2", title: "B" },
+    { url: "https://c.example/3", title: "C" },
+    { url: "https://d.example/4", title: "D" },
+  ];
+  base.context.models.complete = async (request) =>
+    request.model.model === "search" ? { text: "Supported [1] and tracked [4]; also [2].", citations } : complete(request);
+  const result = await search({ query: "cap" }, base.context);
+  assert.match(result.text, /Supported \[1\] and tracked \[4\]; also \[2\]\.\n/);
+  const sourceLines = result.text.split("\n").filter((line) => /^\d+\. /.test(line));
+  assert.deepEqual(sourceLines, [
+    "1. [A](https://a.example/1)",
+    "2. [B](https://b.example/2)",
+    "4. [D](https://d.example/4)",
+  ]);
+  assert.doesNotMatch(result.text, /> Note:/);
+  const sources = result.details.sources as Array<{ number?: number }>;
+  assert.deepEqual(sources.map((s) => s.number), [1, 2, 4]);
 });
 
 it("sanitises untrusted citation titles in the Sources list", async (t) => {
@@ -276,44 +356,9 @@ it("sanitises untrusted citation titles in the Sources list", async (t) => {
         }
       : complete(request);
   const result = await search({ query: "evil title" }, base.context);
-  // The provider title must not be able to close the entry's link and open
-  // another, nor leak a newline into the rendered list.
-  assert.match(result.text, /2\. \[page\]\(https:\/\/evil\.example\/page\)/);
+  assert.match(result.text, /1\. \[page\]\(https:\/\/evil\.example\/page\)/);
   assert.doesNotMatch(result.text, /phish/);
 });
-
-it("numbers intelli_search markers by provider occurrence order across duplicate citations", async (t) => {
-  const root = await workspace(t);
-  const base = coreContext(root, { defaultUrls: 3, maxUrls: 3 });
-  const complete = base.context.models.complete;
-  // Provider ids 1..4 with the same URL at ids 1 and 2; the deduplicated
-  // display list holds three entries but the markers number by occurrence.
-  const occurrences = [
-    { url: "https://a.example/1", title: "A" },
-    { url: "https://a.example/1", title: "A" },
-    { url: "https://b.example/2", title: "B" },
-    { url: "https://c.example/3", title: "C" },
-  ];
-  base.context.models.complete = async (request) =>
-    request.model.model === "search"
-      ? {
-          text: "First [1]. Third [3]. Fourth [4].",
-          citations: [
-            { url: "https://a.example/1", title: "A" },
-            { url: "https://b.example/2", title: "B" },
-            { url: "https://c.example/3", title: "C" },
-          ],
-          citationOrder: occurrences,
-        }
-      : complete(request);
-  const result = await search({ query: "duplicates" }, base.context);
-  // Displayed: [A, B, C]. Marker [3] is provider id 3 = B (entry 2) and
-  // [4] is id 4 = C (entry 3). Without the occurrence order the fallback
-  // would map [3] to citations[2] = C: the wrong source.
-  assert.match(result.text, /First \[1\]\. Third \[2\]\. Fourth \[3\]\.\n/);
-  assert.equal(result.outcome, "completed");
-});
-
 it("labels inferred guesses in intelli_search text and structured sources", async (t) => {
   const root = await workspace(t);
   const base = coreContext(root, { defaultUrls: 3, maxUrls: 3 });
@@ -2103,8 +2148,8 @@ it("uses isolated concurrent model, citation and logger state", async (t) => {
     search({ query: "a" }, a.context),
     search({ query: "b" }, b.context),
   ]);
-  assert.deepEqual(ar.details.sources, [{ url: "https://a.example", title: "A" }]);
-  assert.deepEqual(br.details.sources, [{ url: "https://b.example", title: "B" }]);
+  assert.deepEqual(ar.details.sources, [{ url: "https://a.example", title: "A", number: 1 }]);
+  assert.deepEqual(br.details.sources, [{ url: "https://b.example", title: "B", number: 1 }]);
 });
 
 it("keeps docs staging inside the configured root and cleans partial download failures", async (t) => {

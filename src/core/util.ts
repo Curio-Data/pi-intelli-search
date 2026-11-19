@@ -873,18 +873,3 @@ export function safeLinkLabel(title: string | undefined, url: string): string {
   return host !== undefined && labelCandidateOk(host) ? host : "source";
 }
 
-/**
- * As safeLinkLabel, but the result is never purely numeric (including
- * dotted numbers such as an IP host): a number as link text reads as a
- * citation index, which is exactly what re-titling removes.
- */
-export function safeNonNumericLinkLabel(title: string | undefined, url: string): string {
-  const label = safeLinkLabel(title, url);
-  if (!/^\d+(\.\d+)*$/.test(label)) return label;
-  // The host must itself pass the same checks: an IPv4 literal is dotted
-  // numeric and would read as an index again.
-  const host = hostOf(url);
-  return host !== undefined && labelCandidateOk(host) && !/^\d+(\.\d+)*$/.test(host)
-    ? host
-    : "source";
-}

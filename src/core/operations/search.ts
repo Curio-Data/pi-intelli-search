@@ -5,13 +5,8 @@ import type { SearchResult } from "../types.js";
 import { SEARCH_SYSTEM_PROMPT } from "../prompts.js";
 import type { SearchParams } from "../contracts.js";
 import { mergeCitations } from "../annotations.js";
-import { alignCitationMarkers } from "../citation-markers.js";
-import {
-  extractSourceUrls,
-  safeLinkLabel,
-  stripTrailingSourcesSection,
-  throwIfAborted,
-} from "../util.js";
+import { numberSources } from "../citation-numbering.js";
+import { extractSourceUrls, safeLinkLabel, stripTrailingSourcesSection, throwIfAborted } from "../util.js";
 import { appendDomainFilter, buildSearchPayloadPatch } from "../messages.js";
 import type { OperationContext, OperationResult } from "../contracts.js";
 
@@ -45,36 +40,30 @@ export async function search(
 
     throwIfAborted(signal);
     // Extract URLs from the FULL text (the trailing Sources section the
-    // prompt requests is link-dense), then cap the list at defaultUrls:
-    // annotation harvesting can surface 20+ cited sources, and an
-    // unbounded list would flood the agent context. The summary handed
-    // downstream drops the model's own Sources section; the tool renders
-    // its own canonical block from this list.
-    const sources = mergeCitations(extractSourceUrls(responseText), { citations }).slice(
-      0,
+    // prompt requests is link-dense), then number the display list so a bare
+    // marker [k] in the answer and entry k name the same source: the answer
+    // text itself is never rewritten (citation-numbering.ts). The summary
+    // handed downstream drops the model's own Sources section; the tool
+    // renders its own canonical block from the numbered list.
+    const merged = mergeCitations(extractSourceUrls(responseText), { citations });
+    const numbering = numberSources(
+      responseText,
+      merged,
+      citations,
+      citationOrder,
       Math.max(1, settings.defaultUrls),
     );
-
-    // The model numbers its [n] markers against its own citation list; the
-    // Sources block below is the merged, deduplicated, capped list, whose
-    // order differs whenever prose links precede annotation-only URLs. Align
-    // every marker to the entry it will actually sit beside, and neutralise
-    // markers whose referent the cap removed (citation-markers.ts).
-    const aligned = alignCitationMarkers(responseText, { citations, citationOrder }, sources);
-    // Alignment runs on the full text (the trailing section can be the
-    // numbering base for models without annotations); the section itself is
-    // then dropped exactly as before.
-    const summary = stripTrailingSourcesSection(aligned.text);
+    const sources = numbering.entries;
 
     const result: SearchResult = {
-      summary,
+      summary: stripTrailingSourcesSection(responseText),
       sources,
       query: params.query,
       timestamp: new Date().toISOString(),
     };
 
     return {
-      text: formatSearchResult(result, aligned.removed),
+      text: formatSearchResult(result, numbering.unmatchedMarkers),
       outcome: "completed",
       details: { sources, query: params.query },
     };
@@ -84,24 +73,24 @@ export async function search(
   }
 }
 
-function formatSearchResult(result: SearchResult, removedCount = 0): string {
+function formatSearchResult(result: SearchResult, unmatchedMarkers = 0): string {
   let output = `## Search results for: "${result.query}"\n\n`;
   output += result.summary + "\n\n";
   output += `### Sources (${result.sources.length})\n\n`;
-  for (const [i, source] of result.sources.entries()) {
+  for (const source of result.sources) {
     const inferred = source.inferred
       ? ` (inferred from text, not a citation${source.originalReference ? `; original token: ${source.originalReference}` : ""})`
       : "";
+    const repeats = source.repeats !== undefined ? ` (same source as entry ${source.repeats})` : "";
     // Provider titles are untrusted page text: sanitise anything embedded as
     // link text so a title cannot close the entry's link and open another.
     const label = source.title ? safeLinkLabel(source.title, source.url) : source.url;
-    output += `${i + 1}. [${label}](${source.url})${inferred}\n`;
+    output += `${source.number}. [${label}](${source.url})${repeats}${inferred}\n`;
   }
-  if (removedCount > 0) {
+  if (unmatchedMarkers > 0) {
     output +=
-      `\n> Note: ${removedCount} citation marker${removedCount === 1 ? "" : "s"} in the answer ` +
-      `could not be matched to the Sources list and ` +
-      `${removedCount === 1 ? "was" : "were"} removed.\n`;
+      `\n> Note: ${unmatchedMarkers} citation marker${unmatchedMarkers === 1 ? "" : "s"} in the answer ` +
+      `${unmatchedMarkers === 1 ? "cites" : "cite"} a number with no entry in the list above.\n`;
   }
   return output;
 }

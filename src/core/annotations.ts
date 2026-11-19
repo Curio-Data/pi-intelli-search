@@ -39,9 +39,8 @@ export interface AnnotationSink {
   /** Provider-occurrence order (duplicates kept) from the winning citation
    *  channel of the last attempt, set by callLlm on success. The deduped
    *  `citations` array is the display/merge list; `citationOrder` is the
-   *  numbering base for bare `[n]` markers, which the provider indexes by
-   *  search-result id, not by deduplicated position (annotations.ts header
-   *  and citation-markers.ts). */
+   *  numbering base for the Sources list, which the provider indexes by
+   *  search-result id, not by deduplicated position (citation-numbering.ts). */
   citationOrder?: HarvestedCitation[];
   /** Occurrences from the stream-event channel, duplicates kept (internal). */
   streamOrder?: HarvestedCitation[];
@@ -297,24 +296,10 @@ export function mergeCitations(
   // Explicit links first, then harvested citations, then protocol-less domain
   // guesses from prose, so a guess never displaces a real citation from the
   // maxUrls slice. The inferred flag survives for fetch and result rendering.
-  // A link whose markdown label is only a number (search models write
-  // `[3](url)` inline citations) adopts the matching citation's title, so the
-  // rendered entry is not titled by a position-like number — but only when
-  // the provider actually supplied a title: a label the model chose (a
-  // version, "42") that no annotation corroborates is kept verbatim, because
-  // nothing shows it is a citation marker.
-  const citationTitle = new Map<string, string>();
-  for (const c of sink.citations) {
-    if (c.title && c.title.length > 0 && !citationTitle.has(c.url)) citationTitle.set(c.url, c.title);
-  }
-  for (const { url, title, inferred } of textUrls) {
-    if (inferred) continue;
-    if (/^\d{1,3}$/.test(title.trim())) {
-      add(url, citationTitle.get(url) ?? title);
-    } else {
-      add(url, title);
-    }
-  }
+  // Explicit links first, then harvested citations, then protocol-less domain
+  // guesses from prose, so a guess never displaces a real citation from the
+  // display list. The inferred flag survives for result rendering.
+  for (const { url, title, inferred } of textUrls) if (!inferred) add(url, title);
   for (const { url, title } of sink.citations) add(url, title && title.length > 0 ? title : url);
   for (const { url, title, inferred, originalReference } of textUrls) {
     if (inferred) add(url, title, inferred, originalReference);

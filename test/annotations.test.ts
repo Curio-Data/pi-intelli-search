@@ -37,7 +37,7 @@ describe("parseCitations", () => {
       "data: [DONE]\n\n",
     ].join("");
     // A repeated URL still occupies a provider id: the occurrence order is
-    // the numbering base for bare [n] markers (citation-markers.ts).
+    // the numbering base for the Sources list (citation-numbering.ts).
     assert.deepStrictEqual(parseCitations(body), [
       { url: "https://a.example/1", title: "A One" },
       { url: "https://a.example/1", title: "A One" },

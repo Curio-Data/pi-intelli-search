@@ -25,7 +25,6 @@ import {
   reasoningOnlyCompletion,
   redirectedToDifferentHost,
   safeLinkLabel,
-  safeNonNumericLinkLabel,
 } from "../src/util.js";
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 5));
@@ -1305,10 +1304,4 @@ describe("safeLinkLabel / safeNonNumericLinkLabel", () => {
     assert.equal(safeLinkLabel("bad]title", "https://[::1]/x"), "x");
   });
 
-  it("never returns a purely numeric label from safeNonNumericLinkLabel", () => {
-    assert.equal(safeNonNumericLinkLabel(undefined, "https://d.example/4"), "d.example");
-    assert.equal(safeNonNumericLinkLabel(undefined, "https://1.2.3.4/4"), "source");
-    assert.equal(safeNonNumericLinkLabel("4", "https://d.example/4"), "d.example");
-    assert.equal(safeNonNumericLinkLabel("Docs", "https://d.example/4"), "Docs");
-  });
 });
