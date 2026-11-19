@@ -7,6 +7,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  annotationSinkOrder,
+  dedupeCitations,
   settleAnnotationSink,
   createAnnotationSink,
   harvestChunkAnnotations,
@@ -27,15 +29,22 @@ function sseChunk(annotations: string): string {
 }
 
 describe("parseCitations", () => {
-  it("collects url_citations across SSE chunks and dedupes by url", () => {
+  it("returns every occurrence in provider order, duplicates kept", () => {
     const body = [
-      ": OPENROUTER PROCESSING comment line",
+      ": OPENROUTER PROCESSING comment line\n",
       sseChunk([ANN("https://a.example/1", "A One")]),
       sseChunk([ANN("https://a.example/1", "A One"), ANN("https://b.example/2")]),
       "data: [DONE]\n\n",
     ].join("");
-    const citations = parseCitations(body);
-    assert.deepStrictEqual(citations, [
+    // A repeated URL still occupies a provider id: the occurrence order is
+    // the numbering base for the Sources list (citation-numbering.ts).
+    assert.deepStrictEqual(parseCitations(body), [
+      { url: "https://a.example/1", title: "A One" },
+      { url: "https://a.example/1", title: "A One" },
+      { url: "https://b.example/2" },
+    ]);
+    // The deduplicated display view keeps each first occurrence.
+    assert.deepStrictEqual(dedupeCitations(parseCitations(body)), [
       { url: "https://a.example/1", title: "A One" },
       { url: "https://b.example/2" },
     ]);
@@ -79,7 +88,7 @@ describe("parseCitations", () => {
 });
 
 describe("harvestChunkAnnotations", () => {
-  it("fills the sink from a parsed stream chunk, deduping urls", () => {
+  it("fills the sink from parsed stream chunks, deduping urls and keeping order", () => {
     const sink = createAnnotationSink();
     const chunk = JSON.parse(
       `{"choices":[{"delta":{"annotations":[${ANN("https://a.example")},${ANN("https://b.example", "B")}]}}]}`,
@@ -87,6 +96,14 @@ describe("harvestChunkAnnotations", () => {
     harvestChunkAnnotations(chunk, sink);
     harvestChunkAnnotations(chunk, sink);
     assert.deepEqual(sink.citations, [
+      { url: "https://a.example" },
+      { url: "https://b.example", title: "B" },
+    ]);
+    // The stream channel's occurrence order keeps both deliveries, so a
+    // repeated provider id does not shift later positions.
+    assert.deepEqual(sink.streamOrder, [
+      { url: "https://a.example" },
+      { url: "https://b.example", title: "B" },
       { url: "https://a.example" },
       { url: "https://b.example", title: "B" },
     ]);
@@ -102,6 +119,32 @@ describe("harvestChunkAnnotations", () => {
     harvestChunkAnnotations({ choices: "nope" }, sink);
     harvestChunkAnnotations("data: not-json", sink);
     assert.deepEqual(sink.citations, [{ url: "https://c.example" }]);
+  });
+});
+
+describe("annotationSinkOrder", () => {
+  it("prefers the stream channel, else the tee channel, so dual delivery does not double-count ids", () => {
+    const stream = createAnnotationSink();
+    harvestChunkAnnotations(
+      { choices: [{ delta: { annotations: [{ type: "url_citation", url_citation: { url: "https://s.example/1" } }] } }] },
+      stream,
+    );
+    // Both channels delivered id 1 (the tee read the same body); the order
+    // counts the stream copy only.
+    stream.teeOrder = [{ url: "https://s.example/1" }, { url: "https://t.example/2" }];
+    assert.deepEqual(annotationSinkOrder(stream), [{ url: "https://s.example/1" }]);
+
+    const teeOnly = createAnnotationSink();
+    teeOnly.teeOrder = [
+      { url: "https://t.example/2" },
+      { url: "https://t.example/2" },
+      { url: "https://t.example/3" },
+    ];
+    assert.deepEqual(annotationSinkOrder(teeOnly), [
+      { url: "https://t.example/2" },
+      { url: "https://t.example/2" },
+      { url: "https://t.example/3" },
+    ]);
   });
 });
 

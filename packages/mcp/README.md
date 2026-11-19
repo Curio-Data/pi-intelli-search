@@ -286,7 +286,7 @@ Both packages expose these four operations. Start with `intelli_search` for fact
 
 | Tool               | Description                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
-| `intelli_search`   | Search the web and return a concise answer with a source list (top `defaultUrls`).                   |
+| `intelli_search`   | Search the web and return a concise answer with a source list numbered to the answer's citation markers where they can be matched (see [Source Harvesting from Citations](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#source-harvesting-from-citations)). |
 | `intelli_extract`  | Extract query-relevant content from a web page, preserving code and technical detail verbatim.      |
 | `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
 | `intelli_research` | Search, fetch, extract, collate and cache multi-page research in one call.                        |
@@ -527,7 +527,7 @@ Unspecified tuning comes from the canonical [shared defaults](https://github.com
 
 | Setting | Default and Effect | Accepted Values |
 |---|---|---|
-| `defaultUrls` | `10`: fallback page budget and one-shot search source-list cap | Integer from 1 to 100; must not exceed `maxUrls` |
+| `defaultUrls` | `10`: fallback page budget and one-shot search source-list size (a cited higher-numbered entry can exceed it) | Integer from 1 to 100; must not exceed `maxUrls` |
 | `maxUrls` | `20`: hard cap on research pages | Integer from 1 to 100 |
 | `extractMaxChars` | `400000`: per-page extraction input character limit (≈100,000 tokens) | Integer from 1 to 2,000,000 |
 | `fetchTimeoutMs` | `20000`: page-fetch timeout in milliseconds | Integer from 1 to 600,000 |

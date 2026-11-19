@@ -3,18 +3,20 @@
     "content": [
       {
         "type": "text",
-        "text": "## Search results for: \"Fixture research\"\n\nFixture answer.\n\n\n### Sources (2)\n\n1. [A](https://example.com/a)\n2. [B](https://example.org/b)\n"
+        "text": "## Search results for: \"Fixture research\"\n\nFixture answer.\n\n\n### Sources (2)\n\n1. [Duplicate A](https://example.com/a)\n2. [Annotation C](https://example.net/c)\n"
       }
     ],
     "details": {
       "sources": [
         {
+          "number": 1,
           "url": "https://example.com/a",
-          "title": "A"
+          "title": "Duplicate A"
         },
         {
-          "url": "https://example.org/b",
-          "title": "B"
+          "number": 2,
+          "url": "https://example.net/c",
+          "title": "Annotation C"
         }
       ],
       "query": "Fixture research"

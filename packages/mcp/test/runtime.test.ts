@@ -48,7 +48,7 @@ test("all shared operations run outside the host with standalone policy and cach
       },
     });
     const search = await runtime.execute("intelli_search", { query: "search" });
-    assert.deepEqual(search.details.sources, [{ url: page.url, title: "Docs" }]);
+    assert.deepEqual(search.details.sources, [{ url: page.url, title: "Docs", number: 1 }]);
     const extract = await runtime.execute("intelli_extract", {
       ...page,
       query: "extract",

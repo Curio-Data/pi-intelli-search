@@ -133,6 +133,52 @@ test("wire construction preserves system prompt, selected model, reasoning, tool
   }
 });
 
+test("returns citationOrder with duplicates kept while citations dedupe", async () => {
+  // R2 test gap 2: the occurrence order is the numbering base for bare
+  // markers; a repeated URL still occupies a provider id, so the wire
+  // adapter must not collapse it out of citationOrder.
+  const f = await fixture();
+  try {
+    const client = createOpenRouterClient(f.config, {
+      env: { FIXTURE_KEY: "fixture-secret" },
+      logger,
+      fetch: fakeTransport(() =>
+        json({
+          choices: [
+            {
+              message: {
+                content: "answer",
+                annotations: [
+                  { type: "url_citation", url_citation: { url: "https://a.example/1" } },
+                  { type: "url_citation", url_citation: { url: "https://b.example/2" } },
+                  { type: "url_citation", url_citation: { url: "https://b.example/2" } },
+                  { type: "url_citation", url_citation: { url: "https://c.example/3" } },
+                ],
+              },
+              finish_reason: "stop",
+            },
+          ],
+        }),
+      ),
+    });
+    await client.preflight([{ role: "search", config: f.config.settings.searchModel }]);
+    const result = await client.complete(request(f.config));
+    assert.deepEqual(result.citations, [
+      { url: "https://a.example/1" },
+      { url: "https://b.example/2" },
+      { url: "https://c.example/3" },
+    ]);
+    assert.deepEqual(result.citationOrder, [
+      { url: "https://a.example/1" },
+      { url: "https://b.example/2" },
+      { url: "https://b.example/2" },
+      { url: "https://c.example/3" },
+    ]);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("omits reasoning for models that do not advertise the capability", async () => {
   const f = await fixture();
   try {

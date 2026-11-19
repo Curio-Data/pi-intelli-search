@@ -143,6 +143,9 @@ export function createNativeModelClient(
       return {
         text,
         citations: annotations?.citations ?? [],
+        ...(annotations?.citationOrder && annotations.citationOrder.length > 0
+          ? { citationOrder: annotations.citationOrder }
+          : {}),
         ...(usage ? { usage } : {}),
         ...(routeProvider ? { routeProvider } : {}),
         ...(finishReason ? { finishReason } : {}),

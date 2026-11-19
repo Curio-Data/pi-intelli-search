@@ -16,6 +16,7 @@ import type { ModelConfig } from "./types.js";
 import type { ModelRetryConfig, ModelUsage } from "./core/contracts.js";
 import type { AnnotationSink } from "./annotations.js";
 import {
+  annotationSinkOrder,
   createAnnotationSink,
   harvestChunkAnnotations,
   settleAnnotationSink,
@@ -72,6 +73,10 @@ export const __harness: {
     context: Context,
     options?: SimpleStreamOptions,
   ) => Promise<AssistantMessage>;
+  /** Test seam: called with each per-attempt annotation sink when one is
+   *  created, so tests can prove the caller-visible citationOrder is a
+   *  copy rather than a live reference into the attempt's channel arrays. */
+  captureAnnotationSink?: (sink: AnnotationSink) => void;
 } = {
   registryStreamSimple: (registry, model, context, options) =>
     registry.streamSimple(model, context, options).result(),
@@ -204,6 +209,7 @@ export async function callLlm(
       // Each attempt has its own sink. Late reads from a failed attempt cannot
       // contaminate successful citations even when an old clone is still settling.
       const annotations = options?.annotations ? createAnnotationSink() : undefined;
+      if (annotations) __harness.captureAnnotationSink?.(annotations);
       let attemptRoute: string | undefined;
       if (options?.annotations) options.annotations.citations.length = 0;
       const annotationFetch = annotations
@@ -254,6 +260,11 @@ export async function callLlm(
       if (annotations) {
         await settleAnnotationSink(annotations);
         options!.annotations!.citations.push(...annotations.citations);
+        // Position-faithful order for the Sources-list numbering: one channel
+        // only, so dual-channel delivery does not double-count ids; copied,
+        // so a later push into the per-attempt sink cannot mutate the base
+        // the caller numbers its list by.
+        options!.annotations!.citationOrder = [...annotationSinkOrder(annotations)];
       }
       return { value };
     },

@@ -782,6 +782,25 @@ export function inferCurrentness(line: string): string {
 }
 
 /**
+ * Match a trailing "Sources" section: returns its start offset and text when
+ * the heading is anchored at the end of `text` and its body contains a URL.
+ * `stripTrailingSourcesSection()` cuts on this match; the Sources-list
+ * numbering reads the same section for the model's own numbered entries, so
+ * both share one recognition rule.
+ */
+export function matchTrailingSourcesSection(
+  text: string,
+): { start: number; section: string } | undefined {
+  const trimmedEnd = text.replace(/[ \t]+$/g, "");
+  const match = trimmedEnd.match(
+    /\n[ \t]*(?:#{1,6}[ \t]*)?\*{0,2}Sources\*{0,2}[ \t]*:?[ \t]*\n[\s\S]*$/i,
+  );
+  if (!match) return undefined;
+  if (!/https?:\/\/|\bwww\./.test(match[0])) return undefined;
+  return { start: match.index ?? 0, section: match[0] };
+}
+
+/**
  * Strip a trailing "Sources" section from a search model's response.
  *
  * The search prompt asks for one so the links land in the text where
@@ -799,12 +818,65 @@ export function inferCurrentness(line: string): string {
  * returns unchanged.
  */
 export function stripTrailingSourcesSection(text: string): string {
-  const trimmedEnd = text.replace(/[ \t]+$/g, "");
-  const match = trimmedEnd.match(
-    /\n[ \t]*(?:#{1,6}[ \t]*)?\*{0,2}Sources\*{0,2}[ \t]*:?[ \t]*\n[\s\S]*$/i,
-  );
+  const match = matchTrailingSourcesSection(text);
   if (!match) return text;
-  if (!/https?:\/\/|\bwww\./.test(match[0])) return text;
-  const cut = trimmedEnd.slice(0, match.index).replace(/\s+$/g, "");
+  const cut = text.slice(0, match.start).replace(/\s+$/g, "");
   return cut + "\n";
 }
+
+/**
+ * Derive a display title from a URL: the path's last segment minus its
+ * extension, or the hostname when the path is empty. Shared by bare-URL
+ * extraction (extractSourceUrls pass 2) and the Sources-list label
+ * sanitiser (safeLinkLabel).
+ */
+export function titleFromUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    return parts.length > 0 ? parts[parts.length - 1].replace(/\.[^.]+$/, "") : u.hostname;
+  } catch {
+    return url;
+  }
+}
+
+function hostOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A candidate link label is unsafe when it contains a bracket, newline or
+ *  tab, or ends in a backslash (which would escape the closing bracket of
+ *  `[label](url)` and break the link apart): embedded as link text it could
+ *  close the link early, open another one (`](https://phish)` inside a
+ *  provider-supplied title) or degrade the entry to literal text. A
+ *  whitespace-only label is as good as empty: it renders as a blank
+ *  link. */
+function labelCandidateOk(label: string): boolean {
+  return (
+    label.length > 0 &&
+    !/[\][\r\n\t]/.test(label) &&
+    !label.endsWith("\\") &&
+    label.trim().length > 0
+  );
+}
+
+/**
+ * A citation or link title safe to embed as Markdown link text: an unsafe or
+ * empty candidate falls back to the URL-derived title, then the hostname,
+ * then "source". The hostname itself is re-checked (an IPv6 literal carries
+ * brackets), so the returned label always satisfies labelCandidateOk.
+ * Numeric labels pass through unchanged; the caller decides whether a
+ * number is acceptable there.
+ */
+export function safeLinkLabel(title: string | undefined, url: string): string {
+  if (title !== undefined && labelCandidateOk(title)) return title;
+  const derived = titleFromUrl(url);
+  if (labelCandidateOk(derived)) return derived;
+  const host = hostOf(url);
+  return host !== undefined && labelCandidateOk(host) ? host : "source";
+}
+
