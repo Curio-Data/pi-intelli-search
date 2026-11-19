@@ -23,7 +23,7 @@ Use one query if it covers the task. For distinct research questions known at la
 
 ### Quick Factual Question
 
-Use `mcp__plugin_intelli-search_intelli_search__intelli_search` for a quick factual answer with sources but no deep analysis. The source list is capped at the top `defaultUrls` (default 10) entries; a search-grounded model can cite twenty or more. Read the summary; treat the source list as an index to follow up from, not as reading.
+Use `mcp__plugin_intelli-search_intelli_search__intelli_search` for a quick factual answer with sources but no deep analysis. The source list holds up to `defaultUrls` (default 10) entries, plus any entry the answer cites by a higher number; a search-grounded model can cite twenty or more. Read the summary; treat the source list as an index to follow up from, not as reading.
 
 ```
 mcp__plugin_intelli-search_intelli_search__intelli_search(query="TypeScript 5.8 release date")

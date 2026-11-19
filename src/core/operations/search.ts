@@ -63,7 +63,7 @@ export async function search(
     };
 
     return {
-      text: formatSearchResult(result, numbering.unmatchedMarkers),
+      text: formatSearchResult(result, numbering.unmatchedMarkers, numbering.ambiguousNumbering),
       outcome: "completed",
       details: { sources, query: params.query },
     };
@@ -73,7 +73,11 @@ export async function search(
   }
 }
 
-function formatSearchResult(result: SearchResult, unmatchedMarkers = 0): string {
+function formatSearchResult(
+  result: SearchResult,
+  unmatchedMarkers = 0,
+  ambiguousNumbering = false,
+): string {
   let output = `## Search results for: "${result.query}"\n\n`;
   output += result.summary + "\n\n";
   output += `### Sources (${result.sources.length})\n\n`;
@@ -91,6 +95,10 @@ function formatSearchResult(result: SearchResult, unmatchedMarkers = 0): string 
     output +=
       `\n> Note: ${unmatchedMarkers} citation marker${unmatchedMarkers === 1 ? "" : "s"} in the answer ` +
       `${unmatchedMarkers === 1 ? "cites" : "cite"} a number with no entry in the list above.\n`;
+  }
+  if (ambiguousNumbering) {
+    output +=
+      "\n> Note: the model's own source numbering was ambiguous, so markers may not match the list.\n";
   }
   return output;
 }

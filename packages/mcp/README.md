@@ -286,7 +286,7 @@ Both packages expose these four operations. Start with `intelli_search` for fact
 
 | Tool               | Description                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
-| `intelli_search`   | Search the web and return a concise answer with a source list (top `defaultUrls`).                   |
+| `intelli_search`   | Search the web and return a concise answer with a source list (up to `defaultUrls`, numbered to match the answer's citation markers).                   |
 | `intelli_extract`  | Extract query-relevant content from a web page, preserving code and technical detail verbatim.      |
 | `intelli_collate`  | Deduplicate and synthesise multiple extractions into a summary. Writes cache.                       |
 | `intelli_research` | Search, fetch, extract, collate and cache multi-page research in one call.                        |

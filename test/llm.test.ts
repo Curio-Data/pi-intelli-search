@@ -442,6 +442,11 @@ describe("callLlm registry-facade dispatch (single transport, Pi >= 0.86)", () =
       // R2 test gap 1: the occurrence order inherits the same per-attempt
       // isolation (it is set only from the successful attempt's sink).
       assert.deepEqual(sink.citationOrder, [{ url: "https://successful.example" }]);
+      // r5 review F6: the order must be a copy, not a live reference into
+      // the sink; a later push into the sink must not change it.
+      const orderAfterReturn = sink.citationOrder;
+      sink.streamOrder?.push({ url: "https://late.example" });
+      assert.deepEqual(orderAfterReturn, [{ url: "https://successful.example" }]);
       assert.equal(attempts, 2);
     } finally {
       releaseOld?.();

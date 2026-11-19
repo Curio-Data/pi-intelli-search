@@ -39,9 +39,13 @@ export interface NumberedSource extends MergedSource {
 
 export interface NumberingResult {
   entries: NumberedSource[];
-  /** Distinct bare markers in the answer whose number has no entry (beyond
-   *  the numbering base). Rendered as one short note; the markers stay. */
+  /** Distinct bare markers in the answer whose number has no entry in the
+   *  final list. Rendered as one short note; the markers stay. */
   unmatchedMarkers: number;
+  /** True when the model's own numbered Sources section was rejected or
+   *  partly rejected (a repeated or zero number): the list may not match
+   *  the markers, and the caller says so instead of mispairing silently. */
+  ambiguousNumbering: boolean;
 }
 
 /**
@@ -87,15 +91,27 @@ interface BaseEntry {
  * marked link and a bare URL in one section keep their relative order).
  * Only meaningful when the provider supplied no citations: it is then the
  * only record of what the model's markers number. Returns undefined when
- * the section is absent or its numbers are unusable (a duplicate number, or
- * a zero): the caller falls back to the historical display rather than
- * guessing which entry a duplicated number means.
+ * the section is absent. Numbers the section numbers unambiguously (each
+ * once, and not zero) become the base; a repeated or zero number is
+ * "blocked": its entries drop out of the base and the number is never
+ * handed to an answer-only link, because either choice would guess which
+ * entry a duplicated number means. The caller surfaces the ambiguity with
+ * a note instead of silently mispairing markers. Trailing punctuation is
+ * stripped from a bare URL only, matching extractSourceUrls pass 1 (marked
+ * links keep their exact URL). Numbers above 999 do not match the parser
+ * (\d{1,3}, the same boundary every marker scan uses); their entries drop
+ * to the answer-only list and their markers raise the unmatched note.
  */
-function numberedSectionBase(text: string): BaseEntry[] | undefined {
+interface SectionBase {
+  usable: BaseEntry[];
+  blocked: Set<number>;
+}
+
+function numberedSectionBase(text: string): SectionBase | undefined {
   const match = matchTrailingSourcesSection(text);
   if (!match) return undefined;
-  const out: BaseEntry[] = [];
-  const seen = new Set<number>();
+  const parsed: BaseEntry[] = [];
+  const blocked = new Set<number>();
   // One alternation, matched over the whole section: matchAll yields
   // matches in document order, so mixed formats keep the order the model
   // wrote them in.
@@ -103,12 +119,20 @@ function numberedSectionBase(text: string): BaseEntry[] | undefined {
     /^\s*(\d{1,3})[.)][ \t]*(?:\[([^\]]*)\]\((https?:\/\/(?:[^()\s]|\([^()\s]*\))+)\)|(https?:\/\/(?:[^()\s]|\([^()\s]*\))+))/gm;
   for (const m of match.section.matchAll(pattern)) {
     const number = Number(m[1]);
-    const url = (m[3] ?? m[4]).replace(/[.,;:!]+$/, "");
-    if (number < 1 || seen.has(number)) return undefined;
-    seen.add(number);
-    out.push({ number, url, ...(m[2] ? { title: m[2] } : {}) });
+    // Bare URLs only: a marked link's URL is exact (extractSourceUrls pass 1
+    // does not strip it), so stripping it would rename the source.
+    const url = m[3] ?? m[4].replace(/[.,;:!]+$/, "");
+    parsed.push({ number, url, ...(m[2] ? { title: m[2] } : {}) });
   }
-  return out.length > 0 ? out : undefined;
+  // A number the section used more than once, or zero, is ambiguous: no
+  // entry keeps it and no answer-only link may take it.
+  const counts = new Map<number, number>();
+  for (const e of parsed) counts.set(e.number, (counts.get(e.number) ?? 0) + 1);
+  const usable = parsed.filter((e) => e.number >= 1 && counts.get(e.number) === 1);
+  for (const [number, count] of counts) {
+    if (number < 1 || count > 1) blocked.add(number);
+  }
+  return { usable, blocked };
 }
 
 /**
@@ -138,25 +162,47 @@ export function numberSources(
   citationOrder: ReadonlyArray<HarvestedCitation> | undefined,
   cap: number,
 ): NumberingResult {
-  const used = usedNumbers(text);
+  // The reader sees the answer without the model's trailing Sources section
+  // (stripTrailingSourcesSection removes it downstream), so marker scans run
+  // on that span: a bracketed number written only inside the section must
+  // neither fire the note nor switch the display to the section base.
+  const sectionMatch = matchTrailingSourcesSection(text);
+  const answerText = sectionMatch ? text.slice(0, sectionMatch.start) : text;
+  const used = usedNumbers(answerText);
 
   // Base: provider occurrence order, else the model's numbered section.
   const order = citationOrder && citationOrder.length > 0 ? citationOrder : citations;
   let base: BaseEntry[] | undefined;
+  let blocked = new Set<number>();
+  let ambiguousNumbering = false;
   if (order.length > 0) {
     base = order.map((c, i) => ({
       number: i + 1,
       url: c.url,
       ...(c.title ? { title: c.title } : {}),
     }));
-  } else if (hasBareMarkers(text)) {
+  } else if (hasBareMarkers(answerText)) {
     const section = numberedSectionBase(text);
-    if (section) base = [...section].sort((a, b) => a.number - b.number);
+    if (section) {
+      base = [...section.usable].sort((a, b) => a.number - b.number);
+      blocked = section.blocked;
+      if (base.length === 0) {
+        // No number the section used unambiguously: nothing to honour.
+        // Keep the historical positional display, but say so: markers may
+        // not match the list, and never pair them silently.
+        return {
+          entries: numberPositional(merged.slice(0, cap)),
+          unmatchedMarkers: 0,
+          ambiguousNumbering: true,
+        };
+      }
+      ambiguousNumbering = blocked.size > 0;
+    }
   }
 
   if (!base) {
     // No numbering base: the historical display, numbered by position.
-    return { entries: numberPositional(merged.slice(0, cap)), unmatchedMarkers: 0 };
+    return { entries: numberPositional(merged.slice(0, cap)), unmatchedMarkers: 0, ambiguousNumbering: false };
   }
 
   // Titles: the provider's (or section's) title first, else the model's
@@ -187,14 +233,15 @@ export function numberSources(
 
   // Links only in the answer follow the numbered entries. Numbers continue
   // past the base's largest number and skip every number the answer already
-  // uses, so a stranded marker keeps its number and its note instead of
-  // being silently paired with an answer-only link.
+  // uses and every number the section left ambiguous, so a stranded marker
+  // keeps its number and its note instead of being silently paired with an
+  // answer-only link.
   const baseSize = base[base.length - 1].number;
   let next = baseSize + 1;
   for (const m of merged) {
     if (entries.length >= cap) break;
     if (baseUrls.has(m.url)) continue;
-    while (used.has(next)) next++;
+    while (used.has(next) || blocked.has(next)) next++;
     entries.push({
       number: next++,
       url: m.url,
@@ -206,10 +253,12 @@ export function numberSources(
     baseUrls.add(m.url);
   }
 
-  // Answer-only links never take a used number, so every bare marker beyond
-  // the base genuinely has no entry.
-  const unmatchedMarkers = [...bareMarkerNumbers(text)].filter((n) => n > baseSize).length;
-  return { entries, unmatchedMarkers };
+  // Answer-only links never take a used or blocked number, so a bare
+  // marker whose number has no entry in the FINAL list (beyond the base, or
+  // in an interior gap of the model's own numbering) is counted.
+  const present = new Set(entries.map((e) => e.number));
+  const unmatchedMarkers = [...bareMarkerNumbers(answerText)].filter((n) => !present.has(n)).length;
+  return { entries, unmatchedMarkers, ambiguousNumbering };
 }
 
 function numberPositional(sources: ReadonlyArray<MergedSource>): NumberedSource[] {
