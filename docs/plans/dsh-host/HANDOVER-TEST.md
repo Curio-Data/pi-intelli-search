@@ -1,10 +1,26 @@
-# Fresh Agent Handover Test
+# Fresh Agent Handover Tests
 
-## Result
+## Review-Fix Handover (21 November 2026)
+
+The handover for applying the Steps 1 to 4 review findings was tested by fresh `Pi` agents under herdr, each starting from `HANDOVER.md` with no prior context. Entry checks passed in every round; the gaps were in the handover's instructions.
+
+| Round | Agent and Model | Handover Commit | Verdict and Gaps | Fix |
+|---|---|---|---|---|
+| 1 | `dsh-handover`, `kimi-coding/k3.1-pro` | `b082263` | NOT READY: C4 needed an owner answer the handover said not to wait for; push and merge directions conflicted with the prohibitions | Owner decisions E1 and E2 and git authority recorded (`2901f6e`) |
+| 2 | `dsh-handover-r2`, `deepseek/deepseek-flash` (from its session file; the report's header names `zai/glm-5.3` in error) | `2901f6e` | NOT READY: three contradictions (an incomplete hand-edit list, a one-step edit rule, the stale proposal status read first), two guesses (no `rc.5` host recipe, an incomplete PLAN amendment) and five ambiguities | Handover rewritten: commit grouping, second-host recipe, full gate list, evidence destination, CI scope |
+| 3 | Pending | | | |
+
+Reports and briefs are in the main checkout's gitignored `evidence/agents/2026-11-20-dsh-reviews/` (`reports/dsh-handover.md`, `reports/dsh-handover-r2.md`).
+
+## Plan Handover (19 November 2026, Historical)
+
+This section records the test of the earlier handover, whose next step was PLAN.md Step 1. It does not describe the current handover.
+
+### Result
 
 On 19 November 2026 a fresh `Pi` agent on `zai/glm-5.3` (herdr agent `dsh-handover`, no prior conversation) started from `HANDOVER.md` and returned **VERDICT: READY**. It reconstructed the current state, the six fixed decisions, the next step and its acceptance criterion, the owner stop points and the prohibitions before inspecting the tree. It ran every entry check to the stated result, verified the plan's key claims against the worktree with `path:line`, and recorded no guess, stall or contradiction.
 
-## History
+### History
 
 | Stage | Agent and Model | Outcome |
 |---|---|---|
@@ -13,14 +29,14 @@ On 19 November 2026 a fresh `Pi` agent on `zai/glm-5.3` (herdr agent `dsh-handov
 | Revision | `dsh-explore` | All eleven findings resolved; Revision Log in `PLAN.md` |
 | Handover test | `dsh-handover`, `zai/glm-5.3` | READY |
 
-## Follow-Up Applied
+### Follow-Up Applied
 
 The test noted that `fnm use` needs `eval "$(fnm env)"` first in a non-interactive shell; `HANDOVER.md` now says so. Its other notes were limits of the read-only test (no network to re-check registry tags), which the plan already schedules at release time.
 
-## Evidence
+### Evidence
 
 Briefs and reports are in the main checkout's gitignored `evidence/agents/2026-11-18-next-activities/`: `reports/dsh-plan.md`, `dsh-plan-review.md`, `dsh-plan-r2.md` and `dsh-handover-test.md`, with their briefs under `briefs/`.
 
-## Scope of the Test
+### Scope of the Test
 
 The test ran on 19 November 2026 while the plan and handover lived in the main checkout's gitignored `.plan/dsh-host/`, before they moved onto this branch (`af3bec0`). Moving them changed the handover's links and its HEAD expectation; a later session-level handover test found that expectation stale, and it now names the newest commit that changed `docs/plans/dsh-host/` rather than a fixed hash. The test's other results are unaffected by the move.
