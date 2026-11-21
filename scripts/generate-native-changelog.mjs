@@ -271,7 +271,7 @@ export function validateGenerated(text, root = REPO_ROOT) {
     if (line.startsWith("## ") || REFERENCE_DEF.test(line.trim())) continue;
     for (const seg of splitInlineCode(line, { completeOnly: true })) {
       if (seg.code) continue;
-      const shortcut = seg.text.match(/\[(pi-|mcp-)?\d+\.\d+\.\d+\](?![:(\d])/);
+      const shortcut = seg.text.match(/\[(pi-|mcp-|dsh-)?\d+\.\d+\.\d+\](?![:(\d])/);
       if (shortcut && !REFERENCE_DEF.test(seg.text.trim())) {
         problems.push(`version shortcut reference not rewritten: ${shortcut[0]}`);
       }

@@ -206,6 +206,10 @@ describe("classifyHeading", () => {
     assert.strictEqual(classifyHeading("[0.12.6] - Prepared 2026-09-01, Not Published"), null);
   });
 
+  it("rejects a dsh shortcut in generated native prose", () => {
+    assert.throws(() => validateGenerated("## [1.0.0]\n\nSee [dsh-1.2.3].", ROOT), /version shortcut reference not rewritten/);
+  });
+
   it("accepts the host-documented unbracketed heading form", () => {
     assert.strictEqual(classifyHeading("0.18.0 - 2026-10-13")?.version, "0.18.0");
   });
