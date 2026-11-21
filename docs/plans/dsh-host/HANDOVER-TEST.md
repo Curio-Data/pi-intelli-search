@@ -8,9 +8,9 @@ The handover for applying the Steps 1 to 4 review findings was tested by fresh `
 |---|---|---|---|---|
 | 1 | `dsh-handover`, `kimi-coding/k3.1-pro` | `b082263` | NOT READY: C4 needed an owner answer the handover said not to wait for; push and merge directions conflicted with the prohibitions | Owner decisions E1 and E2 and git authority recorded (`2901f6e`) |
 | 2 | `dsh-handover-r2`, `deepseek/deepseek-flash` (from its session file; the report's header names `zai/glm-5.3` in error) | `2901f6e` | NOT READY: three contradictions (an incomplete hand-edit list, a one-step edit rule, the stale proposal status read first), two guesses (no `rc.5` host recipe, an incomplete PLAN amendment) and five ambiguities | Handover rewritten: commit grouping, second-host recipe, full gate list, evidence destination, CI scope |
-| 3 | Pending | | | |
+| 3 | `dsh-handover-r3`, `qwen-token-plan/qwen4-max-preview` (from its session file; fresh context, though the same model ran the code review) | `481de17` | READY: no contradiction, one minor guess (which commit takes the proposal) and three low ambiguities | All four applied directly without a further test, at the owner's request |
 
-Reports and briefs are in the main checkout's gitignored `evidence/agents/2026-11-20-dsh-reviews/` (`reports/dsh-handover.md`, `reports/dsh-handover-r2.md`).
+Reports and briefs are in the main checkout's gitignored `evidence/agents/2026-11-20-dsh-reviews/` (`reports/dsh-handover.md`, `reports/dsh-handover-r2.md`, `reports/dsh-handover-r3.md`).
 
 ## Plan Handover (19 November 2026, Historical)
 

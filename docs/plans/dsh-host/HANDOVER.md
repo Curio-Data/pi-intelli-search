@@ -16,7 +16,7 @@ On 2026-11-20 an independent code review and a fresh Opus 5.5 prose review of St
 
 The tested host is dsh `0.2.2-rc.1`. On 2026-11-20 the registry's `latest` and `next` were both `0.2.2-rc.5`. A pinned scratch host remains under the worktree's `.tmp/dsh/`, but scratch is disposable and is not evidence; recreate it with the plan's recipe if needed. **Observed:** Node.js 24.19.0 is available through `fnm`; scenario 18 also needs `pnpm` on `PATH` (an isolated 12.21.0 was installed under worktree scratch for Step 2).
 
-CI does not run on this branch: `.github/workflows/ci.yml` triggers on `main`, `plan/mcp-intelli-search` and `release/**` only. Local gates are the only check until a release branch exists, so do not wait for a CI result after pushing.
+CI does not run on this branch: `.github/workflows/ci.yml` runs on pushes to `main`, `plan/mcp-intelli-search` and `release/**`, and on pull requests to `main`; this session opens none. Local gates are the only check until a release branch exists, so do not wait for a CI result after pushing.
 
 Still outside this branch and owned by the coordinator: the `.plan/OPS.md` and `.plan/RELEASE-READINESS.md` text that PLAN.md Step 3 assigns, recorded ready to apply in the Step 3 section of `/srv/secure/repos/CURIO/pi-intelli-search/evidence/agents/2026-11-19-dsh-phase2/reports/dsh-phase2.md`. Do not apply it from the fix session. Step 5 has not started. On 21 November 2026 the owner authorised taking its two credentials from the `api_key` entries `deepseek` and `openrouter` in `~/.pi/agent/auth.json`; the coordinator wrote them as `DEEPSEEK_API_KEY` and `OPENROUTER_API_KEY` to the worktree's gitignored, mode-600 `.env`. That is the source PLAN.md Step 5 names. It copies two values, not the file, and neither is an OAuth login. Do not print, copy or cite the file, and do not use it before Step 5. The spend lands on the same accounts the operator's `pi` agents use.
 
@@ -26,9 +26,9 @@ Apply the review findings in [REVIEW-2026-11-20.md](REVIEW-2026-11-20.md), as a 
 
 1. Run the entry checks below. If `main` has moved, merge it into this branch first (merge, never rebase), then re-run them.
 2. Read both review reports in full, then apply every finding, following E1 and E2 where they govern. Where a report still says a point needs the owner (C4's "owner to confirm", and the merge-before-release note in the prose report's Beyond the Stated Task), REVIEW-2026-11-20.md has settled it: E2 answers C4, and the MCP pin guard plus PLAN.md Step 7 govern the merge. No owner question remains.
-3. Edit any hand-written file the findings need, including `test/`, `docs/`, `AGENTS.md`, the proposal and `PLAN.md`; then regenerate. Never hand-edit a generated file (`plugins/`, `pi.README.md`, `mcp.README.md`, `packages/mcp/README.md`, `PI_CHANGELOG.md`).
+3. Edit any hand-written file the findings need, including `test/`, `docs/`, `AGENTS.md`, the proposal and `PLAN.md`; then regenerate. Never hand-edit a generated file (`plugins/`, `pi.README.md`, `mcp.README.md`, `packages/mcp/README.md`, `PI_CHANGELOG.md`, and the contents block inside `README.md`, which `npm run generate:toc` rewrites).
 4. Run the gates listed under Gates for the Fix Session below, including scenario 18 on both hosts. Each run must pass, not skip.
-5. Commit by owning step: a file belongs to the PLAN.md step whose Files list names it. A finding that touches files of two steps becomes one commit per step. Plan, handover and review records go in their own commit. Update the Progress Checklist and this handover in the last commit, and push `explore/dsh-host` after each commit.
+5. Commit by owning step: a file belongs to the PLAN.md step whose Files list names it. A finding that touches files of two steps becomes one commit per step. Plan, proposal, handover and review records go in their own commit. Update the Progress Checklist and this handover in the last commit, and push `explore/dsh-host` after each commit.
 6. Report to the coordinator for re-review. A Builder does not spawn reviewers.
 
 Step 5 follows only after the re-reviews pass and the owner approves the live run.
