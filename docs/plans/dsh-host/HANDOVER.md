@@ -1,14 +1,22 @@
 # DeepSeek Harness Phase 2 Handover
 
+## Resume Here: Re-Review
+
+The review corrections are on `explore/dsh-host` in `abf4e3a` (bundle), `f7ceb86` (scenario 18), `19fea93` (changelog gate) and `4435194` (documentation). Compare against `d4cad7b` for the corrections. The coordinator's next action is an independent code re-review and a fresh Claude Code Opus 5.5 prose re-review, including generated text. Resolve any findings before requesting owner approval for Step 5. The main-checkout `.plan/` edits remain the coordinator's responsibility.
+
+Scenario 18 passed on Linux with dsh `0.2.2-rc.1` and `0.2.2-rc.5`, Node `v24.19.0` and pnpm `12.21.0`. The logs and SHA-256 checksums are in the main checkout under `evidence/2026-11-21-dsh-host/scenario-18/{rc.1,rc.5}/`. These runs used local bundles and dummy credential delivery, not a registry installation or credentialed research. Gate results are in `evidence/2026-11-21-dsh-host/review-fix-gates.txt` in the same checkout.
+
+The sections below preserve the original fix-session brief and its entry baseline, not instructions to reapply the fixes.
+
 ## Read First
 
-1. Read the proposal's [Resume Here](../../proposals/dsh-host-support-proposal.md#resume-here) on this branch (`docs/proposals/dsh-host-support-proposal.md`), including its corrections and Owner Decisions D1 to D6. The main checkout's copy predates Phase 1 and has no Resume Here; do not use it as the governing text. Its Status line and Next Steps describe the state at the end of Phase 1; Steps 1 to 4 have since landed (see Current State), and finding C7 corrects them. Where they disagree with Current State, Current State governs.
+1. Read the proposal's [Resume Here](../../proposals/dsh-host-support-proposal.md#resume-here) on this branch (`docs/proposals/dsh-host-support-proposal.md`), including its corrections and Owner Decisions D1 to D6. The main checkout's copy predates Phase 1 and has no Resume Here; do not use it as the governing text. Where they disagree with Current State, Current State governs.
 2. Read the complete [Phase 2 plan](PLAN.md).
 3. Read Phase 1 evidence at `/srv/secure/repos/CURIO/pi-intelli-search/evidence/agents/2026-11-18-next-activities/reports/dsh-explore.md`.
 4. Read [REVIEW-2026-11-20.md](REVIEW-2026-11-20.md) and the two review reports it names.
 5. Before release work, read `/srv/secure/repos/CURIO/pi-intelli-search/.plan/OPS.md` and `/srv/secure/repos/CURIO/pi-intelli-search/.plan/RELEASE-READINESS.md`.
 
-## Current State
+## State Before the Fix Session
 
 **Observed on 2026-11-21:** the implementation worktree is `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/explore-dsh-host`, branch `explore/dsh-host`. Its HEAD equals `origin/explore/dsh-host`; every commit is pushed. PLAN.md Steps 1 to 4 are committed (`b2d060b`, `78f34ec`, `4b98798`, `762afbc`; see its Progress Checklist), built by the herdr agent `dsh-phase2` on `zai/glm-5.3` (provenance from its session file; its report is the gitignored `/srv/secure/repos/CURIO/pi-intelli-search/evidence/agents/2026-11-19-dsh-phase2/reports/dsh-phase2.md`). `HANDOVER-TEST.md` records the plan's author and the handover tests, not the builder. Commit `0529c95` is the Phase 1 adapter spike. `test:all` gives 1014 native and 162 standalone tests, matching the README badge (1176). The branch last merged `main` at `0bccc6a`.
 
@@ -20,7 +28,7 @@ CI does not run on this branch: `.github/workflows/ci.yml` runs on pushes to `ma
 
 Still outside this branch and owned by the coordinator: the `.plan/OPS.md` and `.plan/RELEASE-READINESS.md` text that PLAN.md Step 3 assigns, recorded ready to apply in the Step 3 section of `/srv/secure/repos/CURIO/pi-intelli-search/evidence/agents/2026-11-19-dsh-phase2/reports/dsh-phase2.md`. Do not apply it from the fix session. Step 5 has not started. On 21 November 2026 the owner authorised taking its two credentials from the `api_key` entries `deepseek` and `openrouter` in `~/.pi/agent/auth.json`; the coordinator wrote them as `DEEPSEEK_API_KEY` and `OPENROUTER_API_KEY` to the worktree's gitignored, mode-600 `.env`. That is the source PLAN.md Step 5 names. It copies two values, not the file, and neither is an OAuth login. Do not print, copy or cite the file, and do not use it before Step 5. The spend lands on the same accounts the operator's `pi` agents use.
 
-## Next Step
+## Original Fix Assignment
 
 Apply the review findings in [REVIEW-2026-11-20.md](REVIEW-2026-11-20.md), as a new session:
 

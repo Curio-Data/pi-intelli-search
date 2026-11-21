@@ -1,12 +1,12 @@
 # DeepSeek Harness Host Support
 
-Status (19 November 2026): Phase 1 (host verification without credentials, and an adapter spike) is complete on branch `explore/dsh-host`. The owner adopted all six Phase 1 recommendations on 19 November 2026 ([Resume Here](#resume-here)); Phase 2 (the bundle) follows the implementation plan named there. The proposal below was recorded on 18 November 2026 by an external contributor; where Resume Here corrects it, Resume Here governs. This brief specifies the smallest change that makes `intelli-search` a first-class host plugin for _DeepSeek Harness_ (`dsh`), reusing the existing standalone MCP server and the existing generator.
+Status (21 November 2026): Phase 1 and Phase 2 Steps 1 to 4 are complete on `explore/dsh-host`. Credentialed verification and release remain separate owner-approved steps. See the [handover](../plans/dsh-host/HANDOVER.md) for the next action. The proposal below was recorded on 18 November 2026 by an external contributor; where Resume Here corrects it, Resume Here governs. This brief specifies the smallest change that makes `intelli-search` a first-class host plugin for _DeepSeek Harness_ (`dsh`), reusing the existing standalone MCP server and the existing generator.
 
 Read with `docs/COMPATIBILITY.md` (evidence classes), `scripts/README.md` (the bundle generator) and `docs/proposals/BATCH-RESEARCH.md` (the proposal format this document follows).
 
 ## Resume Here
 
-This section is the starting point for any session that continues the work. It records what Phase 1 established, what is committed, and the decisions the owner still has to make. The full Phase 1 report, with commands and sources, is kept as gitignored evidence in the main checkout: `evidence/agents/2026-11-18-next-activities/reports/dsh-explore.md`.
+This section is the starting point for any session that continues the work. It records what Phase 1 established, what is committed, and the decisions the owner adopted. The full Phase 1 report, with commands and sources, is kept as gitignored evidence in the main checkout: `evidence/agents/2026-11-18-next-activities/reports/dsh-explore.md`.
 
 ### Phase 1 Results (18 November 2026)
 
@@ -14,7 +14,7 @@ The checks ran against `dsh` `0.2.2-rc.1`, the registry `latest` on that date; `
 
 - **Tools and skill register.** The bridge started the server and all four tools registered as `mcp__intelli__intelli_*`. A scratch registrar stripped the skill's frontmatter, because runtime registration does not parse it, and registered the body through `ctx.skills.register()`; the host loaded it. The tools appear shortly after start, not at once, so a test must poll for them.
 - **No model turn was run.** The host needs a DeepSeek credential for its own model, so no `intelli_search` or `intelli_research` call went through `dsh`. Model-visible tool use, credential delivery to the server, answer quality, cache placement through a real session and unattended approval remain unverified.
-- **Adapter spike committed.** Commit `0529c95` adds `--host dsh` to `packages/mcp/src/cli.ts`, generalises `defaultCodexConfig` to `defaultHostConfig` with unchanged _Codex_ output, and adds unit tests. Build and the full deterministic suite pass. The scratch bridge row, switched to `--host dsh` without path arguments, started the committed server and registered the same four tools. No bundle, guidance or documentation outside this file has been changed.
+- **Adapter spike committed.** Commit `0529c95` adds `--host dsh` to `packages/mcp/src/cli.ts`, generalises `defaultCodexConfig` to `defaultHostConfig` with unchanged _Codex_ output, and adds unit tests. Build and the full deterministic suite pass. The scratch bridge row, switched to `--host dsh` without path arguments, started the committed server and registered the same four tools. At the end of Phase 1, no bundle, guidance or documentation outside this file had changed.
 
 Phase 1 found these statements wrong or incomplete for `0.2.2-rc.1`:
 
@@ -46,9 +46,9 @@ The committed spike already implements the recommended options of D2 and D4. Cho
 ### Next Steps
 
 1. Done: the owner adopted all six recommendations on 19 November 2026. The Phase 2 implementation plan and its handover note are tracked on this branch under `docs/plans/dsh-host/`; start at `docs/plans/dsh-host/HANDOVER.md`.
-2. Phase 2 builds the bundle on this branch from sections 8 to 11 (section 7's adapter change is the committed spike), amended by the corrections above: generator branch and generated `plugins/dsh`, `guidance/setup-dsh.md`, the registrar, and the deterministic tests (generator contract, registrar contract with a mock host, `npm pack` contents).
-3. A credential-free `test/e2e/18_dsh_plugin.sh`, modelled on scenarios 12 and 14: an isolated `dsh` installation, the local-tarball bundle, polling for the four tool names, delivery of a dummy credential, the workspace guard, removal and reinstallation. It needs Node.js 24.9 or later, so it stays out of the existing Node.js 22 continuous integration (CI) job.
-4. If D5 is "reproduce", a separate opt-in credentialed run first. Then the compatibility row in section 12, at the evidence class D5 sets, the release change in section 10, and the README, changelog and other documentation changes in section 11.
+2. Done: `b2d060b` generated the bundle, registered the skill and added deterministic tests for the generator, registrar and package contents.
+3. Done: `78f34ec` added credential-free scenario 18, including tool and skill discovery, dummy credential delivery, workspace guards, removal and reinstallation on the isolated host.
+4. Release plumbing (`4b98798`) and documentation (`762afbc`) landed before credentialed testing. Under D5 the compatibility row waits for a separate authorised run; neither release nor real research is established by scenario 18.
 
 ## 1. Summary
 

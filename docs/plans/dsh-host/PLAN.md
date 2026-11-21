@@ -23,7 +23,7 @@ Do not:
 - create a native dsh extension, a second pipeline, a dsh search-provider replacement, a settings card or a separate repository;
 - change `src/`, the native extension, cache format or shared engine for this feature;
 - claim an official community catalogue, YAML pull-request submission or mandatory `dsh-plugin` topic;
-- widen the tested host range without evidence, or claim Windows verification;
+- claim verification on an untested version or on Windows. E1 supersedes the initial exact-pin policy: the declared range is broader than the tested hosts;
 - add dsh execution to the existing Node.js 22 CI job;
 - publish, create a GitHub Release, approve an npm staging, merge to `main` or use credentials without the explicit owner stop points below.
 
@@ -167,7 +167,7 @@ Follow proposal §§ 8 and 9 as corrected by Resume Here and D1 to D6.
    - exports for `.`, `./locale/*.json` and `./icon`;
    - a `files` allowlist covering every generated payload and `LICENSE`;
    - in tarball mode only, `vendor/**` in that allowlist so a local dsh package installation retains the vendored server; registry mode must omit it;
-   - `engines.node: >=24.9.0` and initially exact `engines.dsh: 0.2.2-rc.1`, because no broader range has evidence. Widen it only after a recorded check.
+   - `engines.node: >=24.9.0` and `engines.dsh: >=0.2.2-rc.1 <0.3.0` under E1, replacing the initial exact `0.2.2-rc.1` declaration. Record exact versions tested separately.
 6. Emit `cordis.patch.yml` with two inserted rows:
    - `mcp-intelli-search` using `@deepseek-ai/dsh-mcp-client`, `serverName: intelli`, stdio, the selected launcher, `OPENROUTER_API_KEY: !!js process.env.OPENROUTER_API_KEY || ''`, `toolCallTimeoutMs: 600000` and `failOnStartupError: false`;
    - `intelli-search-skill` using `@curio-data/dsh-intelli-search`.
@@ -182,7 +182,7 @@ Extend `test/plugin-bundles.test.ts` to assert:
 
 - the exact three-host generated file set, including no stray dsh files;
 - exact registry and tarball dsh launchers, exact MCP pin and derived vendor path;
-- dsh manifest fields, version, exports, files, licence, Node floor and exact tested dsh version, including `vendor/**` only in tarball mode;
+- dsh manifest fields, version, exports, files, licence, Node floor and declared dsh range (E1 replaces the exact pin; assert the tested reference version separately), including `vendor/**` only in tarball mode;
 - both patch rows and every required bridge value, including the literal environment expression;
 - all four dsh-qualified skill tool names and no unreplaced tokens;
 - no credentials, checkout paths or `../../src` in generated output;
@@ -405,7 +405,7 @@ Do not copy `~/.dsh`, `.credentials.yaml`, `~/.pi/agent/auth.json`, any OAuth fi
 5. Repeat a quick search with empty environment and the configured credential file to reproduce the contributor's fallback claim. Record provider status and outcome without retaining the key.
 6. Record whether the headless run needed approval. Do not infer unattended approval from a completed call without recording the profile's permission mode and approval policy.
 7. Retain sanitised event summaries, completed sidecars, version metadata, commands and SHA-256 checksums in the dated evidence folder. Inspect every artefact for credentials before promotion. Do not cite scratch.
-8. Only after these observations, add `### DeepSeek Harness Evidence and Limits` and a Host Plugins row in `docs/COMPATIBILITY.md`. Separate credential-free local-tarball, credentialed local-tarball, registry-pin and first-run latency evidence. State Linux-only scope and exact host `0.2.2-rc.1`; do not write a support range. Record the `intelli` tool-naming difference and skill-precedence limitation.
+8. Only after these observations, add `### DeepSeek Harness Evidence and Limits` and a Host Plugins row in `docs/COMPATIBILITY.md`. Separate credential-free local-tarball, credentialed local-tarball, registry-pin and first-run latency evidence. State Linux-only scope and the exact host for each observation. E1 replaces the original exact-pin policy: distinguish the declared range from the hosts verified at each evidence class. Record the `intelli` tool-naming difference and skill-precedence limitation.
 9. Update `scripts/README.md` with the now-final scenario 19 purpose, required owner inputs, real inference and spend, isolation and evidence destination. Do not leave it marked as planned.
 
 ### Gates and Acceptance
@@ -477,7 +477,7 @@ Do not open a YAML catalogue pull request, require a GitHub topic, or use `insta
 |---|---|
 | Call timeout confused with startup timeout | Set `toolCallTimeoutMs: 600000`; document the separate 60-second startup/discovery default; measure first-run registry startup in Step 7 (Steps 1, 4 and 7). |
 | `failOnStartupError: false` hides a failed server | Scenario 18 fails unless exact tools and skill appear; docs distinguish a running host from a connected server (Steps 1, 2 and 4). |
-| Preview host drift | Pin evidence and initial `engines.dsh` to `0.2.2-rc.1`; recheck tags before release; never infer rc.5 support (Steps 1, 6 and 7). |
+| Preview host drift | E1 replaces the initial rc.1-only policy: retain credential-free results on rc.1 and rc.5, distinguish tested versions from the declared range and recheck tags before release (Steps 1, 6 and 7). |
 | Skill precedence misstated | Test runtime registration; document project-only override precedence and no user-level override promise (Steps 1 and 4). |
 | Node floor breaks CI | Keep dsh execution out of Node.js 22 CI; select Node `>=24.9.0` for host tests (environment and Step 2). |
 | First-run `npx` exceeds startup deadline | Local-tarball evidence makes no registry-latency claim; measure clean-cache registry installation in Step 7. |
@@ -515,6 +515,8 @@ Update this checklist after each step with the commit hash and evidence path. Do
 - [x] Step 2 complete: scenario 18 executed successfully, not skipped. Commit `78f34ec`; exit `0`, 40 checks on dsh 0.2.2-rc.1 / Node v24.19.0 / pnpm 12.21.0.
 - [x] Step 3 complete for the repository: third-package workflow and CI guard in commit `4b98798`. The OPS.md and RELEASE-READINESS.md updates the plan assigns to this step live under the main checkout's `.plan/`, which the phase-2 brief makes read-only for the builder; the coordinator applies them from the exact content recorded in the report's Step 3 section.
 - [x] Step 4 complete: documentation regenerated in commit `762afbc`; fresh Opus 5.5 prose review assigned to the coordinator, changed prose files listed in the report.
+- [x] Steps 1 to 4 review fixes applied: `abf4e3a`, `f7ceb86`, `19fea93`, `4435194` respectively. Both credential-free host runs passed; retained logs and hashes: main checkout `evidence/2026-11-21-dsh-host/scenario-18/`. See `HANDOVER.md` for the re-review assignment.
+- [ ] Independent code and fresh Opus prose re-reviews accepted.
 - [ ] Step 5 complete: owner-authorised credentialed evidence reproduced and compatibility recorded.
 - [ ] Step 6 complete: integrated reviews and release-candidate gates passed.
 - [ ] Step 7 complete: owner-approved publication, registry verification and merge finished.
