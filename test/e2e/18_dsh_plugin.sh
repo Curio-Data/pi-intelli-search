@@ -96,10 +96,11 @@ export XDG_DATA_HOME="$E2E_ROOT/xdg-data"
 export npm_config_cache="$E2E_ROOT/npm-cache"
 mkdir -p "$HOME" "$DSH_HOME" "$DSH_AGENTS_HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$npm_config_cache"
 
-# The headless host must not reach a model: unset every inherited provider
-# credential this scenario knows about before any host start. The expected
-# missing-key failure occurs after the inspection probe.
-unset DEEPSEEK_API_KEY OPENROUTER_API_KEY || true
+# Drop inherited credential-shaped variables by name without reading their
+# values. Each headless process must report a final missing-credential error.
+while IFS= read -r var; do
+  case "${var^^}" in *API_KEY*|*TOKEN*|*SECRET*|*PASSWORD*) unset "$var" ;; esac
+done < <(compgen -e)
 
 for isolated_var in HOME DSH_HOME DSH_AGENTS_HOME XDG_CONFIG_HOME XDG_DATA_HOME npm_config_cache; do
   case "${!isolated_var}" in
@@ -147,9 +148,16 @@ USER_PATCH="$DSH_HOME/profiles/$PROFILE_NAME/cordis.patch.yml"
 # An invented value, never a real credential; never printed.
 DUMMY_VALUE="intelli-e2e-invented-dummy-key"
 
+# Keep every dsh invocation outside the checkout's launch-directory .env.
+cd "$WORKSPACE"
 DSH_VERSION="$("$DSH_BIN" --version)"
 echo "🔧 dsh $DSH_VERSION, node $(node --version), pnpm $(pnpm --version), npm $(npm --version)"
-check "dsh host binary runs" "$DSH_BIN" --version
+DSH_RANGE="$(jq -er '.engines.dsh' "$PROJECT_DIR/plugins/dsh/package.json")"
+if ! "$PROJECT_DIR/node_modules/.bin/semver" --include-prerelease -r "$DSH_RANGE" "$DSH_VERSION" >/dev/null; then
+  echo "❌ dsh $DSH_VERSION is outside declared range $DSH_RANGE"
+  exit 1
+fi
+ok "dsh $DSH_VERSION satisfies $DSH_RANGE"
 
 # ── Step 1: build, pack and generate the local-tarball bundle ────
 
@@ -262,11 +270,16 @@ else
 fi
 
 run_headless() { # run_headless <label> <inspect-out> <expect-tools yes|no>
-  local label="$1" out="$2" expect="$3"
+  local label="$1" out="$2" expect="$3" rc=0
   DSH_INSPECT_OUT="$out" DSH_INSPECT_EXPECT_TOOLS="$expect" \
     timeout --foreground 150s "$DSH_BIN" --profile "$PROFILE_NAME" --json \
     'Reply without using any tools.' < /dev/null \
-    > /dev/null 2> "$E2E_ROOT/headless-$label.err" || true
+    > "$E2E_ROOT/headless-$label.jsonl" 2> "$E2E_ROOT/headless-$label.err" || rc=$?
+  if [[ $rc != 1 ]] || ! jq -es 'last | .type == "final" and .reason.kind == "error" and .reason.error.code == "MISSING_CREDENTIAL"' "$E2E_ROOT/headless-$label.jsonl" >/dev/null; then
+    echo "❌ $label: expected final MISSING_CREDENTIAL and exit 1, observed exit $rc"
+    exit 1
+  fi
+  ok "$label: model turn stopped with MISSING_CREDENTIAL"
   test -s "$out"
 }
 
@@ -293,6 +306,10 @@ for tool in intelli_search intelli_extract intelli_collate intelli_research; do
     bad "tool missing: mcp__intelli__$tool"
   fi
 done
+SKILL_DIR="$(realpath "$DSH_HOME/profiles/$PROFILE_NAME/node_modules/@curio-data/dsh-intelli-search/skills/intelli-search")"
+# shellcheck disable=SC2016 # $dir is a jq variable.
+check "catalogued and loaded skill resolve inside the installed bundle" jq -e --arg dir "$SKILL_DIR" \
+  'all(.skill, .skillLoaded; .path == ($dir + "/SKILL.md") and .resourceBase == {kind:"directory", path:$dir})' "$INSPECT_NOKEY"
 if [[ "$(jq -r '.skill.source' "$INSPECT_NOKEY")" == "bundled" ]]; then
   ok "skill catalogue entry carries source bundled"
 else
