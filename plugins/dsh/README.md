@@ -4,11 +4,9 @@
 
 The bundle is pure configuration: one inserted bridge row starts the pinned standalone MCP server through `npx` with `--host dsh`, and one registrar registers the shared `intelli-search` skill with the harness. Neither carries pipeline code, so the bundle always mirrors the exact published MCP package version.
 
-This README is generated from [`scripts/templates/dsh/README.md`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/templates/dsh/README.md) by [`scripts/generate-plugin-bundles.mjs`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/generate-plugin-bundles.mjs); the generated copy is authoritative. Do not edit it directly.
-
 ## Requirements
 
-- `dsh` (tested against `0.2.2-rc.1`; the pinned version in `engines.dsh` is a tested fact, not a support range)
+- `dsh` within the declared `engines.dsh` range `>=0.2.2-rc.1 <0.3.0` (see Evidence and Limits below)
 - [_Node.js_](https://nodejs.org/) 24.9 or later on `PATH` (the harness's own floor; the first start downloads the MCP package through `npx`)
 - An [_OpenRouter_](https://openrouter.ai) API key for the search, extract and collate stages
 
@@ -18,24 +16,25 @@ This README is generated from [`scripts/templates/dsh/README.md`](https://github
 dsh plugin --profile <name> add @curio-data/dsh-intelli-search
 ```
 
-Restart the harness after installation; bundle rows are composed at launch.
+Start the same profile from the project directory with `dsh --profile <name>`.
 
 ## Credentials
 
-The server receives its key through the harness environment layer. Precedence: an `OPENROUTER_API_KEY` exported in the launching environment, then a `.env` file in the launch directory, then `$DSH_HOME/.env`. Accepted values are copied into the environment once at launch, so adding a key requires one harness restart:
+The server receives its key through the harness environment layer. Precedence: an `OPENROUTER_API_KEY` exported in the launching environment, then a `.env` file in the launch directory, then `$DSH_HOME/.env`. Accepted values are copied into the environment once at launch, so restart that profile after changing a key. To use the key across launching shells, prepare the harness-home file before entering the key:
 
 ```bash
-printf 'OPENROUTER_API_KEY=%s\n' "$OPENROUTER_API_KEY" >> "${DSH_HOME:-$HOME/.dsh}/.env"
-chmod 600 "${DSH_HOME:-$HOME/.dsh}/.env"
+(umask 077; touch "${DSH_HOME:-$HOME/.dsh}/.env") && chmod 600 "${DSH_HOME:-$HOME/.dsh}/.env"
 ```
+
+After the command succeeds, edit that file privately. Put `OPENROUTER_API_KEY=<key>` on its own line, replacing any previous definition.
 
 The bridge row forwards `process.env.OPENROUTER_API_KEY` to the server; an unset value stays unset and does not block startup. A key stored through the harness model-settings page does not provision this server: that credential is resolved through a service a child process cannot read.
 
-Alternatively, `npx -y --package @curio-data/mcp-intelli-search mcp-intelli-search setup` reads a key from standard input and stores it in a user-only credential file beside the per-user configuration at `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search` (shared with the Codex host mode). A stored file is reread on each call; environment credentials are captured at startup.
+Alternatively, `npx -y --package @curio-data/mcp-intelli-search mcp-intelli-search setup` reads a key from standard input and stores it in a user-only credential file beside the per-user configuration at `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search` (shared with the Codex host mode). A stored file is reread on each call; a nonempty environment key takes precedence. Remove it from all three layers and restart to use the file.
 
 ## Workspace and Cache
 
-The server uses the harness working directory as its workspace and writes the research cache (`.search/` by default) below it. Start the harness from the project directory: a directory change later in the session does not move the cache, and the bridge row's `cwd` field is available for a fixed project root. A home or filesystem-root working directory is rejected with an actionable `WORKSPACE` error instead of creating an accidental shared cache.
+The server uses the harness working directory as its workspace and writes the research cache (`.search/` by default) below it. Start the harness from the project directory: a directory change later in the session does not move the cache. For a fixed project root, override `mcp-intelli-search` in the profile's `cordis.patch.yml` and set `cwd`. The patch replaces the whole configuration: copy the bundle row's other fields and update its pinned package version after each bundle upgrade. A home or filesystem-root working directory is rejected with an actionable `WORKSPACE` error instead of creating an accidental shared cache.
 
 ## Tools and Timeouts
 
@@ -62,12 +61,12 @@ After restarting with a key in place, request a quick search with `mcp__intelli_
 dsh plugin --profile <name> remove @curio-data/dsh-intelli-search
 ```
 
-Restart the harness, then confirm with `dsh --profile <name> --dump-config` that the two bundle rows are gone.
+Restart the same profile with `dsh --profile <name>`, then confirm with `dsh --profile <name> --dump-config` that the two bundle rows are gone.
 
 ## Evidence and Limits
 
-Installation, exact tool registration, skill loading, workspace guards, credential-free startup and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` on Linux without provider calls. See the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#host-plugins) for the current evidence classes. This package carries no `NOTICE` because the runtime dependencies it lists are not bundled here.
+Installation, exact tool registration, skill loading, workspace guards, credential-free startup and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` and `0.2.2-rc.5` on Linux with the local bundle and no provider calls. Other versions in the declared range and credentialed research are unverified.
 
 ## Licence
 
-Apache-2.0. Copyright 2026 Ashraf Miah, Curio Data Pro Ltd. See `LICENSE`.
+Apache-2.0. Copyright 2026 Ashraf Miah, Curio Data Pro Ltd. See `LICENSE`. This package bundles no third-party code, so it carries no `NOTICE`. The MCP server it launches through `npx`, `@curio-data/mcp-intelli-search`, ships its own `LICENSE` and `NOTICE`.

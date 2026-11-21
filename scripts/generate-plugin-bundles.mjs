@@ -56,7 +56,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -73,9 +73,8 @@ const MARKETPLACE_NAME = "curio-data-plugins";
 const VENDOR_CLI_SUFFIX =
   "vendor/node_modules/@curio-data/mcp-intelli-search/dist/cli.js";
 
-// Exact tested dsh version for engines.dsh. Phase 1 evidence covers only
-// 0.2.2-rc.1 on Linux; widen only after a recorded check on more versions.
-const DSH_TESTED_VERSION = "0.2.2-rc.1";
+// Phase 1 reference host; engines.dsh declares compatibility, not coverage.
+export const DSH_TESTED_VERSION = "0.2.2-rc.1";
 
 const DESCRIPTION =
   "Research the web with a five-stage pipeline (search, fetch, extract, " +
@@ -314,7 +313,7 @@ export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT)
   const dshPluginManifest = {
     name: "@curio-data/dsh-intelli-search",
     version: mcpPkg.version,
-    description: DESCRIPTION,
+    description: "Web research over MCP: search, fetch, extract, collate and cache suggestions.",
     type: "module",
     license: "Apache-2.0",
     author: {
@@ -330,6 +329,7 @@ export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT)
     keywords: ["research", "web-search", "documentation", "mcp"],
     exports: {
       ".": "./index.js",
+      "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json",
       "./icon": "./icon.svg",
     },
@@ -347,7 +347,7 @@ export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT)
     ],
     engines: {
       node: ">=24.9.0",
-      dsh: DSH_TESTED_VERSION,
+      dsh: ">=0.2.2-rc.1 <0.3.0",
     },
     dsh: {
       manifestVersion: 1,
@@ -535,6 +535,10 @@ function parseArgs(argv) {
   }
   if (args.check && (args.mode !== "registry" || args.output)) {
     throw new Error("--check only supports the committed registry tree");
+  }
+  if (args.mode === "tarball") {
+    args.output = resolve(args.output);
+    if (args.codexVendorDir) args.codexVendorDir = resolve(args.codexVendorDir);
   }
   return args;
 }

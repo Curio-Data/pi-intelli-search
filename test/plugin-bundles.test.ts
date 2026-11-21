@@ -11,6 +11,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 // @ts-expect-error plain Node module without declarations
 import {
   checkAgainstRepo,
+  DSH_TESTED_VERSION,
   generateFiles,
   launcherFor,
   readMcpPackage,
@@ -273,6 +274,8 @@ describe("plugin bundle generation", () => {
   it("derives the dsh tarball vendor directory from the tarball output", () => {
     const scratch = scratchDir("plugin-bundles-dsh-vendor-");
     try {
+      execFileSync(process.execPath, [GENERATOR, "--mode", "tarball", "--output", "out", "--codex-vendor-dir", "vendor"], { cwd: scratch });
+      assert.ok(readFileSync(join(scratch, "out/plugins/dsh/cordis.patch.yml"), "utf8").includes(join(scratch, "out/plugins/dsh/vendor/node_modules")));
       const tarballFiles = generateFiles("tarball", {
         output: scratch,
         codexVendorDir: join(scratch, "plugins/codex/vendor"),
@@ -317,6 +320,7 @@ describe("plugin bundle generation", () => {
     });
     assert.deepStrictEqual(manifest.exports, {
       ".": "./index.js",
+      "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json",
       "./icon": "./icon.svg",
     });
@@ -329,9 +333,10 @@ describe("plugin bundle generation", () => {
       "README.md",
       "LICENSE",
     ]);
+    assert.strictEqual(DSH_TESTED_VERSION, "0.2.2-rc.1");
     assert.deepStrictEqual(manifest.engines, {
       node: ">=24.9.0",
-      dsh: "0.2.2-rc.1",
+      dsh: ">=0.2.2-rc.1 <0.3.0",
     });
     assert.deepStrictEqual(manifest.dsh, {
       manifestVersion: 1,
@@ -420,7 +425,7 @@ describe("plugin bundle generation", () => {
     assert.match(skill, /one harness restart/);
     assert.match(skill, /does not provision this server/);
     assert.match(skill, /a directory change later in the session does not move the cache/);
-    assert.match(skill, /`cwd` field is available for a fixed project root/);
+    assert.match(skill, /profile's `cordis.patch.yml` and set `cwd`/);
     assert.match(skill, /`WORKSPACE` tool error/);
     for (const op of [
       "mcp__intelli__intelli_search",
