@@ -5,17 +5,31 @@
 1. Read the proposal's [Resume Here](../../proposals/dsh-host-support-proposal.md#resume-here) on this branch (`docs/proposals/dsh-host-support-proposal.md`), including its corrections and Owner Decisions D1 to D6. The main checkout's copy predates Phase 1 and has no Resume Here; do not use it as the governing text.
 2. Read the complete [Phase 2 plan](PLAN.md).
 3. Read Phase 1 evidence at `/srv/secure/repos/CURIO/pi-intelli-search/evidence/agents/2026-11-18-next-activities/reports/dsh-explore.md`.
-4. Before release work, read `/srv/secure/repos/CURIO/pi-intelli-search/.plan/OPS.md` and `/srv/secure/repos/CURIO/pi-intelli-search/.plan/RELEASE-READINESS.md`.
+4. Read [REVIEW-2026-11-20.md](REVIEW-2026-11-20.md) and the two review reports it names.
+5. Before release work, read `/srv/secure/repos/CURIO/pi-intelli-search/.plan/OPS.md` and `/srv/secure/repos/CURIO/pi-intelli-search/.plan/RELEASE-READINESS.md`.
 
 ## Current State
 
-**Observed on 2026-11-19:** the implementation worktree is `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/explore-dsh-host`, branch `explore/dsh-host`. Its HEAD is the newest commit that changed `docs/plans/dsh-host/` (check with `git log -1 --format=%h -- docs/plans/dsh-host`), pushed to `origin/explore/dsh-host`; that does not approve another push. Commit `0529c95` already implements and tests `--host dsh`. Commits `5f2160c` and `56d8392` record Phase 1 and all six owner decisions. No generated `plugins/dsh`, scenario 18 or dsh compatibility row exists yet. On 2026-11-19 `main` (with the `intelli_search` citation fix, `2dd8860`) was merged into this branch (`0bccc6a`); `test:all` there gives 995 native and 162 standalone tests, one more than `main` because of the spike, so update the README badge (`AGENTS.md` Rule 9) when Phase 2 changes the count. Before starting, merge any newer `main` the same way and re-run the entry checks.
+**Observed on 2026-11-21:** the implementation worktree is `/srv/secure/repos/CURIO/.worktrees/pi-intelli-search/explore-dsh-host`, branch `explore/dsh-host`. Its HEAD is the newest commit that changed `docs/plans/dsh-host/` (check with `git log -1 --format=%h -- docs/plans/dsh-host`), pushed to `origin/explore/dsh-host`; that does not approve another push. PLAN.md Steps 1 to 4 are committed (`b2d060b`, `78f34ec`, `4b98798`, `762afbc`; see its Progress Checklist), built by `dsh-phase2` on `zai/glm-5.3`. Commit `0529c95` is the Phase 1 adapter spike. `test:all` gives 1014 native and 162 standalone tests, matching the README badge (1176). The branch last merged `main` at `0bccc6a`.
 
-The tested host is dsh `0.2.2-rc.1`; `next` was `0.2.2-rc.5` in Phase 1. A pinned scratch host remains under the worktree's `.tmp/` at planning time, but scratch is disposable and is not evidence. Recreate it with the plan's recipe if needed. **Observed:** Node.js 24.19.0 is available through `fnm`; `pnpm` is currently absent and must be supplied before `dsh plugin` operations.
+On 2026-11-20 an independent code review and a fresh Opus 5.5 prose review of Steps 1 to 4 completed. [REVIEW-2026-11-20.md](REVIEW-2026-11-20.md) lists every finding, the owner's instruction to apply all of them, and one open owner decision on the dsh version range.
+
+The tested host is dsh `0.2.2-rc.1`. On 2026-11-20 the registry's `latest` and `next` were both `0.2.2-rc.5`. A pinned scratch host remains under the worktree's `.tmp/dsh/`, but scratch is disposable and is not evidence; recreate it with the plan's recipe if needed. **Observed:** Node.js 24.19.0 is available through `fnm`; scenario 18 also needs `pnpm` on `PATH` (an isolated 12.21.0 was installed under worktree scratch for Step 2).
+
+Still outside this branch and owned by the coordinator: the `.plan/OPS.md` and `.plan/RELEASE-READINESS.md` text that PLAN.md Step 3 assigns, recorded ready to apply in the Step 3 section of `/srv/secure/repos/CURIO/pi-intelli-search/evidence/agents/2026-11-19-dsh-phase2/reports/dsh-phase2.md`. Do not apply it from the fix session. Step 5 needs owner-supplied DeepSeek and OpenRouter credentials and has not started.
 
 ## Next Step
 
-Execute [PLAN.md](PLAN.md) Step 1: generate the complete bundle and its deterministic tests. Do not reimplement the adapter spike. Step 2's new E2E script must run successfully before commit; a skip does not qualify it.
+Apply the review findings in [REVIEW-2026-11-20.md](REVIEW-2026-11-20.md), as a new session:
+
+1. Run the entry checks below and merge any newer `main` first.
+2. Read both review reports in full, then ask the owner the open decision on the dsh version range before touching findings V1 and V2. Apply every other finding without waiting.
+3. Edit hand-edited sources only (`README.md`, `guidance/`, `scripts/templates/dsh/`, the generator and scripts), then regenerate. Never hand-edit a generated file.
+4. Run the gates in that file's After Applying section, including scenario 18, which must run successfully, not skip.
+5. Commit the corrections against the steps they belong to, update the Progress Checklist and this handover, and push the branch.
+6. Report to the coordinator for re-review. A Builder does not spawn reviewers.
+
+Step 5 follows only after the re-reviews pass and the owner supplies credentials.
 
 ## Entry Checks
 
@@ -50,7 +64,7 @@ Expected: `0.2.2-rc.1`. Do not use an operator dsh profile.
 
 ## Prohibitions
 
-- No provider calls or credentials during entry, Step 1 or Step 2.
+- No provider calls or credentials during entry or while applying review findings; scenario 18 is credential-free.
 - No writes to `/tmp`, `~/.dsh`, `~/.pi`, `~/.claude`, `~/.codex` or `~/.agents`; keep scratch in the worktree's `.tmp/`.
 - No tracked-file edits outside the step being executed, no generated-file hand edits, no commits outside the current step.
 - No branch switch, rebase, merge, push, GitHub Release, npm publish or staging without the plan's explicit owner approval.
