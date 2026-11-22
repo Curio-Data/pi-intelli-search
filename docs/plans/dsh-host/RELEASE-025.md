@@ -1,5 +1,7 @@
 # Integrated 0.25.0 Release Gates
 
+These gates are historical: 0.25.0 is published and merged. For new work, start at the [post-release handover](HANDOVER.md#resume-here-after-0250).
+
 On 22 November 2026 the owner included the citation-numbering fix, the `Pi` 1.6.0 retry update and the [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) bundle in one release. Use `release/0.25.0` for integration. Keep unpublished pins off `main`. Earlier host receipts identify local builds, not public packages, even when a version string matches.
 
 1. **Qualify the combined tree.** Check the manifests, generated files, dependency audit, builds, deterministic tests, independent tarball installs and bundle inventory. Run the full live suite with owner approval; scenarios 01 to 18 must pass without skips. Export `DSH_BIN` and put isolated pnpm on `PATH` for scenario 18. Scenario 19 is separate and requires its own spend approval. Obtain two independent reviews of the *whole* candidate at one commit, reconcile findings, and verify the amendments. Check changelog dates on the release day. Require green push CI on the exact release commit before staging.

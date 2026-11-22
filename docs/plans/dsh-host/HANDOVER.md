@@ -1,8 +1,24 @@
 # DeepSeek Harness Phase 2 Handover
 
-## Current Release Scope
+## Resume Here After 0.25.0
 
-On 22 November the owner included this branch in the integrated `release/0.25.0` candidate. Follow the [integrated release gates](RELEASE-025.md). The earlier standalone handover below is historical, not a release instruction.
+**The release is complete. Start new work from `main`.** On 22 November 2026 the three `@curio-data` packages (`pi-intelli-search`, `mcp-intelli-search` and `dsh-intelli-search`) were public at `0.25.0`. The MCP and native release tags point to `258b13b`. The owner published the verified dsh tarball separately and configured trusted staging for subsequent releases; there was no first `dsh-v0.25.0` GitHub Release. The integration merged into `main` at `c41da51`; [main CI passed](https://github.com/Curio-Data/pi-intelli-search/actions/runs/45066025636). The release branch, `investigate/pi-1.6.0-audit`, `explore/dsh-host` and the separate dsh exploration worktree were retained. Do not resume implementation in the old worktree or repeat the bootstrap.
+
+### Next Task: Review the DeepSeek Harness README
+
+The owner raised concerns about the README but has not specified the passage or proposed a change. First distinguish the documents a new user sees:
+
+| Reader's Entry Point | Maintained Source | How to Check It |
+|---|---|---|
+| Repository front page and host installation section | [Root README](../../../README.md#deepseek-harness) | Read the opening and follow the profile install link as a new user |
+| [dsh npm package](https://www.npmjs.com/package/@curio-data/dsh-intelli-search) and installed bundle | [dsh README template](../../../scripts/templates/dsh/README.md) | The [plugin generator](../../../scripts/generate-plugin-bundles.mjs) copies the template into [`plugins/dsh/README.md`](../../../plugins/dsh/README.md); do not edit the generated copy directly |
+| Engine package pages | Package-specific blocks in the root README | `npm run check:readmes` checks the generated native and MCP views, not the dsh template |
+
+**One verified discrepancy, not a diagnosis of the owner's concern:** the shipped dsh README ends its Evidence and Limits section by saying registry-pin installation has not been tested. That was true when packed. [Public installation by name](../../COMPATIBILITY.md#public-dsh-profile-installation-2026-11-22) subsequently passed on Linux with `dsh 0.2.2-rc.1`, including four tools, skill loading, removal and reinstallation. This check used an isolated profile named `tui`, created from the headless template, without paid inference. Credentialed search and research passed separately with a local bundle on rc.1, not through the public installation. Do not present those as one test.
+
+**First deliverable:** compare the repository and package introductions, installation steps, credential setup, verification and evidence limits from the perspective of someone with an existing harness profile. Identify the exact page and passage behind each concern, distinguish factual defects from presentation choices, and propose the smallest source edits. Consult the owner's specific concerns when available. For a template change run `npm run generate:plugins` and `npm run check:plugins`; for a root README change regenerate the contents and package READMEs and check their drift. Editing Git does not update the published 0.25.0 tarball. Under [the versioning rule](../../../AGENTS.md#versioning-scheme-three-packages-one-core), shipping changed dsh bundle text requires matching new MCP and dsh versions, not a native release solely for that edit. No new version, publication, paid run or cleanup is authorised by this handover.
+
+The [release sequence](RELEASE-025.md) and everything below record prior work, not outstanding release steps. The compatibility record travels with Git. On the original host, `evidence/2026-11-22-0250-registry/dsh/` holds the verified tarball and by-name receipts; `evidence/agents/2026-11-22-release025-qualified/` holds the live-suite evidence. These directories are gitignored and are not part of a fresh clone.
 
 ## Earlier Standalone Handover
 
