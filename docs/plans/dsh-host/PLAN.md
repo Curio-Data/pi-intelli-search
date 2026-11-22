@@ -517,7 +517,8 @@ Update this checklist after each step with the commit hash and evidence path. Do
 - [x] Step 4 complete: documentation regenerated in commit `762afbc`; fresh Opus 5.5 prose review assigned to the coordinator, changed prose files listed in the report.
 - [x] Steps 1 to 4 review fixes applied: `abf4e3a`, `f7ceb86`, `19fea93`, `4435194` respectively. Both credential-free host runs passed; retained logs and hashes: main checkout `evidence/2026-11-21-dsh-host/scenario-18/`. See `HANDOVER.md` for the re-review assignment.
 - [ ] Independent code and fresh Opus prose re-reviews accepted.
-- [ ] Step 5 complete: owner-authorised credentialed evidence reproduced and compatibility recorded.
+- [x] Step 5 live run and evidence: rc.1 local-bundle search, research and stored-key fallback passed (main checkout `evidence/2026-11-22-dsh-host/verification-receipt.md`). Do not repeat with the same approval.
+- [x] Step 5 scenario and compatibility prose accepted after independent reviews (`evidence/agents/2026-11-22-dsh-step5/reports/s19-code.md` and `s19-prose-r2.md` in the main checkout).
 - [ ] Step 6 complete: integrated reviews and release-candidate gates passed.
 - [ ] Step 7 complete: owner-approved publication, registry verification and merge finished.
 - [ ] Optional Step 8 decision recorded; no catalogue work performed by default.

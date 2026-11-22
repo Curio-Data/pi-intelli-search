@@ -66,7 +66,7 @@ Restart the same profile with `dsh --profile <name>`, then confirm with `dsh --p
 
 ## Evidence and Limits
 
-Installation, exact tool registration, skill loading, workspace guards, credential-free startup and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` and `0.2.2-rc.5` on Linux with the local bundle and no provider calls. Other versions in the declared range and credentialed research are unverified.
+Installation, exact tool registration, skill loading, workspace guards, credential-free startup and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` and `0.2.2-rc.5` on Linux with the local bundle and no provider calls. Credentialed local-bundle search, research and credential-file fallback were verified separately on `0.2.2-rc.1` only. The whole declared range and registry-pin installation have not been tested.
 
 ## Licence
 

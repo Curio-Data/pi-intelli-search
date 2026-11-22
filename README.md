@@ -413,7 +413,7 @@ In the session, ask: “Use mcp__intelli__intelli_search to find the current Typ
 
 Uninstall with `dsh plugin --profile <name> remove @curio-data/dsh-intelli-search`, restart the same profile with `dsh --profile <name>`, and confirm with `dsh --profile <name> --dump-config` that both bundle rows are gone.
 
-Credential-free installation, tool registration, skill loading, workspace guards and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` and `0.2.2-rc.5` on Linux with the local bundle. Other versions in the declared range and credentialed research through this host are unverified.
+Credential-free installation, tool registration, skill loading, workspace guards and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` and `0.2.2-rc.5` on Linux with the local bundle. On `0.2.2-rc.1`, a separate credentialed run also verified search, three-page research and the credential-file fallback. See [DeepSeek Harness Evidence and Limits](docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits).
 
 <a id="route-a-direct-mcp-configuration"></a>
 #### Generic MCP Host
@@ -1431,12 +1431,12 @@ To suppress both telemetry files in the MCP server, set `"disableTelemetry": tru
 <!-- packages:mcp -->
 ### MCP Server Compatibility
 
-- Direct stdio registration serves MCP-compatible hosts; repository plugin routes serve Claude Code and Codex, and the `@curio-data/dsh-intelli-search` npm bundle serves DeepSeek Harness. Recorded live research clients include `Pi` and both repository plugin hosts.
+- Direct stdio registration serves MCP-compatible hosts; repository plugin routes serve Claude Code and Codex, and the `@curio-data/dsh-intelli-search` npm bundle serves DeepSeek Harness. Recorded live research clients include `Pi`, Claude Code, Codex and DeepSeek Harness.
 - The runtime must satisfy the Node.js `engines` range in the [standalone manifest](packages/mcp/package.json). The server uses the [`@modelcontextprotocol/server` SDK](https://github.com/modelcontextprotocol/typescript-sdk), with its dependency range declared in that manifest and the verified release pinned in [package-lock.json](package-lock.json).
 - Standalone fetch assets are verified on _Linux_ x86-64 only; _macOS_ and _Windows_ are not verified.
-- Full research through local-tarball plugins and registry-pin installation checks are separate evidence classes, and the compatibility matrix records these checks for the standalone MCP package and the Claude Code and Codex plugins. For DeepSeek Harness, only the credential-free local-tarball checks described above have run. Publication alone does not establish host compatibility.
+- Full research through local-tarball plugins and registry-pin installation checks are separate evidence classes, and the compatibility matrix records these checks for the standalone MCP package and the Claude Code and Codex plugins. For DeepSeek Harness, the matrix distinguishes credential-free host checks from credentialed local-bundle research. No registry-pin installation has been verified for this host. Publication alone does not establish host compatibility.
 
-For the standalone MCP server and host plugins, including exact tested versions of _Claude Code_, _Codex_, Node.js and the MCP SDK, see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+For the standalone MCP server and host plugins, including exact tested versions of _Claude Code_, _Codex_, DeepSeek Harness, Node.js and the MCP SDK, see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 <!-- /packages -->
 
 <!-- packages:none -->

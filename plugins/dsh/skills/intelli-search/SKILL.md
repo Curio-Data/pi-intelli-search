@@ -269,7 +269,7 @@ Restart the same profile with `dsh --profile <name>` after removal, then confirm
 
 ### Evidence Limits
 
-Installation, exact tool registration, skill loading, workspace guards, credential-free startup and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` and `0.2.2-rc.5` on Linux with the local bundle and no provider calls. The bundle declares `engines.dsh: >=0.2.2-rc.1 <0.3.0`; other versions in that range and credentialed research are unverified.
+Installation, exact tool registration, skill loading, workspace guards, credential-free startup and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` and `0.2.2-rc.5` on Linux with the local bundle and no provider calls. The bundle declares `engines.dsh: >=0.2.2-rc.1 <0.3.0`; the whole range has not been tested. A separate credentialed local-bundle run verified search, research and credential-file fallback on `0.2.2-rc.1` only.
 
 
 ## Failure Modes

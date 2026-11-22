@@ -54,8 +54,15 @@ The software development kit (SDK) and native fetch assets are verified separate
 |---|---|---|
 | Claude Code | 2.1.289, 2.1.292, 2.1.293, 2.1.294, 2.1.296, 2.1.301, 2.1.302, 2.1.311, 2.1.316, 2.1.317, 2.1.319, 2.1.322 | Credential-free installation and key-delivery checks; credentialed local-tarball research. Latest registry-pin installation, connection and skill discovery pass on 2.1.322; historical checks and evidence limits are recorded below |
 | Codex CLI | 0.144.5, 0.160.1 | Credential-free installation and credentialed local-tarball research. Current-candidate zero-configuration startup, missing-key recovery and research pass on 0.160.1. Latest registry-pin installation, enabled-server listing and skill discovery pass on 0.160.1; the independent registry protocol probe is separate from the host's enabled listing |
+| DeepSeek Harness | 0.2.2-rc.1, 0.2.2-rc.5 | Credential-free local-bundle installation on both; credentialed local-bundle search, research and stored-key fallback on rc.1 only |
 
-The latest [registry-pin verification](#published-0230-registry-pin-verification-2026-11-12) covers both hosts. It does not establish full registry-pin research; earlier checks remain evidence for their recorded package and host versions.
+The latest [registry-pin verification](#published-0240-registry-pin-verification-2026-11-18) covers Claude Code and Codex, not DeepSeek Harness. It does not establish full registry-pin research; earlier checks remain evidence for their recorded package and host versions.
+
+### DeepSeek Harness Evidence and Limits
+
+On 22 November 2026, Linux scenario 19 exercised a locally packed MCP server through [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) `0.2.2-rc.1`. Each of three fresh headless sessions completed one `mcp__intelli__*` tool call and returned an answer with a source URL. Search and three-page research used `OPENROUTER_API_KEY` from `$DSH_HOME/.env`; a second search used the credential file written by `setup`, with an empty environment value. Research wrote a completed MCP sidecar and a report with three inventory entries in the launch project's `.search/`. The request named `nodejs.org`, but one fetched source was from Cloudflare. This matches the engine's design: `domains` guides the search but is not a fetch allowlist.
+
+With the scenario's single-call guard, `workspace-write` mode and `never` approval policy, all three MCP calls were admitted without a prompt. Other policies were not tested. Separately, inspection of the rc.1 skill registries on 18 November established that a same-name project skill outranks the bundled runtime skill; a user skill does not. Credential-free checks also passed on `0.2.2-rc.5`. Other versions in the declared `>=0.2.2-rc.1 <0.3.0` range are untested. Registry-pin installation and cold-start latency remain unverified. Maintainer evidence: main checkout `evidence/2026-11-22-dsh-host/verification-receipt.md`.
 
 ### Claude Code Evidence and Limits
 
