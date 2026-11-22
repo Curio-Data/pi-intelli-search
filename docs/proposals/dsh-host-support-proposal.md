@@ -49,6 +49,7 @@ The committed spike already implements the recommended options of D2 and D4. Cho
 2. Done: `b2d060b` generated the bundle, registered the skill and added deterministic tests for the generator, registrar and package contents.
 3. Done: `78f34ec` added credential-free scenario 18, including tool and skill discovery, dummy credential delivery, workspace guards, removal and reinstallation on the isolated host.
 4. Release plumbing (`4b98798`) and documentation (`762afbc`) landed before credentialed testing. Under D5 the compatibility row waits for a separate authorised run; neither release nor real research is established by scenario 18.
+5. After the 20 November review, the owner adopted [E1 and E2](../plans/dsh-host/REVIEW-2026-11-20.md#owner-decisions-21-november-2026). E1 declares `>=0.2.2-rc.1 <0.3.0`; only `0.2.2-rc.1` and `0.2.2-rc.5` have passed the credential-free host checks. E2 settles the bundle licence note. Continue from the [handover](../plans/dsh-host/HANDOVER.md).
 
 ## 1. Summary
 

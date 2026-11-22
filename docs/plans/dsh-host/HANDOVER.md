@@ -2,7 +2,9 @@
 
 ## Resume Here: Re-Review
 
-The review corrections are on `explore/dsh-host` in `abf4e3a` (bundle), `f7ceb86` (scenario 18), `19fea93` (changelog gate) and `4435194` (documentation). Compare against `d4cad7b` for the corrections. The coordinator's next action is an independent code re-review and a fresh Claude Code Opus 5.5 prose re-review, including generated text. Resolve any findings before requesting owner approval for Step 5. The main-checkout `.plan/` edits remain the coordinator's responsibility.
+**22 November follow-up:** Both reviews of `7d3f9fd` finished. The code review passed with three hardening suggestions; the prose review requested changes. Their reports are in the main checkout under `evidence/agents/2026-11-21-dsh-rereview/reports/`. The follow-up applies all ten prose findings and all three hardening suggestions (`ed8130a`, `c4c99a9`, `f3d568b` and this plan update). The deterministic suite passed, and scenario 18 again passed on both hosts. Logs and hashes: `evidence/2026-11-22-dsh-host/scenario-18/`. Review the follow-up diff from `7d3f9fd`, not the earlier correction diff. Step 5 still requires separate approval.
+
+**Earlier round:** The review corrections are on `explore/dsh-host` in `abf4e3a` (bundle), `f7ceb86` (scenario 18), `19fea93` (changelog gate) and `4435194` (documentation). Compare against `d4cad7b` for the corrections. The coordinator assigned an independent code re-review and a fresh Claude Code Opus 5.5 prose re-review, including generated text. Resolve any findings before requesting owner approval for Step 5. The main-checkout `.plan/` edits remain the coordinator's responsibility.
 
 Scenario 18 passed on Linux with dsh `0.2.2-rc.1` and `0.2.2-rc.5`, Node `v24.19.0` and pnpm `12.21.0`. The logs and SHA-256 checksums are in the main checkout under `evidence/2026-11-21-dsh-host/scenario-18/{rc.1,rc.5}/`. These runs used local bundles and dummy credential delivery, not a registry installation or credentialed research. Gate results are in `evidence/2026-11-21-dsh-host/review-fix-gates.txt` in the same checkout.
 
@@ -10,7 +12,7 @@ The sections below preserve the original fix-session brief and its entry baselin
 
 ## Read First
 
-1. Read the proposal's [Resume Here](../../proposals/dsh-host-support-proposal.md#resume-here) on this branch (`docs/proposals/dsh-host-support-proposal.md`), including its corrections and Owner Decisions D1 to D6. The main checkout's copy predates Phase 1 and has no Resume Here; do not use it as the governing text. Where they disagree with Current State, Current State governs.
+1. Read the proposal's [Resume Here](../../proposals/dsh-host-support-proposal.md#resume-here) on this branch (`docs/proposals/dsh-host-support-proposal.md`), including its corrections and Owner Decisions D1 to D6. The main checkout's copy predates Phase 1 and has no Resume Here; do not use it as the governing text.
 2. Read the complete [Phase 2 plan](PLAN.md).
 3. Read Phase 1 evidence at `/srv/secure/repos/CURIO/pi-intelli-search/evidence/agents/2026-11-18-next-activities/reports/dsh-explore.md`.
 4. Read [REVIEW-2026-11-20.md](REVIEW-2026-11-20.md) and the two review reports it names.
@@ -115,7 +117,7 @@ Then scenario 18 on both hosts, as above. Update the README badge if the test co
 
 - No provider calls or credentials during entry or while applying review findings; scenario 18 is credential-free.
 - No writes to `/tmp`, `~/.dsh`, `~/.pi`, `~/.claude`, `~/.codex` or `~/.agents`; keep scratch in the worktree's `.tmp/`.
-- No generated-file hand edits. No commit that mixes steps (see Next Step 5). Do not start Step 5.
+- No generated-file hand edits. No commit that mixes steps (see [Original Fix Assignment](#original-fix-assignment), item 5). Do not start Step 5.
 - Git authority (owner, 21 November 2026): merge newer `main` into `explore/dsh-host`, and push that branch to `origin` after each commit. Never rebase, force-push, switch branch, push or merge into `main`. No GitHub Release, npm publish or staging without the plan's explicit owner approval.
 - No compatibility claim from the contributor's unreproduced credentialed runs.
 - No catalogue YAML submission or claim that a `dsh-plugin` topic is an official requirement.
