@@ -25,17 +25,17 @@ trap 'rm -rf "$ROOT"' EXIT
 # workspace and trace. Both cases start together; each workspace is private,
 # so neither can count the other's sidecar.
 run_case() {
-  local scenario="$1" AGENT WORKSPACE DEFAULT CAP PROMPT
+  local scenario="$1" AGENT WORKSPACE DEFAULT CAP ARGS
   AGENT="$ROOT/$scenario/agent"
   WORKSPACE="$ROOT/$scenario/workspace"
   mkdir -p "$AGENT/sessions" "$WORKSPACE"
   e2e_write_auth "$AGENT"
   if [[ "$scenario" == cap ]]; then
     DEFAULT=8; CAP=3
-    PROMPT='Call intelli_research exactly once with maxUrls=12 and focusPrompt="Official release version and date": what is the latest Node.js LTS version?'
+    ARGS='{"query":"What is the latest Node.js LTS version?","maxUrls":12,"focusPrompt":"Official release version and date"}'
   else
     DEFAULT=3; CAP=6
-    PROMPT='Call intelli_research exactly once to find the current TypeScript version, with focusPrompt="Official version and date". Omit maxUrls entirely: this test verifies the configured default. Do not set it even if the skill normally recommends a value.'
+    ARGS='{"query":"What is the current TypeScript version?","focusPrompt":"Official version and date"}'
   fi
   jq -n --arg provider "$E2E_LOOP_PROVIDER" --arg model "$E2E_LOOP_MODEL" \
     --argjson default "$DEFAULT" --argjson cap "$CAP" '{
@@ -48,7 +48,9 @@ run_case() {
     }}' > "$AGENT/settings.json"
   printf '{}\n' > "$AGENT/models.json"
   E2E_TRACE_FILE="$ROOT/$scenario/trace.jsonl"
-  e2e_run_pi "$AGENT" "$WORKSPACE" "$PROMPT"
+  # Measure the tool's cap/default, not whether an agent follows an exact-argument prompt.
+  e2e_run_direct "$AGENT" "$WORKSPACE" intelli_research "$ARGS" || return 1
+  printf '%s\n' "$E2E_LAST_OUTPUT" > "$E2E_TRACE_FILE"
   if [[ -n "${E2E_TRACE_DIR:-}" ]]; then
     mkdir -p "$E2E_TRACE_DIR"
     cp "$E2E_TRACE_FILE" "$E2E_TRACE_DIR/$scenario.jsonl"
