@@ -1,6 +1,12 @@
 # DeepSeek Harness Phase 2 Handover
 
-## Resume Here: Re-Review
+## Resume Here: Unreleased by Owner Decision
+
+Leave `explore/dsh-host` and its worktree intact. Do not add this feature to the planned `0.25` release, choose a follow-on version, cut a release branch or publish. The next integrating agent should compare this branch with the then-current `main` and bring an integration proposal to the owner. [Installation and Promotion](INSTALLATION-AND-PROMOTION.md) separates what can be advertised now from the install instructions for a verified public release.
+
+Step 6 local gates passed at `dfeb500`, including both fresh installs, the deterministic suite and scenario 18 on rc.1 and rc.5. Integrated code review passed; integrated prose review requested changes, including a release blocker. The registry launcher selects public MCP `0.24.0`, which rejects `--host dsh`. A version-exists check is not a capability check. Before release, resolve the reports in the main checkout at `evidence/agents/2026-11-22-dsh-integrated/reports/`, qualify a dsh-capable **published** MCP pin and verify the published bundle in a clean profile. Do not treat preview documentation edits as release acceptance. No Step 7 action has been taken.
+
+## Earlier Review History
 
 **Step 5 (22 November):** After owner approval, the credentialed local-bundle run passed on rc.1 with exactly the two searches and one three-page research call authorised. Do not repeat it. See `evidence/2026-11-22-dsh-host/verification-receipt.md` in the main checkout. The follow-up prose review of `0c93822` passed (main checkout `evidence/agents/2026-11-22-dsh-followup/reports/dsh-followup-prose.md`). The code review passed on `7d3f9fd`; the later hardening did not receive a separate code verdict. Step 5 passed independent code review and Opus prose re-review; see the main checkout's `evidence/agents/2026-11-22-dsh-step5/reports/`. The coordinator also applied the dsh-specific OPS and release-readiness updates. Resume at Step 6 for integrated verification. The full live suite, release preparation and publication are not authorised by this run.
 

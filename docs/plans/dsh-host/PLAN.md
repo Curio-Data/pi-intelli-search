@@ -508,6 +508,8 @@ Explicitly deferred: a custom JSON index, third-party catalogue submissions, Git
 
 ## Progress Checklist
 
+**Owner decision, 22 November 2026:** retain this worktree and branch as an unreleased candidate, separate from the planned `0.25` release. Steps 6 and 7 below are conditional procedures, not authority to release. A fresh agent will propose integration against the then-current baseline. See the [handover](HANDOVER.md) and [installation and promotion guide](INSTALLATION-AND-PROMOTION.md).
+
 Update this checklist after each step with the commit hash and evidence path. Do not mark a step complete on an unrun or skipped check.
 
 - [x] Entry checks passed; actual Node and dsh versions recorded, with pnpm recorded as absent or its isolated version recorded after installation. (2026-11-19: Node v24.19.0, dsh 0.2.2-rc.1 from Phase 1 scratch; pnpm absent at entry, isolated 12.21.0 installed under worktree scratch before Step 2; evidence: `evidence/agents/2026-11-19-dsh-phase2/reports/dsh-phase2.md`.)

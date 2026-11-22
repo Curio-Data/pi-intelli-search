@@ -2,7 +2,7 @@
 
 [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) host bundle for [`@curio-data/mcp-intelli-search`](https://www.npmjs.com/package/@curio-data/mcp-intelli-search): intelligent web research with a five-stage pipeline (search, fetch, per-page extraction, collation, cache suggestions), cited answers and a local `.search/` cache of every run.
 
-The bundle is pure configuration: one inserted bridge row starts the pinned standalone MCP server through `npx` with `--host dsh`, and one registrar registers the shared `intelli-search` skill with the harness. Neither carries pipeline code, so the bundle always mirrors the exact published MCP package version.
+The bundle adds two entries to a harness profile. One starts the standalone MCP server through `npx` with `--host dsh`; the other registers the shared `intelli-search` skill. The generator pins the server version in the launcher. Search and research run in that server, not in the bundle.
 
 ## Requirements
 
@@ -13,11 +13,13 @@ The bundle is pure configuration: one inserted bridge row starts the pinned stan
 
 ## Installation
 
+**Unreleased preview:** there is no public npm install yet. The published MCP `0.24.0` does not implement `--host dsh`; the local verification used a different, unreleased build. After a dsh-capable MCP version and its matching bundle have been published and verified, install into the intended profile (`tui` in this example):
+
 ```bash
-dsh plugin --profile <name> add @curio-data/dsh-intelli-search
+dsh plugin --profile tui add @curio-data/dsh-intelli-search
 ```
 
-Start the same profile from the project directory with `dsh --profile <name>`.
+Start the same profile from the project directory with `dsh --profile tui`.
 
 ## Credentials
 

@@ -45,7 +45,7 @@ Choose the installation route for the host:
 | Native `Pi` Extension | `Pi` | `@curio-data/pi-intelli-search` |
 | Direct MCP Registration | Any MCP-compatible host | `@curio-data/mcp-intelli-search` |
 | Host Plugin | Claude Code or Codex | Repository marketplace launching the pinned MCP package |
-| Host Plugin | DeepSeek Harness | `@curio-data/dsh-intelli-search` npm bundle launching the pinned MCP package |
+| Host Plugin | DeepSeek Harness | Unreleased preview on `explore/dsh-host`. No public npm install yet. |
 
 The install branches: [`Pi` Native Extension](#pi-native-extension) and [MCP Server](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#mcp-server), with host instructions for [Claude Code](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#claude-code), [Codex](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#codex), [DeepSeek Harness](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#deepseek-harness) and any [Generic MCP Host](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#generic-mcp-host).
 

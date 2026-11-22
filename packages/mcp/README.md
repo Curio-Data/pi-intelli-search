@@ -45,7 +45,7 @@ Choose the installation route for the host:
 | Native `Pi` Extension | `Pi` | `@curio-data/pi-intelli-search` |
 | Direct MCP Registration | Any MCP-compatible host | `@curio-data/mcp-intelli-search` |
 | Host Plugin | Claude Code or Codex | Repository marketplace launching the pinned MCP package |
-| Host Plugin | DeepSeek Harness | `@curio-data/dsh-intelli-search` npm bundle launching the pinned MCP package |
+| Host Plugin | DeepSeek Harness | Unreleased preview on `explore/dsh-host`. No public npm install yet. |
 
 The install branches: [`Pi` Native Extension](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#pi-native-extension) and [MCP Server](#mcp-server), with host instructions for [Claude Code](#claude-code), [Codex](#codex), [DeepSeek Harness](#deepseek-harness) and any [Generic MCP Host](#generic-mcp-host).
 
@@ -257,13 +257,15 @@ The installed `intelli-search` skill covers configuration and unattended tool ap
 
 [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) ships a Model Context Protocol client bridge, so this route is a generated configuration bundle rather than an extension: one inserted bridge row starts the pinned `@curio-data/mcp-intelli-search` package through `npx` with `--host dsh`, and one registrar registers the `intelli-search` skill with the harness. Neither carries pipeline code.
 
-The bundle declares `engines.dsh: >=0.2.2-rc.1 <0.3.0` and installs into a profile. For installation and removal, put `pnpm` on `PATH` or configure `pnpmCommand`. A launcher-provided package manager takes precedence.
+**Availability: unreleased.** There is no public npm install for this bundle. The local verification used an unreleased MCP build that accepts `--host dsh`; the published `@curio-data/mcp-intelli-search@0.24.0` does not. Installing `plugins/dsh` directly from this checkout is not a substitute: its registry launcher still selects that published server. The preview is for technical evaluation, not end-user installation. For the maintainer procedure without credentials, see the [preview guide on the development branch](https://github.com/Curio-Data/pi-intelli-search/blob/explore/dsh-host/docs/plans/dsh-host/INSTALLATION-AND-PROMOTION.md#preview-link-to-the-branch-not-npm).
+
+**After publication:** installation targets the profile used to start the harness. The example below uses `tui`; replace it with the intended profile name. The bundle declares `engines.dsh: >=0.2.2-rc.1 <0.3.0`. Put `pnpm` on `PATH` for package installation and removal.
 
 ```bash
-dsh plugin --profile <name> add @curio-data/dsh-intelli-search
+dsh plugin --profile tui add @curio-data/dsh-intelli-search
 ```
 
-Start the same profile from the project directory with `dsh --profile <name>`. The first start downloads the MCP package through `npx`, so it needs network access.
+Start the same profile from the project directory with `dsh --profile tui`. The first start downloads the MCP package through `npx`, so it needs network access.
 
 Credentials reach the server through the harness environment layer. Precedence: an `OPENROUTER_API_KEY` exported in the launching environment, then a `.env` file in the launch directory, then `$DSH_HOME/.env`. Accepted values are copied into the environment once at launch, so restart that profile after changing a key. To use the key across launching shells, prepare the harness-home file before entering the key:
 
@@ -739,7 +741,7 @@ To suppress both telemetry files in the MCP server, set `"disableTelemetry": tru
 
 ### MCP Server Compatibility
 
-- Direct stdio registration serves MCP-compatible hosts; repository plugin routes serve Claude Code and Codex, and the `@curio-data/dsh-intelli-search` npm bundle serves DeepSeek Harness. Recorded live research clients include `Pi`, Claude Code, Codex and DeepSeek Harness.
+- Direct stdio registration serves MCP-compatible hosts; repository plugin routes serve Claude Code and Codex, and the [DeepSeek Harness](#deepseek-harness) bundle is an unreleased preview. Recorded live research clients include `Pi`, Claude Code, Codex and DeepSeek Harness.
 - The runtime must satisfy the Node.js `engines` range in the [standalone manifest](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/package.json). The server uses the [`@modelcontextprotocol/server` SDK](https://github.com/modelcontextprotocol/typescript-sdk), with its dependency range declared in that manifest and the verified release pinned in [package-lock.json](https://github.com/Curio-Data/pi-intelli-search/blob/main/package-lock.json).
 - Standalone fetch assets are verified on _Linux_ x86-64 only; _macOS_ and _Windows_ are not verified.
 - Full research through local-tarball plugins and registry-pin installation checks are separate evidence classes, and the compatibility matrix records these checks for the standalone MCP package and the Claude Code and Codex plugins. For DeepSeek Harness, the matrix distinguishes credential-free host checks from credentialed local-bundle research. No registry-pin installation has been verified for this host. Publication alone does not establish host compatibility.
