@@ -8,21 +8,18 @@ import { join } from "node:path";
 import { completion, document, fakeTransport, fixture, json } from "./helpers.js";
 import { parseConfig } from "../src/config.js";
 import { createRuntime } from "../src/runtime.js";
-import {
-  defaultCodexConfig,
-  hostPaths,
-  resolveCredential,
-  setupHost,
-} from "../src/host.js";
+import { defaultHostConfig, hostPaths, resolveCredential, setupHost } from "../src/host.js";
 
 const KEY = "sk-or-test-only";
 
-test("Codex defaults select the current workspace and stable per-user files", async () => {
+test("host defaults preserve Codex and select the current workspace and stable per-user files", async () => {
   const f = await fixture();
   try {
     const paths = hostPaths({ HOME: f.dir });
     assert.equal(paths.directory, join(f.dir, ".config/mcp-intelli-search"));
-    const config = await defaultCodexConfig(f.dir, paths);
+    const config = await defaultHostConfig("codex", f.dir, paths);
+    const dshConfig = await defaultHostConfig("dsh", f.dir, paths);
+    assert.deepEqual(dshConfig, config);
     assert.equal(config.workspace, f.dir);
     assert.equal(config.apiKeyEnv, "OPENROUTER_API_KEY");
     assert.equal(config.apiKeyFile, paths.credential);
@@ -54,7 +51,7 @@ test("setup writes a private credential and preserves existing configuration", a
     assert.equal(preserved.providers.openrouter.apiKeyFile, paths.credential);
     assert.equal(await readFile(paths.credential, "utf8"), "sk-or-replacement\n");
     assert.equal(await resolveCredential(f.config, {}), undefined);
-    const configured = await defaultCodexConfig(f.dir, paths);
+    const configured = await defaultHostConfig("codex", f.dir, paths);
     assert.equal(await resolveCredential(configured, {}), "sk-or-replacement");
     assert.equal(
       await resolveCredential(configured, { OPENROUTER_API_KEY: "sk-or-environment" }),
@@ -159,7 +156,7 @@ test("credential files fail closed on unsafe metadata and contents", async () =>
   const f = await fixture();
   try {
     const paths = await setupHost(KEY, { HOME: f.dir });
-    const config = await defaultCodexConfig(f.dir, paths);
+    const config = await defaultHostConfig("codex", f.dir, paths);
     if (process.platform !== "win32") {
       await chmod(paths.credential, 0o644);
       await assert.rejects(resolveCredential(config, {}), /inaccessible to group and other users/);

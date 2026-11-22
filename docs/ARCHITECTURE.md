@@ -156,7 +156,7 @@ Research dependencies are injected per operation rather than changed through a s
 
 ### Standalone Adapter
 
-`packages/mcp/` supplies the separate `@curio-data/mcp-intelli-search` runtime. It uses the shared operations with explicit configuration, a canonical workspace, strict argument validation and a non-streaming OpenRouter transport. Shared tuning lives in `src/core/defaults.ts`; standalone model selections and environment-referenced credentials are mandatory. Catalogue preflight precedes paid work, and the shared retry policy applies once to every standalone model call. The standalone adapter sends reasoning effort and exclusion fields only when the catalogue advertises reasoning support; non-reasoning models receive neither.
+`packages/mcp/` supplies the separate `@curio-data/mcp-intelli-search` runtime. It uses the shared operations with explicit configuration, a canonical workspace, strict argument validation and a non-streaming OpenRouter transport. Shared tuning lives in `src/core/defaults.ts`; standalone model selections and environment-referenced credentials are mandatory. Catalogue preflight precedes paid work, and the shared retry policy applies once to every standalone model call. The standalone adapter sends reasoning effort and exclusion fields only when the catalogue advertises reasoning support; non-reasoning models receive neither. Its CLI has three modes: generic registration with explicit paths, and `--host codex` and `--host dsh` host modes that supply the workspace from the host's own working context and share one per-user configuration directory.
 
 The standalone bundle externalises its declared third-party dependencies and imports no `Pi` library. Its installation gate denies ancestor dependency resolution and exercises both native fetch paths. Existing cache links and traversal are rejected; these checks do not sandbox hostile concurrent filesystem mutation. Results use absolute workspace cache paths and host-neutral file-reading guidance. The [package guide](../packages/mcp/README.md) records exact interfaces and limits.
 
@@ -168,7 +168,7 @@ Successful and degraded results carry the same complete operation text in `conte
 
 ### Host Plugins
 
-Thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/`, generated from one shared guidance source in `guidance/` by `scripts/generate-plugin-bundles.mjs`; repository marketplace catalogues live at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. Launchers pin the exact MCP package version through `npx` and contain no pipeline code or credentials; each host's credential and workspace forwarding follows its own environment rules, documented in the generated skills. `npm run check:plugins` is the bidirectional drift gate between the generator and the committed tree.
+Thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/`, generated from one shared guidance source in `guidance/` by `scripts/generate-plugin-bundles.mjs`; repository marketplace catalogues live at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. The third bundle, `plugins/dsh`, serves [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness): a publishable npm package (`@curio-data/dsh-intelli-search`) with no marketplace entry, whose Cordis patch inserts one bridge row launching the pinned standalone package with `--host dsh` and a registrar for the shared skill. Runtime registration does not parse frontmatter, so the registrar strips it and registers the body with the skill's directory as its resource base. The host namespaces the tools `mcp__intelli__<tool>`. Launchers pin the exact MCP package version through `npx` and contain no pipeline code or credentials; each host's credential and workspace forwarding follows its own environment rules, documented in the generated skills. `npm run check:plugins` is the bidirectional drift gate between the generator and the committed tree.
 
 ## Source Code Structure
 
@@ -214,7 +214,8 @@ packages/mcp/
 └── dist/                   # Generated self-contained executable and runtime bundles
 
 guidance/                   # Shared host-neutral guidance source and per-host setup fragments
-plugins/                    # Generated Claude Code and Codex bundles (manifests, launchers, skills)
+plugins/                    # Generated Claude Code, Codex and DeepSeek Harness bundles
+scripts/templates/dsh/     # Hand-edited dsh bundle sources (registrar, icon, README)
 ```
 
 ## Cache Structure

@@ -1,8 +1,55 @@
 # DeepSeek Harness Host Support
 
-Status: proposed host, recorded 18 November 2026. Not implemented. The owner has not decided on the sequencing. This brief specifies the smallest change that makes `intelli-search` a first-class host plugin for _DeepSeek Harness_ (`dsh`), reusing the existing standalone MCP server and the existing generator.
+Status (21 November 2026): Phase 1 and Phase 2 Steps 1 to 4 are complete on `explore/dsh-host`. Credentialed verification and release remain separate owner-approved steps. See the [handover](../plans/dsh-host/HANDOVER.md) for the next action. The proposal below was recorded on 18 November 2026 by an external contributor; where Resume Here corrects it, Resume Here governs. This brief specifies the smallest change that makes `intelli-search` a first-class host plugin for _DeepSeek Harness_ (`dsh`), reusing the existing standalone MCP server and the existing generator.
 
 Read with `docs/COMPATIBILITY.md` (evidence classes), `scripts/README.md` (the bundle generator) and `docs/proposals/BATCH-RESEARCH.md` (the proposal format this document follows).
+
+## Resume Here
+
+This section is the starting point for any session that continues the work. It records what Phase 1 established, what is committed, and the decisions the owner adopted. The full Phase 1 report, with commands and sources, is kept as gitignored evidence in the main checkout: `evidence/agents/2026-11-18-next-activities/reports/dsh-explore.md`.
+
+### Phase 1 Results (18 November 2026)
+
+The checks ran against `dsh` `0.2.2-rc.1`, the registry `latest` on that date; `next` was `0.2.2-rc.5`. They ran in an isolated scratch installation, without credentials. No bundle was generated: a bridge row inserted by hand into a scratch profile launched the local build of the standalone server.
+
+- **Tools and skill register.** The bridge started the server and all four tools registered as `mcp__intelli__intelli_*`. A scratch registrar stripped the skill's frontmatter, because runtime registration does not parse it, and registered the body through `ctx.skills.register()`; the host loaded it. The tools appear shortly after start, not at once, so a test must poll for them.
+- **No model turn was run.** The host needs a DeepSeek credential for its own model, so no `intelli_search` or `intelli_research` call went through `dsh`. Model-visible tool use, credential delivery to the server, answer quality, cache placement through a real session and unattended approval remain unverified.
+- **Adapter spike committed.** Commit `0529c95` adds `--host dsh` to `packages/mcp/src/cli.ts`, generalises `defaultCodexConfig` to `defaultHostConfig` with unchanged _Codex_ output, and adds unit tests. Build and the full deterministic suite pass. The scratch bridge row, switched to `--host dsh` without path arguments, started the committed server and registered the same four tools. At the end of Phase 1, no bundle, guidance or documentation outside this file had changed.
+
+Phase 1 found these statements wrong or incomplete for `0.2.2-rc.1`:
+
+| Sections | Proposal Says | Phase 1 Finding |
+|---|---|---|
+| 1 and 3 | The bridge is enabled by default | The bridge ships but no row mounts it; the bundle's inserted row does that |
+| 3, 10 and 13 | A community catalogue accepts a pull request adding a YAML file, with a `dsh-plugin` topic and catalogue checks | There is no official catalogue: a publisher serves a JSON index (`format: 1`) and operators add its URL. None of the proposed topic, YAML submission or checks is an official requirement; the topic is used by some third-party catalogues |
+| 6.4 | A project or user skill of the same name outranks the registration | Only a project skill outranks it; a user skill does not |
+| 1, 6.2, 9.1 and 11.1 | `$DSH_HOME/.env` is the only credential source the child process can read | It is one of three: the inherited environment outranks a `.env` in the launch directory, which outranks `$DSH_HOME/.env` |
+| 7.3 and 13 | Scenario 18 makes a credentialed `intelli_search` call and tests disable and enable | Scenario 18 is credential-free and tests removal and reinstallation; credentialed calls move to a separate opt-in run (Next Steps 3 and 4) |
+
+The proposal's claim that omitting `toolCallTimeoutMs` guarantees a first-run timeout is too strong: the 60-second default is a real risk for research, not a certainty, and no timed research run exists. The ten-minute setting covers tool and resource calls; server startup and tool discovery keep the separate 60-second protocol default, and first-run `npx` download time against that startup limit is untested.
+
+### Owner Decisions
+
+Phase 1 recommends the first option in each row. Record the decision and its date in the last column; the implementing session follows that column. D1 to D5 answer the open questions in section 14, and D6 is new: record answers here, not in section 14.
+
+| # | Decision | Options | Phase 1 Recommendation | Owner Decision |
+|---|---|---|---|---|
+| D1 | Server name (section 6.1) | `intelli`, giving `mcp__intelli__intelli_search`; or `intelli_search`, as on the other hosts | `intelli`: shorter in every call and skill example; the generator already sets a prefix per host | Recommendation adopted (2026-11-19) |
+| D2 | Per-user configuration (section 7.2) | One `$XDG_CONFIG_HOME/mcp-intelli-search` shared with _Codex_; or a directory for `dsh` alone | Shared: same engine and models; explicit `--config` still allows a different setup | Recommendation adopted (2026-11-19) |
+| D3 | Publication (section 10) | Publish `@curio-data/dsh-intelli-search` to npm with its own tag; or install from a pinned Git commit | Publish: a versioned install, and an exact source for any JSON index | Recommendation adopted (2026-11-19) |
+| D4 | Workspace (section 6.3) | The launch directory, with the home and root guard; or wait for a per-session workspace from the host | Launch directory: document that a later change of directory does not move the cache | Recommendation adopted (2026-11-19) |
+| D5 | Evidence (section 5) | Reproduce the contributor's credentialed runs before writing a compatibility row; or enter them as a lower evidence class | Reproduce first; needs a DeepSeek key for the host model and the OpenRouter key | Recommendation adopted (2026-11-19) |
+| D6 | Repository | Build `plugins/dsh` here with the existing generator; or a separate repository depending on the published MCP package | Here: one guidance source, one version pin and one drift gate. A separate repository pays off only if the bundle gains substantial `dsh` code or its own release cadence | Recommendation adopted (2026-11-19) |
+
+The committed spike already implements the recommended options of D2 and D4. Choosing the other option for either means changing `packages/mcp/src/cli.ts` and `packages/mcp/src/host.ts`.
+
+### Next Steps
+
+1. Done: the owner adopted all six recommendations on 19 November 2026. The Phase 2 implementation plan and its handover note are tracked on this branch under `docs/plans/dsh-host/`; start at `docs/plans/dsh-host/HANDOVER.md`.
+2. Done: `b2d060b` generated the bundle, registered the skill and added deterministic tests for the generator, registrar and package contents.
+3. Done: `78f34ec` added credential-free scenario 18, including tool and skill discovery, dummy credential delivery, workspace guards, removal and reinstallation on the isolated host.
+4. Release plumbing (`4b98798`) and documentation (`762afbc`) landed before credentialed testing. Under D5 the compatibility row waits for a separate authorised run; neither release nor real research is established by scenario 18.
+5. After the 20 November review, the owner adopted [E1 and E2](../plans/dsh-host/REVIEW-2026-11-20.md#owner-decisions-21-november-2026). E1 declares `>=0.2.2-rc.1 <0.3.0`; only `0.2.2-rc.1` and `0.2.2-rc.5` have passed the credential-free host checks. E2 settles the bundle licence note. Continue from the [handover](../plans/dsh-host/HANDOVER.md).
 
 ## 1. Summary
 

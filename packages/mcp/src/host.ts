@@ -46,7 +46,11 @@ export function defaultDocument(credential: string) {
   };
 }
 
-export function defaultCodexConfig(workspace: string, paths: HostPaths): Promise<StandaloneConfig> {
+export function defaultHostConfig(
+  _host: "codex" | "dsh",
+  workspace: string,
+  paths: HostPaths,
+): Promise<StandaloneConfig> {
   return parseConfig(defaultDocument(paths.credential), workspace);
 }
 

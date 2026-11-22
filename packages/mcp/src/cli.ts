@@ -10,7 +10,7 @@ import { identity } from "./identity.js";
 import { ConfigurationError, loadConfig, resolveWorkspace } from "./config.js";
 import type { StandaloneConfig } from "./config.js";
 import { installStdoutGuard } from "./stdout-guard.js";
-import { defaultCodexConfig, hostPaths, setupHost } from "./host.js";
+import { defaultHostConfig, hostPaths, setupHost } from "./host.js";
 
 export function cliOptions(argv: string[], env: NodeJS.ProcessEnv = process.env) {
   const { values, positionals } = parseArgs({
@@ -26,19 +26,17 @@ export function cliOptions(argv: string[], env: NodeJS.ProcessEnv = process.env)
       "check-config": { type: "boolean" },
     },
   });
-  if (values.host !== undefined && values.host !== "codex")
+  if (values.host !== undefined && values.host !== "codex" && values.host !== "dsh")
     throw new Error("Unsupported host");
   if (positionals.length > 1 || (positionals.length === 1 && positionals[0] !== "setup"))
     throw new Error("Unsupported command");
   const setup = positionals[0] === "setup";
+  const host = values.host === "codex" || values.host === "dsh";
   return {
     ...values,
     setup,
-    config:
-      values.config ?? (setup || values.host === "codex" ? undefined : env.INTELLI_SEARCH_CONFIG),
-    workspace:
-      values.workspace ??
-      (setup || values.host === "codex" ? undefined : env.INTELLI_SEARCH_WORKSPACE),
+    config: values.config ?? (setup || host ? undefined : env.INTELLI_SEARCH_CONFIG),
+    workspace: values.workspace ?? (setup || host ? undefined : env.INTELLI_SEARCH_WORKSPACE),
   };
 }
 
@@ -68,7 +66,7 @@ async function main(): Promise<void> {
   }
   if (args.help) {
     process.stdout.write(
-      `Usage: mcp-intelli-search setup\n       mcp-intelli-search --host codex [--config FILE] [--workspace ABSOLUTE_DIRECTORY]\n       mcp-intelli-search --config FILE --workspace ABSOLUTE_DIRECTORY\n\nCommands:\n  setup               Store an OpenRouter key read from standard input and create or connect per-user configuration; accepts no path selections\n\nOptions:\n  --host codex      Use the Codex working root and per-user defaults\n  --config FILE       Explicit generic configuration (or INTELLI_SEARCH_CONFIG)\n  --workspace DIR     Existing absolute generic workspace (or INTELLI_SEARCH_WORKSPACE)\n  --check-config      Validate configuration without inference or serving\n  --help              Show this help\n  --version           Show package version\n\nGeneric MCP serving requires explicit configuration and workspace paths.\nCodex mode supplies both from its launcher and works without path exports.\nStandard output carries protocol messages only while serving.\n`,
+      `Usage: mcp-intelli-search setup\n       mcp-intelli-search --host codex [--config FILE] [--workspace ABSOLUTE_DIRECTORY]\n       mcp-intelli-search --host dsh [--config FILE] [--workspace ABSOLUTE_DIRECTORY]\n       mcp-intelli-search --config FILE --workspace ABSOLUTE_DIRECTORY\n\nCommands:\n  setup               Store an OpenRouter key read from standard input and create or connect per-user configuration; accepts no path selections\n\nOptions:\n  --host codex        Use the Codex working root and per-user defaults\n  --host dsh          Use the DeepSeek Harness working directory and per-user defaults\n  --config FILE       Explicit generic configuration (or INTELLI_SEARCH_CONFIG)\n  --workspace DIR     Existing absolute generic workspace (or INTELLI_SEARCH_WORKSPACE)\n  --check-config      Validate configuration without inference or serving\n  --help              Show this help\n  --version           Show package version\n\nGeneric MCP serving requires explicit configuration and workspace paths.\nCodex and DeepSeek Harness modes supply both from their launchers and work without path exports.\nStandard output carries protocol messages only while serving.\n`,
     );
     return;
   }
@@ -93,30 +91,33 @@ async function main(): Promise<void> {
       );
     return;
   }
-  const paths = args.host === "codex" ? hostPaths() : undefined;
+  const host = args.host === "codex" || args.host === "dsh" ? args.host : undefined;
+  const paths = host ? hostPaths() : undefined;
   const file = args.config ?? paths?.config;
-  const workspace = args.workspace ?? (args.host === "codex" ? process.cwd() : undefined);
+  const workspace = args.workspace ?? (host ? process.cwd() : undefined);
   if (!file || !workspace)
     throw new Error(
       "Explicit --config and --workspace are required (or their INTELLI_SEARCH_* environment equivalents)",
     );
   const canonicalWorkspace = await resolveWorkspace(workspace);
   let workspaceDefect: string | undefined;
-  if (args.host === "codex" && !args.workspace) {
+  if (host && !args.workspace) {
     const home = await realpath(homedir()).catch(() => homedir());
     if (canonicalWorkspace === parsePath(canonicalWorkspace).root || canonicalWorkspace === home)
       workspaceDefect =
-        "Codex working root must be a project directory, not the home or filesystem root; restart Codex from the project or with --cd <project>";
+        host === "codex"
+          ? "Codex working root must be a project directory, not the home or filesystem root; restart Codex from the project or with --cd <project>"
+          : "DeepSeek Harness working directory must be a project directory, not the home or filesystem root; start the harness from the project or set cwd on the bridge row";
   }
   if (args["check-config"]) {
     if (workspaceDefect) throw new Error(workspaceDefect);
     let builtInDefaults = false;
-    if (paths && !args.config) {
+    if (host && paths && !args.config) {
       try {
         await loadConfig(file, workspace);
       } catch (error) {
         if (!(error instanceof ConfigurationError) || error.reason !== "missing") throw error;
-        await defaultCodexConfig(workspace, paths);
+        await defaultHostConfig(host, workspace, paths);
         builtInDefaults = true;
       }
     } else {
@@ -124,7 +125,7 @@ async function main(): Promise<void> {
     }
     process.stdout.write(
       builtInDefaults
-        ? "Configuration is valid (built-in Codex defaults; no per-user file found).\n"
+        ? `Configuration is valid (built-in ${host === "codex" ? "Codex" : "DeepSeek Harness"} defaults; no per-user file found).\n`
         : "Configuration is valid.\n",
     );
     return;
@@ -144,8 +145,8 @@ async function main(): Promise<void> {
       config = await loadSelected();
     } catch (error) {
       if (!(error instanceof ConfigurationError)) throw error;
-      if (paths && !args.config && error.reason === "missing") {
-        config = await defaultCodexConfig(workspace, paths);
+      if (host && paths && !args.config && error.reason === "missing") {
+        config = await defaultHostConfig(host, workspace, paths);
       } else {
         process.stderr.write(
           `[mcp-intelli-search] ${error.message}. Serving anyway: each tool call reports this and rereads the file until it loads\n`,

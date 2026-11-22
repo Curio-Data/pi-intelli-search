@@ -97,6 +97,7 @@ SCRIPTS=(
   15_pi_floor.sh
   16_batch_independent.sh
   17_batch_expansion.sh
+  18_dsh_plugin.sh
 )
 
 run_scenario() {

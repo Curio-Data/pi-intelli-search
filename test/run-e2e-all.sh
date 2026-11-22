@@ -111,6 +111,7 @@ SCRIPTS=(
   e2e/15_pi_floor.sh
   e2e/16_batch_independent.sh
   e2e/17_batch_expansion.sh
+  e2e/18_dsh_plugin.sh
 )
 
 PASSED=()

@@ -1,10 +1,14 @@
 # Changelog
 
-This changelog records notable changes to the native `Pi` extension and the standalone Model Context Protocol (MCP) server.
+This changelog records notable changes to the native `Pi` extension, the standalone Model Context Protocol (MCP) server and the [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) bundle.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the repository's [two-package versioning scheme](https://github.com/Curio-Data/pi-intelli-search/blob/main/AGENTS.md#versioning-scheme-two-packages-one-core).
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the repository's [versioning scheme](https://github.com/Curio-Data/pi-intelli-search/blob/main/AGENTS.md#versioning-scheme-three-packages-one-core).
 
 ## [Unreleased]
+
+### Added
+
+- MCP server and dsh bundle: a generated DeepSeek Harness (`dsh`) host bundle named `@curio-data/dsh-intelli-search`. It declares `engines.dsh: >=0.2.2-rc.1 <0.3.0` and requires Node.js 24.9 or later. The profile install command is `dsh plugin --profile <name> add @curio-data/dsh-intelli-search`. One inserted bridge row starts the pinned MCP package with the new `--host dsh` adapter mode (launch-directory workspace, home and filesystem-root guard, shared per-user configuration) and one registrar registers the `intelli-search` skill. On this host the tools are named `mcp__intelli__intelli_search`, `mcp__intelli__intelli_extract`, `mcp__intelli__intelli_collate` and `mcp__intelli__intelli_research`: the server is named `intelli`, shorter than the other hosts' `intelli_search`. The bridge call limit is raised to ten minutes; startup and discovery keep the host's separate default.
 
 ### Fixed
 

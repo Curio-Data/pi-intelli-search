@@ -1,0 +1,48 @@
+{
+  "name": "@curio-data/dsh-intelli-search",
+  "version": "0.24.0",
+  "description": "Web research over MCP: search, fetch, extract, collate and cache suggestions.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Curio Data Pro Ltd",
+    "url": "https://github.com/Curio-Data"
+  },
+  "homepage": "https://github.com/Curio-Data/pi-intelli-search",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Curio-Data/pi-intelli-search.git",
+    "directory": "plugins/dsh"
+  },
+  "keywords": [
+    "research",
+    "web-search",
+    "documentation",
+    "mcp"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "skills/**",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=24.9.0",
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
