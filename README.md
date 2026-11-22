@@ -13,7 +13,7 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1156%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1161%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -1389,6 +1389,7 @@ To suppress both telemetry files in the MCP server, set `"disableTelemetry": tru
 
 - **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. The full paced live suite passed on the merged floor-modernisation generation (2026-10-08), including research on the floor host and `Pi` 1.1.0; the [compatibility matrix](docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball checks from registry-pin verification.
 - **`Pi` 1.2.0 Verification:** A static interface audit and targeted native and MCP-client research checks are recorded on 2026-10-13, followed by the [complete paced candidate suite](docs/COMPATIBILITY.md#0180-candidate-verification-2026-10-13). The peer floor and model defaults are unchanged. This is local-candidate evidence, not installation of the published candidate. OpenRouter's per-key catalogue does not remove the extension's unconditional `models.json` registrations, which do not grant account access. See [audit evidence and limits](docs/COMPATIBILITY.md#pi-120-verification-2026-10-13).
+- **`Pi` 1.6.0 Verification:** Static declaration and runtime-source audits, native and standalone deterministic tests, and targeted native and MCP-client research are recorded on 2026-11-21. The shared retry classifier adopts the host's new transient-transport patterns. The peer floor and model defaults are unchanged. This dated 2026-11-21 audit is targeted local-candidate evidence, not a complete live suite or a check of the published package. See [audit evidence and limits](docs/COMPATIBILITY.md#pi-160-verification-2026-11-21).
 - User interface (UI) notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, remote procedure call (RPC)).
 - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
 - Retry and timeout are owned by the shared model policy, invoked by native `callLlm()`, independently of `Pi`'s `retry.provider.maxRetries`. Native calls force SDK `maxRetries: 0`. Configured backoff and application timeout apply inside `intelli_research`; the three standalone tools retain their one-attempt, no-application-timeout behaviour.

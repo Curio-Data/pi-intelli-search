@@ -378,7 +378,7 @@ export async function withRetry<T>(
 // OpenRouter path surfaces 429/5xx only as an errorMessage string (no status or
 // headers post-hoc), so classification is necessarily text-based. The lists
 // below mirror the audited host's retry classifier (pi-ai utils/retry.js,
-// captured for 1.5.2), which the host applies to its agent-loop calls; this
+// captured for 1.6.0), which the host applies to its agent-loop calls; this
 // policy owns the extension's pipeline calls and keeps the same coverage,
 // including the quota/billing exclusions that must fail fast instead of
 // consuming the retry budget.
@@ -386,11 +386,12 @@ export async function withRetry<T>(
 // verbatim and guards digit and letter adjacency on both sides. This policy
 // has no host-side context-overflow pre-filter, so a delimited token count
 // such as "128,500 tokens" can still match and retry (known limitation; bare
-// digit runs like "150293" do not match). Retained historical extras: raw
-// Node transport codes, the standalone adapter's transient 402 wording, and
-// separator-tolerant busy phrasings.
+// digit runs like "150293" do not match). Retained historical extras:
+// unbounded raw Node transport codes (now also covered upstream in bounded
+// form), the standalone adapter's transient 402 wording, and separator-tolerant
+// busy phrasings.
 // Exported for the parity gate in test/util.test.ts, which holds these lists
-// to the captured fixture (test/fixtures/pi-ai-retry-1.5.2.json). The gate
+// to the captured fixture (test/fixtures/pi-ai-retry-1.6.0.json). The gate
 // does not read the installed host: run
 // scripts/capture-retry-fixture.mjs --check <retry.js> at each host bump to
 // detect upstream drift.
@@ -460,12 +461,19 @@ export const RETRYABLE_PATTERNS = [
   "connection.?error",
   "connection.?refused",
   "connection.?lost",
+  // Gateway mid-stream drop relayed as an Anthropic-style api_error event
+  // (pi #12064; upstream since pi-ai 1.6.0).
+  "connection.?closed",
   "other side closed",
   "fetch failed",
   // node-fetch system errors, e.g. the Google ADC OAuth token refresh used by
   // google-vertex. The reason is often empty (pi #10996).
   "request to \\S+ failed, reason:",
   "getaddrinfo",
+  // Bare Node socket error codes, bounded so they do not match inside a longer
+  // identifier (pi #12128; upstream since pi-ai 1.6.0).
+  "(?<![a-z0-9_])(?:ECONNRESET|ECONNABORTED|ECONNREFUSED|ETIMEDOUT|EPIPE)(?![a-z0-9_])",
+  "connection reset by peer",
   "ENOTFOUND",
   "EAI_AGAIN",
   "upstream.?connect",
@@ -475,8 +483,9 @@ export const RETRYABLE_PATTERNS = [
   "timed? out",
   "timeout",
   "terminated",
-  // Raw Node transport codes observed on the OpenRouter path; upstream matches
-  // the prose forms above but not these codes.
+  // Unbounded raw Node transport codes retained from the pre-alignment
+  // classifier. Upstream 1.6.0 covers these in the bounded group above; the
+  // extras avoid narrowing the extension's existing matches.
   "ETIMEDOUT",
   "ECONNRESET",
   "ECONNREFUSED",
@@ -492,6 +501,9 @@ export const RETRYABLE_PATTERNS = [
   // WebSocket transports can report close/error text instead of HTTP/fetch text.
   "websocket.?closed",
   "websocket.?error",
+  // Codex's 60-minute WebSocket lifetime limit; retrying opens a fresh
+  // connection (pi #12124; upstream since pi-ai 1.6.0).
+  "websocket.?connection.?limit.?reached",
   // Premature stream endings from SDKs and transports (pi #4433, #3594).
   "ended without",
   "stream ended before message_stop",
