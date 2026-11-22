@@ -333,6 +333,12 @@ describe("plugin bundle generation", () => {
       "README.md",
       "LICENSE",
     ]);
+    const rootGuide = readFileSync(join(REPO_ROOT, "README.md"), "utf8").split("\n#### DeepSeek Harness\n")[1]?.split("\n#### ")[0];
+    assert.ok(rootGuide, "root dsh setup section exists");
+    for (const guide of [rootGuide, files["plugins/dsh/README.md"], files["plugins/dsh/skills/intelli-search/SKILL.md"]]) {
+      assert.ok(guide.includes(manifest.engines.dsh), "guide states the manifest's declared range");
+      for (const host of [DSH_TESTED_VERSION, "0.2.2-rc.5"]) assert.ok(guide.includes(`\`${host}\``), "guide identifies exact hosts checked");
+    }
     assert.strictEqual(DSH_TESTED_VERSION, "0.2.2-rc.1");
     assert.deepStrictEqual(manifest.engines, {
       node: ">=24.9.0",
@@ -425,7 +431,7 @@ describe("plugin bundle generation", () => {
     assert.match(skill, /one harness restart/);
     assert.match(skill, /does not provision this server/);
     assert.match(skill, /a directory change later in the session does not move the cache/);
-    assert.match(skill, /profile's `cordis.patch.yml` and set `cwd`/);
+    assert.ok(skill.includes("`$DSH_HOME/profiles/<name>/cordis.patch.yml` and set `cwd`"));
     assert.match(skill, /`WORKSPACE` tool error/);
     for (const op of [
       "mcp__intelli__intelli_search",

@@ -8,6 +8,7 @@ The bundle is pure configuration: one inserted bridge row starts the pinned stan
 
 - `dsh` within the declared `engines.dsh` range `>=0.2.2-rc.1 <0.3.0` (see Evidence and Limits below)
 - [_Node.js_](https://nodejs.org/) 24.9 or later on `PATH` (the harness's own floor; the first start downloads the MCP package through `npx`)
+- For installation and removal, `pnpm` on `PATH` or an explicit `pnpmCommand`. A launcher-provided package manager takes precedence.
 - An [_OpenRouter_](https://openrouter.ai) API key for the search, extract and collate stages
 
 ## Installation
@@ -26,7 +27,7 @@ The server receives its key through the harness environment layer. Precedence: a
 (umask 077; touch "${DSH_HOME:-$HOME/.dsh}/.env") && chmod 600 "${DSH_HOME:-$HOME/.dsh}/.env"
 ```
 
-After the command succeeds, edit that file privately. Put `OPENROUTER_API_KEY=<key>` on its own line, replacing any previous definition.
+After the command succeeds, open the file in an editor so the key stays out of shell history. Put `OPENROUTER_API_KEY=<key>` on its own line, replacing any previous definition.
 
 The bridge row forwards `process.env.OPENROUTER_API_KEY` to the server; an unset value stays unset and does not block startup. A key stored through the harness model-settings page does not provision this server: that credential is resolved through a service a child process cannot read.
 
@@ -34,7 +35,7 @@ Alternatively, `npx -y --package @curio-data/mcp-intelli-search mcp-intelli-sear
 
 ## Workspace and Cache
 
-The server uses the harness working directory as its workspace and writes the research cache (`.search/` by default) below it. Start the harness from the project directory: a directory change later in the session does not move the cache. For a fixed project root, override `mcp-intelli-search` in the profile's `cordis.patch.yml` and set `cwd`. The patch replaces the whole configuration: copy the bundle row's other fields and update its pinned package version after each bundle upgrade. A home or filesystem-root working directory is rejected with an actionable `WORKSPACE` error instead of creating an accidental shared cache.
+The server uses the harness working directory as its workspace and writes the research cache (`.search/` by default) below it. Start the harness from the project directory: a directory change later in the session does not move the cache. For a fixed project root, override the row with id `mcp-intelli-search` in `$DSH_HOME/profiles/<name>/cordis.patch.yml` and set `cwd`. The override replaces that row's entire `config`. Copy its other `config` fields from the bundle and update the pinned package version after each bundle upgrade. A home or filesystem-root working directory is rejected with an actionable `WORKSPACE` error instead of creating an accidental shared cache.
 
 ## Tools and Timeouts
 
