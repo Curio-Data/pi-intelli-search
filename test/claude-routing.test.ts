@@ -84,6 +84,42 @@ it("routing checks distinguish discovery, invocation and actual tool choice", ()
   assert.equal(verifyClaudeRouting(fixture("intelli_search", false), "intelli_search", "disabled").skillInvoked, false);
 });
 
+for (const mode of ["independent", "expansion"]) {
+  it(`checks effective inputs and delivered ${mode} batch results`, () => {
+    const events = fixture("intelli_research");
+    const queries = [{ query: "first", focusPrompt: "focus A" }, { query: "second", focusPrompt: "focus B" }];
+    const input = { queries, batchMode: mode, maxUrls: 3 };
+    events[3].message!.content[0].input = input;
+    const entries = queries.map(({ query }, i) => ({ position: i + 1, query, outcome: "completed", details: { cachePath: `.search/${i}` } }));
+    const sections = entries.map(e => `# Query ${e.position} of 2: ${e.query}\n\nAnswer for ${e.query}.\n**Report**: \`${e.details.cachePath}/report.md\``);
+    const perQuery = entries.map(e => `${e.position}. ${e.query}: \`${e.details.cachePath}/report.md\``);
+    const text = (mode === "independent" ? sections.join("\n\n") : `A merged comparison of both results.\n## Per-Query Reports\n${perQuery.join("\n")}`) + "\n\nBatch folder: `.search/batch/`";
+    const batch = { mode, cachePath: ".search/batch", outcome: "completed", entries,
+      ...(mode === "expansion" ? { merge: { outcome: "completed", reportPath: ".search/batch/report.md" } } : {}) };
+    const verify = (visible = text) => {
+      events[4].message!.content[0].content = JSON.stringify({ text: visible, outcome: "completed", details: { batch } });
+      return verifyClaudeRouting(events, "intelli_research", "required");
+    };
+    assert.equal(verify().operationCalls, 1);
+    queries[1].focusPrompt = " ";
+    assert.throws(() => verify(), /extraction focus/);
+    events[3].message!.content[0].input = { focusPrompt: "shared", queries: [{ query: "first", maxUrls: 2 }, { query: "second", maxUrls: 1 }], batchMode: mode };
+    assert.equal(verify().operationCalls, 1);
+    (events[3].message!.content[0].input!.queries as Array<{maxUrls: number}>)[1].maxUrls = 0;
+    assert.throws(() => verify(), /breadth/);
+    queries[1].focusPrompt = "focus B";
+    events[3].message!.content[0].input = input;
+    assert.throws(() => verify(text.replace(".search/1/report.md", "wrong-target")), /visible member report/);
+    entries[1].outcome = "collate-failed";
+    assert.throws(() => verify(), /member did not degrade/);
+    entries[1].outcome = "completed";
+    if (batch.merge) {
+      batch.merge.outcome = "skipped";
+      assert.throws(() => verify(), /merge completed/);
+    }
+  });
+}
+
 it("allows successful same-tool follow-ups but rejects errors and factual escalation", () => {
   for (const operation of ["intelli_search", "intelli_research"]) {
     const events = fixture(operation);
