@@ -637,7 +637,7 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `e2e/01_main.sh` | Default pipeline (Sonar + M3 via OpenRouter) works end-to-end with nested settings |
 | `e2e/04_migration.sh` | Upgrade from 0.7.0 defaults auto-migrates to 0.8.0 OpenRouter defaults |
 | `e2e/03_model_override.sh` | Model override in `pi-intelli-search` settings namespace is read and used |
-| `e2e/02_cap.sh` | `defaultUrls` and `maxUrls` (cap) are enforced; agent requests above cap are silently clamped |
+| `e2e/02_cap.sh` | Two direct calls through the real host verify that omitting `maxUrls` uses `defaultUrls` and an explicit value above the cap is clamped, without relying on agent argument selection |
 | `e2e/06_extract_limits.sh` | `extractMaxChars` and `extractionMaxTokens` are enforced; a paired comparison, both arms run at once, proves truncation |
 | `e2e/05_collation_limits.sh` | `collationMaxTokens` is enforced; a paired comparison, both arms run at once, proves output clamping |
 | `e2e/07_llms_full.sh` | Automatic llms-full.txt discovery works; probes candidate sites, verifies file lands in cache |

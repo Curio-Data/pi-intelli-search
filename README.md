@@ -391,7 +391,7 @@ The installed `intelli-search` skill covers configuration and unattended tool ap
 
 [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) ships a Model Context Protocol client bridge, so this route is a generated configuration bundle rather than an extension: one inserted bridge row starts the pinned `@curio-data/mcp-intelli-search` package through `npx` with `--host dsh`, and one registrar registers the `intelli-search` skill with the harness. Neither carries pipeline code.
 
-**Installation by name requires two public packages:** the profile bundle and the exact MCP server version its launcher selects. The local-bundle checks below do not test that registry route. See [Compatibility](docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits) for the recorded installation evidence.
+**Installation by name requires two public packages:** the profile bundle and the exact MCP server version its launcher selects. The local-bundle checks below do not test that registry route. See [Compatibility](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits) for the recorded installation evidence.
 
 <!-- /packages -->
 <!-- packages:none -->
@@ -403,7 +403,8 @@ dsh plugin --profile tui add @curio-data/dsh-intelli-search
 
 <!-- /packages -->
 <!-- packages:mcp hidden
-The bundle is published separately from this server. Check the [repository installation guide](https://github.com/Curio-Data/pi-intelli-search#readme) for availability before installing.
+The bundle is published separately from this server. Check the [repository installation guide](https://github.com/Curio-Data/pi-intelli-search#readme) for availability before installing. Its example uses the `tui` profile.
+
 -->
 <!-- packages:mcp -->
 Start the same profile from the project directory with `dsh --profile tui`. The first start downloads the MCP package through `npx`, so it needs network access.
@@ -426,7 +427,7 @@ In the session, ask: “Use mcp__intelli__intelli_search to find the current Typ
 
 Uninstall with `dsh plugin --profile <name> remove @curio-data/dsh-intelli-search`, restart the same profile with `dsh --profile <name>`, and confirm with `dsh --profile <name> --dump-config` that both bundle rows are gone.
 
-Credential-free installation, tool registration, skill loading, workspace guards and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` and `0.2.2-rc.5` on Linux with the local bundle. On `0.2.2-rc.1`, a separate credentialed run also verified search, three-page research and the credential-file fallback. See [DeepSeek Harness Evidence and Limits](docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits).
+Credential-free installation, tool registration, skill loading, workspace guards and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` and `0.2.2-rc.5` on Linux with the local bundle. On `0.2.2-rc.1`, a separate credentialed run also verified search, three-page research and the credential-file fallback. See [DeepSeek Harness Evidence and Limits](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits).
 
 <a id="route-a-direct-mcp-configuration"></a>
 #### Generic MCP Host
@@ -1436,7 +1437,7 @@ To suppress both telemetry files in the MCP server, set `"disableTelemetry": tru
 
 - **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. The full paced live suite passed on the merged floor-modernisation generation (2026-10-08), including research on the floor host and `Pi` 1.1.0; the [compatibility matrix](docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball checks from registry-pin verification.
 - **`Pi` 1.2.0 Verification:** A static interface audit and targeted native and MCP-client research checks are recorded on 2026-10-13, followed by the [complete paced candidate suite](docs/COMPATIBILITY.md#0180-candidate-verification-2026-10-13). The peer floor and model defaults are unchanged. This is local-candidate evidence, not installation of the published candidate. OpenRouter's per-key catalogue does not remove the extension's unconditional `models.json` registrations, which do not grant account access. See [audit evidence and limits](docs/COMPATIBILITY.md#pi-120-verification-2026-10-13).
-- **`Pi` 1.6.0 Verification:** Static declaration and runtime-source audits, native and standalone deterministic tests, and targeted native and MCP-client research are recorded on 2026-11-21. The shared retry classifier adopts the host's new transient-transport patterns. The peer floor and model defaults are unchanged. This dated 2026-11-21 audit is targeted local-candidate evidence, not a complete live suite or a check of the published package. See [audit evidence and limits](docs/COMPATIBILITY.md#pi-160-verification-2026-11-21).
+- **`Pi` 1.6.0 Verification:** Static declaration and runtime-source audits, native and standalone deterministic tests, and targeted native and MCP-client research are recorded on 2026-11-21. The shared retry classifier adopts the host's new transient-transport patterns. The peer floor and model defaults are unchanged. This dated 2026-11-21 audit is targeted local-candidate evidence, not a complete live suite or a check of the published package. See [audit evidence and limits](https://github.com/Curio-Data/pi-intelli-search/blob/pi-v0.25.0/docs/COMPATIBILITY.md#pi-160-verification-2026-11-21).
 - User interface (UI) notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, remote procedure call (RPC)).
 - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
 - Retry and timeout are owned by the shared model policy, invoked by native `callLlm()`, independently of `Pi`'s `retry.provider.maxRetries`. Native calls force SDK `maxRetries: 0`. Configured backoff and application timeout apply inside `intelli_research`; the three standalone tools retain their one-attempt, no-application-timeout behaviour.
@@ -1489,7 +1490,7 @@ pi install /path/to/pi-intelli-search
 - [Native release notes](PI_CHANGELOG.md): The generated native-only changelog that `Pi` 1.5.0 shows under Extension Updates after an update; derived from the [Changelog](CHANGELOG.md).
 <!-- /packages -->
 <!-- packages:mcp -->
-- [Claude Code skill](plugins/claude-code/skills/intelli-search/SKILL.md), [Codex skill](plugins/codex/skills/intelli-search/SKILL.md) and [DeepSeek Harness skill](plugins/dsh/skills/intelli-search/SKILL.md): Host-specific setup and agent-facing usage instructions.
+- [Claude Code skill](plugins/claude-code/skills/intelli-search/SKILL.md), [Codex skill](plugins/codex/skills/intelli-search/SKILL.md) and [DeepSeek Harness skill](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/skills/intelli-search/SKILL.md): Host-specific setup and agent-facing usage instructions.
 <!-- /packages -->
 - [Contributor guide](AGENTS.md): Coding conventions and project structure.
 

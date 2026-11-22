@@ -257,9 +257,10 @@ The installed `intelli-search` skill covers configuration and unattended tool ap
 
 [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) ships a Model Context Protocol client bridge, so this route is a generated configuration bundle rather than an extension: one inserted bridge row starts the pinned `@curio-data/mcp-intelli-search` package through `npx` with `--host dsh`, and one registrar registers the `intelli-search` skill with the harness. Neither carries pipeline code.
 
-**Installation by name requires two public packages:** the profile bundle and the exact MCP server version its launcher selects. The local-bundle checks below do not test that registry route. See [Compatibility](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits) for the recorded installation evidence.
+**Installation by name requires two public packages:** the profile bundle and the exact MCP server version its launcher selects. The local-bundle checks below do not test that registry route. See [Compatibility](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits) for the recorded installation evidence.
 
-The bundle is published separately from this server. Check the [repository installation guide](https://github.com/Curio-Data/pi-intelli-search#readme) for availability before installing.
+The bundle is published separately from this server. Check the [repository installation guide](https://github.com/Curio-Data/pi-intelli-search#readme) for availability before installing. Its example uses the `tui` profile.
+
 Start the same profile from the project directory with `dsh --profile tui`. The first start downloads the MCP package through `npx`, so it needs network access.
 
 Credentials reach the server through the harness environment layer. Precedence: an `OPENROUTER_API_KEY` exported in the launching environment, then a `.env` file in the launch directory, then `$DSH_HOME/.env`. Accepted values are copied into the environment once at launch, so restart that profile after changing a key. To use the key across launching shells, prepare the harness-home file before entering the key:
@@ -280,7 +281,7 @@ In the session, ask: “Use mcp__intelli__intelli_search to find the current Typ
 
 Uninstall with `dsh plugin --profile <name> remove @curio-data/dsh-intelli-search`, restart the same profile with `dsh --profile <name>`, and confirm with `dsh --profile <name> --dump-config` that both bundle rows are gone.
 
-Credential-free installation, tool registration, skill loading, workspace guards and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` and `0.2.2-rc.5` on Linux with the local bundle. On `0.2.2-rc.1`, a separate credentialed run also verified search, three-page research and the credential-file fallback. See [DeepSeek Harness Evidence and Limits](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits).
+Credential-free installation, tool registration, skill loading, workspace guards and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` and `0.2.2-rc.5` on Linux with the local bundle. On `0.2.2-rc.1`, a separate credentialed run also verified search, three-page research and the credential-file fallback. See [DeepSeek Harness Evidence and Limits](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits).
 
 <a id="route-a-direct-mcp-configuration"></a>
 #### Generic MCP Host
@@ -750,7 +751,7 @@ For the standalone MCP server and host plugins, including exact tested versions 
 - [Architecture](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/ARCHITECTURE.md): Detailed design decisions and pipeline internals.
 - [Compatibility](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md): Tested host versions and artefacts for the native extension, MCP server and plugins.
 - [Components](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPONENTS.md): Third-party dependencies and licence attribution.
-- [Claude Code skill](https://github.com/Curio-Data/pi-intelli-search/blob/main/plugins/claude-code/skills/intelli-search/SKILL.md), [Codex skill](https://github.com/Curio-Data/pi-intelli-search/blob/main/plugins/codex/skills/intelli-search/SKILL.md) and [DeepSeek Harness skill](https://github.com/Curio-Data/pi-intelli-search/blob/main/plugins/dsh/skills/intelli-search/SKILL.md): Host-specific setup and agent-facing usage instructions.
+- [Claude Code skill](https://github.com/Curio-Data/pi-intelli-search/blob/main/plugins/claude-code/skills/intelli-search/SKILL.md), [Codex skill](https://github.com/Curio-Data/pi-intelli-search/blob/main/plugins/codex/skills/intelli-search/SKILL.md) and [DeepSeek Harness skill](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/skills/intelli-search/SKILL.md): Host-specific setup and agent-facing usage instructions.
 - [Contributor guide](https://github.com/Curio-Data/pi-intelli-search/blob/main/AGENTS.md): Coding conventions and project structure.
 
 ## Downloads
