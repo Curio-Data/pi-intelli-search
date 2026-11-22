@@ -8,7 +8,7 @@
 
 Independent reviews by `pi/openai-codex/gpt-6.2-astra` and Claude Code Opus 5.5 assessed completeness, correctness, prose and source architecture. The orchestrator selected an opt-in dsh audience in the existing package README generator, with the root DeepSeek Harness section as the canonical shared source and one bundle writer in both output modes. Three fresh Opus 5.5 plan-review rounds then closed generator, ownership, link-policy and verification gaps, ending in READY.
 
-Implement from [DeepSeek Harness README Unification Plan](README-UNIFICATION.md), which contains the content and generator contracts, parallel herdr allocation, file ownership, verification gates and release sequence. Find the checkpoint with `git log -1 --format=%H -- docs/plans/dsh-host/README-UNIFICATION.md`; if the file is not yet committed, first obtain owner approval to commit it and this handover to `main`. Otherwise cut `feature/dsh-readme-unification` from that commit and record it as the plan commit. The plan does not itself authorise implementation, publication or cleanup.
+Implement from [DeepSeek Harness README Unification Plan](README-UNIFICATION.md), which contains the content and generator contracts, parallel herdr allocation, file ownership, verification gates and release sequence. Find the checkpoint with `git log -1 --format=%H -- docs/plans/dsh-host/README-UNIFICATION.md`; if the file is not yet committed, first obtain owner approval to commit it and this handover to `main`. Otherwise cut `feature/dsh-readme-unification` from that commit and record it as the plan commit. Stage 0 may proceed; Stage 1 implementation requires separate owner approval. The plan does not itself authorise implementation, publication or cleanup.
 
 The completed review began with the reader entry points below. They record the sources as they stood at review time, not the target architecture:
 
@@ -44,7 +44,7 @@ The sections below preserve the original fix-session brief and its entry baselin
 
 ## Read First
 
-1. Read the proposal's [Resume Here](../../proposals/dsh-host-support-proposal.md#resume-here) on this branch (`docs/proposals/dsh-host-support-proposal.md`), including its corrections and Owner Decisions D1 to D6. The main checkout's copy predates Phase 1 and has no Resume Here; do not use it as the governing text.
+1. Read the proposal's [Resume Here](../../proposals/dsh-host-support-proposal.md#resume-here) on this branch (`docs/proposals/dsh-host-support-proposal.md`), including its corrections and Owner Decisions D1 to D6. The main checkout's copy predated Phase 1 when this instruction was written and now also carries Resume Here; use the current tracked text rather than this historical warning.
 2. Read the complete [Phase 2 plan](PLAN.md).
 3. Read Phase 1 evidence at `/srv/secure/repos/CURIO/pi-intelli-search/evidence/agents/2026-11-18-next-activities/reports/dsh-explore.md`.
 4. Read [REVIEW-2026-11-20.md](REVIEW-2026-11-20.md) and the two review reports it names.

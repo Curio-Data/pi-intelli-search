@@ -2,7 +2,7 @@
 
 **Status:** READY for owner-approved implementation; no implementation, publication or cleanup is authorised by this document
 
-**Planning commit:** `0028e94213a4d29fee0bfd92a88d845e71e86360`
+**Planning review commit (does not contain this plan):** `0028e94213a4d29fee0bfd92a88d845e71e86360`
 
 **Plan commit:** the commit that added this file to `main` (`git log -1 --format=%H -- docs/plans/dsh-host/README-UNIFICATION.md`); record it in the first integration-branch commit and in each agent brief
 

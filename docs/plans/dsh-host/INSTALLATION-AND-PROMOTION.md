@@ -1,6 +1,6 @@
 # Installation and Promotion
 
-For the integrated 0.25.0 candidate, follow the [release gates](RELEASE-025.md). The preview announcement below describes the exploration branch; do not use it as the release announcement.
+**Historical preview guide.** The integrated 0.25.0 release is complete; [its gates](RELEASE-025.md) are a historical record, not a pending procedure. The preview announcement below describes the exploration branch and must not be used as the current release announcement.
 
 ## Preview: Link to the Branch, Not npm
 

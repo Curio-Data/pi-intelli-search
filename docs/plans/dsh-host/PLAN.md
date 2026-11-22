@@ -520,11 +520,11 @@ Update this checklist after each step with the commit hash and evidence path. Do
 - [x] Step 3 complete for the repository: third-package workflow and CI guard in commit `4b98798`. The OPS.md and RELEASE-READINESS.md updates the plan assigns to this step live under the main checkout's `.plan/`, which the phase-2 brief makes read-only for the builder; the coordinator applies them from the exact content recorded in the report's Step 3 section.
 - [x] Step 4 complete: documentation regenerated in commit `762afbc`; fresh Opus 5.5 prose review assigned to the coordinator, changed prose files listed in the report.
 - [x] Steps 1 to 4 review fixes applied: `abf4e3a`, `f7ceb86`, `19fea93`, `4435194` respectively. Both credential-free host runs passed; retained logs and hashes: main checkout `evidence/2026-11-21-dsh-host/scenario-18/`. See `HANDOVER.md` for the re-review assignment.
-- [ ] Independent code and fresh Opus prose re-reviews accepted.
+- [ ] Independent code and fresh Opus prose re-reviews accepted. **Superseded by the integrated procedure in `RELEASE-025.md`; do not execute it from this historical checklist.**
 - [x] Step 5 live run and evidence: rc.1 local-bundle search, research and stored-key fallback passed (main checkout `evidence/2026-11-22-dsh-host/verification-receipt.md`). Do not repeat with the same approval.
 - [x] Step 5 scenario and compatibility prose accepted after independent reviews (`evidence/agents/2026-11-22-dsh-step5/reports/s19-code.md` and `s19-prose-r2.md` in the main checkout).
-- [ ] Step 6 complete: integrated reviews and release-candidate gates passed.
-- [ ] Step 7 complete: owner-approved publication, registry verification and merge finished.
+- [ ] Step 6 complete: integrated reviews and release-candidate gates passed. **Superseded by `RELEASE-025.md`, whose gates completed.**
+- [ ] Step 7 complete: owner-approved publication, registry verification and merge finished. **Superseded by `RELEASE-025.md`, whose publication and merge completed.**
 - [ ] Optional Step 8 decision recorded; no catalogue work performed by default.
 
 ## Revision Log
