@@ -60,6 +60,7 @@
     "esbuild": "0.28.2",
     "prettier": "^3.9.6",
     "roughjs": "^4.6.6",
+    "semver": "7.8.5",
     "tsx": "^4.19.0",
     "typebox": "*",
     "typescript": "^5.7.0"

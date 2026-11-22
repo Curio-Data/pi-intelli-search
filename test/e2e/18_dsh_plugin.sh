@@ -99,7 +99,13 @@ mkdir -p "$HOME" "$DSH_HOME" "$DSH_AGENTS_HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HO
 # Drop inherited credential-shaped variables by name without reading their
 # values. Each headless process must report a final missing-credential error.
 while IFS= read -r var; do
-  case "${var^^}" in *API_KEY*|*TOKEN*|*SECRET*|*PASSWORD*) unset "$var" ;; esac
+  case "${var^^}" in
+    *API_KEY*|*TOKEN*|*SECRET*|*PASSWORD*)
+      if ! unset "$var" 2>/dev/null; then
+        echo '❌ Cannot isolate the host from inherited credentials; run in a clean environment.' >&2
+        exit 1
+      fi ;;
+  esac
 done < <(compgen -e)
 
 for isolated_var in HOME DSH_HOME DSH_AGENTS_HOME XDG_CONFIG_HOME XDG_DATA_HOME npm_config_cache; do
@@ -153,6 +159,10 @@ cd "$WORKSPACE"
 DSH_VERSION="$("$DSH_BIN" --version)"
 echo "🔧 dsh $DSH_VERSION, node $(node --version), pnpm $(pnpm --version), npm $(npm --version)"
 DSH_RANGE="$(jq -er '.engines.dsh' "$PROJECT_DIR/plugins/dsh/package.json")"
+if [[ ! -x "$PROJECT_DIR/node_modules/.bin/semver" ]]; then
+  echo '❌ Scenario 18 requires the semver CLI. Install repository dev dependencies with npm ci.' >&2
+  exit 1
+fi
 if ! "$PROJECT_DIR/node_modules/.bin/semver" --include-prerelease -r "$DSH_RANGE" "$DSH_VERSION" >/dev/null; then
   echo "❌ dsh $DSH_VERSION is outside declared range $DSH_RANGE"
   exit 1
