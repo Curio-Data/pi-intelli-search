@@ -22,7 +22,7 @@ Intelligent web research for coding agents: search, extract, collate, and cache 
 </p>
 
 <!-- packages:none -->
-**DeepSeek Harness profile plugin:** bring cited web search and multi-page research into [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness). Ask for a quick fact with sources, or compare several pages and keep the report and its sources in the project. See [profile installation and verification](#deepseek-harness).
+**DeepSeek Harness profile plugin:** bring cited web search and multi-page research into [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness). Ask for a quick fact with sources, or compare several pages and keep the report and its sources in the project. Install into the `tui` profile with `dsh plugin --profile tui add @curio-data/dsh-intelli-search`. See [profile setup and verification](#deepseek-harness) for credentials and other profile names.
 <!-- /packages -->
 
 **Features:**
@@ -395,7 +395,7 @@ The installed `intelli-search` skill covers configuration and unattended tool ap
 
 <!-- /packages -->
 <!-- packages:none -->
-**After publication:** installation targets the profile used to start the harness. The example below uses `tui`; replace it with the intended profile name. The bundle declares `engines.dsh: >=0.2.2-rc.1 <0.3.0`. Put `pnpm` on `PATH` for package installation and removal.
+The [public npm bundle](https://www.npmjs.com/package/@curio-data/dsh-intelli-search) installs into the profile used to start the harness. The example below uses `tui`; replace it with the intended profile name. The bundle declares `engines.dsh: >=0.2.2-rc.1 <0.3.0`. Put `pnpm` on `PATH` for package installation and removal.
 
 ```bash
 dsh plugin --profile tui add @curio-data/dsh-intelli-search
@@ -1449,7 +1449,14 @@ To suppress both telemetry files in the MCP server, set `"disableTelemetry": tru
 - Direct stdio registration serves MCP-compatible hosts; repository plugin routes serve Claude Code and Codex, and the [DeepSeek Harness](#deepseek-harness) bundle launches the same server from a named profile. Recorded live research clients include `Pi`, Claude Code, Codex and DeepSeek Harness.
 - The runtime must satisfy the Node.js `engines` range in the [standalone manifest](packages/mcp/package.json). The server uses the [`@modelcontextprotocol/server` SDK](https://github.com/modelcontextprotocol/typescript-sdk), with its dependency range declared in that manifest and the verified release pinned in [package-lock.json](package-lock.json).
 - Standalone fetch assets are verified on _Linux_ x86-64 only; _macOS_ and _Windows_ are not verified.
+<!-- /packages -->
+<!-- packages:mcp hidden
 - Full research through local-tarball plugins and registry-pin installation checks are separate evidence classes, and the compatibility matrix records these checks for the standalone MCP package and the Claude Code and Codex plugins. For DeepSeek Harness, the matrix distinguishes credential-free host checks from credentialed local-bundle research. No registry-pin installation has been verified for this host. Publication alone does not establish host compatibility.
+-->
+<!-- packages:none -->
+- Installation by name, cold discovery, removal and reinstallation passed with both public packages on Linux and dsh `0.2.2-rc.1`; the by-name check made no inference call.
+<!-- /packages -->
+<!-- packages:mcp -->
 
 For the standalone MCP server and host plugins, including exact tested versions of _Claude Code_, _Codex_, DeepSeek Harness, Node.js and the MCP SDK, see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 <!-- /packages -->
