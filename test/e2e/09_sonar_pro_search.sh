@@ -92,14 +92,6 @@ cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
       "provider": "openrouter",
       "model": "perplexity/sonar-pro-search"
     },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
     "cacheDir": ".e2e-sps-cache",
     "defaultUrls": 2,
     "maxUrls": 2

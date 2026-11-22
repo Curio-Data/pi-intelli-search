@@ -106,14 +106,6 @@ cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
       "maxResults": 8,
       "reasoning": "minimal"
     },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
     "cacheDir": ".e2e-websearch-cache",
     "defaultUrls": 2,
     "maxUrls": 2
