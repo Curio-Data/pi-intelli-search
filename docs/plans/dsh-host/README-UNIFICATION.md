@@ -4,7 +4,7 @@
 
 **Planning review commit (does not contain this plan):** `0028e94213a4d29fee0bfd92a88d845e71e86360`
 
-**Plan commit:** the commit that added this file to `main` (`git log -1 --format=%H -- docs/plans/dsh-host/README-UNIFICATION.md`); record it in the first integration-branch commit and in each agent brief
+**Plan commit:** the newest commit that changed this file on `main` (`git log -1 --format=%H -- docs/plans/dsh-host/README-UNIFICATION.md`); record it in the first integration-branch commit and in each agent brief
 
 **Audience:** the coordinator and fresh implementation agents
 

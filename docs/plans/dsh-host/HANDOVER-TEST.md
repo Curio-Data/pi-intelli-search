@@ -1,5 +1,17 @@
 # Fresh Agent Handover Tests
 
+## README Unification Handover (22 November 2026)
+
+Fresh `Pi` agents on `deepseek/deepseek-flash` tested the unification handover from `.plan/RELEASE-READINESS.md` without conversation context. The first two tests drove the access and approval-boundary corrections; the final independent agent verified the published result.
+
+| Round | Agent and Model | Commit Tested | Verdict and Gaps | Resolution |
+|---|---|---|---|---|
+| Initial cold start | `dsh-resume-cold`, `deepseek/deepseek-flash` | `0028e94` plus the uncommitted plan | NOT READY: fresh clones and builder worktrees could not receive the plan; stale plan-board and runner-registration instructions also needed correction | Plan and handover committed as `427d5da`; board, runner, spend and release guidance corrected |
+| Committed checkout | `dsh-resume-final`, `deepseek/deepseek-flash` | `427d5da` | NOT READY: `origin/main` still lacked the plan and the entry point did not distinguish Stage 0 from Stage 1 approval | Continuation refinements committed as `597012c`, with Stage 0 allowed and Stage 1 approval reserved; both commits pushed |
+| Remote closure | `dsh-resume-proof`, `deepseek/deepseek-flash` | `597012c`, identical on `origin/main` | READY: the plan is remotely accessible, the next action is unambiguous, and no live procedure depends on the retired worktree | No blocking correction; record-keeping observations incorporated afterward |
+
+Reports and briefs are retained in the main checkout under `evidence/agents/2026-11-22-dsh-readme-resume-{check,final,proof}/`.
+
 ## Review-Fix Handover (21 November 2026)
 
 The handover for applying the Steps 1 to 4 review findings was tested by fresh `Pi` agents under herdr, each starting from `HANDOVER.md` with no prior context. Entry checks passed in every round; the gaps were in the handover's instructions.
