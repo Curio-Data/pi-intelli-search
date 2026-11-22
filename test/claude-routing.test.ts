@@ -70,6 +70,14 @@ it("routing checks distinguish discovery, invocation and actual tool choice", ()
   const script = readFileSync(new URL("./e2e/13_claude_code_plugin.sh", import.meta.url), "utf8");
   const prompts = [...script.matchAll(/^\s+PROMPT='([^']+)'/gm)].map((match) => match[1]);
   assert.equal(prompts.length, 4);
+  // Each host CLI invocation (including installation, auth and all four
+  // sessions) must cross the same boundary as the pre-credential probe.
+  assert.match(script, /CLAUDE=\(bash "\$SCRIPT_DIR\/isolated-claude\.sh" "\$E2E_ROOT"\)/);
+  assert.match(script, /env -u CLAUDE_CODE_OAUTH_TOKEN "\$\{CLAUDE\[@\]\}" --isolation-probe/);
+  for (const verb of ["--version", "auth status", "plugin marketplace add", "plugin install", "plugin configure", "-p"]) {
+    assert.ok(script.includes('"${CLAUDE[@]}" ' + verb));
+    assert.ok(!script.includes("claude " + verb));
+  }
   assert.match(script, /--disallowedTools Bash/);
   assert.match(script, /--allowedTools "Skill,Read,Glob,Grep,/);
   for (const prompt of prompts) {
