@@ -163,7 +163,7 @@ else
   ERRORS=$((ERRORS + 1))
 fi
 
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.*' | sort -r | head -1)
+LATEST_CACHE=$(e2e_completed_cache_entry "$CACHE_DIR")
 META_FILE="$LATEST_CACHE/meta.json"
 
 if [ -n "$LATEST_CACHE" ] && [ -f "$META_FILE" ]; then

@@ -60,7 +60,7 @@ it("the live page-budget assertion rejects missing, degraded and wrong-budget ev
   assert.notEqual(check().status, 0);
 });
 
-it("mtime-based live cache selectors ignore newer internal staging directories", async (t) => {
+it("live cache selectors choose the latest indexed completed member, not the batch or staging", async (t) => {
   const cache = await mkdtemp(join(tmpdir(), "e2e-cache-selection-"));
   t.after(() => rm(cache, { recursive: true, force: true }));
   const older = join(cache, "entry-z");
@@ -71,11 +71,16 @@ it("mtime-based live cache selectors ignore newer internal staging directories",
     await mkdir(dir);
     await utimes(dir, 1000 + index, 1000 + index);
   }
-  for (const script of ["01_main.sh", "04_migration.sh", "15_pi_floor.sh"]) {
+  const meta = { outcome: "completed", stages: { fetch: { succeeded: 1 }, collate: { summaryChars: 100 } } };
+  for (const dir of [older, latest]) await writeFile(join(dir, "meta.json"), JSON.stringify(meta));
+  await mkdir(join(cache, "batch"));
+  await writeFile(join(cache, "batch", "batch-meta.json"), JSON.stringify({ kind: "batch", outcome: "completed" }));
+  await writeFile(join(cache, ".index.json"), JSON.stringify({ searches: ["entry-z", "entry-a", "batch"].map(slug => ({ slug })) }));
+  for (const script of ["01_main.sh", "03_model_override.sh", "04_migration.sh", "08_websearch_tool.sh", "09_sonar_pro_search.sh", "15_pi_floor.sh"])  {
     const source = await readFile(resolve("test/e2e", script), "utf8");
     const selection = source.match(/^LATEST_CACHE=.*$/m)?.[0];
     assert.ok(selection, `missing cache selector in ${script}`);
-    const run = spawnSync("bash", ["-c", `set -euo pipefail; CACHE_DIR="$1"; ${selection}; printf '%s' "$LATEST_CACHE"`, "fixture", cache], { encoding: "utf8" });
+    const run = spawnSync("bash", ["-c", `set -euo pipefail; source "$2"; CACHE_DIR="$1"; ${selection}; printf '%s' "$LATEST_CACHE"`, "fixture", cache, resolve("test/e2e/lib.sh")], { encoding: "utf8" });
     assert.equal(run.status, 0, `${script}: ${run.stderr}`);
     assert.equal(run.stdout, latest, script);
   }

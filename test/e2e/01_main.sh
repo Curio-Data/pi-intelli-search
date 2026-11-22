@@ -207,10 +207,8 @@ else
   INDEX_MISSING=true
 fi
 
-# Find the most recently modified cache subdirectory. Uses mtime, not
-# lexicographic order, so a stale dir whose name sorts later cannot mask the
-# dir the live run just created.
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.*' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+# A batch folder has its own manifest, not a member's research telemetry.
+LATEST_CACHE=$(e2e_completed_cache_entry "$CACHE_DIR")
 if [ -n "$LATEST_CACHE" ]; then
   echo "✅ Cache entry directory: $(basename "$LATEST_CACHE")"
 

@@ -203,7 +203,7 @@ fi
 # The agent may batch its research. A batch folder holds a manifest rather
 # than a query report, so take the newest query folder; a batch's members are
 # ordinary query folders and still satisfy the checks below.
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.*' -not -name '????-??-??-batch-*' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+LATEST_CACHE=$(e2e_completed_cache_entry "$CACHE_DIR")
 if [ -n "$LATEST_CACHE" ]; then
   echo "✅ Cache entry directory: $(basename "$LATEST_CACHE")"
 
