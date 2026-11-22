@@ -387,7 +387,7 @@ The installed `intelli-search` skill covers configuration and unattended tool ap
 
 [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) ships a Model Context Protocol client bridge, so this route is a generated configuration bundle rather than an extension: one inserted bridge row starts the pinned `@curio-data/mcp-intelli-search` package through `npx` with `--host dsh`, and one registrar registers the `intelli-search` skill with the harness. Neither carries pipeline code.
 
-The bundle declares `engines.dsh: >=0.2.2-rc.1 <0.3.0` and installs into a profile; the harness forwards package operations to pnpm:
+The bundle declares `engines.dsh: >=0.2.2-rc.1 <0.3.0` and installs into a profile. For installation and removal, put `pnpm` on `PATH` or configure `pnpmCommand`. A launcher-provided package manager takes precedence.
 
 ```bash
 dsh plugin --profile <name> add @curio-data/dsh-intelli-search
@@ -401,11 +401,11 @@ Credentials reach the server through the harness environment layer. Precedence: 
 (umask 077; touch "${DSH_HOME:-$HOME/.dsh}/.env") && chmod 600 "${DSH_HOME:-$HOME/.dsh}/.env"
 ```
 
-After the command succeeds, edit that file privately. Put `OPENROUTER_API_KEY=<key>` on its own line, replacing any previous definition.
+After the command succeeds, open the file in an editor so the key stays out of shell history. Put `OPENROUTER_API_KEY=<key>` on its own line, replacing any previous definition.
 
 The bridge row forwards `process.env.OPENROUTER_API_KEY` to the server; an unset value stays unset and does not block startup. A key stored through the harness model-settings page does not provision this server: that credential is resolved through a service a child process cannot read. As an alternative, `npx -y --package @curio-data/mcp-intelli-search mcp-intelli-search setup` reads a key from standard input and stores it in a user-only credential file beside the shared per-user configuration at `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search`, the same location the [Codex](#codex) launcher reads. The file is reread on each call, but a nonempty environment key takes precedence. Remove it from all three layers and restart to use the file.
 
-Start the harness from the project folder: the server uses the harness working directory as its workspace and writes the research cache below it, and a directory change later in the session does not move the cache. For a fixed project root, override `mcp-intelli-search` in the profile's `cordis.patch.yml` and set `cwd`. The patch replaces the whole configuration: copy the bundle row's other fields and update its pinned package version after each bundle upgrade. A home or filesystem-root working directory produces an actionable `WORKSPACE` tool error instead of an accidental shared cache. Its four tools appear even before setup.
+Start the harness from the project folder: the server uses the harness working directory as its workspace and writes the research cache below it, and a directory change later in the session does not move the cache. For a fixed project root, override the row with id `mcp-intelli-search` in `$DSH_HOME/profiles/<name>/cordis.patch.yml` and set `cwd`. The override replaces that row's entire `config`. Copy its other `config` fields from the bundle and update the pinned package version after each bundle upgrade. A home or filesystem-root working directory produces an actionable `WORKSPACE` tool error instead of an accidental shared cache. The four tools appear before a key is configured.
 
 This host names the MCP server `intelli`, so the tools are `mcp__intelli__intelli_search`, `mcp__intelli__intelli_extract`, `mcp__intelli__intelli_collate` and `mcp__intelli__intelli_research`. Research calls can take minutes: the bundle raises the bridge call limit to ten minutes, while server startup and tool discovery keep the separate 60-second protocol default, so a slow first `npx` download can still lose the tools on a first start. A missing tool set means the bridge row did not start; the bundle sets `failOnStartupError: false`, so the harness keeps running and logs the failure. Run `dsh --profile <name> --dump-config` to confirm the two bundle rows, then report the missing tools with the startup log rather than substituting the harness's own web search. A project skill with the same name outranks the bundle's registration; a user-level skill does not.
 
@@ -1434,7 +1434,7 @@ To suppress both telemetry files in the MCP server, set `"disableTelemetry": tru
 - Direct stdio registration serves MCP-compatible hosts; repository plugin routes serve Claude Code and Codex, and the `@curio-data/dsh-intelli-search` npm bundle serves DeepSeek Harness. Recorded live research clients include `Pi` and both repository plugin hosts.
 - The runtime must satisfy the Node.js `engines` range in the [standalone manifest](packages/mcp/package.json). The server uses the [`@modelcontextprotocol/server` SDK](https://github.com/modelcontextprotocol/typescript-sdk), with its dependency range declared in that manifest and the verified release pinned in [package-lock.json](package-lock.json).
 - Standalone fetch assets are verified on _Linux_ x86-64 only; _macOS_ and _Windows_ are not verified.
-- Full research through local-tarball plugins and registry-pin installation checks are separate evidence classes, and the DeepSeek Harness route is recorded from credential-free local-tarball verification only; the compatibility matrix records which checks have run for each artefact, and publication alone does not establish host compatibility.
+- Full research through local-tarball plugins and registry-pin installation checks are separate evidence classes, and the compatibility matrix records these checks for the standalone MCP package and the Claude Code and Codex plugins. For DeepSeek Harness, only the credential-free local-tarball checks described above have run. Publication alone does not establish host compatibility.
 
 For the standalone MCP server and host plugins, including exact tested versions of _Claude Code_, _Codex_, Node.js and the MCP SDK, see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 <!-- /packages -->
