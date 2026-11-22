@@ -1,5 +1,7 @@
 # Installation and Promotion
 
+For the integrated 0.25.0 candidate, follow the [release gates](RELEASE-025.md). The preview announcement below describes the exploration branch; do not use it as the release announcement.
+
 ## Preview: Link to the Branch, Not npm
 
 The audience for the preview is a [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) user who wants cited web research inside an existing project. Lead with what the user gets: a quick answer with sources, or a multi-page report whose fetched sources and extractions stay in the project's `.search/` directory. The bundle adds four tools and a research skill to a named profile. It does not replace the harness's own web search.

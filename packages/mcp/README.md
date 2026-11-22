@@ -14,8 +14,6 @@ Intelligent web research for coding agents: search, extract, collate, and cache 
   <img src="https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
 </p>
 
-**DeepSeek Harness profile plugin:** bring cited web search and multi-page research into [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness). Ask for a quick fact with sources, or compare several pages and keep the report and its sources in the project. See [profile installation and verification](#deepseek-harness).
-
 **Features:**
 
 - 🔍 **Search:** a search-grounded model, [_Perplexity Sonar_](https://docs.perplexity.ai) via [_OpenRouter_](https://openrouter.ai) by default. One application programming interface (API) key, no $50 minimum. Chat models with tool support also work through the web search server tool; see [native search settings](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#openrouter-web-search-server-tool) or [Model Context Protocol (MCP) tuning](#tuning).
@@ -49,7 +47,7 @@ Choose the installation route for the host:
 | Host Plugin | Claude Code or Codex | Repository marketplace launching the pinned MCP package |
 | Host Plugin | DeepSeek Harness | Profile bundle `@curio-data/dsh-intelli-search`; installation by name requires its matching MCP release. |
 
-The install branches: [`Pi` Native Extension](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#pi-native-extension) and [MCP Server](#mcp-server), with host instructions for [Claude Code](#claude-code), [Codex](#codex), [DeepSeek Harness](#deepseek-harness) and any [Generic MCP Host](#generic-mcp-host).
+The install branches: [`Pi` Native Extension](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#pi-native-extension) and [MCP Server](#mcp-server), with host instructions for [Claude Code](#claude-code), [Codex](#codex), [DeepSeek Harness](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/README.md#deepseek-harness) and any [Generic MCP Host](#generic-mcp-host).
 
 The native extension uses `Pi` settings and authentication. Generic MCP registration requires explicit configuration and a workspace; the Codex and DeepSeek Harness launchers take the workspace from the host working directory and use built-in defaults unless a per-user configuration is supplied. Inference uses an OpenRouter key supplied through the configured environment variable or credential file. The MCP server does not read `Pi` settings or credentials.
 
@@ -261,12 +259,7 @@ The installed `intelli-search` skill covers configuration and unattended tool ap
 
 **Installation by name requires two public packages:** the profile bundle and the exact MCP server version its launcher selects. The local-bundle checks below do not test that registry route. See [Compatibility](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits) for the recorded installation evidence.
 
-**After publication:** installation targets the profile used to start the harness. The example below uses `tui`; replace it with the intended profile name. The bundle declares `engines.dsh: >=0.2.2-rc.1 <0.3.0`. Put `pnpm` on `PATH` for package installation and removal.
-
-```bash
-dsh plugin --profile tui add @curio-data/dsh-intelli-search
-```
-
+The bundle is published separately from this server. Check the [repository installation guide](https://github.com/Curio-Data/pi-intelli-search#readme) for availability before installing.
 Start the same profile from the project directory with `dsh --profile tui`. The first start downloads the MCP package through `npx`, so it needs network access.
 
 Credentials reach the server through the harness environment layer. Precedence: an `OPENROUTER_API_KEY` exported in the launching environment, then a `.env` file in the launch directory, then `$DSH_HOME/.env`. Accepted values are copied into the environment once at launch, so restart that profile after changing a key. To use the key across launching shells, prepare the harness-home file before entering the key:

@@ -224,13 +224,13 @@ const DEFAULT_HISTORY: Record<
     collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   },
-  "0.25.0": {
+  "0.24.0": {
+    // Batch research (minor bump of both packages); model defaults unchanged.
     extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },
   },
-  "0.24.0": {
-    // Batch research (minor bump of both packages); model defaults unchanged.
+  "0.25.0": {
     extractModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     collateModel: { provider: "openrouter", model: "minimax/minimax-m3" },
     searchModel: { provider: "openrouter", model: "perplexity/sonar" },

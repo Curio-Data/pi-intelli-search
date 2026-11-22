@@ -131,6 +131,13 @@ jobs:
           mcp_manifest=$(node -p "require('./packages/mcp/package.json').version")
           test "$mcp_manifest" = "$TAG_VERSION"
           test "$(npm view "@curio-data/mcp-intelli-search@${TAG_VERSION}" version)" = "$TAG_VERSION"
+          # Run outside the checkout: npm must resolve the published CLI, not the workspace bin.
+          probe=$(mktemp -d "${RUNNER_TEMP}/dsh-pin.XXXXXXXX")
+          mkdir "$probe/project"
+          cd "$probe"
+          HOME="$probe" XDG_CONFIG_HOME="$probe/config" npm_config_cache="$probe/npm" \
+            npm exec --yes --package="@curio-data/mcp-intelli-search@${TAG_VERSION}" -- \
+            mcp-intelli-search --host dsh --workspace "$probe/project" --check-config
 
       - name: Build both artifacts
         run: npm run build:all

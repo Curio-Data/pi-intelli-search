@@ -39,7 +39,10 @@ it("selects the dsh package, directory and version from a dsh-v tag", () => {
 it("guards dsh staging on the exact published MCP version", () => {
   const guardIndex = release.indexOf("Require the exact published MCP version before dsh staging");
   assert.ok(guardIndex > 0, "release.yml has the dsh staging guard");
-  const guard = release.slice(guardIndex, guardIndex + 1400);
+  const guard = release.slice(guardIndex, release.indexOf("- name: Build both artifacts", guardIndex));
+  assert.ok(guard.includes('cd "$probe"'));
+  assert.ok(guard.includes('npm exec --yes --package="@curio-data/mcp-intelli-search@${TAG_VERSION}"'));
+  assert.ok(guard.includes('mcp-intelli-search --host dsh --workspace "$probe/project" --check-config'));
   assert.match(
     guard,
     /if: steps\.select\.outputs\.package == '@curio-data\/dsh-intelli-search'/,

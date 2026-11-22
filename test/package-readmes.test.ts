@@ -206,7 +206,9 @@ describe("repository package READMEs", () => {
       const features = text.indexOf("**Features:**");
       const intro = text.indexOf(introduction);
       const contents = text.indexOf("## Contents");
-      assert.ok(image < bundle && bundle < features && features < intro && intro < contents,
+      if (text === rootView) assert.ok(image < bundle && bundle < features);
+      else assert.equal(bundle, -1, "only the repository advertises the separate bundle");
+      assert.ok(image < features && features < intro && intro < contents,
         "opening sentence, main image and features must precede package introductions and contents");
       assert.equal(text.split("docs/images/01.png").length, 2, "main image occurs once");
     }

@@ -1,5 +1,7 @@
 # DeepSeek Harness Phase 2 Implementation Plan
 
+**Historical implementation plan.** The [integrated 0.25.0 release gates](RELEASE-025.md) supersede the provisional version and sequence in Steps 6 and 7 and the associated checklist. Earlier local verification remains evidence only for its recorded build.
+
 ## Purpose
 
 Build, verify, document and publish `@curio-data/dsh-intelli-search`, a generated DeepSeek Harness (`dsh`) bundle that launches the existing standalone Model Context Protocol (MCP) server and registers the shared research skill. A fresh agent can execute this plan without prior conversation context.

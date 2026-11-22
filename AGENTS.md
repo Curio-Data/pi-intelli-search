@@ -422,6 +422,7 @@ test/
 │   ├── 15_pi_floor.sh
 │   ├── 16_batch_independent.sh
 │   ├── 17_batch_expansion.sh
+│   ├── 19_dsh_credentialed.sh # Separately approved paid checks on rc.1; outside both suite runners
 │   ├── 18_dsh_plugin.sh      # Credential-free DeepSeek Harness host verification (pinned dsh, isolated pnpm, DSH_BIN)
 │   ├── dsh/                  # Scenario-18 inspector and dummy credential launcher (Cordis plugins)
 │   ├── batch.sh              # Direct native and MCP batch checks

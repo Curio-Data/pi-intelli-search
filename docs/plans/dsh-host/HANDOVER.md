@@ -1,6 +1,10 @@
 # DeepSeek Harness Phase 2 Handover
 
-## Resume Here: Unreleased by Owner Decision
+## Current Release Scope
+
+On 22 November the owner included this branch in the integrated `release/0.25.0` candidate. Follow the [integrated release gates](RELEASE-025.md). The earlier standalone handover below is historical, not a release instruction.
+
+## Earlier Standalone Handover
 
 Leave `explore/dsh-host` and its worktree intact. Do not add this feature to the planned `0.25` release, choose a follow-on version, cut a release branch or publish. The next integrating agent should compare this branch with the then-current `main` and bring an integration proposal to the owner. [Installation and Promotion](INSTALLATION-AND-PROMOTION.md) separates what can be advertised now from the install instructions for a verified public release.
 
