@@ -13,7 +13,7 @@ The bundle adds two entries to a harness profile. One starts the standalone MCP 
 
 ## Installation
 
-**Unreleased preview:** there is no public npm install yet. The published MCP `0.24.0` does not implement `--host dsh`; the local verification used a different, unreleased build. After a dsh-capable MCP version and its matching bundle have been published and verified, install into the intended profile (`tui` in this example):
+Installation by name requires both this package and its matching MCP server on npm. Install into the profile used to start the harness (`tui` in this example):
 
 ```bash
 dsh plugin --profile tui add @curio-data/dsh-intelli-search
@@ -31,9 +31,9 @@ The server receives its key through the harness environment layer. Precedence: a
 
 After the command succeeds, open the file in an editor so the key stays out of shell history. Put `OPENROUTER_API_KEY=<key>` on its own line, replacing any previous definition.
 
-The bridge row forwards `process.env.OPENROUTER_API_KEY` to the server; an unset value stays unset and does not block startup. A key stored through the harness model-settings page does not provision this server: that credential is resolved through a service a child process cannot read.
+The bridge row forwards `process.env.OPENROUTER_API_KEY` to the server; the server treats an empty value as absent and starts without a key. A key stored through the harness model-settings page does not provision this server: that credential is resolved through a service a child process cannot read.
 
-Alternatively, `npx -y --package @curio-data/mcp-intelli-search mcp-intelli-search setup` reads a key from standard input and stores it in a user-only credential file beside the per-user configuration at `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search` (shared with the Codex host mode). A stored file is reread on each call; a nonempty environment key takes precedence. Remove it from all three layers and restart to use the file.
+Alternatively, `npx -y --package @curio-data/mcp-intelli-search mcp-intelli-search setup` reads a key from standard input and stores it in a user-only credential file beside the per-user configuration at `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search` (shared with the Codex host mode). A stored file is reread on each call; a nonempty environment key takes precedence. Remove `OPENROUTER_API_KEY` from all three environment layers and restart to use the file.
 
 ## Workspace and Cache
 
@@ -48,11 +48,11 @@ The harness names the MCP server `intelli`, so the four tools appear as:
 - `mcp__intelli__intelli_collate`
 - `mcp__intelli__intelli_research`
 
-Start with `intelli_search` for quick facts; `intelli_research` runs the full pipeline over multiple pages. Research calls can take minutes: the bundle raises the bridge call limit to ten minutes (`toolCallTimeoutMs: 600000`). Server startup and tool discovery keep the separate 60-second protocol default, so a slow first `npx` download can still lose the tools on a first start; a later start reuses the `npx` cache.
+Start with `intelli_search` for quick facts; `intelli_research` runs the full pipeline over multiple pages. Research calls can take minutes: the bundle raises the bridge call limit to ten minutes (`toolCallTimeoutMs: 600000`). Server startup and tool discovery use a separate request timeout (60 seconds on `0.2.2-rc.1`), so a slow first `npx` download can still lose the tools on a first start; a later start reuses the `npx` cache.
 
 A missing tool set means the bridge row did not start. The bundle sets `failOnStartupError: false`, so the harness keeps running and logs the failure rather than surfacing it: report the missing tools together with the startup log instead of substituting the harness's own web search.
 
-A project skill with the same name outranks the bundle's skill registration; a user-level skill does not.
+On `0.2.2-rc.1`, a project skill with the same name outranks the bundle's skill registration; a user-level skill does not.
 
 ## Verification
 

@@ -14,6 +14,8 @@ Intelligent web research for coding agents: search, extract, collate, and cache 
   <img src="https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
 </p>
 
+**DeepSeek Harness profile plugin:** bring cited web search and multi-page research into [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness). Ask for a quick fact with sources, or compare several pages and keep the report and its sources in the project. See [profile installation and verification](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#deepseek-harness).
+
 **Features:**
 
 - 🔍 **Search:** a search-grounded model, [_Perplexity Sonar_](https://docs.perplexity.ai) via [_OpenRouter_](https://openrouter.ai) by default. One application programming interface (API) key, no $50 minimum. Chat models with tool support also work through the web search server tool; see [native search settings](#openrouter-web-search-server-tool) or [Model Context Protocol (MCP) tuning](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#tuning).
@@ -45,11 +47,11 @@ Choose the installation route for the host:
 | Native `Pi` Extension | `Pi` | `@curio-data/pi-intelli-search` |
 | Direct MCP Registration | Any MCP-compatible host | `@curio-data/mcp-intelli-search` |
 | Host Plugin | Claude Code or Codex | Repository marketplace launching the pinned MCP package |
-| Host Plugin | DeepSeek Harness | Unreleased preview on `explore/dsh-host`. No public npm install yet. |
+| Host Plugin | DeepSeek Harness | Profile bundle `@curio-data/dsh-intelli-search`; installation by name requires its matching MCP release. |
 
 The install branches: [`Pi` Native Extension](#pi-native-extension) and [MCP Server](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#mcp-server), with host instructions for [Claude Code](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#claude-code), [Codex](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#codex), [DeepSeek Harness](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#deepseek-harness) and any [Generic MCP Host](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#generic-mcp-host).
 
-The native extension uses `Pi` settings and authentication. Generic MCP registration requires explicit configuration and a workspace; the Codex and DeepSeek Harness launchers supply both from their hosts. Inference uses an OpenRouter key supplied through the configured environment variable or credential file. The MCP server does not read `Pi` settings or credentials.
+The native extension uses `Pi` settings and authentication. Generic MCP registration requires explicit configuration and a workspace; the Codex and DeepSeek Harness launchers take the workspace from the host working directory and use built-in defaults unless a per-user configuration is supplied. Inference uses an OpenRouter key supplied through the configured environment variable or credential file. The MCP server does not read `Pi` settings or credentials.
 
 ## Contents
 
@@ -579,7 +581,7 @@ With these values an output cap that runs out is not retried: an extraction with
 
 ## Model Configuration
 
-Both packages select models independently for search, extract and collate. The configuration below is for the native `Pi` extension. Generic MCP registration requires explicit OpenRouter selections for all three roles in its [configuration file](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#configuration); Codex mode supplies the documented defaults when no per-user file exists.
+Both packages select models independently for search, extract and collate. The configuration below is for the native `Pi` extension. Generic MCP registration requires explicit OpenRouter selections for all three roles in its [configuration file](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#configuration); Codex and DeepSeek Harness modes supply the documented defaults when no per-user file exists.
 
 Native defaults are chosen for cost-efficiency. Registered, authenticated models from built-in providers, [OpenRouter](https://openrouter.ai) or other extensions can replace them, subject to role suitability and context limits. Search needs grounding or supported web-search tools; registry access alone does not establish that capability.
 

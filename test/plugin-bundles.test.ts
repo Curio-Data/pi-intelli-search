@@ -442,9 +442,9 @@ describe("plugin bundle generation", () => {
       assert.ok(skill.includes(op), `setup names ${op}`);
     }
     assert.match(skill, /ten minutes \(`toolCallTimeoutMs: 600000`\)/);
-    assert.match(skill, /separate 60-second protocol default/);
+    assert.ok(skill.includes("separate request timeout (60 seconds on `0.2.2-rc.1`)"));
     assert.match(skill, /failOnStartupError: false/);
-    assert.match(skill, /A project skill with the same name outranks this registration; a user-level skill does not/);
+    assert.match(skill, /On `0\.2\.2-rc\.1`, a project skill with the same name outranks this registration; a user-level skill does not/);
     assert.match(skill, /dsh plugin --profile <name> remove @curio-data\/dsh-intelli-search/);
     assert.match(skill, /--dump-config/);
     assert.match(skill, /0\.2\.2-rc\.1/);
