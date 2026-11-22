@@ -106,14 +106,6 @@ cat > "$ISOLATED_AGENT_DIR/settings.json" <<EOF
       "maxResults": 8,
       "reasoning": "minimal"
     },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
     "cacheDir": ".e2e-websearch-cache",
     "defaultUrls": 2,
     "maxUrls": 2
@@ -171,7 +163,7 @@ else
   ERRORS=$((ERRORS + 1))
 fi
 
-LATEST_CACHE=$(find "$CACHE_DIR" -maxdepth 1 -mindepth 1 -type d -not -name '.*' | sort -r | head -1)
+LATEST_CACHE=$(e2e_completed_cache_entry "$CACHE_DIR")
 META_FILE="$LATEST_CACHE/meta.json"
 
 if [ -n "$LATEST_CACHE" ] && [ -f "$META_FILE" ]; then

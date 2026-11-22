@@ -66,7 +66,7 @@ fi
   echo "OPENROUTER_API_KEY contains unexpected characters."
   exit 1
 }
-for tool in claude node npm jq rg; do
+for tool in bwrap claude node npm jq rg; do
   command -v "$tool" >/dev/null || { echo "Missing tool: $tool"; exit 1; }
 done
 OPTION_KEY="$OPENROUTER_API_KEY"
@@ -77,11 +77,10 @@ mkdir -p "$PROJECT_DIR/.tmp"
 E2E_ROOT="$(mktemp -d "$PROJECT_DIR/.tmp/intelli-claude-e2e-XXXXXXXX")"
 CLAUDE_HOME_DIR="$E2E_ROOT/claude-home"
 WORKSPACE="$E2E_ROOT/workspace"
-mkdir -p "$CLAUDE_HOME_DIR" "$WORKSPACE" "$E2E_ROOT/tmp"
+mkdir -p "$CLAUDE_HOME_DIR" "$WORKSPACE" "$E2E_ROOT/tmp" "$E2E_ROOT/home"
 export TMPDIR="$E2E_ROOT/tmp"
 echo "Scratch: $E2E_ROOT"
-OPERATOR_CREDENTIALS="$HOME/.claude/.credentials.json"
-OPERATOR_MTIME="$(stat -c %Y "$OPERATOR_CREDENTIALS" 2>/dev/null || echo absent)"
+CLAUDE=(bash "$SCRIPT_DIR/isolated-claude.sh" "$E2E_ROOT")
 cleanup() {
   local rc=$?
   # The plugin secret is removed on success and failure, including retained runs.
@@ -97,8 +96,14 @@ ok() { echo "PASS: $1"; }
 bad() { ERRORS=$((ERRORS + 1)); echo "FAIL: $1"; }
 export CLAUDE_CONFIG_DIR="$CLAUDE_HOME_DIR"
 
-echo "Claude $(claude --version), requested model: $E2E_CLAUDE_MODEL"
-AUTH_STATUS="$(claude auth status 2>/dev/null || true)"
+# Check this process's filesystem view, not the mtime of a login also used
+# by unrelated sessions. No token is needed or passed to the probe.
+: > "$E2E_ROOT/home/inside"
+env -u CLAUDE_CODE_OAUTH_TOKEN "${CLAUDE[@]}" --isolation-probe "$PROJECT_DIR/test/e2e/13_claude_code_plugin.sh" "$HOME/.claude/.credentials.json"
+[[ $(<"$TMPDIR/probe-result") == ok ]]
+ok "isolated Claude cannot see the operator credential path or checkout files"
+echo "Claude $("${CLAUDE[@]}" --version), requested model: $E2E_CLAUDE_MODEL"
+AUTH_STATUS="$("${CLAUDE[@]}" auth status 2>/dev/null || true)"
 if ! jq -e '.authMethod == "oauth_token"' <<<"$AUTH_STATUS" >/dev/null; then
   echo "Isolated profile is not authenticating with the static OAuth token."
   exit 1
@@ -122,14 +127,14 @@ node "$PROJECT_DIR/scripts/generate-plugin-bundles.mjs" \
   --mode tarball --output "$WORK" \
   --codex-vendor-dir "$WORK/plugins/codex/vendor" >/dev/null
 npm install --prefix "$WORK/plugins/claude-code/vendor" --omit=dev --ignore-scripts "$TARBALL" >/dev/null 2>&1
-claude plugin marketplace add "$WORK" >/dev/null 2>&1
-if ! claude plugin install intelli-search@curio-data-plugins > "$E2E_ROOT/plugin-install.log" 2>&1; then
+"${CLAUDE[@]}" plugin marketplace add "$WORK" >/dev/null 2>&1
+if ! "${CLAUDE[@]}" plugin install intelli-search@curio-data-plugins > "$E2E_ROOT/plugin-install.log" 2>&1; then
   echo "Plugin install failed; inspect $E2E_ROOT/plugin-install.log"
   exit 1
 fi
 ok "plugin installed from $(basename "$TARBALL")"
 if ! printf '{"openrouter_api_key":"%s"}' "$OPTION_KEY" \
-    | claude plugin configure intelli-search@curio-data-plugins --values-stdin >/dev/null 2>&1; then
+    | "${CLAUDE[@]}" plugin configure intelli-search@curio-data-plugins --values-stdin >/dev/null 2>&1; then
   echo "Plugin key configuration failed."
   exit 1
 fi
@@ -216,7 +221,7 @@ for CASE in "${CASES[@]}"; do
   mkdir -p "$CASE_WORKSPACE"
   echo "Case started: $CASE"
   (cd "$CASE_WORKSPACE" && timeout --foreground "${CASE_TIMEOUT}s" \
-      claude -p "$PROMPT" --model "$E2E_CLAUDE_MODEL" \
+      "${CLAUDE[@]}" -p "$PROMPT" --model "$E2E_CLAUDE_MODEL" \
       --output-format stream-json --verbose --no-session-persistence \
       --allowedTools "Skill,Read,Glob,Grep,${PREFIX}intelli_search,${PREFIX}intelli_research,${PREFIX}intelli_extract,${PREFIX}intelli_collate" \
       --disallowedTools Bash \
@@ -264,11 +269,6 @@ if jq -e 'has("claudeAiOauth")' "$CLAUDE_HOME_DIR/.credentials.json" >/dev/null;
   bad "isolated profile received a login credential"
 else
   ok "isolated profile holds no login credential"
-fi
-if [[ "$(stat -c %Y "$OPERATOR_CREDENTIALS" 2>/dev/null || echo absent)" == "$OPERATOR_MTIME" ]]; then
-  ok "operator credential file untouched"
-else
-  bad "operator credential file changed during the run"
 fi
 if [[ "$ERRORS" -ne 0 ]]; then
   echo "CLAUDE CODE PLUGIN SESSION FAILED ($ERRORS checks)"

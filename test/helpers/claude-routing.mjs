@@ -76,12 +76,40 @@ function verifyOperation(blocks, call, operation) {
   assert.ok(typeof text === "string" && text.length > 100, "model-visible answer, not metadata alone");
   if (operation === "intelli_search") {
     assert.match(text, /### Sources \([1-9]\d*\)/, "search answer has sources");
+  } else if (Array.isArray(call.input?.queries)) {
+    const { queries, batchMode } = call.input;
+    const batch = payload.details?.batch;
+    assert.ok(queries.length >= 2 && ["independent", "expansion"].includes(batchMode), "valid batch request");
+    assert.equal(batch?.mode, batchMode, "matching batch result");
+    assert.equal(batch.outcome, "completed", "all batch members completed");
+    assert.equal(batch.entries.length, queries.length, "all requested queries accounted for");
+    assert.ok(batch.cachePath && text.includes(`Batch folder: \`${batch.cachePath}/\``), "visible batch cache");
+    for (const [index, query] of queries.entries()) {
+      verifyFocusAndBreadth(query.focusPrompt ?? call.input.focusPrompt, query.maxUrls ?? call.input.maxUrls);
+      const entry = batch.entries[index];
+      assert.equal(entry.position, index + 1);
+      assert.equal(entry.query, query.query);
+      assert.equal(entry.outcome, "completed", "member did not degrade");
+      assert.ok(entry.details?.cachePath && text.includes(`${entry.details.cachePath}/report.md`), "visible member report");
+      if (batchMode === "independent") {
+        assert.ok(text.includes(`# Query ${entry.position} of ${queries.length}: ${entry.query.replace(/\s+/g, " ").trim()}`), "visible independent answer section");
+      }
+    }
+    if (batchMode === "expansion") {
+      assert.equal(batch.merge?.outcome, "completed", "expansion merge completed");
+      assert.equal(batch.merge.reportPath, `${batch.cachePath}/report.md`);
+      assert.match(text, /^## Per-Query Reports$/m);
+    }
   } else {
-    assert.ok(call.input?.focusPrompt?.trim(), "research has an extraction focus");
-    assert.ok(Number.isFinite(call.input?.maxUrls) && call.input.maxUrls > 0, "research chooses a breadth");
+    verifyFocusAndBreadth(call.input?.focusPrompt, call.input?.maxUrls);
     assert.match(text, /\*\*Cache\*\*:/);
     assert.match(text, /\*\*Report\*\*:/);
   }
+}
+
+function verifyFocusAndBreadth(focus, breadth) {
+  assert.ok(typeof focus === "string" && focus.trim(), "research has an extraction focus");
+  assert.ok(Number.isSafeInteger(breadth) && breadth > 0, "research chooses a breadth");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

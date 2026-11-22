@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1156%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1184%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -36,7 +36,7 @@ For other coding agents, the sibling `@curio-data/mcp-intelli-search` package se
 
 The shared pipeline searches via a search-grounded model ([_Perplexity Sonar_](https://docs.perplexity.ai), the native default) and merges prose links with harvested citations before selecting pages. It fetches pages through a dual-fetch comparison ([_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), then extracts query-relevant content per page with a dedicated large language model (LLM) guided by a _focused prompt_. Collation deduplicates findings, flags inconsistencies, and synthesises a concise summary. Reports, extractions and fetched content are cached for offline reuse in `.search/` by default. Cache suggest surfaces related previous searches on each query.
 
-## Two Packages, One Engine
+## Three Packages, One Engine
 
 Choose the installation route for the host:
 
@@ -45,16 +45,17 @@ Choose the installation route for the host:
 | Native `Pi` Extension | `Pi` | `@curio-data/pi-intelli-search` |
 | Direct MCP Registration | Any MCP-compatible host | `@curio-data/mcp-intelli-search` |
 | Host Plugin | Claude Code or Codex | Repository marketplace launching the pinned MCP package |
+| Host Plugin | DeepSeek Harness | Profile bundle `@curio-data/dsh-intelli-search`; installation by name requires its matching MCP release. |
 
-The install branches: [`Pi` Native Extension](#pi-native-extension) and [MCP Server](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#mcp-server), with host instructions for [Claude Code](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#claude-code), [Codex](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#codex) and any [Generic MCP Host](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#generic-mcp-host).
+The install branches: [`Pi` Native Extension](#pi-native-extension) and [MCP Server](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#mcp-server), with host instructions for [Claude Code](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#claude-code), [Codex](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#codex), [DeepSeek Harness](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/README.md#deepseek-harness) and any [Generic MCP Host](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#generic-mcp-host).
 
-The native extension uses `Pi` settings and authentication. Generic MCP registration requires explicit configuration and a workspace; the Codex launcher supplies project and model defaults. Inference uses an OpenRouter key supplied through the configured environment variable or credential file. The MCP server does not read `Pi` settings or credentials.
+The native extension uses `Pi` settings and authentication. Generic MCP registration requires explicit configuration and a workspace; the Codex and DeepSeek Harness launchers take the workspace from the host working directory and use built-in defaults unless a per-user configuration is supplied. Inference uses an OpenRouter key supplied through the configured environment variable or credential file. The MCP server does not read `Pi` settings or credentials.
 
 ## Contents
 
 <!-- TOC:START -->
 
-- [Two Packages, One Engine](#two-packages-one-engine)
+- [Three Packages, One Engine](#three-packages-one-engine)
 - [Install](#install)
   - [`Pi` Native Extension](#pi-native-extension)
     - [Prerequisites](#prerequisites)
@@ -578,7 +579,7 @@ With these values an output cap that runs out is not retried: an extraction with
 
 ## Model Configuration
 
-Both packages select models independently for search, extract and collate. The configuration below is for the native `Pi` extension. Generic MCP registration requires explicit OpenRouter selections for all three roles in its [configuration file](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#configuration); Codex mode supplies the documented defaults when no per-user file exists.
+Both packages select models independently for search, extract and collate. The configuration below is for the native `Pi` extension. Generic MCP registration requires explicit OpenRouter selections for all three roles in its [configuration file](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#configuration); Codex and DeepSeek Harness modes supply the documented defaults when no per-user file exists.
 
 Native defaults are chosen for cost-efficiency. Registered, authenticated models from built-in providers, [OpenRouter](https://openrouter.ai) or other extensions can replace them, subject to role suitability and context limits. Search needs grounding or supported web-search tools; registry access alone does not establish that capability.
 
@@ -962,6 +963,7 @@ To suppress both telemetry files in the native extension, set `disableTelemetry:
 
 - **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. The full paced live suite passed on the merged floor-modernisation generation (2026-10-08), including research on the floor host and `Pi` 1.1.0; the [compatibility matrix](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball checks from registry-pin verification.
 - **`Pi` 1.2.0 Verification:** A static interface audit and targeted native and MCP-client research checks are recorded on 2026-10-13, followed by the [complete paced candidate suite](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#0180-candidate-verification-2026-10-13). The peer floor and model defaults are unchanged. This is local-candidate evidence, not installation of the published candidate. OpenRouter's per-key catalogue does not remove the extension's unconditional `models.json` registrations, which do not grant account access. See [audit evidence and limits](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#pi-120-verification-2026-10-13).
+- **`Pi` 1.6.0 Verification:** Static declaration and runtime-source audits, native and standalone deterministic tests, and targeted native and MCP-client research are recorded on 2026-11-21. The shared retry classifier adopts the host's new transient-transport patterns. The peer floor and model defaults are unchanged. This dated 2026-11-21 audit is targeted local-candidate evidence, not a complete live suite or a check of the published package. See [audit evidence and limits](https://github.com/Curio-Data/pi-intelli-search/blob/pi-v0.25.0/docs/COMPATIBILITY.md#pi-160-verification-2026-11-21).
 - User interface (UI) notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, remote procedure call (RPC)).
 - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
 - Retry and timeout are owned by the shared model policy, invoked by native `callLlm()`, independently of `Pi`'s `retry.provider.maxRetries`. Native calls force SDK `maxRetries: 0`. Configured backoff and application timeout apply inside `intelli_research`; the three standalone tools retain their one-attempt, no-application-timeout behaviour.
@@ -979,7 +981,7 @@ To suppress both telemetry files in the native extension, set `disableTelemetry:
 
 ## Downloads
 
-Weekly npm downloads for both packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment. The chart is rendered with [rough.js](https://roughjs.com) from daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see `scripts/plot-downloads.mts`); the caches are append-only with a short trailing re-fetch window so npm's revisions of recent days are picked up. Only complete Monday-to-Sunday weeks are drawn, so a package's segment appears from the first refresh after its first complete week.
+Weekly npm downloads for the native extension and MCP server packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment; a DeepSeek Harness series is deferred until that package has download history. The chart is rendered with [rough.js](https://roughjs.com) from daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see [`scripts/plot-downloads.mts`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/plot-downloads.mts)); the caches are append-only with a short trailing re-fetch window so npm's revisions of recent days are picked up. Only complete Monday-to-Sunday weeks are drawn, so a package's segment appears from the first refresh after its first complete week.
 
 Daily counts come from npm's downloads API and are summed into weeks without additional filtering. [npm's counting documentation](https://blog.npmjs.org/post/92574016600/numeric-precision-matters-how-npm-download-counts-work.html) describes these totals as naïve by design: every served package tarball counts, including automation and mirrors, so read the bars as relative uptake, not unique-user counts. Verification runs that fetch the published tarballs from the registry, such as the registry-pin plugin checks, also count toward release-week totals.
 

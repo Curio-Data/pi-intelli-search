@@ -44,7 +44,7 @@ e2e_completed_cache_entry() {
       printf '%s\n' "$cache/$slug"
       return 0
     fi
-  done < <(jq -r '.searches[]?.slug' "$cache/.index.json" 2>/dev/null)
+  done < <(jq -r '.searches | reverse[] | .slug' "$cache/.index.json" 2>/dev/null)
 }
 
 # e2e_describe_research_calls <trace>: print the shape of every

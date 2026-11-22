@@ -24,6 +24,7 @@ test("help/version are independent of configuration and credentials", () => {
   assert.match(help.stdout, /--config/);
   assert.match(help.stdout, /--workspace/);
   assert.match(help.stdout, /--check-config/);
+  assert.match(help.stdout, /--host dsh/);
   assert.equal(help.stderr, "");
   const version = invoke(["--version"]);
   assert.equal(version.status, 0);
@@ -108,6 +109,46 @@ test("Codex mode serves tool errors for a home workspace and rejects its config 
   }
 });
 
+test("dsh mode supplies paths, ignores legacy exports and accepts explicit overrides", async () => {
+  const f = await fixture();
+  try {
+    const workspace = join(f.dir, "project");
+    await mkdir(workspace);
+    const legacyEnv = {
+      HOME: f.dir,
+      INTELLI_SEARCH_CONFIG: "/nonexistent/legacy.json",
+      INTELLI_SEARCH_WORKSPACE: "/nonexistent/legacy-workspace",
+    };
+    const result = invoke(["--host", "dsh"], legacyEnv, workspace);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, /serving stdio/);
+    assert.doesNotMatch(result.stderr, /Configuration file not found/);
+    const checked = invoke(["--host", "dsh", "--check-config"], legacyEnv, workspace);
+    assert.equal(checked.status, 0, checked.stderr);
+    assert.equal(
+      checked.stdout,
+      "Configuration is valid (built-in DeepSeek Harness defaults; no per-user file found).\n",
+    );
+
+    const file = join(f.dir, "explicit.json");
+    await writeFile(file, JSON.stringify(document()));
+    const explicit = invoke(
+      ["--host", "dsh", "--config", file, "--workspace", f.dir, "--check-config"],
+      legacyEnv,
+      workspace,
+    );
+    assert.equal(explicit.status, 0, explicit.stderr);
+    assert.equal(explicit.stdout, "Configuration is valid.\n");
+
+    const home = invoke(["--host", "dsh", "--check-config"], { HOME: f.dir }, f.dir);
+    assert.equal(home.status, 1);
+    assert.match(home.stderr, /DeepSeek Harness working directory must be a project directory/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("CLI rejects unsupported hosts and setup path selections with specific diagnostics", async () => {
   const f = await fixture();
   try {
@@ -118,6 +159,7 @@ test("CLI rejects unsupported hosts and setup path selections with specific diag
       ["setup", "--config", "x"],
       ["setup", "--workspace", "x"],
       ["setup", "--host", "codex"],
+      ["setup", "--host", "dsh"],
       ["setup", "--check-config"],
     ]) {
       const result = invoke(args, { HOME: f.dir }, f.dir);

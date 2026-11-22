@@ -1,14 +1,23 @@
 # Changelog
 
-This changelog records notable changes to the native `Pi` extension and the standalone Model Context Protocol (MCP) server.
+This changelog records notable changes to the native `Pi` extension, the standalone Model Context Protocol (MCP) server and the [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) bundle.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the repository's [two-package versioning scheme](https://github.com/Curio-Data/pi-intelli-search/blob/main/AGENTS.md#versioning-scheme-two-packages-one-core).
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the repository's [versioning scheme](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/AGENTS.md#versioning-scheme-three-packages-one-core).
 
-## [Unreleased]
+## [pi-0.25.0] - 2026-11-22
 
 ### Fixed
 
+- Shared core: `intelli_research` now retries five more transient transport failures, matching the `Pi` 1.6.0 host retry list: `Connection closed`, `ECONNABORTED`, `EPIPE`, `connection reset by peer` and the Codex WebSocket connection-limit message. `ECONNRESET`, `ECONNREFUSED` and `ETIMEDOUT` were already retried. Compatibility with `Pi` 1.6.0 was verified by static audits of the shipped declarations and runtime source, native and standalone deterministic tests, and targeted live native and MCP-client research; the minimum supported host and model defaults are unchanged.
 - Shared core: `intelli_search` numbered its Sources list by position, so a citation marker such as `[3]` in the answer could name a different source from entry 3. When the search model returns citations, entry k is now the provider's k-th citation, the order the model numbers its markers by, and a source cited twice appears again at its later number as "same source as entry k". An entry the answer cites is kept even beyond `defaultUrls`, so the numbers can skip values, and a note under the list counts the numbers cited by markers with no entry. Sources named only in the answer text follow the citations while the list has room under `defaultUrls`; when the citations fill it, such a source is no longer shown, where it previously came first. Without provider citations, when the answer cites by number, the model's own numbered Sources section sets the numbers in the same way for each number it used once; a repeated or zero number is left unused. With no such section, or none with a usable number, the list is numbered by position. A note says the markers could not be matched, so they may not match the list, whenever a number was left unused or the list is numbered by position while the answer cites by number. The answer text is not rewritten. `intelli_research` is unchanged.
+
+## [mcp-0.25.0] - 2026-11-22
+
+Core behaviour is shared with [pi-0.25.0] and recorded there. The new `--host dsh` mode takes the workspace from the launch directory and uses the same per-user settings and credential file as Codex mode.
+
+## [dsh-0.25.0] - 2026-11-22 (Separate Publication)
+
+The DeepSeek Harness profile bundle adds four cited research tools and the `intelli-search` skill. It launches the exact matching MCP server and allows ten minutes per tool call. Local installation and registration passed on Linux with `0.2.2-rc.1` and `0.2.2-rc.5`; credentialed search and research passed on `0.2.2-rc.1`. See [host setup](README.md#deepseek-harness) for requirements and the profile installation command.
 
 ## [pi-0.24.0] - 2026-11-18
 
@@ -684,6 +693,9 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - 70 unit tests across 7 test files.
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
+[dsh-0.25.0]: https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/docs/plans/dsh-host/RELEASE-025.md
+[mcp-0.25.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.25.0
+[pi-0.25.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.25.0
 [mcp-0.24.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.24.0
 [pi-0.24.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.24.0
 [mcp-0.23.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.23.0

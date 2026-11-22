@@ -2,7 +2,14 @@
 
 # Changelog
 
-Native `Pi` extension release notes, generated from the repository `CHANGELOG.md`. Standalone Model Context Protocol (MCP) server release notes remain in that canonical changelog.
+Native `Pi` extension release notes, generated from the repository `CHANGELOG.md`. Standalone Model Context Protocol (MCP) server and DeepSeek Harness (dsh) release notes remain in that canonical changelog.
+
+## [0.25.0] - 2026-11-22
+
+### Fixed
+
+- Shared core: `intelli_research` now retries five more transient transport failures, matching the `Pi` 1.6.0 host retry list: `Connection closed`, `ECONNABORTED`, `EPIPE`, `connection reset by peer` and the Codex WebSocket connection-limit message. `ECONNRESET`, `ECONNREFUSED` and `ETIMEDOUT` were already retried. Compatibility with `Pi` 1.6.0 was verified by static audits of the shipped declarations and runtime source, native and standalone deterministic tests, and targeted live native and MCP-client research; the minimum supported host and model defaults are unchanged.
+- Shared core: `intelli_search` numbered its Sources list by position, so a citation marker such as `[3]` in the answer could name a different source from entry 3. When the search model returns citations, entry k is now the provider's k-th citation, the order the model numbers its markers by, and a source cited twice appears again at its later number as "same source as entry k". An entry the answer cites is kept even beyond `defaultUrls`, so the numbers can skip values, and a note under the list counts the numbers cited by markers with no entry. Sources named only in the answer text follow the citations while the list has room under `defaultUrls`; when the citations fill it, such a source is no longer shown, where it previously came first. Without provider citations, when the answer cites by number, the model's own numbered Sources section sets the numbers in the same way for each number it used once; a repeated or zero number is left unused. With no such section, or none with a usable number, the list is numbered by position. A note says the markers could not be matched, so they may not match the list, whenever a number was left unused or the list is numbered by position while the answer cites by number. The answer text is not rewritten. `intelli_research` is unchanged.
 
 ## [0.24.0] - 2026-11-18
 

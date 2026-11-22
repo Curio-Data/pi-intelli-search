@@ -196,15 +196,18 @@ describe("repository package READMEs", () => {
 
     const rootView = selectLines(readFileSync(join(REPO_ROOT, "README.md"), "utf8"), "root").join("\n");
     for (const [text, introduction] of [
-      [rootView, "This repository provides two first-class packages"],
+      [rootView, "Two packages run the research engine;"],
       [generated.pi, "`@curio-data/pi-intelli-search` registers four research tools"],
       [generated.mcp, "`@curio-data/mcp-intelli-search` serves four research tools"],
     ]) {
       assert.match(text, /Intelligent web research[^\n]+\n\n<p align="center">\n  <img src="[^"]*docs\/images\/01\.png"/);
       const image = text.indexOf("docs/images/01.png");
+      const bundle = text.indexOf("**DeepSeek Harness profile plugin:**");
       const features = text.indexOf("**Features:**");
       const intro = text.indexOf(introduction);
       const contents = text.indexOf("## Contents");
+      if (text === rootView) assert.ok(image < bundle && bundle < features);
+      else assert.equal(bundle, -1, "only the repository advertises the separate bundle");
       assert.ok(image < features && features < intro && intro < contents,
         "opening sentence, main image and features must precede package introductions and contents");
       assert.equal(text.split("docs/images/01.png").length, 2, "main image occurs once");

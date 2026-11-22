@@ -59,13 +59,18 @@ jobs:
             echo "package=@curio-data/mcp-intelli-search" >> "$GITHUB_OUTPUT"
             echo "directory=packages/mcp" >> "$GITHUB_OUTPUT"
             echo "version=${version}" >> "$GITHUB_OUTPUT"
+          elif [[ "$tag" =~ ^dsh-v(.+)$ ]]; then
+            version="${BASH_REMATCH[1]}"
+            echo "package=@curio-data/dsh-intelli-search" >> "$GITHUB_OUTPUT"
+            echo "directory=plugins/dsh" >> "$GITHUB_OUTPUT"
+            echo "version=${version}" >> "$GITHUB_OUTPUT"
           elif [[ "$tag" =~ ^pi-v(.+)$ ]]; then
             version="${BASH_REMATCH[1]}"
             echo "package=@curio-data/pi-intelli-search" >> "$GITHUB_OUTPUT"
             echo "directory=." >> "$GITHUB_OUTPUT"
             echo "version=${version}" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::Unrecognised release tag '${tag}'. Use 'pi-vX.Y.Z' for the native package or 'mcp-vX.Y.Z' for the MCP package. Historical native tags used the unprefixed 'vX.Y.Z' form (0.14.0 and older) and are not re-released."
+            echo "::error::Unrecognised release tag '${tag}'. Use 'pi-vX.Y.Z' for the native package, 'mcp-vX.Y.Z' for the MCP package or 'dsh-vX.Y.Z' for the DeepSeek Harness bundle. Historical native tags used the unprefixed 'vX.Y.Z' form (0.14.0 and older) and are not re-released. The first dsh release is a manual bootstrap (see .plan/OPS.md): npm trusted publishing cannot bind before the package exists."
             exit 1
           fi
           # npm stage publish inherits publish's guard: a prerelease version
@@ -112,6 +117,28 @@ jobs:
           # check runs after both are published, and ci.yml's catalogue-pin
           # guard keeps an unpublished pin off main.
 
+      - name: Require the exact published MCP version before dsh staging
+        # MCP-before-dsh ordering: the dsh launcher pins the exact MCP
+        # version, so a dsh bundle must never stage while its pin is
+        # unavailable. For a core release, create and publish the MCP release
+        # first and wait for this registry check; the native package never
+        # launches the dsh bundle and does not wait for it.
+        if: steps.select.outputs.package == '@curio-data/dsh-intelli-search'
+        env:
+          TAG_VERSION: ${{ steps.select.outputs.version }}
+        run: |
+          set -euo pipefail
+          mcp_manifest=$(node -p "require('./packages/mcp/package.json').version")
+          test "$mcp_manifest" = "$TAG_VERSION"
+          test "$(npm view "@curio-data/mcp-intelli-search@${TAG_VERSION}" version)" = "$TAG_VERSION"
+          # Run outside the checkout: npm must resolve the published CLI, not the workspace bin.
+          probe=$(mktemp -d "${RUNNER_TEMP}/dsh-pin.XXXXXXXX")
+          mkdir "$probe/project"
+          cd "$probe"
+          HOME="$probe" XDG_CONFIG_HOME="$probe/config" npm_config_cache="$probe/npm" \
+            npm exec --yes --package="@curio-data/mcp-intelli-search@${TAG_VERSION}" -- \
+            mcp-intelli-search --host dsh --workspace "$probe/project" --check-config
+
       - name: Build both artifacts
         run: npm run build:all
 
@@ -130,6 +157,13 @@ jobs:
         run: |
           npm run test:mcp:install
           ./test/run-e2e-publish-local.sh
+
+      - name: Verify the dsh bundle pack inventory
+        run: |
+          set -euo pipefail
+          cd plugins/dsh
+          npm pack --dry-run --json --ignore-scripts > "${RUNNER_TEMP}/dsh-pack.json"
+          jq -e '.[0].files | map(.path) | (any(startswith("vendor")) | not) and (any(. == "cordis.patch.yml")) and (any(. == "LICENSE")) and (any(. == "skills/intelli-search/SKILL.md"))' "${RUNNER_TEMP}/dsh-pack.json" >/dev/null
 
       - name: Stage publish
         working-directory: ${{ steps.select.outputs.directory }}

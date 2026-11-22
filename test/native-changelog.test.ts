@@ -101,6 +101,9 @@ describe("generate-native-changelog exclusions", () => {
     "## [mcp-2.1.0] - 2026-11-30",
     "mcp pointer only",
     "",
+    "## [dsh-2.1.0] - 2026-11-30",
+    "dsh entry stays canonical-changelog-only",
+    "",
     "## [pi-2.0.0-beta.1] - 2026-11-01",
     "prerelease: parser collapses it onto 2.0.0",
     "",
@@ -127,6 +130,7 @@ describe("generate-native-changelog exclusions", () => {
     );
     assert.ok(derived.includes("blob/v2.0.0/"), "historical links pin to v tags");
     assert.ok(!derived.includes("mcp pointer"), "mcp sections excluded");
+    assert.ok(!derived.includes("dsh entry stays"), "dsh sections excluded");
     assert.ok(!derived.includes("prerelease"), "prerelease sections excluded");
     assert.ok(!derived.includes("never shipped"), "Not Published sections excluded");
     assert.ok(!derived.includes("https://example.com"), "reference definitions dropped");
@@ -197,8 +201,13 @@ describe("classifyHeading", () => {
   it("rejects unreleased, mcp, prerelease and not-published headings", () => {
     assert.strictEqual(classifyHeading("[Unreleased]"), null);
     assert.strictEqual(classifyHeading("[mcp-0.21.0] - 2026-11-03"), null);
+    assert.strictEqual(classifyHeading("[dsh-0.24.1] - 2026-11-30"), null);
     assert.strictEqual(classifyHeading("[pi-0.22.0-alpha.0] - 2026-11-05"), null);
     assert.strictEqual(classifyHeading("[0.12.6] - Prepared 2026-09-01, Not Published"), null);
+  });
+
+  it("rejects a dsh shortcut in generated native prose", () => {
+    assert.throws(() => validateGenerated("## [1.0.0]\n\nSee [dsh-1.2.3].", ROOT), /version shortcut reference not rewritten/);
   });
 
   it("accepts the host-documented unbracketed heading form", () => {

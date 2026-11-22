@@ -630,8 +630,13 @@ describe("isRetryableMessage", () => {
     "request timed out",
     "ETIMEDOUT",
     "ECONNRESET while reading",
+    "Connection closed.",
+    "read ECONNABORTED",
+    "write EPIPE",
+    "connection reset by peer",
+    "websocket_connection_limit_reached",
     // Parity with the audited host's own retry classifier (pi-ai
-    // utils/retry.js, captured for 1.5.2): the host applies this list to its
+    // utils/retry.js, captured for 1.6.0): the host applies this list to its
     // agent-loop calls; the extension's pipeline calls own their retry and
     // keep the same coverage.
     "server_busy",
@@ -754,21 +759,21 @@ describe("isRetryableMessage", () => {
   }
 });
 
-describe("retry classifier parity with the captured pi-ai 1.5.2 fixture", () => {
+describe("retry classifier parity with the captured pi-ai 1.6.0 fixture", () => {
   // The fixture is a machine capture of the upstream classifier lists from the
-  // installed pi-ai 1.5.2 dist/utils/retry.js (scripts/capture-retry-fixture.mjs).
+  // installed pi-ai 1.6.0 dist/utils/retry.js (scripts/capture-retry-fixture.mjs).
   // This gate holds the extension lists to that capture; it does not read the
   // installed host, so a host bump cannot fail here by itself. Run
   // scripts/capture-retry-fixture.mjs --check <retry.js> during every host-bump
   // audit, and recapture the fixture deliberately when upstream drifts.
   const fixture = JSON.parse(
-    readFileSync(new URL("./fixtures/pi-ai-retry-1.5.2.json", import.meta.url), "utf8"),
+    readFileSync(new URL("./fixtures/pi-ai-retry-1.6.0.json", import.meta.url), "utf8"),
   ) as { nonRetryable: string[]; retryable: string[] };
 
   // Deliberate divergences, documented inline in src/core/util.ts: retained
-  // historical extras beyond the upstream list (raw Node transport codes, the
-  // standalone adapter's transient 402 wording, separator-tolerant busy
-  // phrasings). The status-code group is upstream's verbatim lookaround form.
+  // historical extras beyond the upstream list (unbounded raw Node transport
+  // codes, the standalone adapter's transient 402 wording, separator-tolerant
+  // busy phrasings). The status-code group is upstream's verbatim lookaround form.
   const DOCUMENTED_EXTRAS = [
     "ETIMEDOUT",
     "ECONNRESET",

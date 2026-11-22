@@ -1,6 +1,6 @@
 {
   "name": "@curio-data/pi-intelli-search",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "description": "Intelligent web research for Pi: search, extract, collate, and cache grounded web context in one tool call.",
   "license": "Apache-2.0",
   "repository": {
@@ -60,6 +60,7 @@
     "esbuild": "0.28.2",
     "prettier": "^3.9.6",
     "roughjs": "^4.6.6",
+    "semver": "7.8.5",
     "tsx": "^4.19.0",
     "typebox": "*",
     "typescript": "^5.7.0"

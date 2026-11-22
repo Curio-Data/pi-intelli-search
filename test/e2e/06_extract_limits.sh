@@ -106,14 +106,6 @@ write_arm() {
       "provider": "openrouter",
       "model": "perplexity/sonar"
     },
-    "extractModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
-    "collateModel": {
-      "provider": "openrouter",
-      "model": "minimax/minimax-m2.7"
-    },
     "defaultUrls": 1,
     "maxUrls": 1,
     "searchRetryAttempts": 4,

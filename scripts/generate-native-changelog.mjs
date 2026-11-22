@@ -16,10 +16,12 @@
 //   - includes native sections only: `## [pi-X.Y.Z] ...` headings are
 //     rewritten to `## [X.Y.Z] ...`; historical unprefixed sections keep
 //     their headings;
-//   - excludes `## [Unreleased]`, every `## [mcp-*]` section, any section
-//     whose version carries a prerelease suffix (the host parser collapses
-//     `0.22.0-alpha.0` onto `0.22.0`, which would duplicate entries), and
-//     sections marked "Not Published";
+//   - excludes `## [Unreleased]`, every `## [mcp-*]` and `## [dsh-*]`
+//     section (both remain canonical-changelog-only: the host feature is
+//     native, and the standalone and dsh release notes never enter
+//     PI_CHANGELOG.md), any section whose version carries a prerelease
+//     suffix (the host parser collapses `0.22.0-alpha.0` onto `0.22.0`,
+//     which would duplicate entries), and sections marked "Not Published";
 //   - fails closed on any other `## ` heading: a mistyped version heading
 //     must stop generation, not silently drop a release;
 //   - drops the trailing reference-definition block and rewrites version
@@ -50,12 +52,14 @@ const GENERATED_HEADER =
   "Edit CHANGELOG.md, then run npm run generate:changelog. -->";
 const INTRO =
   "Native `Pi` extension release notes, generated from the repository `CHANGELOG.md`. " +
-  "Standalone Model Context Protocol (MCP) server release notes remain in that canonical changelog.";
+  "Standalone Model Context Protocol (MCP) server and DeepSeek Harness (dsh) " +
+  "release notes remain in that canonical changelog.";
 
 const PREFIXED = /^\[pi-(\d+)\.(\d+)\.(\d+)((?:-[0-9A-Za-z.-]+)?)\]((?:\s+.*)?)$/;
 const BARE = /^\[(\d+)\.(\d+)\.(\d+)((?:-[0-9A-Za-z.-]+)?)\]((?:\s+.*)?)$/;
 const BARE_NO_BRACKETS = /^(\d+)\.(\d+)\.(\d+)((?:-[0-9A-Za-z.-]+)?)(\s+.*)?$/;
 const MCP_HEADING = /^\[mcp-/;
+const DSH_HEADING = /^\[dsh-/;
 const UNRELEASED_HEADING = /^\[Unreleased\]$/;
 const NOT_PUBLISHED = /not published/i;
 const REFERENCE_DEF = /^\[[^\]]+\]:\s*\S/;
@@ -69,10 +73,12 @@ export function isGenerated(markdown) {
  * Classify one `## ` heading title into a section descriptor, or null when the
  * section is explicitly excluded. Any other heading throws: a bracketed or
  * version-shaped heading that matches no rule is a typo away from silently
- * dropping a release, so classification is fail-closed.
+ * dropping a release, so classification is fail-closed. dsh sections, like
+ * mcp sections, are excluded rather than classified: their notes stay in the
+ * canonical changelog only.
  */
 export function classifyHeading(title) {
-  if (UNRELEASED_HEADING.test(title) || MCP_HEADING.test(title)) return null;
+  if (UNRELEASED_HEADING.test(title) || MCP_HEADING.test(title) || DSH_HEADING.test(title)) return null;
   for (const [re, prefixed] of [
     [PREFIXED, true],
     [BARE, false],
@@ -265,7 +271,7 @@ export function validateGenerated(text, root = REPO_ROOT) {
     if (line.startsWith("## ") || REFERENCE_DEF.test(line.trim())) continue;
     for (const seg of splitInlineCode(line, { completeOnly: true })) {
       if (seg.code) continue;
-      const shortcut = seg.text.match(/\[(pi-|mcp-)?\d+\.\d+\.\d+\](?![:(\d])/);
+      const shortcut = seg.text.match(/\[(pi-|mcp-|dsh-)?\d+\.\d+\.\d+\](?![:(\d])/);
       if (shortcut && !REFERENCE_DEF.test(seg.text.trim())) {
         problems.push(`version shortcut reference not rewritten: ${shortcut[0]}`);
       }

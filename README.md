@@ -13,13 +13,17 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1156%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1184%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
 <p align="center">
   <img src="docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
 </p>
+
+<!-- packages:none -->
+**DeepSeek Harness profile plugin:** bring cited web search and multi-page research into [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness). Ask for a quick fact with sources, or compare several pages and keep the report and its sources in the project. Install into the `tui` profile with `dsh plugin --profile tui add @curio-data/dsh-intelli-search`. See [profile setup and verification](#deepseek-harness) for credentials and other profile names.
+<!-- /packages -->
 
 **Features:**
 
@@ -38,7 +42,7 @@ Intelligent web research for coding agents: search, extract, collate, and cache 
 - 💰 **Cost:** see the [default research-run estimate](#cost).
 
 <!-- packages:none -->
-This repository provides two first-class packages from one research engine:
+Two packages run the research engine; a third, `@curio-data/dsh-intelli-search`, connects DeepSeek Harness to the standalone server:
 
 - `@curio-data/pi-intelli-search`: a [`Pi`](https://github.com/earendil-works/pi) extension that registers the four research tools natively, using `Pi` settings, authentication and the model registry.
 - `@curio-data/mcp-intelli-search`: a standalone Model Context Protocol (MCP) server over standard input/output (stdio) for MCP-compatible hosts, including [_Claude Code_](https://code.claude.com/docs/en/mcp) and [_Codex_](https://developers.openai.com/codex/mcp).
@@ -59,7 +63,7 @@ For [`Pi`](https://github.com/earendil-works/pi), the sibling `@curio-data/pi-in
 
 The shared pipeline searches via a search-grounded model ([_Perplexity Sonar_](https://docs.perplexity.ai), the native default) and merges prose links with harvested citations before selecting pages. It fetches pages through a dual-fetch comparison ([_Defuddle_](https://github.com/kepano/defuddle) versus Markdown endpoint), then extracts query-relevant content per page with a dedicated large language model (LLM) guided by a _focused prompt_. Collation deduplicates findings, flags inconsistencies, and synthesises a concise summary. Reports, extractions and fetched content are cached for offline reuse in `.search/` by default. Cache suggest surfaces related previous searches on each query.
 
-## Two Packages, One Engine
+## Three Packages, One Engine
 
 Choose the installation route for the host:
 
@@ -68,16 +72,17 @@ Choose the installation route for the host:
 | Native `Pi` Extension | `Pi` | `@curio-data/pi-intelli-search` |
 | Direct MCP Registration | Any MCP-compatible host | `@curio-data/mcp-intelli-search` |
 | Host Plugin | Claude Code or Codex | Repository marketplace launching the pinned MCP package |
+| Host Plugin | DeepSeek Harness | Profile bundle `@curio-data/dsh-intelli-search`; installation by name requires its matching MCP release. |
 
-The install branches: [`Pi` Native Extension](#pi-native-extension) and [MCP Server](#mcp-server), with host instructions for [Claude Code](#claude-code), [Codex](#codex) and any [Generic MCP Host](#generic-mcp-host).
+The install branches: [`Pi` Native Extension](#pi-native-extension) and [MCP Server](#mcp-server), with host instructions for [Claude Code](#claude-code), [Codex](#codex), [DeepSeek Harness](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/README.md#deepseek-harness) and any [Generic MCP Host](#generic-mcp-host).
 
-The native extension uses `Pi` settings and authentication. Generic MCP registration requires explicit configuration and a workspace; the Codex launcher supplies project and model defaults. Inference uses an OpenRouter key supplied through the configured environment variable or credential file. The MCP server does not read `Pi` settings or credentials.
+The native extension uses `Pi` settings and authentication. Generic MCP registration requires explicit configuration and a workspace; the Codex and DeepSeek Harness launchers take the workspace from the host working directory and use built-in defaults unless a per-user configuration is supplied. Inference uses an OpenRouter key supplied through the configured environment variable or credential file. The MCP server does not read `Pi` settings or credentials.
 
 ## Contents
 
 <!-- TOC:START -->
 
-- [Two Packages, One Engine](#two-packages-one-engine)
+- [Three Packages, One Engine](#three-packages-one-engine)
 - [Install](#install)
   - [`Pi` Native Extension](#pi-native-extension)
     - [Prerequisites](#prerequisites)
@@ -90,6 +95,7 @@ The native extension uses `Pi` settings and authentication. Generic MCP registra
     - [Claude Code](#claude-code)
     - [Claude Code Plugin](#claude-code-plugin)
     - [Codex](#codex)
+    - [DeepSeek Harness](#deepseek-harness)
     - [Generic MCP Host](#generic-mcp-host)
 - [Tools](#tools)
   - [Evidence and Provenance](#evidence-and-provenance)
@@ -235,12 +241,12 @@ See [Model Configuration](#model-configuration) for model selection, [Configurat
 
 #### MCP Prerequisites
 
-- [_Node.js_](https://nodejs.org/) 22 or later, with `node` and `npx` on `PATH`.
+- [_Node.js_](https://nodejs.org/) 22 or later for the standalone package, with `node` and `npx` on `PATH`. The [DeepSeek Harness](#deepseek-harness) bundle follows that host's own floor, Node.js 24.9 or later.
 - [_Claude Code_](https://code.claude.com/docs/en/overview) installed for the example below.
 - An [OpenRouter API key](https://openrouter.ai/keys) with credit for inference. One key covers all three model roles; charges are separate from the host subscription.
 - An existing project folder for the research cache. The server and host must be able to read the same filesystem.
 
-Generic registration requires an explicit JavaScript Object Notation (JSON) configuration and absolute workspace path. The Codex launcher supplies its working root as the workspace and uses documented model defaults when no per-user configuration exists. The server reads no host credential stores, `Pi` settings or discovered project configuration. Native fetch assets are verified on _Linux_ x86-64; _macOS_ and _Windows_ are not verified. See [Compatibility](#mcp-server-compatibility) for the recorded scope.
+Generic registration requires an explicit JavaScript Object Notation (JSON) configuration and absolute workspace path. The Codex and DeepSeek Harness launchers use the host working directory and built-in model defaults when no per-user configuration exists. The server reads no host credential stores, `Pi` settings or discovered project configuration. Native fetch assets are verified on _Linux_ x86-64; _macOS_ and _Windows_ are not verified. See [Compatibility](#mcp-server-compatibility) for the recorded scope.
 
 #### Claude Code
 
@@ -380,6 +386,48 @@ The plugin starts with `--host codex`, uses the Codex working root as its worksp
 In the session, ask: “Use intelli_search to find the current TypeScript release and cite the official source.” Confirm a successful MCP tool call and an answer with sources. `codex mcp list` alone does not start the server or prove inference. The `/mcp` status `Auth: Unsupported` is expected because this stdio server does not use the OAuth authorization framework; it does not describe the OpenRouter credential.
 
 The installed `intelli-search` skill covers configuration and unattended tool approval; see the [compatibility matrix](docs/COMPATIBILITY.md#host-plugins) for verified host behaviour.
+
+#### DeepSeek Harness
+
+[_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) ships a Model Context Protocol client bridge, so this route is a generated configuration bundle rather than an extension: one inserted bridge row starts the pinned `@curio-data/mcp-intelli-search` package through `npx` with `--host dsh`, and one registrar registers the `intelli-search` skill with the harness. Neither carries pipeline code.
+
+**Installation by name requires two public packages:** the profile bundle and the exact MCP server version its launcher selects. The local-bundle checks below do not test that registry route. See [Compatibility](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits) for the recorded installation evidence.
+
+<!-- /packages -->
+<!-- packages:none -->
+The [public npm bundle](https://www.npmjs.com/package/@curio-data/dsh-intelli-search) installs into the profile used to start the harness. The example below uses `tui`; replace it with the intended profile name. The bundle declares `engines.dsh: >=0.2.2-rc.1 <0.3.0`. Put `pnpm` on `PATH` for package installation and removal.
+
+```bash
+dsh plugin --profile tui add @curio-data/dsh-intelli-search
+```
+
+<!-- /packages -->
+<!-- packages:mcp hidden
+The bundle is published separately from this server. Check the [repository installation guide](https://github.com/Curio-Data/pi-intelli-search#readme) for availability before installing. Its example uses the `tui` profile.
+
+-->
+<!-- packages:mcp -->
+Start the same profile from the project directory with `dsh --profile tui`. The first start downloads the MCP package through `npx`, so it needs network access.
+
+Credentials reach the server through the harness environment layer. Precedence: an `OPENROUTER_API_KEY` exported in the launching environment, then a `.env` file in the launch directory, then `$DSH_HOME/.env`. Accepted values are copied into the environment once at launch, so restart that profile after changing a key. To use the key across launching shells, prepare the harness-home file before entering the key:
+
+```bash
+(umask 077; touch "${DSH_HOME:-$HOME/.dsh}/.env") && chmod 600 "${DSH_HOME:-$HOME/.dsh}/.env"
+```
+
+After the command succeeds, open the file in an editor so the key stays out of shell history. Put `OPENROUTER_API_KEY=<key>` on its own line, replacing any previous definition.
+
+The bridge row forwards `process.env.OPENROUTER_API_KEY` to the server; the server treats an empty value as absent and starts without a key. A key stored through the harness model-settings page does not provision this server: that credential is resolved through a service a child process cannot read. As an alternative, `npx -y --package @curio-data/mcp-intelli-search mcp-intelli-search setup` reads a key from standard input and stores it in a user-only credential file beside the shared per-user configuration at `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search`, the same location the [Codex](#codex) launcher reads. The file is reread on each call, but a nonempty environment key takes precedence. Remove `OPENROUTER_API_KEY` from all three environment layers and restart to use the file.
+
+Start the harness from the project folder: the server uses the harness working directory as its workspace and writes the research cache below it, and a directory change later in the session does not move the cache. For a fixed project root, override the row with id `mcp-intelli-search` in `$DSH_HOME/profiles/<name>/cordis.patch.yml` and set `cwd`. The override replaces that row's entire `config`. Copy its other `config` fields from the bundle and update the pinned package version after each bundle upgrade. A home or filesystem-root working directory produces an actionable `WORKSPACE` tool error instead of an accidental shared cache. The four tools appear before a key is configured.
+
+This host names the MCP server `intelli`, so the tools are `mcp__intelli__intelli_search`, `mcp__intelli__intelli_extract`, `mcp__intelli__intelli_collate` and `mcp__intelli__intelli_research`. Research calls can take minutes: the bundle raises the bridge call limit to ten minutes, while server startup and tool discovery use a separate request timeout (60 seconds on `0.2.2-rc.1`), so a slow first `npx` download can still lose the tools on a first start. A missing tool set means the bridge row did not start; the bundle sets `failOnStartupError: false`, so the harness keeps running and logs the failure. Run `dsh --profile <name> --dump-config` to confirm the two bundle rows, then report the missing tools with the startup log rather than substituting the harness's own web search. On `0.2.2-rc.1`, a project skill with the same name outranks the bundle's registration; a user-level skill does not.
+
+In the session, ask: “Use mcp__intelli__intelli_search to find the current TypeScript release and cite the official source.” Confirm a successful MCP tool call and an answer with sources; a registered tool list alone does not prove provider access.
+
+Uninstall with `dsh plugin --profile <name> remove @curio-data/dsh-intelli-search`, restart the same profile with `dsh --profile <name>`, and confirm with `dsh --profile <name> --dump-config` that both bundle rows are gone.
+
+Credential-free installation, tool registration, skill loading, workspace guards and dummy credential delivery are verified against `dsh` `0.2.2-rc.1` and `0.2.2-rc.5` on Linux with the local bundle. On `0.2.2-rc.1`, a separate credentialed run also verified search, three-page research and the credential-file fallback. See [DeepSeek Harness Evidence and Limits](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits).
 
 <a id="route-a-direct-mcp-configuration"></a>
 #### Generic MCP Host
@@ -811,7 +859,7 @@ With these values an output cap that runs out is not retried: an extraction with
 
 ## Model Configuration
 
-Both packages select models independently for search, extract and collate. The configuration below is for the native `Pi` extension. Generic MCP registration requires explicit OpenRouter selections for all three roles in its [configuration file](#configuration); Codex mode supplies the documented defaults when no per-user file exists.
+Both packages select models independently for search, extract and collate. The configuration below is for the native `Pi` extension. Generic MCP registration requires explicit OpenRouter selections for all three roles in its [configuration file](#configuration); Codex and DeepSeek Harness modes supply the documented defaults when no per-user file exists.
 
 Native defaults are chosen for cost-efficiency. Registered, authenticated models from built-in providers, [OpenRouter](https://openrouter.ai) or other extensions can replace them, subject to role suitability and context limits. Search needs grounding or supported web-search tools; registry access alone does not establish that capability.
 
@@ -1152,11 +1200,11 @@ This reference applies to `@curio-data/mcp-intelli-search` only. Installation ro
 ### Requirements
 
 - [_Node.js_](https://nodejs.org/) satisfying the `engines` range in the [standalone manifest](packages/mcp/package.json).
-- An existing absolute workspace directory and JSON configuration file for generic registration or direct runtime use. Codex mode supplies its workspace and model defaults.
+- An existing absolute workspace directory and JSON configuration file for generic registration or direct runtime use. Codex and DeepSeek Harness modes use the launch directory and supply model defaults.
 - A separately billed OpenRouter API key supplied through a named environment variable before constructing the runtime, or through `setup` and a user-only credential file. Environment changes require a runtime restart; each operation rereads the selected credential file, so a new or replacement key takes effect on the next operation.
 - A platform supported by [_wreq-js_](https://github.com/sqdshguy/wreq-js), the browser-fingerprint fetch dependency. The installation gate exercises its native assets on the running platform; it does not establish support for other platforms.
 
-The package neither reads host credential stores nor loads project configuration automatically. Codex mode reads only its documented per-user configuration and credential paths. Native `Pi` settings, authentication, providers and defaults remain independent.
+The package neither reads host credential stores nor loads project configuration automatically. Codex and DeepSeek Harness modes share per-user configuration and credential paths. Native `Pi` settings, authentication, providers and defaults remain independent.
 
 ### Verification
 
@@ -1172,7 +1220,7 @@ Use the same configuration and workspace as the registered server. If a project-
 
 ### Serving the Protocol
 
-An invocation without `--check-config` validates the selected workspace, then serves the four canonical tools (`intelli_search`, `intelli_extract`, `intelli_collate`, `intelli_research`) over stdio until the input stream closes. An explicitly selected missing, unreadable or invalid configuration file does not prevent connection: each tool call returns an actionable `CONFIGURATION` error, and the server rereads the file on each call until it loads. Repair the file and call again. Once loaded, configuration remains fixed until restart. Generic registration rejects missing launcher arguments and invalid workspaces at startup; `--check-config` remains strict. Codex mode selects its working root and built-in defaults when its per-user configuration is absent. Serving performs no inference at startup; credentials are only required when an operation runs.
+An invocation without `--check-config` validates the selected workspace, then serves the four canonical tools (`intelli_search`, `intelli_extract`, `intelli_collate`, `intelli_research`) over stdio until the input stream closes. An explicitly selected missing, unreadable or invalid configuration file does not prevent connection: each tool call returns an actionable `CONFIGURATION` error, and the server rereads the file on each call until it loads. Repair the file and call again. Once loaded, configuration remains fixed until restart. Generic registration rejects missing launcher arguments and invalid workspaces at startup; `--check-config` remains strict. Each host mode uses its working directory and built-in defaults when its per-user configuration is absent. Serving performs no inference at startup; credentials are only required when an operation runs.
 
 - **Registration and Schemas.** Tool names and JSON input schemas mirror the native `Pi` tools verbatim; descriptions adapt the native guidance for protocol clients (host-neutral cache wording, embedded `focusPrompt` and breadth guidance), because the protocol offers no separate guidance channel. Invalid tool arguments are reported as tool errors (`isError` results), matching the software development kit (SDK) distinction between malformed protocol requests and invalid arguments.
 - **Results.** Successful calls return the complete operation text both as text content and as `structuredContent.text`, alongside `outcome` and `details`. Hosts that prefer the structured representation receive the same answer, sources and cache suggestions. The duplication is intentional for host compatibility; a host that forwards both representations can consume extra context. Degraded research (`no-links`, `fetch-failed`, `extraction-failed`, `collate-failed`) remains a normal result. Execution failures return `isError` results tagged with the safe `StandaloneError` category rather than raw provider causes.
@@ -1186,9 +1234,9 @@ Startup diagnostics go to standard error. The SDK version range is declared in `
 
 ### Configuration
 
-Select the configuration with `--config FILE` or `INTELLI_SEARCH_CONFIG`. Select the workspace with `--workspace ABSOLUTE_DIRECTORY` or `INTELLI_SEARCH_WORKSPACE`. Command-line values take precedence. Relative workspace paths are rejected; existing workspace symlinks are canonicalised. `--host codex` instead selects the working root and `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search/config.json`; explicit selections still take precedence.
+Select the configuration with `--config FILE` or `INTELLI_SEARCH_CONFIG`. Select the workspace with `--workspace ABSOLUTE_DIRECTORY` or `INTELLI_SEARCH_WORKSPACE`. Command-line values take precedence. Relative workspace paths are rejected; existing workspace symlinks are canonicalised. Either `--host codex` or `--host dsh` instead selects the working root and `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search/config.json`; explicit selections still take precedence.
 
-The [minimal configuration](#create-the-configuration) explicitly selects OpenRouter for every role; add an optional `tuning` object (for example `"cacheDir": ".search"`) beside `providers` and `models`. Generic registration has no model defaults. Codex mode uses `perplexity/sonar` for search and `minimax/minimax-m3` for extraction and collation when no per-user file exists.
+The [minimal configuration](#create-the-configuration) explicitly selects OpenRouter for every role; add an optional `tuning` object (for example `"cacheDir": ".search"`) beside `providers` and `models`. Generic registration has no model defaults. Both host modes use `perplexity/sonar` for search and `minimax/minimax-m3` for extraction and collation when no per-user file exists.
 
 Only `providers`, `models` and optional `tuning` are accepted at the top level. All three model roles are required in a configuration file. The provider object accepts `apiKeyEnv`, an environment-variable name rather than a key value, and optional `apiKeyFile`, an absolute path to a separately stored key. The environment variable takes precedence. Setup writes the key with user-only permissions; each file read rejects symbolic links, hard links, other owners and group or world access on platforms with POSIX permissions. Setup manages the default per-user configuration. For a separately selected generic configuration, set `providers.openrouter.apiKeyFile` to the credential path printed by setup and restart after changing loaded configuration. The initial provider scope is OpenRouter at its fixed `https://openrouter.ai/api/v1` endpoint; custom endpoints, proxy settings, provider fallback and dynamic router model identifiers are not accepted.
 
@@ -1322,9 +1370,9 @@ Every startup failure is diagnostic-only and lands on standard error; standard o
 | Configuration rejected with an unknown-key or range error | The loader is strict: unknown keys, invalid types and out-of-range values fail validation. Correct the configuration and call again if it has not yet loaded. The [Tuning](#tuning) table lists accepted keys and ranges. |
 | Tools never appear in the host | Check absent launcher arguments, an unusable workspace or an unsafe cache. Read the host's MCP server logs for the standard-error diagnostic. Claude Code can cache a startup failure from an older server: try `/mcp` reconnect, then restart ([evidence and limits](docs/COMPATIBILITY.md#claude-code-evidence-and-limits)). A connected server still needs a successful tool call to verify inference. |
 | `CONFIGURATION` persists after the file is repaired | A file that has not yet loaded is reread on the next call; once loaded, configuration changes require a restart. |
-| Diagnostic names a missing credential environment variable | Supply the named variable before host launch. Codex users can instead run `mcp-intelli-search setup` with the key on standard input. For a separately selected configuration, set `providers.openrouter.apiKeyFile` to the printed credential path. Environment or loaded-configuration changes require restart; file credentials are reread on each call. |
+| Diagnostic names a missing credential environment variable | Supply the named variable before host launch. Codex and DeepSeek Harness users can instead run the [setup command](#codex) with the key on standard input. For a separately selected configuration, set `providers.openrouter.apiKeyFile` to the printed credential path. Environment or loaded-configuration changes require restart; file credentials are reread on each call. |
 | Catalogue preflight names a model role or capability | Correct the model identifier or required capabilities using [Configuration](#configuration). Read the diagnostic; catalogue lookup failures are not proof of invalid credentials. Restart after changing loaded model selections. |
-| `PROVIDER` reports authentication, access, credit or transport failure | Follow the specific diagnostic: check credentials, model access, account credit or connectivity. Restart after changing an environment credential. For the default Codex configuration, replace a stored key with `setup` and call again. For a separately selected configuration, replace the file named by `providers.openrouter.apiKeyFile`, or select setup's printed path and restart. The category alone does not identify a rejected key. |
+| `PROVIDER` reports authentication, access, credit or transport failure | Follow the specific diagnostic: check credentials, model access, account credit or connectivity. Restart after changing an environment credential. For the default per-user configuration shared by Codex and DeepSeek Harness, replace a stored key with `setup` and call again. For a separately selected configuration, replace the file named by `providers.openrouter.apiKeyFile`, or select setup's printed path and restart. The category alone does not identify a rejected key. |
 | Repeated `429` retries | Tune pacing to observed account/provider limits. For an observed limit of approximately 0.33 requests per second, try `minRequestIntervalMs: 3000` and `extractionConcurrency: 2`; adjust retry attempts as needed. Raise `llmTimeoutMs` only when its model-call timer expires. |
 | Cache paths unreadable from the host | The host must share the server's filesystem. Sandboxed or remote hosts cannot read local cache paths; run the server where the host can read the workspace. |
 <!-- /packages -->
@@ -1389,6 +1437,7 @@ To suppress both telemetry files in the MCP server, set `"disableTelemetry": tru
 
 - **`Pi` >= 0.86.0:** Native model calls use only the `ctx.modelRegistry.streamSimple()` facade, which normalises system prompts and applies host authentication and endpoint overrides. Hosts without the facade receive an actionable upgrade error; there is no direct-provider fallback. Trusted project settings, `CONFIG_DIR_NAME` and sequential cache-writing tools remain supported. The full paced live suite passed on the merged floor-modernisation generation (2026-10-08), including research on the floor host and `Pi` 1.1.0; the [compatibility matrix](docs/COMPATIBILITY.md#current-candidate-verification) separates local-tarball checks from registry-pin verification.
 - **`Pi` 1.2.0 Verification:** A static interface audit and targeted native and MCP-client research checks are recorded on 2026-10-13, followed by the [complete paced candidate suite](docs/COMPATIBILITY.md#0180-candidate-verification-2026-10-13). The peer floor and model defaults are unchanged. This is local-candidate evidence, not installation of the published candidate. OpenRouter's per-key catalogue does not remove the extension's unconditional `models.json` registrations, which do not grant account access. See [audit evidence and limits](docs/COMPATIBILITY.md#pi-120-verification-2026-10-13).
+- **`Pi` 1.6.0 Verification:** Static declaration and runtime-source audits, native and standalone deterministic tests, and targeted native and MCP-client research are recorded on 2026-11-21. The shared retry classifier adopts the host's new transient-transport patterns. The peer floor and model defaults are unchanged. This dated 2026-11-21 audit is targeted local-candidate evidence, not a complete live suite or a check of the published package. See [audit evidence and limits](https://github.com/Curio-Data/pi-intelli-search/blob/pi-v0.25.0/docs/COMPATIBILITY.md#pi-160-verification-2026-11-21).
 - User interface (UI) notifications and status indicators are guarded with `ctx.hasUI`, so the tools behave cleanly in non-interactive modes (`pi -p`, `--mode json`, remote procedure call (RPC)).
 - Page fetching honours the global `httpProxy` setting. The LLM stages already route through `Pi`'s managed HTTP clients, which apply `httpProxy` automatically.
 - Retry and timeout are owned by the shared model policy, invoked by native `callLlm()`, independently of `Pi`'s `retry.provider.maxRetries`. Native calls force SDK `maxRetries: 0`. Configured backoff and application timeout apply inside `intelli_research`; the three standalone tools retain their one-attempt, no-application-timeout behaviour.
@@ -1397,12 +1446,19 @@ To suppress both telemetry files in the MCP server, set `"disableTelemetry": tru
 <!-- packages:mcp -->
 ### MCP Server Compatibility
 
-- Direct stdio registration serves MCP-compatible hosts; repository plugin routes serve Claude Code and Codex. Recorded live research clients include `Pi` and both plugin hosts.
+- Direct stdio registration serves MCP-compatible hosts; repository plugin routes serve Claude Code and Codex, and the [DeepSeek Harness](#deepseek-harness) bundle launches the same server from a named profile. Recorded live research clients include `Pi`, Claude Code, Codex and DeepSeek Harness.
 - The runtime must satisfy the Node.js `engines` range in the [standalone manifest](packages/mcp/package.json). The server uses the [`@modelcontextprotocol/server` SDK](https://github.com/modelcontextprotocol/typescript-sdk), with its dependency range declared in that manifest and the verified release pinned in [package-lock.json](package-lock.json).
 - Standalone fetch assets are verified on _Linux_ x86-64 only; _macOS_ and _Windows_ are not verified.
-- Full research through local-tarball plugins and registry-pin installation checks are separate evidence classes. The compatibility matrix records which checks have run for each artefact; publication alone does not establish host compatibility.
+<!-- /packages -->
+<!-- packages:mcp hidden
+- Full research through local-tarball plugins and registry-pin installation checks are separate evidence classes, and the compatibility matrix records these checks for the standalone MCP package and the Claude Code and Codex plugins. For DeepSeek Harness, the matrix distinguishes credential-free host checks from credentialed local-bundle research. No registry-pin installation has been verified for this host. Publication alone does not establish host compatibility.
+-->
+<!-- packages:none -->
+- Installation by name, cold discovery, removal and reinstallation passed with both public packages on Linux and dsh `0.2.2-rc.1`; the by-name check made no inference call.
+<!-- /packages -->
+<!-- packages:mcp -->
 
-For the standalone MCP server and host plugins, including exact tested versions of _Claude Code_, _Codex_, Node.js and the MCP SDK, see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+For the standalone MCP server and host plugins, including exact tested versions of _Claude Code_, _Codex_, DeepSeek Harness, Node.js and the MCP SDK, see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 <!-- /packages -->
 
 <!-- packages:none -->
@@ -1424,7 +1480,7 @@ pi -e ./dist/index.js
 pi install /path/to/pi-intelli-search
 ```
 
-**Host Plugins:** thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/` at the repository root, with repository marketplace catalogues at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. The bundles are generated from the shared guidance source in `guidance/` and the version pinned in `packages/mcp/package.json`; run `npm run generate:plugins` after a version change and `npm run check:plugins` to detect drift. Launchers pin the exact package version through `npx`. For unreleased changes, follow the tarball flow in the [script guide](scripts/README.md) and the tested full install flow in `test/e2e/12_plugin_bundles.sh`; `node scripts/generate-plugin-bundles.mjs --help` lists the arguments. Host setup, including each host's environment forwarding rules, is in the generated skills.
+**Host Plugins:** thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/` at the repository root, with repository marketplace catalogues at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. The publishable [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle `plugins/dsh` is designed for npm installation by package name instead of a marketplace. The three bundles are generated from the shared guidance source in `guidance/`, the templates in `scripts/templates/dsh/` and the version pinned in `packages/mcp/package.json`; run `npm run generate:plugins` after a version change and `npm run check:plugins` to detect drift. Launchers pin the exact package version through `npx`. For unreleased changes, follow the tarball flow in the [script guide](scripts/README.md) and the tested full install flow in `test/e2e/12_plugin_bundles.sh`; `node scripts/generate-plugin-bundles.mjs --help` lists the arguments. Host setup, including each host's environment forwarding rules, is in the generated skills.
 
 **Package READMEs:** this file is the only hand-edited README. `npm run generate:readmes` derives `packages/mcp/README.md` plus the root previews [`pi.README.md`](pi.README.md) and [`mcp.README.md`](mcp.README.md), and `npm run check:readmes` fails on drift or on any derived link that does not resolve. The native package ships the same derivation, written over this file by its `prepublishOnly` hook. Untagged content goes to both packages. Wrap package-specific sections in `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, and repository-only sections in `<!-- packages:none -->`. Content that only a package shows, such as its title and badges, goes in a hidden block opened by `<!-- packages:mcp hidden` and closed by a `-->` line. Each derived README regenerates its contents list, redirects links to sections it omits to this file on _GitHub_, and makes relative paths absolute. See [`scripts/generate-package-readmes.mjs`](scripts/generate-package-readmes.mjs).
 <!-- /packages -->
@@ -1441,13 +1497,13 @@ pi install /path/to/pi-intelli-search
 - [Native release notes](PI_CHANGELOG.md): The generated native-only changelog that `Pi` 1.5.0 shows under Extension Updates after an update; derived from the [Changelog](CHANGELOG.md).
 <!-- /packages -->
 <!-- packages:mcp -->
-- [Claude Code skill](plugins/claude-code/skills/intelli-search/SKILL.md) and [Codex skill](plugins/codex/skills/intelli-search/SKILL.md): Host-specific setup and agent-facing usage instructions.
+- [Claude Code skill](plugins/claude-code/skills/intelli-search/SKILL.md), [Codex skill](plugins/codex/skills/intelli-search/SKILL.md) and [DeepSeek Harness skill](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/skills/intelli-search/SKILL.md): Host-specific setup and agent-facing usage instructions.
 <!-- /packages -->
 - [Contributor guide](AGENTS.md): Coding conventions and project structure.
 
 ## Downloads
 
-Weekly npm downloads for both packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment. The chart is rendered with [rough.js](https://roughjs.com) from daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see `scripts/plot-downloads.mts`); the caches are append-only with a short trailing re-fetch window so npm's revisions of recent days are picked up. Only complete Monday-to-Sunday weeks are drawn, so a package's segment appears from the first refresh after its first complete week.
+Weekly npm downloads for the native extension and MCP server packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment; a DeepSeek Harness series is deferred until that package has download history. The chart is rendered with [rough.js](https://roughjs.com) from daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see [`scripts/plot-downloads.mts`](scripts/plot-downloads.mts)); the caches are append-only with a short trailing re-fetch window so npm's revisions of recent days are picked up. Only complete Monday-to-Sunday weeks are drawn, so a package's segment appears from the first refresh after its first complete week.
 
 Daily counts come from npm's downloads API and are summed into weeks without additional filtering. [npm's counting documentation](https://blog.npmjs.org/post/92574016600/numeric-precision-matters-how-npm-download-counts-work.html) describes these totals as naïve by design: every served package tarball counts, including automation and mirrors, so read the bars as relative uptake, not unique-user counts. Verification runs that fetch the published tarballs from the registry, such as the registry-pin plugin checks, also count toward release-week totals.
 
