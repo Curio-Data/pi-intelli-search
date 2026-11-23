@@ -7,9 +7,18 @@
 // Generates the Claude Code, Codex and DeepSeek Harness (dsh) plugin
 // bundles, plus the two repository marketplace catalogs, from the shared
 // guidance source in guidance/, the version pinned in
-// packages/mcp/package.json and the templates in scripts/templates/dsh/.
-// The dsh bundle is a publishable npm package rather than a marketplace
-// entry: dsh installs it directly by package name.
+// packages/mcp/package.json, the dsh host metadata in
+// scripts/dsh-host-metadata.mjs and the remaining hand-edited templates in
+// scripts/templates/dsh/ (registrar and icon). The dsh bundle is a
+// publishable npm package rather than a marketplace entry: dsh installs it
+// directly by package name.
+//
+// Single writer: this script is the only writer of plugins/dsh/README.md, in
+// registry and tarball modes alike. It never reads a generated README; it
+// calls derivePackageReadme("dsh", root) from generate-package-readmes.mjs,
+// which reads the canonical root README.md, refuses a publish-swapped
+// generated copy and returns the same bytes generate:readmes writes to the
+// dsh.README.md preview.
 //
 // Modes:
 //   (default)          Write the registry-mode tree into the repository:
@@ -58,6 +67,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { dshHostMetadata, substituteMetadata } from "./dsh-host-metadata.mjs";
+import { derivePackageReadme } from "./generate-package-readmes.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -72,9 +83,6 @@ const PLUGIN_NAME = "intelli-search";
 const MARKETPLACE_NAME = "curio-data-plugins";
 const VENDOR_CLI_SUFFIX =
   "vendor/node_modules/@curio-data/mcp-intelli-search/dist/cli.js";
-
-// Phase 1 reference host; engines.dsh declares compatibility, not coverage.
-export const DSH_TESTED_VERSION = "0.2.2-rc.1";
 
 const DESCRIPTION =
   "Research the web with a five-stage pipeline (search, fetch, extract, " +
@@ -156,7 +164,7 @@ function renderSkill(host, root = REPO_ROOT) {
     join(root, "guidance", `setup-${host}.md`),
     "utf8",
   ).trim();
-  const body = readFileSync(join(root, "guidance", "research-guide.md"), "utf8")
+  const templated = readFileSync(join(root, "guidance", "research-guide.md"), "utf8")
     .replaceAll("{{TOOL_SEARCH}}", `${toolPrefix}intelli_search`)
     .replaceAll("{{TOOL_EXTRACT}}", `${toolPrefix}intelli_extract`)
     .replaceAll("{{TOOL_COLLATE}}", `${toolPrefix}intelli_collate`)
@@ -164,6 +172,10 @@ function renderSkill(host, root = REPO_ROOT) {
     .replaceAll("{{SETUP}}", `${setup}\n`)
     .replaceAll("{{CACHE_READ_HINT}}", cacheReadHint)
     .replaceAll("{{HOST}}", hostLabel);
+  // Metadata tokens run after {{SETUP}} so tokens inside guidance/setup-*.md
+  // resolve. substituteMetadata() leaves unknown tokens in place, so a
+  // misspelt token still fails the check below.
+  const body = substituteMetadata(templated, dshHostMetadata(root));
   if (body.includes("{{") || body.includes("}}")) {
     throw new Error(`unreplaced token remains in ${host} skill`);
   }
@@ -214,10 +226,11 @@ ${args}
 
 /**
  * Computes every generated file as a map of repo-relative path to content.
- * Pure: performs no I/O beyond reading guidance/ and package metadata.
+ * Pure: performs no I/O beyond reading guidance/, package metadata, the\n * canonical README.md (through derivePackageReadme) and the dsh templates.
  */
 export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT) {
   const mcpPkg = readMcpPackage(root);
+  const dshMeta = dshHostMetadata(root);
   const codexVendorDir = options.codexVendorDir;
   const claudeLauncher = launcherFor("claude-code", mode, mcpPkg, codexVendorDir);
   const codexLauncher = launcherFor("codex", mode, mcpPkg, codexVendorDir);
@@ -346,8 +359,8 @@ export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT)
       ...(mode === "tarball" ? ["vendor/**"] : []),
     ],
     engines: {
-      node: ">=24.9.0",
-      dsh: ">=0.2.2-rc.1 <0.3.0",
+      node: dshMeta.nodeEnginesRange,
+      dsh: dshMeta.enginesRange,
     },
     dsh: {
       manifestVersion: 1,
@@ -428,10 +441,10 @@ export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT)
       join(root, "scripts/templates/dsh/icon.svg"),
       "utf8",
     ),
-    "plugins/dsh/README.md": readFileSync(
-      join(root, "scripts/templates/dsh/README.md"),
-      "utf8",
-    ),
+    // Sole writer of the shipped dsh README, identical in both modes: the
+    // validated derivation of the canonical root README.md, byte-identical
+    // to the dsh.README.md preview. Tarball mode changes launchers only.
+    "plugins/dsh/README.md": derivePackageReadme("dsh", root),
     // Verbatim root licence. NOTICE is deliberately not copied: it lists
     // runtime dependencies of the standalone server, which this bundle does
     // not vendor in registry mode.
