@@ -746,3 +746,298 @@ describe("dsh README link checker", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Canonical dsh operator content (Stage 2A): assertions against the real
+// derived views of the repository README, not fixtures.
+// ---------------------------------------------------------------------------
+
+/** Every ```bash fence body in a Markdown text. */
+function bashFences(markdown: string): string[] {
+  return [...markdown.matchAll(/^```bash\n([\s\S]*?)^```$/gm)].map((m) => m[1]);
+}
+
+/**
+ * Executable-example defects in one Bash fence: an angle-bracket placeholder
+ * outside quotes, an unquoted use of the example profile variable, or a use
+ * of that variable the fence never sets.
+ */
+function bashFenceDefects(fence: string): string[] {
+  const defects: string[] = [];
+  const unquoted = fence.replace(/'[^']*'/g, "''").replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  for (const m of unquoted.matchAll(/<[a-z-]+>/g)) defects.push(`placeholder ${m[0]}`);
+  if (/\$\{?profile\b/.test(unquoted)) defects.push("unquoted $profile");
+  if (/\$\{?profile\b/.test(fence) && !/^profile=\S+$/m.test(fence)) defects.push("$profile used without a literal profile= line");
+  return defects;
+}
+
+/** Text of one dsh `## heading` section, up to the next depth-two heading. */
+function dshSection(text: string, heading: string): string {
+  const parts = text.split(`\n## ${heading}\n`);
+  assert.equal(parts.length, 2, `dsh section ${heading} occurs once`);
+  return parts[1].split(/\n## /)[0];
+}
+
+describe("canonical dsh operator content", () => {
+  const meta = dshMeta.dshHostMetadata(REPO_ROOT) as {
+    mcpVersion: string;
+    enginesRange: string;
+    nodeEnginesRange: string;
+    referenceVersion: string;
+    testedVersions: string[];
+  };
+  const dsh = derivePackageReadme("dsh") as string;
+  const mcp = derivePackageReadme("mcp") as string;
+  const pi = derivePackageReadme("pi") as string;
+  const source = readFileSync(join(REPO_ROOT, "README.md"), "utf8");
+  const rootView = selectLines(source, "root").join("\n");
+  const release = `https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v${meta.mcpVersion}/`;
+  const pinned = `@curio-data/mcp-intelli-search@${meta.mcpVersion}`;
+  const nodeFloor = meta.nodeEnginesRange.replace(/^>=(\d+\.\d+)\.0$/, "$1");
+
+  it("puts the depth-one title first, before Contents, and nests every other heading below it", () => {
+    const headings = [...dsh.matchAll(/^(#{1,6}) (.+)$/gm)];
+    assert.equal(headings[0][0], "# Intelli Search for DeepSeek Harness", "the title is the first heading");
+    assert.equal(headings.filter((h) => h[1] === "#").length, 1, "exactly one depth-one heading");
+    assert.equal(headings[1][0], "## Contents", "Contents follows the title");
+    assert.ok(dsh.indexOf("# Intelli Search for DeepSeek Harness") < dsh.indexOf("## Contents"));
+    const toc = dsh.split("<!-- TOC:START -->")[1].split("<!-- TOC:END -->")[0];
+    for (const section of [
+      "Prerequisites",
+      "Installation",
+      "Upgrade, Restart and Removal",
+      "Credentials",
+      "Workspace",
+      "Configuration",
+      "Verification",
+      "Timeouts",
+      "Troubleshooting",
+      "Charges, Cache and Privacy",
+      "Evidence and Limits",
+      "Further Documentation",
+      "Licence",
+    ]) {
+      assert.match(dsh, new RegExp(`^## ${escape(section)}$`, "m"), section);
+      assert.ok(toc.includes(`[${section}](${release}plugins/dsh/README.md#`), `contents lists ${section} absolutely`);
+    }
+    // Anchors of the 0.25.0 hand-written page survive as aliases.
+    const anchors = anchorsOf(dsh) as Set<string>;
+    for (const old of ["requirements", "installation", "credentials", "workspace-and-cache", "tools-and-timeouts", "verification", "removal", "evidence-and-limits", "licence"]) {
+      assert.ok(anchors.has(old), `old dsh anchor #${old}`);
+    }
+  });
+
+  it("states identity, the four tools and when to choose search, research or a batch", () => {
+    const intro = dsh.split("## Contents")[0];
+    assert.match(intro, /`@curio-data\/dsh-intelli-search` adds cited web search and multi-page research/);
+    assert.match(intro, /configuration bundle, not an extension/);
+    assert.ok(intro.includes(`version \`${meta.mcpVersion}\``), "names the exact server version it launches");
+    for (const tool of ["search", "research", "extract", "collate"]) assert.ok(intro.includes(`\`mcp__intelli__intelli_${tool}\``), tool);
+    assert.match(intro, /Quick search: one concise answer with numbered sources/);
+    assert.match(intro, /`batchMode: "independent"`[\s\S]*`"expansion"`/);
+    assert.match(intro, /Start with a quick search; use research for comparisons/);
+  });
+
+  it("lists every prerequisite with metadata-matched ranges", () => {
+    const pre = dshSection(dsh, "Prerequisites");
+    assert.ok(pre.includes(`\`${meta.enginesRange}\``), "declared dsh range");
+    assert.ok(pre.includes(`Node.js ${nodeFloor} or later`), "Node.js floor");
+    for (const needle of ["`pnpm` on `PATH`", "`pnpmCommand`", "`node` and `npx` on `PATH`", "Network access on the first start", "bills that account", "Linux x86-64", "_macOS_ and _Windows_ are not verified"]) {
+      assert.ok(pre.includes(needle), needle);
+    }
+    // Visible root literals are the same values as the metadata module.
+    const shared = rootView.split("\n#### DeepSeek Harness\n")[1].split("\n#### Generic MCP Host")[0];
+    assert.ok(shared.includes(meta.enginesRange));
+    assert.ok(shared.includes(`Node.js ${nodeFloor} or later`));
+    for (const host of meta.testedVersions) assert.ok(shared.includes(`\`${host}\``), host);
+    assert.ok(shared.includes(`60 seconds on \`${meta.referenceVersion}\``));
+  });
+
+  it("documents profile selection, CLI and Web installation, upgrade, restart and removal", () => {
+    const install = dshSection(dsh, "Installation");
+    assert.match(install, /the name given to `--profile`/);
+    assert.match(install, /```bash\nprofile=web\ndsh plugin --profile "\$profile" add @curio-data\/dsh-intelli-search\n```/);
+    assert.match(install, /\*\*Plugins\*\*, select \*\*Add plugin\*\*/);
+    assert.match(install, /```bash\nprofile=web\ndsh --profile "\$profile"\n```/);
+    const life = dshSection(dsh, "Upgrade, Restart and Removal");
+    assert.match(life, /\*\*Versions\*\* and \*\*Update\*\*/);
+    assert.match(life, /no command-line update route has been verified/);
+    assert.match(life, /Restart the profile from the project directory after installing, updating or removing the bundle/);
+    assert.match(life, /dsh plugin --profile "\$profile" remove @curio-data\/dsh-intelli-search\ndsh --profile "\$profile" --dump-config/);
+    assert.match(life, /Removal deletes no data/);
+    assert.doesNotMatch(life, /removal (erases|deletes) (the )?(data|credentials|cache)/i);
+    assert.doesNotMatch(dsh, /dsh plugin [^\n]*@curio-data\/dsh-intelli-search@/, "no untested versioned upgrade command");
+  });
+
+  it("gives environment and credential-file routes with a safe standard-input setup", () => {
+    const cred = dshSection(dsh, "Credentials");
+    assert.match(cred, /environment that launches the harness, then a `\.env` file in the launch directory, then `\$DSH_HOME\/\.env`/);
+    assert.match(cred, /A nonempty environment value takes precedence over the file/);
+    assert.match(cred, /model-settings page does not reach this server/);
+    const setup = bashFences(cred).find((f) => f.includes("mcp-intelli-search setup"));
+    assert.ok(setup, "setup pipeline present");
+    assert.equal(
+      setup,
+      [
+        "read -r -s -p 'OpenRouter API key: ' key",
+        "printf '\\n'",
+        "printf '%s\\n' \"$key\" | \\",
+        `  npx -y --package ${pinned} \\`,
+        "  mcp-intelli-search setup",
+        "unset key",
+        "",
+      ].join("\n"),
+    );
+    assert.doesNotMatch(setup, /OPENROUTER_API_KEY|export|codex/, "never overwrites, exports or starts another host");
+    assert.match(cred, /refuses a terminal as its input/);
+    assert.match(cred, /setup prints `Setup complete\.`/);
+    assert.match(cred, /When the file already names a custom `apiKeyFile`, setup writes the key to that path and leaves the configuration file unchanged/);
+    assert.match(cred, /Only an absolute `XDG_CONFIG_HOME` is honoured; an unset or relative value means `\$HOME\/\.config`/);
+    assert.match(cred, /rereads the credential file on every call/);
+  });
+
+  it("explains workspace selection, the fixed-root override and home or root rejection", () => {
+    const ws = dshSection(dsh, "Workspace");
+    assert.match(ws, /uses the harness working directory as its workspace/);
+    assert.match(ws, /home or filesystem-root working directory is rejected/);
+    assert.match(ws, /by the configuration check/);
+    assert.match(ws, /replaces the row's entire `config`/);
+    assert.match(ws, /update the pinned server version after each bundle update/);
+  });
+
+  it("documents defaults, the per-user path, a complete strict example and reload rules", async () => {
+    const config = dshSection(dsh, "Configuration");
+    assert.match(config, /`perplexity\/sonar` for search, `minimax\/minimax-m3` for extraction and collation/);
+    assert.ok(config.includes("`${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search/config.json`"));
+    assert.match(config, /all three model roles are required/);
+    assert.match(config, /`defaultUrls` must not exceed `maxUrls`/);
+    assert.match(config, /A file without `apiKeyFile` still uses the default credential path/);
+    assert.ok(config.includes(`${release}packages/mcp/README.md#configuration`));
+    assert.ok(config.includes(`${release}packages/mcp/README.md#tuning`));
+    assert.match(config, /built-in defaults stay in force until the profile restarts\. Restart after creating the file/);
+    assert.match(config, /reads it again, until a call finds it valid/);
+    assert.match(config, /Once a file loads, its selections stay fixed until the profile restarts/);
+    const blocks = [...config.matchAll(/^```json\n([\s\S]*?)^```$/gm)].map((m) => m[1]);
+    assert.equal(blocks.length, 1);
+    const document = JSON.parse(blocks[0]);
+    assert.deepStrictEqual(Object.keys(document.models).sort(), ["collate", "extract", "search"]);
+    assert.ok(document.tuning.defaultUrls <= document.tuning.maxUrls);
+    assert.equal(document.providers.openrouter.apiKeyFile, undefined, "a complete example need not carry apiKeyFile");
+    const { parseConfig } = await import("../packages/mcp/src/config.js");
+    const workspace = scratchDir("dsh-config-example-");
+    try {
+      const parsed = await parseConfig(document, workspace);
+      assert.equal(parsed.settings.searchModel.model, "perplexity/sonar");
+      assert.equal(parsed.settings.extractModel.model, "minimax/minimax-m3");
+      assert.equal(parsed.settings.collateModel.model, "minimax/minimax-m3");
+      assert.equal(parsed.settings.defaultUrls, document.tuning.defaultUrls);
+      assert.equal(parsed.settings.maxUrls, document.tuning.maxUrls);
+      await assert.rejects(parseConfig({ providers: document.providers, models: { search: document.models.search } }, workspace));
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("gives a credential-free configuration check, both success lines and a labelled inference request", () => {
+    const verify = dshSection(dsh, "Verification");
+    const check = bashFences(verify).find((f) => f.includes("--check-config"));
+    assert.equal(check, `npx -y --package ${pinned} \\\n  mcp-intelli-search --host dsh --check-config\n`);
+    assert.match(verify, /From the project directory/);
+    assert.match(verify, /It needs no key and makes no model call/);
+    assert.ok(verify.includes("- `Configuration is valid.` when the per-user file loads."));
+    assert.ok(verify.includes("- `Configuration is valid (built-in DeepSeek Harness defaults; no per-user file found).` when there is no per-user file."));
+    assert.match(verify, /\*\*Inference Check \(Billed\)\.\*\*/);
+    assert.match(verify, /a quick search does not exercise page fetching, extraction or collation/);
+  });
+
+  it("explains both timeout clocks, retry impact and concrete smaller-work remedies", () => {
+    const timeouts = dshSection(dsh, "Timeouts");
+    for (const needle of ["`toolCallTimeoutMs: 600000`", "`llmTimeoutMs`", "`llmRetryAttempts`", "`outputBudgetRetries`", "it never extends the bridge limit", "`maxUrls` 3", "fewer questions in one batch", "Set `outputBudgetRetries` to `0`"]) {
+      assert.ok(timeouts.includes(needle), needle);
+    }
+  });
+
+  it("writes troubleshooting for a human operator and keeps agent-only rules in the skill", () => {
+    const trouble = dshSection(dsh, "Troubleshooting");
+    assert.match(trouble, /^\| Symptom \| Cause \| Remedy \|$/m);
+    for (const symptom of ["tools are absent", "`WORKSPACE` error", "`CONFIGURATION` error naming `config.json`", "`CONFIGURATION` error for a missing key", "`PROVIDER` error"]) {
+      assert.ok(trouble.includes(symptom), symptom);
+    }
+    assert.doesNotMatch(dsh, /substitut\w+ the harness's own web search|do not claim/i, "agent-only rule stays out of the human page");
+    assert.ok(trouble.includes(`${release}packages/mcp/README.md#timeouts-and-troubleshooting`), "full reference in the standalone guide");
+    const skill = readFileSync(join(REPO_ROOT, "guidance/setup-dsh.md"), "utf8");
+    assert.match(skill, /do not substitute the harness's own web search/);
+    assert.match(skill, /read -r -s -p 'OpenRouter API key: ' key\n/);
+    assert.match(skill, /@curio-data\/mcp-intelli-search@\{\{MCP_VERSION\}\}/);
+    assert.match(skill, /Setup complete\./);
+    assert.doesNotMatch(skill, /read -r -s[^\n]*OPENROUTER_API_KEY|unset OPENROUTER_API_KEY|^codex$/m);
+    assert.doesNotMatch(skill, /<name>/, "no angle-bracket profile placeholder");
+  });
+
+  it("carries the charge notice, cache map, privacy warning and telemetry distinction", () => {
+    const notices = dshSection(dsh, "Charges, Cache and Privacy");
+    assert.match(notices, /Every search and research call bills the configured OpenRouter account/);
+    assert.match(notices, /≈\$0\.09/);
+    assert.match(notices, /```text\n\.search\/\n/);
+    assert.match(notices, /full copies of fetched pages/);
+    assert.match(notices, /fetched addresses are not restricted to public ones/);
+    assert.match(notices, /`meta\.json` is local telemetry, which the server never transmits/);
+    assert.match(notices, /reports, extractions, sources, batch manifests and the index are still written/);
+  });
+
+  it("keeps evidence classes apart and states the bundle-versus-server licence and NOTICE", () => {
+    const evidence = dshSection(dsh, "Evidence and Limits");
+    for (const label of ["**Local bundle, credential-free:**", "**Pre-bootstrap launcher:**", "**Public installation by name:**", "**Credentialed research:**"]) {
+      assert.ok(evidence.includes(label), label);
+    }
+    assert.match(evidence, /none stands in for another/);
+    assert.ok(evidence.includes(meta.enginesRange));
+    assert.ok(evidence.includes("https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits"));
+    assert.doesNotMatch(dsh, /registry-pin installation (has|have) not been (tested|verified)/i, "stale registry negative");
+    const licence = dshSection(dsh, "Licence");
+    assert.match(licence, /The bundle contains no third-party code, so it carries no `NOTICE`/);
+    assert.match(licence, /its own \[LICENSE\]\([^)]+packages\/mcp\/LICENSE\) and a \[NOTICE\]\([^)]+packages\/mcp\/NOTICE\)/);
+  });
+
+  it("links further documentation absolutely and excludes native, other-host and contributor material", () => {
+    const further = dshSection(dsh, "Further Documentation");
+    for (const target of [
+      `${release}packages/mcp/README.md#usage-examples`,
+      `${release}packages/mcp/README.md#cost`,
+      `${release}packages/mcp/README.md#timeouts-and-troubleshooting`,
+      `${release}packages/mcp/README.md#cache-structure`,
+      `${release}packages/mcp/README.md#filesystem-and-privacy-boundaries`,
+      `${release}plugins/dsh/skills/intelli-search/SKILL.md`,
+      "https://github.com/Curio-Data/pi-intelli-search/blob/main/CHANGELOG.md",
+    ]) {
+      assert.ok(further.includes(target), target);
+    }
+    const body = dsh.slice(dsh.indexOf("\n") + 1);
+    assert.doesNotMatch(body, /pi install|claude mcp add|codex plugin|Configuration Recipes|npm run |Settings Reference|\| `defaultUrls` \|/);
+  });
+
+  it("rejects angle-bracket placeholders and unquoted profile uses in every dsh Bash fence", () => {
+    const fences = bashFences(dsh);
+    assert.ok(fences.length >= 6, "the page carries its command examples");
+    for (const fence of fences) assert.deepStrictEqual(bashFenceDefects(fence), [], fence);
+    assert.deepStrictEqual(bashFenceDefects("dsh plugin --profile <name> remove x\n"), ["placeholder <name>"]);
+    assert.deepStrictEqual(bashFenceDefects("dsh --profile $profile\n"), ["unquoted $profile", "$profile used without a literal profile= line"]);
+    assert.deepStrictEqual(bashFenceDefects("read -r -s -p '<key>: ' key\n"), [], "quoted text is not a placeholder");
+    for (const fence of bashFences(mcp).filter((f) => f.includes("dsh"))) assert.deepStrictEqual(bashFenceDefects(fence), [], fence);
+  });
+
+  it("gives the MCP view the installation command and current evidence, and corrects frozen root links", () => {
+    const section = mcp.split("\n#### DeepSeek Harness\n")[1].split("\n#### Generic MCP Host")[0];
+    assert.match(section, /dsh plugin --profile "\$profile" add @curio-data\/dsh-intelli-search/);
+    assert.match(section, /read -r -s -p 'OpenRouter API key: ' key/);
+    assert.match(section, /--host dsh --check-config/);
+    assert.match(section, /\*\*Public installation by name:\*\*/);
+    assert.doesNotMatch(mcp, /No registry-pin installation has been verified|published separately from this server|Check the \[repository installation guide\]/);
+    assert.match(mcp, /For DeepSeek Harness, the matrix keeps three classes apart/);
+    assert.doesNotMatch(source, /blob\/mcp-v\d/, "no hand-frozen release links in the canonical source");
+    assert.match(rootView, /\[DeepSeek Harness\]\(#deepseek-harness\) and any \[Generic MCP Host\]/);
+    assert.ok(pi.includes("[DeepSeek Harness](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#deepseek-harness)"));
+    assert.ok((anchorsOf(rootView) as Set<string>).has("deepseek-harness"), "root anchor preserved");
+    assert.doesNotMatch(dsh, /\{\{|\]\(#/);
+  });
+});
