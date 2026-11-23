@@ -850,6 +850,22 @@ describe("canonical dsh operator content", () => {
       assert.match(dsh, new RegExp(`^## ${escape(section)}$`, "m"), section);
       assert.ok(toc.includes(`[${section}](${release}plugins/dsh/README.md#`), `contents lists ${section} absolutely`);
     }
+    // Every section common to both engine guides needs a DSH disposition.
+    // These four have host-specific equivalents, rather than a verbatim copy.
+    const equivalents: Record<string, string> = {
+      'Three Packages, One Engine': 'Further Documentation', Install: 'Installation',
+      Compatibility: 'Evidence and Limits', 'MCP Server Reference': 'Configuration',
+    };
+    const sections = (text: string) => [...text.matchAll(/^## (.+)$/gm)].map(m => m[1]);
+    for (const title of sections(mcp).filter(t => sections(pi).includes(t))) {
+      assert.ok(sections(dsh).includes(equivalents[title] ?? title), `missing shared section: ${title}`);
+    }
+    for (const text of [pi, mcp, dsh]) {
+      for (const retained of ['docs/images/01.png', 'docs/images/sponsor.png', 'docs/images/downloads-dark.svg',
+        'docs/images/downloads-light.svg', 'Copyright 2026 Ashraf Miah, Curio Data Pro Ltd.', '[Apache License, Version 2.0]']) {
+        assert.ok(text.includes(retained), `missing shared project material: ${retained}`);
+      }
+    }
     // Anchors of the 0.25.0 hand-written page survive as aliases.
     const anchors = anchorsOf(dsh) as Set<string>;
     for (const old of ["requirements", "installation", "credentials", "workspace-and-cache", "tools-and-timeouts", "verification", "removal", "evidence-and-limits", "licence"]) {

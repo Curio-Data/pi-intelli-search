@@ -1,7 +1,6 @@
 /**
- * Weekly npm download chart, hand-drawn style, stacked across both packages:
- * the native Pi extension (@curio-data/pi-intelli-search, bottom) and the MCP
- * server (@curio-data/mcp-intelli-search, top).
+ * Weekly npm download chart: native extension, MCP server and DSH bundle,
+ * stacked in that order without attributing server downloads to a host.
  * Run: node scripts/plot-downloads.mts
  *      node scripts/plot-downloads.mts --offline   (render from cache, no network)
  */
@@ -10,12 +9,14 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 const FIRST_DAY = {
+  dsh: '2026-11-22', // first public bundle (0.25.0)
   pi: '2026-05-04', // clamp: first publish (0.3.1-alpha.1)
   mcp: '2026-10-05', // clamp: first publish (0.15.0-alpha.0)
 };
 const CACHE = {
   pi: 'data/downloads.json',
   mcp: 'data/downloads-mcp.json',
+  dsh: 'data/downloads-dsh.json',
 };
 const OUT_LIGHT = 'docs/images/downloads-light.svg';
 const OUT_DARK = 'docs/images/downloads-dark.svg';
@@ -23,15 +24,17 @@ const OUT_DARK = 'docs/images/downloads-dark.svg';
 const THEMES = {
   light: {
     bg: '#faf6ee', ink: '#2e2a25', grid: '#c9bfae',
-    pi: '#8b3a2e', mcp: '#3f6f8f',
+    pi: '#8b3a2e', mcp: '#3f6f8f', dsh: '#36704c',
   },
   dark: {
     bg: '#0d1117', ink: '#d8d2c8', grid: '#3d3630',
-    pi: '#d4805f', mcp: '#8fb6d9',
+    pi: '#d4805f', mcp: '#8fb6d9', dsh: '#87c998',
   },
 };
 
 type Pkg = keyof typeof FIRST_DAY;
+const packages = ['pi', 'mcp', 'dsh'] as const;
+const angles = { pi: -41, mcp: 49, dsh: 0 };
 type Day = { day: string; downloads: number };
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -129,14 +132,15 @@ function toWeeks(days: Day[]): Week[] {
   return firstReal === -1 ? [] : weeks.slice(firstReal);
 }
 
-/** Union of both series' weeks; a package absent from a week contributes zero. */
-function stackWeeks(pi: Week[], mcp: Week[]): { week: string; pi: number; mcp: number }[] {
-  const byWeek = new Map<string, { pi: number; mcp: number }>();
-  for (const w of pi) byWeek.set(w.week, { pi: w.downloads, mcp: 0 });
-  for (const w of mcp) {
-    const b = byWeek.get(w.week) ?? { pi: 0, mcp: 0 };
-    b.mcp = w.downloads;
-    byWeek.set(w.week, b);
+/** Union of complete weeks; a missing package contributes no segment. */
+function stackWeeks(series: Record<Pkg, Week[]>) {
+  const byWeek = new Map<string, Record<Pkg, number>>();
+  for (const pkg of packages) {
+    for (const w of series[pkg]) {
+      const b = byWeek.get(w.week) ?? { pi: 0, mcp: 0, dsh: 0 };
+      b[pkg] = w.downloads;
+      byWeek.set(w.week, b);
+    }
   }
   return [...byWeek.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -147,7 +151,7 @@ const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 function render(
-  weeks: { week: string; pi: number; mcp: number }[],
+  weeks: ReturnType<typeof stackWeeks>,
   theme: keyof typeof THEMES,
 ): string {
   const t = THEMES[theme];
@@ -156,7 +160,8 @@ function render(
   const pw = W - M.left - M.right;
   const ph = H - M.top - M.bottom;
 
-  const max = Math.max(...weeks.map((w) => w.pi + w.mcp), 1);
+  const totals = weeks.map(w => packages.reduce((sum, pkg) => sum + w[pkg], 0));
+  const max = Math.max(...totals, 1);
   const niceMax = Math.ceil(max / 100) * 100 || 100;
   const g = rough.generator();
   const parts: string[] = [];
@@ -183,24 +188,19 @@ function render(
     );
   }
 
-  // stacked bars: pi on the bottom, mcp on top of it
+  // Raw package downloads, not counts of distinct installations.
   const slot = pw / weeks.length;
   const bw = Math.max(4, Math.min(slot * 0.62, 40));
   weeks.forEach((w, i) => {
-    const hPi = (w.pi / niceMax) * ph;
-    const hMcp = (w.mcp / niceMax) * ph;
     const x = M.left + slot * i + (slot - bw) / 2;
-    if (hPi > 0) {
-      draw(g.rectangle(x, M.top + ph - hPi, bw, hPi, {
-        stroke: t.pi, strokeWidth: 1.6, fill: t.pi,
-        fillStyle: 'hachure', fillWeight: 1.4, hachureAngle: -41,
-        roughness: 1.5, bowing: 1.4, seed: seed++,
-      }));
-    }
-    if (hMcp > 0) {
-      draw(g.rectangle(x, M.top + ph - hPi - hMcp, bw, hMcp, {
-        stroke: t.mcp, strokeWidth: 1.6, fill: t.mcp,
-        fillStyle: 'hachure', fillWeight: 1.4, hachureAngle: 49,
+    let y = M.top + ph;
+    for (const pkg of packages) {
+      const height = (w[pkg] / niceMax) * ph;
+      if (!height) continue;
+      y -= height;
+      draw(g.rectangle(x, y, bw, height, {
+        stroke: t[pkg], strokeWidth: 1.6, fill: t[pkg],
+        fillStyle: 'hachure', fillWeight: 1.4, hachureAngle: angles[pkg],
         roughness: 1.5, bowing: 1.4, seed: seed++,
       }));
     }
@@ -224,11 +224,11 @@ function render(
     stroke: t.ink, strokeWidth: 2, roughness: 1.3, seed: seed++,
   }));
 
-  const total = weeks.reduce((s, w) => s + w.pi + w.mcp, 0);
+  const total = totals.reduce((a, b) => a + b, 0);
   const font =
     "'Comic Sans MS','Segoe Print','Bradley Hand','Chalkboard SE',cursive,sans-serif";
 
-  // legend: pi bottom segment, mcp top segment; the swatch hatch matches its
+  // The swatch hatch matches its
   // series so the hatch direction stays a redundant cue beside colour.
   const legend = (label: string, colour: string, angle: number, x: number) => {
     draw(g.rectangle(x, 36, 14, 14, {
@@ -240,12 +240,13 @@ function render(
       `<text x="${x + 20}" y="48" font-size="13" fill="${t.ink}" opacity="0.85">${esc(label)}</text>`,
     );
   };
-  legend('mcp server', t.mcp, 49, W - M.right - 118);
-  legend('pi extension', t.pi, -41, W - M.right - 262);
+  legend('pi extension', t.pi, angles.pi, W - M.right - 388);
+  legend('mcp server', t.mcp, angles.mcp, W - M.right - 248);
+  legend('dsh bundle', t.dsh, angles.dsh, W - M.right - 118);
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${font}" role="img" aria-label="Stacked weekly npm downloads for @curio-data/pi-intelli-search and @curio-data/mcp-intelli-search">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${font}" role="img" aria-label="Stacked weekly npm downloads for @curio-data/pi-intelli-search, @curio-data/mcp-intelli-search and @curio-data/dsh-intelli-search">
 <rect width="${W}" height="${H}" fill="${t.bg}"/>
-<text x="${M.left}" y="28" font-size="18" fill="${t.ink}">weekly npm downloads &#183; both intelli-search packages</text>
+<text x="${M.left}" y="28" font-size="18" fill="${t.ink}">weekly npm downloads &#183; three intelli-search packages</text>
 <text x="${M.left}" y="48" font-size="13" fill="${t.ink}" opacity="0.65">${total.toLocaleString('en-GB')} over ${weeks.length} weeks</text>
 ${parts.join('\n')}
 </svg>
@@ -256,7 +257,8 @@ const offline = process.argv.includes('--offline');
 
 const piWeeks = toWeeks(await refresh('pi', offline));
 const mcpWeeks = toWeeks(await refresh('mcp', offline));
-const weeks = stackWeeks(piWeeks, mcpWeeks);
+const dshWeeks = toWeeks(await refresh('dsh', offline));
+const weeks = stackWeeks({ pi: piWeeks, mcp: mcpWeeks, dsh: dshWeeks });
 if (!weeks.length) {
   console.error('No complete weeks with data yet: nothing rendered.');
   process.exit(0);
@@ -265,5 +267,5 @@ await mkdir(dirname(OUT_LIGHT), { recursive: true });
 await writeFile(OUT_LIGHT, render(weeks, 'light'));
 await writeFile(OUT_DARK, render(weeks, 'dark'));
 console.log(
-  `Rendered ${weeks.length} weeks (${piWeeks.length} pi, ${mcpWeeks.length} mcp).`,
+  `Rendered ${weeks.length} weeks (${piWeeks.length} pi, ${mcpWeeks.length} mcp, ${dshWeeks.length} dsh).`,
 );

@@ -4,7 +4,7 @@ Developer and operator tools for `intelli-search`: download charts, local usage 
 
 ## `plot-downloads.mts`
 
-Renders the weekly npm download chart in `README.md` as a hand-drawn-style stacked Scalable Vector Graphics (SVG) image in light and dark themes, using [_rough.js_](https://roughjs.com). Each bar stacks the native extension's weekly downloads (lower segment) with the MCP server's (upper segment). Explicit seeds make rendering byte-identical for unchanged data and rendering inputs.
+Renders the weekly npm download chart in `README.md` as a hand-drawn-style stacked Scalable Vector Graphics (SVG) image in light and dark themes, using [_rough.js_](https://roughjs.com). From bottom to top, each bar stacks weekly downloads of the native extension, MCP server and DeepSeek Harness bundle. The bundle's segment is green. A bundle installation can also download the server; both registry downloads count, without adjustment. Explicit seeds make rendering byte-identical for unchanged data and rendering inputs.
 
 Run directly with [_Node.js_](https://nodejs.org/) 22.18 or later; type stripping requires no build step:
 
@@ -20,6 +20,7 @@ npm run chart                                # same as the first command
 |---|---|
 | `data/downloads.json` | Daily download cache, native package (committed) |
 | `data/downloads-mcp.json` | Daily download cache, MCP package (committed) |
+| `data/downloads-dsh.json` | Daily download cache, DeepSeek Harness package (committed) |
 | `docs/images/downloads-light.svg` | Light-theme chart (committed) |
 | `docs/images/downloads-dark.svg` | Dark-theme chart (committed) |
 
