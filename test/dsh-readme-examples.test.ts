@@ -13,14 +13,14 @@
 // proves syntax, not that a command is runnable or safe.
 import { it } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error plain Node module without declarations
-import { derivePackageReadme } from "../scripts/generate-package-readmes.mjs";
+import { derivePackageReadme, parseRepoUrl } from "../scripts/generate-package-readmes.mjs";
 // @ts-expect-error plain Node module without declarations
-import { FENCE, closesFence } from "../scripts/lib/markdown-links.mjs";
+import { FENCE, allLinkTargets, closesFence } from "../scripts/lib/markdown-links.mjs";
 import { parseConfig } from "../packages/mcp/src/config.js";
 import { defaultHostConfig, hostPaths } from "../packages/mcp/src/host.js";
 
@@ -185,6 +185,21 @@ it("every dsh Bash fence passes shellcheck as a syntax gate", () => {
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it("every dsh repository file link targets a tracked file", () => {
+  const paths = new Set<string>();
+  for (const url of allLinkTargets(dshReadme())) {
+    const target = parseRepoUrl(url);
+    if (target && target.kind !== "tree") paths.add(target.path);
+  }
+  assert.ok(paths.size > 0);
+  for (const path of paths) {
+    assert.doesNotThrow(
+      () => execFileSync("git", ["ls-files", "--error-unmatch", path], { cwd: REPO_ROOT, stdio: "ignore" }),
+      `${path} must be tracked; a build-created local file does not make a published link resolve`,
+    );
   }
 });
 

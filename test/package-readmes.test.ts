@@ -996,7 +996,7 @@ describe("canonical dsh operator content", () => {
     assert.doesNotMatch(dsh, /registry-pin installation (has|have) not been (tested|verified)/i, "stale registry negative");
     const licence = dshSection(dsh, "Licence");
     assert.match(licence, /The bundle contains no third-party code, so it carries no `NOTICE`/);
-    assert.match(licence, /its own \[LICENSE\]\([^)]+packages\/mcp\/LICENSE\) and a \[NOTICE\]\([^)]+packages\/mcp\/NOTICE\)/);
+    assert.match(licence, /its own \[LICENSE\]\([^)]+\/LICENSE\) and a \[NOTICE\]\([^)]+\/NOTICE\)/);
   });
 
   it("links further documentation absolutely and excludes native, other-host and contributor material", () => {

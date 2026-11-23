@@ -112,6 +112,7 @@ SCRIPTS=(
   e2e/16_batch_independent.sh
   e2e/17_batch_expansion.sh
   e2e/18_dsh_plugin.sh
+  e2e/20_dsh_setup_pipeline.sh
 )
 
 PASSED=()

@@ -82,12 +82,17 @@ An early version of this script produced the historical headline numbers. A new 
 
 ## `generate-plugin-bundles.mjs`
 
-Generates the [_Claude Code_](https://code.claude.com/docs/en/plugins), [_Codex_](https://developers.openai.com/codex/plugins) and [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) bundles (`plugins/`) plus both repository marketplace catalogues (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) from `guidance/`, the templates in `scripts/templates/dsh/` and the version in `packages/mcp/package.json`. The dsh bundle is a publishable npm package (`plugins/dsh`, `@curio-data/dsh-intelli-search`) rather than a marketplace entry: dsh installs it directly by package name. Run the generator after a Model Context Protocol (MCP) package version change or guidance edit; never hand-edit generated files.
+Generates the [_Claude Code_](https://code.claude.com/docs/en/plugins), [_Codex_](https://developers.openai.com/codex/plugins) and [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) bundles (`plugins/`) plus both repository marketplace catalogues (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) from the canonical root `README.md`, `guidance/`, `scripts/dsh-host-metadata.mjs`, the remaining registrar and icon templates in `scripts/templates/dsh/` and the version in `packages/mcp/package.json`. The dsh bundle is a publishable npm package (`plugins/dsh`, `@curio-data/dsh-intelli-search`) rather than a marketplace entry: dsh installs it directly by package name. This script is the sole writer of `plugins/dsh/README.md`, using the same derivation as `dsh.README.md`; no independent dsh README template remains. Run `npm run generate:readmes` before `npm run generate:plugins` after a canonical documentation, metadata, Model Context Protocol (MCP) package version or guidance change, and never hand-edit generated files.
 
 ```bash
+npm run generate:readmes   # derive native, MCP and dsh package README previews
 npm run generate:plugins   # rewrite the committed tree (registry launchers)
-npm run check:plugins      # drift gate: committed tree must match generation
+npm run check:readmes      # package README drift gate
+npm run check:plugins      # plugin and marketplace drift gate
+node scripts/check-dsh-readme-links.mjs  # candidate dsh link receipt
 ```
+
+The dsh preview and registry bundle README are byte-identical. `scripts/check-dsh-readme-links.mjs` checks absolute links and Markdown anchors without network access: candidate mode reads the working tree after `generate:plugins`, while `--ref mcp-vX.Y.Z` reads the tagged Git objects and `--main-ref` selects the evidence ref, defaulting to `origin/main`. Fetch before the candidate check so the evidence ref is current, and retain the printed receipt.
 
 Pre-publication install tests use tarball mode. Generated launchers run a vendored installation of the packed tarball rather than the registry pin:
 
@@ -105,6 +110,10 @@ This command generates bundles only; it does not build, pack, vendor-install or 
 The tested full installation flow is [`test/e2e/12_plugin_bundles.sh`](../test/e2e/12_plugin_bundles.sh): build and pack the MCP workspace, generate local bundles, install the tarball into both vendor directories, then install the marketplaces into isolated host profiles and check connection and skill discovery. It uses dummy credentials, not a copied operator credential store. Set `TMPDIR` beneath the repository's gitignored `.tmp/` on encrypted hosts before running it. Credentialed research is a separate check in scenarios 13 and 14; see [Compatibility](../docs/COMPATIBILITY.md#host-plugins) for evidence classes and limits.
 
 The dsh host flow is [`test/e2e/18_dsh_plugin.sh`](../test/e2e/18_dsh_plugin.sh): it is credential-free, making no provider call, and verifies the local-tarball bundle on an isolated dsh host through installation, exact tool registration, skill loading, dummy credential delivery, both workspace guards, and removal plus reinstallation. It requires a host within the bundle's declared range and an isolated pnpm, prepared as described in [Environment and Isolation](../docs/plans/dsh-host/PLAN.md#environment-and-isolation), with `DSH_BIN` and the pnpm `PATH` exported before either suite runner starts; both runners fail the suite when it skips.
+
+[`scripts/verify-dsh-setup.sh`](verify-dsh-setup.sh) executes the documented standard-input setup against a local server tarball with an invented dummy key, including exact success output, credential permissions, environment precedence, both configuration-check forms, custom `apiKeyFile` preservation, relative-XDG fallback and redaction. [`scripts/verify-dsh-lifecycle.sh`](verify-dsh-lifecycle.sh) repeats the profile installation, configuration, tool and skill discovery, launched-server XDG and dummy-key delivery, removal and reinstallation checks on an isolated real host. Its observer records environment presence without printing credential values. Both helpers isolate home, XDG and package caches under repository scratch and accept the documented host or package substitutions.
+
+[`test/e2e/20_dsh_setup_pipeline.sh`](../test/e2e/20_dsh_setup_pipeline.sh) is the standing credential-free setup-pipeline scenario in both suite runners. It needs neither a dsh host nor pnpm and makes no provider call.
 
 [`test/e2e/19_dsh_credentialed.sh`](../test/e2e/19_dsh_credentialed.sh) is an opt-in live check, not part of either suite runner. Obtain approval for two searches and one three-page research request before each run. With Node.js 24.9 or later (tested on 24.19.0) and isolated pnpm on `PATH`, set `DSH_BIN` to the isolated `0.2.2-rc.1` host and run `S19_APPROVED=yes ./test/e2e/19_dsh_credentialed.sh`. It reads only `DEEPSEEK_API_KEY` (host model) and `OPENROUTER_API_KEY` (pipeline) from the private `.env` at the root of the tree containing the script. It ignores inherited values of both variables. Each fresh headless session gets one permitted operation. The script checks both credential routes and the completed report under the isolated launch project. It stops on failure without a paid retry. Evidence promotion is manual. Keep raw sessions private in repository scratch. The main checkout's `evidence/2026-11-22-dsh-host/verification-receipt.md` names the retained files. Scan the selected summaries, sidecar and inventory for both actual keys without printing them, then copy only those files and verify their SHA-256 checksums.
 
@@ -156,7 +165,7 @@ Use sequential mode where an account meets OpenRouter's 402 in-flight spending l
 
 ### Traced Evidence Runs
 
-[`test/run-e2e-parallel.sh`](../test/run-e2e-parallel.sh) runs scenarios 01 to 12 and 15 to 17 with tracing, for investigating what limits or breaks live runs. Run `npm run build:all` first. Each scenario gets an isolated `HOME`, XDG directories, npm cache and trace directory under `.tmp/e2e-evidence/<run>/`, and the run records the key's account state (limit, usage, free-tier flag) at start and end without the key itself.
+[`test/run-e2e-parallel.sh`](../test/run-e2e-parallel.sh) runs scenarios 01 to 12, 15 to 18 and 20 with tracing, for investigating what limits or breaks live runs. Run `npm run build:all` first. Each scenario gets an isolated `HOME`, XDG directories, npm cache and trace directory under `.tmp/e2e-evidence/<run>/`, and the run records the key's account state (limit, usage, free-tier flag) at start and end without the key itself.
 
 ```bash
 npm run build:all

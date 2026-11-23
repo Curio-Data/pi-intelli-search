@@ -215,7 +215,7 @@ packages/mcp/
 
 guidance/                   # Shared host-neutral guidance source and per-host setup fragments
 plugins/                    # Generated Claude Code, Codex and DeepSeek Harness bundles
-scripts/templates/dsh/     # Hand-edited dsh bundle sources (registrar, icon, README)
+scripts/templates/dsh/     # Hand-edited dsh registrar and icon; the README derives from the canonical root README
 ```
 
 ## Cache Structure
