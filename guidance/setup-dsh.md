@@ -1,6 +1,6 @@
 ## Setup (One Time)
 
-The plugin is a generated configuration bundle for _DeepSeek Harness_ (`dsh`), not an extension: one inserted bridge row starts the pinned `@curio-data/mcp-intelli-search@{{MCP_VERSION}}` package through `npx` with `--host dsh`, and one registrar registers this skill. The bundle installs into one harness profile, the name given to `--profile`, and only that profile loads it. The first start needs network access to download the package; later starts reuse the `npx` cache. [_Node.js_](https://nodejs.org/) 24.9 or later must be on `PATH` with `node` and `npx`, the harness's own floor. For bundle installation and removal, put `pnpm` on `PATH` or set the plugin manager's `pnpmCommand`.
+The plugin is a generated configuration bundle for _DeepSeek Harness_ (`dsh`), not an extension: one inserted bridge row starts the pinned `@curio-data/mcp-intelli-search@{{MCP_VERSION}}` package through `npx` with `--host dsh`, and one registrar registers this skill. The bundle installs into one harness profile, the name given to `--profile`, and only that profile loads it. The first start needs network access to download the package; later starts reuse the `npx` cache. [_Node.js_](https://nodejs.org/) 24.9 or later must be on `PATH` with `node` and `npx`, the harness's own floor. For the `dsh plugin` commands, put `pnpm` on `PATH` unless the launcher supplies its own package manager. The `pnpmCommand` setting applies only to the in-harness plugin manager.
 
 No path or credential exports are required. The server uses the harness working directory as its workspace and writes research cache below it. Start the harness from the project directory: a directory change later in the session does not move the cache. For a fixed project root, override the row with id `mcp-intelli-search` in the profile's `cordis.patch.yml` under `$DSH_HOME/profiles/` and set `cwd`. The override replaces that row's entire `config`. Copy its other `config` fields from the profile's `--dump-config` output, for example `dsh --profile web --dump-config` with the profile in use substituted for `web`, and update the pinned package version after each bundle update. A home or filesystem-root working directory produces an actionable `WORKSPACE` tool error instead of an accidental shared cache. Without a per-user configuration file, DeepSeek Harness mode selects `perplexity/sonar` for search and `minimax/minimax-m3` for extraction and collation; the four tools start even when credentials are absent.
 
@@ -15,15 +15,19 @@ After the command succeeds, the user opens the file in an editor so the key stay
 The bridge row forwards `process.env.OPENROUTER_API_KEY` to the server; the server treats an empty value as absent and starts without a key. A key stored through the harness model-settings page does not provision this server: that credential is resolved through a service a child process cannot read. As the alternative, the server's `setup` command reads a key from standard input, never from a terminal, and stores it in a user-only credential file beside the per-user configuration at `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search`, shared with the Codex host mode. Ask the user to run this pipeline in their own _Bash_ shell; never ask for the key in the conversation or place it in arguments, files or logs:
 
 ```bash
-read -r -s -p 'OpenRouter API key: ' key
-printf '\n'
-printf '%s\n' "$key" | \
-  npx -y --package @curio-data/mcp-intelli-search@{{MCP_VERSION}} \
-  mcp-intelli-search setup
-unset key
+(
+  set +x
+  set +a
+  unset key || exit 1
+  IFS= read -r -s -p 'OpenRouter API key: ' key || exit 1
+  printf '\n'
+  printf '%s\n' "$key" | \
+    npx -y --package @curio-data/mcp-intelli-search@{{MCP_VERSION}} \
+    mcp-intelli-search setup
+)
 ```
 
-`key` is an unexported shell variable, so the pipeline leaves any existing `OPENROUTER_API_KEY` untouched. Setup must print `Setup complete.`; otherwise setup is incomplete. It honours an existing custom `apiKeyFile` path and leaves that configuration unchanged. Only an absolute `XDG_CONFIG_HOME` is honoured, and setup must run with the same value as the harness. A stored file is reread on each call, but a nonempty environment key takes precedence: remove `OPENROUTER_API_KEY` from all three environment layers and restart to use the file. Edit that `config.json` to override models or tuning; custom models must pass catalogue validation for the required roles and be accessible to the configured account. A per-user file created after the harness started, or edited after it loaded, takes effect only after a restart; an invalid file is reread on each call until it loads. See [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v{{MCP_VERSION}}/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v{{MCP_VERSION}}/packages/mcp/README.md#tuning) in the standalone guide.
+The subshell passes the key to setup on standard input, not in the environment, and leaves the calling shell's variables unchanged. Setup must print `Setup complete.`; otherwise setup is incomplete. It honours an existing custom `apiKeyFile` path and leaves that configuration unchanged. Only an absolute `XDG_CONFIG_HOME` is honoured, and setup must run with the same value as the harness. A stored file is reread on each call, but a nonempty environment key takes precedence: remove `OPENROUTER_API_KEY` from all three environment layers and restart to use the file. Edit that `config.json` to override models or tuning; custom models must pass catalogue validation for the required roles and be accessible to the configured account. A per-user file created after the harness started, or edited after it loaded, takes effect only after a restart; an invalid file is reread on each call until it loads. See [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v{{MCP_VERSION}}/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v{{MCP_VERSION}}/packages/mcp/README.md#tuning) in the standalone guide.
 
 To validate the configuration without a key or a model call, run from the project directory:
 

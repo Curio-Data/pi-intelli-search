@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/mcp-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/mcp-intelli-search)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-blue)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1248%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1249%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -261,7 +261,7 @@ The installed `intelli-search` skill covers configuration and unattended tool ap
 
 - `dsh` within the bundle's declared range, `>=0.2.2-rc.1 <0.3.0`. The range is a compatibility declaration; Evidence and Limits names the versions tested.
 - Node.js 24.9 or later, the harness's own floor, with `node` and `npx` on `PATH`. The bridge row starts the server through `npx`.
-- `pnpm` on `PATH`, or the plugin manager's `pnpmCommand` setting, to install and remove the bundle.
+- For the `dsh plugin` commands below, put `pnpm` on `PATH` unless the launcher supplies its own package manager. The `pnpmCommand` setting configures the in-harness plugin manager, not these commands.
 - Network access on the first start, when `npx` downloads the MCP server package. Later starts reuse the `npx` cache.
 - An OpenRouter API key on an account with credit. Every search and research call bills that account, separately from any harness subscription.
 - Linux for verified operation. The server's native fetch assets are verified on Linux x86-64 only, and every recorded check of this bundle ran on Linux; _macOS_ and _Windows_ are not verified.
@@ -321,20 +321,24 @@ The server reads its OpenRouter key from the `OPENROUTER_API_KEY` environment va
 
 After the command succeeds, open the file in an editor, so the key stays out of shell history, and put `OPENROUTER_API_KEY=` followed by the key on its own line, replacing any earlier definition.
 
-**Credential-File Route.** The server's `setup` command reads the key from standard input and stores it in a user-only file. It refuses a terminal as its input, so run it through this pipeline from a _Bash_ shell:
+**Credential-File Route.** The server's `setup` command reads the key from standard input and stores it in a user-only file. It refuses a terminal as its input. Run the following block in _Bash_; if the current shell is not Bash, start `bash` first:
 
 ```bash
-read -r -s -p 'OpenRouter API key: ' key
-printf '\n'
-printf '%s\n' "$key" | \
-  npx -y --package @curio-data/mcp-intelli-search \
-  mcp-intelli-search setup
-unset key
+(
+  set +x
+  set +a
+  unset key || exit 1
+  IFS= read -r -s -p 'OpenRouter API key: ' key || exit 1
+  printf '\n'
+  printf '%s\n' "$key" | \
+    npx -y --package @curio-data/mcp-intelli-search \
+    mcp-intelli-search setup
+)
 ```
 
 Add `@` and the version the bundle pins, shown in its row by `--dump-config`, after the package name to run the same server version.
 
-The prompt hides the key as it is typed and stores it in `key`, an ordinary shell variable that is not exported, so no other process receives it and an existing `OPENROUTER_API_KEY` is left unchanged; `unset key` then discards it. Confirm that setup prints `Setup complete.` followed by the configuration and credential paths. If `OPENROUTER_API_KEY` is set in that shell, setup also warns that the environment value takes precedence over the stored key.
+Paste and run the whole block. Wait for the `OpenRouter API key:` prompt before entering the key; input is hidden. The parentheses run the commands in a subshell with tracing and automatic export turned off. Setup receives the key on standard input, and the calling shell's variables remain unchanged. Confirm that setup prints `Setup complete.` followed by the configuration and credential paths. If that shell exports a nonempty `OPENROUTER_API_KEY`, setup also warns that the environment value takes precedence over the stored key.
 
 Setup creates `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search/config.json` with the default models when it is absent, adds a missing `apiKeyFile` selection to an existing file and keeps existing model and tuning selections. It writes the key to `openrouter.key` beside that file. When the file already names a custom `apiKeyFile`, setup writes the key to that path and leaves the configuration file unchanged. Only an absolute `XDG_CONFIG_HOME` is honoured; an unset or relative value means `$HOME/.config`. Run setup with the same `XDG_CONFIG_HOME` as the harness, so both use one directory.
 
@@ -348,7 +352,7 @@ For a fixed project root, override the row with id `mcp-intelli-search` in the p
 
 ##### Bundle Configuration
 
-With no per-user configuration file, the server uses built-in defaults: OpenRouter for every role, `perplexity/sonar` for search, `minimax/minimax-m3` for extraction and collation, and the shared tuning defaults, including ten pages per research call (`defaultUrls`) and a cap of 20 (`maxUrls`). The defaults need no file.
+With no per-user configuration file, the server uses built-in defaults: OpenRouter for every role, `perplexity/sonar` for search, `minimax/minimax-m3` for extraction and collation, and the shared tuning defaults, including a default budget of ten search-result pages per query (`defaultUrls`) and a cap of 20 per query (`maxUrls`). The defaults need no file.
 
 The per-user file is `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search/config.json`, shared with the Codex launcher. It is strict: only `providers`, `models` and an optional `tuning` object are accepted, all three model roles are required, and unknown keys, wrong types and out-of-range values are rejected rather than ignored. `defaultUrls` must not exceed `maxUrls`, and search needs a Sonar model unless the `searchWebSearch` tool is enabled. A file without `apiKeyFile` still uses the default credential path, which the launcher supplies. Custom models must appear in OpenRouter's catalogue with the capabilities their role needs, and be available to the account.
 
@@ -376,7 +380,7 @@ A valid configuration prints one of two lines and exits with status `0`:
 - `Configuration is valid.` when the per-user file loads.
 - `Configuration is valid (built-in DeepSeek Harness defaults; no per-user file found).` when there is no per-user file.
 
-Any other output is a diagnostic, with exit status `1`. The check does not test the key, account credit or model access.
+An invalid server configuration produces a diagnostic and exit status `1`. If `npx` fails to start the server, the check has not run. The check does not test the key, account credit or model access.
 
 **Bundle Rows.** The composed profile must list both bundle rows, `mcp-intelli-search` and `intelli-search-skill`:
 

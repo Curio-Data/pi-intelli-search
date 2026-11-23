@@ -606,13 +606,7 @@ describe("dsh README single writer", () => {
   });
 
   it("gives the pinned setup pipeline and both configuration-check forms", () => {
-    assert.ok(
-      readme.includes(
-        "```bash\nread -r -s -p 'OpenRouter API key: ' key\nprintf '\\n'\nprintf '%s\\n' \"$key\" | \\\n" +
-          `  npx -y --package ${pinned} \\\n  mcp-intelli-search setup\nunset key\n\`\`\``,
-      ),
-      "setup pipeline pins the launched MCP version",
-    );
+    assert.ok(readme.includes(`npx -y --package ${pinned} \\\n    mcp-intelli-search setup`), "setup pipeline pins the launched MCP version");
     assert.ok(readme.includes("`Setup complete.`"));
     assert.ok(readme.includes(`npx -y --package ${pinned} \\\n  mcp-intelli-search --host dsh --check-config\n`));
     assert.ok(readme.includes("- `Configuration is valid.` when the per-user file loads."));

@@ -907,18 +907,10 @@ describe("canonical dsh operator content", () => {
     assert.match(cred, /model-settings page does not reach this server/);
     const setup = bashFences(cred).find((f) => f.includes("mcp-intelli-search setup"));
     assert.ok(setup, "setup pipeline present");
-    assert.equal(
-      setup,
-      [
-        "read -r -s -p 'OpenRouter API key: ' key",
-        "printf '\\n'",
-        "printf '%s\\n' \"$key\" | \\",
-        `  npx -y --package ${pinned} \\`,
-        "  mcp-intelli-search setup",
-        "unset key",
-        "",
-      ].join("\n"),
-    );
+    const skill = readFileSync(join(REPO_ROOT, "guidance/setup-dsh.md"), "utf8");
+    const skillSetup = bashFences(skill).find((f) => f.includes("mcp-intelli-search setup"));
+    assert.equal(skillSetup?.replace("@curio-data/mcp-intelli-search@{{MCP_VERSION}}", pinned), setup);
+    assert.ok(setup.includes(`npx -y --package ${pinned} `));
     assert.doesNotMatch(setup, /OPENROUTER_API_KEY|export|codex/, "never overwrites, exports or starts another host");
     assert.match(cred, /refuses a terminal as its input/);
     assert.match(cred, /setup prints `Setup complete\.`/);
@@ -998,7 +990,7 @@ describe("canonical dsh operator content", () => {
     assert.ok(trouble.includes(`${release}packages/mcp/README.md#timeouts-and-troubleshooting`), "full reference in the standalone guide");
     const skill = readFileSync(join(REPO_ROOT, "guidance/setup-dsh.md"), "utf8");
     assert.match(skill, /do not substitute the harness's own web search/);
-    assert.match(skill, /read -r -s -p 'OpenRouter API key: ' key\n/);
+    assert.match(skill, /read -r -s -p 'OpenRouter API key: ' key \|\| exit 1/);
     assert.match(skill, /@curio-data\/mcp-intelli-search@\{\{MCP_VERSION\}\}/);
     assert.match(skill, /Setup complete\./);
     assert.doesNotMatch(skill, /read -r -s[^\n]*OPENROUTER_API_KEY|unset OPENROUTER_API_KEY|^codex$/m);

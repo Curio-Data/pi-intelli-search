@@ -120,7 +120,7 @@ function scanVariableUses(lines: string[]): VariableUse[] {
 // word (optionally double-quoted) with no expansion or placeholder.
 const ASSIGNMENT = /^\s*([a-z_][a-z0-9_]*)=("?[A-Za-z0-9._/@-]*"?)$/;
 // `read ... name` introduces a variable without an assignment.
-const READ_ASSIGNMENT = /^\s*read\s.*\s([a-z_][a-z0-9_]*)$/;
+const READ_ASSIGNMENT = /^\s*(?:IFS= )?read\s.*\s([a-z_][a-z0-9_]*)(?: \|\| exit 1)?$/;
 
 /** Names a fence introduces itself, so its uses stay self-contained. */
 function introducedNames(lines: string[]): Set<string> {
@@ -166,6 +166,34 @@ it("dsh Bash fences avoid placeholders and quote literal example variables", () 
         `${label}, line ${use.line}: example variable $${use.name} needs a literal assignment in the same fence`,
       );
     }
+  }
+});
+
+it("the documented setup keeps the entered key off the environment and preserves setup status", () => {
+  const fence = bashFences().find((f) => f.lines.some((line) => line.includes("mcp-intelli-search setup")));
+  assert.ok(fence);
+  const dir = scratchDir("dsh-stdin-");
+  try {
+    // Replace npx, not the documented pipeline. Never load credentials or call the registry.
+    writeFileSync(join(dir, "npx"), `#!/bin/bash
+[[ ! -v key && $OPENROUTER_API_KEY == previous ]] || exit 81
+IFS= read -r supplied && [[ $supplied == dummy-input ]] || exit 82
+exit "$STUB_STATUS"
+`, { mode: 0o700 });
+    for (const expected of [0, 37]) {
+      const result = spawnSync("/bin/bash", ["-c", [
+        "set -ax", fence.lines.join("\n"), "status=$?", "set +x",
+        "[[ $key == previous-variable && $OPENROUTER_API_KEY == previous ]] || exit 83",
+        'exit "$status"',
+      ].join("\n")], {
+        env: { PATH: dir, key: "previous-variable", OPENROUTER_API_KEY: "previous", STUB_STATUS: String(expected) },
+        input: "dummy-input\n", encoding: "utf8",
+      });
+      assert.equal(result.status, expected, result.stderr);
+      assert.doesNotMatch(result.stdout + result.stderr, /dummy-input/);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -242,7 +270,7 @@ it("the documented complete configuration parses strictly with an existing works
       provider: "openrouter",
       model: "minimax/minimax-m3",
     });
-    // The documented page budget: five pages unless a call sets maxUrls, and no call reads more than eight.
+    // Per query, including each batch member: default five search-result pages, capped at eight.
     assert.equal(parsed.settings.defaultUrls, 5);
     assert.equal(parsed.settings.maxUrls, 8);
     // Untouched defaults the same page states: a 120-second model-call
