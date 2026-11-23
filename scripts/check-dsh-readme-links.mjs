@@ -24,7 +24,7 @@
 //
 // Rules: every link is absolute; links into this repository use the
 // generator's ref policy (mcp-v<version> for operational files, main for
-// EVIDENCE_FILES); each target file exists at its ref; each Markdown anchor
+// every other target); each target file exists at its ref; each Markdown anchor
 // exists in that file (the root README is read as its GitHub view); and
 // self-anchors resolve in the checked README itself.
 

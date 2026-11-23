@@ -36,8 +36,8 @@
 //     links, validate. No view may keep a `{{`.
 //   - Every link is absolute. Same-page anchors, contents entries included,
 //     point at plugins/dsh/README.md on the release tag mcp-v<version>.
-//     Operational files use that tag; evidence and history (EVIDENCE_FILES)
-//     use main, because they change after publication.
+//     Operational files use that tag; every other path follows main, so
+//     evidence and history do not freeze at publication.
 //   - Link intent: a bare #anchor on a root-visible (shared) line means the
 //     heading the root shows under that anchor. It stays on the dsh page only
 //     when that same source heading is in the dsh view (its dsh anchor is
@@ -79,6 +79,9 @@ const TOC_END = "<!-- TOC:END -->";
 export const GENERATED_HEADER =
   "<!-- Generated from the repository README.md by scripts/generate-package-readmes.mjs. " +
   "Edit the root README.md, then run npm run generate:readmes. -->";
+export const DSH_GENERATED_HEADER =
+  "<!-- Generated from the repository README.md by scripts/generate-package-readmes.mjs. " +
+  "Edit the root README.md, then run npm run generate:readmes and npm run generate:plugins. -->";
 
 // Package key -> committed output paths. Every path is a real file: npm drops
 // a symlinked README from the tarball, and GitHub shows a symlink as its
@@ -99,8 +102,13 @@ export const OPT_IN = new Set(["dsh"]);
 /** The dsh bundle README path that same-page dsh links target. */
 export const DSH_SELF_PATH = "plugins/dsh/README.md";
 
-/** Evidence and history files: dsh links follow main, not the release tag. */
-export const EVIDENCE_FILES = new Set(["docs/COMPATIBILITY.md", "CHANGELOG.md"]);
+/** Release-matched operator instructions; every other dsh target follows main. */
+export const DSH_OPERATIONAL_FILES = new Set([
+  SOURCE,
+  "packages/mcp/README.md",
+  DSH_SELF_PATH,
+  "plugins/dsh/skills/intelli-search/SKILL.md",
+]);
 
 export const releaseRef = (version) => `mcp-v${version}`;
 export const blobBase = (ref) => `${REPO_URL}/blob/${ref}/`;
@@ -117,7 +125,7 @@ export function parseRepoUrl(url) {
 
 /** The ref a dsh link to this repository path must use. */
 export function expectedDshRef(path, version) {
-  return EVIDENCE_FILES.has(path) ? "main" : releaseRef(version);
+  return DSH_OPERATIONAL_FILES.has(path) ? releaseRef(version) : "main";
 }
 
 const OPEN = /^<!-- packages:([a-z,]+) -->$/;
@@ -175,6 +183,7 @@ export function selectRecords(markdown, target) {
         return;
       }
       if (text.includes("-->")) throw new Error(`line ${lineNo}: "-->" inside a hidden block ends the comment early`);
+      if (text.includes("<!--")) throw new Error(`line ${lineNo}: "<!--" inside a hidden block starts an unclosed HTML comment`);
       push();
       return;
     }
@@ -418,7 +427,7 @@ function deriveDsh(markdown, meta) {
     }
     return mapLinks(r.text, rewrite(r.origin));
   });
-  return `${GENERATED_HEADER}\n\n${lines.join("\n")}\n`;
+  return `${DSH_GENERATED_HEADER}\n\n${lines.join("\n")}\n`;
 }
 
 /**

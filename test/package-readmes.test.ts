@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error plain Node module without declarations
 import {
+  DSH_GENERATED_HEADER,
   GENERATED_HEADER,
   PACKAGES,
   anchorsOf,
@@ -111,6 +112,7 @@ describe("package README block selection", () => {
     ["an unknown package", "<!-- packages:codex -->\n<!-- /packages -->", /unknown package "codex"/],
     ["none with a package", "<!-- packages:none,pi -->\n<!-- /packages -->", /cannot be combined/],
     ["--> inside a hidden block", "<!-- packages:mcp hidden\na --> b\n-->", /ends the comment early/],
+    ["an HTML comment opener inside a hidden block", "<!-- packages:mcp hidden\n<!-- note\n-->", /starts an unclosed HTML comment/],
     ["a malformed directive", "<!-- packages: pi -->", /malformed package directive/],
   ] as const) {
     it(`rejects ${name}`, () => {
@@ -304,7 +306,6 @@ describe("native publish swap", () => {
 
 const VERSION = "9.8.7";
 const RELEASE = `https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v${VERSION}/`;
-const RELEASE_RAW = `https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/mcp-v${VERSION}/`;
 const SELF = `${RELEASE}plugins/dsh/README.md#`;
 const META = {
   mcpVersion: VERSION,
@@ -356,7 +357,7 @@ const DSH_SOURCE = [
   "<!-- packages:mcp,dsh -->",
   '<a id="old-setup"></a>',
   "Shared setup: [full tuning](#tuning), [section](#deepseek-harness), [shared](#shared-heading), [alias](#old-setup), [licence](#license).",
-  "Files: [changes](CHANGELOG.md#unreleased), [matrix](docs/COMPATIBILITY.md#host-plugins), [guide](./docs/GUIDE.md#part), ![chart](docs/images/chart.png).",
+  "Files: [changes](CHANGELOG.md#unreleased), [matrix](docs/COMPATIBILITY.md#host-plugins), [guide](./docs/GUIDE.md#part), [standalone](packages/mcp/README.md#configuration), [skill](plugins/dsh/skills/intelli-search/SKILL.md#setup), ![chart](docs/images/chart.png).",
   "",
   "### Shared Heading",
   "<!-- /packages -->",
@@ -383,6 +384,9 @@ function dshFixture(source = DSH_SOURCE) {
   writeFileSync(join(dir, "docs/COMPATIBILITY.md"), "## Host Plugins\n");
   writeFileSync(join(dir, "CHANGELOG.md"), "## [Unreleased]\n");
   writeFileSync(join(dir, "packages/mcp/package.json"), JSON.stringify({ version: VERSION }));
+  writeFileSync(join(dir, "packages/mcp/README.md"), "## Configuration\n");
+  mkdirSync(join(dir, "plugins/dsh/skills/intelli-search"), { recursive: true });
+  writeFileSync(join(dir, "plugins/dsh/skills/intelli-search/SKILL.md"), "## Setup\n");
   return dir;
 }
 
@@ -438,8 +442,9 @@ describe("dsh audience selection", () => {
 describe("dsh derivation", () => {
   const dsh = derive(DSH_SOURCE, "dsh", { metadata: META }) as string;
 
-  it("carries the standard generated header and keeps no token", () => {
-    assert.ok(dsh.startsWith(`${GENERATED_HEADER}\n\n# dsh-title\n`));
+  it("carries the dsh generated header with both regeneration commands and keeps no token", () => {
+    assert.ok(dsh.startsWith(`${DSH_GENERATED_HEADER}\n\n# dsh-title\n`));
+    assert.match(dsh, /npm run generate:readmes and npm run generate:plugins/);
     assert.ok(isGenerated(dsh));
     assert.doesNotMatch(dsh, /\{\{/);
     assert.doesNotMatch(dsh, /Untagged intro|mcp-title|#### DeepSeek Harness|## Reference|### Tuning/);
@@ -489,11 +494,13 @@ describe("dsh derivation", () => {
     assert.ok(dsh.includes(`See [own tuning](${SELF}tuning) and [own shared](${SELF}shared-heading).`));
   });
 
-  it("uses the release tag for operational files and main for evidence and history", () => {
+  it("uses the release tag only for operational files and main for every other target", () => {
     assert.ok(dsh.includes(`[changes](${BLOB}CHANGELOG.md#unreleased)`));
     assert.ok(dsh.includes(`[matrix](${BLOB}docs/COMPATIBILITY.md#host-plugins)`));
-    assert.ok(dsh.includes(`[guide](${RELEASE}docs/GUIDE.md#part)`));
-    assert.ok(dsh.includes(`![chart](${RELEASE_RAW}docs/images/chart.png)`));
+    assert.ok(dsh.includes(`[guide](${BLOB}docs/GUIDE.md#part)`));
+    assert.ok(dsh.includes(`[standalone](${RELEASE}packages/mcp/README.md#configuration)`));
+    assert.ok(dsh.includes(`[skill](${RELEASE}plugins/dsh/skills/intelli-search/SKILL.md#setup)`));
+    assert.ok(dsh.includes(`![chart](${RAW}docs/images/chart.png)`));
   });
 
   it("refuses a source that gives dsh no content and a generated source", () => {
@@ -535,7 +542,7 @@ describe("dsh derivation entry point and validation", () => {
       assert.throws(() => derivePackageReadme("dsh", dir), /missing self anchor #nowhere/);
       // An absent bundle README must not fail a correct derivation either.
       writeFileSync(join(dir, "README.md"), DSH_SOURCE);
-      rmSync(join(dir, "plugins"), { recursive: true });
+      rmSync(join(dir, "plugins/dsh/README.md"));
       derivePackageReadme("dsh", dir);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -553,9 +560,9 @@ describe("dsh derivation entry point and validation", () => {
           validateDerived(
             [
               `[a](${RELEASE}docs/COMPATIBILITY.md#host-plugins)`,
-              `[b](${BLOB}docs/GUIDE.md)`,
+              `[b](${RELEASE}docs/GUIDE.md)`,
               `[c](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/docs/GUIDE.md)`,
-              `[d](#own) [e](docs/GUIDE.md) [f](${RELEASE}docs/MISSING.md) [g](${RELEASE}README.md#lost)`,
+              `[d](#own) [e](docs/GUIDE.md) [f](${BLOB}docs/MISSING.md) [g](${RELEASE}README.md#lost)`,
             ].join("\n"),
             "dsh",
             root,
@@ -565,8 +572,8 @@ describe("dsh derivation entry point and validation", () => {
           new RegExp(
             [
               "docs/COMPATIBILITY\\.md must use ref main, not mcp-v9\\.8\\.7",
-              "docs/GUIDE\\.md must use ref mcp-v9\\.8\\.7, not main",
-              "docs/GUIDE\\.md must use ref mcp-v9\\.8\\.7, not mcp-v0\\.25\\.0",
+              "docs/GUIDE\\.md must use ref main, not mcp-v9\\.8\\.7",
+              "docs/GUIDE\\.md must use ref main, not mcp-v0\\.25\\.0",
               "same-page anchor #own is not absolute",
               "relative link docs/GUIDE\\.md",
               "missing file docs/MISSING\\.md",
@@ -650,30 +657,37 @@ describe("dsh README link checker", () => {
   });
   const release = mem("candidate", {
     "README.md": "## Kept\n",
-    "docs/GUIDE.md": "## Part\n",
-    "docs/images/chart.png": "",
+    "packages/mcp/README.md": "## Configuration\n",
+    "plugins/dsh/skills/intelli-search/SKILL.md": "## Setup\n",
     "CHANGELOG.md": "## [Unreleased]\n## New Entry\n",
   });
-  const main = mem("main", { "CHANGELOG.md": "## [Unreleased]\n", "docs/COMPATIBILITY.md": "## Host Plugins\n" });
+  const main = mem("main", {
+    "CHANGELOG.md": "## [Unreleased]\n",
+    "docs/COMPATIBILITY.md": "## Host Plugins\n",
+    "docs/GUIDE.md": "## Part\n",
+    "docs/images/chart.png": "",
+  });
   const good = [
-    GENERATED_HEADER,
+    DSH_GENERATED_HEADER,
     "",
     "## Own",
-    `[a](${SELF}own) [b](${RELEASE}README.md#kept) [c](${RELEASE}docs/GUIDE.md#part) ![d](${RELEASE_RAW}docs/images/chart.png)`,
-    `[e](${BLOB}CHANGELOG.md#unreleased) [f](${BLOB}docs/COMPATIBILITY.md#host-plugins) [g](https://example.com/x)`,
+    `[a](${SELF}own) [b](${RELEASE}README.md#kept)`,
+    `[c](${RELEASE}packages/mcp/README.md#configuration) [d](${RELEASE}plugins/dsh/skills/intelli-search/SKILL.md#setup)`,
+    `![e](${RAW}docs/images/chart.png) [f](${BLOB}CHANGELOG.md#unreleased)`,
+    `[g](${BLOB}docs/COMPATIBILITY.md#host-plugins) [h](${BLOB}docs/GUIDE.md#part) [i](https://example.com/x)`,
     "",
   ].join("\n");
 
   it("passes when every target and anchor resolves at its ref", () => {
-    assert.deepStrictEqual(checkDshReadmeLinks({ text: good, version: VERSION, release, main }), { problems: [], checked: 7 });
+    assert.deepStrictEqual(checkDshReadmeLinks({ text: good, version: VERSION, release, main }), { problems: [], checked: 9 });
   });
 
   it("reports each class of unresolved or mis-routed link", () => {
     const bad = [
       "## Own",
       "[a](#own) [b](docs/GUIDE.md) {{MCP_VERSION}}",
-      `[c](${SELF}gone) [d](${RELEASE}docs/MISSING.md) [e](${RELEASE}docs/GUIDE.md#lost)`,
-      `[f](${BLOB}CHANGELOG.md#new-entry) [g](${RELEASE}CHANGELOG.md#unreleased) [h](${BLOB}docs/GUIDE.md#part)`,
+      `[c](${SELF}gone) [d](${BLOB}docs/MISSING.md) [e](${BLOB}docs/GUIDE.md#lost)`,
+      `[f](${BLOB}CHANGELOG.md#new-entry) [g](${RELEASE}CHANGELOG.md#unreleased) [h](${BLOB}README.md#kept)`,
     ].join("\n");
     const { problems } = checkDshReadmeLinks({ text: bad, version: VERSION, release, main });
     const expected = [
@@ -682,12 +696,12 @@ describe("dsh README link checker", () => {
       /same-page anchor #own is not absolute/,
       /relative link docs\/GUIDE\.md/,
       /missing self anchor #gone/,
-      /missing docs\/MISSING\.md at candidate/,
-      /missing anchor #lost in docs\/GUIDE\.md at candidate/,
+      /missing docs\/MISSING\.md at main/,
+      /missing anchor #lost in docs\/GUIDE\.md at main/,
       // An evidence anchor present only in the candidate does not yet resolve on main.
       /missing anchor #new-entry in CHANGELOG\.md at main/,
       /CHANGELOG\.md must use ref main, not mcp-v9\.8\.7/,
-      /docs\/GUIDE\.md must use ref mcp-v9\.8\.7, not main/,
+      /README\.md must use ref mcp-v9\.8\.7, not main/,
     ];
     assert.strictEqual(problems.length, expected.length, problems.join("\n"));
     expected.forEach((pattern, i) => assert.match(problems[i], pattern));
