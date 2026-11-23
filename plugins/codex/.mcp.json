@@ -5,7 +5,7 @@
       "args": [
         "-y",
         "--package",
-        "@curio-data/mcp-intelli-search@0.25.1",
+        "@curio-data/mcp-intelli-search@0.25.2",
         "mcp-intelli-search",
         "--host",
         "codex"
