@@ -4,7 +4,7 @@ Developer and operator tools for `intelli-search`: download charts, local usage 
 
 ## `plot-downloads.mts`
 
-Renders the weekly npm download chart in `README.md` as a hand-drawn-style stacked Scalable Vector Graphics (SVG) image in light and dark themes, using [_rough.js_](https://roughjs.com). Each bar stacks the native extension's weekly downloads (lower segment) with the MCP server's (upper segment). Explicit seeds make rendering byte-identical for unchanged data and rendering inputs.
+Renders the weekly npm download chart in `README.md` as a hand-drawn-style stacked Scalable Vector Graphics (SVG) image in light and dark themes, using [_rough.js_](https://roughjs.com). From bottom to top, each bar stacks weekly downloads of the native extension, MCP server and DeepSeek Harness bundle. The bundle's segment is green. A bundle installation can also download the server; both registry downloads count, without adjustment. Explicit seeds make rendering byte-identical for unchanged data and rendering inputs.
 
 Run directly with [_Node.js_](https://nodejs.org/) 22.18 or later; type stripping requires no build step:
 
@@ -20,10 +20,11 @@ npm run chart                                # same as the first command
 |---|---|
 | `data/downloads.json` | Daily download cache, native package (committed) |
 | `data/downloads-mcp.json` | Daily download cache, MCP package (committed) |
+| `data/downloads-dsh.json` | Daily download cache, DeepSeek Harness package (committed) |
 | `docs/images/downloads-light.svg` | Light-theme chart (committed) |
 | `docs/images/downloads-dark.svg` | Dark-theme chart (committed) |
 
-The script fetches the gap between the cache and the last complete day from the npm downloads application programming interface (API), so accumulated history does not require a query beyond the 18-month ceiling. The final three cached days are re-fetched on every run and overwrite their cached values, because npm computes a day's downloads shortly after UTC midnight and can revise recent days; without the trailing window a provisional value would be frozen by the cache. A weekly [_GitHub_](https://github.com) Action (`.github/workflows/downloads-chart.yml`) runs every Monday and commits only when the rendered output changes. Only complete Monday-to-Sunday weeks are drawn.
+The script fetches the gap between the cache and the last complete day from the npm downloads application programming interface (API), so accumulated history does not require a query beyond the 18-month ceiling. The final three cached days are re-fetched on every run and overwrite their cached values, because npm computes a day's downloads shortly after UTC midnight and can revise recent days; without the trailing window a provisional value would be frozen by the cache. A weekly [_GitHub_](https://github.com) Action (`.github/workflows/downloads-chart.yml`) runs every Monday and commits only when the rendered output changes. Only complete Monday-to-Sunday weeks are drawn. For each package's launch week, the days before publication count as zero; every day from publication through Sunday must have a recorded count. Later weeks require all seven daily counts.
 
 On 2026-10-13 the live API returned 612 downloads for the MCP package over 2026-10-05 through 2026-10-11. The operator reported approximately 300 on the `npmjs.com` package page; its reporting window and refresh basis were not captured, so these figures do not establish a difference in counting rules. The live service and committed caches also have distinct refresh times: caches can lag until the next refresh.
 

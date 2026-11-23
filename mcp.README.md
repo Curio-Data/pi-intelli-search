@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/mcp-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/mcp-intelli-search)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-blue)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1249%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1250%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -468,7 +468,7 @@ MCP hosts qualify tool names; use the names exposed by the host. The native `Pi`
 
 ## Tools
 
-Both packages expose these four operations. Start with `intelli_search` for factual questions, latest versions and release dates; use `intelli_research` for multi-page comparisons, detailed analysis or an evidence gap that search leaves unresolved. The names below are native `Pi` tool names and MCP server tool names; MCP hosts add their own callable-name prefixes. Use the names exposed by the host.
+The native extension and the MCP server expose the same four operations. Start with `intelli_search` for factual questions, latest versions and release dates; use `intelli_research` for multi-page comparisons, detailed analysis or an evidence gap that search leaves unresolved. The names below are native `Pi` tool names and MCP server tool names; MCP hosts add their own callable-name prefixes. Use the names exposed by the host.
 
 | Tool               | Description                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
@@ -638,7 +638,7 @@ See [docs/ARCHITECTURE.md](https://github.com/Curio-Data/pi-intelli-search/blob/
 
 ## Cost
 
-The estimate below uses the native default models and tuning, also selected in the minimal MCP configuration example. It is a planning estimate based on the recorded September 2026 price basis, not a live tariff check. Both packages incur inference charges on the configured provider account; MCP does not use host subscriptions or credentials.
+The estimate below uses the native default models and tuning, also selected in the minimal MCP configuration example. It is a planning estimate based on the recorded September 2026 price basis, not a live tariff check. The native extension and MCP server both incur inference charges on the configured provider account; MCP does not use host subscriptions or credentials.
 
 Per research run with the default 10 pages: ≈$0.09
 
@@ -911,14 +911,16 @@ For the standalone MCP server and host plugins, including exact tested versions 
 
 ## Downloads
 
-Weekly npm downloads for the native extension and MCP server packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment; a DeepSeek Harness series is deferred until that package has download history. The chart is rendered with [rough.js](https://roughjs.com) from daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see [`scripts/plot-downloads.mts`](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/plot-downloads.mts)); the caches are append-only with a short trailing re-fetch window so npm's revisions of recent days are picked up. Only complete Monday-to-Sunday weeks are drawn, so a package's segment appears from the first refresh after its first complete week.
+Each bar adds the weekly npm downloads of three packages: the native `Pi` extension at the bottom, the MCP server in the middle and the DeepSeek Harness bundle in green at the top. The bundle launches the server through `npx`, so one installation can download both packages. Each download counts towards its own package; the chart does not subtract an estimated overlap or count distinct installations.
+
+A scheduled GitHub Action refreshes the chart every Monday. The [chart script](https://github.com/Curio-Data/pi-intelli-search/blob/main/scripts/plot-downloads.mts) uses [rough.js](https://roughjs.com) to draw complete Monday-to-Sunday weeks from each package's daily cache. Days before a package was published count as zero. The green segment for the week ending 22 November 2026 therefore includes the bundle's Sunday launch downloads. A missing daily count after publication is not treated as zero: that package's segment waits until the week is complete.
 
 Daily counts come from npm's downloads API and are summed into weeks without additional filtering. [npm's counting documentation](https://blog.npmjs.org/post/92574016600/numeric-precision-matters-how-npm-download-counts-work.html) describes these totals as naïve by design: every served package tarball counts, including automation and mirrors, so read the bars as relative uptake, not unique-user counts. Verification runs that fetch the published tarballs from the registry, such as the registry-pin plugin checks, also count toward release-week totals.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/downloads-dark.svg">
-    <img alt="Stacked weekly npm downloads for @curio-data/pi-intelli-search and @curio-data/mcp-intelli-search" src="https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/downloads-light.svg" width="800" />
+    <img alt="Stacked weekly npm downloads for the native Pi extension, MCP server and DeepSeek Harness bundle" src="https://raw.githubusercontent.com/Curio-Data/pi-intelli-search/main/docs/images/downloads-light.svg" width="800" />
   </picture>
 </p>
 

@@ -1,6 +1,6 @@
 {
   "name": "@curio-data/dsh-intelli-search",
-  "version": "0.25.0",
+  "version": "0.25.1",
   "description": "Web research over MCP: search, fetch, extract, collate and cache suggestions.",
   "type": "module",
   "license": "Apache-2.0",

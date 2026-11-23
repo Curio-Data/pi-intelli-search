@@ -1,3 +1,9 @@
+<!-- packages:dsh hidden
+# Intelli Search for DeepSeek Harness
+
+[![npm version](https://img.shields.io/npm/v/@curio-data/dsh-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/dsh-intelli-search)
+[![npm downloads](https://img.shields.io/npm/dt/@curio-data/dsh-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/dsh-intelli-search)
+-->
 <!-- packages:mcp hidden
 # mcp-intelli-search
 
@@ -12,19 +18,25 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/pi-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/pi-intelli-search)
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
+<!-- packages:pi,mcp,dsh -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1249%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1250%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
 <p align="center">
   <img src="docs/images/01.png" alt="PI-Intelli Search: a five-stage research pipeline diagram arranged in a clockwise cycle. The five labelled stages, each enclosed in a laurel-wreath medallion, are Search (top, depicted as a magnifying glass over an open book), Fetch (right, a hand retrieving a document from shelves), Extract (bottom-right, a distillation apparatus), Collate (bottom-left, stacked books and filing boxes), and Cache &amp; Suggest (left, a treasure chest with an envelope). Copper-coloured arrows connect the stages in sequence. The background is decorated with pen-and-ink botanical and scholarly motifs including quill pens, ink bottles, scrolls, globes, hourglasses, and open books." width="800" />
 </p>
+<!-- /packages -->
 
 <!-- packages:none -->
 **DeepSeek Harness profile plugin:** bring cited web search and multi-page research into [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness). Ask for a quick fact with sources, or compare several pages and keep the report and its sources in the project. Install into the profile the harness starts, for example `web`, with `dsh plugin --profile web add @curio-data/dsh-intelli-search`. See [profile setup and verification](#deepseek-harness) for credentials, configuration and removal.
 <!-- /packages -->
 
+<!-- packages:dsh hidden
+
+-->
+<!-- packages:pi,mcp,dsh -->
 **Features:**
 
 - 🔍 **Search:** a search-grounded model, [_Perplexity Sonar_](https://docs.perplexity.ai) via [_OpenRouter_](https://openrouter.ai) by default. One application programming interface (API) key, no $50 minimum. Chat models with tool support also work through the web search server tool; see [native search settings](#openrouter-web-search-server-tool) or [Model Context Protocol (MCP) tuning](#tuning).
@@ -40,6 +52,7 @@ Intelligent web research for coding agents: search, extract, collate, and cache 
 - 💾 **Cache:** Persistent `.search/` cache with automatic cache suggest. Related previous searches surfaced on each query.
 - 🎯 **Configurable:** Select models independently for search, extract and collate. The native extension uses registered, authenticated `Pi` models (capability and context limits apply); the MCP server uses explicitly selected OpenRouter models.
 - 💰 **Cost:** see the [default research-run estimate](#cost).
+<!-- /packages -->
 
 <!-- packages:none -->
 Two packages run the research engine; a third, `@curio-data/dsh-intelli-search`, connects DeepSeek Harness to the standalone server:
@@ -395,7 +408,6 @@ The installed `intelli-search` skill covers configuration and unattended tool ap
 
 <!-- /packages -->
 <!-- packages:dsh hidden
-# Intelli Search for DeepSeek Harness
 
 `@curio-data/dsh-intelli-search` adds cited web search and multi-page research to a [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) profile. It is a configuration bundle, not an extension. One bridge row starts the standalone Model Context Protocol (MCP) server [`@curio-data/mcp-intelli-search`](https://www.npmjs.com/package/@curio-data/mcp-intelli-search), version `{{MCP_VERSION}}`, through `npx` with `--host dsh`; one registrar registers the `intelli-search` skill with the harness. Search, page fetching, extraction and collation run in that server, which saves each research report with its sources in the project's `.search/` directory. Inference uses an [_OpenRouter_](https://openrouter.ai) account; [_Node.js_](https://nodejs.org/) runs the server.
 
@@ -780,16 +792,15 @@ Other versions in the declared range `>=0.2.2-rc.1 <0.3.0`, the shipped `web` pr
 <!-- packages:dsh hidden
 ## Further Documentation
 
+The sections below cover the shared engine on this page. For the standalone server reference and the differences between hosts, use these links:
+
+- [Three Packages, One Engine](README.md#three-packages-one-engine): how the standalone server and the two host-specific packages fit together.
 - [Usage examples](packages/mcp/README.md#usage-examples), including planned batch research, and the [tool reference](packages/mcp/README.md#tools).
 - [Configuration](packages/mcp/README.md#configuration) and [Tuning](packages/mcp/README.md#tuning) for every key, model constraint and accepted range.
 - [Timeouts and Troubleshooting](packages/mcp/README.md#timeouts-and-troubleshooting) for every diagnostic.
 - [Cost](packages/mcp/README.md#cost), [Cache Structure](packages/mcp/README.md#cache-structure) and [Filesystem and Privacy Boundaries](packages/mcp/README.md#filesystem-and-privacy-boundaries).
 - [Compatibility record](docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits) and [Changelog](CHANGELOG.md).
 - [Installed skill](plugins/dsh/skills/intelli-search/SKILL.md), the agent-facing guidance this bundle registers.
-
-## Licence
-
-Apache-2.0. Copyright 2026 Ashraf Miah, Curio Data Pro Ltd. See the bundle's [LICENSE](plugins/dsh/LICENSE). The bundle contains no third-party code, so it carries no `NOTICE`. The MCP server it launches through `npx`, `@curio-data/mcp-intelli-search`, is a separate package with its own [LICENSE](LICENSE) and a [NOTICE](NOTICE) for the third-party software it includes or uses.
 
 -->
 <!-- packages:mcp -->
@@ -824,9 +835,10 @@ Replace both paths with existing absolute paths. Supply `OPENROUTER_API_KEY` thr
 MCP hosts qualify tool names; use the names exposed by the host. The native `Pi` extension and the MCP server are independent installations; enabling both in one agent gives duplicate tool sets, which is not a supported configuration.
 <!-- /packages -->
 
+<!-- packages:pi,mcp,dsh -->
 ## Tools
 
-Both packages expose these four operations. Start with `intelli_search` for factual questions, latest versions and release dates; use `intelli_research` for multi-page comparisons, detailed analysis or an evidence gap that search leaves unresolved. The names below are native `Pi` tool names and MCP server tool names; MCP hosts add their own callable-name prefixes. Use the names exposed by the host.
+The native extension and the MCP server expose the same four operations. Start with `intelli_search` for factual questions, latest versions and release dates; use `intelli_research` for multi-page comparisons, detailed analysis or an evidence gap that search leaves unresolved. The names below are native `Pi` tool names and MCP server tool names; MCP hosts add their own callable-name prefixes. Use the names exposed by the host.
 
 | Tool               | Description                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
@@ -837,10 +849,12 @@ Both packages expose these four operations. Start with `intelli_search` for fact
 
 Use `query` for a single question. For two or more distinct questions known at launch, pass `queries` instead, with `batchMode: "independent"` for a separate answer per question or `batchMode: "expansion"` for one report on a common topic. Each entry supplies a `query`; its `focusPrompt`, `domains` and `maxUrls` override the corresponding top-level defaults. The page cap applies per entry. An expansion needs at least two completed entries to merge, and the merge request must fit `collationInputBudgetTokens`. If the merge is skipped or fails, the result states why and gives the per-query sections instead. If no entry completes, the result gives each entry's section and outcome; the call returns an error, listing each entry's reason and the batch manifest path when it was written, only when every entry raised an error rather than ending in a degraded outcome such as `no-links`. Ask questions prompted by a finding in a later call. A merged report refers to its members' evidence by cache folder path, and a completed repeat of one of its queries on the same UTC date replaces what those paths hold; see [Same-Day Repeats of Batch Members](#same-day-repeats-of-batch-members). The [native batch benchmark](docs/BENCHMARKS.md#batch-research-on-the-native-host) compares five separate calls with one batch and shows how much main-model input went into issuing the next query.
 
+<!-- /packages -->
 <!-- packages:pi -->
 The native `intelli_research` schema declares `minimum: 1` for `maxUrls`. `Pi` 1.2.0 codemode displays this as an `@minimum` constraint. The runtime default page budget and configured upper cap remain controlled by [Settings](#settings).
 <!-- /packages -->
 
+<!-- packages:pi,mcp,dsh -->
 ### Evidence and Provenance
 
 Research collation receives only successful, non-empty page extractions, not the search model's summary. Code generates the Source Assessment inventory and cache-file references from the run's evidence manifest. Synthesis uses source IDs such as `[S1]`; unknown IDs, prose URLs absent from the supplied extractions and model-generated numbered cache references fail validation before a report is committed. Cross-links present in extracted text remain content, not additional fetched pages. Fenced, indented and inline code examples remain code, not evidence declarations. These checks establish reference consistency, not factual accuracy.
@@ -984,6 +998,7 @@ intelli_research(
 )
 ```
 
+<!-- /packages -->
 <!-- packages:pi -->
 ## Launch Blog Post
 
@@ -1408,6 +1423,7 @@ A single [OpenRouter](https://openrouter.ai) key is the minimum required. It cov
 Run `/login openrouter` in `Pi` to authorise via OAuth (`Pi` 0.82.0 and later), or edit the file directly with a key from [openrouter.ai/keys](https://openrouter.ai/keys).
 <!-- /packages -->
 
+<!-- packages:pi,mcp,dsh -->
 ## Pipeline
 
 <p align="center">
@@ -1424,7 +1440,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design decisions.
 
 ## Cost
 
-The estimate below uses the native default models and tuning, also selected in the minimal MCP configuration example. It is a planning estimate based on the recorded September 2026 price basis, not a live tariff check. Both packages incur inference charges on the configured provider account; MCP does not use host subscriptions or credentials.
+The estimate below uses the native default models and tuning, also selected in the minimal MCP configuration example. It is a planning estimate based on the recorded September 2026 price basis, not a live tariff check. The native extension and MCP server both incur inference charges on the configured provider account; MCP does not use host subscriptions or credentials.
 
 Per research run with the default 10 pages: ≈$0.09
 
@@ -1442,6 +1458,7 @@ Since v0.13.0 the search stage adds recovered provider citation URLs to prose li
 
 The estimate assumes pages of ≈50K characters. `extractMaxChars` (default 400,000) caps the text sent to extraction at ≈100,000 input tokens per page, so a ten-page run over long pages can send ≈1M input tokens to the extract model before collation, at a correspondingly higher cost. Budget retries add output: with the default `outputBudgetRetries`, one affected call's budget attempts can bill up to seven times its configured output cap, before transport retries. Lower `extractMaxChars` or `outputBudgetRetries` to bound that spend.
 
+<!-- /packages -->
 <!-- packages:pi -->
 ## Settings
 
@@ -1742,6 +1759,7 @@ Every startup failure is diagnostic-only and lands on standard error; standard o
 | Cache paths unreadable from the host | The host must share the server's filesystem. Sandboxed or remote hosts cannot read local cache paths; run the server where the host can read the workspace. |
 <!-- /packages -->
 
+<!-- packages:pi,mcp,dsh -->
 ## Cache Structure
 
 Both packages write this format. The native extension resolves the cache against the active `Pi` workspace; MCP resolves it against `INTELLI_SEARCH_WORKSPACE` or `--workspace` and keeps it beneath that workspace. See the MCP [filesystem boundaries](#filesystem-and-privacy-boundaries).
@@ -1788,6 +1806,7 @@ Refresh behaviour:
 
 In a batch, entries add `batch.id`, `batch.mode`, `batch.size` and `batch.position`. Their `stages.fetch.urls` list records browsing history (successfully fetched URLs). `batch-meta.json` records the batch duration, concurrency limits, entry outcomes and, in expansion mode, merge size, duration and outcome. For the fields and their units see [Telemetry Sidecar](docs/ARCHITECTURE.md#telemetry-sidecar).
 
+<!-- /packages -->
 <!-- packages:pi -->
 To suppress both telemetry files in the native extension, set `disableTelemetry: true` inside the `pi-intelli-search` namespace in [Settings](#settings).
 <!-- /packages -->
@@ -1850,6 +1869,7 @@ pi install /path/to/pi-intelli-search
 **Package READMEs:** this file is the only hand-edited package README. `npm run generate:readmes` derives `packages/mcp/README.md` plus the root previews [`pi.README.md`](pi.README.md), [`mcp.README.md`](mcp.README.md) and [`dsh.README.md`](dsh.README.md), and `npm run check:readmes` fails on drift or on any derived link that does not resolve. The native package ships the same derivation, written over this file by its `prepublishOnly` hook. Untagged content goes to the native and MCP packages; dsh is opt-in and receives only blocks that name it. Wrap package-specific sections in `<!-- packages:pi -->`, `<!-- packages:mcp -->` or `<!-- packages:mcp,dsh -->` and `<!-- /packages -->`, repository-only sections in `<!-- packages:none -->`, and package-only framing in hidden blocks such as `<!-- packages:dsh hidden`. DeepSeek Harness metadata tokens are confined to those hidden blocks. `scripts/generate-plugin-bundles.mjs` uses the same derivation entry point as the sole writer of `plugins/dsh/README.md`, making the preview and registry bundle byte-identical. Every dsh link is absolute, with operational documents pinned to the matching MCP tag and other repository targets following `main`; `node scripts/check-dsh-readme-links.mjs` validates candidate and tagged output. Each derived README regenerates its contents list and validates links against its own selected view. See [`scripts/generate-package-readmes.mjs`](scripts/generate-package-readmes.mjs).
 <!-- /packages -->
 
+<!-- packages:pi,mcp,dsh -->
 ## Documentation
 
 - [Comparison](docs/COMPARISON.md): How `intelli-search` compares to other `Pi` search extensions and to host-native web search.
@@ -1857,6 +1877,7 @@ pi install /path/to/pi-intelli-search
 - [Architecture](docs/ARCHITECTURE.md): Detailed design decisions and pipeline internals.
 - [Compatibility](docs/COMPATIBILITY.md): Tested host versions and artefacts for the native extension, MCP server and plugins.
 - [Components](docs/COMPONENTS.md): Third-party dependencies and licence attribution.
+<!-- /packages -->
 <!-- packages:pi -->
 - [Native skill guide](skills/intelli-search/SKILL.md): Agent-facing usage instructions for `Pi`.
 - [Native release notes](PI_CHANGELOG.md): The generated native-only changelog that `Pi` 1.5.0 shows under Extension Updates after an update; derived from the [Changelog](CHANGELOG.md).
@@ -1864,26 +1885,33 @@ pi install /path/to/pi-intelli-search
 <!-- packages:mcp -->
 - [Claude Code skill](plugins/claude-code/skills/intelli-search/SKILL.md), [Codex skill](plugins/codex/skills/intelli-search/SKILL.md) and [DeepSeek Harness skill](plugins/dsh/skills/intelli-search/SKILL.md): Host-specific setup and agent-facing usage instructions.
 <!-- /packages -->
+<!-- packages:pi,mcp,dsh -->
 - [Contributor guide](AGENTS.md): Coding conventions and project structure.
+
 
 ## Downloads
 
-Weekly npm downloads for the native extension and MCP server packages, stacked by package and refreshed every Monday by a scheduled GitHub Action. The native extension is the lower segment of each bar and the MCP server is the upper segment; a DeepSeek Harness series is deferred until that package has download history. The chart is rendered with [rough.js](https://roughjs.com) from daily caches in `data/downloads.json` and `data/downloads-mcp.json` (see [`scripts/plot-downloads.mts`](scripts/plot-downloads.mts)); the caches are append-only with a short trailing re-fetch window so npm's revisions of recent days are picked up. Only complete Monday-to-Sunday weeks are drawn, so a package's segment appears from the first refresh after its first complete week.
+Each bar adds the weekly npm downloads of three packages: the native `Pi` extension at the bottom, the MCP server in the middle and the DeepSeek Harness bundle in green at the top. The bundle launches the server through `npx`, so one installation can download both packages. Each download counts towards its own package; the chart does not subtract an estimated overlap or count distinct installations.
+
+A scheduled GitHub Action refreshes the chart every Monday. The [chart script](scripts/plot-downloads.mts) uses [rough.js](https://roughjs.com) to draw complete Monday-to-Sunday weeks from each package's daily cache. Days before a package was published count as zero. The green segment for the week ending 22 November 2026 therefore includes the bundle's Sunday launch downloads. A missing daily count after publication is not treated as zero: that package's segment waits until the week is complete.
 
 Daily counts come from npm's downloads API and are summed into weeks without additional filtering. [npm's counting documentation](https://blog.npmjs.org/post/92574016600/numeric-precision-matters-how-npm-download-counts-work.html) describes these totals as naïve by design: every served package tarball counts, including automation and mirrors, so read the bars as relative uptake, not unique-user counts. Verification runs that fetch the published tarballs from the registry, such as the registry-pin plugin checks, also count toward release-week totals.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/downloads-dark.svg">
-    <img alt="Stacked weekly npm downloads for @curio-data/pi-intelli-search and @curio-data/mcp-intelli-search" src="docs/images/downloads-light.svg" width="800" />
+    <img alt="Stacked weekly npm downloads for the native Pi extension, MCP server and DeepSeek Harness bundle" src="docs/images/downloads-light.svg" width="800" />
   </picture>
 </p>
+<!-- /packages -->
 
 <!-- packages:pi -->
 ## Provenance
 
 Git history was rewritten in `v0.9.0` to normalise commit author and committer metadata on the path to a stable `v1` release. The `gitHead` commit identifiers recorded in `npm` Supply-chain Levels for Software Artifacts (SLSA) provenance attestations for versions 0.3.1 through 0.8.0 reference pre-rewrite commits that no longer resolve in this repository. Published tarballs and their tree-level contents are unchanged; only commit metadata was altered. From v0.9.0 onwards, attestations track the rewritten history. See the [Changelog](CHANGELOG.md) entry for v0.9.0 for the full account.
 <!-- /packages -->
+
+<!-- packages:pi,mcp,dsh -->
 
 ## Sponsor
 
@@ -1899,7 +1927,13 @@ Git history was rewritten in `v0.9.0` to normalise commit author and committer m
 Copyright 2026 Ashraf Miah, Curio Data Pro Ltd.
 
 Licensed under the [Apache License, Version 2.0](./LICENSE).
+<!-- /packages -->
+<!-- packages:dsh hidden
 
+The bundle contains no third-party code, so it carries no `NOTICE`. Its [LICENSE](plugins/dsh/LICENSE) is included in the package. The MCP server it launches is a separate package with its own [LICENSE](LICENSE) and a [NOTICE](NOTICE) for the third-party software it includes or uses.
+-->
+
+<!-- packages:pi,mcp,dsh -->
 ## Use of Large Language Models
 
 Large Language Models were used extensively during the development of this project:
@@ -1912,3 +1946,4 @@ Large Language Models were used extensively during the development of this proje
 - **_DeepSeek_ V4 Pro:** Research and data analysis.
 - **_Qwen_ 3.6 Plus:** Secondary model for review and documentation.
 - **_Claude_ Opus 5.0/5.5:** Primary model for MCP variant.
+<!-- /packages -->

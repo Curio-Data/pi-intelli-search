@@ -4,11 +4,17 @@ This changelog records notable changes to the native `Pi` extension, the standal
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the repository's [versioning scheme](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/AGENTS.md#versioning-scheme-three-packages-one-core).
 
-## [Unreleased]
+## [mcp-0.25.1] - 2026-11-23
 
 ### Changed
 
-- DeepSeek Harness bundle: its package and in-harness page now document installation, credentials, workspace, configuration, verification, timeouts, troubleshooting, charges, cache, privacy and the evidence behind each claim, with commands pinned to the launched server version. The MCP package page carries the same bundle instructions, and the compatibility record separates local, pre-bootstrap, public by-name and credentialed evidence.
+- The package README now explains how to install and verify the DeepSeek Harness bundle, supply credentials and configure the server. Server behaviour is unchanged.
+
+## [dsh-0.25.1] - 2026-11-23
+
+### Changed
+
+- The package README and in-harness guide now cover installation, credentials, workspace, configuration, timeouts, troubleshooting, charges and cache privacy. The setup example keeps the entered key off the child process environment, and the research example explains how page limits apply to each batch query. The bundle launches MCP 0.25.1.
 
 ## [pi-0.25.0] - 2026-11-22
 
@@ -700,6 +706,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
 [dsh-0.25.0]: https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/docs/plans/dsh-host/RELEASE-025.md
+[mcp-0.25.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.25.1
+[dsh-0.25.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/dsh-v0.25.1
 [mcp-0.25.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.25.0
 [pi-0.25.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/pi-v0.25.0
 [mcp-0.24.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.24.0
