@@ -1,6 +1,17 @@
-# DeepSeek Harness Phase 2 Handover
+# Development Handover After the DeepSeek Harness Release
 
-## Resume Here After 0.25.0
+## Resume Here
+
+Start new development from an up-to-date `main`, not a retained release branch or worktree. On 23 November 2026, MCP and DeepSeek Harness (dsh) `0.25.2` were public and merged at `68baf3b`; native `Pi` remained at `0.25.0`. This release is finished. Do not bump the native version to match, repeat publication, or treat previous live-test approvals as standing permission. Check the manifests, `git status -sb` and `git log --first-parent origin/main` before starting work.
+
+- **What shipped:** `0.25.1` unified the dsh operator guide and corrected the credential-setup example and explained per-query page budgets. `0.25.2` brought shared project material into the dsh guide, including the banner, sponsor and licence, and added the green dsh segment to the weekly downloads chart. Neither patch changed the research engine. See the [changelog](../../../CHANGELOG.md) and [public verification](../../COMPATIBILITY.md#published-readme-patches-2026-11-23).
+- **For README work:** edit the root `README.md`, not a generated copy. Compare every shared section in `pi.README.md` and `mcp.README.md` with the dsh view; keep applicable material and adapt host-specific details. Run `npm run generate:toc`, `npm run generate:readmes`, `npm run generate:plugins` and `node scripts/check-dsh-readme-links.mjs`. See `test/package-readmes.test.ts`. For downloads, edit `scripts/plot-downloads.mts`; `test/download-chart.test.ts` covers launch-week accounting and both themes.
+- **Suggested engineering follow-up, not a release blocker:** harden the scenario 11 batch assertion in `test/e2e/batch.sh`. The test searches the host-visible preview for `# Query 2 of 2:`. In the 0.25.2 suite, both queries completed, but replaying the full response through the host's output limiter removed that heading. The first run did not retain its assertion trace. Start with an offline regression: a complete result larger than 20 KiB with the second heading in the truncated middle must pass, while a genuinely missing second report must still fail. Use `test/e2e-helpers.test.ts` for the regression. Keep the existing manifest and per-member checks. For MCP, inspect the full tool result if available or the host's saved full output from the isolated run, rather than requiring the heading in a shortened preview. Leave the native result check intact. Do not reduce the page budget or rerun paid research to make the assertion pass.
+
+The tracked files above travel with a clone. The [verification record](../../COMPATIBILITY.md#published-readme-patches-2026-11-23) names the gitignored local evidence for deeper investigation; it is not required to reconstruct the offline test. No new release, paid run or cleanup is authorised by these notes. Earlier sections below describe their own checkpoints, not pending instructions.
+
+<a id="resume-here-after-0250"></a>
+## Historical 0.25.0 Handover
 
 **The release is complete. Start new work from `main`.** On 22 November 2026 the three `@curio-data` packages (`pi-intelli-search`, `mcp-intelli-search` and `dsh-intelli-search`) were public at `0.25.0`. The MCP and native release tags point to `258b13b`. The owner published the verified dsh tarball separately and configured trusted staging for subsequent releases; there was no first `dsh-v0.25.0` GitHub Release. The integration merged into `main` at `c41da51`; [main CI passed](https://github.com/Curio-Data/pi-intelli-search/actions/runs/45066025636). The release branch and `investigate/pi-1.6.0-audit` were retained. The `explore/dsh-host` branch remains on `origin`; its separate worktree was retired with the owner's approval because development has moved to `main`. Do not recreate the old worktree or repeat the dsh first-publication bootstrap.
 

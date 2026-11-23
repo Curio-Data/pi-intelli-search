@@ -6,6 +6,10 @@ The strict generic configuration, zero-configuration [_Codex_](https://developer
 
 ---
 
+## Starting a Development Session
+
+Read the [post-release development handover](docs/plans/dsh-host/HANDOVER.md#resume-here) for the published baseline, verification record and open test-harness follow-up. Earlier release plans are historical, not authority to stage packages or spend provider quota.
+
 ## Shell Tool Preferences
 
 Always prefer these over Unix defaults. All are installed and available.

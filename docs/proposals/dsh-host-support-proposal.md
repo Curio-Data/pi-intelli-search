@@ -1,5 +1,7 @@
 # DeepSeek Harness Host Support
 
+Released. For current work start at the [development handover](../plans/dsh-host/HANDOVER.md#resume-here). The following status and proposed steps are historical.
+
 Status (21 November 2026): Phase 1 and Phase 2 Steps 1 to 4 are complete on `explore/dsh-host`. Credentialed verification and release remain separate owner-approved steps. See the [handover](../plans/dsh-host/HANDOVER.md) for the next action. The proposal below was recorded on 18 November 2026 by an external contributor; where Resume Here corrects it, Resume Here governs. This brief specifies the smallest change that makes `intelli-search` a first-class host plugin for _DeepSeek Harness_ (`dsh`), reusing the existing standalone MCP server and the existing generator.
 
 Read with `docs/COMPATIBILITY.md` (evidence classes), `scripts/README.md` (the bundle generator) and `docs/proposals/BATCH-RESEARCH.md` (the proposal format this document follows).

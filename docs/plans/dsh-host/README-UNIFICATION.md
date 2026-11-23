@@ -1,6 +1,6 @@
 # DeepSeek Harness README Unification Plan
 
-**Status:** IMPLEMENTATION DELIVERED; release decision pending. The owner approved complete implementation and delivery to `main`, with release preparation and publication deferred. No cleanup is authorised
+**Status:** Released. This plan records the implementation and its historical gates. For the published baseline and subsequent work, start at the [development handover](HANDOVER.md#resume-here). No cleanup is authorised.
 
 **Planning review commit (does not contain this plan):** `0028e94213a4d29fee0bfd92a88d845e71e86360`
 
@@ -347,7 +347,7 @@ No two tracks own the same file in one wave. Ownership of `test/package-readmes.
 
 ## Completion Criteria
 
-Criteria 2 to 4 are met, and criterion 1 is met for the candidate except the tagged link check, because the dsh README's links name `mcp-v0.25.0` until the next matching release. Under the owner's D2 decision, delivery to `main` preceded release, so that check, criterion 5 (public release and its verification) and the released-state part of criterion 6 remain open until the owner's release decision.
+The implementation checkpoint met criteria 2 to 4. The [publication record](../../COMPATIBILITY.md#published-readme-patches-2026-11-23) and [current handover](HANDOVER.md#resume-here) close criteria 5 and 6. For criterion 1, the tagged links and public tarball bytes passed verification; visual rendering and navigation in npm and the harness UI were not tested.
 
 The programme is complete only when:
 
