@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { it } from 'node:test';
 
-it('stacks three package counts and omits an incomplete DSH week', () => {
+it('stacks launch-day downloads, but never fills a missing day after publication', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'download-chart-'));
   try {
     mkdirSync(join(cwd, 'data'));
@@ -16,19 +16,20 @@ it('stacks three package counts and omits an incomplete DSH week', () => {
       const rows = Array.from({length: file === 'downloads-dsh' ? 8 : 14}, (_, i) => ({
         day: new Date(Date.UTC(2026, 10, 23 + i)).toISOString().slice(0, 10), downloads: count,
       }));
+      if (file === 'downloads-dsh') rows.unshift({day: '2026-11-22', downloads: 170});
       writeFileSync(join(cwd, `data/${file}.json`), JSON.stringify(rows));
     }
     const script = fileURLToPath(new URL('../scripts/plot-downloads.mts', import.meta.url));
     const run = () => execFileSync(process.execPath, [script, '--offline'], {cwd, encoding: 'utf8'});
-    assert.match(run(), /2 pi, 2 mcp, 1 dsh/);
+    assert.match(run(), /2 pi, 2 mcp, 2 dsh/);
     const chart = (theme: string) => readFileSync(join(cwd, `docs/images/downloads-${theme}.svg`), 'utf8');
     const before = [chart('light'), chart('dark')];
     for (const [i, svg] of before.entries()) {
-      assert.match(svg, />105 over 2 weeks</); // (2+3)*14 + 5*7, no adjustment to MCP
+      assert.match(svg, />275 over 3 weeks</); // 170 launch-day + (2+3)*14 + 5*7
       assert.match(svg, />dsh bundle</);
       const green = ['#36704c', '#87c998'][i];
-      // One filled bar segment and its legend swatch, but no second-week segment.
-      assert.equal(svg.split(`stroke="${green}"`).length - 1, 4);
+      // The launch and first full weeks plus the legend; no incomplete final week.
+      assert.equal(svg.split(`stroke="${green}"`).length - 1, 6);
     }
     run();
     assert.deepEqual([chart('light'), chart('dark')], before);

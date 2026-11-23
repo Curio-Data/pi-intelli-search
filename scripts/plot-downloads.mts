@@ -113,9 +113,14 @@ type Week = { week: string; downloads: number };
  * Leading all-zero weeks (pre-publish) and any partial week are dropped:
  * a partial week always renders as a fake cliff at the right-hand edge.
  */
-function toWeeks(days: Day[]): Week[] {
+function toWeeks(days: Day[], firstDay: string): Week[] {
   const buckets = new Map<string, { total: number; n: number }>();
+  // The package could not be downloaded before publication. Count those
+  // weekdays as known zeros only in its launch week, never to fill a gap.
+  const beforeLaunch = (new Date(firstDay + 'T00:00:00Z').getUTCDay() + 6) % 7;
+  buckets.set(addDays(firstDay, -beforeLaunch), { total: 0, n: beforeLaunch });
   for (const d of days) {
+    if (d.day < firstDay) continue;
     const dt = new Date(d.day + 'T00:00:00Z');
     const monday = addDays(d.day, -((dt.getUTCDay() + 6) % 7));
     const b = buckets.get(monday) ?? { total: 0, n: 0 };
@@ -255,9 +260,9 @@ ${parts.join('\n')}
 
 const offline = process.argv.includes('--offline');
 
-const piWeeks = toWeeks(await refresh('pi', offline));
-const mcpWeeks = toWeeks(await refresh('mcp', offline));
-const dshWeeks = toWeeks(await refresh('dsh', offline));
+const piWeeks = toWeeks(await refresh('pi', offline), FIRST_DAY.pi);
+const mcpWeeks = toWeeks(await refresh('mcp', offline), FIRST_DAY.mcp);
+const dshWeeks = toWeeks(await refresh('dsh', offline), FIRST_DAY.dsh);
 const weeks = stackWeeks({ pi: piWeeks, mcp: mcpWeeks, dsh: dshWeeks });
 if (!weeks.length) {
   console.error('No complete weeks with data yet: nothing rendered.');
