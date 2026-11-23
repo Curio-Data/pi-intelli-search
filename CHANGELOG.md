@@ -4,6 +4,14 @@ This changelog records notable changes to the native `Pi` extension, the standal
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the repository's [versioning scheme](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/AGENTS.md#versioning-scheme-three-packages-one-core).
 
+## [mcp-0.25.2] - 2026-11-23
+
+The package README now charts weekly downloads for the native extension, MCP server and DeepSeek Harness bundle. The three counts are added without adjustment for installations that download both the bundle and the server. Research behaviour is unchanged.
+
+## [dsh-0.25.2] - 2026-11-23
+
+The package README now includes the shared project banner, features, usage examples, pipeline, costs, cache reference, sponsor and licence attribution alongside the harness-specific setup guide. The downloads chart includes the bundle as a green segment from its launch week. The bundle launches MCP 0.25.2.
+
 ## [mcp-0.25.1] - 2026-11-23
 
 ### Changed
@@ -706,6 +714,8 @@ Core behaviour is shared with [pi-0.15.0] and recorded there. The initial alpha 
 - CI/CD via _GitHub_ Actions (publish to `npm` on release).
 
 [dsh-0.25.0]: https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/docs/plans/dsh-host/RELEASE-025.md
+[mcp-0.25.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.25.2
+[dsh-0.25.2]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/dsh-v0.25.2
 [mcp-0.25.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.25.1
 [dsh-0.25.1]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/dsh-v0.25.1
 [mcp-0.25.0]: https://github.com/Curio-Data/pi-intelli-search/releases/tag/mcp-v0.25.0
