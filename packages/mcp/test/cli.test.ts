@@ -149,6 +149,68 @@ test("dsh mode supplies paths, ignores legacy exports and accepts explicit overr
   }
 });
 
+test("dsh check-config honours an absolute XDG home, ignores a relative one and rejects the filesystem root", async () => {
+  const f = await fixture();
+  try {
+    const workspace = join(f.dir, "project");
+    await mkdir(workspace);
+    const xdg = join(f.dir, "xdg");
+    const env = { HOME: f.dir, XDG_CONFIG_HOME: xdg };
+    // No per-user file anywhere: the built-in default success form, no key, no provider call.
+    const builtin = invoke(["--host", "dsh", "--check-config"], env, workspace);
+    assert.equal(builtin.status, 0, builtin.stderr);
+    assert.equal(
+      builtin.stdout,
+      "Configuration is valid (built-in DeepSeek Harness defaults; no per-user file found).\n",
+    );
+    assert.equal(builtin.stderr, "");
+    // A per-user file under the absolute XDG configuration home is selected without --config.
+    await mkdir(join(xdg, "mcp-intelli-search"), { recursive: true });
+    await writeFile(join(xdg, "mcp-intelli-search", "config.json"), JSON.stringify(document()));
+    const perUser = invoke(["--host", "dsh", "--check-config"], env, workspace);
+    assert.equal(perUser.status, 0, perUser.stderr);
+    assert.equal(perUser.stdout, "Configuration is valid.\n");
+    assert.equal(perUser.stderr, "");
+    // A relative XDG_CONFIG_HOME is ignored entirely: the home fallback file
+    // loads and an invalid file at the relative path is never opened.
+    await mkdir(join(f.dir, ".config/mcp-intelli-search"), { recursive: true });
+    await writeFile(
+      join(f.dir, ".config/mcp-intelli-search", "config.json"),
+      JSON.stringify(document()),
+    );
+    await mkdir(join(workspace, "relative-xdg/mcp-intelli-search"), { recursive: true });
+    await writeFile(join(workspace, "relative-xdg/mcp-intelli-search", "config.json"), "{");
+    const relative = invoke(
+      ["--host", "dsh", "--check-config"],
+      { HOME: f.dir, XDG_CONFIG_HOME: "relative-xdg" },
+      workspace,
+    );
+    assert.equal(relative.status, 0, relative.stderr);
+    assert.equal(relative.stdout, "Configuration is valid.\n");
+    // The filesystem-root working directory fails closed before the check runs.
+    // The child runs with cwd "/", so tsx is imported by absolute path: a
+    // bare specifier would resolve against the root directory.
+    const tsxLoader = fileURLToPath(
+      new URL("../../../node_modules/tsx/dist/loader.mjs", import.meta.url),
+    );
+    const root = spawnSync(
+      process.execPath,
+      ["--import", tsxLoader, cli, "--host", "dsh", "--check-config"],
+      {
+        encoding: "utf8",
+        timeout: 10_000,
+        cwd: "/",
+        env: { PATH: process.env.PATH, TMPDIR: process.env.TMPDIR, ...env },
+      },
+    );
+    assert.equal(root.status, 1);
+    assert.equal(root.stdout, "");
+    assert.match(root.stderr, /DeepSeek Harness working directory must be a project directory/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("CLI rejects unsupported hosts and setup path selections with specific diagnostics", async () => {
   const f = await fixture();
   try {
