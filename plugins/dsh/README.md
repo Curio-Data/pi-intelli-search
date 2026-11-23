@@ -2,7 +2,7 @@
 
 # Intelli Search for DeepSeek Harness
 
-`@curio-data/dsh-intelli-search` adds cited web search and multi-page research to a [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) profile. It is a configuration bundle, not an extension. One bridge row starts the standalone Model Context Protocol (MCP) server [`@curio-data/mcp-intelli-search`](https://www.npmjs.com/package/@curio-data/mcp-intelli-search), version `0.25.0`, through `npx` with `--host dsh`; one registrar registers the `intelli-search` skill with the harness. Search, page fetching, extraction and collation run in that server, which saves each research report with its sources in the project's `.search/` directory. Inference uses an [_OpenRouter_](https://openrouter.ai) account; [_Node.js_](https://nodejs.org/) runs the server.
+`@curio-data/dsh-intelli-search` adds cited web search and multi-page research to a [_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) profile. It is a configuration bundle, not an extension. One bridge row starts the standalone Model Context Protocol (MCP) server [`@curio-data/mcp-intelli-search`](https://www.npmjs.com/package/@curio-data/mcp-intelli-search), version `0.25.1`, through `npx` with `--host dsh`; one registrar registers the `intelli-search` skill with the harness. Search, page fetching, extraction and collation run in that server, which saves each research report with its sources in the project's `.search/` directory. Inference uses an [_OpenRouter_](https://openrouter.ai) account; [_Node.js_](https://nodejs.org/) runs the server.
 
 The harness names the server `intelli`, so the four tools appear as:
 
@@ -19,19 +19,19 @@ Start with a quick search; use research for comparisons, detailed analysis or a 
 
 <!-- TOC:START -->
 
-- [Prerequisites](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#prerequisites)
-- [Installation](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#installation)
-- [Upgrade, Restart and Removal](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#upgrade-restart-and-removal)
-- [Credentials](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#credentials)
-- [Workspace](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#workspace)
-- [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#configuration)
-- [Verification](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#verification)
-- [Timeouts](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#timeouts)
-- [Troubleshooting](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#troubleshooting)
-- [Charges, Cache and Privacy](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#charges-cache-and-privacy)
-- [Evidence and Limits](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#evidence-and-limits)
-- [Further Documentation](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#further-documentation)
-- [Licence](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/README.md#licence)
+- [Prerequisites](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#prerequisites)
+- [Installation](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#installation)
+- [Upgrade, Restart and Removal](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#upgrade-restart-and-removal)
+- [Credentials](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#credentials)
+- [Workspace](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#workspace)
+- [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#configuration)
+- [Verification](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#verification)
+- [Timeouts](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#timeouts)
+- [Troubleshooting](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#troubleshooting)
+- [Charges, Cache and Privacy](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#charges-cache-and-privacy)
+- [Evidence and Limits](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#evidence-and-limits)
+- [Further Documentation](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#further-documentation)
+- [Licence](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/README.md#licence)
 
 <!-- TOC:END -->
 
@@ -111,7 +111,7 @@ After the command succeeds, open the file in an editor, so the key stays out of 
   IFS= read -r -s -p 'OpenRouter API key: ' key || exit 1
   printf '\n'
   printf '%s\n' "$key" | \
-    npx -y --package @curio-data/mcp-intelli-search@0.25.0 \
+    npx -y --package @curio-data/mcp-intelli-search@0.25.1 \
     mcp-intelli-search setup
 )
 ```
@@ -135,7 +135,7 @@ With no per-user configuration file, the server uses built-in defaults: OpenRout
 
 The per-user file is `${XDG_CONFIG_HOME:-$HOME/.config}/mcp-intelli-search/config.json`, shared with the Codex launcher. It is strict: only `providers`, `models` and an optional `tuning` object are accepted, all three model roles are required, and unknown keys, wrong types and out-of-range values are rejected rather than ignored. `defaultUrls` must not exceed `maxUrls`, and search needs a Sonar model unless the `searchWebSearch` tool is enabled. A file without `apiKeyFile` still uses the default credential path, which the launcher supplies. Custom models must appear in OpenRouter's catalogue with the capabilities their role needs, and be available to the account.
 
-This file keeps the default models. Each research query selects up to five search-result pages unless the request sets `maxUrls`, and never more than eight. The cap applies to each query separately: a two-query batch can select up to 16 pages in total. A quick search lists up to five sources, plus any further source the answer cites by number. [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#tuning) in the standalone server guide list every key and its accepted values.
+This file keeps the default models. Each research query selects up to five search-result pages unless the request sets `maxUrls`, and never more than eight. The cap applies to each query separately: a two-query batch can select up to 16 pages in total. A quick search lists up to five sources, plus any further source the answer cites by number. [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#tuning) in the standalone server guide list every key and its accepted values.
 
 ```json
 {
@@ -176,7 +176,7 @@ Validate the file with the configuration check before restarting. The server rea
 **Configuration Check.** From the project directory, run the server's configuration check. It reads the per-user file, or the built-in defaults when there is none, and applies the server's home and filesystem-root rejection. It needs no key and makes no model call. Its first run also downloads the server into the `npx` cache.
 
 ```bash
-npx -y --package @curio-data/mcp-intelli-search@0.25.0 \
+npx -y --package @curio-data/mcp-intelli-search@0.25.1 \
   mcp-intelli-search --host dsh --check-config
 ```
 
@@ -230,11 +230,11 @@ A longer bridge limit needs a row override setting `toolCallTimeoutMs`, with the
 | Repeated `429` retries | Provider rate limits | Set `minRequestIntervalMs` to `3000` and `extractionConcurrency` to `2` in `tuning`, then restart |
 | The `intelli-search` skill differs in one project | On `0.2.2-rc.1`, a project skill with the same name outranks the bundle's registration; a user-level skill does not | Rename or remove the project skill |
 
-The [standalone server's troubleshooting reference](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#timeouts-and-troubleshooting) gives the full list of diagnostics.
+The [standalone server's troubleshooting reference](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#timeouts-and-troubleshooting) gives the full list of diagnostics.
 
 ## Charges, Cache and Privacy
 
-**Charges.** Every search and research call bills the configured OpenRouter account. The planning estimate for one ten-page research run with the default models is ≈$0.09, at the recorded September 2026 prices; it is not a live tariff. Fewer pages cost less. Each batch entry is a separate run, and retries add calls. See [Cost](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#cost).
+**Charges.** Every search and research call bills the configured OpenRouter account. The planning estimate for one ten-page research run with the default models is ≈$0.09, at the recorded September 2026 prices; it is not a live tariff. Fewer pages cost less. Each batch entry is a separate run, and retries add calls. See [Cost](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#cost).
 
 **Cache.** Each research query writes one folder in the project's cache, named by the Coordinated Universal Time (UTC) date, a stem of the query and a short hash:
 
@@ -252,9 +252,9 @@ The [standalone server's troubleshooting reference](https://github.com/Curio-Dat
 └── .index.json          # Index of cached reports
 ```
 
-On a successful repeat of the same query on the same UTC date, the server tries to move the earlier run's files to a numbered sibling, `.1` then `.2`. Supplementary documentation downloads stay in the live folder. If the move fails, the new run can overwrite the earlier files; copy a run elsewhere before repeating it if it must be kept. See [Cache Structure](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#cache-structure).
+On a successful repeat of the same query on the same UTC date, the server tries to move the earlier run's files to a numbered sibling, `.1` then `.2`. Supplementary documentation downloads stay in the live folder. If the move fails, the new run can overwrite the earlier files; copy a run elsewhere before repeating it if it must be kept. See [Cache Structure](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#cache-structure).
 
-**Privacy.** The cache keeps full copies of fetched pages, the query and each report in the project directory, readable by anything that can read the project; exclude `.search/` from version control when its content must not be shared. Queries and page content go to OpenRouter and the selected model providers. The server fetches pages from the machine it runs on, and fetched addresses are not restricted to public ones. See [Filesystem and Privacy Boundaries](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#filesystem-and-privacy-boundaries).
+**Privacy.** The cache keeps full copies of fetched pages, the query and each report in the project directory, readable by anything that can read the project; exclude `.search/` from version control when its content must not be shared. Queries and page content go to OpenRouter and the selected model providers. The server fetches pages from the machine it runs on, and fetched addresses are not restricted to public ones. See [Filesystem and Privacy Boundaries](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#filesystem-and-privacy-boundaries).
 
 **Telemetry.** `meta.json` is local telemetry, which the server never transmits: it records the query, per-stage outcomes and timings and, for batch entries, the fetched URLs. Setting `"disableTelemetry": true` in `tuning` stops `meta.json` and `batch-meta.json`; reports, extractions, sources, batch manifests and the index are still written, because they are the cache itself.
 
@@ -271,12 +271,12 @@ Other versions in the declared range `>=0.2.2-rc.1 <0.3.0`, the shipped `web` pr
 
 ## Further Documentation
 
-- [Usage examples](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#usage-examples), including planned batch research, and the [tool reference](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#tools).
-- [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#tuning) for every key, model constraint and accepted range.
-- [Timeouts and Troubleshooting](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#timeouts-and-troubleshooting) for every diagnostic.
-- [Cost](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#cost), [Cache Structure](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#cache-structure) and [Filesystem and Privacy Boundaries](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/packages/mcp/README.md#filesystem-and-privacy-boundaries).
+- [Usage examples](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#usage-examples), including planned batch research, and the [tool reference](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#tools).
+- [Configuration](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#configuration) and [Tuning](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#tuning) for every key, model constraint and accepted range.
+- [Timeouts and Troubleshooting](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#timeouts-and-troubleshooting) for every diagnostic.
+- [Cost](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#cost), [Cache Structure](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#cache-structure) and [Filesystem and Privacy Boundaries](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/packages/mcp/README.md#filesystem-and-privacy-boundaries).
 - [Compatibility record](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits) and [Changelog](https://github.com/Curio-Data/pi-intelli-search/blob/main/CHANGELOG.md).
-- [Installed skill](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/plugins/dsh/skills/intelli-search/SKILL.md), the agent-facing guidance this bundle registers.
+- [Installed skill](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.1/plugins/dsh/skills/intelli-search/SKILL.md), the agent-facing guidance this bundle registers.
 
 ## Licence
 
