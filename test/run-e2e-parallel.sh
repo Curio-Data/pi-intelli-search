@@ -98,6 +98,7 @@ SCRIPTS=(
   16_batch_independent.sh
   17_batch_expansion.sh
   18_dsh_plugin.sh
+  20_dsh_setup_pipeline.sh
 )
 
 run_scenario() {

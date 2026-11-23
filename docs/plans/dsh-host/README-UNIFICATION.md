@@ -1,6 +1,6 @@
 # DeepSeek Harness README Unification Plan
 
-**Status:** READY for owner-approved implementation; no implementation, publication or cleanup is authorised by this document
+**Status:** IMPLEMENTATION DELIVERED; release decision pending. The owner approved complete implementation and delivery to `main`, with release preparation and publication deferred. No cleanup is authorised
 
 **Planning review commit (does not contain this plan):** `0028e94213a4d29fee0bfd92a88d845e71e86360`
 
@@ -36,7 +36,7 @@ The review selected an **opt-in `dsh` audience** in `scripts/generate-package-re
 - Version and host metadata are generator inputs, not new hand-maintained copies.
 - Native pipeline code, configuration behaviour and package runtime contracts do not change.
 
-Implementation approval is still required. Version numbers, tags, staging, publication and merge to `main` require their usual separate owner approvals.
+Implementation and delivery to `main` are complete under the owner's D2 approval. For this cycle, that decision defers Stage 5 steps 3 to 6 and the Stage 6 release sequence: version numbers, tags, staging and publication wait for the owner's separate release decision after reviewing `main`. The current evidence and remaining unverified host behaviour are recorded in `docs/COMPATIBILITY.md`.
 
 ## Requirement-to-Acceptance Map
 
@@ -346,6 +346,8 @@ No two tracks own the same file in one wave. Ownership of `test/package-readmes.
 - Do not delete worktrees, scratch, prior evidence or branches automatically. Retirement requires an inventory and explicit owner approval, with retained material promoted first.
 
 ## Completion Criteria
+
+Criteria 2 to 4 are met, and criterion 1 is met for the candidate except the tagged link check, because the dsh README's links name `mcp-v0.25.0` until the next matching release. Under the owner's D2 decision, delivery to `main` preceded release, so that check, criterion 5 (public release and its verification) and the released-state part of criterion 6 remain open until the owner's release decision.
 
 The programme is complete only when:
 

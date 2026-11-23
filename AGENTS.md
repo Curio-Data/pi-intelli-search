@@ -40,7 +40,7 @@ This subsection is the repository's local declaration under the house `professio
 
 | Application | Reader | History Needed | Correctness Reference |
 |---|---|---|---|
-| `README.md` and its generated package READMEs, `docs/ARCHITECTURE.md`, `docs/COMPONENTS.md` | The reader in Audience and Priorities, with no project context | No: the subject as it stands. `ARCHITECTURE.md` keeps design rationale, not history | The code and `package.json` at the documented version |
+| `README.md` and its generated package READMEs, `docs/ARCHITECTURE.md`, `docs/COMPONENTS.md` | The reader in Audience and Priorities, with no project context | No: the subject as it stands. `ARCHITECTURE.md` keeps design rationale, not history | The code and `package.json` at the documented version. DeepSeek Harness host claims also use the installed `@deepseek-ai/dsh-mcp-client`, `dsh-app-boot`, `dsh-launch-environment`, `dsh`, plugin-manager and UI documentation at `0.2.2-rc.1` and `0.2.2-rc.5`; evidence claims use the dated records |
 | `docs/COMPATIBILITY.md`, `docs/BENCHMARKS.md`, `docs/COMPARISON.md` | The same reader | Yes: dated verifications and evidence classes. Recorded results in `BENCHMARKS.md` are append-only; its harness description follows the current script | The recorded evidence (`evidence/`, cache sidecars, test output), with its date |
 | `CHANGELOG.md` | A user deciding whether and how to upgrade | Yes, by definition | What each tagged release delivered, corrected in place (see Changelog Conventions) |
 | `skills/intelli-search/SKILL.md`, `guidance/` | A coding agent choosing and calling the tools | No | The tool schemas and behaviour in `src/core/`, and the result text each adapter shows the model (`src/tools/`, `packages/mcp/src/`); for `guidance/setup-dsh.md`, the installed `@deepseek-ai/dsh-mcp-client` bridge, `dsh-app-boot`, `dsh-launch-environment`, `dsh-skill` and `dsh-skill-filesystem` documentation at `0.2.2-rc.1` and `0.2.2-rc.5` |
@@ -192,7 +192,7 @@ The "Customise (Optional)" and "Model Configuration" sections in README.md use t
 
 ### 12. One Hand-Edited README
 
-For package documentation, the root `README.md` is the only README to edit by hand. Repository guides such as `scripts/README.md`, `test/fixtures/native-contract/README.md` and the dsh bundle template `scripts/templates/dsh/README.md` are hand-edited sources. The generated `plugins/dsh/README.md` is intentionally derived from that template by `scripts/generate-plugin-bundles.mjs`, not by `generate-package-readmes.mjs`, and must not be edited directly either. `PI_CHANGELOG.md` is also generated and must not be edited directly; see Changelog Conventions. `scripts/generate-package-readmes.mjs` derives each package's README from the root `README.md`: `packages/mcp/README.md` and the root previews `pi.README.md` and `mcp.README.md` are real generated files (never symlinks: npm drops a symlinked README and GitHub does not render one), committed and drift-checked in CI (`npm run check:readmes`), which also fails when a derived link does not resolve. The native package ships the root path itself, so its `prepublishOnly` hook writes the same derivation over the root README at publish time. Never edit `packages/mcp/README.md` or the root `*.README.md` previews directly. Tag package-specific sections with `<!-- packages:pi -->` or `<!-- packages:mcp -->` and `<!-- /packages -->`, repository-only sections with `<!-- packages:none -->`, and content only a package shows (its title and badges) with a hidden `<!-- packages:mcp hidden` ... `-->` block. Untagged content goes to both packages. The root `README.md` section `Development` documents the syntax. After any README edit run `npm run generate:toc` and `npm run generate:readmes`.
+For package documentation, the root `README.md` is the only hand-edited package README. Repository guides such as `scripts/README.md`, `test/fixtures/native-contract/README.md` and the remaining dsh registrar and icon templates are hand-edited sources; there is no independent dsh README template. `scripts/generate-package-readmes.mjs` derives `packages/mcp/README.md` and the root previews `pi.README.md`, `mcp.README.md` and `dsh.README.md` from that canonical source. `scripts/generate-plugin-bundles.mjs` calls the same derivation entry point and is the sole writer of `plugins/dsh/README.md` in registry and tarball modes. All generated READMEs are real files, never symlinks, committed and drift-checked (`npm run check:readmes`, then `npm run check:plugins` for the bundle). Never edit a generated README or `PI_CHANGELOG.md` directly. The native package ships the root path itself, so its `prepublishOnly` hook writes the native derivation over the root README at publish time. Tag package-specific sections with `<!-- packages:pi -->`, `<!-- packages:mcp -->` or `<!-- packages:mcp,dsh -->` and `<!-- /packages -->`, repository-only sections with `<!-- packages:none -->`, and package-only framing with a hidden block such as `<!-- packages:dsh hidden` ... `-->`. Untagged content goes to native and MCP; dsh is opt-in, and dsh metadata tokens are confined to hidden dsh blocks. The root `README.md` section `Development` documents the syntax. After any README edit run `npm run generate:toc` and `npm run generate:readmes`; after an edit to a block that includes dsh, or to guidance, also run `npm run generate:plugins` and `node scripts/check-dsh-readme-links.mjs`.
 
 ### 13. No Second-Person Address
 
@@ -262,6 +262,7 @@ All `Pi` SDK packages are **peer dependencies**. They are provided by the hostin
 pi.README.md                  # Generated native package README preview; never edit by hand
 PI_CHANGELOG.md               # Generated native package changelog for Pi 1.5.0 Extension Updates; never edit by hand
 mcp.README.md                 # Generated MCP package README preview; never edit by hand
+dsh.README.md                 # Generated DeepSeek Harness package README preview; never edit by hand
 src/
 ├── index.ts                  # Extension entry: registers tools, events, model setup
 ├── core/                     # Host-neutral execution and shared helpers
@@ -348,7 +349,9 @@ scripts/
 ├── README.md                # Script usage guide
 ├── run-tests.mjs            # Isolated unit-test runner for npm test and test:all
 ├── build-mcp.mjs            # Audited standalone bundles and legal-file copies
-├── generate-package-readmes.mjs # Package READMEs from the root README; --check is the drift gate
+├── generate-package-readmes.mjs # Native, MCP and opt-in dsh READMEs from the root README; --check is the drift gate
+├── dsh-host-metadata.mjs    # dsh engine, Node.js and tested-host metadata plus token substitution
+├── check-dsh-readme-links.mjs # Candidate and tagged dsh README link and anchor validation
 ├── generate-native-changelog.mjs # PI_CHANGELOG.md from CHANGELOG.md; --check is the drift gate
 ├── capture-retry-fixture.mjs  # Capture/audit the pi-ai retry classifier lists (--check at each host bump)
 ├── capture-changelog-fixture.mjs # Capture the Pi changelog parser behaviour into a test fixture
@@ -356,7 +359,10 @@ scripts/
 ├── generate-toc.mjs         # README contents generator; --check is the drift gate
 ├── generate-tlds.mjs        # src/core/tlds.ts from a downloaded IANA list; --check is the drift gate
 ├── generate-plugin-bundles.mjs # Three-host plugin/marketplace generator; --check is the drift gate
-├── templates/dsh/            # Hand-edited dsh bundle sources (registrar index.js, icon.svg, README.md) copied verbatim into plugins/dsh
+├── templates/dsh/            # Hand-edited dsh registrar index.js and icon.svg copied verbatim into plugins/dsh
+├── verify-dsh-setup.sh       # Credential-free setup pipeline and configuration-route verification
+├── dsh-server-env-observer.mjs # Redacted launched-server environment witness for dsh verification
+├── verify-dsh-lifecycle.sh   # Isolated dsh installation, registration, XDG, removal and reinstall verification
 ├── verify-mcp-install.mjs    # Production-only install and native-fetch verification
 └── capture-native-contract.mts # Explicit compatibility-fixture regeneration
 
@@ -398,7 +404,8 @@ test/
 ├── post-0220-minors.test.ts  # Degraded-repeat attempts, rejected synthesis, archive rebasing, multiline emphasis, settings warning, skill cache and collation text, line-one marker
 ├── post-0220-review.test.ts  # List and quote emphasis, list-container fences, generated-inventory boundaries, trimmed-failure guidance
 ├── plugin-bundles.test.ts    # Generated plugin/marketplace shape, pins and drift gate
-├── package-readmes.test.ts   # README block selection, link rewriting, drift gate and publish swap
+├── package-readmes.test.ts   # README block selection, dsh content, link rewriting, drift gate and publish swap
+├── dsh-readme-examples.test.ts # Executable dsh Bash/JSON examples, strict config and runtime defaults
 ├── providers.test.ts
 ├── research.test.ts
 ├── renderer.test.ts
@@ -422,8 +429,9 @@ test/
 │   ├── 15_pi_floor.sh
 │   ├── 16_batch_independent.sh
 │   ├── 17_batch_expansion.sh
-│   ├── 19_dsh_credentialed.sh # Separately approved paid checks on rc.1; outside both suite runners
 │   ├── 18_dsh_plugin.sh      # Credential-free DeepSeek Harness host verification (pinned dsh, isolated pnpm, DSH_BIN)
+│   ├── 19_dsh_credentialed.sh # Separately approved paid checks on rc.1; outside both suite runners
+│   ├── 20_dsh_setup_pipeline.sh # Credential-free documented setup and configuration-route gate
 │   ├── dsh/                  # Scenario-18 inspector and dummy credential launcher (Cordis plugins)
 │   ├── batch.sh              # Direct native and MCP batch checks
 │   ├── env.sh
@@ -433,7 +441,7 @@ test/
 │   ├── direct-tool.mjs       # Calls one registered tool through the real host with exact arguments and no agent-loop call
 │   └── analyze-evidence.mjs  # Summarises a traced run without prompts, completions or credentials
 ├── run-e2e-all.sh            # Suite runner: one build, then all scripts in parallel (or sequential)
-├── run-e2e-parallel.sh       # Traced evidence runner for scenarios 01 to 12 and 15 to 18
+├── run-e2e-parallel.sh       # Traced evidence runner for scenarios 01 to 12, 15 to 18 and 20
 ├── run-e2e-publish.sh
 ├── run-e2e-publish-local.sh
 ├── settings.test.ts
@@ -517,8 +525,9 @@ npm run generate:toc     # Regenerate README contents from headings
 npm run check:toc        # Fail if README contents drift from the generator
 npm run generate:plugins # Regenerate plugin bundles and marketplaces after a version change
 npm run check:plugins    # Fail if committed plugin files drift from the generator
-npm run generate:readmes # Regenerate packages/mcp/README.md and the root *.README.md previews
+npm run generate:readmes # Regenerate packages/mcp/README.md and the root native, MCP and dsh previews
 npm run check:readmes    # Fail if package READMEs drift from the root README
+node scripts/check-dsh-readme-links.mjs # Validate generated dsh links and anchors
 npm run generate:changelog # Regenerate PI_CHANGELOG.md from CHANGELOG.md
 npm run check:changelog  # Fail if the native changelog drifts from CHANGELOG.md
 node scripts/capture-retry-fixture.mjs --check <retry.js>       # Host-bump audit: classifier drift vs installed pi-ai
@@ -571,7 +580,7 @@ All three model roles (search, extract, collate) are configurable via `~/.pi/age
 | **Shared Engine** | Host boundary, injected operations, policy, concurrent cache writes and console scopes | `core-*.test.ts`, `native-model-client.test.ts`, `workspace-paths.test.ts` | No |
 | **Unit (pure logic)** | Functions without filesystem or network deps | `annotations.test.ts`, `cache.test.ts`, `telemetry.test.ts`, `prompts.test.ts`, `util.test.ts` | No |
 | **Deterministic integration** | Functions that read files, with temp-directory isolation | `index.test.ts`, `settings.test.ts`, `providers.test.ts`, `research.test.ts`, `config-recipes.test.ts` (reads `README.md`), `native-changelog.test.ts` (also reads git refs) | No |
-| **E2E** | Live pipeline tests in isolated hosts; scenario 18 verifies dsh installation without provider calls | `e2e/01_main.sh`, `e2e/02_cap.sh`, `e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`, `e2e/07_llms_full.sh`, `e2e/04_migration.sh`, `e2e/03_model_override.sh`, `e2e/08_websearch_tool.sh`, `e2e/09_sonar_pro_search.sh`, `e2e/10_config_recipes.sh`, `e2e/11_mcp_stdio.sh`, `e2e/18_dsh_plugin.sh` (credential-free; scenarios 01 to 18 are listed in Principle 4; `run-e2e-all.sh` runs them together) | 18: No; others Yes |
+| **E2E** | Live pipeline tests in isolated hosts; scenarios 18 and 20 verify dsh installation and setup without provider calls | `e2e/01_main.sh`, `e2e/02_cap.sh`, `e2e/06_extract_limits.sh`, `e2e/05_collation_limits.sh`, `e2e/07_llms_full.sh`, `e2e/04_migration.sh`, `e2e/03_model_override.sh`, `e2e/08_websearch_tool.sh`, `e2e/09_sonar_pro_search.sh`, `e2e/10_config_recipes.sh`, `e2e/11_mcp_stdio.sh`, `e2e/18_dsh_plugin.sh`, `e2e/20_dsh_setup_pipeline.sh` (credential-free; scenarios 01 to 18 and 20 are listed in Principle 4; `run-e2e-all.sh` runs them together) | 18, 20: No; others Yes |
 | **Publish** | Validates the published npm package structure | `run-e2e-publish.sh` (registry install), `run-e2e-publish-local.sh` (local tarball install; CI gate for peer-dep drift) | Yes (npm only) |
 
 ### Principle 1: Tests Must Be Deterministic
@@ -652,8 +661,9 @@ E2E tests run in isolated `PI_CODING_AGENT_DIR` environments and exercise the se
 | `e2e/16_batch_independent.sh` | Calls the native tool directly with two distinct queries and checks the per-query sections, member reports and batch manifest and telemetry without a merged report |
 | `e2e/17_batch_expansion.sh` | Calls the native tool directly with two related queries and checks that the merge completed and returned a report listing its members |
 | `e2e/18_dsh_plugin.sh` | Credential-free DeepSeek Harness verification on an isolated host within the declared version range (tested on `0.2.2-rc.1` and `0.2.2-rc.5`): local-tarball bundle installation into an isolated profile, both composed rows, the four `mcp__intelli__*` tools and the bundled skill through a polling inspector in the profile user patch layer, dummy credential delivery through the environment layer, home and filesystem-root workspace guards, and removal plus reinstallation. Requires `DSH_BIN` and an isolated pnpm on `PATH`; skips with exit `77` naming the prerequisite, which fails both suite runners |
+| `e2e/20_dsh_setup_pipeline.sh` | Executes the documented standard-input setup against a local server tarball with an invented dummy key: exact `Setup complete.` output, credential placement and permissions, environment precedence, both `--check-config` success forms, custom `apiKeyFile` preservation, relative-XDG fallback, home/root rejection and redaction. Needs neither a dsh host nor pnpm and makes no provider call |
 | `run-e2e-all.sh` | Builds both packages once, then starts every scenario script at once, each with its own `TMPDIR` and log, and prints each outcome with the tail of every failing log. `E2E_RUN_MODE=sequential` runs them one at a time with a gap (`E2E_GAP_SECONDS`, default 20) instead. The single build and `E2E_SKIP_BUILD=1` keep scenarios from rebuilding a bundle another is loading |
-| `run-e2e-parallel.sh` | Traced evidence runner for scenarios 01 to 12 and 15 to 18. Gives each scenario an isolated `HOME`, records every extension and agent-loop model call, status, stop reason and retry, and snapshots the key's account state; `test/e2e/analyze-evidence.mjs <run-dir>` summarises a run. Requires `npm run build:all` first |
+| `run-e2e-parallel.sh` | Traced evidence runner for scenarios 01 to 12, 15 to 18 and 20. Gives each scenario an isolated `HOME`, records every extension and agent-loop model call, status, stop reason and retry, and snapshots the key's account state; `test/e2e/analyze-evidence.mjs <run-dir>` summarises a run. Requires `npm run build:all` first |
 
 The scenarios write the nested `pi-intelli-search` format in `settings.json`, matching the recommended user configuration.
 

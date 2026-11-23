@@ -4,6 +4,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { FENCE, closesFence } from "./lib/markdown-links.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const startMarker = "<!-- TOC:START -->";
@@ -36,7 +37,7 @@ export function createSlugger() {
 export function scanHeadings(markdown) {
   const headings = [];
   const slug = createSlugger();
-  let fenceLength = 0;
+  let fence = null;
   let inToc = false;
   let inComment = false;
   for (const line of markdown.split(/\r?\n/)) {
@@ -46,9 +47,8 @@ export function scanHeadings(markdown) {
       if (line.includes("-->")) inComment = false;
       continue;
     }
-    if (fenceLength) {
-      const close = line.match(/^ {0,3}(`{3,})[ \t]*$/);
-      if (close && close[1].length >= fenceLength) fenceLength = 0;
+    if (fence) {
+      if (closesFence(line, fence)) fence = null;
       continue;
     }
     if (line === startMarker) {
@@ -64,9 +64,9 @@ export function scanHeadings(markdown) {
       inComment = true;
       continue;
     }
-    const fence = line.match(/^ {0,3}(`{3,})([^`]*)$/);
-    if (fence) {
-      fenceLength = fence[1].length;
+    const fenceOpen = line.match(FENCE);
+    if (fenceOpen) {
+      fence = fenceOpen[1];
       continue;
     }
     const match = line.match(/^ {0,3}(#{1,6})[ \t]+(.+?)\s*$/);

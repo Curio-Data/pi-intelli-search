@@ -7,16 +7,21 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 // @ts-expect-error plain Node module without declarations
 import {
   checkAgainstRepo,
-  DSH_TESTED_VERSION,
   generateFiles,
   launcherFor,
   readMcpPackage,
   writeTree,
 } from "../scripts/generate-plugin-bundles.mjs";
+// @ts-expect-error plain Node module without declarations
+import { DSH_ENGINES_RANGE, DSH_NODE_ENGINES_RANGE, DSH_REFERENCE_VERSION, DSH_TESTED_VERSIONS, dshHostMetadata, formatVersionList } from "../scripts/dsh-host-metadata.mjs";
+// @ts-expect-error plain Node module without declarations
+import { DSH_GENERATED_HEADER, derivePackageReadme, generateAll, PACKAGES } from "../scripts/generate-package-readmes.mjs";
+// @ts-expect-error plain Node module without declarations
+import { allLinkTargets, isExternal } from "../scripts/lib/markdown-links.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const GENERATOR = join(REPO_ROOT, "scripts", "generate-plugin-bundles.mjs");
@@ -57,6 +62,27 @@ const ALL_PATHS = [
 ];
 
 const DSH_PATHS = ALL_PATHS.filter((path) => path.startsWith("plugins/dsh/"));
+
+// A scratch repository root holding every tracked file present in this
+// working tree: the canonical README.md, guidance, package metadata, the dsh
+// templates and each file a derived dsh link must resolve. The generated
+// trees come along as committed, so tests can rewrite or plant files there.
+// The dsh page links only tracked legal files. These build copies are
+// mirrored defensively for parity with a built tree; no derivation needs them.
+const BUILD_COPIES = ["packages/mcp/LICENSE", "packages/mcp/NOTICE"];
+
+function copyTrackedTree(prefix: string) {
+  const fake = scratchDir(prefix);
+  const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8" })
+    .split("\0")
+    .concat(BUILD_COPIES)
+    .filter((rel) => rel && existsSync(join(REPO_ROOT, rel)));
+  for (const rel of tracked) {
+    mkdirSync(dirname(join(fake, rel)), { recursive: true });
+    writeFileSync(join(fake, rel), readFileSync(join(REPO_ROOT, rel)));
+  }
+  return fake;
+}
 
 function parse(files: Record<string, string>, path: string) {
   return JSON.parse(files[path]) as Record<string, unknown>;
@@ -337,13 +363,17 @@ describe("plugin bundle generation", () => {
     assert.ok(rootGuide, "root dsh setup section exists");
     for (const guide of [rootGuide, files["plugins/dsh/README.md"], files["plugins/dsh/skills/intelli-search/SKILL.md"]]) {
       assert.ok(guide.includes(manifest.engines.dsh), "guide states the manifest's declared range");
-      for (const host of [DSH_TESTED_VERSION, "0.2.2-rc.5"]) assert.ok(guide.includes(`\`${host}\``), "guide identifies exact hosts checked");
+      for (const host of DSH_TESTED_VERSIONS) assert.ok(guide.includes(`\`${host}\``), "guide identifies exact hosts checked");
     }
-    assert.strictEqual(DSH_TESTED_VERSION, "0.2.2-rc.1");
+    // The manifest takes its engines from the shared metadata module, the
+    // only place the dsh range and Node.js floor are maintained.
     assert.deepStrictEqual(manifest.engines, {
-      node: ">=24.9.0",
-      dsh: ">=0.2.2-rc.1 <0.3.0",
+      node: DSH_NODE_ENGINES_RANGE,
+      dsh: DSH_ENGINES_RANGE,
     });
+    const meta = dshHostMetadata(REPO_ROOT) as { mcpVersion: string; enginesRange: string; nodeEnginesRange: string };
+    assert.deepStrictEqual(manifest.engines, { node: meta.nodeEnginesRange, dsh: meta.enginesRange });
+    assert.strictEqual(manifest.version, meta.mcpVersion, "dsh manifest mirrors the exact MCP version");
     assert.deepStrictEqual(manifest.dsh, {
       manifestVersion: 1,
       bundle: { patch: "./cordis.patch.yml" },
@@ -428,10 +458,10 @@ describe("plugin bundle generation", () => {
     assert.match(skill, /No path or credential exports are required/);
     assert.match(skill, /four tools start even when credentials are absent/);
     assert.match(skill, /an `OPENROUTER_API_KEY` exported in the launching environment, then a `\.env` file in the launch directory, then `\$DSH_HOME\/\.env`/);
-    assert.match(skill, /one harness restart/);
+    assert.match(skill, /a changed key requires one restart of the profile/);
     assert.match(skill, /does not provision this server/);
     assert.match(skill, /a directory change later in the session does not move the cache/);
-    assert.ok(skill.includes("`$DSH_HOME/profiles/<name>/cordis.patch.yml` and set `cwd`"));
+    assert.ok(skill.includes("the profile's `cordis.patch.yml` under `$DSH_HOME/profiles/` and set `cwd`"));
     assert.match(skill, /`WORKSPACE` tool error/);
     for (const op of [
       "mcp__intelli__intelli_search",
@@ -442,10 +472,10 @@ describe("plugin bundle generation", () => {
       assert.ok(skill.includes(op), `setup names ${op}`);
     }
     assert.match(skill, /ten minutes \(`toolCallTimeoutMs: 600000`\)/);
-    assert.ok(skill.includes("separate request timeout (60 seconds on `0.2.2-rc.1`)"));
+    assert.ok(skill.includes(`separate request timeout (60 seconds on \`${DSH_REFERENCE_VERSION}\`)`));
     assert.match(skill, /failOnStartupError: false/);
     assert.match(skill, /On `0\.2\.2-rc\.1`, a project skill with the same name outranks this registration; a user-level skill does not/);
-    assert.match(skill, /dsh plugin --profile <name> remove @curio-data\/dsh-intelli-search/);
+    assert.ok(skill.includes('dsh plugin --profile "$profile" remove @curio-data/dsh-intelli-search'));
     assert.match(skill, /--dump-config/);
     assert.match(skill, /0\.2\.2-rc\.1/);
   });
@@ -517,6 +547,152 @@ describe("plugin bundle generation", () => {
   });
 });
 
+describe("dsh README single writer", () => {
+  // scripts/generate-plugin-bundles.mjs is the only writer of
+  // plugins/dsh/README.md. It derives the page from the canonical root
+  // README.md through derivePackageReadme("dsh"), the same call that fills
+  // the dsh.README.md preview, and never reads a generated README.
+  const registry = generateFiles() as Record<string, string>;
+  const readme = registry["plugins/dsh/README.md"];
+  const mcpPkg = readMcpPackage() as { name: string; version: string };
+  const pinned = `${mcpPkg.name}@${mcpPkg.version}`;
+
+  it("writes the preview bytes in registry mode", () => {
+    assert.deepStrictEqual(PACKAGES.dsh, ["dsh.README.md"], "the README generator never names the bundle path");
+    assert.strictEqual(readme, derivePackageReadme("dsh", REPO_ROOT));
+    assert.strictEqual(readme, (generateAll(REPO_ROOT) as Record<string, string>).dsh, "dsh.README.md preview bytes");
+    const printed = execFileSync(process.execPath, [join(REPO_ROOT, "scripts/generate-package-readmes.mjs"), "--print", "dsh"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    });
+    assert.strictEqual(readme, printed, "byte-identical to the README generator's dsh output");
+    const preview = join(REPO_ROOT, "dsh.README.md");
+    if (existsSync(preview)) assert.strictEqual(readme, readFileSync(preview, "utf8"), "committed preview equals the bundle README");
+  });
+
+  it("writes the same bytes in tarball mode", () => {
+    const tarball = generateFiles("tarball", {
+      codexVendorDir: "/abs/codex/vendor",
+      output: "/abs/out",
+    }) as Record<string, string>;
+    assert.strictEqual(tarball["plugins/dsh/README.md"], readme);
+    assert.notStrictEqual(tarball["plugins/dsh/cordis.patch.yml"], registry["plugins/dsh/cordis.patch.yml"], "tarball mode changes launchers only");
+  });
+
+  it("opens with the dsh generated header naming both regeneration commands", () => {
+    assert.ok(readme.startsWith(`${DSH_GENERATED_HEADER}\n\n# Intelli Search for DeepSeek Harness\n`));
+    assert.ok(DSH_GENERATED_HEADER.includes("npm run generate:readmes"));
+    assert.ok(DSH_GENERATED_HEADER.includes("npm run generate:plugins"));
+  });
+
+  it("carries only absolute links and no unreplaced tokens", () => {
+    const targets = allLinkTargets(readme) as string[];
+    assert.ok(targets.length > 20, "the page links its references");
+    for (const url of targets) assert.ok(isExternal(url), `non-absolute link ${url}`);
+    assert.ok(!readme.includes("](#"), "no bare same-page anchor");
+    assert.ok(!readme.includes("{{") && !readme.includes("}}"), "no double-brace token");
+    const self = `https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v${mcpPkg.version}/plugins/dsh/README.md#`;
+    assert.ok(readme.includes(`](${self}prerequisites)`), "contents use release-matched absolute self-anchors");
+  });
+
+  it("states current public evidence, not the stale registry sentence", () => {
+    assert.ok(!readme.includes("No registry-pin installation has been verified"), "stale registry claim absent");
+    assert.ok(!readme.includes("Check the repository installation guide"), "stale bootstrap pointer absent");
+    assert.match(readme, /\*\*Public installation by name:\*\* the public \d+\.\d+\.\d+ bundle installed by name on `0\.2\.2-rc\.1`/);
+    assert.ok(readme.includes("https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits"));
+    assert.ok(!/blob\/mcp-v[^/]+\/docs\/COMPATIBILITY\.md/.test(readme), "evidence links follow main, not a frozen tag");
+    for (const host of DSH_TESTED_VERSIONS) assert.ok(readme.includes(`\`${host}\``), `tested host ${host}`);
+    assert.ok(readme.includes(DSH_ENGINES_RANGE), "declared range");
+  });
+
+  it("gives the pinned setup pipeline and both configuration-check forms", () => {
+    assert.ok(
+      readme.includes(
+        "```bash\nread -r -s -p 'OpenRouter API key: ' key\nprintf '\\n'\nprintf '%s\\n' \"$key\" | \\\n" +
+          `  npx -y --package ${pinned} \\\n  mcp-intelli-search setup\nunset key\n\`\`\``,
+      ),
+      "setup pipeline pins the launched MCP version",
+    );
+    assert.ok(readme.includes("`Setup complete.`"));
+    assert.ok(readme.includes(`npx -y --package ${pinned} \\\n  mcp-intelli-search --host dsh --check-config\n`));
+    assert.ok(readme.includes("- `Configuration is valid.` when the per-user file loads."));
+    assert.ok(readme.includes("- `Configuration is valid (built-in DeepSeek Harness defaults; no per-user file found).` when there is no per-user file."));
+    for (const [, version] of readme.matchAll(/@curio-data\/mcp-intelli-search@([^\s`]+)/g)) {
+      assert.strictEqual(version, mcpPkg.version, "every server pin is the manifest version");
+    }
+  });
+
+  it("resolves metadata tokens inside the dsh setup fragment of the skill", () => {
+    const setup = readFileSync(join(REPO_ROOT, "guidance/setup-dsh.md"), "utf8");
+    assert.ok(setup.includes("{{MCP_VERSION}}") && setup.includes("{{DSH_TESTED_VERSIONS}}"), "fragment uses metadata tokens");
+    const skill = registry["plugins/dsh/skills/intelli-search/SKILL.md"];
+    assert.ok(!skill.includes("{{") && !skill.includes("}}"));
+    assert.ok(skill.includes(`npx -y --package ${pinned}`), "skill pins the launched MCP version");
+    assert.ok(skill.includes(`\`engines.dsh: ${DSH_ENGINES_RANGE}\``), "skill states the metadata range");
+    assert.ok(skill.includes(`\`dsh\` ${formatVersionList(DSH_TESTED_VERSIONS)} on Linux`), "skill lists every tested host");
+  });
+
+  it("does not depend on the retired README template or any generated README", () => {
+    assert.ok(!existsSync(join(REPO_ROOT, "scripts/templates/dsh/README.md")), "template retired");
+    const source = readFileSync(join(REPO_ROOT, "scripts/generate-plugin-bundles.mjs"), "utf8");
+    assert.ok(!source.includes("templates/dsh/README.md"), "generator never names the retired template");
+    const fake = copyTrackedTree("plugin-bundles-single-writer-");
+    try {
+      // Planted stale copies at every README path a generator could read.
+      mkdirSync(join(fake, "scripts/templates/dsh"), { recursive: true });
+      for (const rel of ["scripts/templates/dsh/README.md", "plugins/dsh/README.md", "dsh.README.md", "mcp.README.md", "packages/mcp/README.md"]) {
+        writeFileSync(join(fake, rel), "# PLANTED STALE README\n");
+      }
+      const files = generateFiles("registry", {}, fake) as Record<string, string>;
+      assert.strictEqual(files["plugins/dsh/README.md"], readme, "output ignores every planted README");
+
+      // A canonical edit reaches the bundle README in both modes.
+      const canonical = readFileSync(join(fake, "README.md"), "utf8");
+      const marker = "Every check below ran on Linux";
+      assert.ok(canonical.includes(marker));
+      writeFileSync(join(fake, "README.md"), canonical.replace(marker, `SENTINEL-E. ${marker}`));
+      for (const mode of ["registry", "tarball"]) {
+        const out = generateFiles(mode, { codexVendorDir: "/abs/v", output: "/abs/o" }, fake) as Record<string, string>;
+        assert.ok(out["plugins/dsh/README.md"].includes("SENTINEL-E."), `${mode} mode follows the canonical source`);
+      }
+    } finally {
+      rmSync(fake, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a publish-swapped root README with the restore instruction", () => {
+    const fake = copyTrackedTree("plugin-bundles-swap-");
+    try {
+      const native = (generateAll(fake) as Record<string, string>).pi;
+      writeFileSync(join(fake, "README.md"), native);
+      for (const mode of ["registry", "tarball"]) {
+        assert.throws(
+          () => generateFiles(mode, { codexVendorDir: "/abs/v", output: "/abs/o" }, fake),
+          /generated native README left by a publish; run node scripts\/generate-package-readmes\.mjs --restore-native/,
+        );
+      }
+    } finally {
+      rmSync(fake, { recursive: true, force: true });
+    }
+  });
+
+  it("fails on unreplaced tokens in a setup fragment, opening or closing", () => {
+    const fake = copyTrackedTree("plugin-bundles-token-");
+    try {
+      const path = join(fake, "guidance/setup-dsh.md");
+      const original = readFileSync(path, "utf8");
+      for (const stray of ["{{DSH_TESTED_VERSION}}", "{{UNKNOWN", "UNKNOWN}}"]) {
+        writeFileSync(path, `${original}\n${stray}\n`);
+        assert.throws(() => generateFiles("registry", {}, fake), /unreplaced token remains in dsh skill/, stray);
+      }
+      writeFileSync(path, original);
+      assert.doesNotThrow(() => generateFiles("registry", {}, fake));
+    } finally {
+      rmSync(fake, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("plugin bundle drift check", () => {
   it("committed tree matches generator output", () => {
     const out = execFileSync("node", [GENERATOR, "--check"], {
@@ -573,6 +749,11 @@ describe("plugin bundle drift check", () => {
         dshManifest.files.includes("vendor/**"),
         "tarball dsh manifest retains the vendored server",
       );
+      assert.strictEqual(
+        readFileSync(join(scratch, "plugins/dsh/README.md"), "utf8"),
+        derivePackageReadme("dsh", REPO_ROOT),
+        "tarball mode writes the same derived dsh README as registry mode",
+      );
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
@@ -583,28 +764,10 @@ describe("plugin bundle drift check", () => {
     // and package metadata, generate the tree, add a stray file, and assert
     // the check reports it (regression: the one-directional gate passed with
     // stray files present).
-    const fake = scratchDir("plugin-bundles-stray-");
+    // The fake root carries every tracked file, because the dsh README is
+    // derived from README.md and its links must resolve under that root.
+    const fake = copyTrackedTree("plugin-bundles-stray-");
     try {
-      mkdirSync(join(fake, "packages/mcp"), { recursive: true });
-      writeFileSync(
-        join(fake, "packages/mcp/package.json"),
-        readFileSync(join(REPO_ROOT, "packages/mcp/package.json")),
-      );
-      execFileSync("cp", [
-        "-r",
-        join(REPO_ROOT, "guidance"),
-        join(fake, "guidance"),
-      ]);
-      mkdirSync(join(fake, "scripts"), { recursive: true });
-      execFileSync("cp", [
-        "-r",
-        join(REPO_ROOT, "scripts/templates"),
-        join(fake, "scripts"),
-      ]);
-      writeFileSync(
-        join(fake, "LICENSE"),
-        readFileSync(join(REPO_ROOT, "LICENSE")),
-      );
       writeTree(generateFiles("registry", {}, fake), fake);
       assert.deepStrictEqual(checkAgainstRepo(fake), []);
       writeFileSync(join(fake, "plugins/claude-code/STRAY.txt"), "stray");

@@ -4,6 +4,12 @@ This changelog records notable changes to the native `Pi` extension, the standal
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the repository's [versioning scheme](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/AGENTS.md#versioning-scheme-three-packages-one-core).
 
+## [Unreleased]
+
+### Changed
+
+- DeepSeek Harness bundle: its package and in-harness page now document installation, credentials, workspace, configuration, verification, timeouts, troubleshooting, charges, cache, privacy and the evidence behind each claim, with commands pinned to the launched server version. The MCP package page carries the same bundle instructions, and the compatibility record separates local, pre-bootstrap, public by-name and credentialed evidence.
+
 ## [pi-0.25.0] - 2026-11-22
 
 ### Fixed
