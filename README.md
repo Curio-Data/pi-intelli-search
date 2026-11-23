@@ -13,7 +13,7 @@
 [![pi compatible](https://img.shields.io/badge/pi-%E2%89%A50.86.0-blueviolet)](https://github.com/earendil-works/pi)
 <!-- /packages -->
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1246%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1248%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -391,7 +391,7 @@ The installed `intelli-search` skill covers configuration and unattended tool ap
 <!-- packages:mcp -->
 #### DeepSeek Harness
 
-[_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) ships a Model Context Protocol client bridge, so this route is a generated configuration bundle, `@curio-data/dsh-intelli-search`, rather than an extension: one inserted bridge row starts the pinned `@curio-data/mcp-intelli-search` package through `npx` with `--host dsh`, and one registrar registers the `intelli-search` skill with the harness. Neither carries pipeline code. The harness names the server `intelli`, so the tools are `mcp__intelli__intelli_search`, `mcp__intelli__intelli_extract`, `mcp__intelli__intelli_collate` and `mcp__intelli__intelli_research`. The bundle's own [package page](https://www.npmjs.com/package/@curio-data/dsh-intelli-search) carries the same instructions with the exact server version filled in.
+[_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) ships a Model Context Protocol client bridge, so this route is a generated configuration bundle, `@curio-data/dsh-intelli-search`, rather than an extension: one inserted bridge row starts the pinned `@curio-data/mcp-intelli-search` package through `npx` with `--host dsh`, and one registrar registers the `intelli-search` skill with the harness. Neither carries pipeline code. The harness names the server `intelli`, so the tools are `mcp__intelli__intelli_search`, `mcp__intelli__intelli_extract`, `mcp__intelli__intelli_collate` and `mcp__intelli__intelli_research`. The bundle's own [package page](https://www.npmjs.com/package/@curio-data/dsh-intelli-search) is generated from these instructions with the exact server version filled in.
 
 <!-- /packages -->
 <!-- packages:dsh hidden
@@ -423,7 +423,7 @@ Start with a quick search; use research for comparisons, detailed analysis or a 
 
 -->
 <!-- packages:mcp,dsh -->
-- `dsh` within the bundle's declared range, `>=0.2.2-rc.1 <0.3.0`. The range is a compatibility declaration; the evidence section names the versions tested.
+- `dsh` within the bundle's declared range, `>=0.2.2-rc.1 <0.3.0`. The range is a compatibility declaration; Evidence and Limits names the versions tested.
 - Node.js 24.9 or later, the harness's own floor, with `node` and `npx` on `PATH`. The bridge row starts the server through `npx`.
 - `pnpm` on `PATH`, or the plugin manager's `pnpmCommand` setting, to install and remove the bundle.
 - Network access on the first start, when `npx` downloads the MCP server package. Later starts reuse the `npx` cache.
@@ -467,7 +467,16 @@ dsh --profile "$profile"
 
 -->
 <!-- packages:mcp,dsh -->
-The plugin manager records the installed bundle version exactly, and each bundle version launches one exact MCP server version, so neither changes until the bundle is updated. To update, use the bundle's **Versions** and **Update** controls on the Web **Plugins** page, then restart the profile. That route follows the harness's own documentation and has not been exercised in this project's checks; no command-line update route has been verified. A row override that sets `cwd` (see the workspace instructions) keeps launching the server version written in it until the override is edited.
+Each bundle version launches one exact MCP server version, so the server changes only when the bundle is updated. For a bundle installed by name, the Web **Plugins** page documents **Versions** and **Update** controls; restart the profile after updating. That route follows the harness's documentation and has not been exercised in this project's checks. From the command line, remove the bundle and add it again, then restart the profile:
+
+```bash
+profile=web
+dsh plugin --profile "$profile" remove @curio-data/dsh-intelli-search
+dsh plugin --profile "$profile" add @curio-data/dsh-intelli-search
+dsh --profile "$profile"
+```
+
+Removal and reinstallation are verified; an update between two published versions by either route is not. A row override that sets `cwd` (see Workspace) keeps launching the server version written in it until the override is edited.
 
 Restart the profile from the project directory after installing, updating or removing the bundle, after changing a key in an environment layer and after editing a configuration file the server has already loaded. The harness composes bundle rows and reads environment files at launch, and the server keeps a loaded configuration for its lifetime.
 
@@ -493,7 +502,7 @@ The dump no longer lists the rows `mcp-intelli-search` and `intelli-search-skill
 <!-- packages:mcp,dsh -->
 The server reads its OpenRouter key from the `OPENROUTER_API_KEY` environment variable or from a credential file. A nonempty environment value takes precedence over the file. Without either, the four tools still start and each call returns an actionable `CONFIGURATION` error. A key saved on the harness model-settings page does not reach this server: the harness resolves that credential through a service a child process cannot read.
 
-**Environment Route.** The bridge row forwards `OPENROUTER_API_KEY` from the harness environment layer, which takes the first value it finds in the environment that launches the harness, then a `.env` file in the launch directory, then `$DSH_HOME/.env`. The harness reads these once at launch, so restart the profile after changing a key. An empty value counts as absent. To keep the key in the harness-home file, create the file with user-only permissions before entering the key:
+**Environment Route.** The bridge row forwards `OPENROUTER_API_KEY` from the harness environment layer, which takes the first value it finds in the environment that launches the harness, then a `.env` file in the launch directory, then `$DSH_HOME/.env`. The harness reads these once at launch, so restart the profile after changing a key. The server treats an empty value as absent, so the row loads before a key is supplied. To keep the key in the harness-home file, create the file with user-only permissions before entering the key:
 
 ```bash
 (umask 077; touch "${DSH_HOME:-$HOME/.dsh}/.env") && chmod 600 "${DSH_HOME:-$HOME/.dsh}/.env"
@@ -729,7 +738,8 @@ The [standalone server's troubleshooting reference](packages/mcp/README.md#timeo
 │   ├── extractions/     # One extraction per page
 │   └── sources/         # Full fetched page content
 ├── 2026-11-23-batch-node-lts-releases-9c1e04/
-│   └── manifest.json    # Batch queries, outcomes and member folders
+│   ├── manifest.json    # Batch queries, outcomes and member folders
+│   └── batch-meta.json  # Local batch telemetry, when enabled
 └── .index.json          # Index of cached reports
 ```
 
@@ -737,7 +747,7 @@ A completed repeat of the same query on the same UTC date archives the earlier f
 
 **Privacy.** The cache keeps full copies of fetched pages, the query and each report in the project directory, readable by anything that can read the project; exclude `.search/` from version control when its content must not be shared. Queries and page content go to OpenRouter and the selected model providers. The server fetches pages from the machine it runs on, and fetched addresses are not restricted to public ones. See [Filesystem and Privacy Boundaries](packages/mcp/README.md#filesystem-and-privacy-boundaries).
 
-**Telemetry and Cache.** `meta.json` is local telemetry, which the server never transmits: it records the query, per-stage outcomes and timings and, for batch entries, the fetched URLs. Setting `"disableTelemetry": true` in `tuning` stops `meta.json` and `batch-meta.json`; reports, extractions, sources, batch manifests and the index are still written, because they are the cache itself.
+**Telemetry.** `meta.json` is local telemetry, which the server never transmits: it records the query, per-stage outcomes and timings and, for batch entries, the fetched URLs. Setting `"disableTelemetry": true` in `tuning` stops `meta.json` and `batch-meta.json`; reports, extractions, sources, batch manifests and the index are still written, because they are the cache itself.
 
 -->
 <!-- packages:mcp -->
@@ -1801,7 +1811,7 @@ To suppress both telemetry files in the MCP server, set `"disableTelemetry": tru
 - Full research through local-tarball plugins and registry-pin installation checks are separate evidence classes, and the compatibility matrix records these checks for the standalone MCP package and the Claude Code and Codex plugins. Publication alone does not establish host compatibility.
 -->
 <!-- packages:mcp -->
-- For DeepSeek Harness, the matrix keeps three classes apart: credential-free local-bundle checks on dsh `0.2.2-rc.1` and `0.2.2-rc.5`; installation by name of the public 0.25.0 packages, with cold discovery, removal and reinstallation, on `0.2.2-rc.1` without an inference call; and credentialed local-bundle search and research on `0.2.2-rc.1` only. See [DeepSeek Harness Evidence and Limits](docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits).
+- For DeepSeek Harness, the matrix keeps four classes apart: credential-free local-bundle checks on dsh `0.2.2-rc.1` and `0.2.2-rc.5`; the pre-bootstrap launcher check, in which a packed bundle launched the public server on `0.2.2-rc.1`; installation by name of the public 0.25.0 packages, with cold discovery, removal and reinstallation, on `0.2.2-rc.1` without an inference call; and credentialed local-bundle search and research on `0.2.2-rc.1` only. See [DeepSeek Harness Evidence and Limits](docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits).
 <!-- /packages -->
 <!-- packages:mcp -->
 
@@ -1829,7 +1839,7 @@ pi install /path/to/pi-intelli-search
 
 **Host Plugins:** thin plugin bundles for [_Claude Code_](https://code.claude.com/docs/en/plugins) and [_Codex_](https://developers.openai.com/codex/plugins) live in `plugins/` at the repository root, with repository marketplace catalogues at `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`. The publishable [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle `plugins/dsh` is designed for npm installation by package name instead of a marketplace. The three bundles are generated from the canonical root `README.md`, shared guidance in `guidance/`, host metadata in `scripts/dsh-host-metadata.mjs`, the version in `packages/mcp/package.json` and the remaining dsh registrar and icon templates. Run `npm run generate:readmes` before `npm run generate:plugins` after canonical documentation or guidance changes, then run both corresponding drift checks. Launchers pin the exact package version through `npx`. For unreleased changes, follow the tarball flow in the [script guide](scripts/README.md) and the tested full install flow in `test/e2e/12_plugin_bundles.sh`; `node scripts/generate-plugin-bundles.mjs --help` lists the arguments. Host setup, including each host's environment forwarding rules, is in the generated skills.
 
-**Package READMEs:** this file is the only hand-edited package README. `npm run generate:readmes` derives `packages/mcp/README.md` plus the root previews [`pi.README.md`](pi.README.md), [`mcp.README.md`](mcp.README.md) and [`dsh.README.md`](dsh.README.md), and `npm run check:readmes` fails on drift or on any derived link that does not resolve. The native package ships the same derivation, written over this file by its `prepublishOnly` hook. Untagged content goes to the native and MCP packages; dsh is opt-in and receives only blocks that name it. Wrap package-specific sections in `<!-- packages:pi -->`, `<!-- packages:mcp -->` or `<!-- packages:mcp,dsh -->` and `<!-- /packages -->`, repository-only sections in `<!-- packages:none -->`, and package-only framing in hidden blocks such as `<!-- packages:dsh hidden`. Dsh metadata tokens are confined to those hidden blocks. `scripts/generate-plugin-bundles.mjs` uses the same derivation entry point as the sole writer of `plugins/dsh/README.md`, making the preview and registry bundle byte-identical. Every dsh link is absolute, with operational documents pinned to the matching MCP tag and other repository targets following `main`; `node scripts/check-dsh-readme-links.mjs` validates candidate and tagged output. Each derived README regenerates its contents list and validates links against its own selected view. See [`scripts/generate-package-readmes.mjs`](scripts/generate-package-readmes.mjs).
+**Package READMEs:** this file is the only hand-edited package README. `npm run generate:readmes` derives `packages/mcp/README.md` plus the root previews [`pi.README.md`](pi.README.md), [`mcp.README.md`](mcp.README.md) and [`dsh.README.md`](dsh.README.md), and `npm run check:readmes` fails on drift or on any derived link that does not resolve. The native package ships the same derivation, written over this file by its `prepublishOnly` hook. Untagged content goes to the native and MCP packages; dsh is opt-in and receives only blocks that name it. Wrap package-specific sections in `<!-- packages:pi -->`, `<!-- packages:mcp -->` or `<!-- packages:mcp,dsh -->` and `<!-- /packages -->`, repository-only sections in `<!-- packages:none -->`, and package-only framing in hidden blocks such as `<!-- packages:dsh hidden`. DeepSeek Harness metadata tokens are confined to those hidden blocks. `scripts/generate-plugin-bundles.mjs` uses the same derivation entry point as the sole writer of `plugins/dsh/README.md`, making the preview and registry bundle byte-identical. Every dsh link is absolute, with operational documents pinned to the matching MCP tag and other repository targets following `main`; `node scripts/check-dsh-readme-links.mjs` validates candidate and tagged output. Each derived README regenerates its contents list and validates links against its own selected view. See [`scripts/generate-package-readmes.mjs`](scripts/generate-package-readmes.mjs).
 <!-- /packages -->
 
 ## Documentation

@@ -226,7 +226,8 @@ ${args}
 
 /**
  * Computes every generated file as a map of repo-relative path to content.
- * Pure: performs no I/O beyond reading guidance/, package metadata, the\n * canonical README.md (through derivePackageReadme) and the dsh templates.
+ * Pure: performs no I/O beyond reading guidance/, package metadata, the
+ * canonical README.md (through derivePackageReadme) and the dsh templates.
  */
 export function generateFiles(mode = "registry", options = {}, root = REPO_ROOT) {
   const mcpPkg = readMcpPackage(root);

@@ -8,8 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Changed
 
-- MCP server and DeepSeek Harness bundle: the root README is now the canonical source for complete DeepSeek Harness installation, credential, configuration, lifecycle, troubleshooting, cache, privacy and evidence guidance. The MCP package page includes the actual bundle installation command, and the compatibility record separates local, pre-bootstrap, public by-name and credentialed evidence.
-- DeepSeek Harness bundle: its package and in-harness README now derive through the same generator as the other package pages, with exact-version commands and absolute links. The independent README template is retired, and deterministic checks cover content, metadata, links, both generation modes and executable examples.
+- DeepSeek Harness bundle: its package and in-harness page now document installation, credentials, workspace, configuration, verification, timeouts, troubleshooting, charges, cache, privacy and the evidence behind each claim, with commands pinned to the launched server version. The MCP package page carries the same bundle instructions, and the compatibility record separates local, pre-bootstrap, public by-name and credentialed evidence.
 
 ## [pi-0.25.0] - 2026-11-22
 

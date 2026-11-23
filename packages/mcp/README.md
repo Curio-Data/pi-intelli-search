@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@curio-data/mcp-intelli-search?color=blue)](https://www.npmjs.com/package/@curio-data/mcp-intelli-search)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-blue)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Curio-Data/pi-intelli-search/blob/main/LICENSE)
-![tests](https://img.shields.io/badge/test%3Aall-1246%20passing-brightgreen)
+![tests](https://img.shields.io/badge/test%3Aall-1248%20passing-brightgreen)
 
 Intelligent web research for coding agents: search, extract, collate, and cache grounded web context in one tool call.
 
@@ -255,11 +255,11 @@ The installed `intelli-search` skill covers configuration and unattended tool ap
 
 #### DeepSeek Harness
 
-[_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) ships a Model Context Protocol client bridge, so this route is a generated configuration bundle, `@curio-data/dsh-intelli-search`, rather than an extension: one inserted bridge row starts the pinned `@curio-data/mcp-intelli-search` package through `npx` with `--host dsh`, and one registrar registers the `intelli-search` skill with the harness. Neither carries pipeline code. The harness names the server `intelli`, so the tools are `mcp__intelli__intelli_search`, `mcp__intelli__intelli_extract`, `mcp__intelli__intelli_collate` and `mcp__intelli__intelli_research`. The bundle's own [package page](https://www.npmjs.com/package/@curio-data/dsh-intelli-search) carries the same instructions with the exact server version filled in.
+[_DeepSeek Harness_](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) ships a Model Context Protocol client bridge, so this route is a generated configuration bundle, `@curio-data/dsh-intelli-search`, rather than an extension: one inserted bridge row starts the pinned `@curio-data/mcp-intelli-search` package through `npx` with `--host dsh`, and one registrar registers the `intelli-search` skill with the harness. Neither carries pipeline code. The harness names the server `intelli`, so the tools are `mcp__intelli__intelli_search`, `mcp__intelli__intelli_extract`, `mcp__intelli__intelli_collate` and `mcp__intelli__intelli_research`. The bundle's own [package page](https://www.npmjs.com/package/@curio-data/dsh-intelli-search) is generated from these instructions with the exact server version filled in.
 
 ##### Bundle Prerequisites
 
-- `dsh` within the bundle's declared range, `>=0.2.2-rc.1 <0.3.0`. The range is a compatibility declaration; the evidence section names the versions tested.
+- `dsh` within the bundle's declared range, `>=0.2.2-rc.1 <0.3.0`. The range is a compatibility declaration; Evidence and Limits names the versions tested.
 - Node.js 24.9 or later, the harness's own floor, with `node` and `npx` on `PATH`. The bridge row starts the server through `npx`.
 - `pnpm` on `PATH`, or the plugin manager's `pnpmCommand` setting, to install and remove the bundle.
 - Network access on the first start, when `npx` downloads the MCP server package. Later starts reuse the `npx` cache.
@@ -286,7 +286,16 @@ dsh --profile "$profile"
 
 ##### Upgrade, Restart and Remove the Bundle
 
-The plugin manager records the installed bundle version exactly, and each bundle version launches one exact MCP server version, so neither changes until the bundle is updated. To update, use the bundle's **Versions** and **Update** controls on the Web **Plugins** page, then restart the profile. That route follows the harness's own documentation and has not been exercised in this project's checks; no command-line update route has been verified. A row override that sets `cwd` (see the workspace instructions) keeps launching the server version written in it until the override is edited.
+Each bundle version launches one exact MCP server version, so the server changes only when the bundle is updated. For a bundle installed by name, the Web **Plugins** page documents **Versions** and **Update** controls; restart the profile after updating. That route follows the harness's documentation and has not been exercised in this project's checks. From the command line, remove the bundle and add it again, then restart the profile:
+
+```bash
+profile=web
+dsh plugin --profile "$profile" remove @curio-data/dsh-intelli-search
+dsh plugin --profile "$profile" add @curio-data/dsh-intelli-search
+dsh --profile "$profile"
+```
+
+Removal and reinstallation are verified; an update between two published versions by either route is not. A row override that sets `cwd` (see Workspace) keeps launching the server version written in it until the override is edited.
 
 Restart the profile from the project directory after installing, updating or removing the bundle, after changing a key in an environment layer and after editing a configuration file the server has already loaded. The harness composes bundle rows and reads environment files at launch, and the server keeps a loaded configuration for its lifetime.
 
@@ -304,7 +313,7 @@ The dump no longer lists the rows `mcp-intelli-search` and `intelli-search-skill
 
 The server reads its OpenRouter key from the `OPENROUTER_API_KEY` environment variable or from a credential file. A nonempty environment value takes precedence over the file. Without either, the four tools still start and each call returns an actionable `CONFIGURATION` error. A key saved on the harness model-settings page does not reach this server: the harness resolves that credential through a service a child process cannot read.
 
-**Environment Route.** The bridge row forwards `OPENROUTER_API_KEY` from the harness environment layer, which takes the first value it finds in the environment that launches the harness, then a `.env` file in the launch directory, then `$DSH_HOME/.env`. The harness reads these once at launch, so restart the profile after changing a key. An empty value counts as absent. To keep the key in the harness-home file, create the file with user-only permissions before entering the key:
+**Environment Route.** The bridge row forwards `OPENROUTER_API_KEY` from the harness environment layer, which takes the first value it finds in the environment that launches the harness, then a `.env` file in the launch directory, then `$DSH_HOME/.env`. The harness reads these once at launch, so restart the profile after changing a key. The server treats an empty value as absent, so the row loads before a key is supplied. To keep the key in the harness-home file, create the file with user-only permissions before entering the key:
 
 ```bash
 (umask 077; touch "${DSH_HOME:-$HOME/.dsh}/.env") && chmod 600 "${DSH_HOME:-$HOME/.dsh}/.env"
@@ -882,7 +891,7 @@ To suppress both telemetry files in the MCP server, set `"disableTelemetry": tru
 - The runtime must satisfy the Node.js `engines` range in the [standalone manifest](https://github.com/Curio-Data/pi-intelli-search/blob/main/packages/mcp/package.json). The server uses the [`@modelcontextprotocol/server` SDK](https://github.com/modelcontextprotocol/typescript-sdk), with its dependency range declared in that manifest and the verified release pinned in [package-lock.json](https://github.com/Curio-Data/pi-intelli-search/blob/main/package-lock.json).
 - Standalone fetch assets are verified on _Linux_ x86-64 only; _macOS_ and _Windows_ are not verified.
 - Full research through local-tarball plugins and registry-pin installation checks are separate evidence classes, and the compatibility matrix records these checks for the standalone MCP package and the Claude Code and Codex plugins. Publication alone does not establish host compatibility.
-- For DeepSeek Harness, the matrix keeps three classes apart: credential-free local-bundle checks on dsh `0.2.2-rc.1` and `0.2.2-rc.5`; installation by name of the public 0.25.0 packages, with cold discovery, removal and reinstallation, on `0.2.2-rc.1` without an inference call; and credentialed local-bundle search and research on `0.2.2-rc.1` only. See [DeepSeek Harness Evidence and Limits](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits).
+- For DeepSeek Harness, the matrix keeps four classes apart: credential-free local-bundle checks on dsh `0.2.2-rc.1` and `0.2.2-rc.5`; the pre-bootstrap launcher check, in which a packed bundle launched the public server on `0.2.2-rc.1`; installation by name of the public 0.25.0 packages, with cold discovery, removal and reinstallation, on `0.2.2-rc.1` without an inference call; and credentialed local-bundle search and research on `0.2.2-rc.1` only. See [DeepSeek Harness Evidence and Limits](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md#deepseek-harness-evidence-and-limits).
 
 For the standalone MCP server and host plugins, including exact tested versions of _Claude Code_, _Codex_, DeepSeek Harness, Node.js and the MCP SDK, see [docs/COMPATIBILITY.md](https://github.com/Curio-Data/pi-intelli-search/blob/main/docs/COMPATIBILITY.md).
 

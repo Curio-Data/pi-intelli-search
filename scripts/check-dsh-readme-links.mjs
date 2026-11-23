@@ -38,6 +38,7 @@ import {
   anchorsOf,
   expectedDshRef,
   isGenerated,
+  isSameRepoUrl,
   parseRepoUrl,
   releaseRef,
   selectLines,
@@ -94,6 +95,7 @@ export function checkDshReadmeLinks({ text, version, release, main }) {
   const problems = [];
   if (!isGenerated(text)) problems.push("README does not carry the generated-file header");
   if (text.includes("{{")) problems.push("unreplaced {{ token");
+  if (text.includes("}}")) problems.push("unreplaced }} token");
   const selfAnchors = anchorsOf(text);
   const cache = new Map();
   const anchorsAt = (reader, path) => {
@@ -111,7 +113,10 @@ export function checkDshReadmeLinks({ text, version, release, main }) {
       continue;
     }
     const target = parseRepoUrl(url);
-    if (!target) continue;
+    if (!target) {
+      if (isSameRepoUrl(url)) problems.push(`unsupported repository URL ${url}`);
+      continue;
+    }
     const ref = expectedDshRef(target.path, version);
     if (target.ref !== ref) {
       problems.push(`${url}: ${target.path} must use ref ${ref}, not ${target.ref}`);

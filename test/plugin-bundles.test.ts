@@ -67,9 +67,8 @@ const DSH_PATHS = ALL_PATHS.filter((path) => path.startsWith("plugins/dsh/"));
 // working tree: the canonical README.md, guidance, package metadata, the dsh
 // templates and each file a derived dsh link must resolve. The generated
 // trees come along as committed, so tests can rewrite or plant files there.
-// The dsh page also links packages/mcp/LICENSE and NOTICE, which are
-// untracked build copies (scripts/build-mcp.mjs); they are mirrored when a
-// build has left them, so the scratch root validates as the real one does.
+// The dsh page links only tracked legal files. These build copies are
+// mirrored defensively for parity with a built tree; no derivation needs them.
 const BUILD_COPIES = ["packages/mcp/LICENSE", "packages/mcp/NOTICE"];
 
 function copyTrackedTree(prefix: string) {

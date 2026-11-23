@@ -375,7 +375,7 @@ while IFS= read -r captured; do
     bad "dummy value leaked into $captured"
     LEAK=1
   fi
-done < <(fd -e out -e err -e log . "$E2E_ROOT" -E "$LOG_FILE")
+done < <(fd -e out -e err -e log -e json . "$E2E_ROOT" -E "$LOG_FILE")
 if rg -qF "$DUMMY_KEY" "$LOG_FILE" 2>/dev/null || rg -qF "$DUMMY_ENV" "$LOG_FILE" 2>/dev/null; then
   bad "dummy value leaked into the scenario log"
   LEAK=1

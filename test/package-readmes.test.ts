@@ -32,7 +32,7 @@ import { checkDshReadmeLinks, runCheck } from "../scripts/check-dsh-readme-links
 // @ts-expect-error plain Node module without declarations
 import * as dshMeta from "../scripts/dsh-host-metadata.mjs";
 // @ts-expect-error plain Node module without declarations
-import { generateToc } from "../scripts/generate-toc.mjs";
+import { generateToc, scanHeadings } from "../scripts/generate-toc.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BLOB = "https://github.com/Curio-Data/pi-intelli-search/blob/main/";
@@ -170,6 +170,28 @@ describe("root README validation", () => {
     const toc = generateToc("<!-- packages:mcp hidden\n## Hidden\n-->\n<!-- TOC:START -->\n<!-- TOC:END -->\n## Shown\n") as string;
     assert.match(toc, /- \[Shown\]\(#shown\)/);
     assert.doesNotMatch(toc, /Hidden\]/);
+  });
+
+  it("ignores headings and aliases inside backtick or tilde fences and HTML comments", () => {
+    const source = [
+      "~~~markdown",
+      "# Phantom Tilde",
+      '<a id="phantom-tilde"></a>',
+      "~~~",
+      "```markdown",
+      "# Phantom Backtick",
+      '<a id="phantom-backtick"></a>',
+      "```",
+      "<!--",
+      "# Phantom Comment",
+      '<a id="phantom-comment"></a>',
+      "-->",
+      '<!-- <a id="phantom-inline-comment"></a> -->',
+      "## Real",
+      '<a id="real-alias"></a>',
+    ].join("\n");
+    assert.deepStrictEqual(scanHeadings(source).map((heading) => heading.anchor), ["real"]);
+    assert.deepStrictEqual([...anchorsOf(source)].sort(), ["real", "real-alias"]);
   });
 });
 
@@ -425,6 +447,7 @@ describe("dsh audience selection", () => {
     ["a hidden MCP block", "<!-- packages:mcp hidden\n{{MCP_VERSION}}\n-->"],
     ["a hidden block shared with MCP", "<!-- packages:mcp,dsh hidden\n{{MCP_VERSION}}\n-->"],
     ["a code fence outside dsh blocks", "```bash\necho {{MCP_VERSION}}\n```"],
+    ["a closing token outside dsh blocks", "MCP_VERSION}}"],
   ] as const) {
     it(`rejects a token in ${name}`, () => {
       for (const target of ["root", "pi", "mcp", "dsh"]) {
@@ -513,6 +536,8 @@ describe("dsh derivation", () => {
     assert.throws(() => derive(twice, "dsh", { metadata: META }), /appears 2 times/);
     const unknown = derive("<!-- packages:dsh hidden\n# T\n{{DSH_VERSION}}\n-->\n", "dsh", { metadata: META });
     assert.throws(() => validateDerived(unknown, "dsh", new Set(), REPO_ROOT, { metadata: META }), /unreplaced \{\{ token/);
+    const closing = derive("<!-- packages:dsh hidden\n# T\nMCP_VERSION}}\n-->", "dsh", { metadata: META });
+    assert.throws(() => validateDerived(closing, "dsh", new Set(), REPO_ROOT, { metadata: META }), /unreplaced \}\} token/);
   });
 });
 
@@ -563,6 +588,7 @@ describe("dsh derivation entry point and validation", () => {
               `[b](${RELEASE}docs/GUIDE.md)`,
               `[c](https://github.com/Curio-Data/pi-intelli-search/blob/mcp-v0.25.0/docs/GUIDE.md)`,
               `[d](#own) [e](docs/GUIDE.md) [f](${BLOB}docs/MISSING.md) [g](${RELEASE}README.md#lost)`,
+              "[h](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md?plain=1#kept)",
             ].join("\n"),
             "dsh",
             root,
@@ -578,6 +604,7 @@ describe("dsh derivation entry point and validation", () => {
               "relative link docs/GUIDE\\.md",
               "missing file docs/MISSING\\.md",
               "missing root anchor #lost",
+              "unsupported repository URL https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md\\?plain=1#kept",
             ].join("; "),
           ),
       );
@@ -685,14 +712,16 @@ describe("dsh README link checker", () => {
   it("reports each class of unresolved or mis-routed link", () => {
     const bad = [
       "## Own",
-      "[a](#own) [b](docs/GUIDE.md) {{MCP_VERSION}}",
+      "[a](#own) [b](docs/GUIDE.md) {{MCP_VERSION}} MCP_VERSION}}",
       `[c](${SELF}gone) [d](${BLOB}docs/MISSING.md) [e](${BLOB}docs/GUIDE.md#lost)`,
       `[f](${BLOB}CHANGELOG.md#new-entry) [g](${RELEASE}CHANGELOG.md#unreleased) [h](${BLOB}README.md#kept)`,
+      "[i](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md?plain=1#kept)",
     ].join("\n");
     const { problems } = checkDshReadmeLinks({ text: bad, version: VERSION, release, main });
     const expected = [
       /generated-file header/,
       /unreplaced \{\{ token/,
+      /unreplaced \}\} token/,
       /same-page anchor #own is not absolute/,
       /relative link docs\/GUIDE\.md/,
       /missing self anchor #gone/,
@@ -702,6 +731,7 @@ describe("dsh README link checker", () => {
       /missing anchor #new-entry in CHANGELOG\.md at main/,
       /CHANGELOG\.md must use ref main, not mcp-v9\.8\.7/,
       /README\.md must use ref mcp-v9\.8\.7, not main/,
+      /unsupported repository URL https:\/\/github\.com\/Curio-Data\/pi-intelli-search\/blob\/main\/README\.md\?plain=1#kept/,
     ];
     assert.strictEqual(problems.length, expected.length, problems.join("\n"));
     expected.forEach((pattern, i) => assert.match(problems[i], pattern));
@@ -861,7 +891,8 @@ describe("canonical dsh operator content", () => {
     assert.match(install, /```bash\nprofile=web\ndsh --profile "\$profile"\n```/);
     const life = dshSection(dsh, "Upgrade, Restart and Removal");
     assert.match(life, /\*\*Versions\*\* and \*\*Update\*\*/);
-    assert.match(life, /no command-line update route has been verified/);
+    assert.match(life, /Removal and reinstallation are verified; an update between two published versions by either route is not/);
+    assert.match(life, /dsh plugin --profile "\$profile" remove @curio-data\/dsh-intelli-search\ndsh plugin --profile "\$profile" add @curio-data\/dsh-intelli-search/);
     assert.match(life, /Restart the profile from the project directory after installing, updating or removing the bundle/);
     assert.match(life, /dsh plugin --profile "\$profile" remove @curio-data\/dsh-intelli-search\ndsh --profile "\$profile" --dump-config/);
     assert.match(life, /Removal deletes no data/);
@@ -1033,7 +1064,8 @@ describe("canonical dsh operator content", () => {
     assert.match(section, /--host dsh --check-config/);
     assert.match(section, /\*\*Public installation by name:\*\*/);
     assert.doesNotMatch(mcp, /No registry-pin installation has been verified|published separately from this server|Check the \[repository installation guide\]/);
-    assert.match(mcp, /For DeepSeek Harness, the matrix keeps three classes apart/);
+    assert.match(mcp, /For DeepSeek Harness, the matrix keeps four classes apart/);
+    assert.match(mcp, /pre-bootstrap launcher check/);
     assert.doesNotMatch(source, /blob\/mcp-v\d/, "no hand-frozen release links in the canonical source");
     assert.match(rootView, /\[DeepSeek Harness\]\(#deepseek-harness\) and any \[Generic MCP Host\]/);
     assert.ok(pi.includes("[DeepSeek Harness](https://github.com/Curio-Data/pi-intelli-search/blob/main/README.md#deepseek-harness)"));

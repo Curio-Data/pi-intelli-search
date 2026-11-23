@@ -115,6 +115,11 @@ export const blobBase = (ref) => `${REPO_URL}/blob/${ref}/`;
 export const rawBase = (ref) => `https://raw.githubusercontent.com/${REPO_SLUG}/${ref}/`;
 
 /** Split an absolute link into this repository's blob/raw form, or null. */
+export function isSameRepoUrl(url) {
+  return /^https:\/\/(?:www\.)?github\.com\/Curio-Data\/pi-intelli-search\//.test(url) ||
+    /^https:\/\/raw\.githubusercontent\.com\/Curio-Data\/pi-intelli-search\//.test(url);
+}
+
 export function parseRepoUrl(url) {
   const blob = url.match(/^https:\/\/github\.com\/Curio-Data\/pi-intelli-search\/(blob|tree)\/([^/#?]+)\/([^#?]*)(?:#(.*))?$/);
   if (blob) return { kind: blob[1], ref: blob[2], path: blob[3], anchor: blob[4] };
@@ -169,7 +174,7 @@ export function selectRecords(markdown, target) {
       return target === "root" || block.targets.has(target);
     };
     const push = () => {
-      if (text.includes("{{") && !dshOnlyHidden(block)) {
+      if ((text.includes("{{") || text.includes("}}")) && !dshOnlyHidden(block)) {
         throw new Error(`line ${lineNo}: double-brace tokens are allowed only inside <!-- packages:dsh hidden blocks`);
       }
       if (text.includes(CONTENTS_TOKEN) && text !== CONTENTS_TOKEN) {
@@ -252,9 +257,7 @@ function tidy(lines) {
 }
 
 export function anchorsOf(markdown) {
-  const anchors = new Set(scanHeadings(markdown).map((h) => h.anchor));
-  for (const match of markdown.matchAll(ID_ANCHOR)) anchors.add(match[1]);
-  return anchors;
+  return new Set(anchorIndex(markdown.split(/\r?\n/)).map((entry) => entry.anchor));
 }
 
 // Line-indexed anchors: { index, anchor, kind } for every heading and every
@@ -264,18 +267,16 @@ export function anchorIndex(lines) {
   const slug = createSlugger();
   const headings = [];
   const ids = [];
-  let fenceLength = 0;
+  let fence = null;
   let inToc = false;
   let inComment = false;
   lines.forEach((line, index) => {
-    for (const match of line.matchAll(ID_ANCHOR)) ids.push({ index, anchor: match[1], kind: "id" });
     if (inComment) {
       if (line.includes("-->")) inComment = false;
       return;
     }
-    if (fenceLength) {
-      const close = line.match(/^ {0,3}(`{3,})[ \t]*$/);
-      if (close && close[1].length >= fenceLength) fenceLength = 0;
+    if (fence) {
+      if (closesFence(line, fence)) fence = null;
       return;
     }
     if (line === TOC_START) {
@@ -287,15 +288,16 @@ export function anchorIndex(lines) {
       return;
     }
     if (inToc) return;
-    if (/^ {0,3}<!--/.test(line) && !line.includes("-->")) {
-      inComment = true;
+    if (/^ {0,3}<!--/.test(line)) {
+      if (!line.includes("-->")) inComment = true;
       return;
     }
-    const fence = line.match(/^ {0,3}(`{3,})([^`]*)$/);
-    if (fence) {
-      fenceLength = fence[1].length;
+    const fenceOpen = line.match(FENCE);
+    if (fenceOpen) {
+      fence = fenceOpen[1];
       return;
     }
+    for (const match of line.matchAll(ID_ANCHOR)) ids.push({ index, anchor: match[1], kind: "id" });
     const match = line.match(/^ {0,3}(#{1,6})[ \t]+(.+?)\s*$/);
     if (!match) return;
     const title = match[2].replace(/[ \t]+#+[ \t]*$/, "");
@@ -330,6 +332,7 @@ export function validateRoot(markdown, root = REPO_ROOT) {
   const anchors = anchorsOf(rendered);
   const problems = [];
   if (rendered.includes("{{")) problems.push("unreplaced {{ token");
+  if (rendered.includes("}}")) problems.push("unreplaced }} token");
   mapLinks(rendered, (url) => {
     if (isExternal(url)) return url;
     if (url.startsWith("#")) {
@@ -463,6 +466,7 @@ export function validateDerived(text, pkg, rootAnchors, root = REPO_ROOT, option
   const anchors = anchorsOf(text);
   const problems = [];
   if (text.includes("{{")) problems.push("unreplaced {{ token");
+  if (text.includes("}}")) problems.push("unreplaced }} token");
   if (pkg === "dsh") {
     const version = options.metadata?.mcpVersion ?? dshHostMetadata(root).mcpVersion;
     for (const url of allLinkTargets(text)) {
@@ -471,7 +475,10 @@ export function validateDerived(text, pkg, rootAnchors, root = REPO_ROOT, option
         continue;
       }
       const target = parseRepoUrl(url);
-      if (!target) continue;
+      if (!target) {
+        if (isSameRepoUrl(url)) problems.push(`unsupported repository URL ${url}`);
+        continue;
+      }
       const ref = expectedDshRef(target.path, version);
       if (target.ref !== ref) problems.push(`${target.path} must use ref ${ref}, not ${target.ref}`);
       if (target.kind === "blob" && target.path === DSH_SELF_PATH) {

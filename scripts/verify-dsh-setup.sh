@@ -382,7 +382,7 @@ while IFS= read -r captured; do
     bad "dummy value leaked into $captured"
     LEAK=1
   fi
-done < <(fd -e out -e err -e log . "$SCRATCH")
+done < <(fd -e out -e err -e log -e json . "$SCRATCH")
 if [[ "$LEAK" -eq 0 ]]; then
   ok "no dummy value in any captured output or log"
 fi
