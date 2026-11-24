@@ -24,7 +24,7 @@ npm run chart                                # same as the first command
 | `docs/images/downloads-light.svg` | Light-theme chart (committed) |
 | `docs/images/downloads-dark.svg` | Dark-theme chart (committed) |
 
-The script fetches the gap between the cache and the last complete day from the npm downloads application programming interface (API), so accumulated history does not require a query beyond the 18-month ceiling. The final three cached days are re-fetched on every run and overwrite their cached values, because npm computes a day's downloads shortly after UTC midnight and can revise recent days; without the trailing window a provisional value would be frozen by the cache. A weekly [_GitHub_](https://github.com) Action (`.github/workflows/downloads-chart.yml`) runs every Monday and commits only when the rendered output changes. Only complete Monday-to-Sunday weeks are drawn. For each package's launch week, the days before publication count as zero; every day from publication through Sunday must have a recorded count. Later weeks require all seven daily counts.
+The script fetches the gap between the cache and the last complete day from the npm downloads application programming interface (API), so accumulated history does not require a query beyond the 18-month ceiling. An online refresh also re-fetches the final three cached days, when the cache holds that many, and overwrites their cached values, because npm computes a day's downloads shortly after UTC midnight and can revise recent days; without the trailing window a provisional value would be frozen by the cache. A weekly [_GitHub_](https://github.com) Action (`.github/workflows/downloads-chart.yml`) runs every Monday and commits when the cached data or the rendered output changes. Only complete Monday-to-Sunday weeks are drawn. For each package's launch week, the days before publication count as zero; every day from publication through Sunday must have a recorded count. Later weeks require all seven daily counts.
 
 On 2026-10-13 the live API returned 612 downloads for the MCP package over 2026-10-05 through 2026-10-11. The operator reported approximately 300 on the `npmjs.com` package page; its reporting window and refresh basis were not captured, so these figures do not establish a difference in counting rules. The live service and committed caches also have distinct refresh times: caches can lag until the next refresh.
 
@@ -39,6 +39,8 @@ Every rough.js call passes an explicit integer `seed`. Unseeded calls redraw the
 Parses local `Pi` host-session logs and the research cache. It requires no API keys or network access and computes results from the selected local inputs.
 
 ### Usage
+
+The analyser writes its intermediate files, including aggregated sidecars and batch records, to the temporary directory. On a host with confidential caches, set `TMPDIR` to an existing private directory on the encrypted drive before running it. `SEARCH_ROOTS` selects the cache roots to include; the session-directory argument selects session logs, not cache roots.
 
 ```bash
 scripts/analyze-sessions.sh                    # default (~/.pi/agent/sessions)
@@ -59,19 +61,21 @@ PI_SESSIONS_DIR=/path scripts/analyze-sessions.sh
 | 1 | Total tool calls by name, across selected host sessions |
 | 2 | `intelli_*` breakdown and share of all tool calls |
 | 3 | Per-project `intelli_*` usage (rolls up nested subagent sessions) |
-| 4 | Adoption over time: monthly `intelli_*` and legacy `web_*` calls |
+| 4 | `intelli_*` and legacy `web_*` calls grouped by the month in the session file name (dated file names only) |
 | 5 | Follow-up host sessions (2+ `intelli_research` calls) |
 | 6 | Adoption rate: host sessions using any `intelli_*` tool |
-| 7 | Cache re-reads: tool calls referencing a `.search/` path |
-| 8 | Research-cache sizes per project (from `.index.json`) |
+| 7 | Tool calls mentioning a `.search/` path in their arguments, a proxy for cache consultation |
+| 8 | Searches listed per project index (from `.index.json`) |
 | 9 | Telemetry sidecars (`meta.json`): run outcomes, fetch and extraction totals, extraction-budget diagnostics, available extraction routes, degraded cache judges, fetch-variant winners, search retries and cache-suggest hits |
-| 10 | Batch records (`batch-meta.json`): mode, size, outcomes, durations, page overlap and expansion merge statistics |
+| 10 | Batch records (`batch-meta.json`): mode, size, outcomes, durations and expansion merge statistics; page overlap from the entry sidecars |
 
-Section 10 groups expansion records by merge outcome. For attempted merges it gives the number of recorded observations and mean duration (milliseconds) and input size (characters); output size (characters of the accepted summary) is given for completed merges only, because a rejected or failed merge records `0` there whatever its candidates contained. Skipped merges have their own outcome count; they and records with no merge data do not contribute timing or size observations. A recorded zero counts; a missing field does not. Page overlap counts one record per entry position, and a file found under two overlapping search roots is read once.
+Section 10 groups expansion records by merge outcome. For attempted merges it gives the number of recorded observations and mean duration (milliseconds) and input size (characters); output size (characters of the accepted summary) is given for completed merges only, because a rejected or failed merge records `0` there whatever its candidates contained. Skipped merges have their own outcome count; they and records with no merge data do not contribute timing or size observations. A recorded zero counts; a missing field does not.
+
+Section 10 excludes a `kind: "batch"` record whose `entries` is not a non-empty array from its batch-record statistics, because the duration and entry statistics read that array. If any are excluded, the `excluded batch records without entries` line gives their total. The whole-second batch and slowest-entry lines use zero for missing durations; they do not distinguish missing timing from a measured duration below one second. With no batch-record path or no parsed sidecar, the script omits the overlap section. When batch aggregation completes and parsed sidecars are available, it reports overlap from the entry sidecars that carry a batch identifier and fetch URLs, counting each entry position once per batch, independently of which batch records pass the filter. It says so when no entry sidecar carries fetch URLs; a numerical zero means that the measured entries shared no URL. A path found under two overlapping search roots is listed once.
 
 Section 9 adds `truncatedExtractions`, `budgetExhaustedFailures` and `otherFailures` by summing the corresponding extraction fields across parsed sidecars. These count extractions, not runs. `runsRecordingProvider` counts sidecars with `stages.extract.provider`; `providers` groups those sidecars by their recorded extraction route, not by individual model call. Cache-judge degradation counts sidecars whose `stages.cacheSuggest.degraded` is `true`. Synthesis truncation and synthesis routes are not aggregated.
 
-The script substitutes zero for absent numeric diagnostic fields. Older records, unreached stages and unavailable usage therefore contribute no recorded events, not proof that no failure or truncation occurred. Route labels are optional and cannot attribute every failed page to a provider. Interpret these totals over the selected sidecars, including numbered archives and failed-attempt sidecars under `attempts/`, rather than as an incidence rate for all research calls. Up to 0.22.0 a failed repeat overwrote the preserved report's sidecar; later versions keep both, so totals that span that change count different sets of records. See [Telemetry Sidecar](../docs/ARCHITECTURE.md#telemetry-sidecar) for field definitions.
+The script substitutes zero for absent numeric diagnostic fields. Older records, unreached stages and unavailable usage therefore contribute no recorded events, not proof that no failure or truncation occurred. Route labels are optional and cannot attribute every failed page to a provider. Interpret these totals over the selected sidecars, including numbered archives and failed-attempt sidecars under `attempts/`, rather than as an incidence rate for all research calls. In 0.22.0, a repeat that preserved an earlier successful report could replace that report's sidecar; from 0.23.0 the failed attempt's sidecar is stored separately under `attempts/`, so totals that span that change count different sets of records. See [Telemetry Sidecar](../docs/ARCHITECTURE.md#telemetry-sidecar) for field definitions.
 
 ### Environment
 
@@ -108,7 +112,7 @@ The generated dsh payload is `package.json` (manifest version 1, exact MCP versi
 
 This command generates bundles only; it does not build, pack, vendor-install or install them into a host.
 
-The tested full installation flow is [`test/e2e/12_plugin_bundles.sh`](../test/e2e/12_plugin_bundles.sh): build and pack the MCP workspace, generate local bundles, install the tarball into both vendor directories, then install the marketplaces into isolated host profiles and check connection and skill discovery. It uses dummy credentials, not a copied operator credential store. Set `TMPDIR` beneath the repository's gitignored `.tmp/` on encrypted hosts before running it. Credentialed research is a separate check in scenarios 13 and 14; see [Compatibility](../docs/COMPATIBILITY.md#host-plugins) for evidence classes and limits.
+The tested full installation flow is [`test/e2e/12_plugin_bundles.sh`](../test/e2e/12_plugin_bundles.sh): build and pack the MCP workspace, generate local bundles, install the tarball into the Claude Code and Codex vendor directories, then install the marketplaces into isolated host profiles and check connection and skill discovery. It uses dummy credentials, not a copied operator credential store. Set `TMPDIR` beneath the repository's gitignored `.tmp/` on encrypted hosts before running it. Credentialed research is a separate check in scenarios 13 and 14; see [Compatibility](../docs/COMPATIBILITY.md#host-plugins) for evidence classes and limits.
 
 The dsh host flow is [`test/e2e/18_dsh_plugin.sh`](../test/e2e/18_dsh_plugin.sh): it is credential-free, making no provider call, and verifies the local-tarball bundle on an isolated dsh host through installation, exact tool registration, skill loading, dummy credential delivery, both workspace guards, and removal plus reinstallation. It requires a host within the bundle's declared range and an isolated pnpm, prepared as described in [Environment and Isolation](../docs/plans/dsh-host/PLAN.md#environment-and-isolation), with `DSH_BIN` and the pnpm `PATH` exported before either suite runner starts; both runners fail the suite when it skips.
 
@@ -145,9 +149,13 @@ node scripts/spike-super-collation.mjs --out evidence/agents/<run>/run-1 \
 
 [`test/run-e2e-all.sh`](../test/run-e2e-all.sh) runs the live suite. Unless `E2E_SKIP_BUILD=1`, it builds both packages once. In the default parallel mode it starts every scenario at once, each with its own `TMPDIR` and log under `$TMPDIR/run-<timestamp>-<pid>/`, and the summary prints each scenario's outcome and the last lines of every failing log. Sequential mode runs one scenario at a time in the shared `TMPDIR` and streams its output to the terminal, writing no suite log. `TMPDIR` defaults to the repository's `.tmp/e2e/` when unset or empty; on an encrypted host, leave it unset or point it under the repository's `.tmp/`.
 
+Scenario 14 resets the dedicated Codex test profile on each run: it keeps the login and the lock file but removes the profile's other contents. Use a disposable test profile that holds nothing worth keeping.
+
+Choose one mode. Each invocation runs the suite and consumes provider quota.
+
 ```bash
 ./test/run-e2e-all.sh                          # parallel (default)
-E2E_RUN_MODE=sequential ./test/run-e2e-all.sh  # one at a time, E2E_GAP_SECONDS apart
+# E2E_RUN_MODE=sequential ./test/run-e2e-all.sh  # one at a time, E2E_GAP_SECONDS apart
 ```
 
 | Variable | Default | Effect |
@@ -168,14 +176,18 @@ Use sequential mode where an account meets OpenRouter's 402 in-flight spending l
 
 [`test/run-e2e-parallel.sh`](../test/run-e2e-parallel.sh) runs scenarios 01 to 12, 15 to 18 and 20 with tracing, for investigating what limits or breaks live runs. Run `npm run build:all` first. Each scenario gets an isolated `HOME`, XDG directories, npm cache and trace directory under `.tmp/e2e-evidence/<run>/`, and the run records the key's account state (limit, usage, free-tier flag) at start and end without the key itself.
 
+Choose one mode. Each invocation runs the suite and consumes provider quota.
+
 ```bash
 npm run build:all
 ./test/run-e2e-parallel.sh
-E2E_RUN_MODE=sequential ./test/run-e2e-parallel.sh
+# E2E_RUN_MODE=sequential ./test/run-e2e-parallel.sh
 node test/e2e/analyze-evidence.mjs .tmp/e2e-evidence/<run>
 ```
 
-A harness-only `Pi` extension (`test/e2e/trace-extension.mjs`) records each extension model call by stage, with its HTTP status, selected rate-limit headers, stop reason and latency, and each agent-loop response separately. A global fetch tracer (`test/e2e/trace-fetch.mjs`) covers the standalone MCP transport; native `pi-ai` calls do not pass through global `fetch`. The analyser writes `analysis.json` into the run directory with status counts, stop reasons, retry notices and research arguments, and copies no prompts, completions or credentials. It reads every `.jsonl` file under each scenario's `pi-traces/` directory, including the per-recipe subdirectories that scenario 10 writes.
+Pass the run directory printed by the chosen invocation to `test/e2e/analyze-evidence.mjs`.
+
+A harness-only `Pi` extension (`test/e2e/trace-extension.mjs`) records each extension model call by stage, with its HTTP status, selected rate-limit headers, stop reason and latency, and each agent-loop response separately. A global fetch tracer (`test/e2e/trace-fetch.mjs`) covers the standalone MCP transport. Use the extension trace for native model calls: absence from the global fetch trace does not establish that a native call did not occur. The analyser writes `analysis.json` into the run directory. It does not export whole model conversations. It retains status counts, stop reasons, research arguments (including queries and extraction prompts) and selected progress and error text. Inspect the derived file as well as the raw traces before promoting either. It reads every `.jsonl` file under each scenario's `pi-traces/` directory, including the per-recipe subdirectories that scenario 10 writes.
 
 On native paths `pi-ai` reports a response status only after a request succeeds, so a 429 or 402 appears as an error stop reason, not in the status counts. Read both before concluding that no rate limit occurred. Promote any run cited as evidence from `.tmp/` into `evidence/` first. Inspect the files before copying them: raw `pi-traces/` files hold conversation and tool-result content, and an interrupted scenario can leave a test profile holding an API key under its temporary directory. Exclude credential files from the copy, and record which files were retained so that a citation does not imply the whole run directory was kept.
 
@@ -206,4 +218,4 @@ The server sends routing and skill-loading guidance in its MCP `instructions` fi
 
 ## Codex Credential Recovery
 
-[`test/e2e/14_codex_plugin.sh`](../test/e2e/14_codex_plugin.sh) installs the generated local-tarball Codex plugin into a dedicated profile. Its first real session has no configuration, workspace or credential exports and must reach the search tool's missing-credential guidance. The script then runs the vendored `setup` command with the OpenRouter key on standard input, unsets those variables and completes research through a second real session launched with `codex exec --cd` from a different directory and a non-default `XDG_CONFIG_HOME`. It also checks that the cache lands in the selected working root and that the recorded modification time of the operator's Codex login file is unchanged.
+[`test/e2e/14_codex_plugin.sh`](../test/e2e/14_codex_plugin.sh) installs the generated local-tarball Codex plugin into a dedicated profile. The scenario resets that profile first, as [Live E2E Runs](#live-e2e-runs) describes. Its first real session has no configuration, workspace or credential exports and must reach the search tool's missing-credential guidance. The script then runs the vendored `setup` command with the OpenRouter key on standard input, unsets those variables and completes research through a second real session launched with `codex exec --cd` from a different directory and a non-default `XDG_CONFIG_HOME`. It also checks that the cache lands in the selected working root and that the recorded modification time of the operator's Codex login file is unchanged.

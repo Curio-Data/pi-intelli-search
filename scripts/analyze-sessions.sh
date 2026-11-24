@@ -344,16 +344,26 @@ if [ -z "$batch_files" ]; then
 else
   tmp_batch=$(mktemp)
   trap 'rm -f "$SESSION_FILES" "$TOOLCALLS_CACHE" "$FOLLOW_TMP" "$IDX_TMP" "$PROJ_TMP" "${tmp_meta:-}" "$tmp_batch"' EXIT
+  # A batch-shaped record without a non-empty entries array carries no
+  # per-entry data; the duration and entry statistics below index into it.
+  excluded=0
   while IFS= read -r b; do
     [ -z "$b" ] && continue
     if ! jq -e 'select(.kind == "batch")' "$b" >/dev/null 2>&1; then
       echo "  (skip malformed batch record: $b)"
       continue
     fi
+    if ! jq -e 'select((.entries | type) == "array" and (.entries | length) > 0)' "$b" >/dev/null 2>&1; then
+      excluded=$((excluded + 1))
+      continue
+    fi
     jq -c '.' "$b" >> "$tmp_batch"
   done <<< "$batch_files"
 
   echo "batch records: $(wc -l < "$tmp_batch" | tr -d ' ')"
+  if [ "$excluded" -gt 0 ]; then
+    echo "excluded batch records without entries: $excluded"
+  fi
   echo ""
   echo "by mode:"
   jq -rs 'group_by(.mode) | map("  \(.[0].mode): \(length)") | .[]' "$tmp_batch"
@@ -365,7 +375,7 @@ else
   jq -rs 'group_by(.size) | map("  \(.[0].size): \(length)") | .[]' "$tmp_batch"
   echo ""
   echo "batch duration and the slowest entry (seconds; the gap is time spent beyond the slowest entry):"
-  jq -rs 'map({d: (.durationMs / 1000), s: ((.entries | map(.durationMs) | max) / 1000),
+  jq -rs 'map({d: ((.durationMs // 0) / 1000), s: (((.entries | map(.durationMs // 0) | max) // 0) / 1000),
                c: .concurrency, p: .extractionPool})
           | map("  \(.d | floor)s total, slowest entry \(.s | floor)s, \(.c) at once, pool \(.p)")
           | .[]' "$tmp_batch"

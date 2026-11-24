@@ -424,6 +424,56 @@ describe("independent batch research", () => {
     assert.match(section, /completed: 2/);
     assert.match(section, /1 URL\(s\) fetched by two or more entries; 4 page fetches in all/);
   });
+
+  it("skips batch records without entries in scripts/analyze-sessions.sh", async (t) => {
+    const root = await workspace(t);
+    // Batch-shaped records with no per-entry data, beside one complete record.
+    const records = [
+      {
+        dir: "2026-11-17-batch-independent-fake",
+        record: { kind: "batch", mode: "independent", outcome: "completed", size: 2, durationMs: 50 },
+      },
+      {
+        dir: "2026-11-17-batch-expansion-fake",
+        record: { kind: "batch", mode: "expansion", outcome: "completed", size: 2, durationMs: 50, entries: [] },
+      },
+      {
+        dir: "2026-11-24-batch-complete",
+        record: {
+          kind: "batch",
+          mode: "independent",
+          outcome: "completed",
+          size: 2,
+          durationMs: 30_000,
+          concurrency: 2,
+          extractionPool: 8,
+          entries: [
+            { position: 1, outcome: "completed", durationMs: 20_000 },
+            { position: 2, outcome: "completed", durationMs: 30_000 },
+          ],
+        },
+      },
+    ];
+    for (const { dir, record } of records) {
+      await mkdir(join(root, ".search", dir), { recursive: true });
+      await writeFile(join(root, ".search", dir, "batch-meta.json"), JSON.stringify(record));
+    }
+    const sessions = join(root, "sessions");
+    await mkdir(sessions, { recursive: true });
+    const run = spawnSync("bash", [resolve("scripts/analyze-sessions.sh"), sessions], {
+      cwd: root,
+      env: { ...process.env, SEARCH_ROOTS: root, TMPDIR: root },
+      encoding: "utf8",
+      timeout: 30000,
+    });
+    assert.equal(run.status, 0, run.stderr + run.stdout);
+    const section = run.stdout.slice(run.stdout.indexOf("## 10. Batch research"));
+    assert.match(section, /batch records: 1/);
+    assert.match(section, /excluded batch records without entries: 2/);
+    assert.match(section, /30s total, slowest entry 30s, 2 at once, pool 8/);
+    assert.doesNotMatch(section, /Cannot iterate over null/);
+    assert.doesNotMatch(section, /jq: error/);
+  });
 });
 
 describe("batch merge evidence", () => {
